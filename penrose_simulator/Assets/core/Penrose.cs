@@ -1,85 +1,92 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
-public class gridscript : MonoBehaviour {
-    Vector3[] vertices = new Vector3[1200 * 3];
-    int[] triangles = new int[1200 * 3];
-    Color[] outputs = new Color[1200 * 3];
-    Mesh mesh;
-    GameObject gameobject;
-    public Material material;
-    public Color[] buffer = new Color[600];        // input colors
+[RequireComponent(typeof(MeshFilter))]
+[RequireComponent(typeof(MeshRenderer))]
+public class Penrose : MonoBehaviour {
 
-    void Start()
-    {
-        int i = 0;
-        int j = 0;
-        // grab the geometry
-        float gapscale = 0.9f;
-        for (int n = 0; n < geometry.Length; n += 7)
-        {
-            Vector3 a = new Vector3(geometry[j++] * 0.003f, geometry[j++] * 0.003f, 0);
-            Vector3 b = new Vector3(geometry[j++] * 0.003f, geometry[j++] * 0.003f, 0);
-            Vector3 c = new Vector3(geometry[j++] * 0.003f, geometry[j++] * 0.003f, 0);
-            Vector3 ab = b - a;
-            Vector3 ac = c - a;
-            if(Vector3.Cross(ab,ac).z>0)
-            {
-                Vector3 x = c;
-                c = a;
-                a=x;
-            }
-            Vector3 middle = (a + c) / 2;
-            a = middle + (a - middle) * gapscale;
-            b = middle + (b - middle) * gapscale;
-            c = middle + (c - middle) * gapscale;
-            triangles[i+0] = i+0;
-            vertices[i + 0] = a;
-            triangles[i+1] = i+1;
-            vertices[i + 1] = b;
-            triangles[i+2] = i+2;
-            vertices[i + 2] = c;
-            j++;
-            /*
-            int type = geometry[j++];
-            Color color;
-            if (type!=0)
-                color = Color.red;
-            else
-                color = Color.green;
-            buffer[i + 0] = color;
-            buffer[i + 1] = color;
-            buffer[i + 2] = color;
-            */
-            i += 3;
+  private const int Total = 600;
 
-        }
 
-        mesh = new Mesh();
-        gameobject = new GameObject("Mesh", typeof(MeshFilter), typeof(MeshRenderer));
-        gameobject.transform.localScale = new Vector3(30, 30, 1);
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
-        gameObject.GetComponent<MeshFilter>().mesh = mesh;
-//        gameobject.GetComponent<MeshRenderer>().material = material;
+  [Header("Display Size")]
+  public float scale = 0.003f;
+  public float gapScale = 0.9f;
+
+  [HideInInspector]
+  public Color[] buffer = new Color[Total]; // input buffer
+
+  private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
+  private readonly int[] triangles = new int[Total * 2 * 3];
+  private readonly Color[] colors = new Color[Total * 2 * 3];
+  
+  private Mesh mesh;
+  private MeshFilter meshFilter;
+  private MeshRenderer meshRenderer;
+  private Material material;
+
+  private void Awake() {
+    meshFilter   = GetComponent<MeshFilter>();
+    meshRenderer = GetComponent<MeshRenderer>();
+    material =
+      new Material(Shader.Find("Unlit/myshader")) {hideFlags = HideFlags.HideAndDontSave, name = "PenMaterial"};
+  }
+
+  void Start() {
+    int i = 0;
+    int j = 0;
+    
+    // grab the geometry
+    for(int n = 0; n < Geometry.Length; n += 7) {
+      var a = new Vector3(Geometry[j++] * scale, Geometry[j++] * scale, 0f);
+      var b = new Vector3(Geometry[j++] * scale, Geometry[j++] * scale, 0f);
+      var c = new Vector3(Geometry[j++] * scale, Geometry[j++] * scale, 0f);
+
+      var ab = b - a;
+      var ac = c - a;
+      
+      if(Vector3.Cross(ab, ac).z > 0) {
+        Vector3 x = c;
+        c = a;
+        a = x;
+      }
+
+      var middle = (a + c) / 2;
+      a          = middle + (a - middle) * gapScale;
+      b          = middle + (b - middle) * gapScale;
+      c          = middle + (c - middle) * gapScale;
+
+      vertices[i + 0] = a;
+      vertices[i + 1] = b;
+      vertices[i + 2] = c;
+
+      triangles[i + 0] = i + 0;
+      triangles[i + 1] = i + 1;
+      triangles[i + 2] = i + 2;
+      
+      j++;
+      i += 3;
     }
 
-    void Update()
-    {
-        // color all the mesh vertecies
-        int x = 0;
-        for (int i = 0; i < buffer.Length; i++)
-        {
-            Color c = buffer[i];
+    mesh = new Mesh {vertices = vertices, triangles = triangles};
 
-            for (int j = 0; j < 6; j++)
-                outputs[x++] = c;
-        }
-        mesh.colors = outputs;
+    meshFilter.mesh       = mesh;
+    meshRenderer.material = material;
+
+  }
+
+  void Update() {
+    // color all the mesh vertices
+    int x = 0;
+    for(int i = 0; i < buffer.Length; i++) {
+      Color c = buffer[i];
+
+      // set the vertex color
+      for(int j = 0; j < 6; j++) colors[x++] = c;
     }
 
-    private static readonly int[] geometry = {
+    mesh.colors = colors;
+  }
+
+  private static readonly int[] Geometry = {
         0,733,133,776,133,636,0,
         0,733,0,593,133,636,0,
         133,776,215,889,82,932,0,
@@ -1281,6 +1288,5 @@ public class gridscript : MonoBehaviour {
         -133,776,-215,889,-297,776,0,
         -133,776,-215,663,-297,776,0,
     };
-                        
-}
 
+}
