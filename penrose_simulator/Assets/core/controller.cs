@@ -1,15 +1,25 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class controller : MonoBehaviour {
 
-    public GameObject grid;
     public Effect[] effects;
     float timeleft = 0;
     public float effectTime;
     int effectNumber = 0;
     public tileDefinitions geometry;
+
+
+    private Penrose penrose;
+
+    private void Awake() {
+      // find the penrose game object in the current scene
+      penrose = GameObject.Find("Penrose").GetComponent<Penrose>();
+    }
+
     // Use this for initialization
     void Start () {
         effects = new Effect[3];
@@ -36,8 +46,8 @@ public class controller : MonoBehaviour {
         }
         // update the effect
         effects[effectNumber].Draw(this);
-        // copy the effect buffer into the grid object
-        grid.GetComponent<gridscript>().buffer = effects[effectNumber].buffer;
+    // copy the effect buffer into the grid object
+    penrose.buffer = effects[effectNumber].buffer;
         timeleft -= Time.deltaTime;
 	}
 }
