@@ -23,7 +23,7 @@ public class colorNibblerEffect : Effect {
         {
             for (int i = 0; i < 40; i++)
             {
-                int to = controller.geometry.tiles[current].neighbors[Random.Range(0, 4)];
+                int to = controller.geometry.tileData[current].neighbors[Random.Range(0, 4)];
                 if (to < 0)
                     continue;
                 if (to == last)

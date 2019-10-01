@@ -1,41 +1,40 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System;
 using UnityEngine;
 
-public class tile : ScriptableObject
+[Serializable]
+public class TileData 
 {
     public Vector2 center;
-    //    public Color color;
     public int[] neighbors;
     public int type;
 }
 
-
-public class tileDefinitions : ScriptableObject
+[Serializable]
+public class Tiles 
 {
-    public tile[] tiles;                           // for reading geometry
-    float fullscale = 1.0f / 140.0f;
+    //private readonly TileData[] tileData;                           // for reading geometry
+    private const float FullScale = 1.0f / 140.0f;
 
-    public void Init()
+    public TileData[] tileData;
+
+    public Tiles()
     {
-        int i,j;
-        j = 0;
-        tiles = new tile[600];
-        for (i = 0; i < tiles.Length; i++)
+        var j = 0;
+        tileData = new TileData[600];
+        for (var i = 0; i < tileData.Length; i++)
         {
-            tile t = ScriptableObject.CreateInstance<tile>();
+          var t = new TileData {
+            neighbors = new int[4], type = Data[j++], center = {x = Data[j++] * FullScale, y = Data[j++] * FullScale}
+          };
 
-            t.neighbors = new int[4];
-            t.type = data[j++];
-            t.center.x = data[j++] * fullscale;
-            t.center.y = data[j++] * fullscale;
-            for (int a = 0; a < 4; a++)
-                t.neighbors[a] = data[j++];
-            tiles[i] = t;
+          for (var a = 0; a < 4; a++)
+                t.neighbors[a] = Data[j++];
+
+          tileData[i] = t;
         }
     }
-    private static readonly int[] data =
-    {
+
+  private static readonly int[] Data = {
         0,66,684,2,12,14,586,
         0,107,854,2,19,-1,-1,
         1,0,776,0,1,586,587,
@@ -636,5 +635,5 @@ public class tileDefinitions : ScriptableObject
         0,-456,811,551,598,-1,-1,
         1,-323,811,591,597,599,-1,
         0,-215,776,587,591,595,598,
-            };
+  };
 }

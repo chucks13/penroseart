@@ -21,7 +21,7 @@ public class NoiseEffect: Effect
     }
     public override void Draw(controller controller)
     {
-        tile[] tiles = controller.geometry.tiles;
+        TileData[] tiles = controller.geometry.tileData;
         for (int i = 0; i < buffer.Length; i++)
         {
             float n = Perlin.Noise(tiles[i].center.x * noisescale, tiles[i].center.y * noisescale, Time.fixedTime * noisespeed);

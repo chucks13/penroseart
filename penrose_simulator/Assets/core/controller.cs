@@ -7,13 +7,15 @@ using Random = UnityEngine.Random;
 public class controller : MonoBehaviour {
 
     public Effect[] effects;
-    float timeleft = 0;
+    
     public float effectTime;
+    
+    public Tiles geometry;
+
     int effectNumber = 0;
-    public tileDefinitions geometry;
+    float timeleft = 0;
 
-
-    private Penrose penrose;
+  private Penrose penrose;
 
     private void Awake() {
       // find the penrose game object in the current scene
@@ -23,8 +25,8 @@ public class controller : MonoBehaviour {
     // Use this for initialization
     void Start () {
         effects = new Effect[3];
-        geometry = ScriptableObject.CreateInstance< tileDefinitions>();
-        geometry.Init();
+        geometry = new Tiles();
+        
         effects[0] = ScriptableObject.CreateInstance<NoiseEffect>();
         effects[1] = ScriptableObject.CreateInstance<colorNibblerEffect>();
         effects[2] = ScriptableObject.CreateInstance < colorSparkleEffect>();
