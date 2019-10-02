@@ -1,4 +1,4 @@
-﻿Shader "Unlit/myshader"
+﻿Shader "Unlit/Penrose"
 {
 	Properties{
 	}

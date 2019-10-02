@@ -18,8 +18,8 @@ public class controller : MonoBehaviour {
   private Penrose penrose;
 
     private void Awake() {
-      // find the penrose game object in the current scene
-      penrose = GameObject.Find("Penrose").GetComponent<Penrose>();
+      // find the first game object with the penrose script
+      penrose = GameObject.FindObjectOfType<Penrose>();
     }
 
     // Use this for initialization

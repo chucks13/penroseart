@@ -7,6 +7,8 @@ public class Penrose : MonoBehaviour {
   private const int Total = 600;
 
 
+  public Color bgColor = Color.gray;
+
   [Header("Display Size")]
   public float scale = 0.003f;
   public float gapScale = 0.9f;
@@ -23,16 +25,18 @@ public class Penrose : MonoBehaviour {
   private MeshRenderer meshRenderer;
   private Material material;
 
+  private float bgBrightness;
+
   private void Awake() {
     meshFilter   = GetComponent<MeshFilter>();
     meshRenderer = GetComponent<MeshRenderer>();
     material =
-      new Material(Shader.Find("Unlit/myshader")) {hideFlags = HideFlags.HideAndDontSave, name = "PenMaterial"};
+      new Material(Shader.Find("Unlit/Penrose")) {hideFlags = HideFlags.HideAndDontSave, name = "PenMaterial"};
   }
 
   void Start() {
-    int i = 0;
-    int j = 0;
+    var i = 0;
+    var j = 0;
     
     // grab the geometry
     for(int n = 0; n < Geometry.Length; n += 7) {
@@ -61,29 +65,59 @@ public class Penrose : MonoBehaviour {
       triangles[i + 0] = i + 0;
       triangles[i + 1] = i + 1;
       triangles[i + 2] = i + 2;
-      
+
+      colors[i + 0] = bgColor;
+      colors[i + 1] = bgColor;
+      colors[i + 2] = bgColor;
+
       j++;
       i += 3;
     }
 
-    mesh = new Mesh {vertices = vertices, triangles = triangles};
+    mesh = new Mesh {vertices = vertices, triangles = triangles, colors = colors};
 
     meshFilter.mesh       = mesh;
     meshRenderer.material = material;
+    bgBrightness = bgColor.grayscale;
 
   }
-
+  
   void Update() {
-    // color all the mesh vertices
-    int x = 0;
-    for(int i = 0; i < buffer.Length; i++) {
-      Color c = buffer[i];
+    UpdateVertexColors();
+  }
 
+  void UpdateVertexColors() {
+    // color all the mesh vertices
+    var x = 0;
+    
+    for(var i = 0; i < buffer.Length; i++) {
+      
+      var color = buffer[i];
+      color = FadeColorToBgColor(color);
+      
       // set the vertex color
-      for(int j = 0; j < 6; j++) colors[x++] = c;
+      for(int j = 0; j < 6; j++) colors[x++] = color;
     }
 
     mesh.colors = colors;
+  }
+
+  private Color FadeColorToBgColor(Color color) {
+
+    // Lerp between color and background
+    color = Color.Lerp(bgColor, color, color.grayscale);
+
+    // convert to HSV
+    Color.RGBToHSV(color, out var h, out var s, out var v);
+
+    // if current brightness is less than background bright, fix it
+    if(v < bgBrightness) v = bgBrightness;
+
+    // convert back to RGB
+    color = Color.HSVToRGB(h, s, v);
+
+    // return the new color
+    return color;
   }
 
   private static readonly int[] Geometry = {
