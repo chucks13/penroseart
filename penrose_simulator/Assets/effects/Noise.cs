@@ -38,11 +38,13 @@ public class Noise : Effect {
   }
 
   public override void LoadSettings() {
-    if(controller.sparkleSettings.Length > 0) {
+    if(controller.noiseSettings.Length > 0) {
       setting = controller.noiseSettings[Random.Range(0, controller.noiseSettings.Length)];
     } else {
       setting.Randomize();
     }
+
+    controller.debugText.text = $"Scale: {setting.scale}\nSpeed: {setting.speed}\nAmp: {setting.amplifier}\nDelta: {setting.colorDelta}";
   }
 
   [System.Serializable]

@@ -1,4 +1,4 @@
-﻿using System;
+﻿using TMPro;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -7,7 +7,8 @@ public class EffectController : Singleton<EffectController> {
   public enum EffectTypes {
     Nibbler,
     Sparkle,
-    Noise
+    Noise,
+    Pulse
   }
 
   public float effectTime = 10;
@@ -16,6 +17,10 @@ public class EffectController : Singleton<EffectController> {
   public Noise.Settings[] noiseSettings;
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
+  public Pulse.Settings[] pulseSettings;
+
+  public TextMeshProUGUI effectText;
+  public TextMeshProUGUI debugText;
 
   [HideInInspector]
   public Effect[] effects;
@@ -25,15 +30,17 @@ public class EffectController : Singleton<EffectController> {
 
   private float timeLeft;
   private Penrose penrose;
+  
 
   // Use this for initialization
   void Start() {
     penrose  = GameObject.FindObjectOfType<Penrose>();
-    
-    effects = new Effect[3];
+
+    effects = new Effect[4];
     effects[0] = new Nibbler();
     effects[1] = new ColorSparkle();
     effects[2] = new Noise();
+    effects[3] = new Pulse();
 
     foreach(var effect in effects) {
       effect.Init();
@@ -41,6 +48,9 @@ public class EffectController : Singleton<EffectController> {
     }
 
     geometry = new Tiles();
+    timeLeft = effectTime;
+
+    effectText.text = ((EffectTypes)currentEffect).ToString();
   }
 
   // Update is called once per frame
@@ -53,6 +63,7 @@ public class EffectController : Singleton<EffectController> {
       currentEffect += Random.Range(1, effects.Length);
       currentEffect %= effects.Length;
       effects[currentEffect].LoadSettings();
+      effectText.text = ((EffectTypes)currentEffect).ToString();
     }
 
     // update the effect
