@@ -37,7 +37,7 @@ public class Pulse : Effect {
     
     public void Randomize() {
       startColor = Color.HSVToRGB(Random.value, 1f, 1f);
-      endColor = Color.HSVToRGB(Random.value, 1f, 1f);
+      endColor = Color.HSVToRGB((Random.value + Random.value) * 0.5f, 1f, 1f);
       seconds = Random.Range(1f, 5f);
     }
   }

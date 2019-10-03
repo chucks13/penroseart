@@ -33,6 +33,7 @@ public class ColorSparkle : Effect {
 
     var text = (setting.randomColor) ? "random" : setting.color.ToString();
     controller.debugText.text = $"Color: {text}";
+    ClearAll();
   }
 
   [System.Serializable]

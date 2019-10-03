@@ -41,7 +41,7 @@ public class Nibbler : Effect {
 
     var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
     controller.debugText.text = $"Speed: {setting.speed}\nColor: {colorText}";
-
+    ClearAll();
   }
 
   [System.Serializable]

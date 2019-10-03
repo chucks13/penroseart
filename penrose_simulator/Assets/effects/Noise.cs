@@ -45,6 +45,7 @@ public class Noise : Effect {
     }
 
     controller.debugText.text = $"Scale: {setting.scale}\nSpeed: {setting.speed}\nAmp: {setting.amplifier}\nDelta: {setting.colorDelta}";
+    ClearAll();
   }
 
   [System.Serializable]
