@@ -2,37 +2,31 @@
 using UnityEngine;
 
 [Serializable]
-public class TileData 
-{
-    public Vector2 center;
-    public int[] neighbors;
-    public int type;
+public class TileData {
+  public Vector2 center;
+  public int[] neighbors;
+  public int type;
 }
 
 [Serializable]
-public class Tiles 
-{
-    //private readonly TileData[] tileData;                           // for reading geometry
-    private const float FullScale = 1.0f / 140.0f;
+public class Tiles {
+  private const float FullScale = 1.0f / 140.0f;
 
-    public TileData[] tileData;
+  public TileData[] tileData;
 
-    public Tiles()
-    {
-        var j = 0;
-        tileData = new TileData[600];
-        for (var i = 0; i < tileData.Length; i++)
-        {
-          var t = new TileData {
-            neighbors = new int[4], type = Data[j++], center = {x = Data[j++] * FullScale, y = Data[j++] * FullScale}
-          };
+  public Tiles() {
+    var j = 0;
+    tileData = new TileData[600];
+    for(var i = 0; i < tileData.Length; i++) {
+      var t = new TileData {
+        neighbors = new int[4], type = Data[j++], center = {x = Data[j++] * FullScale, y = Data[j++] * FullScale}
+      };
 
-          for (var a = 0; a < 4; a++)
-                t.neighbors[a] = Data[j++];
+      for(var a = 0; a < 4; a++) t.neighbors[a] = Data[j++];
 
-          tileData[i] = t;
-        }
+      tileData[i] = t;
     }
+  }
 
   private static readonly int[] Data = {
         0,66,684,2,12,14,586,
