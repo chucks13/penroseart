@@ -33,12 +33,15 @@ public class Nibbler : Effect {
   }
 
   public override void LoadSettings() {
-    if(controller.sparkleSettings.Length > 0) {
+    if(controller.nibblerSettings.Length > 0) {
       setting = controller.nibblerSettings[Random.Range(0, controller.nibblerSettings.Length)];
     } else {
       setting.Randomize();
     }
 
+    var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
+    controller.debugText.text = $"Speed: {setting.speed}\nColor: {colorText}";
+    ClearAll();
   }
 
   [System.Serializable]

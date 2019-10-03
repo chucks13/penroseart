@@ -24,14 +24,16 @@ public class ColorSparkle : Effect {
     }
   }
 
-  
-
   public override void LoadSettings() {
     if(controller.sparkleSettings.Length > 0) {
       setting = controller.sparkleSettings[Random.Range(0, controller.sparkleSettings.Length)];
     } else {
       setting.Randomize();
     }
+
+    var text = (setting.randomColor) ? "random" : setting.color.ToString();
+    controller.debugText.text = $"Color: {text}";
+    ClearAll();
   }
 
   [System.Serializable]
