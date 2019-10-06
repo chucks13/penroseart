@@ -12,13 +12,14 @@ public class ColorSparkle : Effect {
   }
 
   public override void Draw() {
-    FadeAll();
-    for(int i = 0; i < 10; i++) {
+   FadeAll();
+   int count =(int) (controller.dance.deltaTime * 600f);
+    for (int i = 0; i < count; i++) {
 
       if(setting.randomColor)
-        color = Color.HSVToRGB(Random.value, 1, 1);
+        color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1);
       else
-        color = setting.color;
+        color = setting.color* (1f + controller.dance.decay);
 
       buffer[Random.Range(0, 600)] = color; //  Color.HSVToRGB(Random.value, 1, 1);
     }

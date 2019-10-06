@@ -26,7 +26,11 @@ public class Noise : Effect {
   public override void Draw() {
     TileData[] tiles = controller.geometry.tileData;
     for(int i = 0; i < buffer.Length; i++) {
-      float n = Perlin.Noise(tiles[i].center.x * setting.scale, tiles[i].center.y * setting.scale, Time.fixedTime * setting.speed);
+      float scale = (1.0f+(controller.dance.decay*0.25f)) * setting.scale;
+      float x = tiles[i].center.x * scale;
+      float y = tiles[i].center.y * scale;
+      float z = controller.dance.fixedTime * setting.speed;
+      float n = Perlin.Noise(x,y ,z );
       n *= setting.amplifier;
 
       int v = (int)n;
