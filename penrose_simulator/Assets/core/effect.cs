@@ -6,7 +6,7 @@ public abstract class Effect {
   [HideInInspector]
   public Color[] buffer;
 
-  protected EffectController controller;
+  protected Controller controller;
 
   protected virtual void Fade(int index) {
     buffer[index] *= 0.98f;
@@ -28,12 +28,11 @@ public abstract class Effect {
   }
 
   public virtual void Init() {
-    controller = EffectController.Instance;
+    controller = Controller.Instance;
     buffer = new Color[600];
   }
   public abstract void Draw();
 
   public abstract void LoadSettings();
-  
   
 }

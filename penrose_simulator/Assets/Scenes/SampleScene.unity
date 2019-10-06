@@ -179,12 +179,12 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 188764251}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -960, y: -540, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 4
+  m_Father: {fileID: 465022703}
+  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &242027523
 GameObject:
@@ -509,7 +509,7 @@ GameObject:
   - component: {fileID: 465022701}
   - component: {fileID: 465022700}
   m_Layer: 5
-  m_Name: Canvas
+  m_Name: GUI Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -588,6 +588,7 @@ RectTransform:
   m_Children:
   - {fileID: 464376787}
   - {fileID: 242027524}
+  - {fileID: 188764254}
   m_Father: {fileID: 0}
   m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -690,7 +691,7 @@ GameObject:
   - component: {fileID: 539948491}
   - component: {fileID: 539948490}
   m_Layer: 0
-  m_Name: EffectController
+  m_Name: Controller
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -734,6 +735,11 @@ MonoBehaviour:
   sparkleSettings: []
   nibblerSettings: []
   pulseSettings: []
+  dance:
+    beat: 0
+    fixedTime: 0
+    deltaTime: 0
+    decay: 0
   effectText: {fileID: 464376788}
   debugText: {fileID: 242027525}
   geometry:

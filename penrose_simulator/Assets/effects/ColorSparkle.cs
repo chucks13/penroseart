@@ -17,9 +17,9 @@ public class ColorSparkle : Effect {
     for (int i = 0; i < count; i++) {
 
       if(setting.randomColor)
-        color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1);
+        color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f);
       else
-        color = setting.color* (1f + controller.dance.decay);
+        color = setting.color * (1f + controller.dance.decay);
 
       buffer[Random.Range(0, 600)] = color; //  Color.HSVToRGB(Random.value, 1, 1);
     }
