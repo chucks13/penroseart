@@ -16,7 +16,8 @@ public class Nibbler : Effect {
 
   public override void Draw() {
     FadeAll();
-    for(var x = 0; x < 5; x++) {
+    int count = (int)(controller.dance.deltaTime * 300f);
+    for (var x = 0; x < count; x++) {
       for(var i = 0; i < 40; i++) {
         var neighbor = controller.geometry.tileData[current].neighbors[Random.Range(0, 4)];
         
@@ -26,7 +27,9 @@ public class Nibbler : Effect {
         last = current;
         current = neighbor;
         
-        buffer[current] = setting.randomColor ? Color.HSVToRGB(Random.value, 1f, 1f) : setting.color;
+        buffer[current] = setting.randomColor ? 
+                    Color.HSVToRGB(Random.value, 1f-controller.dance.decay, 1f) :
+                    ( setting.color*(1f + controller.dance.decay));
         break;
       }
     }
