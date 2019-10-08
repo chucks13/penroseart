@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   effectTime: 10
-  currentEffect: 3
+  currentEffect: 4
   noiseSettings:
   - scale: 0.176559
     speed: 1.356254

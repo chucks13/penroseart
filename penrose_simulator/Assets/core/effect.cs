@@ -8,6 +8,8 @@ public abstract class Effect {
 
   protected Controller controller;
 
+  public string Name => GetType().ToString();
+
   protected virtual void Fade(int index) {
     buffer[index] *= 0.98f;
   }

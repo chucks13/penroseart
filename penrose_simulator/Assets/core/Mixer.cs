@@ -1,15 +1,21 @@
-﻿using UnityEngine;
+﻿using System;
+using Random = UnityEngine.Random;
 
 [System.Serializable]
 public abstract class Mixer : Effect {
 
-  public int effectTotal = 3;
+  protected int numberOfEffectTypes;
 
   protected Effect[] effects;
 
   public override void Init() {
+    
+    // effect init
     base.Init();
-    effects = new Effect[effectTotal];
+
+    // count the number of effect types
+    numberOfEffectTypes = Enum.GetValues(typeof(Controller.EffectTypes)).Length;
+
   }
 
 }

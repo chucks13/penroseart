@@ -36,11 +36,12 @@ public class Controller : Singleton<Controller> {
   private Penrose penrose;
 
   private void SetupEffects() {
-    effects    = new Effect[4];
-    effects[0] = new Nibbler();
-    effects[1] = new ColorSparkle();
-    effects[2] = new Noise();
-    effects[3] = new Pulse();
+    effects    = new Effect[5];
+    effects[0] = EffectFactory.CreateEffect(EffectTypes.Nibbler);
+    effects[1] = EffectFactory.CreateEffect(EffectTypes.Sparkle);
+    effects[2] = EffectFactory.CreateEffect(EffectTypes.Noise);
+    effects[3] = EffectFactory.CreateEffect(EffectTypes.Pulse);
+    effects[4] = new RandomEffectsMixer();
 
     foreach(var effect in effects) {
       effect.Init();
@@ -58,9 +59,10 @@ public class Controller : Singleton<Controller> {
     geometry = new Tiles();
     dance    = new Dance();
     dance.Init();
-    timeLeft = 0f;
 
-    effectText.text = ((EffectTypes)currentEffect).ToString();
+    timeLeft = effectTime;
+
+    effectText.text = effects[currentEffect].GetType().ToString();
   }
 
   void EffectUpdate() {
@@ -72,7 +74,7 @@ public class Controller : Singleton<Controller> {
       currentEffect += Random.Range(1, effects.Length);
       currentEffect %= effects.Length;
       effects[currentEffect].LoadSettings();
-      effectText.text = ((EffectTypes)currentEffect).ToString();
+      effectText.text = effects[currentEffect].GetType().ToString();
     }
 
     // update the effect
