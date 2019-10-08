@@ -2,11 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class RandomEffectsMixer : Mixer {
+public class RandomEffectsMixer : EffectBase {
 
-
+  private EffectBase[] effects;
   private int total;
-
 
   public override void Draw() {
 
@@ -33,7 +32,7 @@ public class RandomEffectsMixer : Mixer {
 
     var debugText = string.Empty;
     for(var i = 0; i < total; i++) {
-      effects[i] = EffectFactory.CreateEffect((Controller.EffectTypes)Random.Range(0, numberOfEffectTypes));
+      effects[i] = EffectFactory.CreateEffect(EffectFactory.EffectTypes[Random.Range(0,EffectFactory.EffectCount)]);
       effects[i].Init();
       effects[i].LoadSettings();
       debugText += (i < total - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";

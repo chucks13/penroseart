@@ -4,12 +4,12 @@ using Random = UnityEngine.Random;
 
 public class Controller : Singleton<Controller> {
 
-  public enum EffectTypes {
-    Nibbler,
-    Sparkle,
-    Noise,
-    Pulse
-  }
+  //public enum EffectTypes {
+  //  Nibbler,
+  //  Sparkle,
+  //  Noise,
+  //  Pulse
+  //}
 
   [Header("Switching")]
   public float effectTime = 10;
@@ -36,15 +36,10 @@ public class Controller : Singleton<Controller> {
   private Penrose penrose;
 
   private void SetupEffects() {
-    effects    = new EffectBase[5];
-    effects[0] = EffectFactory.CreateEffect(EffectTypes.Nibbler);
-    effects[1] = EffectFactory.CreateEffect(EffectTypes.Sparkle);
-    effects[2] = EffectFactory.CreateEffect(EffectTypes.Noise);
-    effects[3] = EffectFactory.CreateEffect(EffectTypes.Pulse);
-    effects[4] = new RandomEffectsMixer();
-
-    foreach(var effect in effects) {
-      effect.Init();
+    effects    = new EffectBase[EffectFactory.EffectCount];
+    for(int i = 0; i < effects.Length; i++) {
+      effects[i] = EffectFactory.CreateEffect(EffectFactory.EffectTypes[i]);
+      effects[i].Init();
     }
 
     effects[currentEffect].LoadSettings();
