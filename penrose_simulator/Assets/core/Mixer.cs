@@ -2,11 +2,11 @@
 using Random = UnityEngine.Random;
 
 [System.Serializable]
-public abstract class Mixer : Effect {
+public abstract class Mixer : EffectBase {
 
   protected int numberOfEffectTypes;
 
-  protected Effect[] effects;
+  protected EffectBase[] effects;
 
   public override void Init() {
     

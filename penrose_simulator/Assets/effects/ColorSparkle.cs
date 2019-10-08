@@ -1,7 +1,7 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
-public class ColorSparkle : Effect {
+public class ColorSparkle : EffectBase {
 
   private Settings setting;
   private Color color;

@@ -4,7 +4,7 @@ using UnityEngine;
 
 
 [System.Serializable]
-public class Nibbler : Effect {
+public class Nibbler : EffectBase {
   private int last = 0;
   private int current = 1;
   private Settings setting;

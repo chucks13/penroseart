@@ -1,7 +1,7 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
-public class Pulse : Effect {
+public class Pulse : EffectBase {
 
   private Settings setting;
   

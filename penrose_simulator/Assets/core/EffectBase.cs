@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 [System.Serializable]
-public abstract class Effect {
+public abstract class EffectBase {
 
   [HideInInspector]
   public Color[] buffer;

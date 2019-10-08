@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Noise : Effect {
+public class Noise : EffectBase {
 
 
   private Settings setting;

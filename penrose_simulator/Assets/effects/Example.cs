@@ -1,7 +1,7 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
-public class Example : Effect {
+public class Example : EffectBase {
 
   // by using a settings data class you can change settings on the fly
   private Settings setting;

@@ -28,7 +28,7 @@ public class RandomEffectsMixer : Mixer {
   }
 
   public override void LoadSettings() {
-    effects = new Effect[Random.Range(2, 5)];
+    effects = new EffectBase[Random.Range(2, 5)];
     total = effects.Length;
 
     var debugText = string.Empty;

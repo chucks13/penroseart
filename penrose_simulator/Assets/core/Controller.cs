@@ -27,7 +27,7 @@ public class Controller : Singleton<Controller> {
   public TextMeshProUGUI debugText;
 
   [HideInInspector]
-  public Effect[] effects;
+  public EffectBase[] effects;
 
   [HideInInspector]
   public Tiles geometry;
@@ -36,7 +36,7 @@ public class Controller : Singleton<Controller> {
   private Penrose penrose;
 
   private void SetupEffects() {
-    effects    = new Effect[5];
+    effects    = new EffectBase[5];
     effects[0] = EffectFactory.CreateEffect(EffectTypes.Nibbler);
     effects[1] = EffectFactory.CreateEffect(EffectTypes.Sparkle);
     effects[2] = EffectFactory.CreateEffect(EffectTypes.Noise);
