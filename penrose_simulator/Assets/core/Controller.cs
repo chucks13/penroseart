@@ -59,9 +59,6 @@ public class Controller : Singleton<Controller> {
     timeLeft = effectTime;
 
     effectText.text = effects[currentEffect].GetType().ToString();
-
-    var names = string.Join(", ", EffectFactory.EffectNames);
-    Debug.Log(names);
   }
 
   void EffectUpdate() {
