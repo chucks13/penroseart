@@ -31,7 +31,7 @@ public abstract class EffectBase {
 
   public virtual void Init() {
     controller = Controller.Instance;
-    buffer = new Color[600];
+    buffer = new Color[900];
   }
   public abstract void Draw();
 
