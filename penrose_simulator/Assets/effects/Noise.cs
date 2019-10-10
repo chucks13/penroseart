@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 using Random = UnityEngine.Random;
-
+// practive comment
 public class Noise : EffectBase {
 
 
