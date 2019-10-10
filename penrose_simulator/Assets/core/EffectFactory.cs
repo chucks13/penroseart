@@ -23,7 +23,7 @@ public static class EffectFactory {
     return effectTypes ?? (effectTypes = Assembly.GetAssembly(typeof(EffectBase)).GetTypes()
                                                  .Where(
                                                    myType => myType.IsClass && !myType.IsAbstract &&
-                                                             myType.IsSubclassOf(typeof(EffectBase))
+                                                             myType.IsSubclassOf(typeof(EffectBase)) && !myType.IsSubclassOf(typeof(Transition))
                                                  ).ToArray());
   }
 

@@ -2589,7 +2589,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f95c9fce4577c274998e22a24e80df9a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  bgColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
+  bgColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   scale: 0.003
   gapScale: 0.9
   buffer:
