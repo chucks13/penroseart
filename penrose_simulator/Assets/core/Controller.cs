@@ -50,9 +50,9 @@ public class Controller : Singleton<Controller> {
   void Start() {
     penrose = GameObject.FindObjectOfType<Penrose>();
 
+    geometry = new Tiles();
     SetupEffects();
 
-    geometry = new Tiles();
     dance    = new Dance();
     dance.Init();
 
