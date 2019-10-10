@@ -1,7 +1,7 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
-public class ColorSparkle : Effect {
+public class ColorSparkle : EffectBase {
 
   private Settings setting;
   private Color color;
@@ -13,15 +13,15 @@ public class ColorSparkle : Effect {
 
   public override void Draw() {
    FadeAll();
-   int count =(int) (controller.dance.deltaTime * 600f);
+   int count =(int) (controller.dance.deltaTime * buffer.Length);
     for (int i = 0; i < count; i++) {
 
       if(setting.randomColor)
-        color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1);
+        color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f);
       else
-        color = setting.color* (1f + controller.dance.decay);
+        color = setting.color * (1f + controller.dance.decay);
 
-      buffer[Random.Range(0, 600)] = color; //  Color.HSVToRGB(Random.value, 1, 1);
+      buffer[Random.Range(0, buffer.Length)] = color; //  Color.HSVToRGB(Random.value, 1, 1);
     }
   }
 

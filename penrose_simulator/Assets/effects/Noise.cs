@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Noise : Effect {
+public class Noise : EffectBase {
 
 
   private Settings setting;
@@ -11,10 +11,12 @@ public class Noise : Effect {
   //private float amplifier;
   //private float colorDelta;
   private float timeScale;
+  private TileData[] tiles;
 
   public override void Init() {
     base.Init();
     setting = new Settings();
+    tiles = controller.geometry.tileData;
 
     //scale = Random.Range(0.05f, 0.2f);
     //speed = Random.Range(0.1f, 1.5f);
@@ -24,7 +26,7 @@ public class Noise : Effect {
     //Debug.Log($"Scale: {scale}, Speed: {speed}, Amplifier: {amplifier}, ColorDelta: {colorDelta}");
   }
   public override void Draw() {
-    TileData[] tiles = controller.geometry.tileData;
+    
     for(int i = 0; i < buffer.Length; i++) {
       float scale = (1.0f+(controller.dance.decay*0.25f)) * setting.scale;
       float x = tiles[i].center.x * scale;
@@ -35,7 +37,7 @@ public class Noise : Effect {
 
       int v = (int)n;
       if((v & 1) == 0)
-        buffer[i] = Color.HSVToRGB((n + setting.colorDelta) % 1, 1, 1);
+        buffer[i] = Color.HSVToRGB((n + setting.colorDelta) % 1, 1f, 1);
       else
         buffer[i] = Color.black;
     }
