@@ -18,22 +18,26 @@ public class Nibbler : EffectBase {
     FadeAll();
     int count = (int)(controller.dance.deltaTime * 300f);
     for (var x = 0; x < count; x++) {
-      for(var i = 0; i < 40; i++) {
-        var neighbor = controller.geometry.tileData[current].neighbors[Random.Range(0, 4)];
+      var neighbor = current;
+      var i=0;
+      for ( i = 0; i < 40; i++) {
+        neighbor = controller.geometry.tileData[current].neighbors[Random.Range(0, 4)];
         
         if(neighbor < 0) continue;
         if(neighbor == last) continue;
 
-        last = current;
-        current = neighbor;
-        
-        buffer[current] = setting.randomColor ? 
-                    Color.HSVToRGB(Random.value, 1f-controller.dance.decay, 1f) :
-                    ( setting.color*(1f + controller.dance.decay));
         break;
       }
+      if (i == 40)
+        neighbor = current;
+      last = current;
+      current = neighbor;
+
+      buffer[current] = setting.randomColor ?
+       Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f) :
+        (setting.color * (1f + controller.dance.decay));
+      }
     }
-  }
 
   public override void LoadSettings() {
     if(controller.nibblerSettings.Length > 0) {
