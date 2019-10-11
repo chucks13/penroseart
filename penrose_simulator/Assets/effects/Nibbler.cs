@@ -14,30 +14,44 @@ public class Nibbler : EffectBase {
     setting = new Settings();
   }
 
+
+  private int GetNeighbor() {
+    var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
+    if(neighbor == -1 || neighbor == last) neighbor = GetNeighbor();
+    return neighbor;
+  }
+
   public override void Draw() {
     FadeAll();
     int count = (int)(controller.dance.deltaTime * 300f);
     for (var x = 0; x < count; x++) {
-      var neighbor = current;
-      var i=0;
-      for ( i = 0; i < 40; i++) {
-        neighbor = controller.geometry.tileData[current].neighbors[Random.Range(0, 4)];
-        
-        if(neighbor < 0) continue;
-        if(neighbor == last) continue;
+      //for(var i = 0; i < 40; i++) {
+        //var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
 
-        break;
-      }
-      if (i == 40)
-        neighbor = current;
-      last = current;
-      current = neighbor;
+        //if(neighbor < 1 || neighbor > 900) neighbor = last;
+        //if(neighbor == last) continue;
 
-      buffer[current] = setting.randomColor ?
-       Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f) :
-        (setting.color * (1f + controller.dance.decay));
-      }
+
+
+        last = current;
+        current = GetNeighbor();
+
+        //current = neighbor;
+
+        buffer[current] = setting.randomColor ?
+                    Color.HSVToRGB(Random.value, 1f-controller.dance.decay, 1f) :
+                    ( setting.color*(1f + controller.dance.decay));
+        //break;
+      //}
     }
+
+    //controller.debugText.text = $"{controller.penrose.geometry.tileData[current].ToString()}";
+    var tile = controller.penrose.geometry.tileData[current];
+    var neighbors = $"({tile.neighbors[0]}, {tile.neighbors[1]}, {tile.neighbors[3]}, {tile.neighbors[0]})";
+    controller.debugText.text = $"Current: {current}\nType: {tile.type}\nPos: {tile.center.ToString()}\nNeighbors: {neighbors}";
+
+
+  }
 
   public override void LoadSettings() {
     if(controller.nibblerSettings.Length > 0) {

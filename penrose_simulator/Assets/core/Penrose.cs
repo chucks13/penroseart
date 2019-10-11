@@ -16,6 +16,9 @@ public class Penrose : MonoBehaviour {
   [HideInInspector]
   public Color[] buffer = new Color[Total]; // input buffer
 
+  [HideInInspector]
+  public Tiles geometry;
+
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];
   private readonly Color[] colors = new Color[Total * 2 * 3];
@@ -32,12 +35,14 @@ public class Penrose : MonoBehaviour {
     meshRenderer = GetComponent<MeshRenderer>();
     material =
       new Material(Shader.Find("Unlit/Penrose")) {hideFlags = HideFlags.HideAndDontSave, name = "PenMaterial"};
+
+    geometry = new Tiles();
   }
 
-  void Start() {
+  private void GenerateMesh() {
     var i = 0;
     var j = 0;
-    
+
     // grab the geometry
     for(int n = 0; n < Geometry.Length; n += 6) {
       var a = new Vector3(Geometry[j++] * scale, Geometry[j++] * scale, 0f);
@@ -46,7 +51,7 @@ public class Penrose : MonoBehaviour {
 
       var ab = b - a;
       var ac = c - a;
-      
+
       if(Vector3.Cross(ab, ac).z > 0) {
         Vector3 x = c;
         c = a;
@@ -54,9 +59,9 @@ public class Penrose : MonoBehaviour {
       }
 
       var middle = (a + c) / 2;
-      a          = middle + (a - middle) * gapScale;
-      b          = middle + (b - middle) * gapScale;
-      c          = middle + (c - middle) * gapScale;
+      a = middle + (a - middle) * gapScale;
+      b = middle + (b - middle) * gapScale;
+      c = middle + (c - middle) * gapScale;
 
       vertices[i + 0] = a;
       vertices[i + 1] = b;
@@ -73,16 +78,20 @@ public class Penrose : MonoBehaviour {
       i += 3;
     }
 
-    mesh = new Mesh {vertices = vertices, triangles = triangles, colors = colors};
+    mesh = new Mesh { vertices = vertices, triangles = triangles, colors = colors, name = "PenMesh", hideFlags = HideFlags.HideAndDontSave };
 
     meshFilter.mesh       = mesh;
     meshRenderer.material = material;
-    bgBrightness = bgColor.grayscale;
+  }
 
+  void Start() {
+    GenerateMesh();
+    bgBrightness = bgColor.grayscale;
   }
   
   void Update() {
     UpdateVertexColors();
+    mesh.RecalculateNormals();
   }
 
   void UpdateVertexColors() {

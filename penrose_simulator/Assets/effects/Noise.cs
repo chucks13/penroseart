@@ -16,7 +16,7 @@ public class Noise : EffectBase {
   public override void Init() {
     base.Init();
     setting = new Settings();
-    tiles = controller.geometry.tileData;
+    tiles = controller.penrose.geometry.tileData;
 
     //scale = Random.Range(0.05f, 0.2f);
     //speed = Random.Range(0.1f, 1.5f);
