@@ -6,6 +6,8 @@ public class TileData {
   public Vector2 center;
   public int[] neighbors;
   public int type;
+
+  public override string ToString() => $"{type}, ({center.x},{center.y}), ({neighbors[0]}, {neighbors[1]}, {neighbors[3]}, {neighbors[0]})";
 }
 
 [Serializable]

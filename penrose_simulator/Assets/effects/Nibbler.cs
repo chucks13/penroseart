@@ -14,25 +14,43 @@ public class Nibbler : EffectBase {
     setting = new Settings();
   }
 
+
+  private int GetNeighbor() {
+    var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
+    if(neighbor == -1 || neighbor == last) neighbor = GetNeighbor();
+    return neighbor;
+  }
+
   public override void Draw() {
     FadeAll();
     int count = (int)(controller.dance.deltaTime * 300f);
     for (var x = 0; x < count; x++) {
-      for(var i = 0; i < 40; i++) {
-        var neighbor = controller.geometry.tileData[current].neighbors[Random.Range(0, 4)];
+      //for(var i = 0; i < 40; i++) {
+        //var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
         
-        if(neighbor < 0) continue;
-        if(neighbor == last) continue;
+        //if(neighbor < 1 || neighbor > 900) neighbor = last;
+        //if(neighbor == last) continue;
+        
+
 
         last = current;
-        current = neighbor;
+        current = GetNeighbor();
+
+        //current = neighbor;
         
         buffer[current] = setting.randomColor ? 
                     Color.HSVToRGB(Random.value, 1f-controller.dance.decay, 1f) :
                     ( setting.color*(1f + controller.dance.decay));
-        break;
-      }
+        //break;
+      //}
     }
+
+    //controller.debugText.text = $"{controller.penrose.geometry.tileData[current].ToString()}";
+    var tile = controller.penrose.geometry.tileData[current];
+    var neighbors = $"({tile.neighbors[0]}, {tile.neighbors[1]}, {tile.neighbors[3]}, {tile.neighbors[0]})";
+    controller.debugText.text = $"Current: {current}\nType: {tile.type}\nPos: {tile.center.ToString()}\nNeighbors: {neighbors}";
+
+
   }
 
   public override void LoadSettings() {

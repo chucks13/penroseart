@@ -30,11 +30,11 @@ public class Controller : Singleton<Controller> {
   [HideInInspector]
   public EffectBase[] effects;
 
-  [HideInInspector]
-  public Tiles geometry;
+  //[HideInInspector]
+  //public Tiles geometry;
 
   private float timeLeft;
-  private Penrose penrose;
+  public Penrose penrose;
 
   private void SetupEffects() {
     effects    = new EffectBase[EffectFactory.EffectCount];
@@ -50,7 +50,7 @@ public class Controller : Singleton<Controller> {
   void Start() {
     penrose = GameObject.FindObjectOfType<Penrose>();
 
-    geometry = new Tiles();
+    //geometry = new Tiles();
     SetupEffects();
 
     dance    = new Dance();
