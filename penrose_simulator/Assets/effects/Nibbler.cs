@@ -27,18 +27,18 @@ public class Nibbler : EffectBase {
     for (var x = 0; x < count; x++) {
       //for(var i = 0; i < 40; i++) {
         //var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
-        
+
         //if(neighbor < 1 || neighbor > 900) neighbor = last;
         //if(neighbor == last) continue;
-        
+
 
 
         last = current;
         current = GetNeighbor();
 
         //current = neighbor;
-        
-        buffer[current] = setting.randomColor ? 
+
+        buffer[current] = setting.randomColor ?
                     Color.HSVToRGB(Random.value, 1f-controller.dance.decay, 1f) :
                     ( setting.color*(1f + controller.dance.decay));
         //break;
