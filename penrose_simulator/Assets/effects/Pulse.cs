@@ -1,10 +1,13 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public class Pulse : EffectBase {
 
   private Settings setting;
-  
+  private Color startColor;
+  private Color endColor;
+
   public override void Init() {
     base.Init();
     setting = new Settings();
@@ -17,28 +20,36 @@ public class Pulse : EffectBase {
       setting.Randomize();
     }
 
-    controller.debugText.text = $"Start: {setting.startColor}\nEnd: {setting.endColor}\nTime: {setting.seconds}";
+    startColor = setting.color;
+    endColor = startColor.Delta(setting.colorDelta);
+
+    controller.debugText.text = $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
   }
 
   public override void Draw() {
     var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(Time.time, setting.seconds));
-    var color = Color.Lerp(setting.startColor, setting.endColor, t);
+
+    var color1 = Color.Lerp(setting.color, endColor, t);
+    var color2 = Color.Lerp(endColor, setting.color, t);
 
     for(int i = 0; i < buffer.Length; i++) {
-      buffer[i] = color;
+      buffer[i] = controller.penrose.tiles[i].type == 0 ? color1 : color2;
     }
   }
 
   [System.Serializable]
   public class Settings {
+
     public float seconds = 2f;
-    public Color startColor = Color.black;
-    public Color endColor = Color.white;
-    
+    public Color color;
+    public float colorDelta = 0.5f;
+
     public void Randomize() {
-      startColor = Color.HSVToRGB(Random.value, 1f, 1f);
-      endColor = Color.HSVToRGB((Random.value + Random.value) * 0.5f, 1f, 1f);
+      color   = Color.HSVToRGB(Random.value, 1f, 1f);
       seconds = Random.Range(1f, 5f);
+      colorDelta = Random.Range(0.25f, 0.75f);
     }
+
   }
+
 }

@@ -1,17 +1,9 @@
-﻿using System.Linq;
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Controller : Singleton<Controller> {
-
-  //public enum EffectTypes {
-  //  Nibbler,
-  //  Sparkle,
-  //  Noise,
-  //  Pulse
-  //}
-
+  
   [Header("Switching")]
   public float effectTime = 10;
   public int currentEffect;
@@ -29,9 +21,6 @@ public class Controller : Singleton<Controller> {
 
   [HideInInspector]
   public EffectBase[] effects;
-
-  //[HideInInspector]
-  //public Tiles geometry;
 
   private float timeLeft;
   public Penrose penrose;
