@@ -1,39 +1,32 @@
 ﻿[System.Serializable]
 public abstract class Transition : EffectBase {
 
-  private EffectBase[] effects;
+  private int a;
+  private int b;
   private float v;
 
-  public EffectBase A {
-    get => effects[0];
+  public int A {
+    get => a;
     set {
-      if(value != null) effects[0] = value;
+      if(value >= 0 && value < controller.effects.Length) a = value;
     }
   }
 
-  public EffectBase B {
-    get => effects[1];
+  public int B {
+    get => b;
     set {
-      if(value != null) effects[1] = value;
+      if(value >= 0 && value < controller.effects.Length) b = value;
     }
   }
 
   public float V {
     get => v;
     set {
-      if(value > 0f && value <= 1f) v = value;
+      if(value >= 0f && value <= 1f) v = value;
     }
   }
 
-  public override void Init() {
-    base.Init();
-    effects = new EffectBase[2];
-  }
-
-  public void SetEffects(EffectBase a, EffectBase b, float mv = 0f) {
-    effects[0] = a;
-    effects[1] = b;
-    v          = mv;
-  }
-
+  public float Delta => 1f - V;
+  
+  
 }

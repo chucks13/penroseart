@@ -3,13 +3,16 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Controller : Singleton<Controller> {
-  
+
   [Header("Switching")]
-  public float effectTime = 10;
+  public float effectTime = 10f;
+
+  public float transitionTime = 2f;
   public int currentEffect;
 
   [Header("Settings")]
   public Noise.Settings[] noiseSettings;
+
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
@@ -17,16 +20,25 @@ public class Controller : Singleton<Controller> {
 
   [Header("GUI")]
   public TextMeshProUGUI effectText;
+
   public TextMeshProUGUI debugText;
 
   [HideInInspector]
   public EffectBase[] effects;
 
-  private float timeLeft;
+  [HideInInspector]
   public Penrose penrose;
 
+  [HideInInspector]
+  public Timer timer;
+
+  [HideInInspector]
+  public Transition transition;
+
+  private bool inTransition;
+
   private void SetupEffects() {
-    effects    = new EffectBase[EffectFactory.EffectCount];
+    effects = new EffectBase[EffectFactory.EffectCount];
     for(int i = 0; i < effects.Length; i++) {
       effects[i] = EffectFactory.CreateEffect(EffectFactory.EffectTypes[i]);
       effects[i].Init();
@@ -42,38 +54,61 @@ public class Controller : Singleton<Controller> {
     //geometry = new Tiles();
     SetupEffects();
 
-    dance    = new Dance();
+    transition = new Fade();
+    transition.Init();
+
+    dance = new Dance();
     dance.Init();
 
-    timeLeft = effectTime;
+    timer            =  new Timer(effectTime, false);
+    timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
   }
 
-  void EffectUpdate() {
-    // if we are out of time
-    if(timeLeft <= 0) {
-      // reset the timer
-      timeLeft = effectTime;
-      // pick a different effect
-      currentEffect += Random.Range(1, effects.Length);
-      currentEffect %= effects.Length;
-      effects[currentEffect].LoadSettings();
-      effectText.text = effects[currentEffect].GetType().ToString();
+  private int GetNewEffectIndex() {
+    var i = Random.Range(0, effects.Length);
+    return (i == transition.A) ? GetNewEffectIndex() : i;
+  }
+
+  private void OnTimerFinished() {
+    if(inTransition) {
+      inTransition  = !inTransition;
+      currentEffect = transition.B;
+      timer.Set(effectTime);
+      timer.Reset();
+      effectText.text = effects[currentEffect].Name;
+      return;
     }
 
-    // update the effect
-    effects[currentEffect].Draw();
+    inTransition = !inTransition;
+    transition.A = currentEffect;
+    transition.V = 0f;
+    transition.B = GetNewEffectIndex();
 
-    // copy the effect buffer into the grid object
-    penrose.buffer =  (Color[])effects[currentEffect].buffer.Clone();
-    timeLeft       -= Time.deltaTime;
+    effects[transition.B].LoadSettings();
+
+    timer.Set(transitionTime);
+    timer.Reset();
+
+    currentEffect = -1;
   }
 
   // Update is called once per frame
   void Update() {
+    timer.Update(Time.deltaTime);
     if(Input.GetKeyDown("space")) dance.MarkBeat();
     dance.Update();
-    EffectUpdate();
+
+    if(inTransition) {
+      transition.V = timer.Value;
+      transition.Draw();
+      penrose.buffer = (Color[])transition.buffer.Clone();
+    } else {
+      effects[currentEffect].Draw();
+      penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
+    }
+    
   }
+
 }
