@@ -1,56 +1,33 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
+﻿using UnityEngine;
 
 [System.Serializable]
 public class Nibbler : EffectBase {
-  private int last = 0;
-  private int current = 1;
+
+  private int current;
   private Settings setting;
 
   public override void Init() {
     base.Init();
     setting = new Settings();
-  }
-
-
-  private int GetNeighbor() {
-    var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
-    if(neighbor == -1 || neighbor == last) neighbor = GetNeighbor();
-    return neighbor;
+    current = Random.Range(0, Penrose.Total);
   }
 
   public override void Draw() {
-    FadeAll();
+    FadeAll(setting.fade);
     int count = (int)(controller.dance.deltaTime * 300f);
-    for (var x = 0; x < count; x++) {
-      //for(var i = 0; i < 40; i++) {
-        //var neighbor = controller.penrose.geometry.tileData[current].neighbors[Random.Range(0, 4)];
+    for(var x = 0; x < count; x++) {
+      current = controller.penrose.tiles[current].GetRandomNeighbor();
 
-        //if(neighbor < 1 || neighbor > 900) neighbor = last;
-        //if(neighbor == last) continue;
-
-
-
-        last = current;
-        current = GetNeighbor();
-
-        //current = neighbor;
-
-        buffer[current] = setting.randomColor ?
-                    Color.HSVToRGB(Random.value, 1f-controller.dance.decay, 1f) :
-                    ( setting.color*(1f + controller.dance.decay));
-        //break;
-      //}
+      buffer[current] = setting.randomColor
+        ? Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f)
+        : (setting.color * (1f + controller.dance.decay));
     }
 
-    //controller.debugText.text = $"{controller.penrose.geometry.tileData[current].ToString()}";
-    var tile = controller.penrose.geometry.tileData[current];
+    // DEBUG
+    var tile = controller.penrose.tiles[current];
     var neighbors = $"({tile.neighbors[0]}, {tile.neighbors[1]}, {tile.neighbors[3]}, {tile.neighbors[0]})";
-    controller.debugText.text = $"Current: {current}\nType: {tile.type}\nPos: {tile.center.ToString()}\nNeighbors: {neighbors}";
-
-
+    var center = $"(x: {tile.center.x:00.00}, y: {tile.center.y:00.00})";
+    controller.debugText.text = $"{current:0000}, {tile.type}, {center}, {neighbors}";
   }
 
   public override void LoadSettings() {
@@ -61,15 +38,19 @@ public class Nibbler : EffectBase {
     }
 
     var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
-    controller.debugText.text = $"Speed: {setting.speed}\nColor: {colorText}";
+    controller.debugText.text = $"Color: {colorText}\nFade: {setting.fade}";
     ClearAll();
   }
 
   [System.Serializable]
   public class Settings {
-    public float speed = 1f;
+
+    //public float speed = 1f;   
     public bool randomColor = true;
     public Color color = Color.clear;
+
+    [Range(0.97f, 0.9999f)]
+    public float fade = 0.999f;
 
     public void Randomize() {
       if(Random.value > 0.5f) {
@@ -79,6 +60,10 @@ public class Nibbler : EffectBase {
         randomColor = false;
         color       = Color.HSVToRGB(Random.value, 1f, 1f);
       }
+
+      fade = Random.Range(0.97f, 0.9999f);
     }
+
   }
+
 }

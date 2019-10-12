@@ -10,13 +10,13 @@ public abstract class EffectBase {
 
   public string Name => GetType().ToString();
 
-  protected virtual void Fade(int index) {
-    buffer[index] *= 0.98f;
+  protected virtual void Fade(int index, float fade = 0.98f) {
+    buffer[index] *= fade;
   }
 
-  protected void FadeAll() {
+  protected void FadeAll(float fade = 0.98f) {
     for(var i = 0; i < buffer.Length; i++)
-      Fade(i);
+      Fade(i, fade);
   }
 
   protected virtual void Clear(int index) {
