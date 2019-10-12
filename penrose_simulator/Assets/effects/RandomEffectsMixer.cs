@@ -34,7 +34,7 @@ public class RandomEffectsMixer : EffectBase {
   }
 
   public override void LoadSettings() {
-    effects = new EffectBase[Random.Range(2, 5)];
+    effects = new EffectBase[Random.Range(2, 4)];
     total = effects.Length;
 
     var debugText = string.Empty;
