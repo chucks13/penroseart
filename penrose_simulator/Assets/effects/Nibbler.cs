@@ -24,10 +24,10 @@ public class Nibbler : EffectBase {
     }
 
     // DEBUG
-    var tile = controller.penrose.tiles[current];
-    var neighbors = $"({tile.neighbors[0]}, {tile.neighbors[1]}, {tile.neighbors[3]}, {tile.neighbors[0]})";
-    var center = $"(x: {tile.center.x:00.00}, y: {tile.center.y:00.00})";
-    controller.debugText.text = $"{current:0000}, {tile.type}, {center}, {neighbors}";
+    //var tile = controller.penrose.tiles[current];
+    //var neighbors = $"({tile.neighbors[0]}, {tile.neighbors[1]}, {tile.neighbors[3]}, {tile.neighbors[0]})";
+    //var center = $"(x: {tile.center.x:00.00}, y: {tile.center.y:00.00})";
+    //controller.debugText.text = $"{current:0000}, {tile.type}, {center}, {neighbors}";
   }
 
   public override void LoadSettings() {
@@ -49,7 +49,7 @@ public class Nibbler : EffectBase {
     public bool randomColor = true;
     public Color color = Color.clear;
 
-    [Range(0.97f, 0.9999f)]
+    [Range(0.97f, 0.999f)]
     public float fade = 0.999f;
 
     public void Randomize() {
@@ -61,7 +61,7 @@ public class Nibbler : EffectBase {
         color       = Color.HSVToRGB(Random.value, 1f, 1f);
       }
 
-      fade = Random.Range(0.97f, 0.9999f);
+      fade = Random.Range(0.97f, 0.999f);
     }
 
   }

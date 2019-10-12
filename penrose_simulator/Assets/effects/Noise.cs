@@ -22,7 +22,7 @@ public class Noise : EffectBase {
 
       int v = (int)n;
       if((v & 1) == 0)
-        buffer[i] = Color.HSVToRGB((n + setting.colorDelta) % 1, 1f, 1);
+        buffer[i] = Color.HSVToRGB((n + setting.colorDelta) % 1f, 1f, 1);
       else
         buffer[i] = Color.black;
     }

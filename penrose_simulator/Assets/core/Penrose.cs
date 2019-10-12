@@ -109,11 +109,8 @@ public class Penrose : MonoBehaviour {
     var x = 0;
 
     for(var i = 0; i < buffer.Length; i++) {
-      var color = buffer[i];
-      color = FadeColorToBgColor(color);
-
       // set the vertex color
-      for(int j = 0; j < 6; j++) colors[x++] = color;
+      for(int j = 0; j < 6; j++) colors[x++] = FadeColorToBgColor(buffer[i]);
     }
 
     mesh.colors = colors;
@@ -125,20 +122,7 @@ public class Penrose : MonoBehaviour {
   }
 
   private Color FadeColorToBgColor(Color color) {
-    // Lerp between color and background
-    color = Color.Lerp(bgColor, color, color.grayscale);
-
-    // convert to HSV
-    Color.RGBToHSV(color, out var h, out var s, out var v);
-
-    // if current brightness is less than background bright, fix it
-    if(v < bgBrightness) v = bgBrightness;
-
-    // convert back to RGB
-    color = Color.HSVToRGB(h, s, v);
-
-    // return the new color
-    return color;
+    return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness);
   }
 
   [Serializable]

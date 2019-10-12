@@ -1,9 +1,6 @@
-﻿using System;
-using Random = UnityEngine.Random;
-
-[System.Serializable]
+﻿[System.Serializable]
 public abstract class Transition : EffectBase {
-  
+
   private EffectBase[] effects;
   private float v;
 
@@ -36,7 +33,7 @@ public abstract class Transition : EffectBase {
   public void SetEffects(EffectBase a, EffectBase b, float mv = 0f) {
     effects[0] = a;
     effects[1] = b;
-    v = mv;
+    v          = mv;
   }
 
 }

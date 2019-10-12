@@ -31,7 +31,7 @@ public abstract class EffectBase {
 
   public virtual void Init() {
     controller = Controller.Instance;
-    buffer = new Color[900];
+    buffer = new Color[Penrose.Total];
   }
   public abstract void Draw();
 
