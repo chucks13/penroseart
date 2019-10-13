@@ -116,9 +116,9 @@ public class Penrose : MonoBehaviour {
     mesh.colors = colors;
   }
 
-  void LateUpdate() {
+  void Update() {
     UpdateVertexColors();
-    mesh.RecalculateNormals();
+    //mesh.RecalculateNormals();
   }
 
   private Color FadeColorToBgColor(Color color) {
@@ -133,9 +133,8 @@ public class Penrose : MonoBehaviour {
     public int type;
 
     public int GetRandomNeighbor() {
-      var neighbor                = neighbors[Random.Range(0, 4)];
-      if(neighbor == -1) neighbor = GetRandomNeighbor();
-      return neighbor;
+      var neighbor = neighbors[Random.Range(0, 4)];
+      return neighbor == -1 ? GetRandomNeighbor() : neighbor;
     }
 
     public override string ToString() =>
