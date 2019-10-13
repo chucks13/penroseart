@@ -49,12 +49,15 @@ public class Controller : Singleton<Controller> {
 
   // Use this for initialization
   void Start() {
+
+    Application.targetFrameRate = 60;
+
     penrose = GameObject.FindObjectOfType<Penrose>();
 
     //geometry = new Tiles();
     SetupEffects();
 
-    transition = new Fade();
+    transition = new IndexWipe();
     transition.Init();
 
     dance = new Dance();
@@ -64,6 +67,7 @@ public class Controller : Singleton<Controller> {
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
+
   }
 
   private int GetNewEffectIndex() {
