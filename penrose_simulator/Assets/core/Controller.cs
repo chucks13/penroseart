@@ -16,6 +16,7 @@ public class Controller : Singleton<Controller> {
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
+  public NoiseTunnel.Settings[] noiseTunnelSettings;
   public Dance dance;
 
   [Header("GUI")]
