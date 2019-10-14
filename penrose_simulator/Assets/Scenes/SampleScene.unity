@@ -709,9 +709,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f47cb3b2738dba41858c13614a36b80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  effectTime: 2
+  effectTime: 10
   transitionTime: 4
-  currentEffect: 4
+  currentEffect: 3
   noiseSettings:
   - scale: 0.176559
     speed: 1.356254
@@ -736,6 +736,7 @@ MonoBehaviour:
   sparkleSettings: []
   nibblerSettings: []
   pulseSettings: []
+  noiseTunnelSettings: []
   dance:
     beat: 0
     fixedTime: 0
