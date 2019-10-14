@@ -39,12 +39,16 @@ public class Controller : Singleton<Controller> {
 
   private void SetupEffects() {
     effects = new EffectBase[EffectFactory.EffectCount];
+    string names = string.Empty;
     for(int i = 0; i < effects.Length; i++) {
       effects[i] = EffectFactory.CreateEffect(EffectFactory.EffectTypes[i]);
       effects[i].Init();
+      names += i != effects.Length - 1 ? $"{effects[i].Name}, " : $"{effects[i].Name}";
     }
 
     effects[currentEffect].LoadSettings();
+
+    Debug.Log($"{names}");
   }
 
   // Use this for initialization
