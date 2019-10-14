@@ -6,6 +6,15 @@ public class RandomEffectsMixer : EffectBase {
   private int total;
   private float percent;
 
+  public override string DebugText() {
+    var debugText = string.Empty;
+    for(var i = 0; i < total; i++) {
+      debugText += (i < total - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
+    }
+
+    return debugText;
+  }
+
   public override void Draw() {
 
     for(int i = 0; i < total; i++) {
@@ -26,7 +35,7 @@ public class RandomEffectsMixer : EffectBase {
   }
 
   private EffectBase GetRandomEffect() {
-    var effect = EffectFactory.CreateEffect(EffectFactory.EffectTypes[Random.Range(0,EffectFactory.EffectCount)]);
+    var effect = EffectFactory.Create(EffectFactory.Types[Random.Range(0,EffectFactory.Count)]);
     if(effect.Name == Name) effect = GetRandomEffect();
     return effect;
   }

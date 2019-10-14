@@ -4,11 +4,15 @@ using Random = UnityEngine.Random;
 
 public class Controller : Singleton<Controller> {
 
-  [Header("Switching")]
+  [Header("Effect Switching")]
+  public int currentEffect;
+
   public float effectTime = 10f;
 
+  [Header("Transition Switching")]
+  public int currentTransition;
+
   public float transitionTime = 2f;
-  public int currentEffect;
 
   [Header("Settings")]
   public Noise.Settings[] noiseSettings;
@@ -28,42 +32,56 @@ public class Controller : Singleton<Controller> {
   public EffectBase[] effects;
 
   [HideInInspector]
+  public TransitionBase[] transitions;
+
+  [HideInInspector]
   public Penrose penrose;
 
   [HideInInspector]
   public Timer timer;
 
-  [HideInInspector]
-  public Transition transition;
+  //[HideInInspector]
+  //public Transition transition;
 
   private bool inTransition;
 
   private void SetupEffects() {
-    effects = new EffectBase[EffectFactory.EffectCount];
-    string names = string.Empty;
+    var factory = new Factory<EffectBase>();
+
+    effects = new EffectBase[factory.Count];
     for(int i = 0; i < effects.Length; i++) {
-      effects[i] = EffectFactory.CreateEffect(EffectFactory.EffectTypes[i]);
+      effects[i] = factory.Create(factory.Types[i]);
       effects[i].Init();
-      names += i != effects.Length - 1 ? $"{effects[i].Name}, " : $"{effects[i].Name}";
     }
 
     effects[currentEffect].LoadSettings();
 
-    Debug.Log($"{names}");
+    Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
+  }
+
+  private void SetupTransitions() {
+    var factory = new Factory<TransitionBase>();
+
+    transitions = new TransitionBase[factory.Count];
+    for(int i = 0; i < transitions.Length; i++) {
+      transitions[i] = factory.Create(factory.Types[i]);
+      transitions[i].Init();
+    }
+
+    Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
   }
 
   // Use this for initialization
   void Start() {
-
     Application.targetFrameRate = 60;
 
     penrose = GameObject.FindObjectOfType<Penrose>();
 
-    //geometry = new Tiles();
     SetupEffects();
+    SetupTransitions();
 
-    transition = new IndexWipe();
-    transition.Init();
+    //transition = new IndexWipe();
+    //transition.Init();
 
     dance = new Dance();
     dance.Init();
@@ -72,35 +90,37 @@ public class Controller : Singleton<Controller> {
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
-
   }
 
   private int GetNewEffectIndex() {
     var i = Random.Range(0, effects.Length);
-    return (i == transition.A) ? GetNewEffectIndex() : i;
+    return (i == transitions[currentTransition].A) ? GetNewEffectIndex() : i;
   }
 
   private void OnTimerFinished() {
     if(inTransition) {
       inTransition  = !inTransition;
-      currentEffect = transition.B;
+      currentEffect = transitions[currentTransition].B;
       timer.Set(effectTime);
       timer.Reset();
       effectText.text = effects[currentEffect].Name;
+      currentTransition = Random.Range(0, transitions.Length);
       return;
     }
 
-    inTransition = !inTransition;
-    transition.A = currentEffect;
-    transition.V = 0f;
-    transition.B = GetNewEffectIndex();
+    inTransition                     = !inTransition;
+    transitions[currentTransition].A = currentEffect;
+    transitions[currentTransition].V = 0f;
+    transitions[currentTransition].B = GetNewEffectIndex();
 
-    effects[transition.B].LoadSettings();
+    effects[transitions[currentTransition].B].LoadSettings();
 
     timer.Set(transitionTime);
     timer.Reset();
 
     currentEffect = -1;
+
+    effectText.text = transitions[currentTransition].Name;
   }
 
   // Update is called once per frame
@@ -110,14 +130,23 @@ public class Controller : Singleton<Controller> {
     dance.Update();
 
     if(inTransition) {
-      transition.V = timer.Value;
-      transition.Draw();
-      penrose.buffer = (Color[])transition.buffer.Clone();
+      transitions[currentTransition].V = timer.Value;
+      transitions[currentTransition].Draw();
+      penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
+
+      var aName = effects[transitions[currentTransition].A].Name;
+      var bName = effects[transitions[currentTransition].B].Name;
+      var delta = transitions[currentTransition].D;
+      var value = transitions[currentTransition].V;
+
+      debugText.text = $"{aName} ({delta:0.00}) => {bName} ({value:0.00})";
+
     } else {
       effects[currentEffect].Draw();
       penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
+
+      debugText.text = effects[currentEffect].DebugText();
     }
-    
   }
 
 }

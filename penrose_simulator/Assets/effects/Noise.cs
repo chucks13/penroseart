@@ -4,7 +4,14 @@ using Random = UnityEngine.Random;
 public class Noise : EffectBase {
 
   private Settings setting;
+
+  private float n;
+
   //private float timeScale;
+
+  public override string DebugText() {
+    return $"Noise: {n}\nSpeed: {setting.speed}";
+  }
 
   public override void Init() {
     base.Init();
@@ -17,8 +24,10 @@ public class Noise : EffectBase {
       float x     = controller.penrose.tiles[i].center.x * scale;
       float y     = controller.penrose.tiles[i].center.y * scale;
       float z     = controller.dance.fixedTime * setting.speed;
-      float n     = Perlin.Noise(x, y, z);
+
+      n =  Perlin.Noise(x, y, z);
       n *= setting.amplifier;
+      //n = Mathf.Abs(n);
 
       int v = (int)n;
       if((v & 1) == 0)
@@ -35,7 +44,6 @@ public class Noise : EffectBase {
       setting.Randomize();
     }
 
-    controller.debugText.text = $"Scale: {setting.scale}\nSpeed: {setting.speed}\nAmp: {setting.amplifier}\nDelta: {setting.colorDelta}";
     ClearAll();
   }
 

@@ -6,6 +6,11 @@ public class Nibbler : EffectBase {
   private int current;
   private Settings setting;
 
+  public override string DebugText() {
+    var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
+    return $"Color: {colorText}\nFade: {setting.fade}";
+  }
+
   public override void Init() {
     base.Init();
     setting = new Settings();
@@ -37,8 +42,7 @@ public class Nibbler : EffectBase {
       setting.Randomize();
     }
 
-    var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
-    controller.debugText.text = $"Color: {colorText}\nFade: {setting.fade}";
+    
     ClearAll();
   }
 

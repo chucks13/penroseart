@@ -10,6 +10,8 @@ public abstract class EffectBase {
 
   public string Name => GetType().ToString();
 
+  public abstract string DebugText();
+
   protected virtual void Fade(int index, float fade = 0.98f) {
     buffer[index] *= fade;
   }
