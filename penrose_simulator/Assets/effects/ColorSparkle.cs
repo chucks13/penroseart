@@ -6,6 +6,8 @@ public class ColorSparkle : EffectBase {
   private Settings setting;
   private Color color;
 
+  public override string DebugText() => setting.randomColor ? "Color: random" : $"Color: {setting.color.ToString()}";
+
   public override void Init() {
     base.Init();
     setting = new Settings();
@@ -24,6 +26,8 @@ public class ColorSparkle : EffectBase {
       buffer[Random.Range(0, buffer.Length)] = color; //  Color.HSVToRGB(Random.value, 1, 1);
     }
   }
+
+  
 
   public override void LoadSettings() {
     if(controller.sparkleSettings.Length > 0) {

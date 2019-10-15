@@ -7,6 +7,10 @@ public class Pulse : EffectBase {
   private Color startColor;
   private Color endColor;
 
+  public override string DebugText() {
+    return $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
+  }
+
   public override void Init() {
     base.Init();
     setting = new Settings();
@@ -21,8 +25,6 @@ public class Pulse : EffectBase {
 
     startColor = setting.color;
     endColor = startColor.Delta(setting.colorDelta);
-
-    controller.debugText.text = $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
   }
 
   public override void Draw() {
