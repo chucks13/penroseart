@@ -85,6 +85,11 @@ public class Penrose : MonoBehaviour {
   }
 
   private void GenerateTiles() {
+    float xMax = float.MinValue;
+    float xMin = float.MaxValue;
+    float yMax = float.MinValue;
+    float yMin = float.MaxValue;
+      
     var j = 0;
     tiles = new TileData[Total];
     for(var i = 0; i < Total; i++) {
@@ -95,7 +100,17 @@ public class Penrose : MonoBehaviour {
       for(var a = 0; a < 4; a++) t.neighbors[a] = RawData.Tiles[j++];
 
       tiles[i] = t;
+
+      xMax = Mathf.Max(t.center.x, xMax);
+      yMax = Mathf.Max(t.center.y, yMax);
+      xMin = Mathf.Min(t.center.x, xMin);
+      yMin = Mathf.Min(t.center.y, yMin);
+
     }
+
+    var ix = Mathf.Round(xMax) + Mathf.Round(Mathf.Abs(Mathf.Round(xMin)));
+    var iy = Mathf.Round(yMax) + Mathf.Round(Mathf.Abs(Mathf.Round(yMin)));
+    Debug.Log($"({xMin}, {yMin}) to ({xMax}, {yMax}), ({ix}, {iy}), {ix * iy} ");
   }
 
   void Start() {
