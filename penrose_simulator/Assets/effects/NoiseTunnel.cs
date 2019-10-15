@@ -15,6 +15,18 @@ public class NoiseTunnel : EffectBase {
     setting = new Settings();
   }
 
+  public override void OnStart() {
+    if(controller.noiseTunnelSettings.Length > 0) {
+      setting = controller.noiseTunnelSettings[Random.Range(0, controller.noiseTunnelSettings.Length)];
+    } else {
+      setting.Randomize();
+    }
+
+    buffer.Clear();
+  }
+
+  public override void OnEnd() {  }
+
   public override void Draw() {
     for(int i = 0; i < buffer.Length; i++) {
       float scale = (1.0f + (controller.dance.decay * 0.25f)) * setting.scale;
@@ -52,17 +64,6 @@ public class NoiseTunnel : EffectBase {
       else
         buffer[i] = Color.black;
     }
-  }
-
-  public override void LoadSettings() {
-    if(controller.noiseTunnelSettings.Length > 0) {
-      setting = controller.noiseTunnelSettings[Random.Range(0, controller.noiseTunnelSettings.Length)];
-    } else {
-      setting.Randomize();
-    }
-
-    
-    ClearAll();
   }
 
   [System.Serializable]

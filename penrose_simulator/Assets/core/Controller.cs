@@ -40,9 +40,6 @@ public class Controller : Singleton<Controller> {
   [HideInInspector]
   public Timer timer;
 
-  //[HideInInspector]
-  //public Transition transition;
-
   private bool inTransition;
 
   private void SetupEffects() {
@@ -54,7 +51,7 @@ public class Controller : Singleton<Controller> {
       effects[i].Init();
     }
 
-    effects[currentEffect].LoadSettings();
+    effects[currentEffect].OnStart();
 
     Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
   }
@@ -79,10 +76,7 @@ public class Controller : Singleton<Controller> {
 
     SetupEffects();
     SetupTransitions();
-
-    //transition = new IndexWipe();
-    //transition.Init();
-
+    
     dance = new Dance();
     dance.Init();
 
@@ -113,7 +107,7 @@ public class Controller : Singleton<Controller> {
     transitions[currentTransition].V = 0f;
     transitions[currentTransition].B = GetNewEffectIndex();
 
-    effects[transitions[currentTransition].B].LoadSettings();
+    effects[transitions[currentTransition].B].OnStart();
 
     timer.Set(transitionTime);
     timer.Reset();
@@ -134,12 +128,7 @@ public class Controller : Singleton<Controller> {
       transitions[currentTransition].Draw();
       penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
 
-      var aName = effects[transitions[currentTransition].A].Name;
-      var bName = effects[transitions[currentTransition].B].Name;
-      var delta = transitions[currentTransition].D;
-      var value = transitions[currentTransition].V;
-
-      debugText.text = $"{aName} ({delta:0.00}) => {bName} ({value:0.00})";
+      debugText.text = transitions[currentTransition].DebugText();
 
     } else {
       effects[currentEffect].Draw();

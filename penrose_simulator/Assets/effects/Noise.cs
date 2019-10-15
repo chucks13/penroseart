@@ -18,6 +18,18 @@ public class Noise : EffectBase {
     setting = new Settings();
   }
 
+  public override void OnStart() {
+    if(controller.noiseSettings.Length > 0) {
+      setting = controller.noiseSettings[Random.Range(0, controller.noiseSettings.Length)];
+    } else {
+      setting.Randomize();
+    }
+
+    buffer.Clear();
+  }
+
+  public override void OnEnd() {  }
+
   public override void Draw() {
     for(int i = 0; i < buffer.Length; i++) {
       float scale = (1.0f + (controller.dance.decay * 0.25f)) * setting.scale;
@@ -35,16 +47,6 @@ public class Noise : EffectBase {
       else
         buffer[i] = Color.black;
     }
-  }
-
-  public override void LoadSettings() {
-    if(controller.noiseSettings.Length > 0) {
-      setting = controller.noiseSettings[Random.Range(0, controller.noiseSettings.Length)];
-    } else {
-      setting.Randomize();
-    }
-
-    ClearAll();
   }
 
   [System.Serializable]

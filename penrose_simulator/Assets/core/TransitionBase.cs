@@ -30,19 +30,27 @@ public abstract class TransitionBase {
 
   public float V {
     get => v;
-    set {
-      if(value >= 0f && value <= 1f) v = value;
-    }
+    set => v = Mathf.Clamp01(value);
   }
 
-  public float D => 1f - V;
+  public float D => 1f - v;
 
+  // Used for UI display and gets called every frame
+  public virtual string DebugText() => $"{controller.effects[a].Name} ({D:0.00}) => {controller.effects[b].Name} ({v:0.00})";
 
+  // Should be called after creation
   public virtual void Init() {
     controller = Controller.Instance;
     buffer = new Color[Penrose.Total];
   }
 
+  // Should be called every time an effect is turned on
+  public abstract void OnStart();
+
+  // Should be called every time an effect is turned off
+  public abstract void OnEnd();
+
+  // Should be called every frame
   public abstract void Draw();
 
 }
