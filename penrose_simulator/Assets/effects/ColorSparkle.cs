@@ -13,8 +13,24 @@ public class ColorSparkle : EffectBase {
     setting = new Settings();
   }
 
+  // Should be called every time an effect is turned on
+  public override void OnStart() {
+    if(controller.sparkleSettings.Length > 0) {
+      setting = controller.sparkleSettings[Random.Range(0, controller.sparkleSettings.Length)];
+    } else {
+      setting.Randomize();
+    }
+
+    var text = (setting.randomColor) ? "random" : setting.color.ToString();
+    controller.debugText.text = $"Color: {text}";
+    buffer.Clear();
+  }
+
+  // Should be called every time an effect is turned off
+  public override void OnEnd() {  }
+
   public override void Draw() {
-   FadeAll();
+   buffer.Fade();
    int count =(int) (controller.dance.deltaTime * buffer.Length);
     for (int i = 0; i < count; i++) {
 
@@ -29,17 +45,7 @@ public class ColorSparkle : EffectBase {
 
   
 
-  public override void LoadSettings() {
-    if(controller.sparkleSettings.Length > 0) {
-      setting = controller.sparkleSettings[Random.Range(0, controller.sparkleSettings.Length)];
-    } else {
-      setting.Randomize();
-    }
-
-    var text = (setting.randomColor) ? "random" : setting.color.ToString();
-    controller.debugText.text = $"Color: {text}";
-    ClearAll();
-  }
+  
 
   [System.Serializable]
   public class Settings {

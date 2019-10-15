@@ -106,17 +106,6 @@ public class Penrose : MonoBehaviour {
       xMin = Mathf.Min(t.center.x, xMin);
       yMin = Mathf.Min(t.center.y, yMin);
 
-      
-    }
-
-
-    for(int i = 0; i < tiles.Length; i++) {
-      var t = tiles[i];
-      var x  = Mathf.Round(t.center.x + xMax);
-      var y  = Mathf.Round(t.center.y + yMax);
-      var d1 = Mathf.Sqrt((x * x) + (y * y));
-
-      Debug.Log($"i: {i} ({x }, {y})");
     }
 
     var ix = Mathf.Round(xMax) + Mathf.Round(Mathf.Abs(Mathf.Round(xMin)));

@@ -16,7 +16,7 @@ public class Pulse : EffectBase {
     setting = new Settings();
   }
 
-  public override void LoadSettings() {
+  public override void OnStart() {
     if(controller.pulseSettings.Length > 0) {
       setting = controller.pulseSettings[Random.Range(0, controller.pulseSettings.Length)];
     } else {
@@ -26,6 +26,8 @@ public class Pulse : EffectBase {
     startColor = setting.color;
     endColor = startColor.Delta(setting.colorDelta);
   }
+
+  public override void OnEnd() {  }
 
   public override void Draw() {
     var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(Time.time, setting.seconds));
