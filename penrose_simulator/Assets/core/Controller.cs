@@ -14,6 +14,7 @@ public class Controller : Singleton<Controller> {
   public Noise.Settings[] noiseSettings;
 
   public ColorSparkle.Settings[] sparkleSettings;
+  public Example2DEffect.Settings[] example2dEffectSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;

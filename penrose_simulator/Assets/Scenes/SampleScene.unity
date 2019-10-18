@@ -711,7 +711,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   effectTime: 10
   transitionTime: 4
-  currentEffect: 3
+  currentEffect: 2
   noiseSettings:
   - scale: 0.176559
     speed: 1.356254
@@ -734,6 +734,7 @@ MonoBehaviour:
     amplifier: 1
     colorDelta: 0
   sparkleSettings: []
+  example2dEffectSettings: []
   nibblerSettings: []
   pulseSettings: []
   noiseTunnelSettings: []
