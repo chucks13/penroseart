@@ -709,7 +709,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f47cb3b2738dba41858c13614a36b80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  currentEffect: 2
+  currentEffect: 1
   effectTime: 20
   currentTransition: 0
   transitionTime: 4
@@ -738,6 +738,7 @@ MonoBehaviour:
   nibblerSettings: []
   pulseSettings: []
   noiseTunnelSettings: []
+  example2dEffectSettings: []
   dance:
     beat: 0
     fixedTime: 0

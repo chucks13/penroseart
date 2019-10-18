@@ -21,6 +21,7 @@ public class Controller : Singleton<Controller> {
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
+  public Example2DEffect.Settings[] example2dEffectSettings;
   public Dance dance;
 
   [Header("GUI")]
