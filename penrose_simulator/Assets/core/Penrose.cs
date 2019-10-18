@@ -89,7 +89,7 @@ public class Penrose : MonoBehaviour {
     float xMin = float.MaxValue;
     float yMax = float.MinValue;
     float yMin = float.MaxValue;
-      
+
     var j = 0;
     tiles = new TileData[Total];
     for(var i = 0; i < Total; i++) {
@@ -105,7 +105,6 @@ public class Penrose : MonoBehaviour {
       yMax = Mathf.Max(t.center.y, yMax);
       xMin = Mathf.Min(t.center.x, xMin);
       yMin = Mathf.Min(t.center.y, yMin);
-
     }
 
     var ix = Mathf.Round(xMax) + Mathf.Round(Mathf.Abs(Mathf.Round(xMin)));
@@ -113,13 +112,13 @@ public class Penrose : MonoBehaviour {
     Debug.Log($"({xMin}, {yMin}) to ({xMax}, {yMax}), ({ix}, {iy}), {ix * iy} ");
   }
 
-  void Start() {
+  public void Init() {
     GenerateMesh();
     GenerateTiles();
     bgBrightness = bgColor.grayscale;
   }
 
-  void UpdateVertexColors() {
+  private void UpdateVertexColors() {
     // color all the mesh vertices
     var x = 0;
 
@@ -131,14 +130,12 @@ public class Penrose : MonoBehaviour {
     mesh.colors = colors;
   }
 
-  void Update() {
+  public void Send() {
     UpdateVertexColors();
     //mesh.RecalculateNormals();
   }
 
-  private Color FadeColorToBgColor(Color color) {
-    return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness);
-  }
+  private Color FadeColorToBgColor(Color color) { return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness); }
 
   [Serializable]
   public class TileData {
