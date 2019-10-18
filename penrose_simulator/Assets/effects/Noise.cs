@@ -4,12 +4,31 @@ using Random = UnityEngine.Random;
 public class Noise : EffectBase {
 
   private Settings setting;
+
+  private float n;
+
   //private float timeScale;
+
+  public override string DebugText() {
+    return $"Noise: {n}\nSpeed: {setting.speed}";
+  }
 
   public override void Init() {
     base.Init();
     setting = new Settings();
   }
+
+  public override void OnStart() {
+    if(controller.noiseSettings.Length > 0) {
+      setting = controller.noiseSettings[Random.Range(0, controller.noiseSettings.Length)];
+    } else {
+      setting.Randomize();
+    }
+
+    buffer.Clear();
+  }
+
+  public override void OnEnd() {  }
 
   public override void Draw() {
     for(int i = 0; i < buffer.Length; i++) {
@@ -17,8 +36,10 @@ public class Noise : EffectBase {
       float x     = controller.penrose.tiles[i].center.x * scale;
       float y     = controller.penrose.tiles[i].center.y * scale;
       float z     = controller.dance.fixedTime * setting.speed;
-      float n     = Perlin.Noise(x, y, z);
+
+      n =  Perlin.Noise(x, y, z);
       n *= setting.amplifier;
+      //n = Mathf.Abs(n);
 
       int v = (int)n;
       if((v & 1) == 0)
@@ -26,20 +47,6 @@ public class Noise : EffectBase {
       else
         buffer[i] = Color.black;
     }
-  }
-
-  public override void LoadSettings() {
-    if(controller.noiseSettings.Length > 0) {
-      setting = controller.noiseSettings[Random.Range(0, controller.noiseSettings.Length)];
-    } else {
-      setting.Randomize();
-    }
-
-<<<<<<< HEAD
-    controller.debugText.text = $"Scale: {setting.scale}\nSpeed: {setting.speed}\nAmp: {setting.amplifier}\nDelta: {setting.colorDelta}";
-=======
->>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
-    ClearAll();
   }
 
   [System.Serializable]

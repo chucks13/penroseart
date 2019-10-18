@@ -7,12 +7,16 @@ public class Pulse : EffectBase {
   private Color startColor;
   private Color endColor;
 
+  public override string DebugText() {
+    return $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
+  }
+
   public override void Init() {
     base.Init();
     setting = new Settings();
   }
 
-  public override void LoadSettings() {
+  public override void OnStart() {
     if(controller.pulseSettings.Length > 0) {
       setting = controller.pulseSettings[Random.Range(0, controller.pulseSettings.Length)];
     } else {
@@ -21,13 +25,10 @@ public class Pulse : EffectBase {
 
     startColor = setting.color;
     endColor = startColor.Delta(setting.colorDelta);
-
-<<<<<<< HEAD
-    controller.debugText.text = $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
   }
 
-=======
->>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
+  public override void OnEnd() {  }
+
   public override void Draw() {
     var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(Time.time, setting.seconds));
 

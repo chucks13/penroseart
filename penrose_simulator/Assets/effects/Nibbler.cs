@@ -6,14 +6,31 @@ public class Nibbler : EffectBase {
   private int current;
   private Settings setting;
 
+  public override string DebugText() {
+    var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
+    return $"Color: {colorText}\nFade: {setting.fade}";
+  }
+
   public override void Init() {
     base.Init();
     setting = new Settings();
     current = Random.Range(0, Penrose.Total);
   }
 
+  public override void OnStart() {
+    if(controller.nibblerSettings.Length > 0) {
+      setting = controller.nibblerSettings[Random.Range(0, controller.nibblerSettings.Length)];
+    } else {
+      setting.Randomize();
+    }
+
+    buffer.Clear();
+  }
+
+  public override void OnEnd() {  }
+
   public override void Draw() {
-    FadeAll(setting.fade);
+    buffer.Fade(setting.fade);
     int count = (int)(controller.dance.deltaTime * 300f);
     for(var x = 0; x < count; x++) {
       current = controller.penrose.tiles[current].GetRandomNeighbor();
@@ -23,27 +40,6 @@ public class Nibbler : EffectBase {
         : (setting.color * (1f + controller.dance.decay));
     }
 
-    // DEBUG
-    //var tile = controller.penrose.tiles[current];
-    //var neighbors = $"({tile.neighbors[0]}, {tile.neighbors[1]}, {tile.neighbors[3]}, {tile.neighbors[0]})";
-    //var center = $"(x: {tile.center.x:00.00}, y: {tile.center.y:00.00})";
-    //controller.debugText.text = $"{current:0000}, {tile.type}, {center}, {neighbors}";
-  }
-
-  public override void LoadSettings() {
-    if(controller.nibblerSettings.Length > 0) {
-      setting = controller.nibblerSettings[Random.Range(0, controller.nibblerSettings.Length)];
-    } else {
-      setting.Randomize();
-    }
-
-<<<<<<< HEAD
-    var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
-    controller.debugText.text = $"Color: {colorText}\nFade: {setting.fade}";
-=======
-    
->>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
-    ClearAll();
   }
 
   [System.Serializable]
