@@ -74,6 +74,7 @@ public class Controller : Singleton<Controller> {
     Application.targetFrameRate = 60;
 
     penrose = GameObject.FindObjectOfType<Penrose>();
+    penrose.Init();
 
     SetupEffects();
     SetupTransitions();
@@ -137,6 +138,8 @@ public class Controller : Singleton<Controller> {
 
       debugText.text = effects[currentEffect].DebugText();
     }
+
+    penrose.Send();
   }
 
 }
