@@ -95,6 +95,26 @@ public class Penrose : MonoBehaviour {
       for(var a = 0; a < 4; a++) t.neighbors[a] = RawData.Tiles[j++];
 
       tiles[i] = t;
+<<<<<<< HEAD
+=======
+
+      xMax = Mathf.Max(t.center.x, xMax);
+      yMax = Mathf.Max(t.center.y, yMax);
+      xMin = Mathf.Min(t.center.x, xMin);
+      yMin = Mathf.Min(t.center.y, yMin);
+
+      
+    }
+
+
+    for(int i = 0; i < tiles.Length; i++) {
+      var t = tiles[i];
+      var x  = Mathf.Round(t.center.x + xMax);
+      var y  = Mathf.Round(t.center.y + yMax);
+      var d1 = Mathf.Sqrt((x * x) + (y * y));
+
+      Debug.Log($"i: {i} ({x }, {y})");
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
     }
   }
 

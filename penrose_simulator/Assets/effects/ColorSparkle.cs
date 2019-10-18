@@ -32,6 +32,16 @@ public class ColorSparkle : EffectBase {
       setting.Randomize();
     }
 
+<<<<<<< HEAD
+=======
+  public override void LoadSettings() {
+    if(controller.sparkleSettings.Length > 0) {
+      setting = controller.sparkleSettings[Random.Range(0, controller.sparkleSettings.Length)];
+    } else {
+      setting.Randomize();
+    }
+
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
     var text = (setting.randomColor) ? "random" : setting.color.ToString();
     controller.debugText.text = $"Color: {text}";
     ClearAll();

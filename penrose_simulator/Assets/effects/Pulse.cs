@@ -22,9 +22,12 @@ public class Pulse : EffectBase {
     startColor = setting.color;
     endColor = startColor.Delta(setting.colorDelta);
 
+<<<<<<< HEAD
     controller.debugText.text = $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
   }
 
+=======
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
   public override void Draw() {
     var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(Time.time, setting.seconds));
 

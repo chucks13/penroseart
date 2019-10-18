@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 ﻿public class Fade : Transition {
+=======
+﻿public class Fade : TransitionBase {
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
 
   public override void Draw() {
    
