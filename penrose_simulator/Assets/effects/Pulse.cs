@@ -7,16 +7,12 @@ public class Pulse : EffectBase {
   private Color startColor;
   private Color endColor;
 
-  public override string DebugText() {
-    return $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
-  }
-
   public override void Init() {
     base.Init();
     setting = new Settings();
   }
 
-  public override void OnStart() {
+  public override void LoadSettings() {
     if(controller.pulseSettings.Length > 0) {
       setting = controller.pulseSettings[Random.Range(0, controller.pulseSettings.Length)];
     } else {
@@ -25,9 +21,9 @@ public class Pulse : EffectBase {
 
     startColor = setting.color;
     endColor = startColor.Delta(setting.colorDelta);
-  }
 
-  public override void OnEnd() {  }
+    controller.debugText.text = $"Start: {startColor}\nEnd: {endColor}\nTime: {setting.seconds}";
+  }
 
   public override void Draw() {
     var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(Time.time, setting.seconds));
