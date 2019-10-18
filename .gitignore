@@ -60,6 +60,9 @@ sysinfo.txt
 # Crashlytics generated file
 crashlytics-build.properties
 
+#Default Editor Layout
+CurrentLayout-default.dwlt
+
 ########## gitignore/Global/Windows.gitignore
 
 # Windows thumbnail cache files
