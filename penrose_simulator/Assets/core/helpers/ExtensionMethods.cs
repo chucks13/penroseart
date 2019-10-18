@@ -2,17 +2,7 @@
 
 public static class ExtensionMethods {
 
-  #region Float Arrays
-
-  public static float[] Fade(this float[] array, float amount = 0.98f) {
-    for(int i = 0; i < array.Length; i++) {
-      array[i] *= amount;
-    }
-
-    return array;
-  }
-
-  #endregion
+  
 
   #region Color
   
