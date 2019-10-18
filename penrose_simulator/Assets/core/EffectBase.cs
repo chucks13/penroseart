@@ -9,23 +9,32 @@ public abstract class EffectBase {
   protected Controller controller;
 
   public string Name => GetType().ToString();
-   
-  // Used for UI display and gets called every frame
-  public abstract string DebugText();
 
-  // Should be called after creation
-  public virtual void Init() {
-    controller = Controller.Instance;
-    buffer     = new Color[Penrose.Total];
+  protected virtual void Fade(int index, float fade = 0.98f) {
+    buffer[index] *= fade;
   }
 
-  // Should be called every time an effect is turned on
-  public abstract void OnStart();
+  protected void FadeAll(float fade = 0.98f) {
+    for(var i = 0; i < buffer.Length; i++)
+      Fade(i, fade);
+  }
 
-  // Should be called every time an effect is turned off
-  public abstract void OnEnd();
+  protected virtual void Clear(int index) {
+    buffer[index] = Color.black;
+  }
 
-  // Should be called every frame
+  protected void ClearAll() {
+    for(var i = 0; i < buffer.Length; i++) {
+      Clear(i);
+    }
+  }
+
+  public virtual void Init() {
+    controller = Controller.Instance;
+    buffer = new Color[Penrose.Total];
+  }
   public abstract void Draw();
 
+  public abstract void LoadSettings();
+  
 }
