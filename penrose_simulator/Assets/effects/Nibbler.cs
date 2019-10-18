@@ -37,8 +37,12 @@ public class Nibbler : EffectBase {
       setting.Randomize();
     }
 
+<<<<<<< HEAD
     var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
     controller.debugText.text = $"Color: {colorText}\nFade: {setting.fade}";
+=======
+    
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
     ClearAll();
   }
 

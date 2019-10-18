@@ -34,8 +34,13 @@ public class Controller : Singleton<Controller> {
   [HideInInspector]
   public Timer timer;
 
+<<<<<<< HEAD
   [HideInInspector]
   public Transition transition;
+=======
+  //[HideInInspector]
+  //public Transition transition;
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
 
   private bool inTransition;
 
@@ -47,6 +52,23 @@ public class Controller : Singleton<Controller> {
     }
 
     effects[currentEffect].LoadSettings();
+<<<<<<< HEAD
+=======
+
+    Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
+  }
+
+  private void SetupTransitions() {
+    var factory = new Factory<TransitionBase>();
+
+    transitions = new TransitionBase[factory.Count];
+    for(int i = 0; i < transitions.Length; i++) {
+      transitions[i] = factory.Create(factory.Types[i]);
+      transitions[i].Init();
+    }
+
+    Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
   }
 
   // Use this for initialization
@@ -58,9 +80,16 @@ public class Controller : Singleton<Controller> {
 
     //geometry = new Tiles();
     SetupEffects();
+<<<<<<< HEAD
 
     transition = new IndexWipe();
     transition.Init();
+=======
+    SetupTransitions();
+
+    //transition = new IndexWipe();
+    //transition.Init();
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
 
     dance = new Dance();
     dance.Init();
@@ -92,7 +121,11 @@ public class Controller : Singleton<Controller> {
     transition.V = 0f;
     transition.B = GetNewEffectIndex();
 
+<<<<<<< HEAD
     effects[transition.B].LoadSettings();
+=======
+    effects[transitions[currentTransition].B].LoadSettings();
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
 
     timer.Set(transitionTime);
     timer.Reset();
@@ -107,9 +140,23 @@ public class Controller : Singleton<Controller> {
     dance.Update();
 
     if(inTransition) {
+<<<<<<< HEAD
       transition.V = timer.Value;
       transition.Draw();
       penrose.buffer = (Color[])transition.buffer.Clone();
+=======
+      transitions[currentTransition].V = timer.Value;
+      transitions[currentTransition].Draw();
+      penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
+
+      var aName = effects[transitions[currentTransition].A].Name;
+      var bName = effects[transitions[currentTransition].B].Name;
+      var delta = transitions[currentTransition].D;
+      var value = transitions[currentTransition].V;
+
+      debugText.text = $"{aName} ({delta:0.00}) => {bName} ({value:0.00})";
+
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
     } else {
       effects[currentEffect].Draw();
       penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();

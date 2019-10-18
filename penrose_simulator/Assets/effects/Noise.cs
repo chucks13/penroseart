@@ -35,7 +35,10 @@ public class Noise : EffectBase {
       setting.Randomize();
     }
 
+<<<<<<< HEAD
     controller.debugText.text = $"Scale: {setting.scale}\nSpeed: {setting.speed}\nAmp: {setting.amplifier}\nDelta: {setting.colorDelta}";
+=======
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
     ClearAll();
   }
 

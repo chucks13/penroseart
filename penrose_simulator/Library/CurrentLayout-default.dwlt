@@ -114,7 +114,11 @@ MonoBehaviour:
   m_MinSize: {x: 887, y: 494}
   m_MaxSize: {x: 16012, y: 14044}
   vertical: 1
+<<<<<<< HEAD
   controlID: 96
+=======
+  controlID: 55
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
 --- !u!114 &6
 MonoBehaviour:
   m_ObjectHideFlags: 52
@@ -141,7 +145,11 @@ MonoBehaviour:
   m_MinSize: {x: 887, y: 222}
   m_MaxSize: {x: 16012, y: 4022}
   vertical: 0
+<<<<<<< HEAD
   controlID: 97
+=======
+  controlID: 56
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
 --- !u!114 &7
 MonoBehaviour:
   m_ObjectHideFlags: 52
@@ -185,10 +193,17 @@ MonoBehaviour:
     serializedVersion: 2
     x: 1123
     y: 0
+<<<<<<< HEAD
     width: 515
     height: 766
   m_MinSize: {x: 204, y: 222}
   m_MaxSize: {x: 4004, y: 4022}
+=======
+    width: 340
+    height: 518
+  m_MinSize: {x: 200, y: 200}
+  m_MaxSize: {x: 4000, y: 4000}
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
   m_ActualView: {fileID: 15}
   m_Panes:
   - {fileID: 15}
@@ -211,10 +226,17 @@ MonoBehaviour:
     serializedVersion: 2
     x: 1371
     y: 0
+<<<<<<< HEAD
     width: 312
     height: 766
   m_MinSize: {x: 204, y: 222}
   m_MaxSize: {x: 4004, y: 4022}
+=======
+    width: 206
+    height: 518
+  m_MinSize: {x: 200, y: 200}
+  m_MaxSize: {x: 4000, y: 4000}
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
   m_ActualView: {fileID: 16}
   m_Panes:
   - {fileID: 16}
@@ -270,7 +292,7 @@ MonoBehaviour:
   m_MinSize: {x: 334, y: 272}
   m_MaxSize: {x: 14004, y: 10022}
   vertical: 0
-  controlID: 103
+  controlID: 105
 --- !u!114 &12
 MonoBehaviour:
   m_ObjectHideFlags: 52
@@ -533,9 +555,15 @@ MonoBehaviour:
   m_SceneHierarchy:
     m_TreeViewState:
       scrollPos: {x: 0, y: 0}
+<<<<<<< HEAD
       m_SelectedIDs: a2350000
       m_LastClickedID: 13730
       m_ExpandedIDs: aef8ffff10f9ffff4af9ffff12faffff56fbffff
+=======
+      m_SelectedIDs: 68340000
+      m_LastClickedID: 13416
+      m_ExpandedIDs: 34fbfffff4ffffff
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name:
@@ -1048,7 +1076,11 @@ MonoBehaviour:
     scrollPos: {x: 0, y: 0}
     m_SelectedIDs: b0490000
     m_LastClickedID: 18864
+<<<<<<< HEAD
     m_ExpandedIDs: 00000000102f0000ba300000ba320000bc320000ac340000
+=======
+    m_ExpandedIDs: 00000000062f0000b2300000b2320000b4320000c8320000aa340000
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name:
@@ -1076,21 +1108,29 @@ MonoBehaviour:
     scrollPos: {x: 0, y: 0}
     m_SelectedIDs:
     m_LastClickedID: 0
+<<<<<<< HEAD
     m_ExpandedIDs: ffffffff00000000102f0000ba300000ba320000bc320000ac340000
     m_RenameOverlay:
       m_UserAcceptedRename: 0
       m_Name:
       m_OriginalName:
+=======
+    m_ExpandedIDs: ffffffff00000000062f0000b2300000b2320000b4320000c8320000aa340000
+    m_RenameOverlay:
+      m_UserAcceptedRename: 0
+      m_Name: TransitionBase
+      m_OriginalName: TransitionBase
+>>>>>>> parent of 327d049... Merge pull request #19 from chucks13/hunter
       m_EditFieldRect:
         serializedVersion: 2
         x: 0
         y: 0
         width: 0
         height: 0
-      m_UserData: 0
+      m_UserData: 13892
       m_IsWaitingForDelay: 0
       m_IsRenaming: 0
-      m_OriginalEventType: 11
+      m_OriginalEventType: 0
       m_IsRenamingFilename: 1
       m_ClientGUIView: {fileID: 13}
     m_SearchString:
