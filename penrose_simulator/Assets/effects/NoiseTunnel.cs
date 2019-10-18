@@ -5,7 +5,7 @@ public class NoiseTunnel : EffectBase
 {
 
     private Settings setting;
-     //private float timeScale;
+    //private float timeScale;
 
     public override void Init()
     {
@@ -21,16 +21,16 @@ public class NoiseTunnel : EffectBase
             float x = Mathf.Abs(controller.penrose.tiles[i].center.x * scale);
             float y = Mathf.Abs(controller.penrose.tiles[i].center.y * scale);
             float d1 = Mathf.Sqrt((x * x) + (y * y));
-            float d2 = x+y;
-            float d3 = x-y;
-            if(setting.direction>0)
+            float d2 = x + y;
+            float d3 = x - y;
+            if (setting.direction > 0)
             {
                 d1 = 10000 - d1;
                 d2 = 10000 - d2;
                 d3 = 10000 - d3;
             }
             float z = controller.dance.fixedTime * setting.speed;
-            float n=0;
+            float n = 0;
             switch (setting.style)
             {
                 case 0:
@@ -86,7 +86,7 @@ public class NoiseTunnel : EffectBase
             amplifier = Random.Range(1f, 5f);
             colorDelta = Random.value;
             style = Random.Range(0, 3);
-            direction = Random.RandomRange(0, 2);
+            direction = Random.Range(0, 2);
         }
 
     }
