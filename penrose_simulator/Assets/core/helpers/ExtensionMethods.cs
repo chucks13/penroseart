@@ -36,23 +36,17 @@ public static class ExtensionMethods {
     return Color.HSVToRGB(h, s, v > max ? max : v);
   }
 
-  public static Color Fade(this Color color, float amount = 0.98f) {
-    return color * amount;
-  }
-
   public static Color[] Fade(this Color[] colors, float amount = 0.98f) {
     for(int i = 0; i < colors.Length; i++) {
-      colors[i].Fade(amount);
+      colors[i] *= amount;
     }
 
     return colors;
   }
 
-  public static Color Clear(this Color color) { return Color.clear; }
-
   public static Color[] Clear(this Color[] colors) {
     for(int i = 0; i < colors.Length; i++) {
-      colors[i].Clear();
+      colors[i] = Color.clear;
     }
 
     return colors;
