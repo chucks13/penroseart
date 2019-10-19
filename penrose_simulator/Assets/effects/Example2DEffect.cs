@@ -48,28 +48,29 @@ public class Example2DEffect : TwoDeeEffect {
       for(int y = 0; y < height; y++) {
 
         switch(setting.direction) {
-          case Settings.Direction.Up:
+          case Direction.Up:
             color = Color.HSVToRGB((x + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.UpLeft:
+          default:
+          case Direction.UpLeft:
             color = Color.HSVToRGB((x * 0.1f + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.UpRight:
+          case Direction.UpRight:
             color = Color.HSVToRGB((x * -0.1f + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.Down:
+          case Direction.Down:
             color = Color.HSVToRGB((x + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.DownLeft:
+          case Direction.DownLeft:
             color = Color.HSVToRGB((x * 0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.DownRight:
+          case Direction.DownRight:
             color = Color.HSVToRGB((x * -0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.Left:
+          case Direction.Left:
             color = Color.HSVToRGB((x * 0.1f + y + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
-          case Settings.Direction.Right:
+          case Direction.Right:
             color = Color.HSVToRGB((x * -0.1f + y + controller.dance.fixedTime) % 1f, 1f, 1f);
             break;
           
@@ -81,7 +82,7 @@ public class Example2DEffect : TwoDeeEffect {
     }
 
     // convert the 2D Matrix buffer to a tile buffer
-    TwoDeeEffect.ConvertBuffer(ref twoDeeBuffer, in buffer);
+    TwoDeeEffect.Convert2dBuffer(ref twoDeeBuffer, in buffer);
   }
 
 
@@ -90,19 +91,6 @@ public class Example2DEffect : TwoDeeEffect {
   /// </summary>
   [Serializable]
   public class Settings {
-
-    public enum Direction {
-
-      Up,
-      UpLeft,
-      UpRight,
-      Down,
-      DownLeft,
-      DownRight,
-      Left,
-      Right
-
-    }
 
     public Direction direction;
 
