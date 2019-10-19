@@ -10,7 +10,7 @@ public class Example2DEffect : TwoDeeEffect {
   /// Called ever frame to update the debug UI text element 
   /// </summary>
   /// <returns></returns>
-  public override string DebugText() { return ""; }
+  public override string DebugText() { return $"{setting.direction.ToString()}"; }
 
 
   /// <summary>
@@ -43,9 +43,40 @@ public class Example2DEffect : TwoDeeEffect {
   /// Called every frame by controller when the effect is selected
   /// </summary>
   public override void Draw() {
+    var color = Color.clear;
     for(int x = 0; x < width; x++) {
       for(int y = 0; y < height; y++) {
-        twoDeeBuffer[x, y] = Color.HSVToRGB((x * 0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+
+        switch(setting.direction) {
+          case Settings.Direction.Up:
+            color = Color.HSVToRGB((x + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.UpLeft:
+            color = Color.HSVToRGB((x * 0.1f + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.UpRight:
+            color = Color.HSVToRGB((x * -0.1f + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.Down:
+            color = Color.HSVToRGB((x + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.DownLeft:
+            color = Color.HSVToRGB((x * 0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.DownRight:
+            color = Color.HSVToRGB((x * -0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.Left:
+            color = Color.HSVToRGB((x * 0.1f + y + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          case Settings.Direction.Right:
+            color = Color.HSVToRGB((x * -0.1f + y + controller.dance.fixedTime) % 1f, 1f, 1f);
+            break;
+          
+        }
+
+
+        twoDeeBuffer[x, y] = color;
       }
     }
 
@@ -60,7 +91,22 @@ public class Example2DEffect : TwoDeeEffect {
   [Serializable]
   public class Settings {
 
-    public void Randomize() { }
+    public enum Direction {
+
+      Up,
+      UpLeft,
+      UpRight,
+      Down,
+      DownLeft,
+      DownRight,
+      Left,
+      Right
+
+    }
+
+    public Direction direction;
+
+    public void Randomize() { direction = (Direction)Random.Range(0, 8); }
 
   }
 
