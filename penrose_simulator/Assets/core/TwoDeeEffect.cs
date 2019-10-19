@@ -3,36 +3,42 @@ using UnityEngine;
 
 public abstract class TwoDeeEffect : EffectBase {
 
-  public static readonly int count = 3;
-  public static readonly int width = 44;
-  public static readonly int height = 22;
+  public enum Direction {
+
+    Up,
+    UpLeft,
+    UpRight,
+    Down,
+    DownLeft,
+    DownRight,
+    Left,
+    Right,
+    Clockwise,
+    CounterClockwise
+
+  }
+
+  private static readonly int count = 4;
+  protected static readonly int width = 44;
+  protected static readonly int height = 22;
 
   protected static Neighbor[,] neighbors;
 
   private static bool initialized;
 
-  protected struct Neighbor {
-
-    public int x;
-    public int y;
-    public float distance;
-    public float weight;
-
-  };
-
-  
   public Color[,] twoDeeBuffer;
 
   private static void InitWeights() {
-    // find extents of tiles;
-    float maxX = -1000000f;
-    float maxY = -1000000f;
-    float minX = 1000000f;
-    float minY = 1000000f;
-
+    // get the tiles
     var tiles = Controller.Instance.penrose.tiles;
 
-    for(int i = 0; i < Penrose.Total; i++) {
+    // find extents of the tiles
+    var maxX = -100000f;
+    var maxY = -100000f;
+    var minX = 100000f;
+    var minY = 1000000f;
+
+    for(var i = 0; i < Penrose.Total; i++) {
       var x = tiles[i].center.x;
       var y = tiles[i].center.y;
 
@@ -41,68 +47,74 @@ public abstract class TwoDeeEffect : EffectBase {
       maxX = Mathf.Max(maxX, x);
       maxY = Mathf.Max(maxY, y);
     }
+    
+    // loop through all the tiles
+    for(var i = 0; i < Penrose.Total; i++) {
 
-    // find closest neighbors
-    var closeNeighbors = new Neighbor[count + 1];
-    for(int i = 0; i < count + 1; i++) {
-      closeNeighbors[i] = new Neighbor();
-    }
-
-    for(int i = 0; i < Penrose.Total; i++) {
-
-      // find the closest neighbors
-      int used = 0;
-      float px = minX;
-      float sx = (maxX - minX) / (width - 1f);
+      // create closeNeighbors array
+      // to sort we need one extra array element
+      var total = count + 1;
+      var closeNeighbors = new Neighbor[total];
+      for(var j = 0; j < total; j++) closeNeighbors[j] = new Neighbor();
       
-      for(int x = 0; x < width; x++) {
-        float py = minY;
-        float sy = (maxY - minY) / (height - 1f);
+      // reset index, px and sx
+      var index = 0;
+      var px = minX;
+      var sx = (maxX - minX) / (width - 1f);
 
-        for(int y = 0; y < height; y++) {
-          if(x == y) continue;
-          float dx = px - tiles[i].center.x;
-          float dy = py - tiles[i].center.y;
-          float d = Mathf.Sqrt((dx * dx) + (dy * dy));
+      for(var x = 0; x < width; x++) {
+        // reset py and sy
+        var py = minY;
+        var sy = (maxY - minY) / (height - 1f);
 
-          // we keep (count+1) samples and sort the every time
-          closeNeighbors[used].distance = d;
-          closeNeighbors[used].x = x;
-          closeNeighbors[used].y = y;
-          used++;
-          if(used == (count + 1)) {
-            Array.Sort(closeNeighbors, (a, b) => a.distance.CompareTo(b.distance));
-            used--; // discard the farthest
-          }
+        for(var y = 0; y < height; y++) {
+          // find closest neighbors
+          // by first sorting the array
+          Array.Sort(closeNeighbors, (a, b) => a.distance.CompareTo(b.distance));
 
+          // set the new sample to the current index
+          closeNeighbors[index].index = i;
+          closeNeighbors[index].position.x = x;
+          closeNeighbors[index].position.y = y;
+
+          // find and set the distance of the sample
+          var dx = px - tiles[i].center.x;
+          var dy = py - tiles[i].center.y;
+          var d = Mathf.Sqrt(dx * dx + dy * dy);
+          closeNeighbors[index].distance = d;
+
+          // increase index if we need too
+          if(index < total - 1) index++;
+
+          // move y forward
           py += sy;
         }
 
+        // move x forward
         px += sx;
       }
 
       // closest have been found
-      // get the total of all distances and copies of the neighbors
-      float total = 0;
-      for(int j = 0; j < count - 1; j++) {
+      // get the total of all distances and 
+      // add the closeNeighbors to the neighbors array
+      // ignoring the last closeNeighbor as that was used for sorting
+      var totalDistance = 0f;
+      for(var j = 0; j < count; j++) {
+        totalDistance += closeNeighbors[j].distance;
         neighbors[i, j] = closeNeighbors[j];
-        total += closeNeighbors[j].distance;
       }
 
-      // weight the values
-      for(int j = 0; j < count - 1; j++) {
-        neighbors[i, j].weight = closeNeighbors[j].distance / total;
-      }
+      // set the weight for the color value based on distance
+      for(var j = 0; j < count; j++) neighbors[i, j].weight = closeNeighbors[j].distance / totalDistance;
     }
   }
 
   // resample the rectangle into the tile buffer
-  protected static void ConvertBuffer(ref Color[,] twoDeeBuffer, in Color[] buffer) {
-    for(int i = 0; i < buffer.Length; i++) {
-      Color pix = Color.black;
-      for(var j = 0; j < count; j++) {
-        pix += twoDeeBuffer[neighbors[i, j].x, neighbors[i, j].y] * neighbors[i, j].weight;
-      }
+  protected static void Convert2dBuffer(ref Color[,] twoDeeBuffer, in Color[] buffer) {
+    for(var i = 0; i < buffer.Length; i++) {
+      var pix = Color.black;
+      for(var j = 0; j < count; j++) 
+        pix += twoDeeBuffer[neighbors[i, j].position.x, neighbors[i, j].position.y] * neighbors[i, j].weight;
 
       buffer[i] = pix;
     }
@@ -116,15 +128,28 @@ public abstract class TwoDeeEffect : EffectBase {
     if(initialized) return;
 
     neighbors = new Neighbor[buffer.Length, count];
-    for(int x = 0; x < buffer.Length; x++) {
-      for(int y = 0; y < count; y++) {
-        neighbors[x, y] = new Neighbor();
-      }
+    for(var x = 0; x < buffer.Length; x++) {
+      for(var y = 0; y < count; y++) neighbors[x, y] = new Neighbor();
     }
 
     InitWeights();
 
+    //for(var x = 0; x < buffer.Length; x++) {
+    //  for(var y = 0; y < count; y++) Debug.Log(neighbors[x, y]);
+    //}
+
     initialized = true;
+  }
+
+  protected class Neighbor {
+
+    public int index = -1;
+    public Vector2Int position;
+    public float distance = 1000000f;
+    public float weight;
+
+    public override string ToString() { return $"{index}, {position}, {distance}, {weight}"; }
+
   }
 
 }
