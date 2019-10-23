@@ -56,14 +56,14 @@ public class Julia : TwoDeeEffect {
 
     angle += setting.speed * Time.deltaTime;
 
-    var y = yMin + setting.yOffset;
+    var y =  yMin + setting.yOffset + Mathf.Sin(angle);
     for(var j = 0; j < height; j++) {
       
       var x = xMin + setting.xOffset;
       for(var i = 0; i < width; i++) {
-        
-        var a = x;
-        var b = y;
+
+        var a = x + Mathf.Cos(angle * Mathf.PI * 2f);// * 0.125f;
+        var b = y + Mathf.Sin(angle * Mathf.PI * 2f);// * 0.125f;
 
         var n = 0;
         while(n < setting.iterations) {
@@ -80,7 +80,7 @@ public class Julia : TwoDeeEffect {
           n++;
         }
 
-        var hue = Mathf.Sqrt((float)n / setting.iterations);
+        var hue = Mathf.Sqrt((float)n / setting.iterations) % 1f;
         twoDeeBuffer[i, j] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f);
 
         x += dx;
@@ -109,7 +109,7 @@ public class Julia : TwoDeeEffect {
 
     public int iterations = 100;
     public float speed = 0.5f;
-    public float distance = 3f;
+    public float distance = 2f;
 
     public float ca = -0.8f;
     public float cb = 0.156f;
