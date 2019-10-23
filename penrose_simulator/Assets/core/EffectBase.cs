@@ -6,6 +6,9 @@ public abstract class EffectBase {
   [HideInInspector]
   public Color[] buffer;
 
+  [HideInInspector]
+  public int sortIndex;
+
   protected Controller controller;
 
   public string Name => GetType().ToString();
