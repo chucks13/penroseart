@@ -23,7 +23,7 @@ public class Controller : Singleton<Controller> {
   public NoiseTunnel.Settings[] noiseTunnelSettings;
   public Plasma.Settings[] plasmaSettings;
   public Example2d.Settings[] example2dSettings;
-  public Julia.Settings[] mandelbrotSettings;
+  public Julia.Settings[] juliaSettings;
   public Dance dance;
 
   [Header("GUI")]

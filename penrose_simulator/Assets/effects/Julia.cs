@@ -12,7 +12,7 @@ public class Julia : TwoDeeEffect {
   /// Called ever frame to update the debug UI text element 
   /// </summary>
   /// <returns></returns>
-  public override string DebugText() { return $""; }
+  public override string DebugText() { return $"{setting.i}, {setting.speed}, ({setting.xOffset}, {setting.yOffset})"; }
 
   /// <summary>
   /// Called once when effect is created
@@ -26,8 +26,8 @@ public class Julia : TwoDeeEffect {
   /// Called when effect is selected by controller to be drawn every frame
   /// </summary>
   public override void OnStart() {
-    if(controller.mandelbrotSettings.Length > 0)
-      setting = controller.mandelbrotSettings[Random.Range(0, controller.mandelbrotSettings.Length)];
+    if(controller.juliaSettings.Length > 0)
+      setting = controller.juliaSettings[Random.Range(0, controller.juliaSettings.Length)];
     else
       setting.Randomize();
 
@@ -43,9 +43,11 @@ public class Julia : TwoDeeEffect {
   /// Called every frame by controller when the effect is selected
   /// </summary>
   public override void Draw() {
-    buffer.Clear();
+    //buffer.Clear();
 
-    var w = Mathf.Abs(Mathf.Sin(angle)) * setting.distance;
+    var sa = Mathf.Sin(angle).Map01(1f, -1f);
+
+    var w = setting.distance * sa;
     var h = w * height / width;
     var xMin = -w / 2f;
     var yMin = -h / 2f;
@@ -56,14 +58,15 @@ public class Julia : TwoDeeEffect {
 
     angle += setting.speed * Time.deltaTime;
 
-    var y =  yMin + setting.yOffset + Mathf.Sin(angle);
+    var y =  yMin + setting.yOffset;
     for(var j = 0; j < height; j++) {
       
+
       var x = xMin + setting.xOffset;
       for(var i = 0; i < width; i++) {
 
-        var a = x + Mathf.Cos(angle * Mathf.PI * 2f);// * 0.125f;
-        var b = y + Mathf.Sin(angle * Mathf.PI * 2f);// * 0.125f;
+        var a = x;// + Mathf.Cos(angle * Mathf.PI * 2f) * 0.125f;
+        var b = y;// + Mathf.Sin(angle * Mathf.PI * 2f) * 0.125f;
 
         var n = 0;
         while(n < setting.iterations) {
@@ -107,9 +110,17 @@ public class Julia : TwoDeeEffect {
       new Vector2(-0.7269f, 0.1889f)
     };
 
+    private readonly Vector2[] offSets = {
+      new Vector2(0.2f, 0.04f), 
+      new Vector2(-0.125f, -0.04f), 
+      new Vector2(-0.0375f, 0f), 
+      new Vector2(0.175f, 0.05f), 
+      new Vector2(0.0875f, 0.225f)
+    };
+
     public int iterations = 100;
-    public float speed = 0.5f;
-    public float distance = 2f;
+    public float speed = 0.15f;
+    public float distance = 5f;
 
     public float ca = -0.8f;
     public float cb = 0.156f;
@@ -117,11 +128,15 @@ public class Julia : TwoDeeEffect {
     public float xOffset = 0f;
     public float yOffset = 0f;
 
+    public int i;
+
     public void Randomize() {
-      var i = Random.Range(0, valueSets.Length);
+      i = Random.Range(0, valueSets.Length);
       ca = valueSets[i].x;
       cb = valueSets[i].y;
-      speed = Random.value + 0.1f;
+      xOffset = offSets[i].x;
+      yOffset = offSets[i].y;
+      speed = Random.Range(0.1f, 0.3f);
     }
 
   }

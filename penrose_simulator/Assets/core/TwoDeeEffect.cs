@@ -22,7 +22,7 @@ public abstract class TwoDeeEffect : EffectBase {
   protected static readonly int width = 44;
   protected static readonly int height = 22;
 
-  protected static Neighbor[,] neighbors;
+  protected static Neighbor[][] neighbors;
 
   private static bool initialized;
 
@@ -30,23 +30,11 @@ public abstract class TwoDeeEffect : EffectBase {
 
   private static void InitWeights() {
     // get the tiles
-    var tiles = Controller.Instance.penrose.tiles;
+    var penrose = Controller.Instance.penrose;
+    var tiles = penrose.tiles;
+    var min = penrose.bounds.min;
+    var max = penrose.bounds.max;
 
-    // find extents of the tiles
-    var maxX = -100000f;
-    var maxY = -100000f;
-    var minX = 100000f;
-    var minY = 1000000f;
-
-    for(var i = 0; i < Penrose.Total; i++) {
-      var x = tiles[i].center.x;
-      var y = tiles[i].center.y;
-
-      minX = Mathf.Min(minX, x);
-      minY = Mathf.Min(minY, y);
-      maxX = Mathf.Max(maxX, x);
-      maxY = Mathf.Max(maxY, y);
-    }
     
     // loop through all the tiles
     for(var i = 0; i < Penrose.Total; i++) {
@@ -59,13 +47,13 @@ public abstract class TwoDeeEffect : EffectBase {
       
       // reset index, px and sx
       var index = 0;
-      var px = minX;
-      var sx = (maxX - minX) / (width - 1f);
+      var px = min.x;
+      var sx = (max.x - min.x) / (width - 1f);
 
       for(var x = 0; x < width; x++) {
         // reset py and sy
-        var py = minY;
-        var sy = (maxY - minY) / (height - 1f);
+        var py = min.y;
+        var sy = (max.y - min.y) / (height - 1f);
 
         for(var y = 0; y < height; y++) {
           // find closest neighbors
@@ -101,11 +89,11 @@ public abstract class TwoDeeEffect : EffectBase {
       var totalDistance = 0f;
       for(var j = 0; j < count; j++) {
         totalDistance += closeNeighbors[j].distance;
-        neighbors[i, j] = closeNeighbors[j];
+        neighbors[i][j] = closeNeighbors[j];
       }
 
       // set the weight for the color value based on distance
-      for(var j = 0; j < count; j++) neighbors[i, j].weight = closeNeighbors[j].distance / totalDistance;
+      for(var j = 0; j < count; j++) neighbors[i][j].weight = closeNeighbors[j].distance / totalDistance;
     }
   }
 
@@ -114,7 +102,7 @@ public abstract class TwoDeeEffect : EffectBase {
     for(var i = 0; i < buffer.Length; i++) {
       var pix = Color.black;
       for(var j = 0; j < count; j++) 
-        pix += twoDeeBuffer[neighbors[i, j].position.x, neighbors[i, j].position.y] * neighbors[i, j].weight;
+        pix += twoDeeBuffer[neighbors[i][j].position.x, neighbors[i][j].position.y] * neighbors[i][j].weight;
 
       buffer[i] = pix;
     }
@@ -127,9 +115,10 @@ public abstract class TwoDeeEffect : EffectBase {
 
     if(initialized) return;
 
-    neighbors = new Neighbor[buffer.Length, count];
+    neighbors = new Neighbor[buffer.Length][];
     for(var x = 0; x < buffer.Length; x++) {
-      for(var y = 0; y < count; y++) neighbors[x, y] = new Neighbor();
+      neighbors[x] = new Neighbor[count];
+      for(var y = 0; y < count; y++) neighbors[x][y] = new Neighbor();
     }
 
     InitWeights();
