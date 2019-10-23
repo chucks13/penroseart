@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   currentEffect: 2
-  effectTime: 100
+  effectTime: 20
   currentTransition: 0
   transitionTime: 4
   noiseSettings:
@@ -740,7 +740,7 @@ MonoBehaviour:
   noiseTunnelSettings: []
   plasmaSettings: []
   example2dSettings: []
-  mandelbrotSettings: []
+  juliaSettings: []
   dance:
     beat: 0
     fixedTime: 0
@@ -1399,6 +1399,9 @@ MonoBehaviour:
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
   tiles: []
+  bounds:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
 --- !u!33 &1518479355
 MeshFilter:
   m_ObjectHideFlags: 0

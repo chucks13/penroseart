@@ -22,6 +22,8 @@ public class Penrose : MonoBehaviour {
   [HideInInspector]
   public TileData[] tiles;
 
+  public Bounds bounds;
+
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];
   private readonly Color[] colors = new Color[Total * 2 * 3];
@@ -99,9 +101,30 @@ public class Penrose : MonoBehaviour {
 
   }
 
+  private void GenerateBounds() {
+    // find extents of the tiles
+    var maxX = -100000f;
+    var maxY = -100000f;
+    var minX = 100000f;
+    var minY = 1000000f;
+
+    for(var i = 0; i < Penrose.Total; i++) {
+      var x = tiles[i].center.x;
+      var y = tiles[i].center.y;
+
+      minX = Mathf.Min(minX, x);
+      minY = Mathf.Min(minY, y);
+      maxX = Mathf.Max(maxX, x);
+      maxY = Mathf.Max(maxY, y);
+    }
+
+    bounds = new Bounds(Vector3.zero, new Vector3(maxX - minX, maxY - minY));
+  }
+
   public void Init() {
     GenerateMesh();
     GenerateTiles();
+    GenerateBounds();
     bgBrightness = bgColor.grayscale;
   }
 
