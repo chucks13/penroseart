@@ -2,7 +2,7 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Example2DEffect : TwoDeeEffect {
+public class Plasma : TwoDeeEffect {
 
   private Settings setting;
 
@@ -25,8 +25,8 @@ public class Example2DEffect : TwoDeeEffect {
   /// Called when effect is selected by controller to be drawn every frame
   /// </summary>
   public override void OnStart() {
-    if(controller.example2dEffectSettings.Length > 0) {
-      setting = controller.example2dEffectSettings[Random.Range(0, controller.example2dEffectSettings.Length)];
+    if(controller.plasmaSettings.Length > 0) {
+      setting = controller.plasmaSettings[Random.Range(0, controller.plasmaSettings.Length)];
     } else {
       setting.Randomize();
     }
