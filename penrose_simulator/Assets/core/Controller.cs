@@ -1,11 +1,14 @@
-﻿using TMPro;
+﻿using System;
+using TMPro;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Controller : Singleton<Controller> {
 
   [Header("Effect Switching")]
-  public int currentEffect;
+  public int startEffect;
+
+  private int currentEffect;
 
   public float effectTime = 10f;
 
@@ -52,11 +55,17 @@ public class Controller : Singleton<Controller> {
     for(int i = 0; i < effects.Length; i++) {
       effects[i] = factory.Create(factory.Types[i]);
       effects[i].Init();
+      effects[i].sortIndex = Random.Range(0, 10000);
     }
+
+    Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
+
+    effects[startEffect].sortIndex = -1;
+    ReSortEffectsArray();
+    currentEffect = 0;
 
     effects[currentEffect].OnStart();
 
-    Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
   }
 
   private void SetupTransitions() {
@@ -91,8 +100,22 @@ public class Controller : Singleton<Controller> {
   }
 
   private int GetNewEffectIndex() {
-    var i = Random.Range(0, effects.Length);
-    return (i == transitions[currentTransition].A) ? GetNewEffectIndex() : i;
+    effects[currentEffect].sortIndex = 100000;
+    ReSortEffectsArray();
+    currentEffect = effects.Length - 1;
+    return Random.Range(0, effects.Length / 2);
+  }
+
+  private void ReSortEffectsArray() {
+    // sort effects array
+    
+    Array.Sort(effects, (a, b) => a.sortIndex.CompareTo(b.sortIndex));
+    var names = new string[effects.Length];
+    for(int i = 0; i < effects.Length; i++) {
+      effects[i].sortIndex = i;
+      names[i] = effects[i].Name;
+    }
+    Debug.Log($"{string.Join(", ", names)}");
   }
 
   private void OnTimerFinished() {
@@ -107,9 +130,10 @@ public class Controller : Singleton<Controller> {
     }
 
     inTransition                     = !inTransition;
-    transitions[currentTransition].A = currentEffect;
+   
     transitions[currentTransition].V = 0f;
     transitions[currentTransition].B = GetNewEffectIndex();
+    transitions[currentTransition].A = currentEffect;
 
     effects[transitions[currentTransition].B].OnStart();
 
