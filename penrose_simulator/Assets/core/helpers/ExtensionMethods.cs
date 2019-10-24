@@ -2,13 +2,19 @@
 
 public static class ExtensionMethods {
 
+  public static int ReMap(
+    this int value, int inMin, int inMax, int outMin, int outMax) {
+    return (int) ((outMin + ((float)outMax - outMin) * ((float)value - inMin) / ((float)inMax - inMin)) + 0.5f);
+  }
+
   #region Floats
 
-  public static float Max(this float a, float b) { return a > b ? a : b; }
+  public static float Abs(this float v) => v < 0f ? v *= -1 : v;
 
-  public static float Min(this float a, float b) { return a < b ? a : b; }
+  public static float Max(this float a, float b) => a > b ? a : b;
 
-  
+  public static float Min(this float a, float b) => a < b ? a : b;
+
   public static float Clamp(this float value, float outMin, float outMax) {
     return outMin.Max(outMax.Min(value));
   }
@@ -93,9 +99,10 @@ public static class ExtensionMethods {
     return colors;
   }
 
-  public static Color[] Clear(this Color[] colors) {
+  public static Color[] Clear(this Color[] colors, Color? color = null) {
+    var c = color ?? Color.clear;
     for(int i = 0; i < colors.Length; i++) {
-      colors[i] = Color.clear;
+      colors[i] = c;
     }
 
     return colors;

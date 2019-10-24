@@ -9,6 +9,8 @@ public class Penrose : MonoBehaviour {
   public const int Total = 900;
   public const float FullScale = 1.0f / 140.0f;
 
+  private const float TestScale = 1f / 100f;
+
   public Color bgColor = Color.gray;
 
   [Header("Display Size")]
@@ -23,6 +25,7 @@ public class Penrose : MonoBehaviour {
   public TileData[] tiles;
 
   public Bounds bounds;
+  public Bounds testBounds;
 
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];
@@ -34,6 +37,8 @@ public class Penrose : MonoBehaviour {
   private Material material;
 
   private float bgBrightness;
+
+  public Vector2Int[] test;
 
   private void Awake() {
     meshFilter   = GetComponent<MeshFilter>();
@@ -90,13 +95,19 @@ public class Penrose : MonoBehaviour {
     
     var j = 0;
     tiles = new TileData[Total];
+    test = new Vector2Int[Total];
     for(var i = 0; i < Total; i++) {
       var t = new TileData {
-        neighbors = new int[4], type = RawData.Tiles[j++], center = {x = RawData.Tiles[j++] * FullScale, y = RawData.Tiles[j++] * FullScale}
+        neighbors = new int[4], 
+        type = RawData.Tiles[j++], 
+        position = {x = (int)((RawData.Tiles[j++] * TestScale) + 0.5f), 
+                    y = (int)((RawData.Tiles[j++] * TestScale) + 0.5f)},
+        center = {x = RawData.Tiles[j - 2] * FullScale, y = RawData.Tiles[j - 1] * FullScale},
       };
 
       for(var a = 0; a < 4; a++) t.neighbors[a] = RawData.Tiles[j++];
       tiles[i] = t;
+      test[i] = t.position;
     }
 
   }
@@ -151,6 +162,8 @@ public class Penrose : MonoBehaviour {
   public class TileData {
 
     public Vector2 center;
+    public Vector2Int position;
+
     public int[] neighbors;
     public int type;
 
