@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using Random = UnityEngine.Random;
+using UnityEngine;
 
 public class Flock : EffectBase {
   private Settings setting;
@@ -11,10 +12,10 @@ public class Flock : EffectBase {
     var min = controller.penrose.min;
     var max = controller.penrose.max;
 
-    //if(controller.flockSettings.Length > 0)
-    //  setting = controller.flockSettings[Random.Range(0, controller.juliaSettings.Length)];
-    //else
-    //  setting.Randomize();
+    if(controller.flockSettings.Length > 0)
+      setting = controller.flockSettings[Random.Range(0, controller.juliaSettings.Length)];
+    else
+      setting.Randomize();
 
     flock = new Boid[setting.total];
     for(int i = 0; i < setting.total; i++) {
@@ -38,17 +39,18 @@ public class Flock : EffectBase {
     }
   }
 
+  [System.Serializable]
   public class Settings {
-    public int total = 40;
+    public int total = 80;
 
     [Range(0f, 10)]
-    public float alignment = 1f;
+    public float alignment = 0.9f;
 
     [Range(0f, 10)]
     public float cohesion = 1f;
 
     [Range(0f, 10)]
-    public float separation = 2f;
+    public float separation = 1.25f;
 
     public void Randomize() { }
   }
