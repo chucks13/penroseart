@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -25,8 +26,8 @@ public class Controller : Singleton<Controller> {
   public Pulse.Settings[] pulseSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
   public Plasma.Settings[] plasmaSettings;
-  public Example2d.Settings[] example2dSettings;
   public Julia.Settings[] juliaSettings;
+  public Flock.Settings[] flockSettings;
   public Dance dance;
 
   [Header("GUI")]
@@ -47,6 +48,17 @@ public class Controller : Singleton<Controller> {
   public Timer timer;
 
   private bool inTransition;
+
+  private float fps;
+  private float lastCount;
+
+  private IEnumerator Fps() {
+    while(true) {
+      fps = Time.frameCount - lastCount;
+      lastCount = Time.frameCount;
+      yield return new WaitForSeconds(1f);
+    }
+  }
 
   private void SetupEffects() {
     var factory = new Factory<EffectBase>();
@@ -97,6 +109,8 @@ public class Controller : Singleton<Controller> {
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
+
+    StartCoroutine(Fps());
   }
 
   private int GetNewEffectIndex() {
@@ -164,6 +178,8 @@ public class Controller : Singleton<Controller> {
 
       debugText.text = effects[currentEffect].DebugText();
     }
+
+    debugText.text += $"\nFPS: {fps}";
 
     penrose.Send();
   }

@@ -1,14 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class Penrose : MonoBehaviour {
-
   public const int Total = 900;
   public const float FullScale = 1.0f / 140.0f;
-
+  private const float TestScale = 1f / 100f;
   public Color bgColor = Color.gray;
 
   [Header("Display Size")]
@@ -22,23 +22,28 @@ public class Penrose : MonoBehaviour {
   [HideInInspector]
   public TileData[] tiles;
 
+  [HideInInspector]
   public Bounds bounds;
 
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];
   private readonly Color[] colors = new Color[Total * 2 * 3];
-
   private Mesh mesh;
   private MeshFilter meshFilter;
   private MeshRenderer meshRenderer;
   private Material material;
-
   private float bgBrightness;
+  private Dictionary<Vector2, int> centerLookup;
+  private Vector2[] centers;
 
   private void Awake() {
-    meshFilter   = GetComponent<MeshFilter>();
+    meshFilter = GetComponent<MeshFilter>();
     meshRenderer = GetComponent<MeshRenderer>();
-    material     = new Material(Shader.Find("Unlit/Penrose")) {hideFlags = HideFlags.HideAndDontSave, name = "PenMaterial"};
+    material =
+      new Material(Shader.Find("Unlit/Penrose")) {
+                                                   hideFlags = HideFlags.HideAndDontSave,
+                                                   name = "PenMaterial"
+                                                 };
   }
 
   private void GenerateMesh() {
@@ -80,45 +85,70 @@ public class Penrose : MonoBehaviour {
       i += 3;
     }
 
-    mesh = new Mesh {vertices = vertices, triangles = triangles, colors = colors, name = "PenMesh", hideFlags = HideFlags.HideAndDontSave};
+    mesh = new Mesh {
+                      vertices = vertices, triangles = triangles, colors = colors, name = "PenMesh",
+                      hideFlags = HideFlags.HideAndDontSave
+                    };
 
-    meshFilter.mesh       = mesh;
+    meshFilter.mesh = mesh;
     meshRenderer.material = material;
   }
 
   private void GenerateTiles() {
-    
-    var j = 0;
+    var idx = 0;
     tiles = new TileData[Total];
+    centers = new Vector2[Total];
+    centerLookup = new Dictionary<Vector2, int>();
     for(var i = 0; i < Total; i++) {
       var t = new TileData {
-        neighbors = new int[4], type = RawData.Tiles[j++], center = {x = RawData.Tiles[j++] * FullScale, y = RawData.Tiles[j++] * FullScale}
-      };
+                             neighbors = new int[4], type = RawData.Tiles[idx++],
+                             position = {
+                                          x = (int)((RawData.Tiles[idx++] * TestScale) + 0.5f),
+                                          y = (int)((RawData.Tiles[idx++] * TestScale) + 0.5f)
+                                        },
+                             center = {
+                                        x = RawData.Tiles[idx - 2] * FullScale,
+                                        y = RawData.Tiles[idx - 1] * FullScale
+                                      }
+                           };
 
-      for(var a = 0; a < 4; a++) t.neighbors[a] = RawData.Tiles[j++];
+      for(var j = 0; j < 4; j++) t.neighbors[j] = RawData.Tiles[idx++];
       tiles[i] = t;
+      centers[i] = t.position;
+      centerLookup[centers[i]] = i;
     }
-
   }
 
   private void GenerateBounds() {
     // find extents of the tiles
-    var maxX = -100000f;
-    var maxY = -100000f;
-    var minX = 100000f;
+    var maxX = -1000000f;
+    var maxY = -1000000f;
+    var minX = 1000000f;
     var minY = 1000000f;
 
     for(var i = 0; i < Penrose.Total; i++) {
       var x = tiles[i].center.x;
       var y = tiles[i].center.y;
 
-      minX = Mathf.Min(minX, x);
-      minY = Mathf.Min(minY, y);
-      maxX = Mathf.Max(maxX, x);
-      maxY = Mathf.Max(maxY, y);
+      minX = minX.Min(x).Round();
+      minY = minY.Min(y).Round();
+      maxX = maxX.Max(x).Round();
+      maxY = maxY.Max(y).Round();
     }
 
-    bounds = new Bounds(Vector3.zero, new Vector3(maxX - minX, maxY - minY));
+    var max = new Vector2(maxX, maxY);
+    var min = new Vector2(minX, minY);
+
+    min.x -= 5f;
+    max.x += 5f;
+
+    min.y -= 1f;
+    max.y += 2f;
+
+    Debug.Log($"{min}, {max}, {max - min}");
+
+    bounds = new Bounds(Vector3.zero, max - min);
+    Debug.Log(bounds.size);
   }
 
   public void Init() {
@@ -142,15 +172,40 @@ public class Penrose : MonoBehaviour {
 
   public void Send() {
     UpdateVertexColors();
+
     //mesh.RecalculateNormals();
   }
 
-  private Color FadeColorToBgColor(Color color) { return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness); }
+  public int GetIndexFromPosition(Vector2 position) {
+    // if we have a correct position already then return the index
+    if(centerLookup.ContainsKey(position)) return centerLookup[position];
+
+    // try to find the nearest position
+    var idx = -1;
+    var minDistance = 100000000f;
+
+    for(int i = 0; i < Total; i++) {
+      var d = (position - centers[i]).magnitude; // get the distance
+      if(d > minDistance) continue;              // continue unless we find a shorter distance
+
+      idx = i;
+      minDistance = d;
+    }
+
+    if(idx < 0 || idx > Total)
+      throw new IndexOutOfRangeException($"{idx}: {minDistance}, {position}");
+
+    return centerLookup[centers[idx]];
+  }
+
+  private Color FadeColorToBgColor(Color color) {
+    return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness);
+  }
 
   [Serializable]
   public class TileData {
-
     public Vector2 center;
+    public Vector2Int position;
     public int[] neighbors;
     public int type;
 
@@ -161,7 +216,5 @@ public class Penrose : MonoBehaviour {
 
     public override string ToString() =>
       $"{type}, ({center.x},{center.y}), ({neighbors[0]}, {neighbors[1]}, {neighbors[3]}, {neighbors[0]})";
-
   }
-
 }
