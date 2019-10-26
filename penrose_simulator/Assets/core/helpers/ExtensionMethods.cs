@@ -1,10 +1,14 @@
 ﻿using UnityEngine;
 
 public static class ExtensionMethods {
+  #region ints
+
   public static int ReMap(this int value, int inMin, int inMax, int outMin, int outMax) {
     return(int)((outMin + ((float)outMax - outMin) * ((float)value - inMin) /
                  ((float)inMax - inMin)) + 0.5f);
   }
+
+  #endregion
 
   #region Floats
 
@@ -37,6 +41,8 @@ public static class ExtensionMethods {
 
   #endregion
 
+  #region doubles
+
   public static double Max(this double a, double b) { return a > b ? a : b; }
 
   public static double Min(this double a, double b) { return a < b ? a : b; }
@@ -58,6 +64,8 @@ public static class ExtensionMethods {
   public static double Map01(this double value, double inMin, double inMax, bool clamp = false) {
     return value.Map(inMin, inMax, 0f, 1f, clamp);
   }
+
+  #endregion
 
   #region Float Arrays
 
@@ -105,4 +113,10 @@ public static class ExtensionMethods {
   }
 
   #endregion Color
+
+  #region Vector2
+
+  public static Vector2 SetMagnitude(this Vector2 v, float amount) => v.normalized * amount;
+
+  #endregion
 }

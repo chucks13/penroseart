@@ -2,7 +2,7 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Julia : TwoDeeEffect {
+public class Julia : ScreenEffect {
 
   private Settings setting;
 
@@ -65,8 +65,8 @@ public class Julia : TwoDeeEffect {
       var x = xMin + setting.xOffset;
       for(var i = 0; i < width; i++) {
 
-        var a = x;// + Mathf.Cos(angle * Mathf.PI * 2f) * 0.125f;
-        var b = y;// + Mathf.Sin(angle * Mathf.PI * 2f) * 0.125f;
+        var a = x;
+        var b = y;
 
         var n = 0;
         while(n < setting.iterations) {
@@ -84,7 +84,7 @@ public class Julia : TwoDeeEffect {
         }
 
         var hue = Mathf.Sqrt((float)n / setting.iterations) % 1f;
-        twoDeeBuffer[i, j] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f);
+        screenBuffer[i + (j * width)] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f);
 
         x += dx;
       }
@@ -93,7 +93,7 @@ public class Julia : TwoDeeEffect {
     }
 
     // convert the 2D Matrix buffer to a tile buffer
-    Convert2dBuffer(ref twoDeeBuffer, in buffer);
+    Convert2dBuffer(ref screenBuffer, in buffer);
   }
 
   /// <summary>
