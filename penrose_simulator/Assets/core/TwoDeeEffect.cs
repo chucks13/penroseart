@@ -19,7 +19,7 @@ public abstract class TwoDeeEffect : EffectBase {
   }
 
   private static readonly int count = 4;
-  protected static readonly int width = 44;
+  protected static readonly int width = 50;
   protected static readonly int height = 22;
 
   protected static Neighbor[][] neighbors;
@@ -32,8 +32,8 @@ public abstract class TwoDeeEffect : EffectBase {
     // get the tiles
     var penrose = Controller.Instance.penrose;
     var tiles = penrose.tiles;
-    var min = penrose.bounds.min;
-    var max = penrose.bounds.max;
+    var min = penrose.min;
+    var max = penrose.max;
 
     
     // loop through all the tiles
@@ -48,12 +48,12 @@ public abstract class TwoDeeEffect : EffectBase {
       // reset index, px and sx
       var index = 0;
       var px = min.x;
-      var sx = (max.x - min.x) / (width - 1f);
+      var sx = (max.x - min.x) / width;
 
       for(var x = 0; x < width; x++) {
         // reset py and sy
         var py = min.y;
-        var sy = (max.y - min.y) / (height - 1f);
+        var sy = (max.y - min.y) / height;
 
         for(var y = 0; y < height; y++) {
           // find closest neighbors
@@ -124,7 +124,7 @@ public abstract class TwoDeeEffect : EffectBase {
     InitWeights();
 
     //for(var x = 0; x < buffer.Length; x++) {
-    //  for(var y = 0; y < count; y++) Debug.Log(neighbors[x, y]);
+    //  for(var y = 0; y < count; y++) Debug.Log(neighbors[x][y]);
     //}
 
     initialized = true;
