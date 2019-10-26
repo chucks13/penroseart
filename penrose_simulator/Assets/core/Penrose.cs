@@ -23,10 +23,7 @@ public class Penrose : MonoBehaviour {
   public TileData[] tiles;
 
   [HideInInspector]
-  public Vector2 max;
-
-  [HideInInspector]
-  public Vector2 min;
+  public Bounds bounds;
 
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];
@@ -36,8 +33,8 @@ public class Penrose : MonoBehaviour {
   private MeshRenderer meshRenderer;
   private Material material;
   private float bgBrightness;
-  private Dictionary<Vector2, int> positionLookup;
-  private Vector2[] positions;
+  private Dictionary<Vector2, int> centerLookup;
+  private Vector2[] centers;
 
   private void Awake() {
     meshFilter = GetComponent<MeshFilter>();
@@ -98,27 +95,27 @@ public class Penrose : MonoBehaviour {
   }
 
   private void GenerateTiles() {
-    var j = 0;
+    var idx = 0;
     tiles = new TileData[Total];
-    positions = new Vector2[Total];
-    positionLookup = new Dictionary<Vector2, int>();
+    centers = new Vector2[Total];
+    centerLookup = new Dictionary<Vector2, int>();
     for(var i = 0; i < Total; i++) {
       var t = new TileData {
-                             neighbors = new int[4], type = RawData.Tiles[j++],
+                             neighbors = new int[4], type = RawData.Tiles[idx++],
                              position = {
-                                          x = (int)((RawData.Tiles[j++] * TestScale) + 0.5f),
-                                          y = (int)((RawData.Tiles[j++] * TestScale) + 0.5f)
+                                          x = (int)((RawData.Tiles[idx++] * TestScale) + 0.5f),
+                                          y = (int)((RawData.Tiles[idx++] * TestScale) + 0.5f)
                                         },
                              center = {
-                                        x = RawData.Tiles[j - 2] * FullScale,
-                                        y = RawData.Tiles[j - 1] * FullScale
-                                      },
+                                        x = RawData.Tiles[idx - 2] * FullScale,
+                                        y = RawData.Tiles[idx - 1] * FullScale
+                                      }
                            };
 
-      for(var a = 0; a < 4; a++) t.neighbors[a] = RawData.Tiles[j++];
+      for(var j = 0; j < 4; j++) t.neighbors[j] = RawData.Tiles[idx++];
       tiles[i] = t;
-      positions[i] = t.position;
-      positionLookup[positions[i]] = i;
+      centers[i] = t.position;
+      centerLookup[centers[i]] = i;
     }
   }
 
@@ -126,21 +123,21 @@ public class Penrose : MonoBehaviour {
     // find extents of the tiles
     var maxX = -1000000f;
     var maxY = -1000000f;
-    var minX =  1000000f;
-    var minY =  1000000f;
+    var minX = 1000000f;
+    var minY = 1000000f;
 
     for(var i = 0; i < Penrose.Total; i++) {
       var x = tiles[i].center.x;
       var y = tiles[i].center.y;
 
-      minX = minX.Min(x).Round(); 
+      minX = minX.Min(x).Round();
       minY = minY.Min(y).Round();
       maxX = maxX.Max(x).Round();
       maxY = maxY.Max(y).Round();
     }
 
-    max = new Vector2(maxX, maxY);
-    min = new Vector2(minX, minY);
+    var max = new Vector2(maxX, maxY);
+    var min = new Vector2(minX, minY);
 
     min.x -= 5f;
     max.x += 5f;
@@ -149,6 +146,9 @@ public class Penrose : MonoBehaviour {
     max.y += 2f;
 
     Debug.Log($"{min}, {max}, {max - min}");
+
+    bounds = new Bounds(Vector3.zero, max - min);
+    Debug.Log(bounds.size);
   }
 
   public void Init() {
@@ -178,25 +178,24 @@ public class Penrose : MonoBehaviour {
 
   public int GetIndexFromPosition(Vector2 position) {
     // if we have a correct position already then return the index
-    if(positionLookup.ContainsKey(position)) return positionLookup[position];
+    if(centerLookup.ContainsKey(position)) return centerLookup[position];
 
     // try to find the nearest position
     var idx = -1;
     var minDistance = 100000000f;
-    for(int i = 0; i < Total; i++) {
-      // get the distance 
-      var d = (position - positions[i]).magnitude;
 
-      // continue unless we find a shorter distance
-      if(d > minDistance) continue;
+    for(int i = 0; i < Total; i++) {
+      var d = (position - centers[i]).magnitude; // get the distance
+      if(d > minDistance) continue;              // continue unless we find a shorter distance
 
       idx = i;
       minDistance = d;
     }
 
-    if(idx < 0 || idx > Total) throw new IndexOutOfRangeException($"{idx}: {minDistance}, {position}");
+    if(idx < 0 || idx > Total)
+      throw new IndexOutOfRangeException($"{idx}: {minDistance}, {position}");
 
-    return positionLookup[positions[idx]];
+    return centerLookup[centers[idx]];
   }
 
   private Color FadeColorToBgColor(Color color) {

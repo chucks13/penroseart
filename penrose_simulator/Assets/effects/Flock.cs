@@ -9,8 +9,8 @@ public class Flock : EffectBase {
 
   public override void OnStart() {
     setting = new Settings();
-    var min = controller.penrose.min;
-    var max = controller.penrose.max;
+    var min = controller.penrose.bounds.min;
+    var max = controller.penrose.bounds.max;
 
     if(controller.flockSettings.Length > 0)
       setting = controller.flockSettings[Random.Range(0, controller.juliaSettings.Length)];
@@ -126,18 +126,18 @@ public class Flock : EffectBase {
 
       if(total > 0) {
         alignment /= total;
-        alignment = alignment.normalized * maxSpeed;
+        alignment = alignment.SetMagnitude(maxSpeed);
         alignment -= velocity;
         alignment = Vector2.ClampMagnitude(alignment, maxForce);
 
         cohesion /= total;
         cohesion -= position;
-        cohesion = cohesion.normalized * maxSpeed;
+        cohesion = cohesion.SetMagnitude(maxSpeed);
         cohesion -= velocity;
         cohesion = Vector2.ClampMagnitude(cohesion, maxForce);
 
         separation /= total;
-        separation = separation.normalized * maxSpeed;
+        separation = separation.SetMagnitude(maxSpeed);
         separation -= velocity;
         separation = Vector2.ClampMagnitude(separation, maxForce);
       }

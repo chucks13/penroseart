@@ -2,7 +2,7 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Plasma : TwoDeeEffect {
+public class Plasma : ScreenEffect {
 
   private Settings setting;
 
@@ -75,14 +75,13 @@ public class Plasma : TwoDeeEffect {
             break;
           
         }
-
-
-        twoDeeBuffer[x, y] = color;
+        
+        screenBuffer[x + (y * width)] = color;
       }
     }
 
     // convert the 2D Matrix buffer to a tile buffer
-    TwoDeeEffect.Convert2dBuffer(ref twoDeeBuffer, in buffer);
+    ScreenEffect.Convert2dBuffer(ref screenBuffer, in buffer);
   }
 
 
