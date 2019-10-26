@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   startEffect: 2
-  effectTime: 10
+  effectTime: 100
   currentTransition: 0
   transitionTime: 4
   noiseSettings:
@@ -1399,9 +1399,8 @@ MonoBehaviour:
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
   tiles: []
-  bounds:
-    m_Center: {x: 0, y: 0, z: 0}
-    m_Extent: {x: 0, y: 0, z: 0}
+  max: {x: 0, y: 0}
+  min: {x: 0, y: 0}
 --- !u!33 &1518479355
 MeshFilter:
   m_ObjectHideFlags: 0

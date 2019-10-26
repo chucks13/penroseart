@@ -19,7 +19,7 @@ public abstract class TwoDeeEffect : EffectBase {
   }
 
   private static readonly int count = 4;
-  protected static readonly int width = 44;
+  protected static readonly int width = 50;
   protected static readonly int height = 22;
 
   protected static Neighbor[][] neighbors;
@@ -32,8 +32,8 @@ public abstract class TwoDeeEffect : EffectBase {
     // get the tiles
     var penrose = Controller.Instance.penrose;
     var tiles = penrose.tiles;
-    var min = penrose.bounds.min;
-    var max = penrose.bounds.max;
+    var min = penrose.min;
+    var max = penrose.max;
 
     
     // loop through all the tiles
