@@ -18,7 +18,7 @@ public abstract class ScreenEffect : EffectBase {
   private static readonly int count = 4;
   protected static int width = -1;
   protected static int height = -1;
-  protected static Neighbor[][] neighbors;
+  protected static ScreenMap[][] neighbors;
   protected Color[] screenBuffer;
 
   private static void InitWeights() {
@@ -35,8 +35,8 @@ public abstract class ScreenEffect : EffectBase {
     // loop through all the tiles
     for(var i = 0; i < Penrose.Total; i++) {
       // create closeNeighbors array
-      var closeNeighbors = new Neighbor[count];
-      for(var j = 0; j < count; j++) closeNeighbors[j] = new Neighbor();
+      var closeNeighbors = new ScreenMap[count];
+      for(var j = 0; j < count; j++) closeNeighbors[j] = new ScreenMap();
 
       // reset index and x position
       var index = 0;
@@ -83,7 +83,7 @@ public abstract class ScreenEffect : EffectBase {
   }
 
   // resample the rectangle into the tile buffer
-  protected static void Convert2dBuffer(ref Color[] screenBuffer, in Color[] buffer) {
+  protected static void ConvertScreenBuffer(ref Color[] screenBuffer, in Color[] buffer) {
     for(var i = 0; i < buffer.Length; i++) {
       var pix = Color.black;
       for(var j = 0; j < count; j++) {
@@ -110,10 +110,10 @@ public abstract class ScreenEffect : EffectBase {
     // have we set the neighbors
     if(neighbors != null) return;
 
-    neighbors = new Neighbor[buffer.Length][];
+    neighbors = new ScreenMap[buffer.Length][];
     for(var x = 0; x < buffer.Length; x++) {
-      neighbors[x] = new Neighbor[count];
-      for(var y = 0; y < count; y++) neighbors[x][y] = new Neighbor();
+      neighbors[x] = new ScreenMap[count];
+      for(var y = 0; y < count; y++) neighbors[x][y] = new ScreenMap();
     }
 
     InitWeights();
@@ -123,7 +123,7 @@ public abstract class ScreenEffect : EffectBase {
     //}
   }
 
-  protected class Neighbor {
+  protected class ScreenMap {
     public Vector2Int position;
     public float distance = 1000000f;
     public float weight;

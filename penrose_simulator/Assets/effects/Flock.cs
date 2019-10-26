@@ -44,7 +44,7 @@ public class Flock : EffectBase {
     public int total = 80;
 
     [Range(0f, 10)]
-    public float alignment = 0.9f;
+    public float alignment = 0.75f;
 
     [Range(0f, 10)]
     public float cohesion = 1f;
