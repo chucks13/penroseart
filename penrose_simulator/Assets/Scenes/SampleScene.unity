@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   startEffect: 2
-  effectTime: 100
+  effectTime: 10
   currentTransition: 0
   transitionTime: 4
   noiseSettings:
@@ -741,6 +741,7 @@ MonoBehaviour:
   plasmaSettings: []
   example2dSettings: []
   juliaSettings: []
+  flockSettings: []
   dance:
     beat: 0
     fixedTime: 0
