@@ -19,11 +19,9 @@ public class Penrose : MonoBehaviour {
   [HideInInspector]
   public Color[] buffer = new Color[Total]; // input buffer
 
-  [HideInInspector]
-  public TileData[] tiles;
+  private TileData[] tiles;
 
-  [HideInInspector]
-  public Bounds bounds;
+  private Bounds bounds;
 
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];
@@ -35,6 +33,12 @@ public class Penrose : MonoBehaviour {
   private float bgBrightness;
   private Dictionary<Vector2, int> centerLookup;
   private Vector2[] centers;
+  private Vector2Int min;
+  private Vector2Int max;
+
+  public Bounds Bounds => bounds;
+
+  public TileData[] Tiles => tiles;
 
   private void Awake() {
     meshFilter = GetComponent<MeshFilter>();
@@ -136,18 +140,19 @@ public class Penrose : MonoBehaviour {
       maxY = maxY.Max(y).Round();
     }
 
-    var max = new Vector2(maxX, maxY);
-    var min = new Vector2(minX, minY);
+    max = new Vector2Int((int)maxX, (int)maxY);
+    min = new Vector2Int((int)minX, (int)minY);
 
-    min.x -= 5f;
-    max.x += 5f;
+    min.x -= 5;
+    max.x += 5;
 
-    min.y -= 1f;
-    max.y += 2f;
+    min.y -= 1;
+    max.y += 2;
 
     Debug.Log($"{min}, {max}, {max - min}");
 
-    bounds = new Bounds(Vector3.zero, max - min);
+    var size = max - min;
+    bounds = new Bounds(Vector3.zero, new Vector3(size.x,size.y)); 
     Debug.Log(bounds.size);
   }
 

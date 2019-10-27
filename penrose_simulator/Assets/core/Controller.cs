@@ -28,6 +28,7 @@ public class Controller : Singleton<Controller> {
   public Plasma.Settings[] plasmaSettings;
   public Julia.Settings[] juliaSettings;
   public Flock.Settings[] flockSettings;
+  public MetaBalls.Settings[] metaBallsSettings;
   public Dance dance;
 
   [Header("GUI")]

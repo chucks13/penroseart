@@ -9,8 +9,8 @@ public class Flock : EffectBase {
 
   public override void OnStart() {
     setting = new Settings();
-    var min = controller.penrose.bounds.min;
-    var max = controller.penrose.bounds.max;
+    var min = penrose.Bounds.min;
+    var max = penrose.Bounds.max;
 
     if(controller.flockSettings.Length > 0)
       setting = controller.flockSettings[Random.Range(0, controller.juliaSettings.Length)];
@@ -44,7 +44,7 @@ public class Flock : EffectBase {
     public int total = 80;
 
     [Range(0f, 10)]
-    public float alignment = 0.9f;
+    public float alignment = 0.75f;
 
     [Range(0f, 10)]
     public float cohesion = 1f;

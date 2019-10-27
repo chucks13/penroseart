@@ -21,7 +21,7 @@ public static class ExtensionMethods {
   // Fast rounding
   public static float Round(this float v) => v > 0f ? (int)(v + 0.5f) : (int)(v - 0.5f);
 
-  public static float Clamp(this float value, float outMin, float outMax) {
+  public static float Clamp(this float value, float outMin= 0f, float outMax = 1f) {
     return outMin.Max(outMax.Min(value));
   }
 
@@ -117,6 +117,11 @@ public static class ExtensionMethods {
   #region Vector2
 
   public static Vector2 SetMagnitude(this Vector2 v, float amount) => v.normalized * amount;
+
+  //public static void Random(this ref Vector2 v) {
+  //  v = new Vector2(UnityEngine.Random.Range(-1f, 1f), UnityEngine.Random.Range(-1f, 1f));
+  //  //v = vec;
+  //}
 
   #endregion
 }

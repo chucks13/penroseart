@@ -36,7 +36,7 @@ public class Pulse : EffectBase {
     var color2 = Color.Lerp(endColor, setting.color, t);
 
     for(int i = 0; i < buffer.Length; i++) {
-      buffer[i] = controller.penrose.tiles[i].type == 0 ? color1 : color2;
+      buffer[i] = tiles[i].type == 0 ? color1 : color2;
     }
   }
 

@@ -81,7 +81,7 @@ public class Plasma : ScreenEffect {
     }
 
     // convert the 2D Matrix buffer to a tile buffer
-    ScreenEffect.Convert2dBuffer(ref screenBuffer, in buffer);
+    ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
   }
 
 
