@@ -59,11 +59,11 @@ public class Julia : ScreenEffect {
     angle += setting.speed * Time.deltaTime;
 
     var y =  yMin + setting.yOffset;
-    for(var j = 0; j < height; j++) {
+    for(var sy = 0; sy < height; sy++) {
       
 
       var x = xMin + setting.xOffset;
-      for(var i = 0; i < width; i++) {
+      for(var sx = 0; sx < width; sx++) {
 
         var a = x;
         var b = y;
@@ -84,7 +84,7 @@ public class Julia : ScreenEffect {
         }
 
         var hue = Mathf.Sqrt((float)n / setting.iterations) % 1f;
-        screenBuffer[i + (j * width)] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f);
+        screenBuffer[sx + (sy * width)] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f);
 
         x += dx;
       }
@@ -93,7 +93,7 @@ public class Julia : ScreenEffect {
     }
 
     // convert the 2D Matrix buffer to a tile buffer
-    Convert2dBuffer(ref screenBuffer, in buffer);
+    ConvertScreenBuffer(ref screenBuffer, in buffer);
   }
 
   /// <summary>

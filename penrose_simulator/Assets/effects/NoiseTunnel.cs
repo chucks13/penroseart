@@ -30,8 +30,8 @@ public class NoiseTunnel : EffectBase {
   public override void Draw() {
     for(int i = 0; i < buffer.Length; i++) {
       float scale = (1.0f + (controller.dance.decay * 0.25f)) * setting.scale;
-      float x     = Mathf.Abs(controller.penrose.tiles[i].center.x * scale);
-      float y     = Mathf.Abs(controller.penrose.tiles[i].center.y * scale);
+      float x     = Mathf.Abs(tiles[i].center.x * scale);
+      float y     = Mathf.Abs(tiles[i].center.y * scale);
       float d1    = Mathf.Sqrt((x * x) + (y * y));
       float d2    = x + y;
       float d3    = x - y;
