@@ -33,8 +33,8 @@ public class Noise : EffectBase {
   public override void Draw() {
     for(int i = 0; i < buffer.Length; i++) {
       float scale = (1.0f + (controller.dance.decay * 0.25f)) * setting.scale;
-      float x     = controller.penrose.tiles[i].center.x * scale;
-      float y     = controller.penrose.tiles[i].center.y * scale;
+      float x     = tiles[i].center.x * scale;
+      float y     = tiles[i].center.y * scale;
       float z     = controller.dance.fixedTime * setting.speed;
 
       n =  Perlin.Noise(x, y, z);

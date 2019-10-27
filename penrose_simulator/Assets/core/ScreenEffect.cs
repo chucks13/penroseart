@@ -24,8 +24,8 @@ public abstract class ScreenEffect : EffectBase {
   private static void InitWeights() {
     // get the tiles
     var penrose = Controller.Instance.penrose;
-    var tiles = penrose.tiles;
-    var bounds = penrose.bounds;
+    var tiles = penrose.Tiles;
+    var bounds = penrose.Bounds;
     var min = bounds.min;
     var max = bounds.max;
 
@@ -100,8 +100,8 @@ public abstract class ScreenEffect : EffectBase {
 
     // have we set the static width and height
     if(width < 0) {
-      width = (int)controller.penrose.bounds.size.x.Round();
-      height = (int)controller.penrose.bounds.size.y.Round();
+      width = (int)penrose.Bounds.size.x.Round();
+      height = (int)penrose.Bounds.size.y.Round();
     }
 
     // create the 2d buffer

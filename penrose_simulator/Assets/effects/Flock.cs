@@ -9,8 +9,8 @@ public class Flock : EffectBase {
 
   public override void OnStart() {
     setting = new Settings();
-    var min = controller.penrose.bounds.min;
-    var max = controller.penrose.bounds.max;
+    var min = penrose.Bounds.min;
+    var max = penrose.Bounds.max;
 
     if(controller.flockSettings.Length > 0)
       setting = controller.flockSettings[Random.Range(0, controller.juliaSettings.Length)];

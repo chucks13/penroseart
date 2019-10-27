@@ -709,7 +709,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f47cb3b2738dba41858c13614a36b80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startEffect: 1
+  startEffect: 3
   effectTime: 20
   currentTransition: 0
   transitionTime: 4
@@ -741,6 +741,7 @@ MonoBehaviour:
   plasmaSettings: []
   juliaSettings: []
   flockSettings: []
+  metaBallsSettings: []
   dance:
     beat: 0
     fixedTime: 0
@@ -1398,10 +1399,6 @@ MonoBehaviour:
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
-  tiles: []
-  bounds:
-    m_Center: {x: 0, y: 0, z: 0}
-    m_Extent: {x: 0, y: 0, z: 0}
 --- !u!33 &1518479355
 MeshFilter:
   m_ObjectHideFlags: 0

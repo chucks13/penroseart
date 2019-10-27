@@ -9,7 +9,9 @@ public abstract class EffectBase {
   [HideInInspector]
   public int sortIndex;
 
+  protected Penrose penrose;
   protected Controller controller;
+  protected Penrose.TileData[] tiles;
 
   public string Name => GetType().ToString();
    
@@ -19,6 +21,8 @@ public abstract class EffectBase {
   // Should be called after creation
   public virtual void Init() {
     controller = Controller.Instance;
+    penrose = controller.penrose;
+    tiles = penrose.Tiles;
     buffer     = new Color[Penrose.Total];
   }
 

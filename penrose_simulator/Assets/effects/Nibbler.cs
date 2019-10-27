@@ -33,7 +33,7 @@ public class Nibbler : EffectBase {
     buffer.Fade(setting.fade);
     int count = (int)(controller.dance.deltaTime * 300f);
     for(var x = 0; x < count; x++) {
-      current = controller.penrose.tiles[current].GetRandomNeighbor();
+      current = tiles[current].GetRandomNeighbor();
 
       buffer[current] = setting.randomColor
         ? Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f)
