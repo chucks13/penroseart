@@ -3,7 +3,8 @@
 [System.Serializable]
 public class Nibbler : EffectBase {
 
-  private int current;
+  private const int Count = 10;
+  private int[] current;
   private Settings setting;
 
   public override string DebugText() {
@@ -14,7 +15,8 @@ public class Nibbler : EffectBase {
   public override void Init() {
     base.Init();
     setting = new Settings();
-    current = Random.Range(0, Penrose.Total);
+    current = new int[Count];
+    for(int i = 0; i < Count; i++) current[i] = Random.Range(0, Penrose.Total);
   }
 
   public override void OnStart() {
@@ -27,19 +29,20 @@ public class Nibbler : EffectBase {
     buffer.Clear();
   }
 
-  public override void OnEnd() {  }
+  public override void OnEnd() { }
 
   public override void Draw() {
     buffer.Fade(setting.fade);
     int count = (int)(controller.dance.deltaTime * 300f);
-    for(var x = 0; x < count; x++) {
-      current = tiles[current].GetRandomNeighbor();
+    for(int y = 0; y < Count; y++) {
+      for(var x = 0; x < count; x++) {
+        current[y] = tiles[current[y]].GetRandomNeighbor();
 
-      buffer[current] = setting.randomColor
-        ? Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f)
-        : (setting.color * (1f + controller.dance.decay));
+        buffer[current[y]] = setting.randomColor
+          ? Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f)
+          : (setting.color * (1f + controller.dance.decay));
+      }
     }
-
   }
 
   [System.Serializable]

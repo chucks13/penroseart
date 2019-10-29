@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   startEffect: 6
-  effectTime: 100
+  effectTime: 10
   currentTransition: 0
   transitionTime: 4
   noiseSettings:
