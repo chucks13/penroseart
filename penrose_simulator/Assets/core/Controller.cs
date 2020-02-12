@@ -3,11 +3,21 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using Random = UnityEngine.Random;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
 
 public class Controller : Singleton<Controller> {
 
-  [Header("Effect Switching")]
-  public int startEffect;
+    [Header("UDP")]
+    public string IP;
+    public int port;
+    private static int localPort;
+    IPEndPoint remoteEndPoint;
+    UdpClient client;
+
+    [Header("Effect Switching")]
+    public int startEffect;
 
   private int currentEffect;
 
@@ -81,7 +91,39 @@ public class Controller : Singleton<Controller> {
 
   }
 
-  private void SetupTransitions() {
+    private void setupUDP()
+    {
+        remoteEndPoint = new IPEndPoint(IPAddress.Parse(IP), port);
+        client = new UdpClient();
+
+    }
+    private void sendUDPFrame(Color[] data)
+    {
+        byte[] packet = new byte[904];          // 900 bytes plus 4 header per packet
+        int ptr1 = 0;
+        for(byte section=1;section<7;section++)
+        {
+            // open pixel control packet header  http://openpixelcontrol.org/
+            packet[0] = section;
+            packet[1] = 0;
+            packet[2] = 900 / 256;
+            packet[3] = 900 % 256;
+            int ptr2 = 4;
+            for(int pix=0;pix<150;pix++)        // 150 pix per section
+            {
+                packet[ptr2++] = (byte)(data[ptr1].b * 256.0);
+                packet[ptr2++] = (byte)(data[ptr1].r * 256.0);
+                packet[ptr2++] = (byte)(data[ptr1].g * 256.0);
+                packet[ptr2++] = (byte)(data[ptr1].b * 256.0);
+                packet[ptr2++] = (byte)(data[ptr1].r * 256.0);
+                packet[ptr2++] = (byte)(data[ptr1].g * 256.0);
+                ptr1++;
+            }
+            client.Send(packet, packet.Length, remoteEndPoint);
+        }
+    }
+
+    private void SetupTransitions() {
     var factory = new Factory<TransitionBase>();
 
     transitions = new TransitionBase[factory.Count];
@@ -102,15 +144,15 @@ public class Controller : Singleton<Controller> {
 
     SetupEffects();
     SetupTransitions();
-    
-    dance = new Dance();
+    setupUDP();
+
+        dance = new Dance();
     dance.Init();
 
     timer            =  new Timer(effectTime, false);
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
-
     StartCoroutine(Fps());
   }
 
@@ -182,7 +224,8 @@ public class Controller : Singleton<Controller> {
 
     debugText.text += $"\nFPS: {fps}";
 
-    penrose.Send();
+        sendUDPFrame(penrose.buffer);
+        penrose.Send();
   }
 
 }
