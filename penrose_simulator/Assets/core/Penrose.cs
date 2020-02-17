@@ -56,9 +56,9 @@ public class Penrose : MonoBehaviour {
 
     // grab the geometry
     for(int n = 0; n < RawData.Mesh.Length; n += 6) {
-      var a = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * scale, 0f);
-      var b = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * scale, 0f);
-      var c = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * scale, 0f);
+      var a = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * -scale, 0f);
+      var b = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * -scale, 0f);
+      var c = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * -scale, 0f);
 
       var ab = b - a;
       var ac = c - a;
