@@ -164,7 +164,6 @@ public class Controller : Singleton<Controller> {
         // set the universe umber
         sending[113] = (byte)(universe >> 8);
         sending[114] = (byte)(universe & 255);
-        sending[111] = sequence++;
         // copy the data
         for (int i = 0; i < length; i++)
             sending[i + acnheader.Length] = data[i + start];
@@ -194,11 +193,12 @@ public class Controller : Singleton<Controller> {
         }
         // send the packets
         int universe = 1;
-        for (ptr1 = 0; ptr1 < (5400-450); ptr1 += 450)
+        for (ptr1 = 0; ptr1 < (5400-510); ptr1 += 510)
         {
-            sendACN(universe++, frame, ptr1, 450);
+            sendACN(universe++, frame, ptr1, 510);
         }
         sendACN(universe, frame, ptr1, 5400 - ptr1);
+        acnheader[111] = sequence++;
     }
 
     private void SetupTransitions() {
