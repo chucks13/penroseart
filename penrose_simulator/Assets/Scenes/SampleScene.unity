@@ -709,8 +709,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f47cb3b2738dba41858c13614a36b80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  IP: 192.168.1.177
-  port: 7890
+  IP: 192.168.1.253
+  brightness: 64
   startEffect: 6
   effectTime: 10
   currentTransition: 0

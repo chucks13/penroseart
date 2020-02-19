@@ -6,12 +6,14 @@ using Random = UnityEngine.Random;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 
 public class Controller : Singleton<Controller> {
 
     [Header("UDP")]
     public string IP;
-    public int port;
+    public byte brightness;
+    int port=5568;      // default e131 port
     private static int localPort;
     IPEndPoint remoteEndPoint;
     UdpClient client;
@@ -89,38 +91,114 @@ public class Controller : Singleton<Controller> {
 
     effects[currentEffect].OnStart();
 
-  }
+    }
+
+    byte[] acnheader = {
+        // root layer
+    0x00,0x10,     // (0-1) preamble size
+    0x00,0x00,     // (2-4) post amble size
+    0x41,0x53,0x43,0x2d,0x45,0x31,0x2e,0x31,0x37,0x00,0x00,0x00, // (4-15) ACN packet identifier
+    0x00,0x00,     // (16-17)flags and length (to be filled in)     0x72,0x30,  560     +110
+    0x00,0x00,0x00,0x04,    // (18-21) vector
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,  // (22-37) senders unique id (to be filled in)
+    // framing layer
+    0x00,0x00,     // (38-39) flags and length (to be filled in)     0x72,0x1a,   538       +88
+    0x00,0x00,0x00,0x02,    // (40-43) vector
+    0x31,0x39,0x32,0x2e,0x31,0x36,0x38,0x2e,0x31,0x2e,0x32,0x35,0x33,0x00,0x00,0x00,    // (44-107) source name
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,     // source name
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,     // source name
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,     // source name
+    0x64,       // (108) priority
+    0x00,0x00,  // (109-110) sync address
+    0x00,       // (111) sequence number  (to be filled in)
+    0x00,       // (112) options
+    0x00,0x00,  // (113-114) universe number  (to be filled in)
+    // DMP layer
+    0x00,0x00,   // (115-116) flags and length  (to be filled in)   0x71,0xcd,  461  +11
+    0x02,       // (117) vector
+    0xa1,       // (118) address type and data type
+    0x00,0x00,  // (119-120) first property address
+    0x00,0x01,  // (121-122) address increment
+    0x00,0x00,  // (123-124) payoad size (channel count+1) (to be filled in)  0x01,0xc3,    451 +1
+    0x00,       // (125)  DMX slot 0
+    };
+
+    Guid g;
+    byte sequence=0;
 
     private void setupUDP()
     {
         remoteEndPoint = new IPEndPoint(IPAddress.Parse(IP), port);
         client = new UdpClient();
-
+        // set up template
+        g = Guid.NewGuid();
+        byte[] uuid = g.ToByteArray();
+        for (int i = 0; i < 16; i++)
+            acnheader[i + 22] = uuid[i];
     }
+
+    private async Task sendACN(int universe,byte[] data,int start,int length)
+    {
+        int fullLength = acnheader.Length + length;
+
+        byte[] sending = new byte[fullLength];
+        // copy the header
+        for (int i = 0; i < acnheader.Length; i++)
+            sending[i] = acnheader[i];
+        // patch some length values
+        int length16 = 0x7000 + 110 + length;
+        sending[16] = (byte)(length16 >> 8);
+        sending[17] = (byte)(length16 & 255);
+
+        int length38 = 0x7000 + 88 + length;
+        sending[38] = (byte)(length38 >> 8);
+        sending[39] = (byte)(length38 & 255);
+
+        int length115 = 0x7000 + 11 + length;
+        sending[115] = (byte)(length115 >> 8);
+        sending[116] = (byte)(length115 & 255);
+
+        int length123 = 1 + length;
+        sending[123] = (byte)(length123 >> 8);
+        sending[124] = (byte)(length123 & 255);
+        // set the universe umber
+        sending[113] = (byte)(universe >> 8);
+        sending[114] = (byte)(universe & 255);
+        sending[111] = sequence++;
+        // copy the data
+        for (int i = 0; i < length; i++)
+            sending[i + acnheader.Length] = data[i + start];
+
+        await client.SendAsync(sending, fullLength, remoteEndPoint);
+    }
+
     private void sendUDPFrame(Color[] data)
     {
-        byte[] packet = new byte[904];          // 900 bytes plus 4 header per packet
+        byte[] frame = new byte[1800*3];          // 900 bytes plus 4 header per packet
         int ptr1 = 0;
-        for(byte section=1;section<7;section++)
+        int ptr2;
+        // build uf the frame data
+        ptr2 = 0;
+        for (byte section=0;section<6;section++)
         {
-            // open pixel control packet header  http://openpixelcontrol.org/
-            packet[0] = section;
-            packet[1] = 0;
-            packet[2] = 900 / 256;
-            packet[3] = 900 % 256;
-            int ptr2 = 4;
             for(int pix=0;pix<150;pix++)        // 150 pix per section
             {
-                packet[ptr2++] = (byte)(data[ptr1].b * 256.0);
-                packet[ptr2++] = (byte)(data[ptr1].r * 256.0);
-                packet[ptr2++] = (byte)(data[ptr1].g * 256.0);
-                packet[ptr2++] = (byte)(data[ptr1].b * 256.0);
-                packet[ptr2++] = (byte)(data[ptr1].r * 256.0);
-                packet[ptr2++] = (byte)(data[ptr1].g * 256.0);
+                frame[ptr2++] = (byte)(data[ptr1].r * brightness);
+                frame[ptr2++] = (byte)(data[ptr1].b * brightness);
+                frame[ptr2++] = (byte)(data[ptr1].g * brightness);
+                frame[ptr2++] = (byte)(data[ptr1].r * brightness);
+                frame[ptr2++] = (byte)(data[ptr1].b * brightness);
+                frame[ptr2++] = (byte)(data[ptr1].g * brightness);
                 ptr1++;
             }
-            client.Send(packet, packet.Length, remoteEndPoint);
         }
+        // send the packets
+        int universe = 1;
+        for (ptr1 = 0; ptr1 < (5400-450); ptr1 += 450)
+        {
+            sendACN(universe++, frame, ptr1, 450);
+        }
+        sendACN(universe, frame, ptr1, 5400 - ptr1);
     }
 
     private void SetupTransitions() {
