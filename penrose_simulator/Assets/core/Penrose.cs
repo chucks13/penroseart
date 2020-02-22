@@ -2,6 +2,49 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
+using System.IO;
+
+[System.Serializable]
+public class NewTileData
+{
+
+    [System.Serializable]
+    public struct vert {
+        public float x;
+        public float y;
+    };
+    [System.Serializable]
+    public class triangle      
+    {
+        public int a;       // vertex index shared with other side or rhombus
+        public int b;       // vertex index unique to this side
+        public int c;       // vertex index shared with other side of rhombus
+        public int i;       // original index in javascript dta generator
+    };
+    [System.Serializable]
+    public class tile          
+    {
+        public int[] triangles;    // triangle indexes
+        public int type;            // 0 or 1 for thin or fat
+        public vert center;         // center of tile
+    };
+    // raw data
+    public vert[] verts;
+    public triangle[] triangles;    // 1800 of these
+    public tile[] tiles;            // 900 of these
+    public int[] wires;             // 1800 of these, wiring order for rendering
+
+    public static NewTileData CreateFromJSON(string fileName)
+    {
+        var sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName);
+        var fileContents = sr.ReadToEnd();
+        sr.Close();
+        return JsonUtility.FromJson<NewTileData>(fileContents);
+    }
+
+}
+
+
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
@@ -20,6 +63,9 @@ public class Penrose : MonoBehaviour {
   public Color[] buffer = new Color[Total]; // input buffer
 
   private TileData[] tiles;
+
+    public NewTileData mytiles=new NewTileData();
+    
 
   private Bounds bounds;
 
@@ -48,9 +94,11 @@ public class Penrose : MonoBehaviour {
                                                    hideFlags = HideFlags.HideAndDontSave,
                                                    name = "PenMaterial"
                                                  };
-  }
+      mytiles = NewTileData.CreateFromJSON("rawdata.json");
 
-  private void GenerateMesh() {
+    }
+
+    private void GenerateMesh() {
     var i = 0;
     var j = 0;
 
