@@ -5,41 +5,33 @@ using Random = UnityEngine.Random;
 using System.IO;
 
 [System.Serializable]
-public class NewTileData
+public class JsonData
 {
-
     [System.Serializable]
-    public struct vert {
-        public float x;
-        public float y;
-    };
-    [System.Serializable]
-    public class triangle      
+    public class neighbor
     {
-        public int a;       // vertex index shared with other side or rhombus
-        public int b;       // vertex index unique to this side
-        public int c;       // vertex index shared with other side of rhombus
-        public int i;       // original index in javascript dta generator
-    };
+        public int type;
+        public int tileIdx;
+    }
     [System.Serializable]
     public class tile          
     {
-        public int[] triangles;    // triangle indexes
+//        public int[] triangles;    // triangle indexes
         public int type;            // 0 or 1 for thin or fat
-        public vert center;         // center of tile
+        public int section;
+        public neighbor[] neighbors;
     };
     // raw data
-    public vert[] verts;
-    public triangle[] triangles;    // 1800 of these
+    public float[] Mesh;
     public tile[] tiles;            // 900 of these
     public int[] wires;             // 1800 of these, wiring order for rendering
 
-    public static NewTileData CreateFromJSON(string fileName)
+    public static JsonData CreateFromJSON(string fileName)
     {
         var sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName);
         var fileContents = sr.ReadToEnd();
         sr.Close();
-        return JsonUtility.FromJson<NewTileData>(fileContents);
+        return JsonUtility.FromJson<JsonData>(fileContents);
     }
 
 }
@@ -64,7 +56,7 @@ public class Penrose : MonoBehaviour {
 
   private TileData[] tiles;
 
-    public NewTileData mytiles=new NewTileData();
+  public JsonData JsonRawData =new JsonData();
     
 
   private Bounds bounds;
@@ -94,7 +86,7 @@ public class Penrose : MonoBehaviour {
                                                    hideFlags = HideFlags.HideAndDontSave,
                                                    name = "PenMaterial"
                                                  };
-      mytiles = NewTileData.CreateFromJSON("rawdata.json");
+        JsonRawData = JsonData.CreateFromJSON("rawdata.json");
 
     }
 
@@ -103,39 +95,39 @@ public class Penrose : MonoBehaviour {
     var j = 0;
 
     // grab the geometry
-    for(int n = 0; n < RawData.Mesh.Length; n += 6) {
-      var a = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * -scale, 0f);
-      var b = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * -scale, 0f);
-      var c = new Vector3(RawData.Mesh[j++] * scale, RawData.Mesh[j++] * -scale, 0f);
+    for(int n = 0; n < JsonRawData.Mesh.Length; n += 6) {
+      var a = new Vector3(JsonRawData.Mesh[j++] * scale, JsonRawData.Mesh[j++] * scale, 0f);
+      var b = new Vector3(JsonRawData.Mesh[j++] * scale, JsonRawData.Mesh[j++] * scale, 0f);
+      var c = new Vector3(JsonRawData.Mesh[j++] * scale, JsonRawData.Mesh[j++] * scale, 0f);
 
-      var ab = b - a;
-      var ac = c - a;
+            var ab = b - a;
+            var ac = c - a;
 
       if(Vector3.Cross(ab, ac).z > 0) {
-        Vector3 x = c;
-        c = a;
-        a = x;
-      }
+                Vector3 x = c;
+                c = a;
+                a = x;
+            }
 
-      var middle = (a + c) / 2;
-      a = middle + (a - middle) * gapScale;
-      b = middle + (b - middle) * gapScale;
-      c = middle + (c - middle) * gapScale;
+            var middle = (a + c) / 2;
+            a = middle + (a - middle) * gapScale;
+            b = middle + (b - middle) * gapScale;
+            c = middle + (c - middle) * gapScale;
 
-      vertices[i + 0] = a;
-      vertices[i + 1] = b;
-      vertices[i + 2] = c;
+            vertices[i + 0] = a;
+            vertices[i + 1] = b;
+            vertices[i + 2] = c;
 
-      triangles[i + 0] = i + 0;
-      triangles[i + 1] = i + 1;
-      triangles[i + 2] = i + 2;
+            triangles[i + 0] = i + 0;
+            triangles[i + 1] = i + 1;
+            triangles[i + 2] = i + 2;
 
-      colors[i + 0] = bgColor;
-      colors[i + 1] = bgColor;
-      colors[i + 2] = bgColor;
+            colors[i + 0] = bgColor;
+            colors[i + 1] = bgColor;
+            colors[i + 2] = bgColor;
 
-      i += 3;
-    }
+            i += 3;
+        }
 
     mesh = new Mesh {
                       vertices = vertices, triangles = triangles, colors = colors, name = "PenMesh",
@@ -146,32 +138,39 @@ public class Penrose : MonoBehaviour {
     meshRenderer.material = material;
   }
 
-  private void GenerateTiles() {
-    var idx = 0;
-    tiles = new TileData[Total];
-    centers = new Vector2[Total];
-    centerLookup = new Dictionary<Vector2, int>();
-    for(var i = 0; i < Total; i++) {
-      var t = new TileData {
-                             neighbors = new int[4], type = RawData.Tiles[idx++],
-                             position = {
-                                          x = (int)((RawData.Tiles[idx++] * TestScale) + 0.5f),
-                                          y = (int)((RawData.Tiles[idx++] * TestScale) + 0.5f)
-                                        },
-                             center = {
-                                        x = RawData.Tiles[idx - 2] * FullScale,
-                                        y = RawData.Tiles[idx - 1] * FullScale
-                                      }
-                           };
+    private void GenerateTiles()
+    {
+        int ix2 = 0;
+        tiles = new TileData[Total];
+        centers = new Vector2[Total];
+        centerLookup = new Dictionary<Vector2, int>();
+        for (var i = 0; i < Total; i++)
+        {
+            var cent = (vertices[ix2] + vertices[ix2 + 2]) / 2;
+            cent /= scale;
+            ix2 += 6;
+            var t = new TileData
+            {
+                neighbors = new neighbor[JsonRawData.tiles[i].neighbors.Length],
+                type = JsonRawData.tiles[i].type,
+                position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f)},
+                center = { x =cent.x * FullScale, y =cent.y * FullScale}
+            };
 
-      for(var j = 0; j < 4; j++) t.neighbors[j] = RawData.Tiles[idx++];
-      tiles[i] = t;
-      centers[i] = t.position;
-      centerLookup[centers[i]] = i;
+            for (var j = 0; j < JsonRawData.tiles[i].neighbors.Length; j++)
+            {
+                t.neighbors[j] = new neighbor();
+                t.neighbors[j].type = JsonRawData.tiles[i].neighbors[j].type;
+                t.neighbors[j].tileIdx = JsonRawData.tiles[i].neighbors[j].tileIdx;
+            }
+//            t.neighbors[j] = RawData.Tiles[idx++];
+            tiles[i] = t;
+            centers[i] = t.position;
+            centerLookup[centers[i]] = i;
+        }
     }
-  }
 
-  private void GenerateBounds() {
+    private void GenerateBounds() {
     // find extents of the tiles
     var maxX = -1000000f;
     var maxY = -1000000f;
@@ -255,16 +254,21 @@ public class Penrose : MonoBehaviour {
     return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness);
   }
 
-  [Serializable]
+    [System.Serializable]
+    public class neighbor
+    {
+        public int type;
+        public int tileIdx;
+    }
+    [Serializable]
   public class TileData {
     public Vector2 center;
     public Vector2Int position;
-    public int[] neighbors;
+    public neighbor[] neighbors;
     public int type;
 
     public int GetRandomNeighbor() {
-      var neighbor = neighbors[Random.Range(0, 4)];
-      return neighbor == -1 ? GetRandomNeighbor() : neighbor;
+       return neighbors[Random.Range(0, neighbors.Length)].tileIdx;
     }
 
     public override string ToString() =>
