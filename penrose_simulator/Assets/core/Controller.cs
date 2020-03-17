@@ -174,22 +174,18 @@ public class Controller : Singleton<Controller> {
     private void sendUDPFrame(Color[] data)
     {
         byte[] frame = new byte[1800*3];          // 900 bytes plus 4 header per packet
-        int ptr1 = 0;
         int ptr2;
+        int ptr1;
         // build uf the frame data
         ptr2 = 0;
-        for (byte section=0;section<6;section++)
+        int[] wires = penrose.JsonRawData.wires;
+        int size = wires.Length;
+        for (ptr1=0;ptr1< size; ptr1++)
         {
-            for(int pix=0;pix<150;pix++)        // 150 pix per section
-            {
-                frame[ptr2++] = (byte)(data[ptr1].r * brightness);
-                frame[ptr2++] = (byte)(data[ptr1].b * brightness);
-                frame[ptr2++] = (byte)(data[ptr1].g * brightness);
-                frame[ptr2++] = (byte)(data[ptr1].r * brightness);
-                frame[ptr2++] = (byte)(data[ptr1].b * brightness);
-                frame[ptr2++] = (byte)(data[ptr1].g * brightness);
-                ptr1++;
-            }
+            int ptr3 = wires[ptr1]/2;
+            frame[ptr2++] = (byte)(data[ptr3].r * brightness);
+            frame[ptr2++] = (byte)(data[ptr3].b * brightness);
+            frame[ptr2++] = (byte)(data[ptr3].g * brightness);
         }
         // send the packets
         int universe = 1;
