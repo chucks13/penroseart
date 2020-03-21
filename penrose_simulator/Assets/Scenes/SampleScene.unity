@@ -736,6 +736,7 @@ MonoBehaviour:
     speed: 1
     amplifier: 1
     colorDelta: 0
+  starsSettings: []
   sparkleSettings: []
   nibblerSettings: []
   pulseSettings: []
@@ -1401,6 +1402,12 @@ MonoBehaviour:
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
+  JsonRawData:
+    Mesh: []
+    tiles: []
+    wires: 
+    shapes:
+      loops: 
 --- !u!33 &1518479355
 MeshFilter:
   m_ObjectHideFlags: 0

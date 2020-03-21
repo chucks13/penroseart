@@ -33,6 +33,8 @@ public class Controller : Singleton<Controller> {
   [Header("Settings")]
   public Noise.Settings[] noiseSettings;
 
+
+  public stars.Settings[] starsSettings;
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;

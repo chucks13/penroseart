@@ -21,10 +21,16 @@ public class JsonData
         public int section;
         public neighbor[] neighbors;
     };
+    [System.Serializable]
+    public class shapelist
+    {
+        public int[] loops;
+    };
     // raw data
     public float[] Mesh;
     public tile[] tiles;            // 900 of these
     public int[] wires;             // 1800 of these, wiring order for rendering
+    public shapelist shapes;
 
     public static JsonData CreateFromJSON(string fileName)
     {
