@@ -49,6 +49,8 @@ public class JsonData
         public int[] lines4;
         public int[] lotusballs;
         public int[] starballs;
+        public int[] mirror2;
+        public int[] mirror10;
     };
     // raw data
     public float[] Mesh;

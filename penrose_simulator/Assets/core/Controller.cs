@@ -39,7 +39,7 @@ public class Controller : Singleton<Controller> {
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
-  public Plasma.Settings[] plasmaSettings;
+  public RainbowBars.Settings[] rainbowBarsSettings;
   public Julia.Settings[] juliaSettings;
   public Flock.Settings[] flockSettings;
   public MetaBalls.Settings[] metaBallsSettings;
