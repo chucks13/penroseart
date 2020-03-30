@@ -4,6 +4,22 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 using System.IO;
 
+/*
+[System.Serializable]
+public class SavedState
+{ 
+	public string Name;
+	public string SaveToString() { return JsonUtility.ToJson(this); }
+}
+
+[System.Serializable]
+public class MySavedState : SavedState 
+{
+	public int[][]Loops;
+	public Color Background;
+}
+*/
+
 [System.Serializable]
 public class JsonData
 {
@@ -25,6 +41,14 @@ public class JsonData
     public class shapelist
     {
         public int[] loops;
+        public int[] stars;
+        public int[] lines0;
+        public int[] lines1;
+        public int[] lines2;
+        public int[] lines3;
+        public int[] lines4;
+        public int[] lotusballs;
+        public int[] starballs;
     };
     // raw data
     public float[] Mesh;
@@ -41,8 +65,6 @@ public class JsonData
     }
 
 }
-
-
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
@@ -93,6 +115,24 @@ public class Penrose : MonoBehaviour {
                                                    name = "PenMaterial"
                                                  };
         JsonRawData = JsonData.CreateFromJSON("rawdata.json");
+        /*---------------------------
+
+        var mySavedState = new MySavedState
+        {
+            Name = "someSavedState",
+            Loops =
+            {
+                { 1, 3, 5, 7, 9},
+                { 0, 2, 4, 6},
+                { 11, 22}
+            },
+        
+            Background = Color.black
+        };
+
+        var jsonString = mySavedState.SaveToString();
+
+        -------------------------*/
 
     }
 

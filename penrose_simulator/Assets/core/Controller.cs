@@ -34,7 +34,7 @@ public class Controller : Singleton<Controller> {
   public Noise.Settings[] noiseSettings;
 
 
-  public stars.Settings[] starsSettings;
+  public TileShapes.Settings[] tileShapesSettings;
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
