@@ -2,7 +2,7 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Plasma : ScreenEffect {
+public class RainbowBars : ScreenEffect {
 
   private Settings setting;
 
@@ -25,8 +25,8 @@ public class Plasma : ScreenEffect {
   /// Called when effect is selected by controller to be drawn every frame
   /// </summary>
   public override void OnStart() {
-    if(controller.plasmaSettings.Length > 0) {
-      setting = controller.plasmaSettings[Random.Range(0, controller.plasmaSettings.Length)];
+    if(controller.rainbowBarsSettings.Length > 0) {
+      setting = controller.rainbowBarsSettings[Random.Range(0, controller.rainbowBarsSettings.Length)];
     } else {
       setting.Randomize();
     }

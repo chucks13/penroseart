@@ -12,7 +12,7 @@ public class MetaBalls : ScreenEffect {
   public override void OnStart() {
     setting = new Settings();
 
-    if(controller.plasmaSettings.Length > 0) {
+    if(controller.rainbowBarsSettings.Length > 0) {
       setting = controller.metaBallsSettings[Random.Range(0, controller.metaBallsSettings.Length)];
     } else { setting.Randomize(); }
 
