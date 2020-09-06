@@ -24,6 +24,7 @@ public class Controller : Singleton<Controller> {
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
+  public Ripple.Settings[] rippleSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
   public Plasma.Settings[] plasmaSettings;
   public Julia.Settings[] juliaSettings;
