@@ -222,7 +222,16 @@ public class Controller : Singleton<Controller> {
 
     SetupEffects();
     SetupTransitions();
-    setupUDP();
+        try
+        {
+            setupUDP();
+
+        }
+        catch (Exception e)
+        {
+
+            Debug.Log($"Failed to setup UDP: {e.Message}");
+        }
 
         dance = new Dance();
     dance.Init();
