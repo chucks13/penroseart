@@ -41,6 +41,7 @@ public class Controller : Singleton<Controller> {
   public Ripple.Settings[] rippleSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
   public RainbowBars.Settings[] rainbowBarsSettings;
+  public Waterfall.Settings[] waterfallSettings;
   public Julia.Settings[] juliaSettings;
   public Flock.Settings[] flockSettings;
   public MetaBalls.Settings[] metaBallsSettings;
