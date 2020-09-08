@@ -709,7 +709,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f47cb3b2738dba41858c13614a36b80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startEffect: 6
+  IP: 192.168.1.253
+  brightness: 64
+  startEffect: 0
   effectTime: 10
   currentTransition: 0
   transitionTime: 4
@@ -734,11 +736,12 @@ MonoBehaviour:
     speed: 1
     amplifier: 1
     colorDelta: 0
+  tileShapesSettings: []
   sparkleSettings: []
   nibblerSettings: []
   pulseSettings: []
   noiseTunnelSettings: []
-  plasmaSettings: []
+  rainbowBarsSettings: []
   juliaSettings: []
   flockSettings: []
   metaBallsSettings: []
@@ -795,7 +798,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f95c9fce4577c274998e22a24e80df9a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  bgColor: {r: 0.4528302, g: 0.4528302, b: 0.4528302, a: 1}
+  bgColor: {r: 0.1254902, g: 0.1254902, b: 0.1254902, a: 1}
   scale: 0.003
   gapScale: 0.9
   buffer:
@@ -1399,6 +1402,22 @@ MonoBehaviour:
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
+  JsonRawData:
+    Mesh: []
+    tiles: []
+    wires: 
+    shapes:
+      loops: 
+      stars: 
+      lines0: 
+      lines1: 
+      lines2: 
+      lines3: 
+      lines4: 
+      lotusballs: 
+      starballs: 
+      mirror2: 
+      mirror10: 
 --- !u!33 &1518479355
 MeshFilter:
   m_ObjectHideFlags: 0
