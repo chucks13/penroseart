@@ -39,8 +39,10 @@ public class Controller : Singleton<Controller> {
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
   public Pulse.Settings[] pulseSettings;
+  public Ripple.Settings[] rippleSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
   public RainbowBars.Settings[] rainbowBarsSettings;
+  public Waterfall.Settings[] waterfallSettings;
   public Julia.Settings[] juliaSettings;
   public Flock.Settings[] flockSettings;
   public MetaBalls.Settings[] metaBallsSettings;
@@ -223,7 +225,16 @@ public class Controller : Singleton<Controller> {
 
     SetupEffects();
     SetupTransitions();
-    setupUDP();
+        try
+        {
+            setupUDP();
+
+        }
+        catch (Exception e)
+        {
+
+            Debug.Log($"Failed to setup UDP: {e.Message}");
+        }
 
     osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
     dance = new Dance();
