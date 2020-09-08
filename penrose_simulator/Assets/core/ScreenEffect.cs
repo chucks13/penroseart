@@ -83,7 +83,7 @@ public abstract class ScreenEffect : EffectBase {
   }
 
   // resample the rectangle into the tile buffer
-  protected static void ConvertScreenBuffer(ref Color[] screenBuffer, in Color[] buffer) {
+  public static void ConvertScreenBuffer(ref Color[] screenBuffer, in Color[] buffer) {
     for(var i = 0; i < buffer.Length; i++) {
       var pix = Color.black;
       for(var j = 0; j < count; j++) {

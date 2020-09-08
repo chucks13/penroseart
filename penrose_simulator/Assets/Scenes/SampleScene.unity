@@ -711,6 +711,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   IP: 192.168.1.253
   brightness: 64
+  cameraOverlay:
+    border: {r: 0, g: 0, b: 0, a: 0}
+    style: 5
+    thresh: 0.01
+    frames: 20
+    huestep: 0
   startEffect: 0
   effectTime: 10
   currentTransition: 0
@@ -1418,6 +1424,9 @@ MonoBehaviour:
       starballs: 
       mirror2: 
       mirror10: 
+  bounds:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
 --- !u!33 &1518479355
 MeshFilter:
   m_ObjectHideFlags: 0
