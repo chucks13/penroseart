@@ -89,7 +89,7 @@ public class Penrose : MonoBehaviour {
   public JsonData JsonRawData =new JsonData();
     
 
-  private Bounds bounds;
+  public Bounds bounds;
 
   private readonly Vector3[] vertices = new Vector3[Total * 2 * 3];
   private readonly int[] triangles = new int[Total * 2 * 3];

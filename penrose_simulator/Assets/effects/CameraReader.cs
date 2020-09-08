@@ -3,44 +3,47 @@ using UnityEngine;
 using System.Collections;
 using Random = UnityEngine.Random;
 
-public class CameraReader : ScreenEffect
+[Serializable]
+public class CameraReader 
 {
     WebCamTexture webcamTexture;
-    private protected Color[] localBuffer;
-    private protected Color[] lastBuffer;
-    private protected int[] age;
 
-    private EffectBase[] effects;
-    private Factory<EffectBase> factory;
-    private Color border;
-    public int style=5;
-
+    private float expandMin, expandMax;
+    protected static int width = -1;
+    protected static int height = -1;
+    protected Penrose penrose;
+    private Color[] deltabuffer;            // camera samples down to this smaller buffer
+    private Color[] screenBuffer;           // camera samples down to this smaller buffer
+    private Color[] localBuffer;            // screen buffer samples down to this tile buffer
+    private protected Color[] lastBuffer;   // last frame of local buffer
+    private protected int[] age;            // countdown times for when pixel was activated
+    public Color border;                    // used as an effect color
+    public int style = 5;                   // mixing style
+    public float thresh=0.0f;               // color delta to activate tile
+    public int frames = 50;                 // countdown init value when tile is activated
+    public float huestep = 0;               // hue animate rate
 
     /// <summary>
     /// Called ever frame to update the debug UI text element 
     /// </summary>
     /// <returns></returns>
-    public override string DebugText()
-    {
-        var debugText = string.Empty;
-        for (var i = 0; i < 2; i++)
-        {
-            debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
-        }
-
-        return debugText;
-    }
-
     /// <summary>
     /// Called once when effect is created
     /// </summary>
-    public override void Init()
+    public void Init(int w,int h,int length)
     {
-        base.Init();
-        factory = new Factory<EffectBase>();
-        localBuffer = new Color[buffer.Length];
-        lastBuffer = new Color[buffer.Length];
-        age = new int[buffer.Length];
+        width = w;
+        height = h;
+ 
+        // create the 2d buffer
+        screenBuffer = new Color[width * height];
+
+        expandMin = 0;
+        expandMax = 1.0f;
+        deltabuffer = new Color[length];
+        lastBuffer = new Color[length];
+        localBuffer = new Color[length];
+        age = new int[length];
         FindWebCams();
         Application.RequestUserAuthorization(UserAuthorization.WebCam);
         webcamTexture = new WebCamTexture
@@ -50,64 +53,23 @@ public class CameraReader : ScreenEffect
         };
         webcamTexture.Play();
     }
-    private EffectBase GetRandomEffect()
-    {
-        var effect = factory.Create(factory.Types[Random.Range(0, factory.Count)]);
-        return effect.Name == Name ? GetRandomEffect() : effect;
-    }
-
-    /// <summary>
-    /// Called when effect is selected by controller to be drawn every frame
-    /// </summary>
-    public override void OnStart()
-    {
-
-        buffer.Clear();
-        effects = new EffectBase[2];
-
-        var debugText = string.Empty;
-        for (var i = 0; i < 2; i++)
-        {
-            effects[i] = GetRandomEffect();
-            effects[i].Init();
-            effects[i].OnStart();
-            debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
-            border = Color.HSVToRGB(Random.value, 1, 1);
-        }
-        style = Random.Range(0, 6);     // pick a style
-
-        controller.debugText.text = debugText;
-    }
-
-    /// <summary>
-    /// Called when effect is no longer selected to be drawn by the controller
-    /// </summary>
-    public override void OnEnd() { }
 
     /// <summary>
     /// Called every frame by controller when the effect is selected
     /// </summary>
-    public override void Draw()
+    public void Draw(Color[] buffer)
     {
-        for (int i = 0; i < 2; i++)
-        {
-            effects[i].Draw();
-        }
         if (Application.HasUserAuthorization(UserAuthorization.WebCam))
         {
             if (webcamTexture.isPlaying)
             {
-                RenderCamera();
+                RenderCamera(buffer);
                 return;
             }
-
         }
-        // backup effect
-        for(int i=0;i<buffer.Length;i++)
-            buffer[i] = effects[0].buffer[i];
     }
 
-    void RenderCamera()
+    void RenderCamera(Color[] effectBuffer)
     {
         // sample webcamTexture down to screenBuffer
         int blocksize = webcamTexture.width / width;
@@ -136,50 +98,95 @@ public class CameraReader : ScreenEffect
         }
 
         // sample screenBuffer down to localBuffer
-        ConvertScreenBuffer(ref screenBuffer, in localBuffer);
+        ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in localBuffer);
+        buildAgeMask(localBuffer, thresh, frames);
 
+        Expand(localBuffer);               // expand to cover full range
+        huestep += 0.001f;
+ //       saturate(localBuffer, huestep,1f,1f);             // saturate
+        style = 4;
+        mixEffect(localBuffer, effectBuffer, style);       // add color effects
+    }
 
-        for (var i = 0; i < localBuffer.Length; i++)
+    void buildAgeMask(Color[] videoBuffer, float threshold,int timout)
+    {
+        for (var i = 0; i < videoBuffer.Length; i++)
         {
-            float dr = lastBuffer[i].r - localBuffer[i].r;
-            float dg = lastBuffer[i].g - localBuffer[i].g;
-            float db = lastBuffer[i].b - localBuffer[i].b;
+            float dr = lastBuffer[i].r - videoBuffer[i].r;
+            float dg = lastBuffer[i].g - videoBuffer[i].g;
+            float db = lastBuffer[i].b - videoBuffer[i].b;
             float d = (dr * dr) + (dg * dg) + (db * db);
-            Color c = localBuffer[i];                       // default copy
-            if (d > 0.1)
-                age[i] = 50;
+            if (d > threshold)
+                age[i] = timout;
+            if (age[i] > 0)
+                age[i]--;
+            lastBuffer[i] = videoBuffer[i];
+            deltabuffer[i] = Color.HSVToRGB(1, 0, d);
+        }
+    }
+
+    void mixEffect(Color[] videoBuffer,Color[] effectBuffer, int type)
+    {
+        for (var i = 0; i < effectBuffer.Length; i++)
+        {
+            Color c = effectBuffer[i];                       // default copy
             if (age[i] > 0)
             {
-                age[i]--;
-                switch(style)
-                {
-                    case 0: break;          
-                    case 1: c = effects[0].buffer[i];   break;
-                    case 2: c = effects[0].buffer[i]; break;
-                    case 3: break;
-                    case 4: c = border; break;
-                    case 5: c = border; break;
-
-                }
+                c = effectBuffer[i];
             }
             else
             {
-                switch (style)
-                {
-                    case 0: break;          
-                    case 1: c = effects[1].buffer[i]; break;
-                    case 2: break;
-                    case 3: c = effects[1].buffer[i]; break;
-                    case 4: break;
-                    case 5: c = effects[1].buffer[i]; break;
-
-                }
+                c = videoBuffer[i];
             }
-            buffer[i] = c;
-            lastBuffer[i] = localBuffer[i];
-
+            //            c = videoBuffer[i];
+            effectBuffer[i] = c;
         }
 
+    }
+
+    /// <summary>
+    /// Expands the buffer to have at least one zero and one one
+    /// </summary>
+
+    void Expand(Color[] buffer)
+    {
+        float max = 0.0f;
+        float min = 1.0f;
+        for(int i=0;i< buffer.Length;i++)
+        {
+            Color c = buffer[i]; 
+            if (c.r > max) max = c.r;
+            if (c.g > max) max = c.g;
+            if (c.b > max) max = c.b;
+            if (c.r < min) min = c.r;
+            if (c.g < min) min = c.g;
+            if (c.b < min) min = c.b;
+        }
+        expandMin += (min - expandMin) * 0.05f;
+        expandMax += (max - expandMax) * 0.05f;
+        float delta = expandMax - expandMin;
+        if (delta == 0) return;
+        float scale = 1.0f / delta;
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            Color c = buffer[i];
+            c.r = (c.r - expandMin) * scale;
+            c.g = (c.g - expandMin) * scale;
+            c.b = (c.b - expandMin) * scale;
+            buffer[i] = c;
+        }
+    }
+
+    void saturate(Color[] buffer,float h,float s,float v)
+    {
+        for (int i=0;i< buffer.Length;i++)
+        {
+            Color c = buffer[i];
+            float H, S, V;
+
+            Color.RGBToHSV(c, out H, out S, out V);
+            buffer[i] = Color.HSVToRGB((H+ h) %1f, s, v);
+         }
     }
 
     /// <summary>
