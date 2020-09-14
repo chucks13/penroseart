@@ -17,6 +17,7 @@ public class Controller : Singleton<Controller> {
     private static int localPort;
     IPEndPoint remoteEndPoint;
     UdpClient client;
+    public CameraReader cameraOverlay;
 
     [Header("Effect Switching")]
     public int startEffect;
@@ -63,6 +64,8 @@ public class Controller : Singleton<Controller> {
 
   [HideInInspector]
   public Timer timer;
+
+    private OSCReader osc;
 
   private bool inTransition;
 
@@ -233,10 +236,14 @@ public class Controller : Singleton<Controller> {
             Debug.Log($"Failed to setup UDP: {e.Message}");
         }
 
-        dance = new Dance();
+    osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
+    dance = new Dance();
     dance.Init();
 
-    timer            =  new Timer(effectTime, false);
+    cameraOverlay = new CameraReader();
+    cameraOverlay.Init((int)penrose.Bounds.size.x,(int) penrose.Bounds.size.y, Penrose.Total);
+
+    timer =  new Timer(effectTime, false);
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
@@ -308,11 +315,12 @@ public class Controller : Singleton<Controller> {
 
       debugText.text = effects[currentEffect].DebugText();
     }
+    cameraOverlay.Draw(penrose.buffer);
 
     debugText.text += $"\nFPS: {fps}";
 
-        sendUDPFrame(penrose.buffer);
-        penrose.Send();
+    sendUDPFrame(penrose.buffer);
+    penrose.Send();
   }
 
 }
