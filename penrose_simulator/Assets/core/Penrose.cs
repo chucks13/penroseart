@@ -138,6 +138,40 @@ public class Penrose : MonoBehaviour {
 
     }
 
+    void dumpVerticies(String path)
+    {
+        return;
+        try
+        {
+            //Pass the filepath and filename to the StreamWriter Constructor
+            StreamWriter sw = new StreamWriter(path);
+            String triangle = "";
+            int j = 0;
+            for(int i=0;i<vertices.Length;i++)
+            {
+                triangle += string.Format("{0},{1},{2},", vertices[i].x, vertices[i].y, vertices[i].z);
+                j++;
+                if(j==3)
+                {
+                    sw.WriteLine(triangle);
+                    triangle = "";
+                    j = 0;
+                }
+            }
+            if(j>0)
+                sw.WriteLine(triangle);
+            sw.Close();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Exception: " + e.Message);
+        }
+        finally
+        {
+            Console.WriteLine("Executing finally block.");
+        }
+    }
+
     private void GenerateMesh() {
     var i = 0;
     var j = 0;
@@ -184,6 +218,7 @@ public class Penrose : MonoBehaviour {
 
     meshFilter.mesh = mesh;
     meshRenderer.material = material;
+//    dumpVerticies(Application.streamingAssetsPath + "/" + "mesh.txt");
   }
 
     private void GenerateTiles()
@@ -270,7 +305,7 @@ public class Penrose : MonoBehaviour {
     mesh.colors = colors;
   }
 
-  public void Send() {
+  public void UpdateModelColors() {
     UpdateVertexColors();
 
     //mesh.RecalculateNormals();

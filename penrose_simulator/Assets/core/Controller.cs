@@ -2,11 +2,14 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Random = UnityEngine.Random;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+
+using System.Net.NetworkInformation;
 
 public class Controller : Singleton<Controller> {
 
@@ -17,7 +20,7 @@ public class Controller : Singleton<Controller> {
     private static int localPort;
     IPEndPoint remoteEndPoint;
     UdpClient client;
-    public CameraReader cameraOverlay;
+//    public CameraReader cameraOverlay;
 
     [Header("Effect Switching")]
     public int startEffect;
@@ -46,14 +49,20 @@ public class Controller : Singleton<Controller> {
   public Julia.Settings[] juliaSettings;
   public Flock.Settings[] flockSettings;
   public MetaBalls.Settings[] metaBallsSettings;
+  public drums.Settings[] drumsSettings;
+
   public Dance dance;
+  public drums drum;
+  public ACNHandler readACN;
 
   [Header("GUI")]
   public TextMeshProUGUI effectText;
-
   public TextMeshProUGUI debugText;
+  public TextMeshProUGUI myIPText; 
+  public TextMeshProUGUI myBrightnessText;
 
-  [HideInInspector]
+
+    [HideInInspector]
   public EffectBase[] effects;
 
   [HideInInspector]
@@ -132,6 +141,23 @@ public class Controller : Singleton<Controller> {
 
     Guid g;
     byte sequence=0;
+
+
+
+    public string GetLocalIPv4()
+    {
+        string addresses = "";
+        var host = Dns.GetHostEntry(Dns.GetHostName());
+        foreach (var ip in host.AddressList)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetwork)
+            {
+                 addresses+= "\n"+ ip.ToString();
+            }
+        }
+        return addresses;
+    }
+
 
     private void setupUDP()
     {
@@ -223,6 +249,8 @@ public class Controller : Singleton<Controller> {
     penrose = GameObject.FindObjectOfType<Penrose>();
     penrose.Init();
 
+        myIPText.text = GetLocalIPv4();
+
     SetupEffects();
     SetupTransitions();
         try
@@ -239,11 +267,15 @@ public class Controller : Singleton<Controller> {
     osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
     dance = new Dance();
     dance.Init();
+    drum = new drums();
+    drum.Init();
+    readACN = new ACNHandler();
+    readACN.Init();
 
-    cameraOverlay = new CameraReader();
-    cameraOverlay.Init((int)penrose.Bounds.size.x,(int) penrose.Bounds.size.y, Penrose.Total);
+            //   cameraOverlay = new CameraReader();
+            //   cameraOverlay.Init((int)penrose.Bounds.size.x,(int) penrose.Bounds.size.y, Penrose.Total);
 
-    timer =  new Timer(effectTime, false);
+            timer =  new Timer(effectTime, false);
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
@@ -296,31 +328,42 @@ public class Controller : Singleton<Controller> {
     effectText.text = transitions[currentTransition].Name;
   }
 
-  // Update is called once per frame
-  void Update() {
-    timer.Update(Time.deltaTime);
-    if(Input.GetKeyDown("space")) dance.MarkBeat();
-    dance.Update();
+    // Update is called once per frame
+    void Update() {
+        timer.Update(Time.deltaTime);
+        if (Input.GetKeyDown("space")) 
+            dance.MarkBeat();
+        dance.Update();
+        drum.Update();
+        if( readACN.Update())
+        {
+            penrose.buffer = (Color[])readACN.buffer.Clone();
+             debugText.text = "ACN source";
+        }
+        else 
+        { 
+            if (inTransition) {
+                transitions[currentTransition].V = timer.Value;
+                transitions[currentTransition].Draw();
+                penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
 
-    if(inTransition) {
-      transitions[currentTransition].V = timer.Value;
-      transitions[currentTransition].Draw();
-      penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
+                debugText.text = transitions[currentTransition].DebugText();
 
-      debugText.text = transitions[currentTransition].DebugText();
+            } else {
+                effects[currentEffect].Draw();
+                penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
 
-    } else {
-      effects[currentEffect].Draw();
-      penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
+                debugText.text = effects[currentEffect].DebugText();
+            }
+            drum.Draw(penrose.buffer);
+        }
 
-      debugText.text = effects[currentEffect].DebugText();
+        //    cameraOverlay.Draw(penrose.buffer);
+
+        debugText.text += $"\nFPS: {fps}";
+        sendUDPFrame(penrose.buffer);
+ 
+        penrose.UpdateModelColors();
     }
-    cameraOverlay.Draw(penrose.buffer);
-
-    debugText.text += $"\nFPS: {fps}";
-
-    sendUDPFrame(penrose.buffer);
-    penrose.Send();
-  }
-
 }
+
