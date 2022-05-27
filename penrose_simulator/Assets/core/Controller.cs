@@ -41,6 +41,7 @@ public class Controller : Singleton<Controller> {
   public TileShapes.Settings[] tileShapesSettings;
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
+  public Panels.Settings[]panelsSettings;
   public Pulse.Settings[] pulseSettings;
   public Ripple.Settings[] rippleSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
@@ -59,7 +60,7 @@ public class Controller : Singleton<Controller> {
   public TextMeshProUGUI effectText;
   public TextMeshProUGUI debugText;
   public TextMeshProUGUI myIPText; 
-  public TextMeshProUGUI myBrightnessText;
+//  public TextMeshProUGUI myBrightnessText;
 
 
     [HideInInspector]
