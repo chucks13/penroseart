@@ -52,6 +52,8 @@ public class JsonData
         public int[] mirror2;
         public int[] mirror10;
     };
+
+    // [count,pointers[count],(length,tiles[length])
     // raw data
     public float[] Mesh;
     public tile[] tiles;            // 900 of these
@@ -65,6 +67,7 @@ public class JsonData
         sr.Close();
         return JsonUtility.FromJson<JsonData>(fileContents);
     }
+
 
 }
 
@@ -87,7 +90,7 @@ public class Penrose : MonoBehaviour {
   private TileData[] tiles;
 
   public JsonData JsonRawData =new JsonData();
-    
+ 
 
   public Bounds bounds;
 
@@ -108,7 +111,7 @@ public class Penrose : MonoBehaviour {
 
   public TileData[] Tiles => tiles;
 
-  private void Awake() {
+    private void Awake() {
     meshFilter = GetComponent<MeshFilter>();
     meshRenderer = GetComponent<MeshRenderer>();
     material =
@@ -169,6 +172,44 @@ public class Penrose : MonoBehaviour {
         finally
         {
             Console.WriteLine("Executing finally block.");
+        }
+    }
+    private void GenerateRings()
+    {
+        for (int ring=0;ring<10;ring++)
+        {
+            bool found = false;
+            for (int i = 0; i < Tiles.Length; i++)
+            {
+                TileData t = Tiles[i];
+                if (t.ring >= 0)            // already marked
+                    continue;
+                int neighborCount = t.neighbors.Length;
+                if(neighborCount<4)         // outside edge, automatic
+                {
+                    t.ring = ring;
+                    found = true;
+                    continue;
+                }
+                for (int y = 0; y < neighborCount; y++)
+                {
+                    TileData t2 = Tiles[t.neighbors[y].tileIdx];
+                    if (t2.section != t.section)        // borders another section, automatic
+                    {
+                        t.ring = ring;
+                        found = true;
+                        break;
+                    }
+                    if(t2.ring==ring-1)    // touches previous ring 
+                    {
+                        t.ring = ring;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found)     // nothing marked
+                break;
         }
     }
 
@@ -237,7 +278,9 @@ public class Penrose : MonoBehaviour {
                 neighbors = new neighbor[JsonRawData.tiles[i].neighbors.Length],
                 type = JsonRawData.tiles[i].type,
                 position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f)},
-                center = { x =cent.x * FullScale, y =cent.y * FullScale}
+                center = { x =cent.x * FullScale, y =cent.y * FullScale},
+                section = JsonRawData.tiles[i].section,
+                ring = -3                   // undefined
             };
 
             for (var j = 0; j < JsonRawData.tiles[i].neighbors.Length; j++)
@@ -290,6 +333,7 @@ public class Penrose : MonoBehaviour {
     GenerateMesh();
     GenerateTiles();
     GenerateBounds();
+    GenerateRings();
     bgBrightness = bgColor.grayscale;
   }
 
@@ -348,6 +392,8 @@ public class Penrose : MonoBehaviour {
     public Vector2 center;
     public Vector2Int position;
     public neighbor[] neighbors;
+    public int section;
+    public int ring;
     public int type;
 
     public int GetRandomNeighbor() {
