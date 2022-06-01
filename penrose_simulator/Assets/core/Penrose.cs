@@ -216,6 +216,7 @@ public class Penrose : MonoBehaviour {
     private void GenerateMesh() {
     var i = 0;
     var j = 0;
+        Vector3 reflect = new Vector3(1, -1, 1);
 
     // grab the geometry
     for(int n = 0; n < JsonRawData.Mesh.Length; n += 6) {
@@ -237,9 +238,12 @@ public class Penrose : MonoBehaviour {
             b = middle + (b - middle) * gapScale;
             c = middle + (c - middle) * gapScale;
 
-            vertices[i + 0] = a;
+            a.y *= -1f;
+            b.y *= -1f;
+            c.y *= -1f;
+            vertices[i + 0] = c;
             vertices[i + 1] = b;
-            vertices[i + 2] = c;
+            vertices[i + 2] = a;
 
             triangles[i + 0] = i + 0;
             triangles[i + 1] = i + 1;
@@ -271,15 +275,34 @@ public class Penrose : MonoBehaviour {
         for (var i = 0; i < Total; i++)
         {
             var cent = (vertices[ix2] + vertices[ix2 + 2]) / 2;
+
+            // find angle
+            float maxlen = 0;
+            Vector2 maxseg=new Vector2(0,1);
+            for(int x=0;x<6;x++)
+            {
+                var seg = cent - vertices[ix2+x];
+                float len = (seg.x * seg.x) + (seg.y * seg.y);
+                if(len>maxlen)
+                {
+                    maxlen = len;
+                    maxseg = seg;
+                }
+            }
+
             cent /= scale;
+            float segangle = (float)Math.Atan2(maxseg.y, maxseg.x);
+            if (segangle > Math.PI)
+                segangle -= (float)Math.PI;
             ix2 += 6;
             var t = new TileData
             {
                 neighbors = new neighbor[JsonRawData.tiles[i].neighbors.Length],
                 type = JsonRawData.tiles[i].type,
-                position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f)},
-                center = { x =cent.x * FullScale, y =cent.y * FullScale},
+                position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f) },
+                center = { x = cent.x * FullScale, y = cent.y * FullScale },
                 section = JsonRawData.tiles[i].section,
+                angle = segangle,
                 ring = -3                   // undefined
             };
 
@@ -329,7 +352,17 @@ public class Penrose : MonoBehaviour {
     Debug.Log(bounds.size);
   }
 
+    /*
+  // there is a bug in the json data
+  private void patchLoops()
+    {
+        int shapeidx = JsonRawData.shapes.loops[3];          // broken one here
+        int countidx = JsonRawData.shapes.loops[shapeidx];
+        int count = JsonRawData.shapes.loops[countidx];
+    }
+    */
   public void Init() {
+//    patchLoops();
     GenerateMesh();
     GenerateTiles();
     GenerateBounds();
@@ -395,6 +428,7 @@ public class Penrose : MonoBehaviour {
     public int section;
     public int ring;
     public int type;
+    public float angle;
 
     public int GetRandomNeighbor() {
        return neighbors[Random.Range(0, neighbors.Length)].tileIdx;

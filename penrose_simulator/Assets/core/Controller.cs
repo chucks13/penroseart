@@ -35,13 +35,14 @@ public class Controller : Singleton<Controller> {
   public float transitionTime = 2f;
 
   [Header("Settings")]
-  public Noise.Settings[] noiseSettings;
+    public Noise.Settings[] noiseSettings;
 
 
   public TileShapes.Settings[] tileShapesSettings;
+  public Angles.Settings[] anglesSettings;
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
-  public Panels.Settings[]panelsSettings;
+  public Panels.Settings[] panelsSettings;
   public Pulse.Settings[] pulseSettings;
   public Ripple.Settings[] rippleSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
