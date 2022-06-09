@@ -854,15 +854,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   IP: 192.168.1.253
   brightness: 64
+  cameraOverlay:
+    border: {r: 0, g: 0, b: 0, a: 0}
+    style: 5
+    thresh: 0.15
+    frames: 20
+    huestep: 0
   startEffect: 0
   effectTime: 10
   currentTransition: 0
   transitionTime: 4
-  anglesSettings:
-  - speed: 1
-  - speed: 0.5
-  - speed: 0.25
-  - speed: 0.05
   noiseSettings:
   - scale: 0.176559
     speed: 1.356254
@@ -885,6 +886,11 @@ MonoBehaviour:
     amplifier: 1
     colorDelta: 0
   tileShapesSettings: []
+  anglesSettings:
+  - speed: 1
+  - speed: 0.5
+  - speed: 0.25
+  - speed: 0.05
   sparkleSettings: []
   nibblerSettings: []
   panelsSettings: []

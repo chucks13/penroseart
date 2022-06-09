@@ -406,7 +406,7 @@ public class OSC : MonoBehaviour
 {
 
     public int inPort = 6969;
-    public string outIP = "127.0.0.1";
+    public string outIP = "192.168.1.255";
     public int outPort = 6161;
 
     private UDPPacketIO OscPacketIO;

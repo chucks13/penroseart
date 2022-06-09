@@ -20,7 +20,7 @@ public class Controller : Singleton<Controller> {
     private static int localPort;
     IPEndPoint remoteEndPoint;
     UdpClient client;
-//    public CameraReader cameraOverlay;
+    public CameraReader cameraOverlay;
 
     [Header("Effect Switching")]
     public int startEffect;
@@ -75,8 +75,10 @@ public class Controller : Singleton<Controller> {
 
   [HideInInspector]
   public Timer timer;
-
-    private OSCReader osc;
+  
+  private OSCReader osc;
+    private int OSCtimer;
+    private String OSCtext;
 
   private bool inTransition;
 
@@ -243,10 +245,50 @@ public class Controller : Singleton<Controller> {
 
     Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
   }
+    private void OSCHandler(OscMessage om, ArrayList oms)
+    {
+        if (om.address == "/1/vscroll1")       // brightness
+        {
+            brightness = (byte)Mathf.Lerp(255f, 0f, om.GetFloat(0));
+        }
+        if(om.address=="/ping")
+        {
+            oms.Add(makemessage("/1/vscroll1",1f- (float)brightness/255f));
+        }
 
-  // Use this for initialization
-  void Start() {
+    }
+
+    public void OscHandler(OscMessage om)
+    {
+        ArrayList oms = new ArrayList();        // make a list of replies
+        OSCHandler(om,oms);
+        cameraOverlay.OSCHandler(om, oms);
+        OSCtext = om.ToString();
+        OSCtimer = 20;
+         if (oms.Count > 0)                      // send any replies
+            osc.Send(oms);
+    }
+    public OscMessage makemessage(string address, float value)
+    {
+        OscMessage message = new OscMessage();
+        message.address = address;
+        message.values.Add(value);
+        return message;
+    }
+
+    public void OSCping()
+    {
+        ArrayList oms = new ArrayList();        // make a list of replies
+        OscMessage om = makemessage("/ping", 0);
+        OSCHandler(om, oms);
+        cameraOverlay.OSCHandler(om, oms);
+        if (oms.Count > 0)                      // send any replies
+            osc.Send(oms);
+    }
+    // Use this for initialization
+    void Start() {
     Application.targetFrameRate = 60;
+    OSCtimer = 0;
 
     penrose = GameObject.FindObjectOfType<Penrose>();
     penrose.Init();
@@ -267,6 +309,7 @@ public class Controller : Singleton<Controller> {
         }
 
     osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
+    osc.SetAllMessageHandler(OscHandler);
     dance = new Dance();
     dance.Init();
     drum = new drums();
@@ -274,16 +317,17 @@ public class Controller : Singleton<Controller> {
     readACN = new ACNHandler();
     readACN.Init();
 
-            //   cameraOverlay = new CameraReader();
-            //   cameraOverlay.Init((int)penrose.Bounds.size.x,(int) penrose.Bounds.size.y, Penrose.Total);
+    cameraOverlay = new CameraReader();
+    cameraOverlay.Init((int)penrose.Bounds.size.x,(int) penrose.Bounds.size.y, Penrose.Total);
 
-            timer =  new Timer(effectTime, false);
+    timer =  new Timer(effectTime, false);
     timer.onFinished += OnTimerFinished;
 
     effectText.text = effects[currentEffect].GetType().ToString();
     StartCoroutine(Fps());
   }
 
+ 
   private int GetNewEffectIndex() {
     effects[currentEffect].sortIndex = 100000;
     ReSortEffectsArray();
@@ -337,7 +381,7 @@ public class Controller : Singleton<Controller> {
             dance.MarkBeat();
         dance.Update();
         drum.Update();
-        if( readACN.Update())
+        if ( readACN.Update())
         {
             penrose.buffer = (Color[])readACN.buffer.Clone();
              debugText.text = "ACN source";
@@ -360,12 +404,18 @@ public class Controller : Singleton<Controller> {
             drum.Draw(penrose.buffer);
         }
 
-        //    cameraOverlay.Draw(penrose.buffer);
+        cameraOverlay.Draw(penrose.buffer);
 
         debugText.text += $"\nFPS: {fps}";
+        if(OSCtimer>0)
+        {
+            debugText.text = OSCtext;
+            OSCtimer--;
+        }
         sendUDPFrame(penrose.buffer);
  
         penrose.UpdateModelColors();
+        OSCping();
     }
 }
 

@@ -277,23 +277,12 @@ public class Penrose : MonoBehaviour {
             var cent = (vertices[ix2] + vertices[ix2 + 2]) / 2;
 
             // find angle
-            float maxlen = 0;
-            Vector2 maxseg=new Vector2(0,1);
-            for(int x=0;x<6;x++)
-            {
-                var seg = cent - vertices[ix2+x];
-                float len = (seg.x * seg.x) + (seg.y * seg.y);
-                if(len>maxlen)
-                {
-                    maxlen = len;
-                    maxseg = seg;
-                }
-            }
+            Vector2 maxseg = cent - vertices[ix2];
 
             cent /= scale;
-            float segangle = (float)Math.Atan2(maxseg.y, maxseg.x);
-            if (segangle > Math.PI)
-                segangle -= (float)Math.PI;
+            float segangle = (float)Math.Atan2(maxseg.y, maxseg.x) * Mathf.Rad2Deg;
+            if (segangle > 180f)
+                segangle -= 180f;
             ix2 += 6;
             var t = new TileData
             {
