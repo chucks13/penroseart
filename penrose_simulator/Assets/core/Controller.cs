@@ -2,11 +2,14 @@
 using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Random = UnityEngine.Random;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+
+using System.Net.NetworkInformation;
 
 public class Controller : Singleton<Controller> {
 
@@ -32,12 +35,14 @@ public class Controller : Singleton<Controller> {
   public float transitionTime = 2f;
 
   [Header("Settings")]
-  public Noise.Settings[] noiseSettings;
+    public Noise.Settings[] noiseSettings;
 
 
   public TileShapes.Settings[] tileShapesSettings;
+  public Angles.Settings[] anglesSettings;
   public ColorSparkle.Settings[] sparkleSettings;
   public Nibbler.Settings[] nibblerSettings;
+  public Panels.Settings[] panelsSettings;
   public Pulse.Settings[] pulseSettings;
   public Ripple.Settings[] rippleSettings;
   public NoiseTunnel.Settings[] noiseTunnelSettings;
@@ -46,14 +51,21 @@ public class Controller : Singleton<Controller> {
   public Julia.Settings[] juliaSettings;
   public Flock.Settings[] flockSettings;
   public MetaBalls.Settings[] metaBallsSettings;
+  public drums.Settings[] drumsSettings;
+  public Tunnel.Settings[] tunnelSettings;
+
   public Dance dance;
+  public drums drum;
+  public ACNHandler readACN;
 
   [Header("GUI")]
   public TextMeshProUGUI effectText;
-
   public TextMeshProUGUI debugText;
+  public TextMeshProUGUI myIPText; 
+//  public TextMeshProUGUI myBrightnessText;
 
-  [HideInInspector]
+
+    [HideInInspector]
   public EffectBase[] effects;
 
   [HideInInspector]
@@ -64,8 +76,10 @@ public class Controller : Singleton<Controller> {
 
   [HideInInspector]
   public Timer timer;
-
-    private OSCReader osc;
+  
+  private OSCReader osc;
+    private int OSCtimer;
+    private String OSCtext;
 
   private bool inTransition;
 
@@ -132,6 +146,23 @@ public class Controller : Singleton<Controller> {
 
     Guid g;
     byte sequence=0;
+
+
+
+    public string GetLocalIPv4()
+    {
+        string addresses = "";
+        var host = Dns.GetHostEntry(Dns.GetHostName());
+        foreach (var ip in host.AddressList)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetwork)
+            {
+                 addresses+= "\n"+ ip.ToString();
+            }
+        }
+        return addresses;
+    }
+
 
     private void setupUDP()
     {
@@ -215,13 +246,55 @@ public class Controller : Singleton<Controller> {
 
     Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
   }
+    private void OSCHandler(OscMessage om, ArrayList oms)
+    {
+        if (om.address == "/1/vscroll1")       // brightness
+        {
+            brightness = (byte)Mathf.Lerp(255f, 0f, om.GetFloat(0));
+        }
+        if(om.address=="/ping")
+        {
+            oms.Add(makemessage("/1/vscroll1",1f- (float)brightness/255f));
+        }
 
-  // Use this for initialization
-  void Start() {
+    }
+
+    public void OscHandler(OscMessage om)
+    {
+        ArrayList oms = new ArrayList();        // make a list of replies
+        OSCHandler(om,oms);
+        cameraOverlay.OSCHandler(om, oms);
+        OSCtext = om.ToString();
+        OSCtimer = 20;
+         if (oms.Count > 0)                      // send any replies
+            osc.Send(oms);
+    }
+    public OscMessage makemessage(string address, float value)
+    {
+        OscMessage message = new OscMessage();
+        message.address = address;
+        message.values.Add(value);
+        return message;
+    }
+
+    public void OSCping()
+    {
+        ArrayList oms = new ArrayList();        // make a list of replies
+        OscMessage om = makemessage("/ping", 0);
+        OSCHandler(om, oms);
+        cameraOverlay.OSCHandler(om, oms);
+        if (oms.Count > 0)                      // send any replies
+            osc.Send(oms);
+    }
+    // Use this for initialization
+    void Start() {
     Application.targetFrameRate = 60;
+    OSCtimer = 0;
 
     penrose = GameObject.FindObjectOfType<Penrose>();
     penrose.Init();
+
+        myIPText.text = GetLocalIPv4();
 
     SetupEffects();
     SetupTransitions();
@@ -237,8 +310,13 @@ public class Controller : Singleton<Controller> {
         }
 
     osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
+    osc.SetAllMessageHandler(OscHandler);
     dance = new Dance();
     dance.Init();
+    drum = new drums();
+    drum.Init();
+    readACN = new ACNHandler();
+    readACN.Init();
 
     cameraOverlay = new CameraReader();
     cameraOverlay.Init((int)penrose.Bounds.size.x,(int) penrose.Bounds.size.y, Penrose.Total);
@@ -250,6 +328,7 @@ public class Controller : Singleton<Controller> {
     StartCoroutine(Fps());
   }
 
+ 
   private int GetNewEffectIndex() {
     effects[currentEffect].sortIndex = 100000;
     ReSortEffectsArray();
@@ -296,31 +375,48 @@ public class Controller : Singleton<Controller> {
     effectText.text = transitions[currentTransition].Name;
   }
 
-  // Update is called once per frame
-  void Update() {
-    timer.Update(Time.deltaTime);
-    if(Input.GetKeyDown("space")) dance.MarkBeat();
-    dance.Update();
+    // Update is called once per frame
+    void Update() {
+        timer.Update(Time.deltaTime);
+        if (Input.GetKeyDown("space")) 
+            dance.MarkBeat();
+        dance.Update();
+        drum.Update();
+        if ( readACN.Update())
+        {
+            penrose.buffer = (Color[])readACN.buffer.Clone();
+             debugText.text = "ACN source";
+        }
+        else 
+        { 
+            if (inTransition) {
+                transitions[currentTransition].V = timer.Value;
+                transitions[currentTransition].Draw();
+                penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
 
-    if(inTransition) {
-      transitions[currentTransition].V = timer.Value;
-      transitions[currentTransition].Draw();
-      penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
+                debugText.text = transitions[currentTransition].DebugText();
 
-      debugText.text = transitions[currentTransition].DebugText();
+            } else {
+                effects[currentEffect].Draw();
+                penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
 
-    } else {
-      effects[currentEffect].Draw();
-      penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
+                debugText.text = effects[currentEffect].DebugText();
+            }
+            drum.Draw(penrose.buffer);
+        }
 
-      debugText.text = effects[currentEffect].DebugText();
+        cameraOverlay.Draw(penrose.buffer);
+
+        debugText.text += $"\nFPS: {fps}";
+        if(OSCtimer>0)
+        {
+            debugText.text = OSCtext;
+            OSCtimer--;
+        }
+        sendUDPFrame(penrose.buffer);
+ 
+        penrose.UpdateModelColors();
+        OSCping();
     }
-    cameraOverlay.Draw(penrose.buffer);
-
-    debugText.text += $"\nFPS: {fps}";
-
-    sendUDPFrame(penrose.buffer);
-    penrose.Send();
-  }
-
 }
+

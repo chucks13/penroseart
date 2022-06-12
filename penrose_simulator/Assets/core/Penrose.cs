@@ -52,6 +52,8 @@ public class JsonData
         public int[] mirror2;
         public int[] mirror10;
     };
+
+    // [count,pointers[count],(length,tiles[length])
     // raw data
     public float[] Mesh;
     public tile[] tiles;            // 900 of these
@@ -65,6 +67,7 @@ public class JsonData
         sr.Close();
         return JsonUtility.FromJson<JsonData>(fileContents);
     }
+
 
 }
 
@@ -87,7 +90,7 @@ public class Penrose : MonoBehaviour {
   private TileData[] tiles;
 
   public JsonData JsonRawData =new JsonData();
-    
+ 
 
   public Bounds bounds;
 
@@ -108,7 +111,7 @@ public class Penrose : MonoBehaviour {
 
   public TileData[] Tiles => tiles;
 
-  private void Awake() {
+    private void Awake() {
     meshFilter = GetComponent<MeshFilter>();
     meshRenderer = GetComponent<MeshRenderer>();
     material =
@@ -138,9 +141,82 @@ public class Penrose : MonoBehaviour {
 
     }
 
+    void dumpVerticies(String path)
+    {
+        return;
+        try
+        {
+            //Pass the filepath and filename to the StreamWriter Constructor
+            StreamWriter sw = new StreamWriter(path);
+            String triangle = "";
+            int j = 0;
+            for(int i=0;i<vertices.Length;i++)
+            {
+                triangle += string.Format("{0},{1},{2},", vertices[i].x, vertices[i].y, vertices[i].z);
+                j++;
+                if(j==3)
+                {
+                    sw.WriteLine(triangle);
+                    triangle = "";
+                    j = 0;
+                }
+            }
+            if(j>0)
+                sw.WriteLine(triangle);
+            sw.Close();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Exception: " + e.Message);
+        }
+        finally
+        {
+            Console.WriteLine("Executing finally block.");
+        }
+    }
+    private void GenerateRings()
+    {
+        for (int ring=0;ring<10;ring++)
+        {
+            bool found = false;
+            for (int i = 0; i < Tiles.Length; i++)
+            {
+                TileData t = Tiles[i];
+                if (t.ring >= 0)            // already marked
+                    continue;
+                int neighborCount = t.neighbors.Length;
+                if(neighborCount<4)         // outside edge, automatic
+                {
+                    t.ring = ring;
+                    found = true;
+                    continue;
+                }
+                for (int y = 0; y < neighborCount; y++)
+                {
+                    TileData t2 = Tiles[t.neighbors[y].tileIdx];
+                    if (t2.section != t.section)        // borders another section, automatic
+                    {
+                        t.ring = ring;
+                        found = true;
+                        break;
+                    }
+                    if(t2.ring==ring-1)    // touches previous ring 
+                    {
+                        t.ring = ring;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found)     // nothing marked
+                break;
+        }
+    }
+
     private void GenerateMesh() {
     var i = 0;
     var j = 0;
+        Vector3 reflect = new Vector3(1, -1, 1);
 
     // grab the geometry
     for(int n = 0; n < JsonRawData.Mesh.Length; n += 6) {
@@ -162,9 +238,12 @@ public class Penrose : MonoBehaviour {
             b = middle + (b - middle) * gapScale;
             c = middle + (c - middle) * gapScale;
 
-            vertices[i + 0] = a;
+            a.y *= -1f;
+            b.y *= -1f;
+            c.y *= -1f;
+            vertices[i + 0] = c;
             vertices[i + 1] = b;
-            vertices[i + 2] = c;
+            vertices[i + 2] = a;
 
             triangles[i + 0] = i + 0;
             triangles[i + 1] = i + 1;
@@ -184,6 +263,7 @@ public class Penrose : MonoBehaviour {
 
     meshFilter.mesh = mesh;
     meshRenderer.material = material;
+//    dumpVerticies(Application.streamingAssetsPath + "/" + "mesh.txt");
   }
 
     private void GenerateTiles()
@@ -195,14 +275,24 @@ public class Penrose : MonoBehaviour {
         for (var i = 0; i < Total; i++)
         {
             var cent = (vertices[ix2] + vertices[ix2 + 2]) / 2;
+
+            // find angle
+            Vector2 maxseg = cent - vertices[ix2];
+
             cent /= scale;
+            float segangle = (float)Math.Atan2(maxseg.y, maxseg.x) * Mathf.Rad2Deg;
+            if (segangle > 180f)
+                segangle -= 180f;
             ix2 += 6;
             var t = new TileData
             {
                 neighbors = new neighbor[JsonRawData.tiles[i].neighbors.Length],
                 type = JsonRawData.tiles[i].type,
-                position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f)},
-                center = { x =cent.x * FullScale, y =cent.y * FullScale}
+                position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f) },
+                center = { x = cent.x * FullScale, y = cent.y * FullScale },
+                section = JsonRawData.tiles[i].section,
+                angle = segangle,
+                ring = -3                   // undefined
             };
 
             for (var j = 0; j < JsonRawData.tiles[i].neighbors.Length; j++)
@@ -251,10 +341,21 @@ public class Penrose : MonoBehaviour {
     Debug.Log(bounds.size);
   }
 
+    /*
+  // there is a bug in the json data
+  private void patchLoops()
+    {
+        int shapeidx = JsonRawData.shapes.loops[3];          // broken one here
+        int countidx = JsonRawData.shapes.loops[shapeidx];
+        int count = JsonRawData.shapes.loops[countidx];
+    }
+    */
   public void Init() {
+//    patchLoops();
     GenerateMesh();
     GenerateTiles();
     GenerateBounds();
+    GenerateRings();
     bgBrightness = bgColor.grayscale;
   }
 
@@ -270,7 +371,7 @@ public class Penrose : MonoBehaviour {
     mesh.colors = colors;
   }
 
-  public void Send() {
+  public void UpdateModelColors() {
     UpdateVertexColors();
 
     //mesh.RecalculateNormals();
@@ -313,7 +414,10 @@ public class Penrose : MonoBehaviour {
     public Vector2 center;
     public Vector2Int position;
     public neighbor[] neighbors;
+    public int section;
+    public int ring;
     public int type;
+    public float angle;
 
     public int GetRandomNeighbor() {
        return neighbors[Random.Range(0, neighbors.Length)].tileIdx;
