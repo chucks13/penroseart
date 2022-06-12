@@ -52,6 +52,7 @@ public class Controller : Singleton<Controller> {
   public Flock.Settings[] flockSettings;
   public MetaBalls.Settings[] metaBallsSettings;
   public drums.Settings[] drumsSettings;
+  public Tunnel.Settings[] tunnelSettings;
 
   public Dance dance;
   public drums drum;
