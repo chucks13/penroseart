@@ -85,7 +85,8 @@ public class Controller : Singleton<Controller> {
 
   private float fps;
   private float lastCount;
-
+  private int pingIndex;
+ 
   private IEnumerator Fps() {
     while(true) {
       fps = Time.frameCount - lastCount;
@@ -102,7 +103,9 @@ public class Controller : Singleton<Controller> {
       effects[i] = factory.Create(factory.Types[i]);
       effects[i].Init();
       effects[i].sortIndex = Random.Range(0, 10000);
+      effects[i].initialIndex = i;
     }
+    pingIndex = 0;
 
     Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
 
@@ -246,23 +249,71 @@ public class Controller : Singleton<Controller> {
 
     Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
   }
-    private void OSCHandler(OscMessage om, ArrayList oms)
+
+    public void OSCpage1(OscMessage om, ArrayList oms)
     {
         if (om.address == "/1/vscroll1")       // brightness
         {
             brightness = (byte)Mathf.Lerp(255f, 0f, om.GetFloat(0));
         }
-        if(om.address=="/ping")
+        if(om.address.StartsWith("/1/push"))
         {
-            oms.Add(makemessage("/1/vscroll1",1f- (float)brightness/255f));
+            if(om.GetInt(0)==1)
+            {
+                int button = int.Parse(om.address.Substring(7)) - 1;
+                for (int i = 0; i < effects.Length; i++)
+                {
+                    if (effects[i].initialIndex == button)
+                    {
+                        //select the new effect
+                        inTransition = false;
+                        currentEffect = i;
+                        effects[currentEffect].OnStart();
+                        timer.Set(effectTime);
+                        timer.Reset();
+                        effectText.text = effects[currentEffect].Name;
+                        // turn on the button
+                        oms.Add(makemessage(om.address, 1f));
+                        break;
+                    }
+                }
+
+            }
+
+        }
+        if (om.address == "/1/hscroll1")       // period
+        {
+            float position = om.GetFloat(0);
+            if (position == 1f) effectTime = 60 * 60;
+            if (position < 0.87f) effectTime = 2 * 60;
+            if (position < 0.62f) effectTime = 10;
+            if (position < 0.37f) effectTime = 5;
+            if (position < 0.12f) effectTime = 1;
+        }
+
+        if (currentEffect >= effects.Length)
+        {
+            oms.Add(makemessage("/1/reset", 1f - (float)brightness / 255f));
+
+        }
+        if (om.address == "/ping")
+        {
+            oms.Add(makemessage("/1/vscroll1", 1f - (float)brightness / 255f));
+            // update the current effect button
+            if(currentEffect>=0)
+                 oms.Add(makemessage("/1/push" + (pingIndex + 1), (pingIndex == effects[currentEffect].initialIndex) ? 1f : 0f));
+            pingIndex++;
+            pingIndex %= effects.Length;
+
         }
 
     }
 
+
     public void OscHandler(OscMessage om)
     {
         ArrayList oms = new ArrayList();        // make a list of replies
-        OSCHandler(om,oms);
+        OSCpage1(om,oms);
         cameraOverlay.OSCHandler(om, oms);
         OSCtext = om.ToString();
         OSCtimer = 20;
@@ -281,7 +332,7 @@ public class Controller : Singleton<Controller> {
     {
         ArrayList oms = new ArrayList();        // make a list of replies
         OscMessage om = makemessage("/ping", 0);
-        OSCHandler(om, oms);
+        OSCpage1(om, oms);
         cameraOverlay.OSCHandler(om, oms);
         if (oms.Count > 0)                      // send any replies
             osc.Send(oms);
