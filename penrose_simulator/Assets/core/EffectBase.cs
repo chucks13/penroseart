@@ -5,6 +5,7 @@ public abstract class EffectBase {
 
   [HideInInspector]
   public Color[] buffer;
+  public int initialIndex;
 
   [HideInInspector]
   public int sortIndex;
