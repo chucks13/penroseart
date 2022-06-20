@@ -50,7 +50,6 @@ public class Petals : ScreenEffect {
                 for (int j = start; j < end; j++)
                 {
                     int idx = shape[j];
-                    buffer[idx] = colors[shapeIdx];
                     buffer[idx] = Color.HSVToRGB((hue + 0.002f * j) % 1f, sat, bri);
                 }
                 colors[shapeIdx] = Color.HSVToRGB((hue + 0.00004f) % 1f, sat, bri);
