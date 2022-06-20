@@ -1,8 +1,8 @@
 ﻿
 using System;
 using UnityEngine;
+using System.Collections;
 using Random = UnityEngine.Random;
-using UnityEngine;
 
 [Serializable]
 public class drums 
@@ -90,6 +90,15 @@ public class drums
 
 
     }
+
+    public void hit(int i,float p)
+    {
+        if((i>=0)&&(i<5))
+            hits[i] = p*5f;
+    }
+
+    // current drum packet byte packet[9] = {0, 2, 0, 5, 0, 0, 0, 0, 0};
+
     void handleOpenPixel(byte[] data)
     {
         for (int i = 0; i < 5; i++)
@@ -99,5 +108,44 @@ public class drums
         }
      }
 
+    private void OSCpage3(OscMessage om, ArrayList oms)
+    {
+        if(om.address.StartsWith("/3/toggle"))      // test the drums
+        {
+            if(om.GetInt(0)==1)
+            {
+                int pad = int.Parse(om.address.Substring(9));
+                hit(pad - 1, 1f);
+
+            }
+        }
+        if(om.address.StartsWith("/3/rotary"))
+        {
+
+        }
+        if (om.address == "/ping")
+        {
+
+        }
+    }
+    public void OSCHandler(OscMessage om, ArrayList oms)
+    {
+        OSCpage3(om, oms);
+    }
+
 }
 
+// starburst, 0,8,11,16,20
+/*
+ *    20             16
+ *            0
+ *        11      8
+ *        
+ *        loops:            *47  (big loop)
+ *        0,1
+ *        2,
+ *        3,4,5,6,7
+ *       
+ *        26,48        24,49
+ *        
+ */

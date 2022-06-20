@@ -53,8 +53,9 @@ public class Controller : Singleton<Controller> {
   public MetaBalls.Settings[] metaBallsSettings;
   public drums.Settings[] drumsSettings;
   public Tunnel.Settings[] tunnelSettings;
+  public Vortex.Settings[] vortexSettings;
 
-  public Dance dance;
+    public Dance dance;
   public drums drum;
   public ACNHandler readACN;
 
@@ -300,11 +301,13 @@ public class Controller : Singleton<Controller> {
         {
             oms.Add(makemessage("/1/vscroll1", 1f - (float)brightness / 255f));
             // update the current effect button
+            // stream these one at a time for the button matrix
             if(currentEffect>=0)
-                 oms.Add(makemessage("/1/push" + (pingIndex + 1), (pingIndex == effects[currentEffect].initialIndex) ? 1f : 0f));
-            pingIndex++;
-            pingIndex %= effects.Length;
-
+            {
+                osc.Send(makemessage("/1/push" + (pingIndex + 1), (pingIndex == effects[currentEffect].initialIndex) ? 1f : 0f));
+                pingIndex++;
+                pingIndex %= effects.Length;
+            }
         }
 
     }
@@ -315,6 +318,7 @@ public class Controller : Singleton<Controller> {
         ArrayList oms = new ArrayList();        // make a list of replies
         OSCpage1(om,oms);
         cameraOverlay.OSCHandler(om, oms);
+        drum.OSCHandler(om, oms);
         OSCtext = om.ToString();
         OSCtimer = 20;
          if (oms.Count > 0)                      // send any replies
@@ -334,6 +338,7 @@ public class Controller : Singleton<Controller> {
         OscMessage om = makemessage("/ping", 0);
         OSCpage1(om, oms);
         cameraOverlay.OSCHandler(om, oms);
+        drum.OSCHandler(om,oms);
         if (oms.Count > 0)                      // send any replies
             osc.Send(oms);
     }
@@ -432,6 +437,12 @@ public class Controller : Singleton<Controller> {
         if (Input.GetKeyDown("space")) 
             dance.MarkBeat();
         dance.Update();
+        // test drums
+        if (Input.GetKeyDown("1")) drum.hit(0, 1f);
+        if (Input.GetKeyDown("2")) drum.hit(1, 1f);
+        if (Input.GetKeyDown("3")) drum.hit(2, 1f);
+        if (Input.GetKeyDown("4")) drum.hit(3, 1f);
+        if (Input.GetKeyDown("5")) drum.hit(4, 1f);
         drum.Update();
         if ( readACN.Update())
         {
