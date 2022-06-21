@@ -315,6 +315,9 @@ public class Controller : Singleton<Controller> {
 
     public void OscHandler(OscMessage om)
     {
+        if(om.address=="/beat")
+            dance.MarkBeat();
+
         ArrayList oms = new ArrayList();        // make a list of replies
         OSCpage1(om,oms);
         cameraOverlay.OSCHandler(om, oms);

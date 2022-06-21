@@ -19,13 +19,16 @@ public class GPalette
         bounded=2,
     }
 
-    public static string[] StaticSamples = 
+    public static string[] StaticSamples =
     {
         "ff0000,000000,ffff00,000000,00ff00,000000,00ffff,000000,0000ff,000000,ff00ff,000000",
         "ffff00,000000,00ffff,000000,ff00ff,000000",
         "ff0000,000000,00ff00,000000,0000ff,000000",
+        "ff0000,ffff00,00ff00,00ffff,0000ff,00ffff",
+        "5500AB,84007C,B5004B,E5001B,E81700,B84700,AB7700,ABAB00,AB5500,DD2200,F2000E,C2003E,8F0071,5F00A1,2F00D0,0007F9",
+        "000000,330000,660000,990000,CC0000,FF0000,FF3300,FF6600,FF9900,FFCC00,FFFF00,FFFF33,FFFF66,FFFF99,FFFFCC,FFFFFF",
     };
-
+ 
     // init function
     private void Populate(Color[] initialvalues,ushort styletype=0)
     {
@@ -52,6 +55,7 @@ public class GPalette
     private Color[] listFromString(string list)
     {
         string[] colors = list.Split(',');
+        length = colors.Length;
         Color[] values = new Color[length];
         for (int i = 0; i < length; i++)
         {
@@ -84,7 +88,8 @@ public class GPalette
         {
             if (i<0f)
             {
-                i += Mathf.Floor(i);
+                float bottom= Mathf.Floor(i);
+                i -= bottom;
             }
             i %= 1f;
         }
