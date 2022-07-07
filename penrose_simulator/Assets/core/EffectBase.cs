@@ -13,6 +13,7 @@ public abstract class EffectBase {
   protected Penrose penrose;
   protected Controller controller;
   protected Penrose.TileData[] tiles;
+  public static AnimPalette APalette=new AnimPalette();
 
   public string Name => GetType().ToString();
    

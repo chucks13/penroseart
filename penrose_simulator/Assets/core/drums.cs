@@ -18,7 +18,7 @@ public class drums
     public float[] points = {  10f,-5f,   10f,5f,       0f,0f,   -10f, 5f,        -10f,-5f     };
     private Color[] colors = { Color.green, Color.yellow, Color.cyan, new Color(0xff, 0xa5, 0x00), Color.red };//};
     public float diameter=8;
-    public float shrink =60;
+    public float shrink =30;
     [HideInInspector]
 
     public string DebugText() => "drums";
@@ -110,7 +110,12 @@ public class drums
 
     private void OSCpage3(OscMessage om, ArrayList oms)
     {
-        if(om.address.StartsWith("/3/toggle"))      // test the drums
+        if (om.address=="/disk")      // test the drums
+        {
+            hit(om.GetInt(0), 1f);
+        }
+
+        if (om.address.StartsWith("/3/toggle"))      // test the drums
         {
             if(om.GetInt(0)==1)
             {

@@ -42,11 +42,11 @@ public class Noise : EffectBase {
       //n = Mathf.Abs(n);
 
       int v = (int)n;
-      if((v & 1) == 0)
-        buffer[i] = Color.HSVToRGB((n + setting.colorDelta) % 1f, 1f, 1);
-      else
-        buffer[i] = Color.black;
-    }
+            if ((v & 1) == 0)
+                buffer[i] = APalette.read((n + setting.colorDelta) % 1f, true);//Color.HSVToRGB((n + setting.colorDelta) % 1f, 1f, 1);
+            else
+                buffer[i] = Color.black;
+        }
   }
 
   [System.Serializable]

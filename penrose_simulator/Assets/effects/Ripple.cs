@@ -55,7 +55,7 @@ public class Ripple : ScreenEffect
                 }
                 sum += 0.5f;
                 sum %= 1f;
-                screenBuffer[idx] = Color.HSVToRGB(sum, 1f, 1f);
+                screenBuffer[idx] = APalette.read(sum,true);//Color.HSVToRGB(sum, 1f, 1f);
             }
         }
 

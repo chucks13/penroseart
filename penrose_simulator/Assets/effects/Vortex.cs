@@ -32,16 +32,13 @@ public class Vortex : EffectBase
             speed = -speed;
         float twist = Random.Range(-0.02f, 0.02f);
         spinners = new spinner[count];
-        int same = Random.Range(0, 2);
         for (int i = 0; i < count; i++)
         {
             spinner sample = new spinner();
-            if(Random.Range(0,2)==0)
-                sample.palette.style += (ushort)GPalette.styles.blend;
+//            sample.palette.blend = (Random.Range(0, 2) == 0);
             sample.twist = twist;
             spinners[i] = sample;
-//            if (same == 0)            // seems to look best this way
-            spinners[i].palette = spinners[0].palette;          // make palettes the same
+//            spinners[i].palette = spinners[0].palette;          // make palettes the same
         }
         buffer.Clear();
     }
@@ -94,7 +91,7 @@ public class Vortex : EffectBase
         public float angle =0;
         const float rad2once = 1f / (Mathf.PI * 2f);
         public float speed =0.5f;
-        public GPalette palette = new GPalette();
+//        public GPalette palette = new GPalette();
 
         public Color Draw(int i,Vector2 position)
         {
@@ -106,7 +103,7 @@ public class Vortex : EffectBase
             rotate *= arms;
             rotate += twist * length;
             rotate += angle;
-            return palette.read(rotate % 1f);// Color.HSVToRGB(rotate%1f, 1f, 1f);
+            return APalette.read(rotate % 1f);// Color.HSVToRGB(rotate%1f, 1f, 1f);
         }
     }
 

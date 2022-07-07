@@ -87,7 +87,7 @@ public class Waterfall : ScreenEffect
                         color += 25 * drop.intensity / (25 + (y - drop.position.y));
                     }
                 }
-                screenBuffer[x + (y * width)] = Color.HSVToRGB(color % 1f, 1f, 1f);
+                screenBuffer[x + (y * width)] = APalette.read(color % 1f, true);//Color.HSVToRGB(color % 1f, 1f, 1f);
             }
     }
     // convert the 2D Matrix buffer to a tile buffer

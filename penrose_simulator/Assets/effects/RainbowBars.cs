@@ -38,40 +38,45 @@ public class RainbowBars : ScreenEffect {
   /// Called when effect is no longer selected to be drawn by the controller
   /// </summary>
   public override void OnEnd() { }
+    private Color getColor(float n)
+    {
+        //return Color.HSVToRGB((n + controller.dance.fixedTime) % 1f, 1f, 1f);
+        return APalette.read((n + controller.dance.fixedTime) % 1f, true);
+    }
 
-  /// <summary>
-  /// Called every frame by controller when the effect is selected
-  /// </summary>
-  public override void Draw() {
+    /// <summary>
+    /// Called every frame by controller when the effect is selected
+    /// </summary>
+    public override void Draw() {
     var color = Color.clear;
     for(int x = 0; x < width; x++) {
       for(int y = 0; y < height; y++) {
 
         switch(setting.direction) {
           case Direction.Up:
-            color = Color.HSVToRGB((x + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x + y * -0.1f );
             break;
           default:
           case Direction.UpLeft:
-            color = Color.HSVToRGB((x * 0.1f + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x * 0.1f + y * -0.1f);
             break;
           case Direction.UpRight:
-            color = Color.HSVToRGB((x * -0.1f + y * -0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x * -0.1f + y * -0.1f );
             break;
           case Direction.Down:
-            color = Color.HSVToRGB((x + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x + y * 0.1f );
             break;
           case Direction.DownLeft:
-            color = Color.HSVToRGB((x * 0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x * 0.1f + y * 0.1f );
             break;
           case Direction.DownRight:
-            color = Color.HSVToRGB((x * -0.1f + y * 0.1f + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x * -0.1f + y * 0.1f );
             break;
           case Direction.Left:
-            color = Color.HSVToRGB((x * 0.1f + y + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x * 0.1f + y );
             break;
           case Direction.Right:
-            color = Color.HSVToRGB((x * -0.1f + y + controller.dance.fixedTime) % 1f, 1f, 1f);
+            color = getColor(x * -0.1f + y );
             break;
           
         }
@@ -85,10 +90,10 @@ public class RainbowBars : ScreenEffect {
   }
 
 
-  /// <summary>
-  /// put all data that can be changed or saved here
-  /// </summary>
-  [Serializable]
+    /// <summary>
+    /// put all data that can be changed or saved here
+    /// </summary>
+    [Serializable]
   public class Settings {
 
     public Direction direction;

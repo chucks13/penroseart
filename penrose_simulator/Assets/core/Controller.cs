@@ -266,6 +266,7 @@ public class Controller : Singleton<Controller> {
                 {
                     if (effects[i].initialIndex == button)
                     {
+                        EffectBase.APalette.Change();
                         //select the new effect
                         inTransition = false;
                         currentEffect = i;
@@ -352,6 +353,8 @@ public class Controller : Singleton<Controller> {
 
     penrose = GameObject.FindObjectOfType<Penrose>();
     penrose.Init();
+    
+
 
         myIPText.text = GetLocalIPv4();
 
@@ -423,6 +426,7 @@ public class Controller : Singleton<Controller> {
     transitions[currentTransition].V = 0f;
     transitions[currentTransition].B = GetNewEffectIndex();
     transitions[currentTransition].A = currentEffect;
+    EffectBase.APalette.Change();
 
     effects[transitions[currentTransition].B].OnStart();
 
@@ -439,6 +443,7 @@ public class Controller : Singleton<Controller> {
         timer.Update(Time.deltaTime);
         if (Input.GetKeyDown("space")) 
             dance.MarkBeat();
+        EffectBase.APalette.Update();
         dance.Update();
         // test drums
         if (Input.GetKeyDown("1")) drum.hit(0, 1f);
