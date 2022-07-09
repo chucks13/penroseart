@@ -1,0 +1,6 @@
+waynewall.txt
+carolwall.txt
+palettedata.txt
+jenpalettes.txt
+
+

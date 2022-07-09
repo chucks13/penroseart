@@ -251,6 +251,20 @@ public class Controller : Singleton<Controller> {
     Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
   }
 
+    public void JumpToEffect(int i)
+    {
+        if (i < 0) return;
+        if (i >= effects.Length) return;
+        EffectBase.APalette.Change();
+        //select the new effect
+        inTransition = false;
+        currentEffect = i;
+        effects[currentEffect].OnStart();
+        timer.Set(effectTime);
+        timer.Reset();
+        effectText.text = effects[currentEffect].Name;
+        // turn on the button
+    }
     public void OSCpage1(OscMessage om, ArrayList oms)
     {
         if (om.address == "/1/vscroll1")       // brightness
@@ -266,15 +280,7 @@ public class Controller : Singleton<Controller> {
                 {
                     if (effects[i].initialIndex == button)
                     {
-                        EffectBase.APalette.Change();
-                        //select the new effect
-                        inTransition = false;
-                        currentEffect = i;
-                        effects[currentEffect].OnStart();
-                        timer.Set(effectTime);
-                        timer.Reset();
-                        effectText.text = effects[currentEffect].Name;
-                        // turn on the button
+                        JumpToEffect(i);
                         oms.Add(makemessage(om.address, 1f));
                         break;
                     }
@@ -441,10 +447,34 @@ public class Controller : Singleton<Controller> {
     // Update is called once per frame
     void Update() {
         timer.Update(Time.deltaTime);
+        if (Input.GetKeyDown(KeyCode.Return))
+        {
+            EffectBase.APalette= new AnimPalette(); // reload the palettes
+        }
         if (Input.GetKeyDown("space")) 
-            dance.MarkBeat();
+        dance.MarkBeat();
         EffectBase.APalette.Update();
         dance.Update();
+
+        if (Input.anyKey)
+        {
+            for (KeyCode k = KeyCode.A; k <= KeyCode.Z; k++)
+            {
+                if (Input.GetKeyDown(k))
+                {
+                    int button = k - KeyCode.A;
+                    for (int i = 0; i < effects.Length; i++)
+                    {
+                        if (effects[i].initialIndex == button)
+                        {
+                            JumpToEffect(i);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
         // test drums
         if (Input.GetKeyDown("1")) drum.hit(0, 1f);
         if (Input.GetKeyDown("2")) drum.hit(1, 1f);

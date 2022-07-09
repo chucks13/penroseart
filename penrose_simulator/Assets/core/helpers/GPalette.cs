@@ -110,13 +110,28 @@ public class AnimPalette
     public AnimPalette()
     {
         // built in palettes
-        for (int i=0;i<StaticSamples.Length;i++)
-        {
-//            palettes.Add(new GPalette(StaticSamples[i]));
-        }
         // leadables
-        LoadFromFile("palettedata.txt");
-        LoadFromFile("jenpalettes.txt");
+        string liststring = readfile("filelist.txt");
+        liststring = liststring.Replace("\r", "");
+        liststring = liststring.Replace(" ", "");
+        string[] filelist = liststring.Split('\n');
+        for (int i = 0; i < filelist.Length; i++)
+        {
+            LoadGradientFile(filelist[i]);
+            LoadHexGradientFile(filelist[i]);
+        }
+// if no loadable palettes, load default palettes
+        if(palettes.Count==0)
+        {
+            for (int i = 0; i < StaticSamples.Length; i++)
+            {
+                palettes.Add(new GPalette(StaticSamples[i]));
+            }
+
+        }
+
+        //        LoadFromFile("palettedata.txt");
+        //        LoadFromFile("jenpalettes.txt");
         current = palettes[0];
     }
     public void Change()
@@ -152,11 +167,60 @@ public class AnimPalette
             return Color.Lerp(next.read(i, doblend), current.read(i, doblend), tween/ transitionTime);
     }
 
-    public void LoadFromFile(string fileName)
+    private string readfile(string fileName)
     {
-        var sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName);
-        string fileContents = sr.ReadToEnd();
-        sr.Close();
+        try
+        {
+            var sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName);
+            string fileContents = sr.ReadToEnd();
+            sr.Close();
+            return fileContents;
+        }
+        catch(Exception e)
+        {
+            return "";
+        }
+    
+    }
+
+    public bool isNewName(string pname)
+    {
+        int x;
+        for (x = 0; x < names.Count; x++)
+        {
+            if (pname.Equals(names[x]))
+                return false;
+        }
+        names.Add(pname);
+        return true;
+
+    }
+    public void LoadHexGradientFile(string fileName)
+    {
+        string fileContents = readfile(fileName);
+        while (true)
+        {
+            int def = fileContents.IndexOf("DEEFINE_HEX_PALETTE(", 0);
+            if (def < 0)
+                break;
+            fileContents = fileContents.Substring(def + 20);
+            def = fileContents.IndexOf(")", 0);
+            string fn = fileContents.Substring(0, def);
+            if (!isNewName(fn))
+                continue;
+
+            fileContents = fileContents.Substring(def + 1);
+            // get the color info
+            int begin = fileContents.IndexOf("{", 0) + 1;
+            int end = fileContents.IndexOf("}", begin);
+            string data = fileContents.Substring(begin, end - begin);
+            palettes.Add(new GPalette(data));
+         }
+
+    }
+    public void LoadGradientFile(string fileName)
+    {
+        string fileContents = readfile(fileName);
         while(true)
         {
             int def = fileContents.IndexOf("DEFINE_GRADIENT_PALETTE(", 0);
@@ -164,18 +228,10 @@ public class AnimPalette
                 break;
             fileContents = fileContents.Substring(def + 24);
             def = fileContents.IndexOf(")", 0);
-            int x;
-            for( x=0;x<names.Count;x++)
-            {
-                if (def.Equals(names[x]))
-                    break;
-            }
-            if(x<names.Count)
-            {
+            string fn = fileContents.Substring(0, def);
+            if (!isNewName(fn))
                 continue;
-            }
 
-            names.Add(fileContents.Substring(0, def));
             fileContents = fileContents.Substring(def + 1);
             // get the color info
             int begin = fileContents.IndexOf("{", 0)+1;
@@ -184,7 +240,7 @@ public class AnimPalette
             colortab[] source = data2colortab(data);
             Color[] dest = new Color[32];           // how many mapped entries
             // do the mapping
-            for ( x=0;x< dest.Length; x++)        // for each output color
+            for (int x=0;x< dest.Length; x++)        // for each output color
             {
                 float f = (float)x /(float)dest.Length;       // position in color table
                 dest[x] = Map2Palette(f, source);
