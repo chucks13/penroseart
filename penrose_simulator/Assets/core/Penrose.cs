@@ -87,7 +87,7 @@ public class Penrose : MonoBehaviour {
   [HideInInspector]
   public Color[] buffer = new Color[Total]; // input buffer
 
-  private TileData[] tiles;
+  public TileData[] tiles;
 
   public JsonData JsonRawData =new JsonData();
  
