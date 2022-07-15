@@ -247,8 +247,11 @@ public class Controller : Singleton<Controller> {
       transitions[i] = factory.Create(factory.Types[i]);
       transitions[i].Init();
     }
+     transitions[currentTransition].OnStart();
 
     Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
+
+        Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
   }
 
     public void JumpToEffect(int i)
