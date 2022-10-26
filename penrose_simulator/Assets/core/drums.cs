@@ -15,10 +15,12 @@ public class drums
     private Settings setting;
     private UDPReceive listenerOpenPixel;
     private float[] hits;
+    private float[] rings;
+    private float[] speed;
     public float[] points = {  10f,-5f,   10f,5f,       0f,0f,   -10f, 5f,        -10f,-5f     };
     private Color[] colors = { Color.green, Color.yellow, Color.cyan, new Color(0xff, 0xa5, 0x00), Color.red };//};
     public float diameter=8;
-    public float shrink =30;
+    public float shrink =128f;
     [HideInInspector]
 
     public string DebugText() => "drums";
@@ -31,6 +33,8 @@ public class drums
         setting = new Settings();
         listenerOpenPixel = new UDPReceive(8500, handleOpenPixel);
         hits = new float[5];
+        rings = new float[5];
+        speed = new float[5];
     }
 
     // Should be called every time an effect is turned on
@@ -57,24 +61,55 @@ public class drums
                 float dy = points[k++] - y;
                 dx = dx * dx;
                 dy = dy * dy;
-                float d = dx+dy;
-                float v = hits[j];
+                float r2 = dx+dy;       // raduis squared
+                float v = hits[j];      // hit value
                 float v2 = v / 2;
-                if (d<(v*v))
+                if (r2 < (v*v))
                 {
-                    if (d<(v2*v2))
+                    if (r2 < (v2*v2))
                         destBuffer[i] = Color.black;
                     else
                         destBuffer[i] = colors[j];
+                }
+                if(rings[j]>0)
+                {
+                    v = 5f - rings[j];      // hit value
+                    v *= 10;
+                    v2 = v / 2;
+                    int c2 = j + 1;
+                    int r = ((c2 & 1) != 0) ? 255 : 0;
+                    int g = ((c2 & 2) != 0) ? 255 : 0;
+                    int b = ((c2 & 4) != 0) ? 255 : 0;
+                    Color ring = new Color32((byte)r, (byte)g, (byte)b, 0);
+                    if (r2 < (v * v))
+                    {
+                        if (r2 > (v2 * v2))
+                            destBuffer[i] = ring;
+                    }
                 }
             }
         }
         for (int j = 0; j < 5; j++)
         {
             if (hits[j] > 0)
-                hits[j] -= shrink* Time.deltaTime;
+            {
+                // decay accelerates
+                speed[j] += shrink * Time.deltaTime * Time.deltaTime;
+                hits[j] -= speed[j];
+            }
             if (hits[j] < 0)
+            {
                 hits[j] = 0;
+                speed[j] = 0;
+            }
+            if(rings[j]>0)
+            {
+                rings[j]-= 0.2f;
+                if (rings[j] < 0)
+                    rings[j] = 0f;
+
+            }
+
 
         }
 
@@ -94,7 +129,18 @@ public class drums
     public void hit(int i,float p)
     {
         if((i>=0)&&(i<5))
-            hits[i] = p*5f;
+        {
+            hits[i] = p * 5f;
+            speed[i] = 0f;
+        }
+    }
+
+    public void ring(int i, float p)
+    {
+        if ((i > 0) && (i < 6))
+        {
+            rings[i-1] = 5f;
+        }
     }
 
     // current drum packet byte packet[9] = {0, 2, 0, 5, 0, 0, 0, 0, 0};
@@ -112,7 +158,7 @@ public class drums
     {
         if (om.address=="/disk")      // test the drums
         {
-            hit(om.GetInt(0), 1f);
+            ring(om.GetInt(0), 1f);
         }
 
         if (om.address.StartsWith("/3/toggle"))      // test the drums

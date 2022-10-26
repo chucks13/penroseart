@@ -34,7 +34,7 @@ public class MetaBalls : ScreenEffect {
         var idx = x + (y * width);
         var sum = 0f;
         for(int i = 0; i < balls.Length; i++) {
-          balls[i].Update();
+          balls[i].Update(controller.dance.deltaTime);
           var d = Vector2.Distance(screen, balls[i].Position);
           sum += setting.radius / d;
         }
@@ -58,8 +58,8 @@ public class MetaBalls : ScreenEffect {
 
     public Vector2 Position => position;
 
-    public void Update() {
-      position += Time.deltaTime * velocity;
+    public void Update(float time) {
+      position += time * velocity;
       if(position.x < 5f || position.x > width - 5f) velocity.x *= -1;
       if(position.y < 2f || position.y > height - 2f) velocity.y *= -1;
     }

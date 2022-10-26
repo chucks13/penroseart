@@ -6,12 +6,12 @@ public abstract class EffectBase {
   [HideInInspector]
   public Color[] buffer;
   public int initialIndex;
+  public Controller controller;
 
-  [HideInInspector]
+    [HideInInspector]
   public int sortIndex;
 
   protected Penrose penrose;
-  protected Controller controller;
   protected Penrose.TileData[] tiles;
   public static AnimPalette APalette=new AnimPalette();
 

@@ -325,7 +325,9 @@ public class Controller : Singleton<Controller> {
 
     public void OscHandler(OscMessage om)
     {
-        if(om.address=="/beat")
+        if (om.address.StartsWith("/rhythm/beat"))
+            dance.MarkBeat();
+        if (om.address == "/beat")
             dance.MarkBeat();
 
         ArrayList oms = new ArrayList();        // make a list of replies
@@ -484,6 +486,11 @@ public class Controller : Singleton<Controller> {
         if (Input.GetKeyDown("3")) drum.hit(2, 1f);
         if (Input.GetKeyDown("4")) drum.hit(3, 1f);
         if (Input.GetKeyDown("5")) drum.hit(4, 1f);
+        if (Input.GetKeyDown("6")) drum.ring(1, 1f);
+        if (Input.GetKeyDown("7")) drum.ring(2, 1f);
+        if (Input.GetKeyDown("8")) drum.ring(3, 1f);
+        if (Input.GetKeyDown("9")) drum.ring(4, 1f);
+        if (Input.GetKeyDown("0")) drum.ring(5, 1f);
         drum.Update();
         if ( readACN.Update())
         {
