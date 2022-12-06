@@ -6,7 +6,6 @@ public class Mirror : EffectBase
 {
 
     private EffectBase sourceEffect;
-    private Factory<EffectBase> factory;
     private int[] mirrorList;
     private int[] centerline;
 
@@ -64,16 +63,9 @@ public class Mirror : EffectBase
     public override void Init()
     {
         base.Init();
-        factory = new Factory<EffectBase>();
+        mixer = true;       // must come after base.Init();
         mirrorList = penrose.JsonRawData.shapes.mirror2;
         fixCenterLineInit();
-    }
-
-
-private EffectBase GetRandomEffect()
-    {
-        var effect = factory.Create(factory.Types[Random.Range(0, factory.Count)]);
-        return effect.Name == Name ? GetRandomEffect() : effect;
     }
 
     public override void OnStart()

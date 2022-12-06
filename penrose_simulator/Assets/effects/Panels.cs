@@ -8,23 +8,17 @@ public class Panels : EffectBase
     private Settings setting;
     EffectBase ef0;
     EffectBase ef1;
-    private Factory<EffectBase> factory;
 
     public override string DebugText() => "Panels";
 
     public override void Init()
     {
         base.Init();
+        mixer = true;       // must come after base.Init();
         setting = new Settings();
-        factory = new Factory<EffectBase>();
-    }
+   }
 
-    private EffectBase GetRandomEffect()
-    {
-        var effect = factory.Create(factory.Types[Random.Range(0, factory.Count)]);
-        return effect.Name == Name ? GetRandomEffect() : effect;
-    }
-    // Should be called every time an effect is turned on
+   // Should be called every time an effect is turned on
     public override void OnStart()
     {
         which = Random.Range(0,2);

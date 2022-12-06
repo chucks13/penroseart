@@ -281,6 +281,8 @@ public class Penrose : MonoBehaviour {
 
             cent /= scale;
             float segangle = (float)Math.Atan2(maxseg.y, maxseg.x) * Mathf.Rad2Deg;
+            Vector2 center = new Vector2( cent.x * FullScale,  cent.y * FullScale);
+            double rad = Math.Sqrt((center.x * center.x) + (center.y * center.y));
             if (segangle > 180f)
                 segangle -= 180f;
             ix2 += 6;
@@ -291,9 +293,11 @@ public class Penrose : MonoBehaviour {
                 position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f) },
                 center = { x = cent.x * FullScale, y = cent.y * FullScale },
                 section = JsonRawData.tiles[i].section,
-                angle = segangle,
-                ring = -3                   // undefined
-            };
+                tileangle = segangle,
+                ring = -3,                   // undefined
+                radius=(float)rad,
+                angle=(float)Math.Atan2(cent.y,cent.x) * Mathf.Rad2Deg
+        };
 
             for (var j = 0; j < JsonRawData.tiles[i].neighbors.Length; j++)
             {
@@ -417,6 +421,8 @@ public class Penrose : MonoBehaviour {
     public int section;
     public int ring;
     public int type;
+    public float tileangle;
+    public float radius;
     public float angle;
 
     public int GetRandomNeighbor() {

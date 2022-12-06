@@ -13,7 +13,6 @@ public class ShapeGlitch : EffectBase {
   }
 
   private EffectBase effect;
-  private Factory<EffectBase> factory;
   private int[] shape;
   private Color color;
   private Mode mode;
@@ -28,7 +27,7 @@ public class ShapeGlitch : EffectBase {
 
   public override void Init() {
     base.Init();
-    factory = new Factory<EffectBase>();
+    mixer = true;       // must come after base.Init();
     switch (Random.Range(0,2))
     {
       case 0:
@@ -76,12 +75,7 @@ public class ShapeGlitch : EffectBase {
     color = Color.HSVToRGB(Random.value, Random.value, 1f);
   }
 
-  private EffectBase GetRandomEffect() {
-    var effect = factory.Create(factory.Types[Random.Range(0,factory.Count)]);
-    return effect.Name == Name ? GetRandomEffect() : effect;
-  }
-
-  public override void OnStart() {
+     public override void OnStart() {
 
     effect = GetRandomEffect();
     effect.Init();

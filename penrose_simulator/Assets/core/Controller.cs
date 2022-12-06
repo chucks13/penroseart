@@ -29,7 +29,8 @@ public class Controller : Singleton<Controller> {
 
   public float effectTime = 10f;
 
-  [Header("Transition Switching")]
+    [Header("Transition Switching")]
+    public bool randomTransition = true;
   public int currentTransition;
 
   public float transitionTime = 2f;
@@ -428,12 +429,14 @@ public class Controller : Singleton<Controller> {
       timer.Set(effectTime);
       timer.Reset();
       effectText.text = effects[currentEffect].Name;
+    if(randomTransition)
       currentTransition = Random.Range(0, transitions.Length);
       return;
     }
 
     inTransition                     = !inTransition;
-   
+
+    transitions[currentTransition].OnStart();
     transitions[currentTransition].V = 0f;
     transitions[currentTransition].B = GetNewEffectIndex();
     transitions[currentTransition].A = currentEffect;

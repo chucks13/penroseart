@@ -855,14 +855,11 @@ MonoBehaviour:
   IP: 192.168.1.253
   brightness: 64
   cameraOverlay:
-    border: {r: 0, g: 0, b: 0, a: 0}
-    style: 5
-    thresh: 0.15
-    frames: 20
     huestep: 0
   startEffect: 0
   effectTime: 10
-  currentTransition: 0
+  randomTransition: 1
+  currentTransition: 4
   transitionTime: 4
   noiseSettings:
   - scale: 0.176559
@@ -902,6 +899,8 @@ MonoBehaviour:
   juliaSettings: []
   flockSettings: []
   metaBallsSettings: []
+  tunnelSettings: []
+  vortexSettings: []
   dance:
     beat: 0
     fixedTime: 0
@@ -1978,6 +1977,7 @@ MonoBehaviour:
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
   - {r: 0, g: 0, b: 0, a: 0}
+  tiles: []
   JsonRawData:
     Mesh: []
     tiles: []

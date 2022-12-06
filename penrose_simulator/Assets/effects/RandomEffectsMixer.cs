@@ -5,7 +5,6 @@ public class RandomEffectsMixer : EffectBase {
   private EffectBase[] effects;
   private int total;
   private float percent;
-  private Factory<EffectBase> factory;
 
   public override string DebugText() {
     var debugText = string.Empty;
@@ -17,16 +16,10 @@ public class RandomEffectsMixer : EffectBase {
   }
 
   public override void Init() {
-    base.Init();
-    factory = new Factory<EffectBase>();
-  }
-
-  private EffectBase GetRandomEffect() {
-    var effect = factory.Create(factory.Types[Random.Range(0,factory.Count)]);
-    return effect.Name == Name ? GetRandomEffect() : effect;
-  }
-
-  public override void OnStart() {
+        base.Init();
+        mixer = true;       // must come after base.Init();
+    }
+    public override void OnStart() {
     effects = new EffectBase[Random.Range(2, 4)];
     total   = effects.Length;
 

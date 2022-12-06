@@ -3,7 +3,6 @@
 public class NoiseMixer : EffectBase {
 
   private EffectBase[] effects;
-  private Factory<EffectBase> factory;
   private Color border;
 
   public override string DebugText() {
@@ -17,15 +16,10 @@ public class NoiseMixer : EffectBase {
 
   public override void Init() {
     base.Init();
-    factory = new Factory<EffectBase>();
+    mixer = true;       // must come after base.Init();
   }
 
-  private EffectBase GetRandomEffect() {
-    var effect = factory.Create(factory.Types[Random.Range(0, factory.Count)]);
-    return effect.Name == Name ? GetRandomEffect() : effect;
-  }
-
-  public override void OnStart() {
+    public override void OnStart() {
     effects = new EffectBase[2];
 
     var debugText = string.Empty;

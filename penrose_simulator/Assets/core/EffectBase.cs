@@ -7,6 +7,8 @@ public abstract class EffectBase {
   public Color[] buffer;
   public int initialIndex;
   public Controller controller;
+  public bool mixer = false;
+  private Factory<EffectBase> factory;
 
     [HideInInspector]
   public int sortIndex;
@@ -22,10 +24,12 @@ public abstract class EffectBase {
 
   // Should be called after creation
   public virtual void Init() {
+    factory = new Factory<EffectBase>();
     controller = Controller.Instance;
     penrose = controller.penrose;
     tiles = penrose.Tiles;
     buffer     = new Color[Penrose.Total];
+    mixer = false;
   }
 
   // Should be called every time an effect is turned on
@@ -36,5 +40,18 @@ public abstract class EffectBase {
 
   // Should be called every frame
   public abstract void Draw();
+    public EffectBase GetRandomEffect()
+    {
+        EffectBase effect;
+        while (true)
+        {
+            effect = factory.Create(factory.Types[Random.Range(0, factory.Count)]);
+            if (effect.Name == Name)
+                continue;
+            if (!effect.mixer)
+                break;
+        }
+        return effect;
+    }
 
 }
