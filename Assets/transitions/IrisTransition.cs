@@ -1,0 +1,79 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using Random = UnityEngine.Random;
+public class IrisTransition : TransitionBase
+{
+
+    int direction;
+    float diagonalsize;
+    public override void OnStart()
+    {
+        buffer.Clear();
+        direction = Random.Range(0, 2);
+        var width = (int)controller.penrose.Bounds.size.x.Round();
+        var height = (int)controller.penrose.Bounds.size.y.Round();
+        Vector2 diagonal = new Vector2(width, height);
+        diagonalsize = diagonal.magnitude / 2f;
+    }
+
+    public override void OnEnd() { }
+
+    public override void Draw()
+    {
+        controller.effects[A].Draw();
+        controller.effects[B].Draw();
+
+        Draw2(buffer, controller.effects[A].buffer, controller.effects[B].buffer, V, direction);
+    }
+
+    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, int dir)
+    {
+        Color[] a1 = src1;
+        Color[] b1 = src2;
+        float v1 = V2;
+
+        if (dir == 0)
+        {
+            a1 = src2;
+            b1 = src1;
+            v1 = 1f - V2;
+        }
+
+        float size = v1 * diagonalsize;
+        size = size * size;             // squared is faster
+
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            float dist = controller.penrose.tiles[i].position.sqrMagnitude;
+
+            if (dist > size)
+            {
+                dest[i] = a1[i];
+            }
+            else
+            {
+                dest[i] = b1[i];
+            }
+        }
+
+    }
+    public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+    {
+        float V2 = 0.5f;
+        int d = 0;
+        if (settings.Length > 0)
+            V2 = settings[0];
+        if (settings.Length > 1)
+            if (settings[1] > 0.5f)
+                d = 1;
+        Draw2(dest, src1, src2, V2, d);
+    }
+    public override string Usage()
+    {
+        return "[ratio] [direction (0,1)]";
+    }
+
+
+
+}

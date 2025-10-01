@@ -1,0 +1,6 @@
+crystal.png
+crystal.png.meta
+files.txt
+files.txt.meta
+latticebw.png
+latticebw.png.meta
