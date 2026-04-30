@@ -15,3 +15,7 @@
 *.meta
 # Except keep .meta files inside Assets
 !/[Aa]ssets/**/*.meta
+
+# IDE specific files
+.vs/
+*.dotsettings
