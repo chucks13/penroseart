@@ -1,8 +1,12 @@
-﻿using System;
+﻿#define PREP_CAPTURE 
+// git connection test 4/29/2026
+
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Color = UnityEngine.Color;
 using Random = UnityEngine.Random;
 using System.Net;
 using System.Net.Sockets;
@@ -13,6 +17,9 @@ using System.Text;
 //  gameObjectToHide.GetComponent<Renderer>().enabled = false;
 
 using System.Net.NetworkInformation;
+using System.Drawing;
+
+
 
 public class Controller : Singleton<Controller>
 {
@@ -90,7 +97,7 @@ public class Controller : Singleton<Controller>
 
     public Dance dance;
     public drums drum;
-    public ACNHandler readACN;
+    public PixelReceiver readPixel;
 
     [Header("GUI")]
     public TextMeshProUGUI effectText;
@@ -226,6 +233,7 @@ public class Controller : Singleton<Controller>
 
     private void setupUDP(string address)
     {
+
         remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
         client = new UdpClient();
         // set up template
@@ -269,8 +277,59 @@ public class Controller : Singleton<Controller>
         await client.SendAsync(sending, fullLength, remoteEndPoint);
     }
 
+    private void SendPixelData(Color[] data, byte seq)
+    {
+        const ushort headerSize = 6;
+        // 1464 is the largest multiple of 3 <= (1472 - 6)
+        const ushort maxData = 1464;
+
+        // Pre-allocate or use a class-level buffer
+        byte[] packet = new byte[maxData + headerSize];
+
+        int pixelsTotal = data.Length;
+        int pixelsProcessed = 0;
+        ushort byteOffset = 0;
+
+        while (pixelsProcessed < pixelsTotal)
+        {
+            // How many pixels can we fit in this chunk?
+            int pixelsRemaining = pixelsTotal - pixelsProcessed;
+            int pixelsInThisChunk = Math.Min(pixelsRemaining, maxData / 3);
+
+            ushort thisDataSize = (ushort)(pixelsInThisChunk * 3);
+            ushort thisPacketSize = (ushort)(thisDataSize + headerSize);
+
+            // Header
+            packet[0] = (byte)(thisPacketSize >> 8);
+            packet[1] = (byte)(thisPacketSize & 0xFF);
+            packet[2] = 0x00; // Context: RGB
+            packet[3] = seq;
+            packet[4] = (byte)(byteOffset >> 8);
+            packet[5] = (byte)(byteOffset & 0xFF);
+
+            // Pack the pixels
+            for (int i = 0; i < pixelsInThisChunk; i++)
+            {
+                Color32 c = data[pixelsProcessed + i];
+                int writeIdx = headerSize + (i * 3);
+                packet[writeIdx] = c.r;
+                packet[writeIdx + 1] = c.g;
+                packet[writeIdx + 2] = c.b;
+            }
+
+            client.Send(packet, thisPacketSize, "127.0.0.1", 7777);
+
+            // Advance based on what we actually sent
+            pixelsProcessed += pixelsInThisChunk;
+            byteOffset += thisDataSize;
+        }
+    }
     private void sendUDPFrame(Color[] data)
     {
+#if PREP_CAPTURE
+        if(readPixel.timeout==0)
+            SendPixelData(data, sequence);
+#endif
         byte[] frame = new byte[1800 * 3];          // 900 bytes plus 4 header per packet
         int ptr2;
         int ptr1;
@@ -281,6 +340,8 @@ public class Controller : Singleton<Controller>
         byte level = brightness;
         if (!displayOn)
             level = 0;
+
+
         for (ptr1 = 0; ptr1 < size; ptr1++)
         {
             int ptr3 = wires[ptr1] / 2;
@@ -308,7 +369,7 @@ public class Controller : Singleton<Controller>
             transitions[i] = factory.Create(factory.Types[i]);
             transitions[i].Init();
         }
-        transitionDeck=initDeck(transitions.Length);
+        transitionDeck = initDeck(transitions.Length);
         transitions[currentTransition].OnStart();
 
         Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
@@ -578,7 +639,6 @@ public class Controller : Singleton<Controller>
         penrose = GameObject.FindObjectOfType<Penrose>();
         penrose.Init();
 
-
         myIPText.text = GetLocalIPv4();
         onTime.text = onMinute.ToString();
         offTime.text = offMinute.ToString();
@@ -601,8 +661,8 @@ public class Controller : Singleton<Controller>
         dance.Init();
         drum = new drums();
         drum.Init();
-        readACN = new ACNHandler();
-        readACN.Init();
+        readPixel = new PixelReceiver();
+        readPixel.Init();
 
         if (useCamera)
         {
@@ -635,9 +695,9 @@ public class Controller : Singleton<Controller>
             timer.Set(effectTime);
             timer.Reset();
             effectText.text = effects[currentEffect].Name;
-            currentTransition=pullCard(transitionDeck);
- //           if (randomTransition)
- //               currentTransition = Random.Range(0, transitions.Length);
+            currentTransition = pullCard(transitionDeck);
+            //           if (randomTransition)
+            //               currentTransition = Random.Range(0, transitions.Length);
             return;
         }
 
@@ -782,10 +842,10 @@ public class Controller : Singleton<Controller>
             debugText.text = "dummy source";
             doblend = true;
         }
-        else if (readACN.Update())
+        else if (readPixel.Update())
         {
-            blendBuffer = (Color[])readACN.buffer.Clone();
-            debugText.text = "ACN source";
+            blendBuffer = (Color[])readPixel.buffer.Clone();
+            debugText.text = "Pixel source";
             doblend = true;
         }
 
@@ -800,7 +860,7 @@ public class Controller : Singleton<Controller>
                 ActiveTransitionBlender.Blend(penrose.buffer, penrose.buffer, blendBuffer);
             }
             else
-            penrose.buffer=(Color[])blendBuffer.Clone();
+                penrose.buffer = (Color[])blendBuffer.Clone();
 
 
         }
