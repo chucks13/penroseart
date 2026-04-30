@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Collections.Concurrent;
 
+#if ENABLE_TELNET
 public interface ICommand
 {
     string Name { get; }
@@ -422,10 +423,16 @@ public class TelnetServer : MonoBehaviour
                 while (client.IncomingQueue.TryDequeue(out string cmd))
                 {
                     System.IO.File.AppendAllText("log.txt", "in " + cmd);
+                    if (string.IsNullOrWhiteSpace(cmd)) continue;
+
+                    System.IO.File.AppendAllText("log.txt", $"[{DateTime.Now:HH:mm:ss}] IN:  {cmd}{Environment.NewLine}");
                     Console.WriteLine($"[Service] Processing: {cmd}");
+
                     string response = ProcessCommand(cmd);
                     client.OutgoingQueue.Enqueue(response);
                     System.IO.File.AppendAllText("log.txt", "out " + response);
+
+                    System.IO.File.AppendAllText("log.txt", $"[{DateTime.Now:HH:mm:ss}] OUT: {response}{Environment.NewLine}");
                 }
             }
         }
@@ -450,5 +457,4 @@ public class TelnetServer : MonoBehaviour
         return result;
     }
 }
-
-
+#endif

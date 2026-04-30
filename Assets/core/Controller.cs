@@ -30,7 +30,9 @@ public class Controller : Singleton<Controller>
 
     public BlenderBase ActiveBlender = null;
     public TransitionBase ActiveTransitionBlender = null;
+#if ENABLE_TELNET
     public TelnetServer server;
+#endif
 
     public Color[] blendBuffer = new Color[Penrose.Total];
 
@@ -676,8 +678,10 @@ public class Controller : Singleton<Controller>
 
         effectText.text = effects[currentEffect].GetType().ToString();
         StartCoroutine(Fps());
+#if ENABLE_TELNET
         server = new TelnetServer();
         server.Start();     // start telnet server
+#endif
 
     }
 
@@ -760,7 +764,9 @@ public class Controller : Singleton<Controller>
     {
         checkTime();
         timer.Update(Time.deltaTime);
+#if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
+#endif
         if (Input.GetKeyDown(KeyCode.Return))
         {
             EffectBase.APalette = new AnimPalette(); // reload the palettes
