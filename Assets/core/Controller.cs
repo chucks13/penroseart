@@ -122,6 +122,7 @@ public class Controller : Singleton<Controller>
     private int OSCtimer;
     private String OSCtext;
 
+    private byte[] udpFrameBuffer;
     private bool inTransition;
 
     private float fps;
@@ -330,7 +331,7 @@ public class Controller : Singleton<Controller>
         if(readPixel.timeout==0)
             SendPixelData(data, sequence);
 #endif
-        byte[] frame = new byte[1800 * 3];          // 900 bytes plus 4 header per packet
+        if (udpFrameBuffer == null) udpFrameBuffer = new byte[1800 * 3];
         int ptr2;
         int ptr1;
         // build uf the frame data
@@ -345,17 +346,17 @@ public class Controller : Singleton<Controller>
         for (ptr1 = 0; ptr1 < size; ptr1++)
         {
             int ptr3 = wires[ptr1] / 2;
-            frame[ptr2++] = (byte)(data[ptr3].r * level);
-            frame[ptr2++] = (byte)(data[ptr3].b * level);
-            frame[ptr2++] = (byte)(data[ptr3].g * level);
+            udpFrameBuffer[ptr2++] = (byte)(data[ptr3].r * level);
+            udpFrameBuffer[ptr2++] = (byte)(data[ptr3].b * level);
+            udpFrameBuffer[ptr2++] = (byte)(data[ptr3].g * level);
         }
         // send the packets
         int universe = 1;
         for (ptr1 = 0; ptr1 < (5400 - 510); ptr1 += 510)
         {
-            sendACN(universe++, frame, ptr1, 510);
+            sendACN(universe++, udpFrameBuffer, ptr1, 510);
         }
-        sendACN(universe, frame, ptr1, 5400 - ptr1);
+        sendACN(universe, udpFrameBuffer, ptr1, 5400 - ptr1);
         acnheader[111] = sequence++;
     }
 
@@ -871,4 +872,3 @@ public class Controller : Singleton<Controller>
         OSCping();
     }
 }
-

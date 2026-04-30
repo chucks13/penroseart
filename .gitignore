@@ -1,0 +1,17 @@
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Logs]/
+/[MemoryCaptures]/
+/[UserSettings]/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.meta
+# Except keep .meta files inside Assets
+!/[Aa]ssets/**/*.meta
