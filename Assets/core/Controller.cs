@@ -1,5 +1,5 @@
 ﻿#define PREP_CAPTURE 
-// git connection test 4/29/2026
+
 
 using System;
 using System.Collections;
@@ -19,7 +19,7 @@ using System.Text;
 using System.Net.NetworkInformation;
 using System.Drawing;
 
-
+// git connection test 4/29/2026
 
 public class Controller : Singleton<Controller>
 {
