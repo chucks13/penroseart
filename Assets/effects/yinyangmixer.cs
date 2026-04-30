@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class yinyangmixer : EffectBase
+public class yinyangmixer : MixerBase
 {
 
     private EffectBase[] effects;
@@ -24,7 +24,6 @@ public class yinyangmixer : EffectBase
     public override void Init()
     {
         base.Init();
-        mixer = true;       // must come after base.Init();
     }
 
 

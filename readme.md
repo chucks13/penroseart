@@ -1,0 +1,32 @@
+Effect life cycle:
+Each effect has only one instance. effect.Init() is called when it is created. 
+    It is never destroyed.
+Each time an effect starts, effect.OnStart() is called.
+Each frame the effect is displayer, effect.Draw() is called.
+
+Animation cycle:
+1) Select an effect randomly
+2) Play the new for 10 seconds
+3) Select a different effect, and a transition.
+4) Transition from the current effect to the new one, over 2 seconds
+5) Go back to step 2.
+
+Selection process:
+For randomly selected things like effects and transitions, there is a collection
+of these like a deck of cards. a card is drawn form the top half of the deck
+to be used, then the card is placed at the bottom of the deck. This insures
+that all effects are used, in a random order, but recent effects take longer
+to repeate.
+
+Effect Subclasses:
+Most effects are **Generative**, meaning they create visual data from scratch using math or noise functions. However, structural effects (Mixers and Wrappers) inherit from **`MixerBase`** and use child effects:
+
+### Mixers
+Mixers are used to combine multiple visual streams. 
+- **Behavior**: Inherit from `MixerBase`. They typically manage multiple child effects simultaneously.
+- **Interaction**: They call `Draw()` on multiple children and use a blending algorithm (like Additive or Screen) to merge them into a single output.
+
+### Wrappers (Filters)
+Wrappers act as post-processors for a single visual source (e.g., `Mirror.cs`).
+- **Behavior**: Inherit from `MixerBase`. They encapsulate exactly one `sourceEffect`. 
+- **Interaction**: They call `sourceEffect.Draw()` first to populate the buffer, then execute their own logic to transform that data (e.g., duplicating pixels across symmetry lines or shifting colors). They inherit from `MixerBase` to signal this dependency.

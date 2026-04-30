@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public class ShapeGlitch : EffectBase {
+public class ShapeGlitch : MixerBase {
 
   private enum Mode {
     Blink,
@@ -27,7 +27,6 @@ public class ShapeGlitch : EffectBase {
 
   public override void Init() {
     base.Init();
-    mixer = true;       // must come after base.Init();
     switch (Random.Range(0,2))
     {
       case 0:

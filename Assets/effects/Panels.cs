@@ -1,7 +1,7 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
-public class Panels : EffectBase
+public class Panels : MixerBase
 {
     private Color[] colors;
     private int which;
@@ -14,7 +14,6 @@ public class Panels : EffectBase
     public override void Init()
     {
         base.Init();
-        mixer = true;       // must come after base.Init();
         setting = new Settings();
     }
 

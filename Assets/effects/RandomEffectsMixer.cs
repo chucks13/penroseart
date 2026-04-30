@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public class RandomEffectsMixer : EffectBase {
+public class RandomEffectsMixer : MixerBase {
 
   private EffectBase[] effects;
   private int total;
@@ -17,7 +17,6 @@ public class RandomEffectsMixer : EffectBase {
 
   public override void Init() {
         base.Init();
-        mixer = true;       // must come after base.Init();
     }
     public override void OnStart() {
     effects = new EffectBase[Random.Range(2, 4)];

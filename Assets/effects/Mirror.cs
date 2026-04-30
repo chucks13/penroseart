@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Mirror : EffectBase
+public class Mirror : MixerBase
 {
 
     private EffectBase sourceEffect;
@@ -65,7 +65,6 @@ public class Mirror : EffectBase
     public override void Init()
     {
         base.Init();
-        mixer = true;       // must come after base.Init();
         mirrorList = penrose.JsonRawData.shapes.mirror2;
         fixCenterLineInit();
     }

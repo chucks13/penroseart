@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public class NoiseMixer : EffectBase
+public class NoiseMixer : MixerBase
 {
 
     private EffectBase[] effects;
@@ -20,7 +20,6 @@ public class NoiseMixer : EffectBase
     public override void Init()
     {
         base.Init();
-        mixer = true;       // must come after base.Init();
     }
 
     public override void OnStart()
