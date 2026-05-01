@@ -185,6 +185,7 @@ public class BlenderCommand : ICommand
 }
 
 
+#if PREP_CAPTURE
 public class DummyCommand : ICommand
 {
     public string Name { get { return "dummy"; } }
@@ -206,6 +207,7 @@ public class DummyCommand : ICommand
         return "error";
     }
 }
+#endif
 
 public class NYECommand : ICommand
 {
@@ -262,7 +264,9 @@ public class TelnetServer : MonoBehaviour
         registry.Register(new ListCommand());
         registry.Register(new EffectCommand());
         registry.Register(new BlenderCommand());
+#if PREP_CAPTURE
         registry.Register(new DummyCommand());
+#endif
         registry.Register(new NYECommand());
 
 

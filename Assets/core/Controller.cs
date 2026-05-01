@@ -1,7 +1,4 @@
-﻿﻿#define PREP_CAPTURE 
-
-
-using System;
+﻿﻿using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -38,7 +35,9 @@ public class Controller : Singleton<Controller>
 
     public bool NYE = false;
 
+#if PREP_CAPTURE
     public bool dummyActive = false;
+#endif
     private float secondsAccululator = 0f;
     public float FilterScale = 0.03f;
     public float FilterTimer = 0f;
@@ -125,7 +124,10 @@ public class Controller : Singleton<Controller>
 
     private byte[] udpFrameBuffer;
     private bool inTransition;
-    private float dummyTime;
+#if PREP_CAPTURE
+    public float diagnosticTime;
+#endif
+    public float effectDelta;
 
     private float fps;
     private float lastCount;
@@ -601,6 +603,8 @@ public class Controller : Singleton<Controller>
     {
         secondsAccululator += Time.deltaTime;
         FilterTimer -= Time.deltaTime;
+
+#if PREP_CAPTURE
         if (secondsAccululator > 1f)
         {
             secondsAccululator %= 1f;
@@ -632,6 +636,7 @@ public class Controller : Singleton<Controller>
             json += "}";
             StartCoroutine(PostRequest(url, json));
         }
+#endif
     }
 
     void Start()
@@ -661,6 +666,7 @@ public class Controller : Singleton<Controller>
         osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
         osc.SetAllMessageHandler(OscHandler);
         drum = new drums();
+        drum.RandomizeTime();
         drum.Init();
         readPixel = new PixelReceiver();
         readPixel.Init();
@@ -668,6 +674,7 @@ public class Controller : Singleton<Controller>
         if (useCamera)
         {
             cameraOverlay = new CameraReader();
+            cameraOverlay.RandomizeTime();
             cameraOverlay.Init((int)penrose.Bounds.size.x, (int)penrose.Bounds.size.y, Penrose.Total);
         }
 
@@ -744,13 +751,14 @@ public class Controller : Singleton<Controller>
 
     }
 
+#if PREP_CAPTURE
     void makeDummySignal(Color[] buffer)
     {
         for (int i = 0; i < buffer.Length; i++)
         {
             Penrose.TileData t = penrose.Tiles[i];
             float y = t.center.y / 30f;
-            y += dummyTime;
+            y += diagnosticTime;
             y %= 1f;
             {
                 Color c = y > 0.5f ? Color.magenta : Color.black;
@@ -758,13 +766,17 @@ public class Controller : Singleton<Controller>
             }
         }
     }
+#endif
 
     // Update is called once per frame
     void Update()
     {
         checkTime();
-        dummyTime += Time.deltaTime;
-        timer.Update(Time.deltaTime);
+        effectDelta = Time.deltaTime;
+#if PREP_CAPTURE
+        diagnosticTime += effectDelta;
+#endif
+        timer.Update(effectDelta);
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
 #endif
@@ -831,11 +843,14 @@ public class Controller : Singleton<Controller>
             }
             if (FilterMode)
                 applyFilter(penrose.buffer);
-            drum.Draw(penrose.buffer, Time.deltaTime);
+            drum.Draw(penrose.buffer);
         }
 
         if (useCamera)
-            cameraOverlay.Draw(penrose.buffer, Time.deltaTime);
+        {
+            cameraOverlay.UpdateTime();
+            cameraOverlay.Draw(penrose.buffer);
+        }
 
         debugText.text += $"\nFPS: {fps},KB{keyboardBase}";
         if (OSCtimer > 0)
@@ -845,13 +860,16 @@ public class Controller : Singleton<Controller>
         }
 
         bool doblend = false;
+#if PREP_CAPTURE
         if (dummyActive)
         {
             makeDummySignal(blendBuffer);
             debugText.text = "dummy source";
             doblend = true;
         }
-        else if (readPixel.Update())
+        else 
+#endif
+        if (readPixel.Update())
         {
             blendBuffer = (Color[])readPixel.buffer.Clone();
             debugText.text = "Pixel source";

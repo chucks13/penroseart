@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System;
+using Random = UnityEngine.Random;
 
 [System.Serializable]
 public abstract class TransitionBase
@@ -73,7 +74,8 @@ public abstract class TransitionBase
 
   public void RandomizeTime()
   {
-      effectTime = UnityEngine.Random.Range(0f, 14400f);
+      // Seed with 0 to 4 hours (14400 seconds)
+      effectTime = Random.Range(0f, 14400f);
   }
 
   public void UpdateTime()

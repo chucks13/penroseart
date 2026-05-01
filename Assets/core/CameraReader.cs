@@ -19,6 +19,8 @@ public class CameraReader
     private Color[] localBuffer;            // screen buffer samples down to this tile buffer
     private protected Color[] lastBuffer;   // last frame of local buffer
     private protected int[] age;            // countdown times for when pixel was activated
+    public float effectTime;
+    public float effectDelta;
 //    public Color border;                    // used as an effect color
     public float huestep = 0;               // hue animate rate
     private int currentCameraIdx = 0;
@@ -73,6 +75,18 @@ public class CameraReader
         webcamTexture.Play();
     }
 
+    public void RandomizeTime()
+    {
+        effectTime = Random.Range(0f, 14400f);
+        huestep = Random.Range(0f, 1f);
+    }
+
+    public void UpdateTime()
+    {
+        effectDelta = Time.deltaTime;
+        effectTime += effectDelta;
+    }
+
     /// <summary>
     /// Called every frame by controller when the effect is selected
     /// </summary>
@@ -85,21 +99,21 @@ public class CameraReader
     private float vbrght() { return settings[7]; }
     private float mix() { return settings[8]; }
     private float thresh() { return settings[9] * 0.01f; }
-    public void Draw(Color[] buffer, float deltaTime)
+    public void Draw(Color[] buffer)
     {
         if (Application.HasUserAuthorization(UserAuthorization.WebCam))
         {
             if (webcamTexture.isPlaying)
             {
-                RenderCamera(buffer, deltaTime);
+                RenderCamera(buffer);
                 return;
             }
         }
     }
 
-    private void RenderCamera(Color[] effectBuffer, float deltaTime)
+    private void RenderCamera(Color[] effectBuffer)
     {
-        huestep += deltaTime * huespeed();
+        huestep += effectDelta * huespeed();
         if (mix()==0.0f)
             return;
         // sample webcamTexture down to screenBuffer

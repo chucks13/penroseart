@@ -17,6 +17,8 @@ public class drums
     private float[] hits;
     private float[] rings;
     private float[] speed;
+    public float effectTime;
+    public float effectDelta;
     public float[] points = {  10f,-5f,   10f,5f,       0f,0f,   -10f, 5f,        -10f,-5f     };
     private Color[] colors = { Color.green, Color.yellow, Color.cyan, new Color(0xff, 0xa5, 0x00), Color.red };//};
     public float diameter=8;
@@ -46,7 +48,7 @@ public class drums
     public void OnEnd() { }
 
     // overlay the drums
-    public void Draw(Color[] destBuffer, float deltaTime)        
+    public void Draw(Color[] destBuffer)        
     {
    
         for (int i = 0; i < destBuffer.Length; i++)
@@ -94,7 +96,7 @@ public class drums
             if (hits[j] > 0)
             {
                 // decay accelerates
-                speed[j] += shrink * deltaTime * deltaTime;
+                speed[j] += shrink * effectDelta * effectDelta;
                 hits[j] -= speed[j];
             }
             if (hits[j] < 0)
@@ -104,7 +106,7 @@ public class drums
             }
             if(rings[j]>0)
             {
-                rings[j]-= 0.2f;
+                rings[j] -= 12f * effectDelta; // Equivalent to 0.2 per frame at 60fps
                 if (rings[j] < 0)
                     rings[j] = 0f;
 
@@ -117,7 +119,18 @@ public class drums
 
     public void Update()
     {
+        UpdateTime();
+    }
 
+    public void RandomizeTime()
+    {
+        effectTime = Random.Range(0f, 14400f);
+    }
+
+    public void UpdateTime()
+    {
+        effectDelta = Time.deltaTime;
+        effectTime += effectDelta;
     }
 
     public class Settings

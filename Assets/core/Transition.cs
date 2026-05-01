@@ -26,7 +26,7 @@ public abstract class Transition : EffectBase {
     }
   }
 
-  public float Delta => 1f - V;
+  public float ProgressRemaining => 1f - V;
   
   
 }
