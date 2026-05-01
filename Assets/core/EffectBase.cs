@@ -1,4 +1,4 @@
-﻿﻿using UnityEngine;
+﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 [System.Serializable]
