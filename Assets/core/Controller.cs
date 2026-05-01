@@ -57,6 +57,13 @@ public class Controller : Singleton<Controller>
     IPEndPoint remoteEndPoint;
     UdpClient client;
     public CameraReader cameraOverlay;
+
+    [Header("Nova Testing Technique")]
+    [Tooltip("If true, the controller will only pick the effect specified below.")]
+    public bool forceEffect = false;
+    [Tooltip("If not empty, the controller will only select effects containing this name. Useful for debugging.")]
+    public string forceEffectName = "";
+
     public bool useCamera;
 
     [Header("Effect Switching")]
@@ -180,7 +187,7 @@ public class Controller : Singleton<Controller>
 
         //    effects[startEffect].sortIndex = -1;
         //    ReSortEffectsArray();
-        currentEffect = pullCard(effectDeck);
+        currentEffect = GetNewEffectIndex();
         effects[currentEffect].RandomizeTime();
 
         effects[currentEffect].OnStart();
@@ -693,6 +700,17 @@ public class Controller : Singleton<Controller>
 
     private int GetNewEffectIndex()
     {
+        // Integrated Nova Technique: Override randomization if forceEffect is enabled
+        if (forceEffect && !string.IsNullOrEmpty(forceEffectName))
+        {
+            for (int i = 0; i < effects.Length; i++)
+            {
+                if (effects[i].Name.IndexOf(forceEffectName, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return i;
+                }
+            }
+        }
         return pullCard(effectDeck);
     }
 
@@ -785,6 +803,13 @@ public class Controller : Singleton<Controller>
             EffectBase.APalette = new AnimPalette(); // reload the palettes
         }
         EffectBase.APalette.Update();
+
+        // Nova Technique: Escape key toggles the testing override on/off
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            forceEffect = !forceEffect;
+            Debug.Log($"[Nova] Testing override: {forceEffect}");
+        }
 
         if (Input.anyKey)
         {

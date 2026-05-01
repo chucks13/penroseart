@@ -55,6 +55,7 @@ public abstract class EffectBase {
   public abstract void Draw();
     public virtual EffectBase GetRandomEffect()
     {
+
         EffectBase effect;
         while (true)
         {

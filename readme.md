@@ -18,6 +18,12 @@ to be used, then the card is placed at the bottom of the deck. This insures
 that all effects are used, in a random order, but recent effects take longer
 to repeate.
 
+### Developer Tools (Nova Technique)
+For debugging, the controller supports a "Nova" testing override:
+- **Force Effect**: A toggle in the Inspector (or the **Escape** key during runtime) that enables/disables the override.
+- **Force Effect Name**: A string field. When the override is active, the controller searches for any effect whose name contains this string.
+- **Behavior**: This bypasses the deck randomization logic for the top-level effect selection.
+
 Effect Subclasses:
 Most effects are **Generative**, meaning they create visual data from scratch using math or noise functions. However, structural effects (Mixers and Wrappers) inherit from **`MixerBase`** and use child effects:
 

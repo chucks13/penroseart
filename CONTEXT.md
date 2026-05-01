@@ -1,4 +1,4 @@
-# Penrose Simulator Architecture Guide
+# Penrose Simulator Context & Architecture Guide
 
 ## Overview
 This project is a real-time controller for the Penrose Wall light installation. It generates generative visuals and outputs them via the ACN (E1.31) protocol to LED hardware.
@@ -10,6 +10,7 @@ Manages the main loop, effect switching, and hardware output.
 - **Deck System**: Ensures variety by drawing effects from the top half of a randomized array and moving them to the bottom.
 - **State Machine**: Alternates between a "Playing" state (generative effects) and a "Transition" state (blending between effects).
 - **Timing**: Defaults to 10s per effect with a 2s transition.
+- **Testing Override (Nova Technique)**: Allows locking selection to a specific effect by name for debugging, toggled via the Inspector or the `Escape` key.
 
 ### 2. The Buffer System
 The system works on a 1D array of `UnityEngine.Color`. 
@@ -20,6 +21,7 @@ The system works on a 1D array of `UnityEngine.Color`.
 - **Penrose.cs**: Holds the physical mapping. The `wires` array maps the 1D buffer to DMX universes.
 
 ### 3. Reactive Systems
+- **Dance.cs**: "Warp" timing logic. It detects beats and manipulates `deltaTime` to create rhythmic visual motion (speeding up and slowing down time).
 - **OSC.cs**: Ingests beat triggers and remote control commands via Port 6969.
 
 ### 4. Input/Output
@@ -27,7 +29,7 @@ The system works on a 1D array of `UnityEngine.Color`.
 - **OSC**: Incoming remote control on port 6969. Handles brightness, effect selection, and beats.
 
 ## Build Symbols (Conditional Compilation)
-The project uses Scripting Define Symbols to keep the core code clean and performant. You can enable these in **Project Settings > Player**.
+The project uses Scripting Define Symbols to keep the core code clean and performant. 
 - `ENABLE_TELNET`: Enables the remote command-line interface (Port 23).
 - `ENABLE_BLENDING`: Enables the `PixelReceiver` and the dual-source frame blending logic.
 - `PREP_CAPTURE`: Enables the localhost pixel feedback loop for external capture tools.

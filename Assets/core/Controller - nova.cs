@@ -1,4 +1,8 @@
-﻿#if false
+﻿
+#if false
+
+// thenova version is commented out because it is incompatible with this code base
+// if is only included for reference to do upgrades
 
 // LED https://www.aliexpress.com/item/32734333207.html?spm=a2g0s.9042311.0.0.27254c4d9KHEYb
 #define USE_MINI
@@ -620,12 +624,12 @@ public class Controller : Singleton<Controller>
         int Idx = 0;
         EffectBase effect = null;
 
-        bool testing = false;
+        bool testing = false;       // set to true to test
         if (allowMixers && testing)                // testing
         {
             for (int i = 0; i < effects.Length; i++)
             {
-                if (effects[i] is distortionFilter)
+                if (effects[i] is distortionFilter)     // specify effect to test
                 {
                     effect = effects[i];
                     effect.activeity = 3;
