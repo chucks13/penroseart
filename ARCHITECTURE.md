@@ -14,12 +14,12 @@ Manages the main loop, effect switching, and hardware output.
 ### 2. The Buffer System
 The system works on a 1D array of `UnityEngine.Color`. 
 - **Effects**: Inherit from `EffectBase`. They fill their local `buffer`.
+- **ScreenEffects**: A middleware "Lens" for 2D visuals. It provides an abstract layer that maps a virtual 2D grid onto the 1D Penrose layout using static interpolation weights for performance.
 - **Mixers/Wrappers**: Inherit from `MixerBase`. They manipulate child effects and use type-checking to ensure they only pick generative children.
 - **Transitions**: Inherit from `TransitionBase`. They blend between two `EffectBase` buffers.
 - **Penrose.cs**: Holds the physical mapping. The `wires` array maps the 1D buffer to DMX universes.
 
 ### 3. Reactive Systems
-- **Dance.cs**: "Warp" timing logic. It detects beats and manipulates `deltaTime` to create rhythmic visual motion (speeding up and slowing down time).
 - **OSC.cs**: Ingests beat triggers and remote control commands via Port 6969.
 
 ### 4. Input/Output

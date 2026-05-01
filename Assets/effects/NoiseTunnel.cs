@@ -38,7 +38,7 @@ public class NoiseTunnel : EffectBase
     {
         for (int i = 0; i < buffer.Length; i++)
         {
-            float scale = (1.0f + (controller.dance.decay * 0.25f)) * setting.scale;
+            float scale = setting.scale;
             float x = Mathf.Abs(tiles[i].center.x * scale);
             float y = Mathf.Abs(tiles[i].center.y * scale);
             float d1 = Mathf.Sqrt((x * x) + (y * y));
@@ -51,7 +51,7 @@ public class NoiseTunnel : EffectBase
                 d3 = 10000 - d3;
             }
 
-            float z = controller.dance.fixedTime * setting.speed;
+            float z = Time.time * setting.speed;
 
             switch (setting.style)
             {

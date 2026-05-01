@@ -289,15 +289,15 @@ public class kscope : ScreenEffect
         }
 
 
-        positionX += motionX * controller.dance.deltaTime * 60f;
-        positionY += motionY * controller.dance.deltaTime * 60f;
+        positionX += motionX * Time.deltaTime * 60f;
+        positionY += motionY * Time.deltaTime * 60f;
         double m11 = Math.Cos(angle);
         double m12 = -Math.Sin(angle);
         double m21 = Math.Sin(angle);
         double m22 = Math.Cos(angle);
         double wh = width / 2;
         double yh = height / 2;
-        angle += aspeed * controller.dance.deltaTime * 60f;
+        angle += aspeed * Time.deltaTime * 60f;
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)

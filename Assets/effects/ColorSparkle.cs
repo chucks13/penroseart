@@ -38,13 +38,13 @@ public class ColorSparkle : EffectBase
     public override void Draw()
     {
         buffer.Fade();
-        int count = (int)(controller.dance.deltaTime * buffer.Length);
+        int count = (int)(Time.deltaTime * buffer.Length);
         for (int i = 0; i < count; i++)
         {
             if (setting.randomColor)
-                color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f);
+                color = Color.HSVToRGB(Random.value, 1f, 1f);
             else
-                color = setting.color * (1f + controller.dance.decay);
+                color = setting.color;
 
             buffer[Random.Range(0, buffer.Length)] = color; //  Color.HSVToRGB(Random.value, 1, 1);
         }

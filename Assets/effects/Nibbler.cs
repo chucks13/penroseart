@@ -41,7 +41,7 @@ public class Nibbler : EffectBase
     public override void Draw()
     {
         buffer.Fade(setting.fade);
-        int count = (int)(controller.dance.deltaTime * 300f);
+        int count = (int)(Time.deltaTime * 300f);
         for (int y = 0; y < Count; y++)
         {
             for (var x = 0; x < count; x++)
@@ -49,8 +49,8 @@ public class Nibbler : EffectBase
                 current[y] = tiles[current[y]].GetRandomNeighbor();
                 Color c;
                     c = setting.randomColor ?
-                        Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f)
-                        : (setting.color * (1f + controller.dance.decay));
+                        Color.HSVToRGB(Random.value, 1f, 1f)
+                        : setting.color;
                 buffer[current[y]] = c;
             }
         }

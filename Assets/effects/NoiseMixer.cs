@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 
 public class NoiseMixer : MixerBase
 {
@@ -50,10 +50,10 @@ public class NoiseMixer : MixerBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            float scale = 0.07f; //(1.0f + (controller.dance.decay * 0.25f)) * setting.scale;
+            float scale = 0.07f;
             float x = tiles[i].center.x * scale;
             float y = tiles[i].center.y * scale;
-            float z = controller.dance.fixedTime; // * setting.speed;
+            float z = Time.time; // * setting.speed;
 
             float n = Perlin.Noise(x, y, z);
             if (n > 0.1)

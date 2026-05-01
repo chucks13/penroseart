@@ -70,15 +70,15 @@ public class TileShapes : EffectBase
     public override void Draw()
     {
         buffer.Fade();
-        int count = (int)(controller.dance.deltaTime * buffer.Length);
+        int count = (int)(Time.deltaTime * buffer.Length);
         count = count/5;
         for (int i = 0; i < count; i++)
         {
 
             if (setting.randomColor)
-                color = Color.HSVToRGB(Random.value, 1f - controller.dance.decay, 1f);
+                color = Color.HSVToRGB(Random.value, 1f, 1f);
             else
-                color = setting.color * (1f + controller.dance.decay);
+                color = setting.color;
 
 
             int loop = Random.Range(0, shape[0]); 
@@ -116,4 +116,3 @@ public class TileShapes : EffectBase
         }
     }
 }
-

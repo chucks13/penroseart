@@ -1,4 +1,4 @@
-﻿#define PREP_CAPTURE 
+﻿﻿#define PREP_CAPTURE 
 
 
 using System;
@@ -97,7 +97,6 @@ public class Controller : Singleton<Controller>
     public string paletteSource;
     public string jsonSource;
 
-    public Dance dance;
     public drums drum;
     public PixelReceiver readPixel;
 
@@ -468,10 +467,8 @@ public class Controller : Singleton<Controller>
 
     public void OscHandler(OscMessage om)
     {
-        if (om.address.StartsWith("/rhythm/beat"))
-            dance.MarkBeat();
         if (om.address == "/beat")
-            dance.MarkBeat();
+            {}
 
         ArrayList oms = new ArrayList();        // make a list of replies
         OSCpage1(om, oms);
@@ -660,8 +657,6 @@ public class Controller : Singleton<Controller>
 
         osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
         osc.SetAllMessageHandler(OscHandler);
-        dance = new Dance();
-        dance.Init();
         drum = new drums();
         drum.Init();
         readPixel = new PixelReceiver();
@@ -771,10 +766,7 @@ public class Controller : Singleton<Controller>
         {
             EffectBase.APalette = new AnimPalette(); // reload the palettes
         }
-        if (Input.GetKeyDown("space"))
-            dance.MarkBeat();
         EffectBase.APalette.Update();
-        dance.Update();
 
         if (Input.anyKey)
         {

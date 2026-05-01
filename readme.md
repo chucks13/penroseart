@@ -21,6 +21,12 @@ to repeate.
 Effect Subclasses:
 Most effects are **Generative**, meaning they create visual data from scratch using math or noise functions. However, structural effects (Mixers and Wrappers) inherit from **`MixerBase`** and use child effects:
 
+### ScreenEffects
+Some generative effects inherit from **`ScreenEffect`** instead of directly from `EffectBase`. 
+- **Purpose**: Acts as a "Geometric Lens" for designers. It allows the creation of effects using a standard 2D coordinate system (like Fractals or Fluids) while mapping them to the irregular Penrose grid.
+- **Operation**: It provides a `screenBuffer` and a conversion engine. It uses `static` mapping data to ensure that the expensive interpolation weights are only calculated once during the application's lifetime.
+- **Note**: Located in the `/core` folder, it is an architectural helper. Subclasses (like `Julia.cs`) look and behave like standard generative effects to the player and the `Controller`.
+
 ### Mixers
 Mixers are used to combine multiple visual streams. 
 - **Behavior**: Inherit from `MixerBase`. They typically manage multiple child effects simultaneously.

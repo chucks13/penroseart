@@ -40,8 +40,7 @@ public class RainbowBars : ScreenEffect {
   public override void OnEnd() { }
     private Color getColor(float n)
     {
-        //return Color.HSVToRGB((n + controller.dance.fixedTime) % 1f, 1f, 1f);
-        return APalette.read((n + controller.dance.fixedTime) % 1f, true);
+        return APalette.read((n + Time.time) % 1f, true);
     }
 
     /// <summary>
