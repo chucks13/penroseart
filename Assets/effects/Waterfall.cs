@@ -70,7 +70,7 @@ public class Waterfall : ScreenEffect
                 screen.x = x;
                 screen.y = y;
                 // background
-                var color = y * setting.backgrounStretch + controller.dance.fixedTime * setting.backgroundSpeed;
+                var color = y * setting.backgrounStretch + Time.time * setting.backgroundSpeed;
                 for (int i = 0; i < drops.Length; i++)
                 {
                     Drop drop = drops[i];

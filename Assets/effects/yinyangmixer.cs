@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -49,8 +49,8 @@ public class yinyangmixer : MixerBase
 
     public override void Draw()
     {
-        
-        yina += spin * controller.dance.deltaTime * 60f ;
+
+        yina += spin * Time.deltaTime * 60f ;
         for (int i = 0; i < 2; i++)
         {
             effects[i].Draw();

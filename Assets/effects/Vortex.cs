@@ -47,7 +47,7 @@ public class Vortex : EffectBase
     public void Update()
     {
         float deg2rad = (Mathf.PI * 2f)/360f;
-        angle += speed * controller.dance.deltaTime;
+        angle += speed * Time.deltaTime;
         for (int i=0;i<count;i++)
         {
             spinner sample = spinners[i];
