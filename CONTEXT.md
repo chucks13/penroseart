@@ -20,13 +20,14 @@ The system works on a 1D array of `UnityEngine.Color`.
 - **Transitions**: Inherit from `TransitionBase`. They blend between two `EffectBase` buffers.
 - **Penrose.cs**: Holds the physical mapping. The `wires` array maps the 1D buffer to DMX universes.
 
-### 3. Reactive Systems
-- **Dance.cs**: "Warp" timing logic. It detects beats and manipulates `deltaTime` to create rhythmic visual motion (speeding up and slowing down time).
-- **OSC.cs**: Ingests beat triggers and remote control commands via Port 6969.
+### 3. Palette System (GPalette / AnimPalette)
+A global system for color management and animation.
+- **Global Coordination**: Managed as a static instance in `EffectBase`, ensuring all effects share a cohesive look.
+- **Runtime Control**: The `Controller` updates the palette's animation state and can trigger global palette shifts or reloads (via the **Return** key).
+- **Integration**: Effects query colors using normalized positions (0.0 to 1.0), allowing the palette to abstract color details away from generative logic.
 
 ### 4. Input/Output
 - **ACN/E1.31**: Standard DMX-over-Ethernet. Found in `sendACN`.
-- **OSC**: Incoming remote control on port 6969. Handles brightness, effect selection, and beats.
 
 ## Build Symbols (Conditional Compilation)
 The project uses Scripting Define Symbols to keep the core code clean and performant. 

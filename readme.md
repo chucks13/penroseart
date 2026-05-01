@@ -24,7 +24,13 @@ For debugging, the controller supports a "Nova" testing override:
 - **Force Effect Name**: A string field. When the override is active, the controller searches for any effect whose name contains this string.
 - **Behavior**: This bypasses the deck randomization logic for the top-level effect selection.
 
-Effect Subclasses:
+### Palette System (GPalette)
+The project uses a global palette animation system (implemented as `AnimPalette`) to ensure visual harmony across different effects.
+- **Sampling**: Effects sample colors using `APalette.read(position, interpolate)` where position is typically a normalized value (0.0 to 1.0).
+- **Animation**: The `Controller` updates the palette state every frame, enabling smooth color cycling and rotation.
+- **Triggers**: Pressing **Return** reloads the palette definitions at runtime. The palette also shifts automatically during effect transitions to maintain variety.
+
+### Effect Subclasses:
 Most effects are **Generative**, meaning they create visual data from scratch using math or noise functions. However, structural effects (Mixers and Wrappers) inherit from **`MixerBase`** and use child effects:
 
 ### ScreenEffects
