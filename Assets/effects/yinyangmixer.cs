@@ -1,4 +1,4 @@
-﻿﻿using System.Collections;
+﻿﻿﻿﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -29,6 +29,7 @@ public class yinyangmixer : MixerBase
 
     public override void OnStart()
     {
+        base.OnStart();
         effects = new EffectBase[2];
         var debugText = string.Empty;
         for (var i = 0; i < 2; i++)
@@ -37,6 +38,7 @@ public class yinyangmixer : MixerBase
             effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
+            effects[i].beatEnable = false;
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
         }
         controller.debugText.text = debugText;
@@ -57,7 +59,8 @@ public class yinyangmixer : MixerBase
             effects[i].UpdateTime();
             effects[i].Draw();
         }
-        Color ribbon = APalette.read(0.5f, true);
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        Color ribbon = APalette.read(0.5f, true) * beatBrightness;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -82,12 +85,12 @@ public class yinyangmixer : MixerBase
             }
             if (a < (180f - w))
             {
-                buffer[i] = effects[0].buffer[i];
+                buffer[i] = effects[0].buffer[i] * beatBrightness;
                 continue;
             }
             if (a > (180f + w))
             {
-                buffer[i] = effects[1].buffer[i];
+                buffer[i] = effects[1].buffer[i] * beatBrightness;
                 continue;
             }
             buffer[i] = ribbon;

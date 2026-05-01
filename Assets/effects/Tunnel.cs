@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -10,14 +10,11 @@ public class Tunnel : ScreenEffect
 
     public override void OnStart()
     {
-        if(controller.tunnelSettings.Length > 0)
-        {
-            setting = controller.tunnelSettings[Random.Range(0, controller.tunnelSettings.Length)];
-        }
+        base.OnStart();
+        if (controller.effectSettings.tunnel.Length > 0)
+            setting = controller.effectSettings.tunnel[Random.Range(0, controller.effectSettings.tunnel.Length)];
         else
-        {
             setting.Randomize();
-        }
         buffer.Clear();
     }
 
@@ -37,13 +34,14 @@ public class Tunnel : ScreenEffect
   
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         for (int i = 0; i <  Penrose.Total; i++)
         {
             float x = Mathf.Abs(tiles[i].center.x * 0.03f);
             float y = Mathf.Abs(tiles[i].center.y * 0.03f);
             float distance = Mathf.Sqrt((x * x) + (y * y));
             var color = i * setting.density + effectTime * setting.speed + distance * setting.mix;
-            buffer[i] = Color.HSVToRGB(color % 1f, 1f, 1f);
+            buffer[i] = Color.HSVToRGB(color % 1f, 1f, 1f) * beatBrightness;
         }
   }
 

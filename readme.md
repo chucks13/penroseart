@@ -18,6 +18,13 @@ to be used, then the card is placed at the bottom of the deck. This insures
 that all effects are used, in a random order, but recent effects take longer
 to repeate.
 
+### Beat System & Synchronization
+The system includes a `BeatManager` that provides a global clock for rhythmic visuals.
+*Note: The current version is a debug simulation that generates beats internally and serves as a placeholder for external OSC data.*
+- **Pulse**: Effects use `beatManager.GetBeatBrightness()` to pulse in sync with the BPM.
+- **Personality**: Each effect instance picks a `beatVariant` in `OnStart` to determine its specific rhythm (e.g., only pulsing on the '1').
+- **Bypass**: If `BeatManager.active` is false, all effects return to 100% brightness and standard motion.
+
 ### Developer Tools (Nova Technique)
 For debugging, the controller supports a "Nova" testing override:
 - **Force Effect**: A toggle in the Inspector (or the **Escape** key during runtime) that enables/disables the override.

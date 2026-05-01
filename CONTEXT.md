@@ -11,8 +11,15 @@ Manages the main loop, effect switching, and hardware output.
 - **State Machine**: Alternates between a "Playing" state (generative effects) and a "Transition" state (blending between effects).
 - **Timing**: Defaults to 10s per effect with a 2s transition.
 - **Testing Override (Nova Technique)**: Allows locking selection to a specific effect by name for debugging, toggled via the Inspector or the `Escape` key.
+- **Effect Settings**: Hand-tuned presets are stored in the `EffectSettingsContainer` class, allowing for organized foldouts in the Inspector.
 
-### 2. The Buffer System
+### 2. Beat Manager (Synchronization)
+Provides a global heartbeat for the installation. **Note:** The current implementation is a debug simulation; future versions will poll an OSC server for live synchronization.
+- **BeatData**: A shared reference containing BPM, current beat in measure, and a millisecond timer (`timeEvent`) relative to the nearest beat.
+- **Variants**: Effects can pick a "Rhythmic Personality" (e.g., Every Beat, Even/Odd Beats, or Measure Start).
+- **Propagation**: Mixers can choose to pass their rhythm to children (Unified), let children pick their own (Passive), or suppress child pulsing (Active) to keep complex layouts readable.
+
+### 3. The Buffer System
 The system works on a 1D array of `UnityEngine.Color`. 
 - **Effects**: Inherit from `EffectBase`. They fill their local `buffer`.
 - **ScreenEffects**: A middleware "Lens" for 2D visuals. It provides an abstract layer that maps a virtual 2D grid onto the 1D Penrose layout using static interpolation weights for performance.
@@ -20,7 +27,7 @@ The system works on a 1D array of `UnityEngine.Color`.
 - **Transitions**: Inherit from `TransitionBase`. They blend between two `EffectBase` buffers.
 - **Penrose.cs**: Holds the physical mapping. The `wires` array maps the 1D buffer to DMX universes.
 
-### 3. Palette System (GPalette / AnimPalette)
+### 4. Palette System (GPalette / AnimPalette)
 A global system for color management and animation.
 - **Global Coordination**: Managed as a static instance in `EffectBase`, ensuring all effects share a cohesive look.
 - **Runtime Control**: The `Controller` updates the palette's animation state and can trigger global palette shifts or reloads (via the **Return** key).

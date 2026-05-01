@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -19,14 +19,11 @@ public class TileShapes : EffectBase
     // Should be called every time an effect is turned on
     public override void OnStart()
     {
-        if (controller.sparkleSettings.Length > 0)
-        {
-            setting = controller.tileShapesSettings[Random.Range(0, controller.sparkleSettings.Length)];
-        }
+        base.OnStart();
+        if (controller.effectSettings.tileShapes.Length > 0)
+            setting = controller.effectSettings.tileShapes[Random.Range(0, controller.effectSettings.tileShapes.Length)];
         else
-        {
             setting.Randomize();
-        }
 
         switch(Random.Range(0,9))
         {
@@ -69,6 +66,7 @@ public class TileShapes : EffectBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
         count = count/5;
@@ -89,7 +87,7 @@ public class TileShapes : EffectBase
             {
                 int idx = shape[j];
                 if(idx>=0)
-                    buffer[idx] = color;
+                    buffer[idx] = color * beatBrightness;
             }
         }
     }

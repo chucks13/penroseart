@@ -21,11 +21,11 @@ public class Ripple : ScreenEffect
   }
 
   public override void OnStart() {
-    if(controller.rippleSettings.Length > 0) {
-      setting = controller.rippleSettings[Random.Range(0, controller.rippleSettings.Length)];
-    } else {
+    base.OnStart();
+    if (controller.effectSettings.ripple.Length > 0)
+      setting = controller.effectSettings.ripple[Random.Range(0, controller.effectSettings.ripple.Length)];
+    else
       setting.Randomize();
-    }
 
     drops = new Drop[0];
     }
@@ -33,6 +33,7 @@ public class Ripple : ScreenEffect
   public override void OnEnd() {  }
 
   public override void Draw() {
+    float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
    if (Random.value < setting.intensity) {
             Array.Resize(ref drops, drops.Length + 1);
             drops[drops.Length - 1] = new Drop();
@@ -55,7 +56,7 @@ public class Ripple : ScreenEffect
                 }
                 sum += 0.5f;
                 sum %= 1f;
-                screenBuffer[idx] = APalette.read(sum,true);//Color.HSVToRGB(sum, 1f, 1f);
+                screenBuffer[idx] = APalette.read(sum, true) * beatBrightness;
             }
         }
 

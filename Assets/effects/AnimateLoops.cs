@@ -1,4 +1,4 @@
-﻿using Random = UnityEngine.Random;
+﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 using System.Numerics;
 
@@ -20,6 +20,7 @@ public class AnimateLoops : EffectBase {
 
   public override void OnStart()
     {
+        base.OnStart();
         shape = penrose.JsonRawData.shapes.loops;
         shapeName = "loops";
         /*        switch (Random.Range(0, 2))
@@ -46,12 +47,13 @@ public class AnimateLoops : EffectBase {
 
   public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);
         background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = Color.HSVToRGB(background, 1f, 1f);
+            buffer[i] = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
         }
         for (int i = 0; i < shape[0]; i++)
         {
@@ -62,7 +64,7 @@ public class AnimateLoops : EffectBase {
             for (int j = start; j < end; j++)
             {
                 int idx = shape[j];
-                buffer[idx] = Color.HSVToRGB((hue + 0.01f * j) % 1f, sat, bri);
+                buffer[idx] = Color.HSVToRGB((hue + 0.01f * j) % 1f, sat, bri) * beatBrightness;
             }
             colors[i] = Color.HSVToRGB((hue + 0.01f) % 1f, sat, bri);
         }

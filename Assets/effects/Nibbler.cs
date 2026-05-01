@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 
 [System.Serializable]
 public class Nibbler : EffectBase
@@ -24,15 +24,11 @@ public class Nibbler : EffectBase
 
     public override void OnStart()
     {
-        if (controller.nibblerSettings.Length > 0)
-        {
-            setting = controller.nibblerSettings[Random.Range(0, controller.nibblerSettings.Length)];
-        }
+        base.OnStart();
+        if (controller.effectSettings.nibbler.Length > 0)
+            setting = controller.effectSettings.nibbler[Random.Range(0, controller.effectSettings.nibbler.Length)];
         else
-        {
             setting.Randomize();
-        }
-
         buffer.Clear();
     }
 
@@ -40,6 +36,7 @@ public class Nibbler : EffectBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         buffer.Fade(setting.fade);
         int count = (int)(effectDelta * 300f);
         for (int y = 0; y < Count; y++)
@@ -47,11 +44,9 @@ public class Nibbler : EffectBase
             for (var x = 0; x < count; x++)
             {
                 current[y] = tiles[current[y]].GetRandomNeighbor();
-                Color c;
-                    c = setting.randomColor ?
-                        Color.HSVToRGB(Random.value, 1f, 1f)
-                        : setting.color;
-                buffer[current[y]] = c;
+                Color c = setting.randomColor ? Color.HSVToRGB(Random.value, 1f, 1f) : setting.color;
+                
+                buffer[current[y]] = c * beatBrightness;
             }
         }
     }

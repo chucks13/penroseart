@@ -71,6 +71,7 @@ public class Mirror : MixerBase
 
     public override void OnStart()
     {
+        base.OnStart();
     mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
 
     sourceEffect = GetRandomEffect();
@@ -78,6 +79,7 @@ public class Mirror : MixerBase
         sourceEffect.Init();
         sourceEffect.RandomizeTime();
         sourceEffect.OnStart();
+        sourceEffect.beatVariant = this.beatVariant; // Unified: child pulses with the mirror
         debugText += $"{sourceEffect.Name}";
 
         controller.debugText.text = debugText;

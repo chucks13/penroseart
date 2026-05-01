@@ -17,8 +17,9 @@ public class Pulse : EffectBase {
   }
 
   public override void OnStart() {
-    if(controller.pulseSettings.Length > 0) {
-      setting = controller.pulseSettings[Random.Range(0, controller.pulseSettings.Length)];
+    base.OnStart();
+    if(controller.effectSettings.pulse.Length > 0) {
+      setting = controller.effectSettings.pulse[Random.Range(0, controller.effectSettings.pulse.Length)];
     } else {
       setting.Randomize();
     }

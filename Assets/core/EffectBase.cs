@@ -19,6 +19,12 @@ public abstract class EffectBase {
   protected Penrose.TileData[] tiles;
   public static AnimPalette APalette=new AnimPalette();
 
+  public BeatData beat => controller.beatManager.beatData;
+  public BeatManager beatManager => controller.beatManager;
+
+  public bool beatEnable = true;
+  public int beatVariant;
+
   public string Name => GetType().ToString();
    
   // Used for UI display and gets called every frame
@@ -46,7 +52,11 @@ public abstract class EffectBase {
   }
 
   // Should be called every time an effect is turned on
-  public abstract void OnStart();
+  public virtual void OnStart()
+  {
+      beatEnable = true;
+      beatVariant = beatManager.GetRandomVariant();
+  }
 
   // Should be called every time an effect is turned off
   public abstract void OnEnd();

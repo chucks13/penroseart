@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -29,11 +29,11 @@ public class Julia : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        if (controller.juliaSettings.Length > 0)
-            setting = controller.juliaSettings[Random.Range(0, controller.juliaSettings.Length)];
+        base.OnStart();
+        if (controller.effectSettings.julia.Length > 0)
+            setting = controller.effectSettings.julia[Random.Range(0, controller.effectSettings.julia.Length)];
         else
             setting.Randomize();
-
         buffer.Clear();
     }
 
@@ -47,6 +47,7 @@ public class Julia : ScreenEffect
     /// </summary>
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         //buffer.Clear();
 
         var sa = Mathf.Sin(angle).Map01(1f, -1f);
@@ -91,7 +92,7 @@ public class Julia : ScreenEffect
                 }
 
                 var hue = Mathf.Sqrt((float)n / setting.iterations) % 1f;
-                screenBuffer[sx + (sy * width)] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f);
+                screenBuffer[sx + (sy * width)] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f) * beatBrightness;
 
                 x += dx;
             }

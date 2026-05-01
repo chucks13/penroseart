@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -34,14 +34,11 @@ public class Waterfall : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        if(controller.waterfallSettings.Length > 0)
-        {
-            setting = controller.waterfallSettings[Random.Range(0, controller.waterfallSettings.Length)];
-        }
+        base.OnStart();
+        if (controller.effectSettings.waterfall.Length > 0)
+            setting = controller.effectSettings.waterfall[Random.Range(0, controller.effectSettings.waterfall.Length)];
         else
-        {
             setting.Randomize();
-        }
         buffer.Clear();
         drops = new Drop[setting.numDrops];
         for (int i = 0; i < drops.Length; i++)
@@ -62,6 +59,7 @@ public class Waterfall : ScreenEffect
     /// </summary>
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         for(int x = 0; x < width; x++)
         {
             for(int y = 0; y < height; y++)
@@ -87,7 +85,7 @@ public class Waterfall : ScreenEffect
                         color += 25 * drop.intensity / (25 + (y - drop.position.y));
                     }
                 }
-                screenBuffer[x + (y * width)] = APalette.read(color % 1f, true);//Color.HSVToRGB(color % 1f, 1f, 1f);
+                screenBuffer[x + (y * width)] = APalette.read(color % 1f, true) * beatBrightness;
             }
     }
     // convert the 2D Matrix buffer to a tile buffer

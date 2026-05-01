@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 // Chuck Sommerville
 
 [System.Serializable]
@@ -23,6 +23,7 @@ public class lightning : EffectBase
 
     public override void OnStart()
     {
+        base.OnStart();
         buffer.Clear();
         fadeValue = Random.value;
         starthue = Random.value;
@@ -41,6 +42,8 @@ public class lightning : EffectBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+
         // this selects the center star 5 tiles
         int[] shape = penrose.JsonRawData.shapes.stars;
         int list = shape[1];
@@ -62,10 +65,13 @@ public class lightning : EffectBase
             {
                 // color the current tile
                 float currentRadius = tiles[currentIdx].radius;
+                Color strokeColor;
                 if(mode!=0)
-                    buffer[currentIdx] = APalette.read((tilehue+10000f) % 1.0f, true); //Color.HSVToRGB((hue+ huerot)%1.0f, 1, 1);
+                    strokeColor = APalette.read((tilehue+10000f) % 1.0f, true);
                 else
-                    buffer[currentIdx] = Color.HSVToRGB((tilehue+10000f) %1.0f, 1, 1);
+                    strokeColor = Color.HSVToRGB((tilehue+10000f) % 1.0f, 1, 1);
+                
+                buffer[currentIdx] = strokeColor * beatBrightness;
                 tilehue += deltatile;
                 // find possible paths
                 int used = 0;

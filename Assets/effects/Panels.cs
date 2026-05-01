@@ -1,4 +1,4 @@
-﻿using Random = UnityEngine.Random;
+﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
 public class Panels : MixerBase
@@ -20,6 +20,7 @@ public class Panels : MixerBase
     // Should be called every time an effect is turned on
     public override void OnStart()
     {
+        base.OnStart();
         which = Random.Range(0, 2);
         switch (which)
         {
@@ -37,10 +38,12 @@ public class Panels : MixerBase
                 ef0.RandomizeTime();
                 ef0.Init();
                 ef0.OnStart();
+                ef0.beatVariant = this.beatVariant;
                 ef1 = GetRandomEffect();
                 ef1.RandomizeTime();
                 ef1.Init();
                 ef1.OnStart();
+                ef1.beatVariant = this.beatVariant;
                 break;
 
         }
@@ -54,6 +57,7 @@ public class Panels : MixerBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         switch (which)
         {
             case 0:
@@ -68,7 +72,7 @@ public class Panels : MixerBase
                         Penrose.TileData t = tiles[i];
                         if (t.section == section)
                         {
-                            buffer[i] = Color.HSVToRGB(((t.ring % 4) < 2) ? h1 : h2, 1f, 1f);
+                            buffer[i] = Color.HSVToRGB(((t.ring % 4) < 2) ? h1 : h2, 1f, 1f) * beatBrightness;
                         }
                     }
                 }
@@ -86,7 +90,7 @@ public class Panels : MixerBase
                         int v = ((t.ring % 4) < 2) ? 1 : 0;
                         v ^= ((t.section & 1) == 0) ? 1 : 0;
                         v ^= (((t.section / 6) & 1) == 0) ? 1 : 0;
-                        buffer[i] = v == 0 ? color1 : color2;
+                        buffer[i] = (v == 0 ? color1 : color2) * beatBrightness;
                     }
 
                 }

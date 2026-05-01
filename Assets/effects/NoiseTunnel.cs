@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class NoiseTunnel : EffectBase
@@ -20,15 +20,11 @@ public class NoiseTunnel : EffectBase
 
     public override void OnStart()
     {
-        if (controller.noiseTunnelSettings.Length > 0)
-        {
-            setting = controller.noiseTunnelSettings[Random.Range(0, controller.noiseTunnelSettings.Length)];
-        }
+        base.OnStart();
+        if (controller.effectSettings.noiseTunnel.Length > 0)
+            setting = controller.effectSettings.noiseTunnel[Random.Range(0, controller.effectSettings.noiseTunnel.Length)];
         else
-        {
             setting.Randomize();
-        }
-
         buffer.Clear();
     }
 
@@ -36,6 +32,8 @@ public class NoiseTunnel : EffectBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+
         for (int i = 0; i < buffer.Length; i++)
         {
             float scale = setting.scale;
@@ -77,7 +75,7 @@ public class NoiseTunnel : EffectBase
             }
             else
                 c = Color.black;
-            buffer[i] = c;
+            buffer[i] = c * beatBrightness;
         }
     }
 

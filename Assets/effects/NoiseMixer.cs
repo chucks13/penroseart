@@ -24,6 +24,7 @@ public class NoiseMixer : MixerBase
 
     public override void OnStart()
     {
+        base.OnStart();
         effects = new EffectBase[2];
 
         var debugText = string.Empty;
@@ -33,6 +34,7 @@ public class NoiseMixer : MixerBase
             effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
+            effects[i].beatEnable = false; // Active Mixer: suppress children pulses
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
             border = Color.HSVToRGB(Random.value, 1, 1);
         }

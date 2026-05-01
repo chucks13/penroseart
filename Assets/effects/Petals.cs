@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -9,6 +9,7 @@ public class Petals : ScreenEffect {
     public override string DebugText() { return$""; }
 
   public override void OnStart() {
+        base.OnStart();
         colors = new Color[4];
         for (int i = 0; i < 4; i++)
         {
@@ -20,11 +21,12 @@ public class Petals : ScreenEffect {
   public override void OnEnd() { }
 
   public override void Draw() {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = Color.HSVToRGB(background, 1f, 1f);
+            buffer[i] = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
         }
         for (int shapeIdx = 0; shapeIdx < 3; shapeIdx++)
         {
@@ -50,7 +52,7 @@ public class Petals : ScreenEffect {
                 for (int j = start; j < end; j++)
                 {
                     int idx = shape[j];
-                    buffer[idx] = Color.HSVToRGB((hue + 0.002f * j) % 1f, sat, bri);
+                    buffer[idx] = Color.HSVToRGB((hue + 0.002f * j) % 1f, sat, bri) * beatBrightness;
                 }
                 colors[shapeIdx] = Color.HSVToRGB((hue + 0.00004f) % 1f, sat, bri);
             }

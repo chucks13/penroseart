@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Noise : EffectBase {
@@ -19,18 +19,19 @@ public class Noise : EffectBase {
   }
 
   public override void OnStart() {
-    if(controller.noiseSettings.Length > 0) {
-      setting = controller.noiseSettings[Random.Range(0, controller.noiseSettings.Length)];
-    } else {
+    base.OnStart();
+    if (controller.effectSettings.noise.Length > 0)
+      setting = controller.effectSettings.noise[Random.Range(0, controller.effectSettings.noise.Length)];
+    else
       setting.Randomize();
-    }
-
     buffer.Clear();
   }
 
   public override void OnEnd() {  }
 
   public override void Draw() {
+    float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+
     for(int i = 0; i < buffer.Length; i++) {
       float scale = setting.scale;
       float x     = tiles[i].center.x * scale;
@@ -43,7 +44,7 @@ public class Noise : EffectBase {
 
       int v = (int)n;
             if ((v & 1) == 0)
-                buffer[i] = APalette.read((n + setting.colorDelta) % 1f, true);//Color.HSVToRGB((n + setting.colorDelta) % 1f, 1f, 1);
+                buffer[i] = APalette.read((n + setting.colorDelta) % 1f, true) * beatBrightness;
             else
                 buffer[i] = Color.black;
         }

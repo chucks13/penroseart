@@ -1,4 +1,4 @@
-﻿
+﻿﻿
 using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -14,6 +14,7 @@ public class fluid : ScreenEffect
     public float scale = 10f;
     public float fneighbors = 2f;
 
+    int beatVariant;
     public override string DebugText() { return $""; }
 
     public override void Init()
@@ -22,7 +23,7 @@ public class fluid : ScreenEffect
     }
     public override void OnStart()
     {
-        buffer.Clear();
+        base.OnStart();
         for (int i = 0; i < state1.Length; i++)
         {
             state1[i] = 0f;
@@ -71,12 +72,13 @@ public class fluid : ScreenEffect
         if ((slower % 2) == 0)
             generate();
         inject();
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         for (int i = 0; i < state1.Length; i++)
         {
             float v = state1[i] * scale;
             v += 1000.5f;
             v %= 1f;
-            buffer[i] = APalette.read(v);
+            buffer[i] = APalette.read(v) * beatBrightness;
         }
     }
 

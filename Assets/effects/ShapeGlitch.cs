@@ -75,11 +75,12 @@ public class ShapeGlitch : MixerBase {
   }
 
      public override void OnStart() {
-
+    base.OnStart();
     effect = GetRandomEffect();
     effect.RandomizeTime();
     effect.Init();
     effect.OnStart();
+    effect.beatEnable = false;
     var debugText = $"{effect.Name}";
     controller.debugText.text = debugText;
   }

@@ -8,14 +8,20 @@ public class Flock : EffectBase
 
     public override string DebugText() { return $""; }
 
+    public override void Init()
+    {
+        base.Init();
+        setting = new Settings();
+    }
+
     public override void OnStart()
     {
-        setting = new Settings();
+        base.OnStart();
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
 
-        if (controller.flockSettings.Length > 0)
-            setting = controller.flockSettings[Random.Range(0, controller.juliaSettings.Length)];
+        if (controller.effectSettings.flock.Length > 0)
+            setting = controller.effectSettings.flock[Random.Range(0, controller.effectSettings.flock.Length)];
         else
             setting.Randomize();
 
@@ -39,12 +45,13 @@ public class Flock : EffectBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
         {
             var f = flock[i];
             f.Update(effectDelta);
-            buffer[controller.penrose.GetIndexFromPosition(f.position)] = f.color;
+            buffer[controller.penrose.GetIndexFromPosition(f.position)] = f.color * beatBrightness;
         }
     }
 

@@ -25,6 +25,12 @@ public class Vortex : EffectBase
 
     public override void OnStart()
     {
+        base.OnStart();
+        if (controller.effectSettings.vortex.Length > 0)
+            setting = controller.effectSettings.vortex[Random.Range(0, controller.effectSettings.vortex.Length)];
+        else
+            setting.Randomize();
+
         count = Random.Range(1, 5);
         angle = 0f;
         speed = Random.Range(50, 100);
@@ -61,6 +67,7 @@ public class Vortex : EffectBase
 
     public override void Draw()
     {
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         Update();
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -78,7 +85,7 @@ public class Vortex : EffectBase
                 }
             }
             // Draw the point
-            buffer[i] = spinners[which].Draw(i,tiles[i].position);
+            buffer[i] = spinners[which].Draw(i,tiles[i].position) * beatBrightness;
         }
     }
 

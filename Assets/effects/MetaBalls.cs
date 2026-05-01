@@ -7,16 +7,20 @@ public class MetaBalls : ScreenEffect {
   private Ball[] balls;
   private Vector2 screen;
 
+  public override void Init()
+  {
+    base.Init();
+    setting = new Settings(); // Initialize the settings object here
+  }
+
   public override string DebugText() { return$""; }
 
   public override void OnStart() {
-    setting = new Settings();
-
-    if(controller.rainbowBarsSettings.Length > 0) {
-      setting = controller.metaBallsSettings[Random.Range(0, controller.metaBallsSettings.Length)];
-    } else { setting.Randomize(); }
-
-    buffer.Clear();
+    base.OnStart();
+    if (controller.effectSettings.metaBalls.Length > 0)
+        setting = controller.effectSettings.metaBalls[Random.Range(0, controller.effectSettings.metaBalls.Length)];
+    else
+        setting.Randomize();
 
     balls = new Ball[setting.total];
     for(int i = 0; i < balls.Length; i++) { balls[i] = new Ball(); }
@@ -25,6 +29,8 @@ public class MetaBalls : ScreenEffect {
   public override void OnEnd() { }
 
   public override void Draw() {
+    float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+
     buffer.Fade();
 
     for(int x = 0; x < width; x++) {
@@ -40,7 +46,7 @@ public class MetaBalls : ScreenEffect {
         }
 
         sum = sum.Clamp();
-                screenBuffer[idx] = APalette.read(sum,true);//Color.HSVToRGB(sum, 1f, 1f);
+        screenBuffer[idx] = APalette.read(sum, true) * beatBrightness;
       }
     }
 

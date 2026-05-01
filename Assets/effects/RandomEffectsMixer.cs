@@ -19,6 +19,7 @@ public class RandomEffectsMixer : MixerBase {
         base.Init();
     }
     public override void OnStart() {
+    base.OnStart();
     effects = new EffectBase[Random.Range(2, 4)];
     total   = effects.Length;
 
@@ -28,6 +29,7 @@ public class RandomEffectsMixer : MixerBase {
       effects[i].RandomizeTime();
       effects[i].Init();
       effects[i].OnStart();
+      // Passive: allow children to use the beat independently
       debugText += (i < total - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
     }
 

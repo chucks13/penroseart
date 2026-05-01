@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -25,13 +25,11 @@ public class RainbowBars : ScreenEffect {
   /// Called when effect is selected by controller to be drawn every frame
   /// </summary>
   public override void OnStart() {
-    if(controller.rainbowBarsSettings.Length > 0) {
-      setting = controller.rainbowBarsSettings[Random.Range(0, controller.rainbowBarsSettings.Length)];
-    } else {
+    base.OnStart();
+    if (controller.effectSettings.rainbowBars.Length > 0)
+      setting = controller.effectSettings.rainbowBars[Random.Range(0, controller.effectSettings.rainbowBars.Length)];
+    else
       setting.Randomize();
-    }
-
-    buffer.Clear();
   }
 
   /// <summary>
@@ -47,6 +45,7 @@ public class RainbowBars : ScreenEffect {
     /// Called every frame by controller when the effect is selected
     /// </summary>
     public override void Draw() {
+    float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
     var color = Color.clear;
     for(int x = 0; x < width; x++) {
       for(int y = 0; y < height; y++) {
@@ -80,7 +79,7 @@ public class RainbowBars : ScreenEffect {
           
         }
         
-        screenBuffer[x + (y * width)] = color;
+        screenBuffer[x + (y * width)] = color * beatBrightness;
       }
     }
 

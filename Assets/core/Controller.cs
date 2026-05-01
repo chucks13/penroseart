@@ -81,30 +81,36 @@ public class Controller : Singleton<Controller>
     public float transitionTime = 2f;
 
     [Header("Settings")]
-    public Noise.Settings[] noiseSettings;
+    public EffectSettingsContainer effectSettings;
 
+    [Serializable]
+    public class EffectSettingsContainer
+    {
+        public Noise.Settings[] noise;
+        public TileShapes.Settings[] tileShapes;
+        public Angles.Settings[] angles;
+        public ColorSparkle.Settings[] sparkle;
+        public Nibbler.Settings[] nibbler;
+        public Panels.Settings[] panels;
+        public Pulse.Settings[] pulse;
+        public Ripple.Settings[] ripple;
+        public NoiseTunnel.Settings[] noiseTunnel;
+        public RainbowBars.Settings[] rainbowBars;
+        public Waterfall.Settings[] waterfall;
+        public Julia.Settings[] julia;
+        public Flock.Settings[] flock;
+        public MetaBalls.Settings[] metaBalls;
+        public drums.Settings[] drums;
+        public Tunnel.Settings[] tunnel;
+        public Vortex.Settings[] vortex;
+    }
 
-    public TileShapes.Settings[] tileShapesSettings;
-    public Angles.Settings[] anglesSettings;
-    public ColorSparkle.Settings[] sparkleSettings;
-    public Nibbler.Settings[] nibblerSettings;
-    public Panels.Settings[] panelsSettings;
-    public Pulse.Settings[] pulseSettings;
-    public Ripple.Settings[] rippleSettings;
-    public NoiseTunnel.Settings[] noiseTunnelSettings;
-    public RainbowBars.Settings[] rainbowBarsSettings;
-    public Waterfall.Settings[] waterfallSettings;
-    public Julia.Settings[] juliaSettings;
-    public Flock.Settings[] flockSettings;
-    public MetaBalls.Settings[] metaBallsSettings;
-    public drums.Settings[] drumsSettings;
-    public Tunnel.Settings[] tunnelSettings;
-    public Vortex.Settings[] vortexSettings;
     public string paletteSource;
     public string jsonSource;
 
     public drums drum;
     public PixelReceiver readPixel;
+    public BeatManager beatManager = new BeatManager();
 
     [Header("GUI")]
     public TextMeshProUGUI effectText;
@@ -836,6 +842,7 @@ public class Controller : Singleton<Controller>
         if (Input.GetKeyDown("9")) drum.ring(4, 1f);
         if (Input.GetKeyDown("0")) drum.ring(5, 1f);
         drum.Update();
+        beatManager.Update();
         if (NYE)
         {
             Color[] buffer = penrose.buffer;

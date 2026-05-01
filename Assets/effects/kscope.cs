@@ -1,4 +1,4 @@
-﻿// By Chuck Sommerville
+﻿﻿// By Chuck Sommerville
 /*
  * loads images in assets folder, and displays them as kscope
  */
@@ -231,6 +231,7 @@ public class kscope : ScreenEffect
     }
     public override void OnStart()
     {
+        base.OnStart();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
         int colorCount = colorTex.Count;
         int monoCount = monoTex.Count;
