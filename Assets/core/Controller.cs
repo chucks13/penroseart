@@ -125,6 +125,7 @@ public class Controller : Singleton<Controller>
 
     private byte[] udpFrameBuffer;
     private bool inTransition;
+    private float dummyTime;
 
     private float fps;
     private float lastCount;
@@ -178,6 +179,7 @@ public class Controller : Singleton<Controller>
         //    effects[startEffect].sortIndex = -1;
         //    ReSortEffectsArray();
         currentEffect = pullCard(effectDeck);
+        effects[currentEffect].RandomizeTime();
 
         effects[currentEffect].OnStart();
 
@@ -399,6 +401,7 @@ public class Controller : Singleton<Controller>
         //select the new effect
         inTransition = false;
         currentEffect = i;
+        effects[currentEffect].RandomizeTime();
         effects[currentEffect].OnStart();
         timer.Set(time);
         timer.Reset();
@@ -703,12 +706,14 @@ public class Controller : Singleton<Controller>
 
         inTransition = !inTransition;
 
+        transitions[currentTransition].RandomizeTime();
         transitions[currentTransition].OnStart();
         transitions[currentTransition].V = 0f;
         transitions[currentTransition].B = GetNewEffectIndex();
         transitions[currentTransition].A = currentEffect;
         EffectBase.APalette.Change();
 
+        effects[transitions[currentTransition].B].RandomizeTime();
         effects[transitions[currentTransition].B].OnStart();
 
         timer.Set(transitionTime);
@@ -745,7 +750,7 @@ public class Controller : Singleton<Controller>
         {
             Penrose.TileData t = penrose.Tiles[i];
             float y = t.center.y / 30f;
-            y += Time.fixedTime;
+            y += dummyTime;
             y %= 1f;
             {
                 Color c = y > 0.5f ? Color.magenta : Color.black;
@@ -758,6 +763,7 @@ public class Controller : Singleton<Controller>
     void Update()
     {
         checkTime();
+        dummyTime += Time.deltaTime;
         timer.Update(Time.deltaTime);
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
@@ -806,6 +812,9 @@ public class Controller : Singleton<Controller>
             if (inTransition)
             {
                 transitions[currentTransition].V = timer.Value;
+                transitions[currentTransition].UpdateTime();
+                effects[transitions[currentTransition].A].UpdateTime();
+                effects[transitions[currentTransition].B].UpdateTime();
                 transitions[currentTransition].Draw();
                 penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
 
@@ -814,6 +823,7 @@ public class Controller : Singleton<Controller>
             }
             else
             {
+                effects[currentEffect].UpdateTime();
                 effects[currentEffect].Draw();
                 penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
 
@@ -821,11 +831,11 @@ public class Controller : Singleton<Controller>
             }
             if (FilterMode)
                 applyFilter(penrose.buffer);
-            drum.Draw(penrose.buffer);
+            drum.Draw(penrose.buffer, Time.deltaTime);
         }
 
         if (useCamera)
-            cameraOverlay.Draw(penrose.buffer);
+            cameraOverlay.Draw(penrose.buffer, Time.deltaTime);
 
         debugText.text += $"\nFPS: {fps},KB{keyboardBase}";
         if (OSCtimer > 0)

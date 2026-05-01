@@ -51,7 +51,7 @@ public class NoiseTunnel : EffectBase
                 d3 = 10000 - d3;
             }
 
-            float z = Time.time * setting.speed;
+            float z = effectTime * setting.speed;
 
             switch (setting.style)
             {

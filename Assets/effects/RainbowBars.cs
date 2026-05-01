@@ -40,7 +40,7 @@ public class RainbowBars : ScreenEffect {
   public override void OnEnd() { }
     private Color getColor(float n)
     {
-        return APalette.read((n + Time.time) % 1f, true);
+        return APalette.read((n + effectTime) % 1f, true);
     }
 
     /// <summary>

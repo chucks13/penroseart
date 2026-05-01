@@ -49,7 +49,7 @@ public class Ripple : ScreenEffect
                 var sum = 0f;
                 for (int i = 0; i < drops.Length; i++)
                 {
-                    drops[i].Update();
+                    drops[i].Update(effectDelta);
                     var d = Vector2.Distance(screen, drops[i].Position);
                     sum += (drops[i].radius - (d / 20)).Clamp01();
                 }
@@ -77,9 +77,9 @@ public class Ripple : ScreenEffect
         public Vector2 Position => position;
         public float Radius => radius;
 
-        public void Update()
+        public void Update(float deltaTime)
         {
-            radius += Time.deltaTime * velocity;
+            radius += deltaTime * velocity;
         }
     }
 

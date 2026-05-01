@@ -38,7 +38,7 @@ public class Angles : EffectBase
             Penrose.TileData t = tiles[i];
             {
                 float angle = t.tileangle/180f;
-                angle += Time.time * setting.speed;
+                angle += effectTime * setting.speed;
                 Color c = Color.HSVToRGB(angle % 1f, 1f, 1f);
                 buffer[i] = c;
             }

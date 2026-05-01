@@ -60,7 +60,7 @@ public class Julia : ScreenEffect
         var dx = (xMax - xMin) / width;
         var dy = (yMax - yMin) / height;
 
-        angle += setting.speed * Time.deltaTime;
+        angle += setting.speed * effectDelta;
 
         var y = yMin + setting.yOffset;
         for (var sy = 0; sy < height; sy++)

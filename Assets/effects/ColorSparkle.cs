@@ -38,7 +38,7 @@ public class ColorSparkle : EffectBase
     public override void Draw()
     {
         buffer.Fade();
-        int count = (int)(Time.deltaTime * buffer.Length);
+        int count = (int)(effectDelta * buffer.Length);
         for (int i = 0; i < count; i++)
         {
             if (setting.randomColor)

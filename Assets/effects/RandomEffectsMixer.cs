@@ -25,6 +25,7 @@ public class RandomEffectsMixer : MixerBase {
     var debugText = string.Empty;
     for(var i = 0; i < total; i++) {
       effects[i] = GetRandomEffect();
+      effects[i].RandomizeTime();
       effects[i].Init();
       effects[i].OnStart();
       debugText += (i < total - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
@@ -40,6 +41,7 @@ public class RandomEffectsMixer : MixerBase {
   public override void Draw() {
 
     for(int i = 0; i < total; i++) {
+      effects[i].UpdateTime();
       effects[i].Draw();
     }
 

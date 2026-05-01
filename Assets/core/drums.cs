@@ -46,7 +46,7 @@ public class drums
     public void OnEnd() { }
 
     // overlay the drums
-    public void Draw(Color[] destBuffer)        
+    public void Draw(Color[] destBuffer, float deltaTime)        
     {
    
         for (int i = 0; i < destBuffer.Length; i++)
@@ -94,7 +94,7 @@ public class drums
             if (hits[j] > 0)
             {
                 // decay accelerates
-                speed[j] += shrink * Time.deltaTime * Time.deltaTime;
+                speed[j] += shrink * deltaTime * deltaTime;
                 hits[j] -= speed[j];
             }
             if (hits[j] < 0)

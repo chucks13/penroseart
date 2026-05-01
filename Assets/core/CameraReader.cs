@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using UnityEngine;
 using System.Collections;
 using Random = UnityEngine.Random;
@@ -85,21 +85,21 @@ public class CameraReader
     private float vbrght() { return settings[7]; }
     private float mix() { return settings[8]; }
     private float thresh() { return settings[9] * 0.01f; }
-    public void Draw(Color[] buffer)
+    public void Draw(Color[] buffer, float deltaTime)
     {
         if (Application.HasUserAuthorization(UserAuthorization.WebCam))
         {
             if (webcamTexture.isPlaying)
             {
-                RenderCamera(buffer);
+                RenderCamera(buffer, deltaTime);
                 return;
             }
         }
     }
 
-    private void RenderCamera(Color[] effectBuffer)
+    private void RenderCamera(Color[] effectBuffer, float deltaTime)
     {
-        huestep += Time.deltaTime * huespeed();
+        huestep += deltaTime * huespeed();
         if (mix()==0.0f)
             return;
         // sample webcamTexture down to screenBuffer

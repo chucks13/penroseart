@@ -70,7 +70,7 @@ public class TileShapes : EffectBase
     public override void Draw()
     {
         buffer.Fade();
-        int count = (int)(Time.deltaTime * buffer.Length);
+        int count = (int)(effectDelta * buffer.Length);
         count = count/5;
         for (int i = 0; i < count; i++)
         {

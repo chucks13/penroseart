@@ -34,9 +34,11 @@ public class Panels : MixerBase
                 break;
             case 2:
                 ef0 = GetRandomEffect();
+                ef0.RandomizeTime();
                 ef0.Init();
                 ef0.OnStart();
                 ef1 = GetRandomEffect();
+                ef1.RandomizeTime();
                 ef1.Init();
                 ef1.OnStart();
                 break;
@@ -73,7 +75,7 @@ public class Panels : MixerBase
                 break;
             case 1:
                 {
-                    var time = Mathf.InverseLerp(0f, 1, Mathf.PingPong(Time.time, 1));
+                    var time = Mathf.InverseLerp(0f, 1, Mathf.PingPong(effectTime, 1));
 
                     var color1 = Color.Lerp(colors[0], colors[1], time);
                     var color2 = Color.Lerp(colors[1], colors[0], time);
@@ -90,6 +92,8 @@ public class Panels : MixerBase
                 }
                 break;
             case 2:
+                ef0.UpdateTime();
+                ef1.UpdateTime();
                 ef0.Draw();
                 ef1.Draw();
                 for (int i = 0; i < buffer.Length; i++)

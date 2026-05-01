@@ -20,7 +20,7 @@ public class Petals : ScreenEffect {
   public override void OnEnd() { }
 
   public override void Draw() {
-        background += Time.deltaTime * 0.1f;
+        background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {

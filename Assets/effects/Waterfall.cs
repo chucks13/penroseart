@@ -70,11 +70,11 @@ public class Waterfall : ScreenEffect
                 screen.x = x;
                 screen.y = y;
                 // background
-                var color = y * setting.backgrounStretch + Time.time * setting.backgroundSpeed;
+                var color = y * setting.backgrounStretch + effectTime * setting.backgroundSpeed;
                 for (int i = 0; i < drops.Length; i++)
                 {
                     Drop drop = drops[i];
-                    drop.Update();
+                    drop.Update(effectDelta);
                     var distance = Vector2.Distance(screen, drop.position);
                     //drop
                     if (distance < drop.radius)
@@ -109,12 +109,12 @@ public class Waterfall : ScreenEffect
             intensity = Random.Range(0.1f, 0.5f);
         }
 
-        public void Update()
+        public void Update(float deltaTime)
         {
             var velocity = new Vector2();
             velocity.x = 0f;
             velocity.y = -speed;
-            position += Time.deltaTime * velocity;
+            position += deltaTime * velocity;
             if (position.y < height * -15) position = new Vector2(Random.Range(0, width), Random.Range(height, height * 10));
         }
     }

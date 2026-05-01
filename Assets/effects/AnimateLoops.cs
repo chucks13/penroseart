@@ -47,7 +47,7 @@ public class AnimateLoops : EffectBase {
   public override void Draw()
     {
         colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);
-        background += Time.deltaTime * 0.1f;
+        background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {

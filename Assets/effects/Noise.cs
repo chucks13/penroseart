@@ -35,7 +35,7 @@ public class Noise : EffectBase {
       float scale = setting.scale;
       float x     = tiles[i].center.x * scale;
       float y     = tiles[i].center.y * scale;
-      float z     = Time.time * setting.speed;
+      float z     = effectTime * setting.speed;
 
       n =  Perlin.Noise(x, y, z);
       n *= setting.amplifier;

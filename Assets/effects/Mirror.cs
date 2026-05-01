@@ -76,6 +76,7 @@ public class Mirror : MixerBase
     sourceEffect = GetRandomEffect();
         var debugText = string.Empty;
         sourceEffect.Init();
+        sourceEffect.RandomizeTime();
         sourceEffect.OnStart();
         debugText += $"{sourceEffect.Name}";
 
@@ -86,7 +87,7 @@ public class Mirror : MixerBase
 
     public override void Draw()
     {
-
+        sourceEffect.UpdateTime();
         sourceEffect.Draw();
 
         int groupcount = mirrorList[0];     // how many copies

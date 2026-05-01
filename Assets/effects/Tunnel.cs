@@ -42,7 +42,7 @@ public class Tunnel : ScreenEffect
             float x = Mathf.Abs(tiles[i].center.x * 0.03f);
             float y = Mathf.Abs(tiles[i].center.y * 0.03f);
             float distance = Mathf.Sqrt((x * x) + (y * y));
-            var color = i * setting.density + Time.time * setting.speed + distance * setting.mix;
+            var color = i * setting.density + effectTime * setting.speed + distance * setting.mix;
             buffer[i] = Color.HSVToRGB(color % 1f, 1f, 1f);
         }
   }

@@ -15,6 +15,8 @@ public abstract class TransitionBase
   private int a;
   private int b;
   private float v;
+  public float effectTime;
+  public float effectDelta;
 
 
   public float[] settings;
@@ -67,6 +69,17 @@ public abstract class TransitionBase
   {
     controller = Controller.Instance;
     buffer = new Color[Penrose.Total];
+  }
+
+  public void RandomizeTime()
+  {
+      effectTime = UnityEngine.Random.Range(0f, 14400f);
+  }
+
+  public void UpdateTime()
+  {
+      effectDelta = Time.deltaTime;
+      effectTime += effectDelta;
   }
 
   // Should be called every time an effect is turned on

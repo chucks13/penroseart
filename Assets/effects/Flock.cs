@@ -43,7 +43,7 @@ public class Flock : EffectBase
         for (int i = 0; i < flock.Length; i++)
         {
             var f = flock[i];
-            f.Update();
+            f.Update(effectDelta);
             buffer[controller.penrose.GetIndexFromPosition(f.position)] = f.color;
         }
     }
@@ -92,11 +92,11 @@ public class Flock : EffectBase
             //maxSpeed = Random.Range(5f, 20f);
         }
 
-        public void Update()
+        public void Update(float deltaTime)
         {
             if (boids == null) return;
 
-            position += Time.deltaTime * velocity;
+            position += deltaTime * velocity;
 
             UpdateFlock();
             acceleration = (alignment * setting.alignment) + (cohesion * setting.cohesion) +

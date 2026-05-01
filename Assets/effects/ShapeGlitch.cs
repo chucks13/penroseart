@@ -77,6 +77,7 @@ public class ShapeGlitch : MixerBase {
      public override void OnStart() {
 
     effect = GetRandomEffect();
+    effect.RandomizeTime();
     effect.Init();
     effect.OnStart();
     var debugText = $"{effect.Name}";
@@ -87,6 +88,7 @@ public class ShapeGlitch : MixerBase {
 
   public override void Draw() {
 
+    effect.UpdateTime();
     effect.Draw();
 
     for(int i = 0; i < buffer.Length; i++) {

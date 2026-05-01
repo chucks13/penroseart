@@ -34,7 +34,7 @@ public class MetaBalls : ScreenEffect {
         var idx = x + (y * width);
         var sum = 0f;
         for(int i = 0; i < balls.Length; i++) {
-          balls[i].Update(Time.deltaTime);
+          balls[i].Update(effectDelta);
           var d = Vector2.Distance(screen, balls[i].Position);
           sum += setting.radius / d;
         }

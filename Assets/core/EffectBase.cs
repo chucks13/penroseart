@@ -9,6 +9,8 @@ public abstract class EffectBase {
   public Controller controller;
   private Factory<EffectBase> factory;
 
+  public float effectTime;
+  public float effectDelta;
     [HideInInspector]
  // public int sortIndex;
 
@@ -28,6 +30,18 @@ public abstract class EffectBase {
     penrose = controller.penrose;
     tiles = penrose.Tiles;
     buffer     = new Color[Penrose.Total];
+  }
+
+  public void RandomizeTime()
+  {
+      // Seed with 0 to 4 hours (14400 seconds)
+      effectTime = Random.Range(0f, 14400f);
+  }
+
+  public void UpdateTime()
+  {
+      effectDelta = Time.deltaTime;
+      effectTime += effectDelta;
   }
 
   // Should be called every time an effect is turned on

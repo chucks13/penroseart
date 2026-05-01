@@ -30,7 +30,7 @@ public class NoiseTransition : TransitionBase
             float scale = 0.07f;
             float x = controller.penrose.tiles[i].center.x * scale;
             float y = controller.penrose.tiles[i].center.y * scale;
-            float z = Time.time;
+            float z = effectTime;
 
             float n = Perlin.Noise(x, y, z);
             n += v2;

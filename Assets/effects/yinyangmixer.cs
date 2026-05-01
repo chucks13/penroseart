@@ -34,6 +34,7 @@ public class yinyangmixer : MixerBase
         for (var i = 0; i < 2; i++)
         {
             effects[i] = GetRandomEffect();
+            effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
@@ -50,9 +51,10 @@ public class yinyangmixer : MixerBase
     public override void Draw()
     {
 
-        yina += spin * Time.deltaTime * 60f ;
+        yina += spin * effectDelta * 60f ;
         for (int i = 0; i < 2; i++)
         {
+            effects[i].UpdateTime();
             effects[i].Draw();
         }
         Color ribbon = APalette.read(0.5f, true);

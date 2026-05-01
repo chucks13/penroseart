@@ -30,7 +30,7 @@ public class Pulse : EffectBase {
   public override void OnEnd() {  }
 
   public override void Draw() {
-    var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(Time.time, setting.seconds));
+    var t = Mathf.InverseLerp(0f, setting.seconds, Mathf.PingPong(effectTime, setting.seconds));
 
     var color1 = Color.Lerp(setting.color, endColor, t);
     var color2 = Color.Lerp(endColor, setting.color, t);

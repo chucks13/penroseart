@@ -41,7 +41,7 @@ public class Nibbler : EffectBase
     public override void Draw()
     {
         buffer.Fade(setting.fade);
-        int count = (int)(Time.deltaTime * 300f);
+        int count = (int)(effectDelta * 300f);
         for (int y = 0; y < Count; y++)
         {
             for (var x = 0; x < count; x++)

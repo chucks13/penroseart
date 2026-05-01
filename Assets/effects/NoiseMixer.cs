@@ -30,6 +30,7 @@ public class NoiseMixer : MixerBase
         for (var i = 0; i < 2; i++)
         {
             effects[i] = GetRandomEffect();
+            effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
@@ -45,6 +46,7 @@ public class NoiseMixer : MixerBase
     {
         for (int i = 0; i < 2; i++)
         {
+            effects[i].UpdateTime();
             effects[i].Draw();
         }
 
@@ -53,7 +55,7 @@ public class NoiseMixer : MixerBase
             float scale = 0.07f;
             float x = tiles[i].center.x * scale;
             float y = tiles[i].center.y * scale;
-            float z = Time.time; // * setting.speed;
+            float z = effectTime; // use local mixer time
 
             float n = Perlin.Noise(x, y, z);
             if (n > 0.1)
