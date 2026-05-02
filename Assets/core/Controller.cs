@@ -21,7 +21,9 @@ using System.Drawing;
 public class Controller : Singleton<Controller>
 {
 
+    [HideInInspector]
     public int[] effectDeck;
+    [HideInInspector]
     public int[] transitionDeck;
     public BlenderBase[] blenders;
 
@@ -31,6 +33,7 @@ public class Controller : Singleton<Controller>
     public TelnetServer server;
 #endif
 
+    [HideInInspector]
     public Color[] blendBuffer = new Color[Penrose.Total];
 
     public bool NYE = false;
