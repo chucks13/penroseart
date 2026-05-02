@@ -6,18 +6,19 @@ public class Nibbler : EffectBase
 
     private const int Count = 10;
     private int[] current;
-    private Settings setting;
+    private bool randomColor;
+    private Color color;
+    private float fade;
 
     public override string DebugText()
     {
-        var colorText = (setting.randomColor) ? "random" : setting.color.ToString();
-        return $"Color: {colorText}\nFade: {setting.fade}";
+        var colorText = (randomColor) ? "random" : color.ToString();
+        return $"Color: {colorText}\nFade: {fade}";
     }
 
     public override void Init()
     {
         base.Init();
-        setting = new Settings();
         current = new int[Count];
         for (int i = 0; i < Count; i++) current[i] = Random.Range(0, Penrose.Total);
     }
@@ -25,10 +26,18 @@ public class Nibbler : EffectBase
     public override void OnStart()
     {
         base.OnStart();
-        if (controller.effectSettings.nibbler.Length > 0)
-            setting = controller.effectSettings.nibbler[Random.Range(0, controller.effectSettings.nibbler.Length)];
+        if (Random.value > 0.5f)
+        {
+            randomColor = true;
+            color = Color.clear;
+        }
         else
-            setting.Randomize();
+        {
+            randomColor = false;
+            color = Color.HSVToRGB(Random.value, 1f, 1f);
+        }
+
+        fade = Random.Range(0.97f, 0.999f);
         buffer.Clear();
     }
 
@@ -37,47 +46,17 @@ public class Nibbler : EffectBase
     public override void Draw()
     {
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
-        buffer.Fade(setting.fade);
+        buffer.Fade(fade);
         int count = (int)(effectDelta * 300f);
         for (int y = 0; y < Count; y++)
         {
             for (var x = 0; x < count; x++)
             {
                 current[y] = tiles[current[y]].GetRandomNeighbor();
-                Color c = setting.randomColor ? Color.HSVToRGB(Random.value, 1f, 1f) : setting.color;
+                Color c = randomColor ? Color.HSVToRGB(Random.value, 1f, 1f) : color;
                 
                 buffer[current[y]] = c * beatBrightness;
             }
         }
     }
-
-    [System.Serializable]
-    public class Settings
-    {
-
-        //public float speed = 1f;   
-        public bool randomColor = true;
-        public Color color = Color.clear;
-
-        [Range(0.97f, 0.999f)]
-        public float fade = 0.999f;
-
-        public void Randomize()
-        {
-            if (Random.value > 0.5f)
-            {
-                randomColor = true;
-                color = Color.clear;
-            }
-            else
-            {
-                randomColor = false;
-                color = Color.HSVToRGB(Random.value, 1f, 1f);
-            }
-
-            fade = Random.Range(0.97f, 0.999f);
-        }
-
-    }
-
 }

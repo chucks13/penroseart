@@ -3,26 +3,23 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class MetaBalls : ScreenEffect {
-  private Settings setting;
   private Ball[] balls;
   private Vector2 screen;
+  private int total = 8;
+  private float radius = 1f;
 
   public override void Init()
   {
     base.Init();
-    setting = new Settings(); // Initialize the settings object here
   }
 
   public override string DebugText() { return$""; }
 
   public override void OnStart() {
     base.OnStart();
-    if (controller.effectSettings.metaBalls.Length > 0)
-        setting = controller.effectSettings.metaBalls[Random.Range(0, controller.effectSettings.metaBalls.Length)];
-    else
-        setting.Randomize();
+    // Randomize logic was commented out in original class
 
-    balls = new Ball[setting.total];
+    balls = new Ball[total];
     for(int i = 0; i < balls.Length; i++) { balls[i] = new Ball(); }
   }
 
@@ -42,7 +39,7 @@ public class MetaBalls : ScreenEffect {
         for(int i = 0; i < balls.Length; i++) {
           balls[i].Update(effectDelta);
           var d = Vector2.Distance(screen, balls[i].Position);
-          sum += setting.radius / d;
+          sum += radius / d;
         }
 
         sum = sum.Clamp();
@@ -68,20 +65,6 @@ public class MetaBalls : ScreenEffect {
       position += time * velocity;
       if(position.x < 5f || position.x > width - 5f) velocity.x *= -1;
       if(position.y < 2f || position.y > height - 2f) velocity.y *= -1;
-    }
-  }
-
-  /// <summary>
-  /// put all data that can be changed or saved here
-  /// </summary>
-  [Serializable]
-  public class Settings {
-    public int total = 8;
-    public float radius = 1f;
-
-    public void Randomize() {
-      //total = Random.Range(5, 16);
-      //radius = Random.Range(0.5f, 1f);
     }
   }
 }

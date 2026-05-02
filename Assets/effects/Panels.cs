@@ -1,11 +1,10 @@
-﻿﻿using Random = UnityEngine.Random;
+﻿﻿﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
 public class Panels : MixerBase
 {
     private Color[] colors;
     private int which;
-    private Settings setting;
     EffectBase ef0;
     EffectBase ef1;
 
@@ -14,7 +13,6 @@ public class Panels : MixerBase
     public override void Init()
     {
         base.Init();
-        setting = new Settings();
     }
 
     // Should be called every time an effect is turned on
@@ -110,11 +108,4 @@ public class Panels : MixerBase
                 break;
         }
     }
-
-
-    [System.Serializable]
-    public class Settings
-    {
-    }
-
 }

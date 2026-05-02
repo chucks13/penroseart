@@ -1,12 +1,12 @@
-﻿﻿
+﻿﻿﻿﻿
 using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class fluid : ScreenEffect
 {
-    float[] state1 = new float[900];
-    float[] state2 = new float[900];
+    private float[] state1;
+    private float[] state2;
     int slower = 0;
     public float fdamping = 0.95f;
     public float impulse = 1f;
@@ -24,6 +24,8 @@ public class fluid : ScreenEffect
     public override void OnStart()
     {
         base.OnStart();
+        state1 = new float[Penrose.Total];
+        state2 = new float[Penrose.Total];
         for (int i = 0; i < state1.Length; i++)
         {
             state1[i] = 0f;
@@ -61,7 +63,7 @@ public class fluid : ScreenEffect
     {
         if (Random.Range(0, activity) == 0)
         {
-            state1[Random.Range(0, 900)] = impulse;
+            state1[Random.Range(0, state1.Length)] = impulse;
         }
         //        for(int i=0;i<2460;i+=820)
         //        state1[455+i] = 20f;

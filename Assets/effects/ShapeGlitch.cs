@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿﻿using UnityEngine;
 
 public class ShapeGlitch : MixerBase {
 
@@ -27,6 +27,10 @@ public class ShapeGlitch : MixerBase {
 
   public override void Init() {
     base.Init();
+  }
+
+     public override void OnStart() {
+    base.OnStart();
     switch (Random.Range(0,2))
     {
       case 0:
@@ -72,10 +76,7 @@ public class ShapeGlitch : MixerBase {
             break;
     }
     color = Color.HSVToRGB(Random.value, Random.value, 1f);
-  }
 
-     public override void OnStart() {
-    base.OnStart();
     effect = GetRandomEffect();
     effect.RandomizeTime();
     effect.Init();

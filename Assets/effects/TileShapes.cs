@@ -1,29 +1,34 @@
-﻿﻿using System.Collections;
+﻿﻿﻿﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class TileShapes : EffectBase
 {
-    private Settings setting;
+    private bool randomColor;
     private Color color;
     private int[] shape;
 
-    public override string DebugText() => setting.randomColor ? "Color: random" : $"Color: {setting.color.ToString()}";
+    public override string DebugText() => randomColor ? "Color: random" : $"Color: {color.ToString()}";
 
     public override void Init()
     {
         base.Init();
-        setting = new Settings();
     }
 
     // Should be called every time an effect is turned on
     public override void OnStart()
     {
         base.OnStart();
-        if (controller.effectSettings.tileShapes.Length > 0)
-            setting = controller.effectSettings.tileShapes[Random.Range(0, controller.effectSettings.tileShapes.Length)];
+        if (Random.value > 0.5f)
+        {
+            randomColor = true;
+            color = Color.clear;
+        }
         else
-            setting.Randomize();
+        {
+            randomColor = false;
+            color = Color.HSVToRGB(Random.value, 1f, 1f);
+        }
 
         switch(Random.Range(0,9))
         {
@@ -56,7 +61,7 @@ public class TileShapes : EffectBase
                 break;
         }
 
-        var text = (setting.randomColor) ? "random" : setting.color.ToString();
+        var text = (randomColor) ? "random" : color.ToString();
         controller.debugText.text = $"Color: {text}";
         buffer.Clear();
     }
@@ -73,10 +78,10 @@ public class TileShapes : EffectBase
         for (int i = 0; i < count; i++)
         {
 
-            if (setting.randomColor)
+            if (randomColor)
                 color = Color.HSVToRGB(Random.value, 1f, 1f);
             else
-                color = setting.color;
+                color = color; // Logic remains the same, using the class variable
 
 
             int loop = Random.Range(0, shape[0]); 
@@ -88,28 +93,6 @@ public class TileShapes : EffectBase
                 int idx = shape[j];
                 if(idx>=0)
                     buffer[idx] = color * beatBrightness;
-            }
-        }
-    }
-
-
-    [System.Serializable]
-    public class Settings
-    {
-        public bool randomColor = true;
-        public Color color;
-
-        public void Randomize()
-        {
-            if (Random.value > 0.5f)
-            {
-                randomColor = true;
-                color = Color.clear;
-            }
-            else
-            {
-                randomColor = false;
-                color = Color.HSVToRGB(Random.value, 1f, 1f);
             }
         }
     }

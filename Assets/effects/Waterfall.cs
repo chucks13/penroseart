@@ -1,12 +1,14 @@
-﻿﻿using System;
+﻿﻿﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Waterfall : ScreenEffect
 {
 
-    private Settings setting;
     private Drop[] drops;
+    private int numDrops;
+    private float backgrounStretch;
+    private float backgroundSpeed;
 
     /// <summary>
     /// Called ever frame to update the debug UI text element 
@@ -14,9 +16,9 @@ public class Waterfall : ScreenEffect
     /// <returns></returns>
     public override string DebugText()
     {
-        return $"Drops: {setting.numDrops}\n" +
-            $"Background stretch: {setting.backgrounStretch}\n" +
-            $"Background speed: {setting.backgroundSpeed}\n";
+        return $"Drops: {numDrops}\n" +
+            $"Background stretch: {backgrounStretch}\n" +
+            $"Background speed: {backgroundSpeed}\n";
     }
 
     /// <summary>
@@ -25,8 +27,6 @@ public class Waterfall : ScreenEffect
     public override void Init()
     {
         base.Init();
-        setting = new Settings();
-        drops = new Drop[setting.numDrops];
     }
 
     /// <summary>
@@ -35,12 +35,11 @@ public class Waterfall : ScreenEffect
     public override void OnStart()
     {
         base.OnStart();
-        if (controller.effectSettings.waterfall.Length > 0)
-            setting = controller.effectSettings.waterfall[Random.Range(0, controller.effectSettings.waterfall.Length)];
-        else
-            setting.Randomize();
+        numDrops = Random.Range(70, 100);
+        backgrounStretch = Random.Range(0.001f, 0.025f);
+        backgroundSpeed = Random.Range(0.01f, 0.3f);
         buffer.Clear();
-        drops = new Drop[setting.numDrops];
+        drops = new Drop[numDrops];
         for (int i = 0; i < drops.Length; i++)
         {
             drops[i] = new Drop();
@@ -68,7 +67,7 @@ public class Waterfall : ScreenEffect
                 screen.x = x;
                 screen.y = y;
                 // background
-                var color = y * setting.backgrounStretch + effectTime * setting.backgroundSpeed;
+                var color = y * backgrounStretch + effectTime * backgroundSpeed;
                 for (int i = 0; i < drops.Length; i++)
                 {
                     Drop drop = drops[i];
@@ -116,25 +115,4 @@ public class Waterfall : ScreenEffect
             if (position.y < height * -15) position = new Vector2(Random.Range(0, width), Random.Range(height, height * 10));
         }
     }
-
-    /// <summary>
-    /// put all data that can be changed or saved here
-    /// </summary>
-    [Serializable]
-    public class Settings
-    {
-
-        public int numDrops;
-        public float backgrounStretch;
-        public float backgroundSpeed;
-
-        public void Randomize()
-        {
-            numDrops = Random.Range(70, 100);
-            backgrounStretch = Random.Range(0.001f, 0.025f);
-            backgroundSpeed = Random.Range(0.01f, 0.3f);
-        }
-
-    }
-
 }

@@ -1,19 +1,41 @@
-﻿﻿using System;
+﻿﻿﻿﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class Julia : ScreenEffect
 {
 
-    private Settings setting;
-
     private float angle;
+    private int iterations = 100;
+    private float speed = 0.15f;
+    private float distance = 5f;
+    private float ca = -0.8f;
+    private float cb = 0.156f;
+    private float xOffset = 0f;
+    private float yOffset = 0f;
+    private int i;
+
+    private readonly Vector2[] valueSets = {
+      new Vector2(0.285f, 0.01f),
+      new Vector2(-0.70176f, -0.3842f),
+      new Vector2(-0.835f, -0.2321f),
+      new Vector2(-0.8f, 0.156f),
+      new Vector2(-0.7269f, 0.1889f)
+    };
+
+    private readonly Vector2[] offSets = {
+      new Vector2(0.2f, 0.04f),
+      new Vector2(-0.125f, -0.04f),
+      new Vector2(-0.0375f, 0f),
+      new Vector2(0.175f, 0.05f),
+      new Vector2(0.0875f, 0.225f)
+    };
 
     /// <summary>
     /// Called ever frame to update the debug UI text element 
     /// </summary>
     /// <returns></returns>
-    public override string DebugText() { return $"{setting.i}, {setting.speed}, ({setting.xOffset}, {setting.yOffset})"; }
+    public override string DebugText() { return $"{i}, {speed}, ({xOffset}, {yOffset})"; }
 
     /// <summary>
     /// Called once when effect is created
@@ -21,7 +43,6 @@ public class Julia : ScreenEffect
     public override void Init()
     {
         base.Init();
-        setting = new Settings();
     }
 
     /// <summary>
@@ -30,10 +51,12 @@ public class Julia : ScreenEffect
     public override void OnStart()
     {
         base.OnStart();
-        if (controller.effectSettings.julia.Length > 0)
-            setting = controller.effectSettings.julia[Random.Range(0, controller.effectSettings.julia.Length)];
-        else
-            setting.Randomize();
+        i = Random.Range(0, valueSets.Length);
+        ca = valueSets[i].x;
+        cb = valueSets[i].y;
+        xOffset = offSets[i].x;
+        yOffset = offSets[i].y;
+        speed = Random.Range(0.1f, 0.3f);
         buffer.Clear();
     }
 
@@ -52,7 +75,7 @@ public class Julia : ScreenEffect
 
         var sa = Mathf.Sin(angle).Map01(1f, -1f);
 
-        var w = setting.distance * sa;
+        var w = distance * sa;
         var h = w * height / width;
         var xMin = -w / 2f;
         var yMin = -h / 2f;
@@ -61,14 +84,14 @@ public class Julia : ScreenEffect
         var dx = (xMax - xMin) / width;
         var dy = (yMax - yMin) / height;
 
-        angle += setting.speed * effectDelta;
+        angle += speed * effectDelta;
 
-        var y = yMin + setting.yOffset;
+        var y = yMin + yOffset;
         for (var sy = 0; sy < height; sy++)
         {
 
 
-            var x = xMin + setting.xOffset;
+            var x = xMin + xOffset;
             for (var sx = 0; sx < width; sx++)
             {
 
@@ -76,7 +99,7 @@ public class Julia : ScreenEffect
                 var b = y;
 
                 var n = 0;
-                while (n < setting.iterations)
+                while (n < iterations)
                 {
                     var aa = a * a;
                     var bb = b * b;
@@ -85,14 +108,14 @@ public class Julia : ScreenEffect
 
                     var twoAb = 2f * a * b;
 
-                    a = aa - bb + setting.ca;
-                    b = twoAb + setting.cb;
+                    a = aa - bb + ca;
+                    b = twoAb + cb;
 
                     n++;
                 }
 
-                var hue = Mathf.Sqrt((float)n / setting.iterations) % 1f;
-                screenBuffer[sx + (sy * width)] = Color.HSVToRGB(hue, 1f, n == setting.iterations ? 0f : 1f) * beatBrightness;
+                var hue = Mathf.Sqrt((float)n / iterations) % 1f;
+                screenBuffer[sx + (sy * width)] = Color.HSVToRGB(hue, 1f, n == iterations ? 0f : 1f) * beatBrightness;
 
                 x += dx;
             }
@@ -103,52 +126,4 @@ public class Julia : ScreenEffect
         // convert the 2D Matrix buffer to a tile buffer
         ConvertScreenBuffer(ref screenBuffer, in buffer);
     }
-
-    /// <summary>
-    /// put all data that can be changed or saved here
-    /// </summary>
-    [Serializable]
-    public class Settings
-    {
-
-        private readonly Vector2[] valueSets = {
-      new Vector2(0.285f, 0.01f),
-      new Vector2(-0.70176f, -0.3842f),
-      new Vector2(-0.835f, -0.2321f),
-      new Vector2(-0.8f, 0.156f),
-      new Vector2(-0.7269f, 0.1889f)
-    };
-
-        private readonly Vector2[] offSets = {
-      new Vector2(0.2f, 0.04f),
-      new Vector2(-0.125f, -0.04f),
-      new Vector2(-0.0375f, 0f),
-      new Vector2(0.175f, 0.05f),
-      new Vector2(0.0875f, 0.225f)
-    };
-
-        public int iterations = 100;
-        public float speed = 0.15f;
-        public float distance = 5f;
-
-        public float ca = -0.8f;
-        public float cb = 0.156f;
-
-        public float xOffset = 0f;
-        public float yOffset = 0f;
-
-        public int i;
-
-        public void Randomize()
-        {
-            i = Random.Range(0, valueSets.Length);
-            ca = valueSets[i].x;
-            cb = valueSets[i].y;
-            xOffset = offSets[i].x;
-            yOffset = offSets[i].y;
-            speed = Random.Range(0.1f, 0.3f);
-        }
-
-    }
-
 }

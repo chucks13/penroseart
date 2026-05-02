@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -65,16 +65,15 @@ public class Mirror : MixerBase
     public override void Init()
     {
         base.Init();
-        mirrorList = penrose.JsonRawData.shapes.mirror2;
-        fixCenterLineInit();
     }
 
     public override void OnStart()
     {
         base.OnStart();
-    mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
+        mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
+        fixCenterLineInit();
 
-    sourceEffect = GetRandomEffect();
+        sourceEffect = GetRandomEffect();
         var debugText = string.Empty;
         sourceEffect.Init();
         sourceEffect.RandomizeTime();

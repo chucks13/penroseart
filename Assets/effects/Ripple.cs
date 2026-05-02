@@ -1,15 +1,15 @@
-﻿using Random = UnityEngine.Random;
+﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 using System;
 
 public class Ripple : ScreenEffect
 {
 
-  private Settings setting;
   private Color startColor;
   private Color endColor;
   private Drop[] drops;
     private Vector2 screen;
+    private float intensity;
 
     public override string DebugText() {
     return $"Drops {drops.Length}";
@@ -17,16 +17,11 @@ public class Ripple : ScreenEffect
 
   public override void Init() {
     base.Init();
-    setting = new Settings();
   }
 
   public override void OnStart() {
     base.OnStart();
-    if (controller.effectSettings.ripple.Length > 0)
-      setting = controller.effectSettings.ripple[Random.Range(0, controller.effectSettings.ripple.Length)];
-    else
-      setting.Randomize();
-
+    intensity = Random.Range(0.01f, 0.02f);
     drops = new Drop[0];
     }
 
@@ -34,7 +29,7 @@ public class Ripple : ScreenEffect
 
   public override void Draw() {
     float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
-   if (Random.value < setting.intensity) {
+   if (Random.value < intensity) {
             Array.Resize(ref drops, drops.Length + 1);
             drops[drops.Length - 1] = new Drop();
         }
@@ -83,16 +78,4 @@ public class Ripple : ScreenEffect
             radius += deltaTime * velocity;
         }
     }
-
-    [System.Serializable]
-  public class Settings {
-
-    public float intensity = 0.01f;
-
-        public void Randomize() {
-            intensity = Random.Range(0.01f, 0.02f);
-        }
-
-  }
-
 }

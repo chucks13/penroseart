@@ -1,30 +1,36 @@
-﻿﻿using UnityEngine;
+﻿﻿﻿﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class NoiseTunnel : EffectBase
 {
 
-    private Settings setting;
     private float n;
+    private float scale;
+    private float speed;
+    private float amplifier;
+    private float colorDelta;
+    private int style;
+    private int direction;
 
     public override string DebugText()
     {
-        return $"Noise: {n}\nSpeed: {setting.speed}\nDirection: {setting.direction}";
+        return $"Noise: {n}\nSpeed: {speed}\nDirection: {direction}";
     }
 
     public override void Init()
     {
         base.Init();
-        setting = new Settings();
     }
 
     public override void OnStart()
     {
         base.OnStart();
-        if (controller.effectSettings.noiseTunnel.Length > 0)
-            setting = controller.effectSettings.noiseTunnel[Random.Range(0, controller.effectSettings.noiseTunnel.Length)];
-        else
-            setting.Randomize();
+        scale = Random.Range(0.05f, 0.2f);
+        speed = Random.Range(0.1f, 1.5f);
+        amplifier = Random.Range(1f, 5f);
+        colorDelta = Random.value;
+        style = Random.Range(0, 3);
+        direction = Random.Range(0, 2);
         buffer.Clear();
     }
 
@@ -36,22 +42,21 @@ public class NoiseTunnel : EffectBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            float scale = setting.scale;
             float x = Mathf.Abs(tiles[i].center.x * scale);
             float y = Mathf.Abs(tiles[i].center.y * scale);
             float d1 = Mathf.Sqrt((x * x) + (y * y));
             float d2 = x + y;
             float d3 = x - y;
-            if (setting.direction > 0)
+            if (direction > 0)
             {
                 d1 = 10000 - d1;
                 d2 = 10000 - d2;
                 d3 = 10000 - d3;
             }
 
-            float z = effectTime * setting.speed;
+            float z = effectTime * speed;
 
-            switch (setting.style)
+            switch (style)
             {
                 case 0:
                     n = Perlin.Noise(d1 + z);
@@ -64,42 +69,18 @@ public class NoiseTunnel : EffectBase
                     break;
             }
 
-            n *= setting.amplifier;
+            n *= amplifier;
             //n = Mathf.Abs(n);
 
             int v = (int)n;
             Color c;
             if ((v & 1) == 0)
             {
-                c = Color.HSVToRGB((n + setting.colorDelta) % 1f, 1f, 1);
+                c = Color.HSVToRGB((n + colorDelta) % 1f, 1f, 1);
             }
             else
                 c = Color.black;
             buffer[i] = c * beatBrightness;
         }
     }
-
-    [System.Serializable]
-    public class Settings
-    {
-
-        public float scale;
-        public float speed;
-        public float amplifier;
-        public float colorDelta;
-        public int style;
-        public int direction;
-
-        public void Randomize()
-        {
-            scale = Random.Range(0.05f, 0.2f);
-            speed = Random.Range(0.1f, 1.5f);
-            amplifier = Random.Range(1f, 5f);
-            colorDelta = Random.value;
-            style = Random.Range(0, 3);
-            direction = Random.Range(0, 2);
-        }
-
-    }
-
 }

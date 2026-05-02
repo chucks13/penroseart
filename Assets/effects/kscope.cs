@@ -1,4 +1,4 @@
-﻿﻿// By Chuck Sommerville
+﻿﻿﻿﻿// By Chuck Sommerville
 /*
  * loads images in assets folder, and displays them as kscope
  */
@@ -188,8 +188,6 @@ public class kscope : ScreenEffect
         base.Init();
         colorTex = readDirectory($"/images/color");
         monoTex = readDirectory($"/images/mono");
-        mirrorList = penrose.JsonRawData.shapes.mirror2;
-        fixCenterLineInit();
     }
 
     /// <summary>
@@ -233,6 +231,8 @@ public class kscope : ScreenEffect
     {
         base.OnStart();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
+        fixCenterLineInit();
+
         int colorCount = colorTex.Count;
         int monoCount = monoTex.Count;
         int total = colorCount + monoCount;

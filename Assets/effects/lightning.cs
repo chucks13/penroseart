@@ -6,7 +6,7 @@ public class lightning : EffectBase
 {
     float huerot=0;
     float fadeValue;
-    float starthue = Random.value;
+    float starthue;
     float deltastart=0f;
     float deltaray = 0f;
     float deltatile = 0f;

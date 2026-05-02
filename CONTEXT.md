@@ -11,7 +11,6 @@ Manages the main loop, effect switching, and hardware output.
 - **State Machine**: Alternates between a "Playing" state (generative effects) and a "Transition" state (blending between effects).
 - **Timing**: Defaults to 10s per effect with a 2s transition.
 - **Testing Override (Nova Technique)**: Allows locking selection to a specific effect by name for debugging, toggled via the Inspector or the `Escape` key.
-- **Effect Settings**: Hand-tuned presets are stored in the `EffectSettingsContainer` class, allowing for organized foldouts in the Inspector.
 
 ### 2. Beat Manager (Synchronization)
 Provides a global heartbeat for the installation. **Note:** The current implementation is a debug simulation; future versions will poll an OSC server for live synchronization.

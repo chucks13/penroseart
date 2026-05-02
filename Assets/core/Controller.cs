@@ -80,31 +80,6 @@ public class Controller : Singleton<Controller>
 
     public float transitionTime = 2f;
 
-    [Header("Settings")]
-    public EffectSettingsContainer effectSettings;
-
-    [Serializable]
-    public class EffectSettingsContainer
-    {
-        public Noise.Settings[] noise;
-        public TileShapes.Settings[] tileShapes;
-        public Angles.Settings[] angles;
-        public ColorSparkle.Settings[] sparkle;
-        public Nibbler.Settings[] nibbler;
-        public Panels.Settings[] panels;
-        public Pulse.Settings[] pulse;
-        public Ripple.Settings[] ripple;
-        public NoiseTunnel.Settings[] noiseTunnel;
-        public RainbowBars.Settings[] rainbowBars;
-        public Waterfall.Settings[] waterfall;
-        public Julia.Settings[] julia;
-        public Flock.Settings[] flock;
-        public MetaBalls.Settings[] metaBalls;
-        public drums.Settings[] drums;
-        public Tunnel.Settings[] tunnel;
-        public Vortex.Settings[] vortex;
-    }
-
     public string paletteSource;
     public string jsonSource;
 
