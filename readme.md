@@ -21,9 +21,16 @@ to repeate.
 ### Beat System & Synchronization
 The system includes a `BeatManager` that provides a global clock for rhythmic visuals.
 *Note: The current version is a debug simulation that generates beats internally and serves as a placeholder for external OSC data.*
-- **Pulse**: Effects use `beatManager.GetBeatBrightness()` to pulse in sync with the BPM.
+- **Pulse**: Effects use `beatManager.GetBeatBrightness()` to pulse in sync with the BPM. It uses a high-power curve ($x^4$) to ensure the pulse feels like a sharp rhythmic "kick" rather than a slow fade, maintaining high average brightness.
 - **Personality**: Each effect instance picks a `beatVariant` in `OnStart` to determine its specific rhythm (e.g., only pulsing on the '1').
+- **Variants**: 
+    - `0`: Every Beat, `1`: Beats 1&3, `2`: Beats 2&4, `3`: Measure Start
+    - `4`: 8th Notes, `5`: 16th Notes, `6`: Syncopated (1 and 4)
 - **Bypass**: If `BeatManager.active` is false, all effects return to 100% brightness and standard motion.
+- **Distortion Modes**: Some effects (like `Noise`) can randomly choose how to react to the beat:
+    - **Brightness**: Rhythmic gain pulsing (default floor of 0.85).
+    - **Color**: Post-palette hue rotation (e.g., shifting 90 degrees on the beat).
+    - **Time**: Warping `effectTime` to cause motion "surges" or "kicks."
 
 ### Developer Tools (Nova Technique)
 For debugging, the controller supports a "Nova" testing override:

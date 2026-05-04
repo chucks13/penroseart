@@ -15,7 +15,8 @@ Manages the main loop, effect switching, and hardware output.
 ### 2. Beat Manager (Synchronization)
 Provides a global heartbeat for the installation. **Note:** The current implementation is a debug simulation; future versions will poll an OSC server for live synchronization.
 - **BeatData**: A shared reference containing BPM, current beat in measure, and a millisecond timer (`timeEvent`) relative to the nearest beat.
-- **Variants**: Effects can pick a "Rhythmic Personality" (e.g., Every Beat, Even/Odd Beats, or Measure Start).
+- **Variants**: Supports 7 rhythmic personalities: Every Beat, Alternating (1&3 or 2&4), Measure Start, Sub-divisions (8th and 16th notes), and Syncopated patterns.
+- **Rhythmic Logic**: Uses an $x^4$ decay curve to maximize display uptime. To prevent the installation from looking too dark, "off-beats" return to `maxBrightness` immediately, and pulses default to a high floor (`0.85`).
 - **Propagation**: Mixers can choose to pass their rhythm to children (Unified), let children pick their own (Passive), or suppress child pulsing (Active) to keep complex layouts readable.
 
 ### 3. The Buffer System
