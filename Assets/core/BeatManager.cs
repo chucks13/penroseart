@@ -50,31 +50,61 @@ public class BeatManager
     /// </summary>
     public int GetRandomVariant()
     {
-        return UnityEngine.Random.Range(0, 4);
+        return UnityEngine.Random.Range(0, 7);
     }
 
     /// <summary>
     /// Calculates a beat-synced brightness multiplier.
-    /// Max brightness (e.g., 1.0) on the beat, decaying to min brightness (e.g., 0.5) halfway between beats.
+    /// Max brightness (e.g., 1.0) on the beat, decaying to min brightness (e.g., 0.85) halfway between beats.
     /// </summary>
-    /// <param name="variant">The rhythm variant: 0=All, 1=Even, 2=Odd, 3=Measure Start</param>
+    /// <param name="variant">
+    /// 0: All Beats, 1: Beats 1&3, 2: Beats 2&4, 3: Measure Start, 
+    /// 4: 8th Notes (Double Time), 5: 16th Notes, 6: Syncopated (1 and 4)
+    /// </param>
     /// <param name="maxBrightness">The brightness value on the beat.</param>
     /// <param name="minBrightness">The brightness value furthest from the beat.</param>
     /// <param name="enable">If false, returns maxBrightness (no pulsing).</param>
     /// <returns>A float between minBrightness and maxBrightness.</returns>
-    public float GetBeatBrightness(int variant, float maxBrightness = 1.0f, float minBrightness = 0.5f, bool enable = true)
+    public float GetBeatBrightness(int variant, float maxBrightness = 1.0f, float minBrightness = 0.85f, bool enable = true)
     {
         if (!enable || !beatData.active) return maxBrightness;
 
         float msPerBeat = 60000f / Mathf.Max(beatData.bpm, 1f);
-        float normalizedDist = Mathf.Abs(beatData.timeEvent) / (msPerBeat * 0.5f);
-        float pulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Clamp01(normalizedDist));
 
-        if (variant == 1 && beatData.currentBeat % 2 != 0) return minBrightness; // Even
-        if (variant == 2 && beatData.currentBeat % 2 == 0) return minBrightness; // Odd
-        if (variant == 3 && beatData.currentBeat != 0) return minBrightness;     // Measure Start
+        // Calculate standard normalized distance (0.0 at beat, 1.0 at midpoint)
+        float dist = Mathf.Abs(beatData.timeEvent);
+        float normDist = Mathf.Clamp01(dist / (msPerBeat * 0.5f));
 
-        return pulse;
+        // Sub-beat calculations for higher frequency variants
+        float msPer8th = msPerBeat * 0.5f;
+        float norm8thDist = Mathf.Clamp01((dist % msPer8th) / (msPer8th * 0.5f));
+        float msPer16th = msPerBeat * 0.25f;
+        float norm16thDist = Mathf.Clamp01((dist % msPer16th) / (msPer16th * 0.5f));
+
+        // Use a high power (x^4) to keep brightness high for 90% of the beat.
+        // This prevents the "too dark" feeling while still providing a sharp rhythmic kick.
+        float standardPulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(normDist, 4.0f));
+        float doublePulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(norm8thDist, 4.0f));
+        float quadPulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(norm16thDist, 4.0f));
+
+        switch (variant)
+        {
+            case 1: // Beats 1 & 3
+                return (beatData.currentBeat == 0 || beatData.currentBeat == 2) ? standardPulse : maxBrightness;
+            case 2: // Beats 2 & 4
+                return (beatData.currentBeat == 1 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
+            case 3: // Measure Start (Beat 1)
+                return (beatData.currentBeat == 0) ? standardPulse : maxBrightness;
+            case 4: // 8th Notes
+                return doublePulse;
+            case 5: // 16th Notes
+                return quadPulse;
+            case 6: // Syncopated (1 and 4)
+                return (beatData.currentBeat == 0 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
+            case 0: // Every Beat
+            default:
+                return standardPulse;
+        }
     }
 
     /// <summary>
