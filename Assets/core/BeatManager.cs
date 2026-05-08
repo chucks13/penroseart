@@ -52,6 +52,10 @@ public class BeatManager
     {
         return UnityEngine.Random.Range(0, 7);
     }
+    public int GetRandomVariantChill()
+    {
+        return UnityEngine.Random.Range(0, 5);
+    }
 
     /// <summary>
     /// Calculates a beat-synced brightness multiplier.
@@ -95,11 +99,11 @@ public class BeatManager
                 return (beatData.currentBeat == 1 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
             case 3: // Measure Start (Beat 1)
                 return (beatData.currentBeat == 0) ? standardPulse : maxBrightness;
-            case 4: // 8th Notes
+            case 5: // 8th Notes
                 return doublePulse;
-            case 5: // 16th Notes
+            case 6: // 16th Notes
                 return quadPulse;
-            case 6: // Syncopated (1 and 4)
+            case 4: // Syncopated (1 and 4)
                 return (beatData.currentBeat == 0 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
             case 0: // Every Beat
             default:
