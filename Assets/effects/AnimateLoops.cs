@@ -8,10 +8,12 @@ public class AnimateLoops : EffectBase {
     private float background;
     int[] shape;
     string shapeName;
+    private int distortionMode; // 0: Brightness, 1: Color, 2: Time
 
     public override string DebugText()
     {
-        return $"shape: {shapeName}";
+        string[] modeNames = { "Brightness", "Color", "Time Warp" };
+        return $"shape: {shapeName}\nBeat Mode: {modeNames[distortionMode]}";
     }
 
     public override void Init() {
@@ -22,6 +24,7 @@ public class AnimateLoops : EffectBase {
     {
         base.OnStart();
         shape = penrose.JsonRawData.shapes.loops;
+        distortionMode = Random.Range(1, 3);
         shapeName = "loops";
         /*        switch (Random.Range(0, 2))
                 {
@@ -47,13 +50,27 @@ public class AnimateLoops : EffectBase {
 
   public override void Draw()
     {
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatBrightness = 1.0f;
+        float hueShift = 0.0f;
+        float sampleTime = effectTime;
+
+        if (beatEnable)
+        {
+            if (distortionMode == 0)
+                beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f);
+            else if (distortionMode == 1)
+                hueShift = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.0f);
+            else if (distortionMode == 2)
+                sampleTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
+        }
+
+        float beatOffset = (sampleTime - effectTime);
         colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);
         background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
+            buffer[i] = Color.HSVToRGB((background + beatOffset * 0.1f + hueShift) % 1f, 1f, 1f) * beatBrightness;
         }
         for (int i = 0; i < shape[0]; i++)
         {
@@ -64,7 +81,7 @@ public class AnimateLoops : EffectBase {
             for (int j = start; j < end; j++)
             {
                 int idx = shape[j];
-                buffer[idx] = Color.HSVToRGB((hue + 0.01f * j) % 1f, sat, bri) * beatBrightness;
+                buffer[idx] = Color.HSVToRGB((hue + 0.01f * j + beatOffset * 0.1f + hueShift) % 1f, sat, bri) * beatBrightness;
             }
             colors[i] = Color.HSVToRGB((hue + 0.01f) % 1f, sat, bri);
         }
