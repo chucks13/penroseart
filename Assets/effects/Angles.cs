@@ -8,7 +8,6 @@ public class Angles : EffectBase
 {
     private Color[] colors;
     private float speed;
-    private int beatVariant;
 
     public override string DebugText() => "Angles";
 
