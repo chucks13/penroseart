@@ -835,8 +835,14 @@ public class Controller : Singleton<Controller>
             {
                 transitions[currentTransition].V = timer.Value;
                 transitions[currentTransition].UpdateTime();
-                effects[transitions[currentTransition].A].UpdateTime();
-                effects[transitions[currentTransition].B].UpdateTime();
+
+                int indexA = transitions[currentTransition].A;
+                int indexB = transitions[currentTransition].B;
+
+                effects[indexA].UpdateTime();
+                if (indexA != indexB)
+                    effects[indexB].UpdateTime();
+
                 transitions[currentTransition].Draw();
                 penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
 
