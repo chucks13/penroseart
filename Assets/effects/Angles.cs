@@ -8,6 +8,7 @@ public class Angles : EffectBase
 {
     private Color[] colors;
     private float speed;
+    private int beatVariant;
 
     public override string DebugText() => "Angles";
 
@@ -23,6 +24,7 @@ public class Angles : EffectBase
         speed = 0.25f;
         controller.debugText.text = "Angles";
         buffer.Clear();
+        beatVariant=beatManager.GetRandomVariantChill();
     }
 
     // Should be called every time an effect is turned off
@@ -30,15 +32,15 @@ public class Angles : EffectBase
 
     public override void Draw()
     {
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatAngle = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.9f, beatEnable);
         for (int i = 0; i < buffer.Length; i++)
         {
             Penrose.TileData t = tiles[i];
             {
                 float angle = t.tileangle/180f;
                 angle += effectTime * speed;
-                Color c = Color.HSVToRGB(angle % 1f, 1f, 1f);
-                buffer[i] = c * beatBrightness;
+                Color c = Color.HSVToRGB((angle+beatAngle) % 1f, 1f, 1f);
+                buffer[i] = c;
             }
         }
     }
