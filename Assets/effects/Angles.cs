@@ -1,4 +1,4 @@
-﻿﻿﻿﻿using Random = UnityEngine.Random;
+﻿﻿using Random = UnityEngine.Random;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -23,7 +23,6 @@ public class Angles : EffectBase
         speed = 0.25f;
         controller.debugText.text = "Angles";
         buffer.Clear();
-        beatVariant=beatManager.GetRandomVariantChill();
     }
 
     // Should be called every time an effect is turned off
