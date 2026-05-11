@@ -18,6 +18,8 @@ using System.Drawing;
 
 // git connection test 4/29/2026
 
+//ENABLE_SERIAL
+
 public class Controller : Singleton<Controller>
 {
 
@@ -59,6 +61,9 @@ public class Controller : Singleton<Controller>
     private static int localPort;
     IPEndPoint remoteEndPoint;
     UdpClient client;
+#if ENABLE_SERIAL
+    private SerialOut serial;
+#endif
     public CameraReader cameraOverlay;
 
     [Header("Nova Testing Technique")]
@@ -678,6 +683,11 @@ public class Controller : Singleton<Controller>
         server = new TelnetServer();
         server.Start();     // start telnet server
 #endif
+#if ENABLE_SERIAL
+        serial = new SerialOut();
+        serial.Init(230400);
+        Debug.Log("[Controller] Serial Output Enabled.");
+#endif
 
     }
 
@@ -908,7 +918,11 @@ public class Controller : Singleton<Controller>
 
         }
 
+#if ENABLE_SERIAL
+        serial.send(penrose.buffer, brightness);
+#else
         sendUDPFrame(penrose.buffer);
+#endif
 
         penrose.UpdateModelColors();
         OSCping();
