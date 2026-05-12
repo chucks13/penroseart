@@ -1,12 +1,13 @@
-﻿﻿﻿﻿using Random = UnityEngine.Random;
+﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
 public class ColorSparkle : EffectBase
 {
     private bool randomColor;
-    private Color color;
+    //    private Color color;
+    private float hue;
 
-    public override string DebugText() => randomColor ? "Color: random" : $"Color: {color.ToString()}";
+    public override string DebugText() => randomColor ? "Color: random" : $"hue: {hue}";
 
     public override void Init()
     {
@@ -17,18 +18,10 @@ public class ColorSparkle : EffectBase
     public override void OnStart()
     {
         base.OnStart();
-        if (Random.value > 0.5f)
-        {
-            randomColor = true;
-            color = Color.clear;
-        }
-        else
-        {
-            randomColor = false;
-            color = Color.HSVToRGB(Random.value, 1f, 1f);
-        }
+        randomColor = (Random.value > 0.5f);
+        hue = Random.value;
 
-        var text = (randomColor) ? "random" : color.ToString();
+        var text = (randomColor) ? "random " : hue.ToString();
         controller.debugText.text = $"Color: {text}";
         buffer.Clear();
     }
@@ -41,15 +34,13 @@ public class ColorSparkle : EffectBase
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
+        Color drawColor = Color.HSVToRGB((hue + beatBrightness) % 1.0f, 1f, 1f);
         for (int i = 0; i < count; i++)
         {
-            Color drawColor;
-            if (randomColor)
+            if (randomColor && (!IsBeatActive))
                 drawColor = Color.HSVToRGB(Random.value, 1f, 1f);
-            else
-                drawColor = color;
 
-            buffer[Random.Range(0, buffer.Length)] = drawColor * beatBrightness;
+            buffer[Random.Range(0, buffer.Length)] = drawColor;// * beatBrightness;
         }
     }
 }
