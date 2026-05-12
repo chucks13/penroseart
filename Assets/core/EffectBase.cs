@@ -21,6 +21,7 @@ public abstract class EffectBase {
 
   public BeatData beat => controller.beatManager.beatData;
   public BeatManager beatManager => controller.beatManager;
+  public bool IsBeatActive => controller.beatManager.IsActive;
 
   public bool beatEnable = true;
   public int beatVariant;
