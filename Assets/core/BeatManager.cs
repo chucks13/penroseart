@@ -18,6 +18,9 @@ public class BeatManager
     private int _lastTotalBeats = -1;
     private bool _isBeatTriggered = false;
 
+    // Shorthand for beat status
+    public bool IsActive => beatData.active;
+
     public void Update()
     {
         if (!beatData.active || beatData.bpm <= 0) return;
