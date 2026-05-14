@@ -254,9 +254,14 @@ public class SerialOut
 
         // 1. Snapshot the simulation data for the IO thread
         globalLevel = level;
-        int pixelsToCopy = Math.Min(data.Length, simulationFrameCopy.Length);
+        
+        // Ensure copy buffer matches simulation data size (1800)
+        if (simulationFrameCopy.Length != data.Length) {
+            simulationFrameCopy = new Color[data.Length];
+        }
+
         // Use a high-speed array copy instead of a per-element loop
-        Array.Copy(data, simulationFrameCopy, pixelsToCopy);
+        Array.Copy(data, simulationFrameCopy, data.Length);
 
         // 2. Signal threads to pack their specific segments and transmit
         foreach (var board in activeBoards)

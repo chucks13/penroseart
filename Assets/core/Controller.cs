@@ -62,6 +62,7 @@ public class Controller : Singleton<Controller>
     IPEndPoint remoteEndPoint;
     UdpClient client;
 #if ENABLE_SERIAL
+    private Color[] serialOutputBuffer = new Color[1800];
     private SerialOut serial;
 #endif
     public CameraReader cameraOverlay;
@@ -360,6 +361,27 @@ public class Controller : Singleton<Controller>
         sendACN(universe, udpFrameBuffer, ptr1, 5400 - ptr1);
         acnheader[111] = sequence++;
     }
+
+#if ENABLE_SERIAL
+    private void sendSerialFrame(Color[] data)
+    {
+        byte level = brightness;
+        if (!displayOn) level = 0;
+
+        // Map the 900 animation tiles to the 1800 physical LEDs
+        int[] wires = penrose.JsonRawData.wires;
+        if (serialOutputBuffer.Length != wires.Length) {
+            serialOutputBuffer = new Color[wires.Length];
+        }
+
+        for (int i = 0; i < wires.Length; i++) {
+            // Map physical LED 'i' to simulation tile 'wires[i]/2'
+            serialOutputBuffer[i] = data[wires[i] / 2];
+        }
+
+        serial.send(serialOutputBuffer, level);
+    }
+#endif
 
     private void SetupTransitions()
     {
@@ -923,8 +945,7 @@ public class Controller : Singleton<Controller>
         }
 
 #if ENABLE_SERIAL
-        byte serialLevel = displayOn ? brightness : (byte)0;
-        serial.send(penrose.buffer, serialLevel);
+        sendSerialFrame(penrose.buffer);
 #else
         sendUDPFrame(penrose.buffer);
 #endif
