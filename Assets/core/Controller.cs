@@ -1,4 +1,7 @@
-﻿﻿using System;
+﻿﻿
+#define ENABLE_SERIAL
+
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -14,11 +17,8 @@ using System.Text;
 //  gameObjectToHide.GetComponent<Renderer>().enabled = false;
 
 using System.Net.NetworkInformation;
-using System.Drawing;
 
 // git connection test 4/29/2026
-
-//ENABLE_SERIAL
 
 public class Controller : Singleton<Controller>
 {
@@ -881,6 +881,10 @@ public class Controller : Singleton<Controller>
         debugText.text += $"\nFPS: {fps},KB{keyboardBase}";
         if (OSCtimer > 0)
         {
+            #if ENABLE_SERIAL
+            // Clear serial debug info if OSC text is active to prevent clutter
+            if (serial != null) debugText.text = debugText.text.Replace(serial.GetDebugInfo(), "");
+            #endif
             debugText.text = OSCtext;
             OSCtimer--;
         }
@@ -919,12 +923,17 @@ public class Controller : Singleton<Controller>
         }
 
 #if ENABLE_SERIAL
-        serial.send(penrose.buffer, brightness);
+        byte serialLevel = displayOn ? brightness : (byte)0;
+        serial.send(penrose.buffer, serialLevel);
 #else
         sendUDPFrame(penrose.buffer);
 #endif
 
         penrose.UpdateModelColors();
         OSCping();
+
+#if ENABLE_SERIAL
+        if (serial != null) debugText.text += serial.GetDebugInfo();
+#endif
     }
 }
