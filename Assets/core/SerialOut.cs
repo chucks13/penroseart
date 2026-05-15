@@ -45,6 +45,7 @@ public class SerialOut
     private const int MAX_PIXELS_PER_SEGMENT = 300; // Sanity limit for buffer allocation
     private const byte CMD_QUERY = 0x3F; // '?'
     private const byte CMD_DATA  = 0x44; // 'D'
+    private const byte CMD_LATCH = 0x4C; // 'L'
     private const byte CMD_SYNC  = 0x53; // 'S'
     private const byte ACK_BYTE  = 0x06;
     private const byte NACK_BYTE = 0x15;
@@ -173,7 +174,7 @@ public class SerialOut
 
             // Total the pixels to size the bulk transfer buffer correctly
             board.TotalPixels = board.Segments.Sum(s => s.Count);
-            board.ReusableBuffer = new byte[5 + (board.TotalPixels * 3)]; // CMD_DATA + Header(4) + Pixels
+            board.ReusableBuffer = new byte[5 + (board.TotalPixels * 3) + 1]; // CMD_DATA + Header(4) + Pixels + CMD_LATCH
             
             board.IsReady = true;
             
@@ -253,6 +254,8 @@ public class SerialOut
                         }
                     }
                 }
+                // Append Latch command to the end of the packet to commit the frame
+                board.ReusableBuffer[p++] = CMD_LATCH;
                 // Use the underlying stream for lower overhead in some Mono versions
                 board.Port.BaseStream.Write(board.ReusableBuffer, 0, board.ReusableBuffer.Length);
             } catch { board.IsReady = false; }
