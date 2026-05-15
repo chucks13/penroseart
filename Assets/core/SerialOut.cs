@@ -41,6 +41,7 @@ public class SerialOut
     private string[] lastScannedPorts = new string[0];
     private const float DiscoveryInterval = 2.0f; // Scan for new USB devices every 2 seconds
 
+    private const byte BOARD_TYPE_LED = 0x01;
     private const int MAX_PIXELS_PER_SEGMENT = 300; // Sanity limit for buffer allocation
     private const byte CMD_QUERY = 0x3F; // '?'
     private const byte CMD_DATA  = 0x44; // 'D'
@@ -134,34 +135,45 @@ public class SerialOut
                 sp.DiscardInBuffer();
                 throw new Exception("Handshake timeout: No response byte received.");
             }
-            int numSegments = header[0];
-            Debug.Log($"[SerialOut] {portName}: Handshake response received. {numSegments} segments reported.");
+
+            byte boardType = header[0];
+            
+            // Read 1 byte for the config payload size
+            byte[] sizeHeader = new byte[1];
+            int sizeRead = await Task.Run(() => sp.Read(sizeHeader, 0, 1));
+            if (sizeRead == 0) throw new Exception("Handshake timeout: No payload size received.");
+            byte payloadSize = sizeHeader[0];
+
+            if (boardType != BOARD_TYPE_LED)
+            {
+                throw new Exception($"Unsupported board type: 0x{boardType:X2}");
+            }
+            
+            Debug.Log($"[SerialOut] {portName}: LED Driver identified.");
 
             S2MiniBoard board = new S2MiniBoard { 
                 Port = sp, 
                 PortName = portName
             };
 
-            for (int i = 0; i < numSegments; i++)
+            // Read N bytes as defined by payloadSize
+            byte[] rangeData = new byte[payloadSize];
+            int read = 0;
+            while (read < payloadSize) 
             {
-                byte[] segData = new byte[4];
-                int read = 0;
-                while (read < 4) 
-                {
-                    int r = await Task.Run(() => sp.Read(segData, read, 4 - read));
-                    if (r == 0) throw new Exception($"Timeout reading segment {i} definition.");
-                    read += r;
-                }
-
-                int start = (segData[0] << 8) | segData[1];
-                int count = (segData[2] << 8) | segData[3];
-                Debug.Log($"[SerialOut] {portName}: Segment {i} mapped to Pixels {start}..{start + count - 1}");
-                board.Segments.Add(new S2MiniBoard.PixelSegment { StartIndex = start, Count = count });
+                int r = await Task.Run(() => sp.Read(rangeData, read, payloadSize - read));
+                if (r == 0) throw new Exception("Timeout reading mapping range.");
+                read += r;
             }
+
+            int start = (rangeData[0] << 8) | rangeData[1];
+            int count = (rangeData[2] << 8) | rangeData[3];
+            Debug.Log($"[SerialOut] {portName}: Board mapped to Pixels {start}..{start + count - 1}");
+            board.Segments.Add(new S2MiniBoard.PixelSegment { StartIndex = start, Count = count });
 
             // Total the pixels to size the bulk transfer buffer correctly
             board.TotalPixels = board.Segments.Sum(s => s.Count);
-            board.ReusableBuffer = new byte[1 + (board.TotalPixels * 3)]; // CMD_DATA + Pixels
+            board.ReusableBuffer = new byte[5 + (board.TotalPixels * 3)]; // CMD_DATA + Header(4) + Pixels
             
             board.IsReady = true;
             
@@ -171,7 +183,7 @@ public class SerialOut
             board.BoardThread.Start();
 
             activeBoards.Add(board);
-            Debug.Log($"[SerialOut] Connected S2 Mini on {portName} handling {numSegments} segments.");
+            Debug.Log($"[SerialOut] Connected LED Driver on {portName} with {count} pixels.");
         }
         catch (Exception e)
         {
@@ -215,8 +227,16 @@ public class SerialOut
             try {
                 // Pack the buffer for this specific board's segments on the background thread
                 int p = 0;
+                var seg = board.Segments[0]; // Assuming unified range for now
+                
                 board.ReusableBuffer[p++] = CMD_DATA;
-                foreach (var seg in board.Segments)
+                board.ReusableBuffer[p++] = (byte)(seg.StartIndex >> 8);
+                board.ReusableBuffer[p++] = (byte)(seg.StartIndex & 0xFF);
+                board.ReusableBuffer[p++] = (byte)(seg.Count >> 8);
+                board.ReusableBuffer[p++] = (byte)(seg.Count & 0xFF);
+
+                // For LED driver boards, there is only one unified segment.
+                // The 'seg' variable already holds this segment's data.
                 {
                     for (int i = 0; i < seg.Count; i++)
                     {

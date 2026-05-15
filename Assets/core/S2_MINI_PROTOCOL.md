@@ -4,7 +4,7 @@
 This document defines the communication protocol between the Penrose Simulator (C#) and the S2 Mini (ESP32-S2) distributed hardware controllers. The system uses USB-Serial to manage multiple boards, each responsible for specific segments of the Penrose Wall.
 
 ## Connection Settings
-- **Baud Rate:** 230400
+- **Baud Rate:** 2000000
 - **Data Bits:** 8
 - **Parity:** None
 - **Stop Bits:** 1
@@ -19,37 +19,26 @@ Sent by the PC to discover what pixels this board controls.
 `0x3F` (1 byte)
 
 **Arduino Response:**
-- `[1 byte]`: Number of segments handled by this board (N).
-- For each segment (Repeat N times):
-    - `[2 bytes]`: Start Index (Big-Endian/MSB first).
-    - `[2 bytes]`: Pixel Count (Big-Endian/MSB first).
+- `[1 byte]`: Board Type (0x01 = LED Driver)
+- `[1 byte]`: Payload Size (N)
+- `[2 bytes]`: Start Index (Big-Endian/MSB first).
+- `[2 bytes]`: Pixel Count (Big-Endian/MSB first).
 
-*Example:* A board handling pixels 20-30 and 50-60 would respond: `0x02 0x00 0x14 0x00 0x0B 0x00 0x32 0x00 0x0B`.
+*Example:* An LED board handling pixels 900-1440 would respond: `0x01 0x04 0x03 0x84 0x02 0x1C` (where 0x04 is the payload size).
 
 ---
 
 ### 2. Data Packet ('D' - 0x44)
-Sent by the PC to update the color buffer for a specific segment.
+Sent by the PC to update the color buffer.
 
 **PC Sends:**
 - `0x44` (1 byte)
-- `[2 bytes]`: Start Index (Must match one provided in handshake).
-- `[2 bytes]`: Pixel Count (Must match one provided in handshake).
-- `[Count * 3 bytes]`: Raw RGB data (1 byte per channel, R-G-B order).
+- `[2 bytes]`: Start Index
+- `[2 bytes]`: Pixel Count
+- `[Count * 3 bytes]`: Raw RGB data (R-G-B order).
 
 **Arduino Action:**
-Store these bytes in the local `CRGB` array (FastLED). **Do not** call `.show()` yet.
-
----
-
-### 3. Latch / Show ('L' - 0x4C)
-Sent by the PC after it has successfully finished sending all 'D' packets to all active boards.
-
-**PC Sends:**
-`0x4C` (1 byte)
-
-**Arduino Action:**
-Immediately call `FastLED.show()`. This ensures all boards in the installation update their LEDs simultaneously for synchronized animation.
+Store these bytes in the local `CRGB` array and immediately call `FastLED.show()`.
 
 ## Arduino Implementation Strategy
 
@@ -61,8 +50,7 @@ Use `Serial.begin(230400)`. Since the ESP32-S2 uses native USB-CDC, the baud rat
 2. Read the command byte.
 3. Use a `switch` statement to route to:
     - `handleQuery()`: Write the hardcoded segment map.
-    - `handleData()`: Read exactly `5 + (count * 3)` bytes into a buffer, then copy to `leds`.
-    - `handleLatch()`: Execute `FastLED.show()`.
+    - `handleData()`: Read exactly `5 + (count * 3)` bytes, copy to `leds`, then call `FastLED.show()`.
 
 ### Buffer Management
 Because the S2 Mini has ample RAM, it is recommended to allocate a `CRGB` array large enough to hold all pixels for its assigned segments plus a small serial RX buffer to prevent overflows during high-speed transfers.
