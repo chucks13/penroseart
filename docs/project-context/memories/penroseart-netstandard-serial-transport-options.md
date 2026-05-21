@@ -15,22 +15,50 @@ Research after switching Unity `6000.4.7f1` Standalone API Compatibility Level t
 - Unity's `.NET Standard 2.1` profile does not include `System.IO.Ports` by default.
 - Unity's API compatibility docs say `.NET Standard 2.1` is the default/recommended profile for new projects, while `.NET Framework` is `.NET Framework 4.8` plus additional `.NET Standard 2.1` APIs and is useful for older/existing applications.
 - Microsoft's `SerialPort` API is the official `System.IO.Ports.SerialPort` class for serial port resources, including `GetPortNames()`, open/close, byte reads/writes, timeouts, DTR/RTS, and driver properties.
-- Microsoft's `System.IO.Ports` NuGet package is compatible with `netstandard2.0`/computed `netstandard2.1` and depends on `runtime.native.System.IO.Ports`.
-- The package includes platform native runtime packages such as `runtime.osx-arm64.runtime.native.System.IO.Ports`, which contains `runtimes/osx-arm64/native/libSystem.IO.Ports.Native.dylib`.
+- `.NET Standard` itself is an API specification, not a runtime implementation. Microsoft library guidance says compiling for `.NET Standard` does not guarantee every API runs everywhere; platform-specific APIs can throw `PlatformNotSupportedException`.
+- Microsoft's `System.IO.Ports` NuGet package includes a `netstandard2.0` asset and depends on `runtime.native.System.IO.Ports`.
+- Modern `System.IO.Ports` package/runtime assets include platform native packages such as `runtime.osx-arm64.runtime.native.System.IO.Ports`, which contains `runtimes/osx-arm64/native/libSystem.IO.Ports.Native.dylib`.
+- Microsoft docs say .NET Core 3.0 added basic `System.IO.Ports.SerialPort` support on Linux; the package/runtime story relies on SDK/NuGet runtime-asset selection, not just copying the `lib/netstandard2.0` DLL.
 - Unity does not automatically consume NuGet packages or .NET SDK publish/runtime asset selection; a tool such as NuGetForUnity or manual managed DLL + native-plugin import is needed and must be validated in the Editor and target Player.
+
+## Validation results
+
+### Microsoft `System.IO.Ports` NuGet plug-in attempts
+
+A Unity `6000.4.7f1` temp-project proof-of-concept switched Standalone API Compatibility to `.NET Standard 2.1` (`Standalone: 6`) and tested multiple manual import shapes.
+
+Failed import shape:
+
+- `System.IO.Ports` `10.0.8` `lib/netstandard2.0/System.IO.Ports.dll`.
+- macOS ARM64 native runtime `runtimes/osx-arm64/native/libSystem.IO.Ports.Native.dylib`.
+
+Results:
+
+- Unity script compilation succeeded under `.NET Standard 2.1` once only one macOS native dylib was imported for the current architecture.
+- An Editor-only probe that referenced `System.IO.Ports.SerialPort` directly failed with CS0433 because Unity Editor also references `Resources/Scripting/NetStandard/EditorExtensions/System.IO.Ports.dll` version `6.0.0.0`, which conflicts with the imported package assembly version `10.0.0.8`.
+- A runtime-assembly probe invoked by reflection compiled but `SerialPort.GetPortNames()` threw `System.PlatformNotSupportedException: System.IO.Ports is currently only supported on Windows.`
+- Replacing the imported assembly with the NuGet `lib/net6.0/System.IO.Ports.dll` is not viable under Unity's `.NET Standard 2.1` profile: Unity compilation failed with CS1705 because that assembly requires `System.ComponentModel.Primitives, Version=6.0.0.0` while Unity references `4.1.2.0`.
+
+Working macOS Editor import shape discovered later:
+
+- `System.IO.Ports` `6.0.0` **runtime implementation** DLL from `runtimes/unix/lib/netstandard2.0/System.IO.Ports.dll`.
+- macOS ARM64 native runtime from `runtime.osx-arm64.runtime.native.System.IO.Ports` `6.0.0`: `runtimes/osx-arm64/native/libSystem.IO.Ports.Native.dylib`.
+
+Results in an isolated temp copy, not applied to the repo:
+
+- Unity `.NET Standard 2.1` script compilation succeeded with only existing project warnings.
+- A runtime-assembly probe invoked from an Editor method returned macOS serial port names, including `/dev/tty.usbmodem502NTUW9N3663` and `/dev/cu.usbmodem502NTUW9N3663`.
+- The probe constructed a `SerialPort`, set `BaudRate = 2000000`, `DtrEnable = true`, and `RtsEnable = true`.
+- A hardware-open probe then opened both `/dev/cu.usbmodem502NTUW9N3663` and `/dev/tty.usbmodem502NTUW9N3663` under Unity `.NET Standard 2.1` with `System.IO.Ports` 6.0 runtime assets. The S2 Mini query handshake timed out on both candidates after sending `?`; no board type byte was received, so no frame was sent.
+- The timeout means managed/native serial can enumerate and open the USB CDC device under Unity `.NET Standard`; the remaining blocker is handshake behavior against the attached firmware/device state, not compilation or basic port access.
+
+Conclusion: the Microsoft `System.IO.Ports` route is **viable enough for a controlled PenroseArt proof-of-concept** under Unity `.NET Standard 2.1` on macOS if the correct `6.0.0` runtime implementation asset is used. The next validation must determine whether the timeout is caused by firmware/device state, DTR/RTS/reset timing, port choice, or a behavioral difference from the old `.NET Framework` path.
 
 ## Option candidates
 
-### 1. Try Microsoft `System.IO.Ports` as managed + native Unity plug-ins
+### 1. Use Microsoft `System.IO.Ports` 6.0 runtime assets as managed + native Unity plug-ins
 
-Most direct replacement. Keep `SerialOut.cs` mostly intact, import:
-
-- `System.IO.Ports.dll` from the package's `lib/netstandard2.0/` folder.
-- The matching native runtime library for each target platform, e.g. macOS ARM64 `libSystem.IO.Ports.Native.dylib`.
-
-NuGetForUnity can install NuGet packages inside the Unity Editor and restore packages, but first-launch compile errors are a known limitation until packages are restored.
-
-Risk: this is not a Unity-provided path and must be tested in Unity Editor and target Player. Native library placement/import settings and Mono/IL2CPP behavior need validation.
+Status after validation: promising for PenroseArt desktop/macOS `.NET Standard` use if the imported managed DLL is the `6.0.0` runtime implementation at `runtimes/unix/lib/netstandard2.0/System.IO.Ports.dll`, not the package's top-level `lib/netstandard2.0` facade. Requires matching native runtime libraries per platform and hardware-open validation.
 
 ### 2. Use a Unity serial native plugin
 
@@ -56,12 +84,37 @@ This avoids taking a large dependency but requires per-platform native code and 
 
 ### 4. Stay on `.NET Framework 4.8 + Unity additions`
 
-Safest if USB serial is required immediately and the goal is to keep the current `SerialOut.cs` implementation. The current serial path already works/compiles under this profile for Standalone/Editor usage. This gives up Unity's default smaller `.NET Standard 2.1` profile, but it avoids introducing NuGet/native-plugin packaging risk into the core hardware path.
+Fallback only. The project goal is to move to Unity's recommended `.NET Standard 2.1` profile, so `.NET Framework` should not be treated as the target solution for the serial blocker.
+
+## Applied project state
+
+The repo has applied the `.NET Standard` migration for desktop serial builds:
+
+- `ProjectSettings/ProjectSettings.asset` has Standalone API Compatibility set to `.NET Standard` (`Standalone: 6`).
+- Platform-specific managed `System.IO.Ports.dll` runtime implementation assets live under `Assets/Plugins/System.IO.Ports/runtimes/{osx,linux,win}/lib/netstandard2.0/` with mutually exclusive Unity plugin importer settings.
+- Native runtime libraries live under `Assets/Plugins/System.IO.Ports/runtimes/osx/native/` and `Assets/Plugins/System.IO.Ports/runtimes/linux-x64/native/` with platform-specific importer settings.
+- Unity batchmode import/compile of the real changed tree succeeded under `.NET Standard` with no C# compile errors and no duplicate plugin warnings.
+
+## Cross-platform status
+
+The repo has been expanded from macOS ARM64-only serial runtime support to desktop runtime assets for Windows, macOS, and Linux x64:
+
+- macOS managed runtime: `Assets/Plugins/System.IO.Ports/runtimes/osx/lib/netstandard2.0/System.IO.Ports.dll`, copied from `system.io.ports/6.0.0/runtimes/unix/lib/netstandard2.0/System.IO.Ports.dll`, importer enabled only for macOS Editor/Standalone.
+- Linux managed runtime: `Assets/Plugins/System.IO.Ports/runtimes/linux/lib/netstandard2.0/System.IO.Ports.dll`, copied from the same Unix implementation, importer enabled only for Linux Editor/Standalone.
+- Windows managed runtime: `Assets/Plugins/System.IO.Ports/runtimes/win/lib/netstandard2.0/System.IO.Ports.dll`, copied from `system.io.ports/6.0.0/runtimes/win/lib/netstandard2.0/System.IO.Ports.dll`, importer enabled only for Windows Editor/Standalone.
+- macOS native runtime: `Assets/Plugins/System.IO.Ports/runtimes/osx/native/libSystem.IO.Ports.Native.dylib`, a universal x86_64+arm64 dylib made with `lipo` from the `runtime.osx-x64.runtime.native.System.IO.Ports` and `runtime.osx-arm64.runtime.native.System.IO.Ports` 6.0.0 packages. Using one universal dylib avoids Unity Editor duplicate-plugin-name warnings from separate arm64/x64 dylibs.
+- Linux x64 native runtime: `Assets/Plugins/System.IO.Ports/runtimes/linux-x64/native/libSystem.IO.Ports.Native.so`, copied from `runtime.linux-x64.runtime.native.System.IO.Ports` 6.0.0, importer enabled only for Linux Editor/Standalone with CPU `x86_64`.
+- Windows uses the Windows managed runtime implementation; the inspected `System.IO.Ports` 6.0.0 package layout did not include a separate Windows native runtime asset.
+- `Controller.cs` still has a file-local `#define ENABLE_SERIAL`, so serial remains compiled/enabled wherever the code is compiled. Android/iOS/WebGL are intentionally out of scope for this desktop serial asset pass.
 
 ## Recommendation
 
-If serial output is mission-critical and the target is Standalone/Editor on macOS/Windows/Linux, prefer returning to `.NET Framework 4.8 + Unity additions` now. It is the lowest-risk path for the existing `SerialOut.cs` implementation.
+Continue from this state:
 
-Only stay on `.NET Standard 2.1` if there is a concrete reason to require it. In that case, first run a small throwaway proof-of-concept inside Unity: import `System.IO.Ports` + the matching native runtime library, compile under `.NET Standard 2.1`, and run only `SerialPort.GetPortNames()` plus open/write/read against the ESP32 board in both Editor and target Player. If that succeeds, it is the least invasive `.NET Standard` path. If it fails due to Unity native-library loading or runtime behavior, use either a Unity serial native plugin or return to `.NET Framework 4.8`.
+1. Push the desktop runtime asset commit before asking other machines to test it.
+1. When boards are connected, validate S2 Mini/ESP32 discovery, `?` handshake, frame send, and latch behavior under `.NET Standard`.
+1. Clean up serial discovery noise only after hardware validation: avoid irrelevant `/dev/tty*` candidates and duplicate `/dev/tty.*` versus `/dev/cu.*` alias attempts.
+1. Gate serial code by supported target/platform rather than file-local `#define ENABLE_SERIAL` if the goal is "build for any Unity platform" rather than only desktop serial builds. Desktop targets can enable `SerialOut`; unsupported targets such as WebGL/iOS/Android should compile with serial disabled or a different transport.
+1. If handshake/write fails under `.NET Standard`, compare against the old `.NET Framework` behavior to isolate device/reset/timing differences before changing transport strategy.
 
-If the production target is Android/IL2CPP, do not assume `.NET Framework 4.8` solves serial runtime behavior; Android USB serial usually needs an Android/Unity USB serial plugin or platform-specific transport.
+If hardware-open/write validation fails due to a real runtime incompatibility, next best route is a Unity-native serial plugin. Serial Port Utility Pro is the most directly targeted commercial option found; a small project-specific native wrapper over `libserialport` or `wjwwood/serial` is the likely open-source/custom route.

@@ -8,18 +8,25 @@ Memory Vault remains canonical.
 
 These are confirmed from local code/assets unless marked as a question. Do not silently "fix" behavioral items without confirming intent because many affect hardware output or visual style.
 
-## Output path drift
+## Output path state
 
-- `CONTEXT.md` describes ACN/E1.31 output, but current active code has file-local `#define ENABLE_SERIAL` in `Assets/core/Controller.cs`, so runtime uses USB serial output through `SerialOut`.
+- Current active code has file-local `#define ENABLE_SERIAL` in `Assets/core/Controller.cs:2`, so runtime uses USB serial output through `SerialOut`.
+- Root `CONTEXT.md` and `Assets/core/helpers/CONTEXT.md` have been realigned to describe serial as the active path while noting that the ACN/E1.31 UDP fallback code still exists.
 - Ask which path is production before changing output code.
 
 ## API compatibility and serial output
 
-Standalone is intentionally back on `.NET Framework 4.8 + Unity additions` (`apiCompatibilityLevelPerPlatform: Standalone: 3`) because the active serial output path uses `System.IO.Ports.SerialPort`.
+**Updated 2026-05-21:** Standalone is now `apiCompatibilityLevelPerPlatform: Standalone: 6` (`NET_Standard_2_1`), not `.NET Framework 4.8`. The project ships platform-specific `System.IO.Ports` 6.0 runtime assets under `Assets/Plugins/System.IO.Ports/runtimes/`. This is the path documented in `[[penroseart-netstandard-serial-transport-options]]`.
 
-The previous `.NET Standard 2.1` setting caused `dotnet build Assembly-CSharp.csproj --no-restore -v:minimal` to fail when the generated project targeted `netstandard2.1`. Generated `.csproj` files may remain stale until Unity regenerates them.
+Current desktop runtime asset shape:
 
-See `penroseart-netstandard-switch-compile-errors` and `penroseart-netstandard-serial-transport-options` before changing API compatibility, serial transport, or output mode.
+- macOS: Unix managed runtime DLL plus a universal x86_64+arm64 `libSystem.IO.Ports.Native.dylib`, importer-restricted to macOS Editor/Standalone.
+- Windows: Windows managed runtime DLL, importer-restricted to Windows Editor/Standalone. The inspected NuGet package did not include a separate Windows native runtime asset.
+- Linux: Unix managed runtime DLL plus Linux x64 `libSystem.IO.Ports.Native.so`, importer-restricted to Linux Editor/Standalone.
+
+Caveat: Android/iOS/WebGL serial support remains out of scope, and `Controller.cs` still file-defines `ENABLE_SERIAL`, so platform-gating serial code is still a future cleanup if non-desktop builds matter.
+
+See `[[penroseart-netstandard-switch-compile-errors]]` for the prior failure mode (now superseded) and `[[penroseart-investigation-2026-05-21]]` for the corrected state.
 
 ## Serial protocol drift
 

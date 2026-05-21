@@ -24,12 +24,12 @@ Interpretation:
 
 - The real blocking error is `System.IO.Ports.SerialPort` usage in `Assets/core/SerialOut.cs`.
 - `SerialOut` uses `SerialPort.GetPortNames()`, opens candidate USB serial ports at 2,000,000 baud, toggles DTR/RTS for ESP32-S2 CDC, sends a `?` handshake, reads the board pixel range, then writes packed RGB frame data plus latch/sync commands on a background I/O thread.
-- `System.IO.Ports` is available under Unity's `.NET Framework 4.8 + Unity additions` profile but not under Unity's `.NET Standard 2.1` API compatibility profile.
+- `System.IO.Ports` is available under Unity's `.NET Framework 4.8 + Unity additions` profile but is not built into Unity's `.NET Standard 2.1` API compatibility profile; `.NET Standard` now works in this repo only because platform-specific runtime plugin assets were added.
 - Microsoft documents `SerialPort` as a class for controlling serial port resources, including port enumeration, baud rate, DTR/RTS, timeouts, and byte reads/writes. Unity's .NET Standard profile does not ship that API surface as a built-in reference.
 - The `fluid.beatVariant` warning is newly visible but non-blocking.
 
-Resolution chosen for now:
+Current status:
 
-- Standalone was switched back to `.NET Framework 4.8 + Unity additions` (`apiCompatibilityLevelPerPlatform: Standalone: 3`) because USB serial output via `SerialPort` is required.
-- If `.NET Standard 2.1` is revisited, replace/gate the serial transport with a Unity-compatible serial plugin, a manually validated `System.IO.Ports` managed/native plugin import, or a platform-specific implementation.
+- The original compile failure is superseded. Standalone is now `.NET Standard 2.1` (`apiCompatibilityLevelPerPlatform: Standalone: 6`) and serial compile support is provided through manually validated `System.IO.Ports` 6.0 runtime plugin assets.
+- Hardware handshake/frame validation against the S2 Mini / ESP32 boards remains separate from C# compilation.
 - Generated `.csproj` files may remain stale until Unity regenerates them.

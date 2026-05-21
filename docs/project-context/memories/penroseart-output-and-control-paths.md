@@ -114,7 +114,7 @@ If enabled, it listens on port `23` and registers commands:
 
 ## Output-related open questions
 
-- Is production output currently intended to be USB serial S2 Mini boards or E1.31/ACN UDP?
+- Serial is currently the active compiled output path; should the legacy E1.31/ACN UDP path remain available as a fallback or be retired later?
 - Should output mode remain a file-local `#define`, move to Unity scripting symbols, or become a serialized runtime setting?
 - Is UDP channel order intentionally R,B,G while serial is R,G,B?
 - Which document/source is authoritative for the S2 Mini firmware protocol?

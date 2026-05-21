@@ -63,7 +63,7 @@ Key settings found:
 - Gamma color space: `m_ActiveColorSpace: 0`.
 - Project scripting define symbols are empty in `ProjectSettings/ProjectSettings.asset`; active serial output is controlled by a file-local define in `Controller.cs`.
 - Text serialization is enabled in `ProjectSettings/EditorSettings.asset` (`m_SerializationMode: 2`).
-- Standalone API compatibility is currently `.NET Framework 4.8 + Unity additions` via per-platform override (`apiCompatibilityLevelPerPlatform: Standalone: 3`). The root/default `apiCompatibilityLevel` remains `6`, but Standalone is explicitly overridden.
+- Standalone API compatibility is currently `.NET Standard 2.1` via per-platform override (`apiCompatibilityLevelPerPlatform: Standalone: 6`). Desktop `System.IO.Ports` support is supplied by platform-specific plugin assets under `Assets/Plugins/System.IO.Ports/`.
 
 ## Package dependencies
 
@@ -72,8 +72,7 @@ Direct dependencies in `Packages/manifest.json` include:
 - `com.unity.ai.navigation` `2.0.12`
 - `com.unity.collab-proxy` `2.12.4`
 - `com.unity.ext.nunit` `2.0.5`
-- `com.unity.ide.visualstudio` `2.0.27`
-- `com.unity.ide.vscode` `1.1.4`
+- `com.unity.ide.visualstudio` `2.0.27` is the current editor integration package; deprecated `com.unity.ide.vscode` was removed.
 - `com.unity.multiplayer.center` `1.0.1`
 - `com.unity.test-framework` `1.6.0`
 - `com.unity.timeline` `1.8.12`

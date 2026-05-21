@@ -1,48 +1,70 @@
 # Penrose Simulator Context & Architecture Guide
 
 ## Overview
-This project is a real-time controller for the Penrose Wall light installation. It generates generative visuals and outputs them via the ACN (E1.31) protocol to LED hardware.
+
+This project is a real-time controller for the Penrose Wall light installation. It generates generative visuals for a 900-tile Penrose model in Unity and currently outputs to LED hardware through high-speed USB serial (`SerialOut`) for S2 Mini / ESP32 boards.
+
+The older ACN/E1.31 UDP output path still exists in `Controller.sendUDPFrame()` / `sendACN()`, but the active build path is serial because `Assets/core/Controller.cs` file-defines `ENABLE_SERIAL`.
 
 ## Core Components
 
 ### 1. Controller.cs (The Singleton Hub)
-Manages the main loop, effect switching, and hardware output.
-- **Deck System**: Ensures variety by drawing effects from the top half of a randomized array and moving them to the bottom.
-- **State Machine**: Alternates between a "Playing" state (generative effects) and a "Transition" state (blending between effects).
-- **Timing**: Defaults to 10s per effect with a 2s transition.
-- **Testing Override (Nova Technique)**: Allows locking selection to a specific effect by name for debugging, toggled via the Inspector or the `Escape` key.
+
+Manages the main loop, effect switching, overlays, input, and hardware output.
+
+- **Deck System**: Ensures variety by drawing effects/transitions from the top half of a rotating deck and moving selected entries to the bottom.
+- **State Machine**: Alternates between a playing state (generative effects) and a transition state (blending between effects).
+- **Timing**: Defaults to 10 seconds per effect with a 2 second transition.
+- **Testing Override (Nova Technique)**: Allows locking selection to effects whose names match `forceEffectName`, toggled via the Inspector or the `Escape` key.
 
 ### 2. Beat Manager (Synchronization)
-Provides a global heartbeat for the installation. **Note:** The current implementation is a debug simulation; future versions will poll an OSC server for live synchronization.
-- **BeatData**: A shared reference containing BPM, current beat in measure, and a millisecond timer (`timeEvent`) relative to the nearest beat.
-- **Variants**: Supports 7 rhythmic personalities: Every Beat, Alternating (1&3 or 2&4), Measure Start, Sub-divisions (8th and 16th notes), and Syncopated patterns.
-- **Rhythmic Logic**: Uses an $x^4$ decay curve to maximize display uptime. To prevent the installation from looking too dark, "off-beats" return to `maxBrightness` immediately, and pulses default to a high floor (`0.85`).
-- **Propagation**: Mixers can choose to pass their rhythm to children (Unified), let children pick their own (Passive), or suppress child pulsing (Active) to keep complex layouts readable.
 
-### 3. The Buffer System
-The system works on a 1D array of `UnityEngine.Color`. 
-- **Effects**: Inherit from `EffectBase`. They fill their local `buffer`.
-- **ScreenEffects**: A middleware "Lens" for 2D visuals. It provides an abstract layer that maps a virtual 2D grid onto the 1D Penrose layout using static interpolation weights for performance.
-- **Mixers/Wrappers**: Inherit from `MixerBase`. They manipulate child effects and use type-checking to ensure they only pick generative children.
-- **Transitions**: Inherit from `TransitionBase`. They blend between two `EffectBase` buffers.
-- **Penrose.cs**: Holds the physical mapping. The `wires` array maps the 1D buffer to DMX universes.
+Provides a global heartbeat for the installation. The current implementation is a simulated/debug beat source; future versions may poll OSC or another live synchronization source.
+
+- **BeatData**: Shared BPM/current-beat/timing state.
+- **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, subdivisions, and syncopation. The current code and docs disagree on the numbering of variants 4/5/6; confirm intended behavior before changing it.
+- **Rhythmic Logic**: Uses an x^4 decay curve to create sharp visual kicks without making off-beat visuals too dark.
+- **Propagation**: Mixers can pass rhythm to children, let children choose independently, or suppress child pulsing.
+
+### 3. Buffer and Effect System
+
+The runtime works on `UnityEngine.Color[]` buffers sized to `Penrose.Total == 900`.
+
+- **Effects**: Inherit from `EffectBase` and fill their local 900-color `buffer`.
+- **ScreenEffects**: Render into a rectangular virtual screen and map that image onto the irregular Penrose tile layout through precomputed interpolation weights.
+- **Mixers/Wrappers**: Inherit from `MixerBase`, own child effects, and combine or transform child buffers.
+- **Transitions**: Inherit from `TransitionBase` and blend between two effect buffers by effect index.
+- **Penrose.cs**: Holds the physical model, tile metadata, JSON data, mesh generation, and buffer-to-mesh color mapping.
 
 ### 4. Palette System (GPalette / AnimPalette)
-A global system for color management and animation.
-- **Global Coordination**: Managed as a static instance in `EffectBase`, ensuring all effects share a cohesive look.
-- **Runtime Control**: The `Controller` updates the palette's animation state and can trigger global palette shifts or reloads (via the **Return** key).
-- **Integration**: Effects query colors using normalized positions (0.0 to 1.0), allowing the palette to abstract color details away from generative logic.
 
-### 4. Input/Output
-- **ACN/E1.31**: Standard DMX-over-Ethernet. Found in `sendACN`.
+A shared color-management and animation system.
 
-## Build Symbols (Conditional Compilation)
-The project uses Scripting Define Symbols to keep the core code clean and performant. 
-- `ENABLE_TELNET`: Enables the remote command-line interface (Port 23).
-- `ENABLE_BLENDING`: Enables the `PixelReceiver` and the dual-source frame blending logic.
-- `PREP_CAPTURE`: Enables the localhost pixel feedback loop for external capture tools.
+- **Global Coordination**: `EffectBase.APalette` is static, so all effects share a cohesive palette state.
+- **Runtime Control**: `Controller` updates palette animation and can trigger global palette shifts or reloads via the `Return` key.
+- **Integration**: Effects query colors using normalized positions, allowing palette details to remain separate from generative logic.
+
+### 5. Input and Output
+
+- **Primary output**: USB serial via `SerialOut`, using `sendSerialFrame()` to expand the 900 logical Penrose tiles through `penrose.JsonRawData.wires` into the physical LED order.
+- **Serial runtime support**: Standalone API compatibility is `.NET Standard 2.1`; desktop `System.IO.Ports` support is supplied by platform-specific plugin assets under `Assets/Plugins/System.IO.Ports/` for macOS, Windows, and Linux x64.
+- **Fallback/legacy output**: ACN/E1.31 UDP code remains present in `sendUDPFrame()` / `sendACN()` and is used only when serial is not compiled in.
+- **Control/input paths**: OSC (`OSCReader`), optional PixelReceiver blending, drum overlays, keyboard shortcuts, and optional telnet/debug paths.
+
+## Build Symbols and Platform Notes
+
+The project uses conditional compilation for optional output/control paths.
+
+- `ENABLE_SERIAL`: Currently file-defined in `Controller.cs`, so serial is the active output path for the compiled controller.
+- `ENABLE_TELNET`: Enables the remote command-line interface on port 23.
+- `ENABLE_BLENDING`: Enables the `PixelReceiver` and dual-source frame blending logic.
+- `PREP_CAPTURE`: Enables localhost pixel feedback/capture helper behavior.
+
+Android, iOS, and WebGL serial support are not covered by the desktop `System.IO.Ports` plugin setup. If those become production targets, they need either serial-disabled builds or a platform-specific transport.
 
 ## Operational Logic
-1. **Initialization**: The `Controller` instantiates all effects through a Factory and initializes the UDP hardware connection.
-2. **Loop**: Every frame, the `activeEffect` draws to a 1D color array.
-3. **Output**: The `sendUDPFrame` method iterates through the `wires` map in `Penrose.cs`, converting the 1D color buffer into DMX universes sent via ACN.
+
+1. **Initialization**: `Controller` initializes `Penrose`, discovers effects/transitions/blenders through `Factory<T>`, configures UI fields, starts OSC/control helpers, and initializes serial output when enabled.
+2. **Loop**: The active effect or transition draws into a 900-color buffer; overlays/blenders can modify it.
+3. **Output**: The active serial path maps the Penrose buffer to physical LED order and sends frames through `SerialOut`; the legacy UDP path maps the same data into ACN/E1.31 universes.
+4. **Scene update**: `Penrose.UpdateModelColors()` applies the current buffer to the Unity mesh for visualization.

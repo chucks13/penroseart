@@ -21,9 +21,9 @@ The generated Unity C# project can be checked from the shell with:
 dotnet build Assembly-CSharp.csproj --no-restore -v:minimal
 ```
 
-Current source-of-truth setting: Standalone is set to `.NET Framework 4.8 + Unity additions` (`apiCompatibilityLevelPerPlatform: Standalone: 3`) so `Assets/core/SerialOut.cs` can use `System.IO.Ports.SerialPort`.
+Current source-of-truth setting: Standalone is set to `.NET Standard 2.1` (`apiCompatibilityLevelPerPlatform: Standalone: 6`). `System.IO.Ports` support is supplied by platform-specific Unity plugin assets under `Assets/Plugins/System.IO.Ports/`.
 
-If `dotnet build` still reports `netstandard2.1` or missing `System.IO.Ports`, Unity-generated project files are stale and need regeneration. The failure shape from the stale `.NET Standard 2.1` project is:
+If `dotnet build` still reports missing `System.IO.Ports`, Unity-generated project files may be stale or the platform-specific plugin importer settings may need rechecking. The old failure shape before runtime assets were added was:
 
 ```text
 Assets/core/SerialOut.cs(5,17): error CS0234: The type or namespace name 'Ports' does not exist in the namespace 'System.IO'
@@ -86,4 +86,4 @@ For meaningful runtime validation, test in the Unity Editor or a player with the
 - **Alternate/legacy path:** E1.31/ACN UDP via `sendUDPFrame()` when serial output is disabled.
 - **Optional controls:** OSC defaults to local port `6969`, outbound `192.168.1.255:6161`; pixel receiver listens on UDP `7778`; drum input listens on UDP `8500`; telnet requires `ENABLE_TELNET`.
 
-Before deployment, confirm whether production output should be serial or E1.31/ACN UDP.
+Before deployment, validate the serial handshake/frame path against the actual S2 Mini/ESP32 boards; keep ACN/E1.31 UDP behavior unchanged unless explicitly changing output mode.

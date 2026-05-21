@@ -1,5 +1,7 @@
 # AGENTS.md - PenroseArt
 
+> Maintenance note: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` are intentionally kept byte-identical. Edit `AGENTS.md` first, then copy the result to the other two files.
+
 This repo is a Unity-hosted C# creative/hardware runtime for the Penrose Wall LED installation. Follow the existing project shape instead of turning it into a conventional Unity application.
 
 ## Development Philosophy
@@ -49,8 +51,8 @@ Start with these before adding new structures:
 ## Serial, Output, and Cross-Platform Rules
 
 - Current target focus is Windows, with macOS development also important. The project should stay as cross-platform as practical, but serial output is a core requirement.
-- Standalone API compatibility is intentionally `.NET Framework 4.8 + Unity additions` because `Assets/core/SerialOut.cs` uses `System.IO.Ports.SerialPort`.
-- Do not switch Standalone back to `.NET Standard 2.1` unless serial output has been replaced or validated with a Unity-compatible managed/native plugin path.
+- Standalone API compatibility is intentionally `.NET Standard 2.1`; `System.IO.Ports` support is provided through platform-specific Unity plugin assets under `Assets/Plugins/System.IO.Ports/`.
+- Do not switch Standalone back to `.NET Framework 4.8 + Unity additions` unless the desktop serial plugin path is proven unsuitable or the user explicitly approves the rollback.
 - Ask before changing any hardware/control path:
   - `#define ENABLE_SERIAL`
   - `SerialOut.cs`

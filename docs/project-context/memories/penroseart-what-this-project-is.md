@@ -13,7 +13,7 @@ PenroseArt is a Unity/C# real-time simulator and controller for the **Penrose Wa
 - **Unity version:** `6000.4.7f1 (f3c3c4248748)` from `ProjectSettings/ProjectVersion.txt`.
 - **Product metadata:** company `Chuck`, product `penrose_simulator` in `ProjectSettings/ProjectSettings.asset`.
 - **Primary scene:** `Assets/Scenes/SampleScene.unity` is the only enabled build scene.
-- **Primary runtime assembly:** custom scripts compile into Unity's generated `Assembly-CSharp` assembly. Standalone API compatibility is currently `.NET Framework 4.8 + Unity additions` via `apiCompatibilityLevelPerPlatform: Standalone: 3`; generated `.csproj` files may remain stale until Unity regenerates them.
+- **Primary runtime assembly:** custom scripts compile into Unity's generated `Assembly-CSharp` assembly. Standalone API compatibility is currently `.NET Standard 2.1` via `apiCompatibilityLevelPerPlatform: Standalone: 6`; desktop `System.IO.Ports` support is supplied by platform-specific Unity plugin assets.
 - **Primary source:** custom runtime scripts live under `Assets/core`, `Assets/effects`, `Assets/transitions`, and `Assets/blenders`.
 - **Primary data:** Penrose geometry/mapping and palettes live in scene-serialized `Controller` fields and also in `Assets/StreamingAssets` JSON/text/image files.
 
@@ -39,7 +39,7 @@ PenroseArt is a Unity/C# real-time simulator and controller for the **Penrose Wa
 
 ## Current status notes
 
-- The code and docs both describe ACN/E1.31, but the current compiled path is serial due `#define ENABLE_SERIAL`; confirm which path is production before changing output logic.
+- Root docs now describe serial as the active compiled output path; confirm intent before changing output logic because the legacy ACN/E1.31 UDP path still exists.
 - `Assets/core/Controller - nova.cs` is a disabled reference/alternate controller wrapped in `#if false`.
 - There are no project-specific tests currently found under `Assets`; Unity Test Framework packages are installed but unused.
 - Project philosophy has not been explicitly provided by the user yet.
