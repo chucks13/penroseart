@@ -68,9 +68,9 @@ public class Controller : Singleton<Controller>
     public CameraReader cameraOverlay;
 
     [Header("Nova Testing Technique")]
-    [Tooltip("If true, the controller will only pick the effect specified below.")]
+    [Tooltip("If true, immediately stops transitions and locks playback to the named effect below.")]
     public bool forceEffect = false;
-    [Tooltip("If not empty, the controller will only select effects containing this name. Useful for debugging.")]
+    [Tooltip("If not empty, matches the effect name substring used by the live force override.")]
     public string forceEffectName = "";
 
     public bool useCamera;
@@ -158,6 +158,22 @@ public class Controller : Singleton<Controller>
         return result;
     }
 
+    private static string FormatCatalog(string[] names)
+    {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (i > 0)
+                builder.AppendLine();
+
+            builder.Append(i.ToString("00"));
+            builder.Append(" ");
+            builder.Append(names[i]);
+        }
+
+        return builder.ToString();
+    }
+
     private void SetupEffects()
     {
         var factory = new Factory<EffectBase>();
@@ -173,7 +189,7 @@ public class Controller : Singleton<Controller>
         effectDeck = initDeck(effects.Length);
         pingIndex = 0;
 
-        Debug.Log($"Effects: {string.Join(", ", factory.Names)}");
+        Debug.Log($"Effects ({effects.Length}):\n{FormatCatalog(factory.Names)}");
 
         //    effects[startEffect].sortIndex = -1;
         //    ReSortEffectsArray();
@@ -394,9 +410,10 @@ public class Controller : Singleton<Controller>
             transitions[i].Init();
         }
         transitionDeck = initDeck(transitions.Length);
-        transitions[currentTransition].OnStart();
 
-        Debug.Log($"Transitions: {string.Join(", ", factory.Names)}");
+        // Transitions are started only when the controller enters a real
+        // effect-to-effect transition. Startup should only build the catalog.
+        Debug.Log($"Transitions ({transitions.Length}):\n{FormatCatalog(factory.Names)}");
     }
     private void SetupBlenders()
     {
@@ -407,9 +424,10 @@ public class Controller : Singleton<Controller>
         {
             blenders[i] = factory.Create(factory.Types[i]);
         }
-        transitions[currentTransition].OnStart();
 
-        Debug.Log($"Blenders: {string.Join(", ", factory.Names)}");
+        // BlenderBase has no Init/OnStart contract. Concrete blenders are
+        // ready after construction; transition startup remains transition-only.
+        Debug.Log($"Blenders ({blenders.Length}):\n{FormatCatalog(factory.Names)}");
 
     }
 
@@ -427,6 +445,41 @@ public class Controller : Singleton<Controller>
         timer.Reset();
         effectText.text = effects[currentEffect].Name;
         // turn on the button
+    }
+
+    private bool TryGetForcedEffectIndex(out int effectIndex)
+    {
+        effectIndex = -1;
+        if (!forceEffect || string.IsNullOrWhiteSpace(forceEffectName) || effects == null)
+            return false;
+
+        for (int i = 0; i < effects.Length; i++)
+        {
+            if (effects[i].Name.IndexOf(forceEffectName, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                effectIndex = i;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ApplyForceEffectOverride()
+    {
+        if (!forceEffect)
+            return;
+
+        if (!TryGetForcedEffectIndex(out int forcedEffectIndex))
+            return;
+
+        if (inTransition || currentEffect != forcedEffectIndex)
+        {
+            // Inspector/keyboard force is a live override: cancel transitions and
+            // enter the requested effect immediately instead of waiting for the deck.
+            JumpToEffect(forcedEffectIndex, effectTime);
+        }
+
     }
     public void OSCpage1(OscMessage om, ArrayList oms)
     {
@@ -716,22 +769,26 @@ public class Controller : Singleton<Controller>
 
     private int GetNewEffectIndex()
     {
-        // Integrated Nova Technique: Override randomization if forceEffect is enabled
-        if (forceEffect && !string.IsNullOrEmpty(forceEffectName))
-        {
-            for (int i = 0; i < effects.Length; i++)
-            {
-                if (effects[i].Name.IndexOf(forceEffectName, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return i;
-                }
-            }
-        }
+        // Keep random deck selection as the default, but let the live testing
+        // override choose future targets while forceEffect remains enabled.
+        if (TryGetForcedEffectIndex(out int forcedEffectIndex))
+            return forcedEffectIndex;
+
         return pullCard(effectDeck);
     }
 
     private void OnTimerFinished()
     {
+        if (TryGetForcedEffectIndex(out int forcedEffectIndex))
+        {
+            if (inTransition || currentEffect != forcedEffectIndex)
+                JumpToEffect(forcedEffectIndex, effectTime);
+            else
+                timer.Reset();
+
+            return;
+        }
+
         if (inTransition)
         {
             inTransition = !inTransition;
@@ -747,22 +804,23 @@ public class Controller : Singleton<Controller>
 
         inTransition = !inTransition;
 
-        transitions[currentTransition].RandomizeTime();
-        transitions[currentTransition].OnStart();
-        transitions[currentTransition].V = 0f;
-        transitions[currentTransition].B = GetNewEffectIndex();
-        transitions[currentTransition].A = currentEffect;
+        TransitionBase transition = transitions[currentTransition];
+        transition.RandomizeTime();
+        transition.V = 0f;
+        transition.B = GetNewEffectIndex();
+        transition.A = currentEffect;
+        transition.OnStart();
         EffectBase.APalette.Change();
 
-        effects[transitions[currentTransition].B].RandomizeTime();
-        effects[transitions[currentTransition].B].OnStart();
+        effects[transition.B].RandomizeTime();
+        effects[transition.B].OnStart();
 
         timer.Set(transitionTime);
         timer.Reset();
 
         currentEffect = -1;
 
-        effectText.text = transitions[currentTransition].Name;
+        effectText.text = transition.Name;
     }
 
     void applyFilter(Color[] buffer)
@@ -840,6 +898,9 @@ public class Controller : Singleton<Controller>
             }
         }
         if (Input.GetKeyDown(KeyCode.X)) keyboardBase = 1 - keyboardBase;       // toggle base
+
+        ApplyForceEffectOverride();
+
         // test drums
         if (Input.GetKeyDown("1")) drum.hit(0, 1f);
         if (Input.GetKeyDown("2")) drum.hit(1, 1f);
@@ -936,6 +997,10 @@ public class Controller : Singleton<Controller>
             }
             else if (ActiveTransitionBlender != null)
             {
+                // Transitions can also be selected as external-source blenders.
+                // Keep their time moving so Blend() implementations that use
+                // effectTime, such as NoiseTransition, behave like Draw().
+                ActiveTransitionBlender.UpdateTime();
                 ActiveTransitionBlender.Blend(penrose.buffer, penrose.buffer, blendBuffer);
             }
             else

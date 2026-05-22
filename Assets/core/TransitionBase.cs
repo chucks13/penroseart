@@ -20,7 +20,9 @@ public abstract class TransitionBase
   public float effectDelta;
 
 
-  public float[] settings;
+  // Defaults to no fader arguments so Blend() implementations can safely use
+  // settings.Length before telnet or other controls provide values.
+  public float[] settings = Array.Empty<float>();
   public void setFaders(string[] stringArray)
   {
     settings = Array.ConvertAll(stringArray, float.Parse);
@@ -65,7 +67,11 @@ public abstract class TransitionBase
   // Used for UI display and gets called every frame
   public virtual string DebugText() => $"{controller.effects[a].Name} ({D:0.00}) => {controller.effects[b].Name} ({v:0.00})";
 
-  // Should be called after creation
+  /// <summary>
+  /// Called once after reflection creates the transition instance.
+  /// Put reusable setup here so Blend() is safe before the transition has
+  /// been selected for a real effect-to-effect transition.
+  /// </summary>
   public virtual void Init()
   {
     controller = Controller.Instance;
@@ -84,10 +90,16 @@ public abstract class TransitionBase
       effectTime += effectDelta;
   }
 
-  // Should be called every time an effect is turned on
+  /// <summary>
+  /// Called each time this transition becomes the active effect-to-effect
+  /// transition. Use it for per-run state such as random direction/color.
+  /// </summary>
   public abstract void OnStart();
 
-  // Should be called every time an effect is turned off
+  /// <summary>
+  /// Reserved for future transition deactivation cleanup. The current
+  /// controller does not call OnEnd(); transitions should not rely on it yet.
+  /// </summary>
   public abstract void OnEnd();
 
   // Should be called every frame

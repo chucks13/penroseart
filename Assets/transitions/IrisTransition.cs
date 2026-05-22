@@ -7,17 +7,32 @@ public class IrisTransition : TransitionBase
 
     int direction;
     float diagonalsize;
+
+    public override void Init()
+    {
+        base.Init();
+        CacheGeometry();
+    }
+
     public override void OnStart()
     {
         buffer.Clear();
         direction = Random.Range(0, 2);
+    }
+
+    public override void OnEnd() { }
+
+    /// <summary>
+    /// Cache Penrose bounds once so transition-as-blender usage does not depend
+    /// on a previous transition activation calling OnStart().
+    /// </summary>
+    private void CacheGeometry()
+    {
         var width = (int)controller.penrose.Bounds.size.x.Round();
         var height = (int)controller.penrose.Bounds.size.y.Round();
         Vector2 diagonal = new Vector2(width, height);
         diagonalsize = diagonal.magnitude / 2f;
     }
-
-    public override void OnEnd() { }
 
     public override void Draw()
     {

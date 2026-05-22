@@ -5,17 +5,32 @@ public class DirectionalWipe : TransitionBase
 
   float angle;
   float diagonalsize;
+
+  public override void Init()
+  {
+    base.Init();
+    CacheGeometry();
+  }
+
   public override void OnStart()
   {
     buffer.Clear();
     angle = Random.value * Mathf.PI * 2f;
+  }
+
+  public override void OnEnd() { }
+
+  /// <summary>
+  /// Cache Penrose bounds once so transition-as-blender usage does not depend
+  /// on a previous transition activation calling OnStart().
+  /// </summary>
+  private void CacheGeometry()
+  {
     var width = (int)controller.penrose.Bounds.size.x.Round();
     var height = (int)controller.penrose.Bounds.size.y.Round();
     Vector2 diagonal = new Vector2(width, height);
     diagonalsize = diagonal.magnitude;
   }
-
-  public override void OnEnd() { }
 
   public static Vector2 rotate(Vector2 v, float delta)
   {

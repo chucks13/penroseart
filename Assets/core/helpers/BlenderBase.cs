@@ -4,7 +4,9 @@ using System;
 
 public abstract class BlenderBase
 {
-    public float[] settings;
+    // Defaults to no fader arguments so Blend() implementations can safely use
+    // settings.Length before telnet or other controls provide values.
+    public float[] settings = Array.Empty<float>();
 
     public string Name => GetType().ToString();
     public void setFaders(string[] stringArray)

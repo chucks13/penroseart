@@ -59,7 +59,10 @@ public abstract class EffectBase {
       beatVariant = beatManager.GetRandomVariant();
   }
 
-  // Should be called every time an effect is turned off
+  /// <summary>
+  /// Reserved for future effect deactivation cleanup. The current controller
+  /// does not call OnEnd(); effects should not rely on it yet.
+  /// </summary>
   public abstract void OnEnd();
 
   // Should be called every frame
