@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
+/// <summary>
+/// Reveals destination tiles through a fixed shuffled tile order.
+/// </summary>
 public class FizzleTransition : TransitionBase
 {
     short[] order = null;
@@ -9,7 +12,10 @@ public class FizzleTransition : TransitionBase
     {
         buffer.Clear();
     }
-    public void OnInit()
+    /// <summary>
+  /// Builds the fixed randomized tile reveal order used by this transition instance.
+  /// </summary>
+  public void OnInit()
     {
         if (order == null)
         {
@@ -28,22 +34,34 @@ public class FizzleTransition : TransitionBase
         }
     }
 
-    public FizzleTransition()
+    /// <summary>
+  /// Creates a fizzle transition and initializes its persistent reveal order.
+  /// </summary>
+  public FizzleTransition()
     {
         OnInit();
     }
 
 
-    public override void OnEnd() { }
+      /// <summary>
+  /// Reserved deactivation hook. Controller does not currently call this.
+  /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+      /// <summary>
+  /// Draws source and destination effects and writes the transition frame into buffer.
+  /// </summary>
+public override void Draw()
     {
         controller.effects[A].Draw();
         controller.effects[B].Draw();
         Draw2(buffer, controller.effects[A].buffer, controller.effects[B].buffer, V);
     }
 
-    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2)
+    /// <summary>
+  /// Shared fixed-order reveal implementation for normal transitions and external blending.
+  /// </summary>
+  private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2)
     {
         if (order == null)
             return;
@@ -61,7 +79,10 @@ public class FizzleTransition : TransitionBase
 
     }
 
-    public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+      /// <summary>
+  /// Uses this transition algorithm as an external-source blender.
+  /// </summary>
+public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
         float V2 = 0.5f;
         if (settings.Length > 0)

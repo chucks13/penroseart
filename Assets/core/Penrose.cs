@@ -7,36 +7,50 @@ using System.IO;
 /*
 [System.Serializable]
 public class SavedState
-{ 
+{
 	public string Name;
 	public string SaveToString() { return JsonUtility.ToJson(this); }
 }
 
 [System.Serializable]
-public class MySavedState : SavedState 
+public class MySavedState : SavedState
 {
 	public int[][]Loops;
 	public Color Background;
 }
 */
 
+/// <summary>
+/// Deserialized Penrose geometry, shape, and wiring data loaded from StreamingAssets JSON.
+/// </summary>
 [System.Serializable]
 public class JsonData
 {
+    /// <summary>
+    /// JSON shape-neighbor entry describing a neighboring tile and edge color.
+    /// </summary>
     [System.Serializable]
     public class neighbor
     {
         public int type;
         public int tileIdx;
     }
+
+    /// <summary>
+    /// JSON tile entry containing the source topology for one Penrose tile.
+    /// </summary>
     [System.Serializable]
-    public class tile          
+    public class tile
     {
 //        public int[] triangles;    // triangle indexes
         public int type;            // 0 or 1 for thin or fat
         public int section;
         public neighbor[] neighbors;
     };
+
+    /// <summary>
+    /// Packed named shape collections loaded from Penrose JSON.
+    /// </summary>
     [System.Serializable]
     public class shapelist
     {
@@ -60,6 +74,9 @@ public class JsonData
     public int[] wires;             // 1800 of these, wiring order for rendering
     public shapelist shapes;
 
+    /// <summary>
+    /// Loads and deserializes a Penrose JSON data file from StreamingAssets.
+    /// </summary>
     public static JsonData CreateFromJSON(string fileName)
     {
         var sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName);
@@ -71,6 +88,9 @@ public class JsonData
 
 }
 
+/// <summary>
+/// Unity component that owns the Penrose tile model, generated preview mesh, JSON metadata, and 900-color runtime buffer.
+/// </summary>
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class Penrose : MonoBehaviour {
@@ -107,8 +127,10 @@ public class Penrose : MonoBehaviour {
   private Vector2Int min;
   private Vector2Int max;
 
+  /// <summary>Bounds of the generated Penrose tile layout in Unity/world coordinates.</summary>
   public Bounds Bounds => bounds;
 
+  /// <summary>Runtime metadata for all logical Penrose tiles.</summary>
   public TileData[] Tiles => tiles;
 
     private void Awake() {
@@ -142,6 +164,9 @@ public class Penrose : MonoBehaviour {
 
     }
 
+    /// <summary>
+    /// Writes generated mesh vertex positions to a text file for debugging. Currently returns immediately.
+    /// </summary>
     void dumpVerticies(String path)
     {
         return;
@@ -175,7 +200,10 @@ public class Penrose : MonoBehaviour {
             Console.WriteLine("Executing finally block.");
         }
     }
-    private void GenerateRings()
+    /// <summary>
+  /// Derives ring numbers for each tile from integer tile positions.
+  /// </summary>
+  private void GenerateRings()
     {
         for (int ring=0;ring<10;ring++)
         {
@@ -214,7 +242,10 @@ public class Penrose : MonoBehaviour {
         }
     }
 
-    private void GenerateMesh() {
+    /// <summary>
+  /// Builds the Unity preview mesh from JSON mesh floats, applying scale, gap, and y-axis flip.
+  /// </summary>
+  private void GenerateMesh() {
     var i = 0;
     var j = 0;
         Vector3 reflect = new Vector3(1, -1, 1);
@@ -267,7 +298,10 @@ public class Penrose : MonoBehaviour {
 //    dumpVerticies(Application.streamingAssetsPath + "/" + "mesh.txt");
   }
 
-    private void GenerateTiles()
+    /// <summary>
+  /// Builds runtime TileData objects from JSON topology and generated mesh centers.
+  /// </summary>
+  private void GenerateTiles()
     {
         int ix2 = 0;
         tiles = new TileData[Total];
@@ -313,7 +347,10 @@ public class Penrose : MonoBehaviour {
         }
     }
 
-    private void GenerateBounds() {
+    /// <summary>
+  /// Computes the aggregate Bounds that enclose all generated tile mesh vertices.
+  /// </summary>
+  private void GenerateBounds() {
     // find extents of the tiles
     var maxX = -1000000f;
     var maxY = -1000000f;
@@ -355,6 +392,9 @@ public class Penrose : MonoBehaviour {
         int count = JsonRawData.shapes.loops[countidx];
     }
     */
+  /// <summary>
+  /// Generates mesh, tile metadata, bounds, rings, and background brightness after JSON is loaded.
+  /// </summary>
   public void Init() {
 //    patchLoops();
     GenerateMesh();
@@ -364,6 +404,9 @@ public class Penrose : MonoBehaviour {
     bgBrightness = bgColor.grayscale;
   }
 
+  /// <summary>
+  /// Copies each logical tile color into the six vertex-color slots for that tile.
+  /// </summary>
   private void UpdateVertexColors() {
     // color all the mesh vertices
     var x = 0;
@@ -376,12 +419,18 @@ public class Penrose : MonoBehaviour {
     mesh.colors = colors;
   }
 
+  /// <summary>
+  /// Updates the Unity mesh preview from the current 900-tile buffer.
+  /// </summary>
   public void UpdateModelColors() {
     UpdateVertexColors();
 
     //mesh.RecalculateNormals();
   }
 
+  /// <summary>
+  /// Finds the logical tile index at an integerized Penrose position.
+  /// </summary>
   public int GetIndexFromPosition(Vector2 position) {
     // if we have a correct position already then return the index
     if(centerLookup.ContainsKey(position)) return centerLookup[position];
@@ -404,18 +453,27 @@ public class Penrose : MonoBehaviour {
     return centerLookup[centers[idx]];
   }
 
+  /// <summary>
+  /// Blends a tile color toward the configured background based on color brightness.
+  /// </summary>
   private Color FadeColorToBgColor(Color color) {
     return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness);
   }
 
     [System.Serializable]
-    public class neighbor
+    /// <summary>
+/// JSON shape-neighbor entry describing a neighboring tile and edge color.
+/// </summary>
+public class neighbor
     {
         public int type;
         public int tileIdx;
     }
     [Serializable]
-  public class TileData {
+  /// <summary>
+/// Runtime tile metadata derived from JSON and used by effects for geometry, topology, and grouping.
+/// </summary>
+public class TileData {
     public Vector2 center;
     public Vector2Int position;
     public neighbor[] neighbors;
@@ -426,6 +484,9 @@ public class Penrose : MonoBehaviour {
     public float radius;
     public float angle;
 
+    /// <summary>
+    /// Returns a random valid neighbor tile index, retrying until a non-negative neighbor is found.
+    /// </summary>
     public int GetRandomNeighbor() {
        return neighbors[Random.Range(0, neighbors.Length)].tileIdx;
     }

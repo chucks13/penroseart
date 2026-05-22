@@ -1,12 +1,24 @@
 ﻿using UnityEngine;
+/// <summary>
+/// Wipes by raw tile index order rather than geometric position.
+/// </summary>
 public class IndexWipe : TransitionBase
 {
 
-  public override void OnStart() { buffer.Clear(); }
+    /// <summary>
+  /// Initializes per-run transition state before effect-to-effect blending begins.
+  /// </summary>
+public override void OnStart() { buffer.Clear(); }
 
-  public override void OnEnd() { }
+    /// <summary>
+  /// Reserved deactivation hook. Controller does not currently call this.
+  /// </summary>
+public override void OnEnd() { }
 
-  public override void Draw()
+    /// <summary>
+  /// Draws source and destination effects and writes the transition frame into buffer.
+  /// </summary>
+public override void Draw()
   {
     controller.effects[A].Draw();
     controller.effects[B].Draw();
@@ -14,6 +26,9 @@ public class IndexWipe : TransitionBase
 
   }
 
+  /// <summary>
+  /// Shared raw-index wipe implementation for normal transitions and external blending.
+  /// </summary>
   private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2)
   {
     var total = (int)(Penrose.Total * V2);
@@ -28,7 +43,10 @@ public class IndexWipe : TransitionBase
       dest[j] = src2[j];
     }
   }
-  public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+    /// <summary>
+  /// Uses this transition algorithm as an external-source blender.
+  /// </summary>
+public override void Blend(Color[] dest, Color[] src1, Color[] src2)
   {
     //        OnInit();
     float V2 = 0.5f;

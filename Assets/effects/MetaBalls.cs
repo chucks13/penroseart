@@ -2,20 +2,32 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Renders a screen-space metaball field and maps it onto Penrose tiles.
+/// </summary>
 public class MetaBalls : ScreenEffect {
   private Ball[] balls;
   private Vector2 screen;
   private int total = 8;
   private float radius = 1f;
 
-  public override void Init()
+      /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
   {
     base.Init();
   }
 
-  public override string DebugText() { return$""; }
+      /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() { return$""; }
 
-  public override void OnStart() {
+      /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart() {
     base.OnStart();
     // Randomize logic was commented out in original class
 
@@ -23,9 +35,16 @@ public class MetaBalls : ScreenEffect {
     for(int i = 0; i < balls.Length; i++) { balls[i] = new Ball(); }
   }
 
-  public override void OnEnd() { }
+      /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-  public override void Draw() {
+      /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw() {
+    // Beat pulse scales metaball color output for this frame.
     float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
 
     buffer.Fade();
@@ -50,17 +69,27 @@ public class MetaBalls : ScreenEffect {
     ConvertScreenBuffer(ref screenBuffer, in buffer);
   }
 
-  public class Ball {
+  /// <summary>
+/// Moving screen-space metaball source.
+/// </summary>
+public class Ball {
     private Vector2 position;
     private Vector2 velocity;
 
+    /// <summary>
+    /// Creates one moving metaball source at a random screen position.
+    /// </summary>
     public Ball() {
       velocity = new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f)) / 60f;
       position = new Vector2(Random.Range(0, width), Random.Range(0, height));
     }
 
+    /// <summary>Current screen-space metaball center.</summary>
     public Vector2 Position => position;
 
+    /// <summary>
+    /// Advances metaball position and bounces it inside the screen bounds.
+    /// </summary>
     public void Update(float time) {
       position += time * velocity;
       if(position.x < 5f || position.x > width - 5f) velocity.x *= -1;

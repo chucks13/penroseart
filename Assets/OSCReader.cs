@@ -15,6 +15,9 @@ using System.Text;
 using UnityEngine;
 
 
+/// <summary>
+/// UDP transport wrapper used by OSCReader to send and receive raw OSC packets.
+/// </summary>
 public class UDPPacketIO
 {
     private UdpClient Sender;
@@ -26,6 +29,9 @@ public class UDPPacketIO
 
 
 
+    /// <summary>
+    /// Creates a UDP packet transport with remote send endpoint and local receive port.
+    /// </summary>
     public UDPPacketIO(string hostIP, int remotePort, int localPort)
     {
         RemoteHostName = hostIP;
@@ -35,6 +41,9 @@ public class UDPPacketIO
     }
 
 
+    /// <summary>
+    /// Finalizer fallback that closes open UDP sockets.
+    /// </summary>
     ~UDPPacketIO()
     {
         // latest time for this socket to be closed
@@ -93,6 +102,9 @@ public class UDPPacketIO
 
     }
 
+    /// <summary>
+    /// Unity-style shutdown hook that closes sockets.
+    /// </summary>
     public void OnDisable()
     {
         Close();
@@ -194,6 +206,9 @@ public class UDPPacketIO
 }
 
 
+/// <summary>
+/// Active Unity OSC component for PenroseArt. Receives OSC packets on a background thread and dispatches parsed messages during Update().
+/// </summary>
 public class OSCReader : MonoBehaviour
 {
     public int inPort = 6969;
@@ -215,6 +230,9 @@ public class OSCReader : MonoBehaviour
 
     bool paused = false;
 
+    /// <summary>
+    /// Opens OSC UDP transport and starts the background reader thread.
+    /// </summary>
     void Awake()
     {
         //print("Opening OSC listener on port " + inPort);
@@ -239,11 +257,17 @@ public class OSCReader : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Closes OSC transport when the component is destroyed.
+    /// </summary>
     void OnDestroy()
     {
         Close();
     }
 
+    /// <summary>
+    /// Closes OSC transport when the application pauses.
+    /// </summary>
     void OnApplicationPause(bool pauseStatus)
     {
 //#if !UNITY_EDITOR
@@ -253,6 +277,9 @@ public class OSCReader : MonoBehaviour
     }
 
 
+    /// <summary>
+    /// Dispatches queued OSC messages on Unity's main thread.
+    /// </summary>
     void Update()
     {
 

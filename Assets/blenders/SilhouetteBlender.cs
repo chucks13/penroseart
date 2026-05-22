@@ -3,6 +3,9 @@ using UnityEngine;
 /// <summary>
 /// Performs a linear interpolation between two color arrays using a single fade value from ACN data.
 /// </summary>
+/// <summary>
+/// Blends non-black external pixels over the native buffer while treating exact black as transparent.
+/// </summary>
 public class SilhouetteBlender : BlenderBase
 {
     public override string Usage()
@@ -10,6 +13,9 @@ public class SilhouetteBlender : BlenderBase
         return "[fade]";
     }
 
+    /// <summary>
+    /// Keeps src1 where src2 is exact black; otherwise fades from src1 toward src2 using settings[0].
+    /// </summary>
     public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
         if (settings.Length > 0)

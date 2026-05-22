@@ -3,6 +3,9 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 
+/// <summary>
+/// Renders a direct tile-space tunnel from radius, density, and time.
+/// </summary>
 public class Tunnel : ScreenEffect
 {
 
@@ -10,7 +13,10 @@ public class Tunnel : ScreenEffect
     private float speed;
     private float mix;
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         density = Random.Range(0.0004f, 0.003f);
@@ -19,9 +25,15 @@ public class Tunnel : ScreenEffect
         buffer.Clear();
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override string DebugText()
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText()
     {
         return $"Density: {density}\n" +
         $"Speed: {speed}\n" +
@@ -32,8 +44,12 @@ public class Tunnel : ScreenEffect
         base.Init();
     }
   
+    /// <summary>
+    /// Renders one frame of radial tunnel bands directly into the tile buffer.
+    /// </summary>
     public override void Draw()
     {
+        // Beat pulse scales tunnel brightness without changing the tunnel phase.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         for (int i = 0; i <  Penrose.Total; i++)
         {

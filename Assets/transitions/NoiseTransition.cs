@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
+/// <summary>
+/// Perlin-threshold transition with a colored border band.
+/// </summary>
 public class NoiseTransition : TransitionBase
 {
     private Color border;
@@ -12,16 +15,25 @@ public class NoiseTransition : TransitionBase
         border = Color.HSVToRGB(Random.value, 1, 1);
     }
 
-    public override void OnEnd() { }
+      /// <summary>
+  /// Reserved deactivation hook. Controller does not currently call this.
+  /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+      /// <summary>
+  /// Draws source and destination effects and writes the transition frame into buffer.
+  /// </summary>
+public override void Draw()
     {
         controller.effects[A].Draw();
         controller.effects[B].Draw();
         Draw2(buffer, controller.effects[A].buffer, controller.effects[B].buffer, V, border);
     }
 
-    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, Color brd)
+    /// <summary>
+  /// Shared Perlin-threshold implementation for normal transitions and external blending.
+  /// </summary>
+  private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, Color brd)
     {
         float v2 = V2.Map(0f, 1f, -1.1f, 1.1f);
 
@@ -44,7 +56,10 @@ public class NoiseTransition : TransitionBase
         }
     }
 
-    public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+      /// <summary>
+  /// Uses this transition algorithm as an external-source blender.
+  /// </summary>
+public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
         float V2 = 0.5f;
         Color brd = Color.HSVToRGB(0, 1, 1);
@@ -55,7 +70,10 @@ public class NoiseTransition : TransitionBase
 
         Draw2(dest, src1, src2, V2, brd);
     }
-    public override string Usage()
+      /// <summary>
+  /// Returns the external-blender fader argument format for this transition.
+  /// </summary>
+public override string Usage()
     {
         return "[ratio] [borderHue]";
     }

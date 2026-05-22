@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Wraps one child effect and mirrors its buffer through Penrose mirror shape groups.
+/// </summary>
 public class Mirror : MixerBase
 {
 
@@ -9,7 +12,10 @@ public class Mirror : MixerBase
     private int[] mirrorList;
     private int[] centerline;
 
-    public override string DebugText()
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText()
     {
         var debugText = string.Empty;
         debugText +=  $"{sourceEffect.Name}";
@@ -51,6 +57,9 @@ public class Mirror : MixerBase
                 centerline[y++] = x;
         }
     }
+    /// <summary>
+    /// Patches centerline tiles omitted by mirror shape data before mirror replication.
+    /// </summary>
     private void fixCenterLineDraw()
     {
         for (int i = 0; i < centerline.Length; i++)
@@ -62,12 +71,18 @@ public class Mirror : MixerBase
     }
 
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
@@ -78,15 +93,22 @@ public class Mirror : MixerBase
         sourceEffect.Init();
         sourceEffect.RandomizeTime();
         sourceEffect.OnStart();
-        sourceEffect.beatVariant = this.beatVariant; // Unified: child pulses with the mirror
+        // Mirror is a wrapper, so the child uses the same beat variant as the parent.
+        sourceEffect.beatVariant = this.beatVariant;
         debugText += $"{sourceEffect.Name}";
 
         controller.debugText.text = debugText;
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
         sourceEffect.UpdateTime();
         sourceEffect.Draw();

@@ -1,6 +1,9 @@
 ﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
+/// <summary>
+/// Alternates two colors across tile types with a ping-pong time curve.
+/// </summary>
 public class Pulse : EffectBase {
 
   private Color startColor;
@@ -9,15 +12,24 @@ public class Pulse : EffectBase {
   private Color color;
   private float colorDelta;
 
-  public override string DebugText() {
+      /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() {
     return $"Start: {startColor}\nEnd: {endColor}\nTime: {seconds}";
   }
 
-  public override void Init() {
+      /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init() {
     base.Init();
   }
 
-  public override void OnStart() {
+      /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart() {
     base.OnStart();
     color   = Color.HSVToRGB(Random.value, 1f, 1f);
     seconds = Random.Range(1f, 5f);
@@ -27,9 +39,15 @@ public class Pulse : EffectBase {
     endColor = startColor.Delta(colorDelta);
   }
 
-  public override void OnEnd() {  }
+      /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() {  }
 
-  public override void Draw() {
+      /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw() {
     var t = Mathf.InverseLerp(0f, seconds, Mathf.PingPong(effectTime, seconds));
 
     var color1 = Color.Lerp(color, endColor, t);

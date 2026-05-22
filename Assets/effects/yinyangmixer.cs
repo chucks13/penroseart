@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Splits two child effects into rotating yin-yang-like angular regions.
+/// </summary>
 public class yinyangmixer : MixerBase
 {
 
@@ -10,7 +13,10 @@ public class yinyangmixer : MixerBase
     float spin;
     float drift;
 
-    public override string DebugText()
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText()
     {
         var debugText = string.Empty;
         for (var i = 0; i < 2; i++)
@@ -21,13 +27,19 @@ public class yinyangmixer : MixerBase
         return debugText;
     }
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         effects = new EffectBase[2];
@@ -38,6 +50,7 @@ public class yinyangmixer : MixerBase
             effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
+            // The parent applies one shared beat pulse after splitting child buffers.
             effects[i].beatEnable = false;
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
         }
@@ -48,9 +61,15 @@ public class yinyangmixer : MixerBase
         drift *= (Random.value < 0.5) ? -1f : 1f;
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
 
         yina += spin * effectDelta * 60f ;
@@ -59,6 +78,7 @@ public class yinyangmixer : MixerBase
             effects[i].UpdateTime();
             effects[i].Draw();
         }
+        // Parent beat pulse scales the final split/masked child-effect output.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         Color ribbon = APalette.read(0.5f, true) * beatBrightness;
 

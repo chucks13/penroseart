@@ -7,6 +7,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
+/// <summary>
+/// USB serial output manager for discovering S2 Mini / ESP32 LED boards and sending mapped RGB frame packets.
+/// </summary>
 public class SerialOut
 {
     private class S2MiniBoard
@@ -50,6 +53,9 @@ public class SerialOut
     private const byte ACK_BYTE  = 0x06;
     private const byte NACK_BYTE = 0x15;
 
+    /// <summary>
+    /// Starts serial board discovery. The current implementation uses the class target baud rate.
+    /// </summary>
     public void Init(int baudRate)
     {
         // 2,000,000 baud is required for 900 pixels @ 60fps (~1.6Mbps raw data)
@@ -58,6 +64,9 @@ public class SerialOut
         DiscoverBoards();
     }
 
+    /// <summary>
+    /// Clears discovered/ignored/connecting board state and restarts port discovery.
+    /// </summary>
     public void ResetDiscovery()
     {
         ignoredPorts.Clear();
@@ -65,6 +74,9 @@ public class SerialOut
         Debug.Log("[SerialOut] Discovery reset. Re-scanning all ports...");
     }
 
+    /// <summary>
+    /// Scans available serial ports and starts asynchronous handshake attempts for new candidates.
+    /// </summary>
     private void DiscoverBoards()
     {
         string[] ports = SerialPort.GetPortNames();
@@ -103,6 +115,9 @@ public class SerialOut
         }
     }
 
+    /// <summary>
+    /// Opens one serial port, sends the query command, and records the board range if the S2 Mini handshake succeeds.
+    /// </summary>
     private async Task TryConnectBoardAsync(string portName)
     {
         connectingPorts.Add(portName);
@@ -202,6 +217,9 @@ public class SerialOut
         }
     }
 
+    /// <summary>
+    /// Attempts to reopen a failed board port and restore its output thread state.
+    /// </summary>
     private bool AttemptRecovery(S2MiniBoard board)
     {
         try
@@ -218,6 +236,9 @@ public class SerialOut
         catch { return false; }
     }
 
+    /// <summary>
+    /// Dedicated per-board output loop that waits for frame data and writes serial packets.
+    /// </summary>
     private void BoardIOThreadLoop(S2MiniBoard board)
     {
         while (threadsRunning && board.IsReady)
@@ -262,6 +283,9 @@ public class SerialOut
         }
     }
 
+    /// <summary>
+    /// Copies the expanded physical LED frame into each active board buffer and signals board output threads.
+    /// </summary>
     public void send(Color[] data, byte level)
     {
         // Handle Hot-Plugging Discovery - Only scan if no boards are active or every 5s

@@ -20,116 +20,285 @@ using System.Net.NetworkInformation;
 
 // git connection test 4/29/2026
 
+/// <summary>
+/// Main Unity-hosted runtime hub for PenroseArt. Owns catalogs, timing, input routing, output routing, overlays, and preview updates.
+/// </summary>
+/// <remarks>
+/// Most visual runtime objects are plain C# classes, not MonoBehaviours. Controller is responsible for creating them and calling their lifecycle hooks.
+/// </remarks>
 public class Controller : Singleton<Controller>
 {
+    // ---------------------------------------------------------------------
+    // Runtime catalogs and selection decks
+    // ---------------------------------------------------------------------
 
+    /// <summary>
+    /// Rotating deck of indexes into <see cref="effects"/>. A card is drawn
+    /// from the top half and moved to the bottom to reduce immediate repeats.
+    /// </summary>
     [HideInInspector]
     public int[] effectDeck;
+
+    /// <summary>
+    /// Rotating deck of indexes into <see cref="transitions"/> using the same
+    /// anti-repeat draw behavior as <see cref="effectDeck"/>.
+    /// </summary>
     [HideInInspector]
     public int[] transitionDeck;
+
+    /// <summary>
+    /// External pixel-source blenders discovered by <see cref="Factory{T}"/>.
+    /// </summary>
     public BlenderBase[] blenders;
 
+    /// <summary>
+    /// Optional active external-source blender selected by telnet/debug paths.
+    /// When set, incoming PixelReceiver data is blended with the native buffer.
+    /// </summary>
     public BlenderBase ActiveBlender = null;
+
+    /// <summary>
+    /// Optional transition reused as an external-source blender. This is separate
+    /// from normal effect-to-effect transition playback.
+    /// </summary>
     public TransitionBase ActiveTransitionBlender = null;
+
 #if ENABLE_TELNET
+    /// <summary>Optional telnet command server, compiled only with ENABLE_TELNET.</summary>
     public TelnetServer server;
 #endif
 
+    /// <summary>
+    /// Scratch buffer for external pixel-source data before it is blended or
+    /// copied into <see cref="penrose"/>.<see cref="Penrose.buffer"/>.
+    /// </summary>
     [HideInInspector]
     public Color[] blendBuffer = new Color[Penrose.Total];
 
+    /// <summary>
+    /// New Year's Eve overlay mode: replaces the effect pipeline with random
+    /// sparse white pixels on black.
+    /// </summary>
     public bool NYE = false;
 
 #if PREP_CAPTURE
+    /// <summary>PREP_CAPTURE dummy input toggle for local blend-source testing.</summary>
     public bool dummyActive = false;
 #endif
+
+    // ---------------------------------------------------------------------
+    // Display scheduling, brightness, and legacy filter controls
+    // ---------------------------------------------------------------------
+
+    /// <summary>Accumulator used by PREP_CAPTURE display scheduling.</summary>
     private float secondsAccululator = 0f;
+
+    /// <summary>Hue-window scale used by <see cref="applyFilter"/>.</summary>
     public float FilterScale = 0.03f;
+
+    /// <summary>Seconds remaining for the optional filter mode.</summary>
     public float FilterTimer = 0f;
+
+    /// <summary>Wall-clock HHMM minute at which PREP_CAPTURE display scheduling turns output on.</summary>
     public float onMinute = 1700;
+
+    /// <summary>Wall-clock HHMM minute at which PREP_CAPTURE display scheduling turns output off.</summary>
     public float offMinute = 200;
+
+    /// <summary>UI input field for the UDP/E1.31 destination IP.</summary>
     public InputField destIP;
+
+    /// <summary>UI input field for <see cref="onMinute"/>.</summary>
     public InputField onTime;
+
+    /// <summary>UI input field for <see cref="offMinute"/>.</summary>
     public InputField offTime;
+
+    /// <summary>UI toggle for <see cref="displayOn"/>.</summary>
     public Toggle onToggle;
+
+    /// <summary>Whether <see cref="applyFilter"/> should hue-clamp the current frame.</summary>
     public bool FilterMode = false;
+
+    /// <summary>Master output gate. When false, output brightness is forced to zero.</summary>
     public bool displayOn = true;
+
+    // ---------------------------------------------------------------------
+    // Hardware output state
+    // ---------------------------------------------------------------------
+
     [Header("UDP")]
+    /// <summary>Destination IP for the legacy UDP/E1.31 output path.</summary>
     public string IP;
+
+    /// <summary>Master output brightness multiplier, 0-255.</summary>
     public byte brightness;
-    int port = 5568;      // default e131 port
+
+    /// <summary>Default E1.31/ACN UDP port.</summary>
+    int port = 5568;
+
+    /// <summary>Unused/static local port placeholder retained by the UDP setup code.</summary>
     private static int localPort;
+
+    /// <summary>Destination endpoint for the legacy UDP/E1.31 output path.</summary>
     IPEndPoint remoteEndPoint;
+
+    /// <summary>UDP client used by E1.31 output and PREP_CAPTURE pixel feedback.</summary>
     UdpClient client;
+
 #if ENABLE_SERIAL
+    /// <summary>
+    /// Physical LED output buffer after expanding 900 logical Penrose tiles
+    /// through the 1800-entry wire map.
+    /// </summary>
     private Color[] serialOutputBuffer = new Color[1800];
+
+    /// <summary>USB serial transport manager for S2 Mini / ESP32 boards.</summary>
     private SerialOut serial;
 #endif
+
+    /// <summary>Optional webcam overlay source, created only when <see cref="useCamera"/> is true.</summary>
     public CameraReader cameraOverlay;
+
+    // ---------------------------------------------------------------------
+    // Effect forcing and playback state
+    // ---------------------------------------------------------------------
 
     [Header("Nova Testing Technique")]
     [Tooltip("If true, immediately stops transitions and locks playback to the named effect below.")]
     public bool forceEffect = false;
+
     [Tooltip("If not empty, matches the effect name substring used by the live force override.")]
     public string forceEffectName = "";
 
+    /// <summary>Whether to create and draw the optional camera overlay.</summary>
     public bool useCamera;
 
     [Header("Effect Switching")]
+    /// <summary>
+    /// Serialized legacy field for an initial effect index. Current startup uses
+    /// the effect deck / force override instead, so this is not actively read.
+    /// </summary>
     public int startEffect;
 
+    /// <summary>
+    /// Index into <see cref="effects"/> for the currently playing effect. Set to
+    /// -1 while an effect-to-effect transition is active.
+    /// </summary>
     private int currentEffect;
+
+    /// <summary>Keyboard bank: A-W select effects 0-22 or 23-45 depending on this value.</summary>
     private int keyboardBase = 0;
 
+    /// <summary>Seconds to play an effect before starting the next transition.</summary>
     public float effectTime = 10f;
 
     [Header("Transition Switching")]
+    /// <summary>
+    /// Serialized legacy toggle from the older random-transition path. Current
+    /// code always uses <see cref="transitionDeck"/> selection after startup.
+    /// </summary>
     public bool randomTransition = true;
+
+    /// <summary>
+    /// Index into <see cref="transitions"/> for the active or next transition.
+    /// The scene-serialized value controls the first transition before deck
+    /// selection takes over.
+    /// </summary>
     public int currentTransition;
 
+    /// <summary>Seconds for each effect-to-effect transition.</summary>
     public float transitionTime = 2f;
 
+    // ---------------------------------------------------------------------
+    // Scene-provided source data and helper systems
+    // ---------------------------------------------------------------------
+
+    /// <summary>Serialized palette definitions consumed by <see cref="AnimPalette"/>.</summary>
     public string paletteSource;
+
+    /// <summary>Serialized Penrose geometry/wiring JSON consumed by <see cref="Penrose"/>.</summary>
     public string jsonSource;
 
+    /// <summary>Drum/ring overlay system drawn after the main effect/transition.</summary>
     public drums drum;
+
+    /// <summary>External UDP pixel-source receiver used for optional blending/replacement.</summary>
     public PixelReceiver readPixel;
+
+    /// <summary>Global beat clock and beat-reactive helper system.</summary>
     public BeatManager beatManager = new BeatManager();
 
+    // ---------------------------------------------------------------------
+    // UI and scene references
+    // ---------------------------------------------------------------------
+
     [Header("GUI")]
+    /// <summary>UI label showing the active effect or transition name.</summary>
     public TextMeshProUGUI effectText;
+
+    /// <summary>UI label showing effect debug text, OSC text, FPS, and serial state.</summary>
     public TextMeshProUGUI debugText;
+
+    /// <summary>UI label listing local IPv4 addresses.</summary>
     public TextMeshProUGUI myIPText;
     //  public TextMeshProUGUI myBrightnessText;
 
-
+    /// <summary>Runtime catalog of top-level effects created by <see cref="SetupEffects"/>.</summary>
     [HideInInspector]
     public EffectBase[] effects;
 
+    /// <summary>Runtime catalog of transitions created by <see cref="SetupTransitions"/>.</summary>
     [HideInInspector]
     public TransitionBase[] transitions;
 
+    /// <summary>Scene Penrose model and preview mesh component.</summary>
     [HideInInspector]
     public Penrose penrose;
 
+    /// <summary>Effect/transition phase timer. Its finish event drives <see cref="OnTimerFinished"/>.</summary>
     [HideInInspector]
     public Timer timer;
 
+    // ---------------------------------------------------------------------
+    // OSC, frame timing, and private frame state
+    // ---------------------------------------------------------------------
+
+    /// <summary>Runtime OSC reader component added to the Controller GameObject.</summary>
     private OSCReader osc;
+
+    /// <summary>Frames remaining before the latest OSC debug text is cleared.</summary>
     private int OSCtimer;
+
+    /// <summary>Latest OSC message text shown temporarily in the debug label.</summary>
     private String OSCtext;
 
+    /// <summary>Reusable byte buffer for legacy UDP/E1.31 frame packets.</summary>
     private byte[] udpFrameBuffer;
+
+    /// <summary>Whether the controller is currently drawing a transition instead of a single effect.</summary>
     private bool inTransition;
+
 #if PREP_CAPTURE
+    /// <summary>Local time accumulator for PREP_CAPTURE dummy signal generation.</summary>
     public float diagnosticTime;
 #endif
+
+    /// <summary>Last frame delta time stored for effects/helpers that read Controller state directly.</summary>
     public float effectDelta;
 
+    /// <summary>Approximate frames per second, sampled once per second by <see cref="Fps"/>.</summary>
     private float fps;
+
+    /// <summary>Last sampled Time.frameCount used to calculate <see cref="fps"/>.</summary>
     private float lastCount;
+
+    /// <summary>Current effect-button index used to stream OSC button state over repeated pings.</summary>
     private int pingIndex;
 
+    /// <summary>
+    /// Samples frame count once per second for the debug display.
+    /// </summary>
     private IEnumerator Fps()
     {
         while (true)
@@ -140,6 +309,9 @@ public class Controller : Singleton<Controller>
         }
     }
 
+    /// <summary>
+    /// Creates an ordered deck of catalog indexes from 0 to count - 1.
+    /// </summary>
     private int[] initDeck(int count)
     {
         int[] deck = new int[count];
@@ -147,6 +319,10 @@ public class Controller : Singleton<Controller>
             deck[i] = i;
         return deck;
     }
+    /// <summary>
+    /// Draws a random entry from the top half of a deck, shifts the deck up,
+    /// and moves the drawn card to the bottom to reduce immediate repeats.
+    /// </summary>
     private int pullCard(int[] deck)
     {
         int length = deck.Length;
@@ -158,6 +334,9 @@ public class Controller : Singleton<Controller>
         return result;
     }
 
+    /// <summary>
+    /// Formats catalog names with stable numeric indexes for startup logs.
+    /// </summary>
     private static string FormatCatalog(string[] names)
     {
         StringBuilder builder = new StringBuilder();
@@ -174,6 +353,10 @@ public class Controller : Singleton<Controller>
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Builds the top-level effect catalog, initializes every effect once,
+    /// creates the effect deck, and starts the first selected effect.
+    /// </summary>
     private void SetupEffects()
     {
         var factory = new Factory<EffectBase>();
@@ -200,6 +383,11 @@ public class Controller : Singleton<Controller>
 
     }
 
+    /// <summary>
+    /// E1.31/ACN packet template used by the legacy UDP output path.
+    /// Runtime fields such as packet lengths, sender UUID, sequence, universe,
+    /// and payload size are patched before each universe is sent.
+    /// </summary>
     byte[] acnheader = {
         // root layer
     0x00,0x10,     // (0-1) preamble size
@@ -230,11 +418,17 @@ public class Controller : Singleton<Controller>
     0x00,       // (125)  DMX slot 0
     };
 
+    /// <summary>Sender UUID written into the ACN packet template during UDP setup.</summary>
     Guid g;
+
+    /// <summary>Legacy UDP/E1.31 frame sequence byte, incremented after each frame.</summary>
     byte sequence = 0;
 
 
 
+    /// <summary>
+    /// Returns the IPv4 addresses visible on this host for display/debug output.
+    /// </summary>
     public string GetLocalIPv4()
     {
         string addresses = "";
@@ -250,6 +444,9 @@ public class Controller : Singleton<Controller>
     }
 
 
+    /// <summary>
+    /// Prepares the legacy UDP/E1.31 output endpoint and fills the ACN sender UUID.
+    /// </summary>
     private void setupUDP(string address)
     {
 
@@ -262,6 +459,9 @@ public class Controller : Singleton<Controller>
             acnheader[i + 22] = uuid[i];
     }
 
+    /// <summary>
+    /// Sends one E1.31/ACN universe payload from the packed UDP frame buffer.
+    /// </summary>
     private async Task sendACN(int universe, byte[] data, int start, int length)
     {
         int fullLength = acnheader.Length + length;
@@ -296,6 +496,9 @@ public class Controller : Singleton<Controller>
         await client.SendAsync(sending, fullLength, remoteEndPoint);
     }
 
+    /// <summary>
+    /// Sends the current 900-tile frame to the local PREP_CAPTURE pixel feedback port in chunked RGB packets.
+    /// </summary>
     private void SendPixelData(Color[] data, byte seq)
     {
         const ushort headerSize = 6;
@@ -343,6 +546,9 @@ public class Controller : Singleton<Controller>
             byteOffset += thisDataSize;
         }
     }
+    /// <summary>
+    /// Legacy output path: expands 900 logical tile colors through the 1800-entry wire map and sends E1.31/ACN UDP packets.
+    /// </summary>
     private void sendUDPFrame(Color[] data)
     {
 #if PREP_CAPTURE
@@ -379,6 +585,9 @@ public class Controller : Singleton<Controller>
     }
 
 #if ENABLE_SERIAL
+    /// <summary>
+    /// Active hardware output path: expands 900 logical tile colors through the 1800-entry wire map and sends them over SerialOut.
+    /// </summary>
     private void sendSerialFrame(Color[] data)
     {
         byte level = brightness;
@@ -399,6 +608,9 @@ public class Controller : Singleton<Controller>
     }
 #endif
 
+    /// <summary>
+    /// Builds and initializes the transition catalog. Transitions are activated later when the state machine enters transition playback.
+    /// </summary>
     private void SetupTransitions()
     {
         var factory = new Factory<TransitionBase>();
@@ -415,6 +627,9 @@ public class Controller : Singleton<Controller>
         // effect-to-effect transition. Startup should only build the catalog.
         Debug.Log($"Transitions ({transitions.Length}):\n{FormatCatalog(factory.Names)}");
     }
+    /// <summary>
+    /// Builds the external-source blender catalog. Blenders have no Init or OnStart lifecycle hook.
+    /// </summary>
     private void SetupBlenders()
     {
         var factory = new Factory<BlenderBase>();
@@ -431,6 +646,9 @@ public class Controller : Singleton<Controller>
 
     }
 
+    /// <summary>
+    /// Cancels transition playback and immediately starts the effect at the requested catalog index.
+    /// </summary>
     public void JumpToEffect(int i, float time)
     {
         if (i < 0) return;
@@ -447,6 +665,9 @@ public class Controller : Singleton<Controller>
         // turn on the button
     }
 
+    /// <summary>
+    /// Resolves the live force-effect override to an effect catalog index by case-insensitive substring match.
+    /// </summary>
     private bool TryGetForcedEffectIndex(out int effectIndex)
     {
         effectIndex = -1;
@@ -465,6 +686,9 @@ public class Controller : Singleton<Controller>
         return false;
     }
 
+    /// <summary>
+    /// Applies the live force-effect override during Update, cancelling transitions when needed.
+    /// </summary>
     private void ApplyForceEffectOverride()
     {
         if (!forceEffect)
@@ -481,6 +705,9 @@ public class Controller : Singleton<Controller>
         }
 
     }
+    /// <summary>
+    /// Handles page-1 OSC controls for brightness, effect jumps, and runtime UI feedback.
+    /// </summary>
     public void OSCpage1(OscMessage om, ArrayList oms)
     {
         if (om.address == "/1/vscroll1")       // brightness
@@ -541,6 +768,9 @@ public class Controller : Singleton<Controller>
     }
 
 
+    /// <summary>
+    /// Root OSC router called by OSCReader for every received message.
+    /// </summary>
     public void OscHandler(OscMessage om)
     {
         if (om.address == "/beat")
@@ -556,6 +786,9 @@ public class Controller : Singleton<Controller>
         if (oms.Count > 0)                      // send any replies
             osc.Send(oms);
     }
+    /// <summary>
+    /// Creates a single-float OSC message for replies to the control surface.
+    /// </summary>
     public OscMessage makemessage(string address, float value)
     {
         OscMessage message = new OscMessage();
@@ -564,6 +797,9 @@ public class Controller : Singleton<Controller>
         return message;
     }
 
+    /// <summary>
+    /// Applies a new legacy UDP/E1.31 destination address, reporting parse/setup failures to the Unity log.
+    /// </summary>
     private void setIP(string address)
     {
         try
@@ -578,15 +814,22 @@ public class Controller : Singleton<Controller>
         }
     }
 
+    /// <summary>Updates the scheduled display-on minute from the UI field.</summary>
     private void onTimeEndEditCallback(string input) { onMinute = int.Parse(input); }
+    /// <summary>Updates the scheduled display-off minute from the UI field.</summary>
     private void offTimeEndEditCallback(string input) { offMinute = int.Parse(input); }
+    /// <summary>Updates the legacy UDP/E1.31 destination IP from the UI field.</summary>
     private void destIPEndEditCallback(string input)
     {
         IP = input;
         setIP(IP);
     }
+    /// <summary>Updates the master display gate from the UI toggle.</summary>
     private void displayOnChange(bool isOn) { displayOn = isOn; }
 
+    /// <summary>
+    /// Sends periodic OSC state updates back to the control surface.
+    /// </summary>
     public void OSCping()
     {
         ArrayList oms = new ArrayList();        // make a list of replies
@@ -599,6 +842,9 @@ public class Controller : Singleton<Controller>
             osc.Send(oms);
     }
 
+    /// <summary>
+    /// Parses the small JSON-like response used by the PREP_CAPTURE wall status endpoint.
+    /// </summary>
     void parseResponce(string data)
     {
         String vname = "";
@@ -650,6 +896,9 @@ public class Controller : Singleton<Controller>
             }
         }
     }
+    /// <summary>
+    /// Posts PREP_CAPTURE wall state to the remote status endpoint and applies the returned state.
+    /// </summary>
     IEnumerator PostRequest(string url, string json)
     {
         var request = new UnityWebRequest(url, "POST");
@@ -670,6 +919,9 @@ public class Controller : Singleton<Controller>
         }
     }
 
+    /// <summary>
+    /// Updates display/filter timers and, when PREP_CAPTURE is enabled, synchronizes wall state with the remote status endpoint.
+    /// </summary>
     private void checkTime()
     {
         secondsAccululator += Time.deltaTime;
@@ -710,30 +962,47 @@ public class Controller : Singleton<Controller>
 #endif
     }
 
+    /// <summary>
+    /// Unity startup hook. Initializes the scene model, runtime catalogs, input systems, overlays, timer, and active hardware output.
+    /// </summary>
     void Start()
     {
+        // Unity/application setup.
         Application.targetFrameRate = 60;
         OSCtimer = 0;
 
+        // The Penrose scene object owns JSON-derived geometry, tile metadata,
+        // bounds, mesh generation, and the preview color buffer. Effects must
+        // not be initialized until this completes because EffectBase.Init()
+        // caches penrose.Tiles.
         penrose = GameObject.FindObjectOfType<Penrose>();
         penrose.Init();
 
+        // Seed the on-screen configuration controls from serialized fields.
         myIPText.text = GetLocalIPv4();
         onTime.text = onMinute.ToString();
         offTime.text = offMinute.ToString();
         destIP.text = IP;
         onToggle.isOn = displayOn;
 
+        // UI callbacks update the serialized/runtime fields directly. The IP
+        // callback also rebuilds the legacy UDP endpoint.
         onTime.onEndEdit.AddListener(onTimeEndEditCallback);
         offTime.onEndEdit.AddListener(offTimeEndEditCallback);
         destIP.onEndEdit.AddListener(destIPEndEditCallback);
         onToggle.onValueChanged.AddListener(displayOnChange);
 
+        // Build runtime catalogs. These are plain C# objects, not scene objects.
+        // Effects are also started here because the first frame needs an active
+        // currentEffect before the timer state machine begins.
         SetupEffects();
         SetupTransitions();
         SetupBlenders();
         setIP(IP);
 
+        // Input/overlay helpers. OSCReader is a MonoBehaviour added to this
+        // GameObject; drums and PixelReceiver are plain C# objects with their
+        // own UDP listeners.
         osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
         osc.SetAllMessageHandler(OscHandler);
         drum = new drums();
@@ -742,6 +1011,8 @@ public class Controller : Singleton<Controller>
         readPixel = new PixelReceiver();
         readPixel.Init();
 
+        // Optional camera overlay. It depends on Penrose bounds and writes into
+        // the same 900-tile buffer as the main effect pipeline.
         if (useCamera)
         {
             cameraOverlay = new CameraReader();
@@ -749,16 +1020,20 @@ public class Controller : Singleton<Controller>
             cameraOverlay.Init((int)penrose.Bounds.size.x, (int)penrose.Bounds.size.y, Penrose.Total);
         }
 
+        // Timer drives effect/transition phase changes. Update() advances it;
+        // OnTimerFinished() is the state-machine callback.
         timer = new Timer(effectTime, false);
         timer.onFinished += OnTimerFinished;
 
         effectText.text = effects[currentEffect].GetType().ToString();
         StartCoroutine(Fps());
 #if ENABLE_TELNET
+        // Optional debug command server. Disabled in normal builds.
         server = new TelnetServer();
         server.Start();     // start telnet server
 #endif
 #if ENABLE_SERIAL
+        // Active hardware output path for desktop controller builds.
         serial = new SerialOut();
         serial.Init(230400);
         Debug.Log("[Controller] Serial Output Enabled.");
@@ -767,6 +1042,9 @@ public class Controller : Singleton<Controller>
     }
 
 
+    /// <summary>
+    /// Selects the next effect index, using forceEffectName when active or the rotating effect deck otherwise.
+    /// </summary>
     private int GetNewEffectIndex()
     {
         // Keep random deck selection as the default, but let the live testing
@@ -777,8 +1055,13 @@ public class Controller : Singleton<Controller>
         return pullCard(effectDeck);
     }
 
+    /// <summary>
+    /// Timer state-machine callback. Alternates between effect playback and transition playback unless forceEffect is active.
+    /// </summary>
     private void OnTimerFinished()
     {
+        // Force mode owns the state machine. If an operator/dev has requested a
+        // specific effect, timer expiry should not transition away from it.
         if (TryGetForcedEffectIndex(out int forcedEffectIndex))
         {
             if (inTransition || currentEffect != forcedEffectIndex)
@@ -791,6 +1074,9 @@ public class Controller : Singleton<Controller>
 
         if (inTransition)
         {
+            // Transition phase finished: promote the transition target to the
+            // active effect, return to normal effect playback, and draw the next
+            // transition card for the following phase change.
             inTransition = !inTransition;
             currentEffect = transitions[currentTransition].B;
             timer.Set(effectTime);
@@ -802,6 +1088,10 @@ public class Controller : Singleton<Controller>
             return;
         }
 
+        // Effect phase finished: configure the selected transition to blend from
+        // the current effect to the next effect, start the destination effect so
+        // it can render during the transition, then switch Update() into
+        // transition drawing mode.
         inTransition = !inTransition;
 
         TransitionBase transition = transitions[currentTransition];
@@ -823,6 +1113,9 @@ public class Controller : Singleton<Controller>
         effectText.text = transition.Name;
     }
 
+    /// <summary>
+    /// Applies the optional hue-clamping display filter in-place to the current frame buffer.
+    /// </summary>
     void applyFilter(Color[] buffer)
     {
         Color32 c = new Color32(0x5a, 0x2d, 0x81, 255);
@@ -844,6 +1137,9 @@ public class Controller : Singleton<Controller>
     }
 
 #if PREP_CAPTURE
+    /// <summary>
+    /// Generates a PREP_CAPTURE dummy external source pattern for blender testing.
+    /// </summary>
     void makeDummySignal(Color[] buffer)
     {
         for (int i = 0; i < buffer.Length; i++)
@@ -860,9 +1156,12 @@ public class Controller : Singleton<Controller>
     }
 #endif
 
-    // Update is called once per frame
+    /// <summary>
+    /// Unity frame loop. Advances timing, handles input, draws effects/transitions, applies overlays/blending, outputs hardware frames, and updates the preview mesh.
+    /// </summary>
     void Update()
     {
+        // 1. Advance clocks and service optional command systems.
         checkTime();
         effectDelta = Time.deltaTime;
 #if PREP_CAPTURE
@@ -872,12 +1171,16 @@ public class Controller : Singleton<Controller>
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
 #endif
+        // 2. Palette controls. Return reloads palette definitions; Update()
+        // advances the shared animated palette used by most effects.
         if (Input.GetKeyDown(KeyCode.Return))
         {
             EffectBase.APalette = new AnimPalette(); // reload the palettes
         }
         EffectBase.APalette.Update();
 
+        // 3. Local keyboard/debug input. Escape toggles live force mode; A-W
+        // jump directly to effect indexes; X switches the keyboard bank.
         // Nova Technique: Escape key toggles the testing override on/off
         if (Input.GetKeyDown(KeyCode.Escape))
         {
@@ -901,6 +1204,7 @@ public class Controller : Singleton<Controller>
 
         ApplyForceEffectOverride();
 
+        // 4. Drum test keys and global rhythm update.
         // test drums
         if (Input.GetKeyDown("1")) drum.hit(0, 1f);
         if (Input.GetKeyDown("2")) drum.hit(1, 1f);
@@ -914,6 +1218,8 @@ public class Controller : Singleton<Controller>
         if (Input.GetKeyDown("0")) drum.ring(5, 1f);
         drum.Update();
         beatManager.Update();
+        // 5. Main visual generation. Either draw the special NYE overlay, the
+        // active transition, or the active effect into penrose.buffer.
         if (NYE)
         {
             Color[] buffer = penrose.buffer;
@@ -926,6 +1232,8 @@ public class Controller : Singleton<Controller>
         {
             if (inTransition)
             {
+                // Transition mode: update transition progress, advance both
+                // participating effects, and let the transition fill its buffer.
                 transitions[currentTransition].V = timer.Value;
                 transitions[currentTransition].UpdateTime();
 
@@ -944,6 +1252,7 @@ public class Controller : Singleton<Controller>
             }
             else
             {
+                // Effect mode: advance and draw the single active effect.
                 effects[currentEffect].UpdateTime();
                 effects[currentEffect].Draw();
                 penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
@@ -955,12 +1264,15 @@ public class Controller : Singleton<Controller>
             drum.Draw(penrose.buffer);
         }
 
+        // 6. Optional camera overlay modifies the already-rendered Penrose buffer.
         if (useCamera)
         {
             cameraOverlay.UpdateTime();
             cameraOverlay.Draw(penrose.buffer);
         }
 
+        // 7. Debug text: normal effect/transition debug plus FPS/keyboard bank,
+        // temporarily replaced by recent OSC text when OSC traffic arrives.
         debugText.text += $"\nFPS: {fps},KB{keyboardBase}";
         if (OSCtimer > 0)
         {
@@ -972,6 +1284,9 @@ public class Controller : Singleton<Controller>
             OSCtimer--;
         }
 
+        // 8. External pixel source. PREP_CAPTURE can synthesize a dummy source;
+        // otherwise PixelReceiver supplies incoming UDP RGB frames. If no
+        // blender is active, external pixels replace the native buffer.
         bool doblend = false;
 #if PREP_CAPTURE
         if (dummyActive)
@@ -1009,12 +1324,15 @@ public class Controller : Singleton<Controller>
 
         }
 
+        // 9. Hardware output. Serial is the active compiled path when
+        // ENABLE_SERIAL is defined; otherwise this falls back to legacy UDP/E1.31.
 #if ENABLE_SERIAL
         sendSerialFrame(penrose.buffer);
 #else
         sendUDPFrame(penrose.buffer);
 #endif
 
+        // 10. Local Unity preview and outbound OSC control-surface state.
         penrose.UpdateModelColors();
         OSCping();
 

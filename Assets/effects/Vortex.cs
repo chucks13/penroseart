@@ -1,6 +1,9 @@
 ﻿﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Renders nearest-spinner palette fields from moving angular sources.
+/// </summary>
 public class Vortex : EffectBase
 {
 
@@ -11,17 +14,26 @@ public class Vortex : EffectBase
 
     public spinner[] spinners;
 
-    public override string DebugText()
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText()
     {
         return $"Vortex: {count}\n";
     }
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         count = Random.Range(1, 5);
@@ -42,7 +54,10 @@ public class Vortex : EffectBase
         buffer.Clear();
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
     public void Update()
     {
         float deg2rad = (Mathf.PI * 2f)/360f;
@@ -58,8 +73,12 @@ public class Vortex : EffectBase
         }
     }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
+        // Beat pulse scales the nearest-spinner palette result for each tile.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         Update();
         for (int i = 0; i < buffer.Length; i++)
@@ -83,7 +102,10 @@ public class Vortex : EffectBase
     }
 
     [System.Serializable]
-    public class spinner
+    /// <summary>
+/// Moving angular source used by Vortex to determine nearest palette influence.
+/// </summary>
+public class spinner
     {
         public Vector2 center;
         public int arms =1;
@@ -93,7 +115,10 @@ public class Vortex : EffectBase
         public float speed =0.5f;
 //        public GPalette palette = new GPalette();
 
-        public Color Draw(int i,Vector2 position)
+        /// <summary>
+    /// Samples the spinner's palette contribution for a tile position.
+    /// </summary>
+    public Color Draw(int i,Vector2 position)
         {
             Vector2 vect = position - center;
             float rotate = Mathf.Atan2(vect.y, vect.x) ;

@@ -1,64 +1,90 @@
-Effect life cycle:
-Each effect has only one instance. effect.Init() is called when it is created. 
-    It is never destroyed.
-Each time an effect starts, effect.OnStart() is called.
-Each frame the effect is displayer, effect.Draw() is called.
+# PenroseArt
 
-Animation cycle:
-1) Select an effect randomly
-2) Play the new for 10 seconds
-3) Select a different effect, and a transition.
-4) Transition from the current effect to the new one, over 2 seconds
-5) Go back to step 2.
+PenroseArt is a Unity-hosted C# runtime for the Penrose Wall LED installation. It renders generative visuals for a 900-tile Penrose model, previews them in Unity, and outputs the same buffer to LED hardware.
 
-Selection process:
-For randomly selected things like effects and transitions, there is a collection
-of these like a deck of cards. a card is drawn form the top half of the deck
-to be used, then the card is placed at the bottom of the deck. This insures
-that all effects are used, in a random order, but recent effects take longer
-to repeate.
+Unity is the host and simulator. The effect system itself is mostly plain C# so visuals can be authored by copying and editing effect classes rather than wiring new scene objects.
 
-### Beat System & Synchronization
-The system includes a `BeatManager` that provides a global clock for rhythmic visuals.
-*Note: The current version is a debug simulation that generates beats internally and serves as a placeholder for external OSC data.*
-- **Pulse**: Effects use `beatManager.GetBeatBrightness()` to pulse in sync with the BPM. It uses a high-power curve ($x^4$) to ensure the pulse feels like a sharp rhythmic "kick" rather than a slow fade, maintaining high average brightness.
-- **Personality**: Each effect instance picks a `beatVariant` in `OnStart` to determine its specific rhythm (e.g., only pulsing on the '1').
-- **Variants**: 
-    - `0`: Every Beat, `1`: Beats 1&3, `2`: Beats 2&4, `3`: Measure Start
-    - `4`: 8th Notes, `5`: 16th Notes, `6`: Syncopated (1 and 4)
-- **Bypass**: If `BeatManager.active` is false, all effects return to 100% brightness and standard motion.
-- **Distortion Modes**: Some effects (like `Noise`) can randomly choose how to react to the beat:
-    - **Brightness**: Rhythmic gain pulsing (default floor of 0.85).
-    - **Color**: Post-palette hue rotation (e.g., shifting 90 degrees on the beat).
-    - **Time**: Warping `effectTime` to cause motion "surges" or "kicks."
+## Start here
 
-### Developer Tools (Nova Technique)
-For debugging, the controller supports a "Nova" testing override:
-- **Force Effect**: A toggle in the Inspector (or the **Escape** key during runtime) that enables/disables the override.
-- **Force Effect Name**: A string field. When the override is active, the controller searches for any effect whose name contains this string.
-- **Behavior**: This bypasses the deck randomization logic for the top-level effect selection.
+- [`docs/runtime-architecture.md`](docs/runtime-architecture.md) — how the Controller, catalogs, buffers, transitions, inputs, and outputs fit together.
+- [`docs/effect-authoring.md`](docs/effect-authoring.md) — how to create effects, use the lifecycle, and work with buffers.
+- [`docs/code-map.md`](docs/code-map.md) — file-by-file map of the project-authored runtime code.
+- [`CONTEXT.md`](CONTEXT.md) — operational project context and platform/output notes.
+- [`Assets/core/S2_MINI_PROTOCOL.md`](Assets/core/S2_MINI_PROTOCOL.md) — USB serial protocol used by the S2 Mini / ESP32 boards.
+- [`docs/investigation/`](docs/investigation/) — historical research/audit notes; useful context, but not canonical current docs.
 
-### Palette System (GPalette)
-The project uses a global palette animation system (implemented as `AnimPalette`) to ensure visual harmony across different effects.
-- **Sampling**: Effects sample colors using `APalette.read(position, interpolate)` where position is typically a normalized value (0.0 to 1.0).
-- **Animation**: The `Controller` updates the palette state every frame, enabling smooth color cycling and rotation.
-- **Triggers**: Pressing **Return** reloads the palette definitions at runtime. The palette also shifts automatically during effect transitions to maintain variety.
+## Runtime loop
 
-### Effect Subclasses:
-Most effects are **Generative**, meaning they create visual data from scratch using math or noise functions. However, structural effects (Mixers and Wrappers) inherit from **`MixerBase`** and use child effects:
+The normal animation cycle is:
 
-### ScreenEffects
-Some generative effects inherit from **`ScreenEffect`** instead of directly from `EffectBase`. 
-- **Purpose**: Acts as a "Geometric Lens" for designers. It allows the creation of effects using a standard 2D coordinate system (like Fractals or Fluids) while mapping them to the irregular Penrose grid.
-- **Operation**: It provides a `screenBuffer` and a conversion engine. It uses `static` mapping data to ensure that the expensive interpolation weights are only calculated once during the application's lifetime.
-- **Note**: Located in the `/core` folder, it is an architectural helper. Subclasses (like `Julia.cs`) look and behave like standard generative effects to the player and the `Controller`.
+1. Select an effect from the effect deck.
+2. Play it for `effectTime` seconds.
+3. Select a destination effect and transition.
+4. Transition from the current effect to the destination over `transitionTime` seconds.
+5. Repeat.
 
-### Mixers
-Mixers are used to combine multiple visual streams. 
-- **Behavior**: Inherit from `MixerBase`. They typically manage multiple child effects simultaneously.
-- **Interaction**: They call `Draw()` on multiple children and use a blending algorithm (like Additive or Screen) to merge them into a single output.
+Effects and transitions are selected from rotating decks. A card is drawn from the top half of the deck, then moved to the bottom. This gives random variety while reducing immediate repeats.
 
-### Wrappers (Filters)
-Wrappers act as post-processors for a single visual source (e.g., `Mirror.cs`).
-- **Behavior**: Inherit from `MixerBase`. They encapsulate exactly one `sourceEffect`. 
-- **Interaction**: They call `sourceEffect.Draw()` first to populate the buffer, then execute their own logic to transform that data (e.g., duplicating pixels across symmetry lines or shifting colors). They inherit from `MixerBase` to signal this dependency.
+## Effect lifecycle
+
+Each top-level effect has one runtime catalog instance.
+
+```text
+Init()       called once after reflection creates the effect
+OnStart()   called every time the effect becomes active
+UpdateTime() called before Draw() while active
+Draw()      called every active frame
+OnEnd()     reserved; Controller does not currently call it
+```
+
+Effects write into a `Color[] buffer` with `Penrose.Total == 900` entries. The controller copies the active effect or transition buffer into `penrose.buffer`, applies overlays/blending, sends hardware output, then updates the Unity preview mesh.
+
+## Authoring effects
+
+For a new effect, copy `Assets/effects/EmptyEffect.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, and implement `Draw()`.
+
+Choose the base class by shape:
+
+- `EffectBase` for direct tile algorithms;
+- `ScreenEffect` for rectangular 2D algorithms mapped onto Penrose tiles;
+- `MixerBase` for wrappers/mixers that own child effects.
+
+## Catalogs and indexing
+
+Effects, transitions, and blenders are discovered by `Factory<T>` using reflection. Catalog entries are sorted by type full name, so indexes are deterministic for a fixed set of classes.
+
+Indexes are not permanent IDs. Adding, removing, or renaming classes can shift sorted indexes. For debugging and inspection, prefer name-based controls such as `forceEffectName`.
+
+## Beat system
+
+`BeatManager` provides a shared beat clock for rhythmic visuals.
+
+- Effects can use `beatManager.GetBeatBrightness()` for pulse-like brightness.
+- `OnStart()` chooses a `beatVariant` so effects can have different rhythmic personalities.
+- The current beat source is simulated/debug timing from Unity time, not an external sync source.
+- If beat behavior is inactive, effects generally return to standard brightness/motion.
+
+## Palette system
+
+`EffectBase.APalette` is a shared animated palette. Effects sample it with normalized positions, usually through:
+
+```csharp
+APalette.read(position, interpolate)
+```
+
+The controller updates the palette every frame. Pressing Return reloads palette definitions at runtime, and transitions trigger palette changes for variety.
+
+## Output paths
+
+The active compiled output path is USB serial through `SerialOut` because `Controller.cs` currently defines `ENABLE_SERIAL`.
+
+The older ACN/E1.31 UDP path remains in the code and is used only when serial is not compiled in.
+
+## Debug controls
+
+The live force-effect override is intended for development and visual testing:
+
+- `forceEffect`: enable/disable the override from the Inspector or Escape key.
+- `forceEffectName`: case-insensitive substring match against effect class names.
+
+When enabled and matched, the controller cancels transitions, jumps immediately to the matching effect, and stays there while the force remains active.

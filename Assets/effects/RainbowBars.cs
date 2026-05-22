@@ -2,6 +2,9 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Renders directional palette bars in screen space and maps them to Penrose tiles.
+/// </summary>
 public class RainbowBars : ScreenEffect {
 
   private Direction direction;
@@ -41,6 +44,7 @@ public class RainbowBars : ScreenEffect {
     /// Called every frame by controller when the effect is selected
     /// </summary>
     public override void Draw() {
+    // Beat pulse scales the screen-space bar colors before mapping to tiles.
     float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
     var color = Color.clear;
     for(int x = 0; x < width; x++) {

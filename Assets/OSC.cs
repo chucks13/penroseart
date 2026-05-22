@@ -132,6 +132,9 @@ public class UDPPacketIO
 
 
 
+    /// <summary>
+    /// Creates a UDP packet transport with remote send endpoint and local receive port.
+    /// </summary>
     public UDPPacketIO(string hostIP, int remotePort, int localPort)
     {
         RemoteHostName = hostIP;
@@ -141,6 +144,9 @@ public class UDPPacketIO
     }
 
 
+    /// <summary>
+    /// Finalizer fallback that closes open UDP sockets.
+    /// </summary>
     ~UDPPacketIO()
     {
         // latest time for this socket to be closed
@@ -199,6 +205,9 @@ public class UDPPacketIO
 
     }
 
+    /// <summary>
+    /// Unity-style shutdown hook that closes sockets.
+    /// </summary>
     public void OnDisable()
     {
         Close();
@@ -303,8 +312,7 @@ public class UDPPacketIO
 //namespace MakingThings
 //{
 /// <summary>
-/// The OscMessage class is a data structure that represents
-/// an OSC address and an arbitrary number of values to be sent to that address.
+/// Dynamically typed OSC message with an address and ordered value list.
 /// </summary>
 public class OscMessage
 {
@@ -317,11 +325,17 @@ public class OscMessage
     /// </summary>
     public ArrayList values;
 
+    /// <summary>
+    /// Creates an OSC message with an empty value list.
+    /// </summary>
     public OscMessage()
     {
         values = new ArrayList();
     }
 
+    /// <summary>
+    /// Formats the address and values as a readable debug string.
+    /// </summary>
     public override string ToString()
     {
         StringBuilder s = new StringBuilder();
@@ -336,6 +350,9 @@ public class OscMessage
     }
 
 
+    /// <summary>
+    /// Reads a value as an integer, accepting int and float payloads.
+    /// </summary>
     public int GetInt(int index)
     {
 
@@ -358,6 +375,9 @@ public class OscMessage
         }
     }
 
+    /// <summary>
+    /// Reads a value as a float, accepting int and float payloads.
+    /// </summary>
     public float GetFloat(int index)
     {
 
@@ -385,22 +405,7 @@ public class OscMessage
 public delegate void OscMessageHandler(OscMessage oscM);
 
 /// <summary>
-/// The Osc class provides the methods required to send, receive, and manipulate OSC messages.
-/// Several of the helper methods are static since a running Osc instance is not required for 
-/// their use.
-/// 
-/// When instanciated, the Osc class opens the PacketIO instance that's handed to it and 
-/// begins to run a reader thread.  The instance is then ready to service Send OscMessage requests 
-/// and to start supplying OscMessages as received back.
-/// 
-/// The Osc class can be called to Send either individual messages or collections of messages
-/// in an Osc Bundle.  Receiving is done by delegate.  There are two ways: either submit a method
-/// to receive all incoming messages or submit a method to handle only one particular address.
-/// 
-/// Messages can be encoded and decoded from Strings via the static methods on this class, or
-/// can be hand assembled / disassembled since they're just a string (the address) and a list 
-/// of other parameters in Object form. 
-/// 
+/// OSC parser/serializer and legacy MonoBehaviour sender/receiver implementation. PenroseArt primarily uses OSCReader at runtime.
 /// </summary>
 public class OSC : MonoBehaviour
 {
@@ -441,6 +446,9 @@ public class OSC : MonoBehaviour
 
 
 
+    /// <summary>
+    /// Opens OSC UDP transport and starts the background reader thread.
+    /// </summary>
     void Awake()
     {
         //print("Opening OSC listener on port " + inPort);
@@ -465,6 +473,9 @@ public class OSC : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Closes OSC transport when the component is destroyed.
+    /// </summary>
     void OnDestroy()
     {
         Close();
@@ -500,6 +511,9 @@ public class OSC : MonoBehaviour
 
 
 
+    /// <summary>
+    /// Closes OSC transport when the application pauses.
+    /// </summary>
     void OnApplicationPause(bool pauseStatus)
     {
 #if !UNITY_EDITOR
@@ -509,6 +523,9 @@ public class OSC : MonoBehaviour
     }
 
 
+    /// <summary>
+    /// Dispatches queued OSC messages on Unity's main thread.
+    /// </summary>
     void Update()
     {
 
@@ -801,6 +818,9 @@ public class OSC : MonoBehaviour
     /// <param name="packet">The packet to be populated with the OscMessage.</param>
     /// <param name="length">The usable size of the array of bytes.</param>
     /// <returns>The length of the packet</returns>
+    /// <summary>
+    /// Serializes one OSC message into a packet from the start of the buffer.
+    /// </summary>
     public static int OscMessageToPacket(OscMessage oscM, byte[] packet, int length)
     {
         return OscMessageToPacket(oscM, packet, 0, length);
@@ -815,6 +835,9 @@ public class OSC : MonoBehaviour
     /// <param name="start">The start index in the packet where the OscMessage should be put.</param>
     /// <param name="length">The length of the array of bytes.</param>
     /// <returns>The index into the packet after the last OscMessage.</returns>
+    /// <summary>
+    /// Serializes one OSC message into a packet at a specific buffer offset.
+    /// </summary>
     private static int OscMessageToPacket(OscMessage oscM, byte[] packet, int start, int length)
     {
         int index = start;
@@ -880,6 +903,9 @@ public class OSC : MonoBehaviour
     /// <param name="start">The index of where to start looking in the packet.</param>
     /// <param name="length">The length of the packet.</param>
     /// <returns>The index after the last OscMessage read.</returns>
+    /// <summary>
+    /// Extracts all messages from an OSC bundle payload.
+    /// </summary>
     private static int ExtractMessages(ArrayList messages, byte[] packet, int start, int length)
     {
         int index = start;
@@ -915,6 +941,9 @@ public class OSC : MonoBehaviour
     /// <param name="start">The index of where to start looking in the packet.</param>
     /// <param name="length">The length of the packet.</param>
     /// <returns>The index after the OscMessage is read.</returns>
+    /// <summary>
+    /// Extracts one OSC message from a packet and appends it to the message list.
+    /// </summary>
     private static int ExtractMessage(ArrayList messages, byte[] packet, int start, int length)
     {
         OscMessage oscM = new OscMessage();
@@ -977,6 +1006,9 @@ public class OSC : MonoBehaviour
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Formats a byte range as a diagnostic hex dump.
+    /// </summary>
     private static string Dump(byte[] packet, int start, int length)
     {
         StringBuilder sb = new StringBuilder();
@@ -994,6 +1026,9 @@ public class OSC : MonoBehaviour
     /// <param name="start">The index of where to start looking in the packet.</param>
     /// <param name="length">The length of the packet.</param>
     /// <returns>An index to the next byte in the packet after the padded string.</returns>
+    /// <summary>
+    /// Writes an OSC padded string into a packet buffer.
+    /// </summary>
     private static int InsertString(string s, byte[] packet, int start, int length)
     {
         int index = start;

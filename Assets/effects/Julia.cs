@@ -2,6 +2,9 @@
 using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Renders a Julia fractal in screen space and maps it onto the Penrose tile buffer.
+/// </summary>
 public class Julia : ScreenEffect
 {
 
@@ -70,6 +73,7 @@ public class Julia : ScreenEffect
     /// </summary>
     public override void Draw()
     {
+        // Beat pulse scales the fractal colors after screen-to-tile conversion.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         //buffer.Clear();
 

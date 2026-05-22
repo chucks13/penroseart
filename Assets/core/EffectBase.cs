@@ -1,6 +1,12 @@
 ﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Base contract for PenroseArt effects that render one 900-tile frame into a color buffer.
+/// </summary>
+/// <remarks>
+/// Effects are plain C# objects created by Factory&lt;EffectBase&gt;. Controller calls Init once, OnStart on activation, UpdateTime and Draw every active frame.
+/// </remarks>
 [System.Serializable]
 public abstract class EffectBase {
 
@@ -19,19 +25,29 @@ public abstract class EffectBase {
   protected Penrose.TileData[] tiles;
   public static AnimPalette APalette=new AnimPalette();
 
+  /// <summary>Current shared beat data from the controller's BeatManager.</summary>
   public BeatData beat => controller.beatManager.beatData;
+  /// <summary>Shared beat helper used for rhythmic effect behavior.</summary>
   public BeatManager beatManager => controller.beatManager;
+  /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
   public bool IsBeatActive => controller.beatManager.IsActive;
 
+  /// <summary>Whether this effect should apply beat brightness/time/color behavior.</summary>
   public bool beatEnable = true;
+  /// <summary>Rhythmic personality selected during OnStart().</summary>
   public int beatVariant;
 
+  /// <summary>Catalog/display name for this effect. Currently the C# type name.</summary>
   public string Name => GetType().ToString();
    
-  // Used for UI display and gets called every frame
+  /// <summary>
+  /// Text displayed in the debug UI while this effect is active.
+  /// </summary>
   public abstract string DebugText();
 
-  // Should be called after creation
+  /// <summary>
+  /// One-time setup after reflection creates the effect. Binds Controller, Penrose, tile data, and the 900-color buffer.
+  /// </summary>
   public virtual void Init() {
     factory = new Factory<EffectBase>();
     controller = Controller.Instance;
@@ -40,19 +56,27 @@ public abstract class EffectBase {
     buffer     = new Color[Penrose.Total];
   }
 
+  /// <summary>
+  /// Seeds effectTime with a random offset so reactivated effects do not always start from the same phase.
+  /// </summary>
   public void RandomizeTime()
   {
       // Seed with 0 to 4 hours (14400 seconds)
       effectTime = Random.Range(0f, 14400f);
   }
 
+  /// <summary>
+  /// Advances the effect's local clock from Unity's current frame delta.
+  /// </summary>
   public void UpdateTime()
   {
       effectDelta = Time.deltaTime;
       effectTime += effectDelta;
   }
 
-  // Should be called every time an effect is turned on
+  /// <summary>
+  /// Per-activation setup called every time Controller or a mixer turns this effect on.
+  /// </summary>
   public virtual void OnStart()
   {
       beatEnable = true;
@@ -65,8 +89,14 @@ public abstract class EffectBase {
   /// </summary>
   public abstract void OnEnd();
 
-  // Should be called every frame
+  /// <summary>
+  /// Renders one frame into <see cref="buffer"/>.
+  /// </summary>
   public abstract void Draw();
+
+    /// <summary>
+    /// Creates a random non-identical effect instance for mixer/wrapper child use.
+    /// </summary>
     public virtual EffectBase GetRandomEffect()
     {
 

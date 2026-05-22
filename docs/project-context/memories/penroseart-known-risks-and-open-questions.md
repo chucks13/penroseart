@@ -51,7 +51,7 @@ Docs/readme describe beat variants as:
 - `5`: 16th notes
 - `6`: syncopated
 
-`BeatManager.GetBeatBrightness()` currently maps `case 5` to 8th notes, `case 6` to 16th notes, and `case 4` to syncopated. Clarify desired musical behavior before changing cases or docs.
+`BeatManager.GetBeatBrightness()` currently maps `case 5` to 8th notes, `case 6` to 16th notes, and `case 4` to syncopated. Current code comments document that mapping; clarify desired musical behavior before changing cases.
 
 ## Effect instance lifecycle nuance
 

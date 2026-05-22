@@ -4,6 +4,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// Scene UI helper that synchronizes a Unity slider with Controller brightness.
+/// </summary>
 public class SliderScript : MonoBehaviour
 {
     [SerializeField] Slider _slider;
@@ -20,6 +23,9 @@ public class SliderScript : MonoBehaviour
     }
 
     // Update is called once per frame
+    /// <summary>
+    /// Mirrors Controller.brightness back into the slider so external changes stay visible.
+    /// </summary>
     void Update()
     {
         _slider.value = controller.brightness;

@@ -1,6 +1,12 @@
 ﻿using System;
 using UnityEngine;
 
+/// <summary>
+/// Base class for effects that render into a rectangular screen buffer before mapping that image onto Penrose tiles.
+/// </summary>
+/// <remarks>
+/// The tile-to-screen interpolation cache is static and is built after Penrose bounds are available.
+/// </remarks>
 public abstract class ScreenEffect : EffectBase {
   public enum Direction {
     Up,
@@ -21,6 +27,9 @@ public abstract class ScreenEffect : EffectBase {
   protected static ScreenMap[][] neighbors;
   protected Color[] screenBuffer;
 
+  /// <summary>
+  /// Builds the static tile-to-screen interpolation map used by ConvertScreenBuffer.
+  /// </summary>
   private static void InitWeights() {
     // get the tiles
     var penrose = Controller.Instance.penrose;
@@ -83,6 +92,9 @@ public abstract class ScreenEffect : EffectBase {
   }
 
   // resample the rectangle into the tile buffer
+  /// <summary>
+  /// Resamples a rectangular screen buffer into the 900-tile Penrose effect buffer.
+  /// </summary>
   public static void ConvertScreenBuffer(ref Color[] screenBuffer, in Color[] buffer) {
     for(var i = 0; i < buffer.Length; i++) {
       var pix = Color.black;
@@ -95,6 +107,9 @@ public abstract class ScreenEffect : EffectBase {
     }
   }
 
+  /// <summary>
+  /// Allocates this effect's screen buffer and initializes the shared mapping cache if needed.
+  /// </summary>
   public override void Init() {
     base.Init();
 
@@ -128,6 +143,7 @@ public abstract class ScreenEffect : EffectBase {
     public float distance = 1000000f;
     public float weight;
 
+    /// <summary>Formats this mapping entry for debug output.</summary>
     public override string ToString() { return$"{position}, {distance}, {weight}"; }
   }
 }

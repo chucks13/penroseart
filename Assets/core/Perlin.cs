@@ -10,6 +10,9 @@
 
 using UnityEngine;
 
+/// <summary>
+/// Shared Perlin noise and fractal Brownian motion utility functions.
+/// </summary>
 public static class Perlin {
 
   #region Noise functions
@@ -21,6 +24,9 @@ public static class Perlin {
     return Lerp(u, Grad(perm[X], x), Grad(perm[X + 1], x - 1)) * 2;
   }
 
+  /// <summary>
+  /// Returns 2D Perlin noise for scalar coordinates.
+  /// </summary>
   public static float Noise(float x, float y) {
     var X = Mathf.FloorToInt(x) & 0xff;
     var Y = Mathf.FloorToInt(y) & 0xff;
@@ -36,8 +42,14 @@ public static class Perlin {
     );
   }
 
+  /// <summary>
+  /// Returns 2D Perlin noise for a Vector2 coordinate.
+  /// </summary>
   public static float Noise(Vector2 coord) { return Noise(coord.x, coord.y); }
 
+  /// <summary>
+  /// Returns 3D Perlin noise for scalar coordinates.
+  /// </summary>
   public static float Noise(float x, float y, float z) {
     var X = Mathf.FloorToInt(x) & 0xff;
     var Y = Mathf.FloorToInt(y) & 0xff;
@@ -67,12 +79,18 @@ public static class Perlin {
     );
   }
 
+  /// <summary>
+  /// Returns 3D Perlin noise for a Vector3 coordinate.
+  /// </summary>
   public static float Noise(Vector3 coord) { return Noise(coord.x, coord.y, coord.z); }
 
   #endregion
 
   #region fBm functions
 
+  /// <summary>
+  /// Returns one-dimensional fractal Brownian motion using the requested octave count.
+  /// </summary>
   public static float Fbm(float x, int octave) {
     var f = 0.0f;
     var w = 0.5f;
@@ -85,6 +103,9 @@ public static class Perlin {
     return f;
   }
 
+  /// <summary>
+  /// Returns 2D fractal Brownian motion using the requested octave count.
+  /// </summary>
   public static float Fbm(Vector2 coord, int octave) {
     var f = 0.0f;
     var w = 0.5f;
@@ -97,8 +118,14 @@ public static class Perlin {
     return f;
   }
 
+  /// <summary>
+  /// Returns 2D fractal Brownian motion for scalar coordinates.
+  /// </summary>
   public static float Fbm(float x, float y, int octave) { return Fbm(new Vector2(x, y), octave); }
 
+  /// <summary>
+  /// Returns 3D fractal Brownian motion using the requested octave count.
+  /// </summary>
   public static float Fbm(Vector3 coord, int octave) {
     var f = 0.0f;
     var w = 0.5f;
@@ -111,20 +138,28 @@ public static class Perlin {
     return f;
   }
 
+  /// <summary>
+  /// Returns 3D fractal Brownian motion for scalar coordinates.
+  /// </summary>
   public static float Fbm(float x, float y, float z, int octave) { return Fbm(new Vector3(x, y, z), octave); }
 
   #endregion
 
   #region Private functions
 
+  /// <summary>Perlin smoothing curve.</summary>
   private static float Fade(float t) { return t * t * t * (t * (t * 6 - 15) + 10); }
 
+  /// <summary>Linear interpolation helper.</summary>
   private static float Lerp(float t, float a, float b) { return a + t * (b - a); }
 
+  /// <summary>One-dimensional gradient contribution.</summary>
   private static float Grad(int hash, float x) { return (hash & 1) == 0 ? x : -x; }
 
+  /// <summary>Two-dimensional gradient contribution.</summary>
   private static float Grad(int hash, float x, float y) { return ((hash & 1) == 0 ? x : -x) + ((hash & 2) == 0 ? y : -y); }
 
+  /// <summary>Three-dimensional gradient contribution.</summary>
   private static float Grad(int hash, float x, float y, float z) {
     var h = hash & 15;
     var u = h < 8 ? x : y;

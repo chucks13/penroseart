@@ -1,5 +1,7 @@
 # Penroseart Unity/C# architecture brief
 
+_Status: historical architecture brief. This file was moved under `docs/investigation/` and updated for known cleanup-branch changes, but many line-number references reflect the source state at the time of the original investigation. Current canonical docs live in `docs/runtime-architecture.md`, `docs/effect-authoring.md`, `docs/code-map.md`, root `readme.md`, and root `CONTEXT.md`.
+
 ## Scope and method
 
 - Project: `/Users/hunter/Projects/penroseart`.
@@ -17,11 +19,11 @@ The central runtime object is `Controller : Singleton<Controller>` (`Assets/core
 
 Important current-state findings:
 
-- `Controller.cs` has a file-local `#define ENABLE_SERIAL` at line 2, so the active output path is serial (`sendSerialFrame`) rather than E1.31/ACN UDP, despite docs emphasizing ACN. `ENABLE_TELNET` and `PREP_CAPTURE` are not project scripting defines (`ProjectSettings/ProjectSettings.asset:614`) and are not file-defined in active code.
+- `Controller.cs` has a file-local `#define ENABLE_SERIAL`, so the active output path is serial (`sendSerialFrame`) rather than E1.31/ACN UDP. Current docs have been updated to describe serial as active and ACN/E1.31 as legacy/fallback. `ENABLE_TELNET` and `PREP_CAPTURE` are not project scripting defines and are not file-defined in active code.
 - `SampleScene` has only three custom MonoBehaviour bindings: `Controller`, `SliderScript`, and `Penrose`; most effects/transitions are not scene components and are instantiated by `Factory<T>` at runtime.
 - Scene data includes a huge `Controller.jsonSource` blob at `Assets/Scenes/SampleScene.unity:2092`; local parsing confirmed it exactly matches `Assets/StreamingAssets/rawdata.json` and contains 900 tiles, 1800 wires, and 10800 mesh floats. `Penrose.Awake()` reads from `Controller.Instance.jsonSource`, not directly from StreamingAssets (`Assets/core/Penrose.cs:122-123`).
-- The effect model is mostly non-MonoBehaviour plain C# classes. Additions/removals are discovered automatically by reflection in `Factory<T>` (`Assets/core/helpers/Factory.cs:19-27`), so adding a non-abstract `EffectBase`, `TransitionBase`, or `BlenderBase` subclass changes runtime catalogs and possibly keyboard/deck order.
-- Several docs are directionally useful but stale/incomplete: top-level effects are singleton-like, but mixers create transient child effects; active code serializes output by USB serial, while `CONTEXT.md` describes ACN; beat variant comments/docs disagree with switch cases in code.
+- The effect model is mostly non-MonoBehaviour plain C# classes. Additions/removals are discovered automatically by reflection in `Factory<T>`. The current factory excludes `[RuntimeCatalogIgnore]` templates and sorts by `Type.FullName`, so order is deterministic for a fixed class set, but adding/removing/renaming catalog classes can still shift indexes.
+- Several historical docs were directionally useful but stale/incomplete: top-level effects are singleton-like, but mixers create transient child effects; current docs now identify USB serial as active output; beat variant comments/docs still need clarification against switch cases in code.
 
 ## Project and asset organization
 
@@ -174,7 +176,7 @@ The local README states the intended effect lifecycle: `Init()` once, `OnStart()
 Implications for agents:
 
 - Adding any non-abstract subclass automatically changes runtime catalogs.
-- Reflection order is not explicitly sorted; keyboard shortcuts, deck order, initial `currentTransition` index, and debug listings can shift when scripts are added/removed.
+- Catalog order is explicitly sorted by `Type.FullName`; keyboard shortcuts, deck order, and numeric scene fields are deterministic for a fixed class set but can still shift when scripts are added/removed/renamed.
 - Constructors should stay parameterless.
 - Because `EffectBase.Init()` assumes `Controller.Instance.penrose` and `penrose.Tiles` are ready, do not instantiate/init effects before `Controller.Start()` has called `penrose.Init()`.
 
@@ -339,14 +341,14 @@ Risk: because `APalette` construction depends on `Controller.Instance.paletteSou
 - `BeatData` defaults active at 120 BPM with 4 beats per measure (`Assets/core/BeatManager.cs:5-11`).
 - `BeatManager.Update()` derives beat position from `Time.time`, not external OSC (`BeatManager.cs:24-48`).
 - `EffectBase.OnStart()` assigns `beatVariant = beatManager.GetRandomVariant()` (`EffectBase.cs:56-59`), and many effects call `GetBeatBrightness(...)` during `Draw()`.
-- `GetBeatBrightness()` maps variants by switch (`BeatManager.cs:75-112`). Current code maps `case 5` to 8th notes, `case 6` to 16th notes, and `case 4` to syncopated (`BeatManager.cs:105-110`). This conflicts with comments/docs that describe variant 4 as 8th, 5 as 16th, 6 as syncopated. Clarify before changing beat behavior.
+- `GetBeatBrightness()` maps variants by switch. Current code maps `case 5` to 8th notes, `case 6` to 16th notes, and `case 4` to syncopated. Earlier comments/docs conflicted with this mapping; current `BeatManager` code comments now document the code's actual mapping. Clarify desired musical behavior before changing behavior.
 
 ## Packages and project settings
 
 - Unity editor version: `6000.4.7f1` (`ProjectSettings/ProjectVersion.txt:1-2`).
 - Main packages in `Packages/manifest.json`:
   - AI Navigation `2.0.12` (`manifest.json:3`).
-  - IDE integrations Visual Studio `2.0.27`, VSCode `1.1.4` (`manifest.json:6-7`).
+  - IDE integration uses Visual Studio package `2.0.27`; the deprecated Unity VS Code package was removed during cleanup.
   - Test Framework `1.6.0` (`manifest.json:9`) — no custom tests found under `Assets`.
   - Timeline `1.8.12` (`manifest.json:10`).
   - uGUI `2.0.0`, UI Builder `2.0.0` (`manifest.json:11-12`).
@@ -394,15 +396,15 @@ Before pressing Play or running batchmode, be aware runtime side effects include
 
 ### Confirmed from local code/assets
 
-1. **Active output path contradicts docs.** `CONTEXT.md` describes ACN/E1.31 output (`CONTEXT.md:4`, `:37-48`), but active `Controller.cs` file-defines `ENABLE_SERIAL` (`Controller.cs:2`) and thus uses serial output (`Controller.cs:947-948`). Clarify intended production output path before changing output code.
+1. **Active output path is serial.** Earlier docs emphasized ACN/E1.31, but current docs and source now align on USB serial via `SerialOut` as the active output path. ACN/E1.31 remains present as fallback/legacy code when serial is not compiled in.
 2. **Top-level singleton lifecycle vs mixer children.** `readme.md` says each effect has only one instance and is never destroyed (`readme.md:1-5`), but mixers/wrappers create new child effects on activation (`Mirror.cs:76-80`, `RandomEffectsMixer.cs:23-31`). Treat the README as top-level effect guidance, not a universal allocation invariant.
 3. **Beat variant mismatch.** Code maps variants 4/5/6 differently than comments/docs (`BeatManager.cs:105-110`, `readme.md:25-29`). Needs user decision before “fixing.”
 4. **Serial protocol docs drift.** `S2_MINI_PROTOCOL.md` says baud 2,000,000 in connection settings but later says Arduino `Serial.begin(230400)` and 200ms boot delay; code ignores `Init(230400)`, hard-codes 2,000,000, waits 2 seconds, and appends `CMD_LATCH` (`SerialOut.cs:53-58`, `:125`, `:258`; protocol doc `Assets/core/S2_MINI_PROTOCOL.md:7`, `:11`, `:40-46`). Clarify firmware contract before changing serial protocol.
-5. **Reflection order is unsorted.** `Factory<T>` does not sort types (`Factory.cs:19-24`). Adding/removing scripts can shift indexes used by keyboard shortcuts and scene `currentTransition`.
+5. **Catalog indexes remain behavior-bearing.** `Factory<T>` now sorts types by `Type.FullName` and excludes `[RuntimeCatalogIgnore]`, so indexes are deterministic for a fixed class set. Adding/removing/renaming scripts can still shift indexes used by keyboard shortcuts and scene `currentTransition`.
 6. **Thread lifecycle hazards.** `UDPReceive` loops forever and swallows receive exceptions (`UDPControllers.cs:69-84`); `OSCReader.Close()` uses `Thread.Abort()` (`OSCReader.cs:299-307`); `SerialOut` board thread catches all exceptions and only marks board not ready (`SerialOut.cs:260-261`). Be careful with playmode/domain reload behavior and hardware error visibility.
 7. **`Panels` child-effect mode appears unreachable.** `which = Random.Range(0, 2)` (`Panels.cs:22`) only yields 0 or 1 for integer overload, but `case 2` exists in both `OnStart` and `Draw` (`Panels.cs:34-40`, `:96+`). Ask before changing because it affects visuals.
 8. **`kscope` can dirty assets at runtime.** It regenerates `files.txt` in StreamingAssets image folders on non-Android (`kscope.cs:105-111`).
-9. **No asmdefs/tests.** All custom code is in default assembly with TMP examples; no custom test files were found. Compile scope is broad.
+9. **No asmdefs/tests.** All custom code is in the default assembly and no custom test files were found. Compile scope is broad.
 
 ### Gaps needing user clarification or web/API research
 

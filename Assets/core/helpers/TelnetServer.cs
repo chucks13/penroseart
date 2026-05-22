@@ -16,15 +16,24 @@ public interface ICommand
     string Execute(string[] args, CommandRegistry registry);
 }
 
+/// <summary>
+/// Registry for optional telnet commands. Compiled only when ENABLE_TELNET is defined.
+/// </summary>
 public class CommandRegistry
 {
     private readonly Dictionary<string, ICommand> _commands = new Dictionary<string, ICommand>();
 
+    /// <summary>
+    /// Adds or replaces a command by name.
+    /// </summary>
     public void Register(ICommand command)
     {
         _commands[command.Name] = command;
     }
 
+    /// <summary>
+    /// Looks up a command by name, returning null when not registered.
+    /// </summary>
     public ICommand GetCommand(string name)
     {
         ICommand cmd;
@@ -33,12 +42,18 @@ public class CommandRegistry
         return null;
     }
 
+    /// <summary>
+    /// Returns all registered commands for help/listing output.
+    /// </summary>
     public IEnumerable<ICommand> GetAllCommands()
     {
         return _commands.Values;
     }
 }
 
+/// <summary>
+/// Telnet command that lists available commands.
+/// </summary>
 public class HelpCommand : ICommand
 {
     public string Name { get { return "help"; } }
@@ -65,6 +80,9 @@ public class HelpCommand : ICommand
         }
     }
 }
+/// <summary>
+/// Telnet command that echoes arguments back to the client.
+/// </summary>
 public class EchoCommand : ICommand
 {
     public string Name { get { return "echo"; } }
@@ -76,6 +94,9 @@ public class EchoCommand : ICommand
     }
 }
 
+/// <summary>
+/// Telnet command that lists runtime catalogs such as effects and blenders.
+/// </summary>
 public class ListCommand : ICommand
 {
     public string Name { get { return "list"; } }
@@ -117,6 +138,9 @@ public class ListCommand : ICommand
 }
 
 
+/// <summary>
+/// Telnet command that jumps directly to a named effect.
+/// </summary>
 public class EffectCommand : ICommand
 {
     public string Name { get { return "effect"; } }
@@ -144,6 +168,9 @@ public class EffectCommand : ICommand
     }
 }
 
+/// <summary>
+/// Telnet command that selects an external-source blender or transition blender.
+/// </summary>
 public class BlenderCommand : ICommand
 {
     public string Name { get { return "blender"; } }
@@ -186,6 +213,9 @@ public class BlenderCommand : ICommand
 
 
 #if PREP_CAPTURE
+/// <summary>
+/// Telnet command for PREP_CAPTURE dummy input control.
+/// </summary>
 public class DummyCommand : ICommand
 {
     public string Name { get { return "dummy"; } }
@@ -209,6 +239,9 @@ public class DummyCommand : ICommand
 }
 #endif
 
+/// <summary>
+/// Telnet command that toggles the NYE random-white overlay mode.
+/// </summary>
 public class NYECommand : ICommand
 {
     public string Name { get { return "nye"; } }
@@ -230,6 +263,9 @@ public class NYECommand : ICommand
 }
 
 
+/// <summary>
+/// Per-client telnet connection wrapper and line parser.
+/// </summary>
 public class ClientConnection
 {
     public TcpClient TcpClient;
@@ -240,6 +276,9 @@ public class ClientConnection
 
 
 
+/// <summary>
+/// Optional telnet command server for runtime inspection and control. Inactive unless ENABLE_TELNET is defined.
+/// </summary>
 public class TelnetServer : MonoBehaviour
 {
     List<ClientConnection> clients = new List<ClientConnection>();
@@ -254,6 +293,9 @@ public class TelnetServer : MonoBehaviour
 
     //private readonly object clientLock = new object();
 
+    /// <summary>
+    /// Initializes command registrations and starts the telnet listener thread.
+    /// </summary>
     public void Start()
     {
         //    controller = Controller.Instance;
@@ -272,11 +314,17 @@ public class TelnetServer : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Stops the telnet server when the MonoBehaviour is destroyed.
+    /// </summary>
     void OnDestroy()
     {
         StopTelnetServer();
     }
 
+    /// <summary>
+    /// Opens the TCP listener on port 23 and starts accepting clients on a background thread.
+    /// </summary>
     void StartTelnetServer()
     {
         TcpListener listener = new TcpListener(IPAddress.Any, 23);
@@ -305,6 +353,9 @@ public class TelnetServer : MonoBehaviour
     }
 
 
+    /// <summary>
+    /// Stops accepting telnet clients and closes the listener.
+    /// </summary>
     void StopTelnetServer()
     {
         isListening = false;
@@ -332,6 +383,9 @@ public class TelnetServer : MonoBehaviour
         Debug.Log("Telnet server stopped.");
     }
 
+    /// <summary>
+    /// Blocking accept loop that starts one client handler thread per connection.
+    /// </summary>
     void ListenForClients()
     {
         while (isListening)
@@ -365,6 +419,9 @@ public class TelnetServer : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Reads client command lines, executes registered commands, and writes responses.
+    /// </summary>
     void HandleClient(object obj)
     {
         ClientConnection conn = (ClientConnection)obj;
@@ -418,6 +475,9 @@ public class TelnetServer : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Main-thread service hook for queued command side effects and command logging.
+    /// </summary>
     public void Service()
     {
         lock (clientLock)

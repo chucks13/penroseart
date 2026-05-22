@@ -11,14 +11,21 @@ public sealed class RuntimeCatalogIgnoreAttribute : Attribute
 {
 }
 
+/// <summary>
+/// Reflection-backed runtime catalog builder for effects, transitions, and blenders.
+/// </summary>
+/// <typeparam name="T">Base class used to select concrete catalog entries.</typeparam>
 public class Factory<T> where T : class {
 
   private Type[] types;
   private string[] names;
 
+  /// <summary>Number of concrete, non-ignored catalog types.</summary>
   public int Count => GetTypes().Length;
+  /// <summary>Sorted concrete, non-ignored catalog types.</summary>
   public Type[] Types => GetTypes();
 
+  /// <summary>Display names for the sorted catalog types.</summary>
   public string[] Names => GetNames();
 
   public Factory() { names = GetNames(); }
@@ -33,6 +40,9 @@ public class Factory<T> where T : class {
            ).OrderBy(myType => myType.FullName, StringComparer.Ordinal).ToArray());
   }
 
+  /// <summary>
+  /// Creates a catalog instance. Catalog entries must have parameterless constructors.
+  /// </summary>
   public T Create(Type t) { return Activator.CreateInstance(t) as T; }
 
 }

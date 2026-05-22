@@ -1,24 +1,36 @@
 ﻿using UnityEngine;
 using Random = UnityEngine.Random;
+/// <summary>
+/// Wipes from source to destination by projecting tile positions along a randomized direction.
+/// </summary>
 public class DirectionalWipe : TransitionBase
 {
 
   float angle;
   float diagonalsize;
 
-  public override void Init()
+    /// <summary>
+  /// Performs one-time transition setup after reflection creates this instance.
+  /// </summary>
+public override void Init()
   {
     base.Init();
     CacheGeometry();
   }
 
-  public override void OnStart()
+    /// <summary>
+  /// Initializes per-run transition state before effect-to-effect blending begins.
+  /// </summary>
+public override void OnStart()
   {
     buffer.Clear();
     angle = Random.value * Mathf.PI * 2f;
   }
 
-  public override void OnEnd() { }
+    /// <summary>
+  /// Reserved deactivation hook. Controller does not currently call this.
+  /// </summary>
+public override void OnEnd() { }
 
   /// <summary>
   /// Cache Penrose bounds once so transition-as-blender usage does not depend
@@ -32,6 +44,9 @@ public class DirectionalWipe : TransitionBase
     diagonalsize = diagonal.magnitude;
   }
 
+  /// <summary>
+  /// Rotates a 2D point by delta radians for directional wipe projection.
+  /// </summary>
   public static Vector2 rotate(Vector2 v, float delta)
   {
     return new Vector2(
@@ -40,13 +55,19 @@ public class DirectionalWipe : TransitionBase
     );
   }
 
-  public override void Draw()
+    /// <summary>
+  /// Draws source and destination effects and writes the transition frame into buffer.
+  /// </summary>
+public override void Draw()
   {
     controller.effects[A].Draw();
     controller.effects[B].Draw();
     Draw2(buffer, controller.effects[A].buffer, controller.effects[B].buffer, V, angle);
   }
 
+  /// <summary>
+  /// Shared directional wipe implementation for normal transitions and external blending.
+  /// </summary>
   private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, float Angle2)
   {
 
@@ -65,7 +86,10 @@ public class DirectionalWipe : TransitionBase
     }
   }
 
-  public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+    /// <summary>
+  /// Uses this transition algorithm as an external-source blender.
+  /// </summary>
+public override void Blend(Color[] dest, Color[] src1, Color[] src2)
   {
     float V2 = 0.5f;
     float Angle2 = 0;
@@ -75,7 +99,10 @@ public class DirectionalWipe : TransitionBase
       Angle2 = settings[1];
     Draw2(dest, src1, src2, V2, Angle2);
   }
-  public override string Usage()
+    /// <summary>
+  /// Returns the external-blender fader argument format for this transition.
+  /// </summary>
+public override string Usage()
   {
     return "[ratio] [angle (radians)]";
   }

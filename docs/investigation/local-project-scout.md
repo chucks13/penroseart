@@ -1,5 +1,7 @@
 # Code Context
 
+_Status: historical local scout. This file was moved under `docs/investigation/` and updated for known cleanup-branch changes, but many line-number references reflect the source state at the time of the scout. Current canonical docs live in `docs/runtime-architecture.md`, `docs/effect-authoring.md`, `docs/code-map.md`, root `readme.md`, and root `CONTEXT.md`.
+
 ## Files Retrieved
 
 1. `readme.md` (lines 1-64) - concise lifecycle notes for effects, animation deck, beat variants, Nova override, palette system, `ScreenEffect`, mixers, wrappers.
@@ -59,7 +61,7 @@
 ### Identity
 
 - This is a Unity/C# real-time controller/simulator for the Penrose Wall light installation.
-- Root docs state it generates generative visuals and outputs to LED hardware over ACN/E1.31 (`CONTEXT.md` lines 3-4), while current source has serial output enabled by a file-local define (`Assets/core/Controller.cs` line 2) and helper docs describe ESP32-S2 USB-serial output (`Assets/core/helpers/CONTEXT.md` lines 5-15).
+- Current docs and source identify USB serial via `SerialOut` as the active output path. The older ACN/E1.31 UDP path remains present as a fallback/legacy path when serial is not compiled in.
 - Product metadata: company `Hunter`, product `penrose_simulator` (`ProjectSettings/ProjectSettings.asset` lines 15-16). Android package is `com.hunter.penrosesimulator` (`ProjectSettings/ProjectSettings.asset` lines 166-172).
 
 ### Main entry points
@@ -126,8 +128,8 @@ public override void Init() {
 ### Controller lifecycle and data flow
 
 - `Controller.Start()` sets 60 FPS, finds and initializes `Penrose`, binds GUI inputs, discovers effects/transitions/blenders via reflection factories, initializes UDP/OSC/drums/pixel receiver/camera, and initializes serial output if `ENABLE_SERIAL` is active (`Assets/core/Controller.cs` lines 662-714).
-- Effects are discovered by `Factory<EffectBase>` and each is instantiated once and initialized (`Assets/core/Controller.cs` lines 161-183). `Factory<T>` selects non-abstract subclasses of `T` from the assembly (`Assets/core/helpers/Factory.cs` lines 19-27).
-- Selection uses a deck: `pullCard()` picks from the top half then moves the selected index to the bottom (`Assets/core/Controller.cs` lines 143-158). Nova override can force an effect by name substring (`Assets/core/Controller.cs` lines 717-730).
+- Effects are discovered by `Factory<EffectBase>` and each top-level effect is instantiated once and initialized. `Factory<T>` selects concrete non-abstract subclasses, excludes `[RuntimeCatalogIgnore]` templates, and sorts by `Type.FullName` for deterministic order.
+- Selection uses a deck: `pullCard()` picks from the top half then moves the selected index to the bottom. The live force-effect override can force an effect by case-insensitive name substring, cancels transitions, and stays locked while enabled.
 - Transitions run as a state toggle in `OnTimerFinished()`: playing effect -> transition with `A=currentEffect`, `B=GetNewEffectIndex()`, palette change, then transition -> new current effect (`Assets/core/Controller.cs` lines 733-766).
 - Per-frame `Update()` updates timer, palette, beat manager, active effect/transition, optional filter, drum overlay, optional camera overlay, optional pixel-source blending, hardware output, mesh colors, and OSC ping (`Assets/core/Controller.cs` lines 805-959).
 
@@ -222,14 +224,14 @@ Examples:
 
 ## Unknowns / Unity-specific follow-up
 
-- **Deployment output path:** Docs emphasize ACN/E1.31 UDP, but current source compiles serial output by default. Confirm whether production should use USB-serial S2 Mini boards or E1.31 UDP.
+- **Deployment output path:** Current docs and source align on USB serial as the active output path, with ACN/E1.31 UDP retained as legacy/fallback. Hardware validation with S2 Mini / ESP32 boards is still needed.
 - **Firmware location:** `Assets/core/helpers/CONTEXT.md` references `main.cpp`, but no `main.cpp` exists under `Assets/`. Firmware may live in another repo or is missing.
 - **Embedded vs StreamingAssets JSON:** `Penrose.Awake()` uses the scene-serialized `jsonSource`, while `Assets/StreamingAssets/rawdata.json` and `rawdata1.json` also exist. Confirm source of truth and update workflow for Penrose geometry/mapping.
-- **Reflection order dependency:** Effects/transitions are discovered by `Assembly.GetTypes()` order. Scene serializes `currentTransition: 4`; adding/removing classes may shift indices. Confirm whether this is acceptable.
+- **Catalog index dependency:** Effects/transitions are now sorted deterministically by `Type.FullName`, but adding/removing/renaming classes can still shift indexes. Scene-serialized numeric fields such as `currentTransition` remain fragile compared with name-based controls.
 - **`startEffect` field:** Serialized in scene, but `SetupEffects()` currently ignores it and always uses `GetNewEffectIndex()`.
 - **Unity asset hygiene:** `kscope` writes `StreamingAssets/images/*/files.txt` at runtime on non-Android. Confirm whether this side effect is intended in editor/play mode.
 - **Thread/runtime behavior:** UDP and serial helper threads catch broad exceptions in places; hardware validation is needed to know expected failure/degradation behavior.
-- **TextMesh Pro import state:** Many TMP resource/example files are present and show as modified/untracked in git status; likely imported/generated Unity assets, but ownership was not investigated.
+- **TextMesh Pro import state:** TMP runtime resources are retained because the scene uses TMP. Earlier sample/example cleanup removed unused example content; preserve TMP resources and `.meta` files unless a future scene audit proves they are unused.
 
 ## Start Here
 

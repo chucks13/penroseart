@@ -1,12 +1,18 @@
 ﻿﻿using UnityEngine;
 
+/// <summary>
+/// Combines two child effects using a Perlin noise mask and colored border band.
+/// </summary>
 public class NoiseMixer : MixerBase
 {
 
     private EffectBase[] effects;
     private Color border;
 
-    public override string DebugText()
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText()
     {
         var debugText = string.Empty;
         for (var i = 0; i < 2; i++)
@@ -17,12 +23,18 @@ public class NoiseMixer : MixerBase
         return debugText;
     }
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         effects = new EffectBase[2];
@@ -34,7 +46,8 @@ public class NoiseMixer : MixerBase
             effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
-            effects[i].beatEnable = false; // Active Mixer: suppress children pulses
+            // NoiseMixer owns the rhythmic shape of the composite, so child pulses are suppressed.
+            effects[i].beatEnable = false;
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
             border = Color.HSVToRGB(Random.value, 1, 1);
         }
@@ -42,9 +55,15 @@ public class NoiseMixer : MixerBase
         controller.debugText.text = debugText;
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
         for (int i = 0; i < 2; i++)
         {

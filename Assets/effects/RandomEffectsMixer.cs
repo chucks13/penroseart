@@ -1,12 +1,18 @@
 ﻿using UnityEngine;
 
+/// <summary>
+/// Creates two or three child effects and additively mixes their buffers.
+/// </summary>
 public class RandomEffectsMixer : MixerBase {
 
   private EffectBase[] effects;
   private int total;
   private float percent;
 
-  public override string DebugText() {
+      /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() {
     var debugText = string.Empty;
     for(var i = 0; i < total; i++) {
       debugText += (i < total - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
@@ -15,7 +21,10 @@ public class RandomEffectsMixer : MixerBase {
     return debugText;
   }
 
-  public override void Init() {
+      /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init() {
         base.Init();
     }
     public override void OnStart() {
@@ -38,9 +47,15 @@ public class RandomEffectsMixer : MixerBase {
 
   }
 
-  public override void OnEnd() {  }
+      /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() {  }
 
-  public override void Draw() {
+      /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw() {
 
     for(int i = 0; i < total; i++) {
       effects[i].UpdateTime();

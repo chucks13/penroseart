@@ -1,6 +1,9 @@
 ﻿﻿﻿﻿﻿﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Renders palette-colored Perlin noise over tile positions with optional beat-driven brightness, color, or time distortion.
+/// </summary>
 public class Noise : EffectBase {
 
   private float n;
@@ -10,16 +13,25 @@ public class Noise : EffectBase {
   private float colorDelta;
   private int distortionMode; // 0: Brightness, 1: Color, 2: Time
 
-  public override string DebugText() {
+      /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() {
     string[] modeNames = { "Brightness", "Color", "Time Warp" };
     return $"Noise: {n}\nSpeed: {speed}\nBeat Mode: {modeNames[distortionMode]}";
   }
 
-  public override void Init() {
+      /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init() {
     base.Init();
   }
 
-  public override void OnStart() {
+      /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart() {
     base.OnStart();
     scale      = Random.Range(0.05f, 0.2f);
     speed      = Random.Range(0.1f, 1.5f);
@@ -29,13 +41,21 @@ public class Noise : EffectBase {
     buffer.Clear();
   }
 
-  public override void OnEnd() {  }
+      /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() {  }
 
-  public override void Draw() {
+      /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw() {
     float beatBrightness = 1.0f;
     float hueShift = 0.0f;
     float sampleTime = effectTime;
 
+    // This effect has three beat-response modes: brightness pulsing,
+    // palette hue offset pulsing, or time warping for a motion kick.
     if (beatEnable)
     {
         if (distortionMode == 0) 

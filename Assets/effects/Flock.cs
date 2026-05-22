@@ -1,6 +1,9 @@
 ﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
+/// <summary>
+/// Runs a small boid simulation and projects boid positions onto nearby Penrose tiles.
+/// </summary>
 public class Flock : EffectBase
 {
     private Boid[] flock;
@@ -9,14 +12,23 @@ public class Flock : EffectBase
     private float cohesion = 1f;
     private float separation = 1.25f;
 
-    public override string DebugText() { return $""; }
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() { return $""; }
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         var min = penrose.Bounds.min;
@@ -42,10 +54,17 @@ public class Flock : EffectBase
         buffer.Clear();
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
+        // Beat pulse scales boid brightness after positions are projected to tiles.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
@@ -56,7 +75,10 @@ public class Flock : EffectBase
         }
     }
 
-    public class Boid
+    /// <summary>
+/// Small moving particle used by Flock before projection onto the nearest Penrose tile.
+/// </summary>
+public class Boid
     {
         public Vector2 position;
         public Vector2 velocity;
@@ -73,7 +95,10 @@ public class Flock : EffectBase
         private Vector2 cohesionVec;
         private Vector2 separationVec;
 
-        public Boid(Vector2 min, Vector2 max, Flock parent)
+        /// <summary>
+    /// Creates one boid within bounds and assigns initial velocity.
+    /// </summary>
+    public Boid(Vector2 min, Vector2 max, Flock parent)
         {
             this.min = min;
             this.max = max;
@@ -82,7 +107,10 @@ public class Flock : EffectBase
             position = new Vector2(Random.Range(min.x, max.x), Random.Range(min.y, max.y));
         }
 
-        public void Update(float deltaTime)
+        /// <summary>
+    /// Advances boid position, flock steering, and edge wrapping for one frame.
+    /// </summary>
+    public void Update(float deltaTime)
         {
             if (boids == null) return;
 
@@ -98,7 +126,10 @@ public class Flock : EffectBase
             CheckEdges();
         }
 
-        private void CheckEdges()
+        /// <summary>
+    /// Wraps boids around Penrose bounds when they leave the visible area.
+    /// </summary>
+    private void CheckEdges()
         {
             if (position.x > max.x)
                 position.x = min.x;
@@ -109,7 +140,10 @@ public class Flock : EffectBase
             else if (position.y < min.y) position.y = max.y;
         }
 
-        private void UpdateFlock()
+        /// <summary>
+    /// Applies simple cohesion steering toward neighboring boids.
+    /// </summary>
+    private void UpdateFlock()
         {
             alignmentVec = Vector2.zero;
             cohesionVec = Vector2.zero;

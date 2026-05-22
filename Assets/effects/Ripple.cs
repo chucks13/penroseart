@@ -2,6 +2,9 @@
 using UnityEngine;
 using System;
 
+/// <summary>
+/// Renders expanding screen-space ripple rings and maps them to Penrose tiles.
+/// </summary>
 public class Ripple : ScreenEffect
 {
 
@@ -11,23 +14,39 @@ public class Ripple : ScreenEffect
     private Vector2 screen;
     private float intensity;
 
-    public override string DebugText() {
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() {
     return $"Drops {drops.Length}";
   }
 
-  public override void Init() {
+      /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init() {
     base.Init();
   }
 
-  public override void OnStart() {
+      /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart() {
     base.OnStart();
     intensity = Random.Range(0.01f, 0.02f);
     drops = new Drop[0];
     }
 
-  public override void OnEnd() {  }
+      /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() {  }
 
-  public override void Draw() {
+      /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw() {
+    // Beat pulse scales ripple brightness while drop radius/progression remains independent.
     float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
    if (Random.value < intensity) {
             Array.Resize(ref drops, drops.Length + 1);
@@ -58,12 +77,18 @@ public class Ripple : ScreenEffect
         ConvertScreenBuffer(ref screenBuffer, in buffer);
     }
 
-    public class Drop
+    /// <summary>
+/// Expanding screen-space ripple source.
+/// </summary>
+public class Drop
     {
         private Vector2 position;
         private float velocity;
         public float radius = 0f;
 
+        /// <summary>
+        /// Creates a ripple drop at a random screen position.
+        /// </summary>
         public Drop()
         {
             velocity = Random.Range(0.01f, 0.9f)/2000f;
@@ -73,6 +98,9 @@ public class Ripple : ScreenEffect
         public Vector2 Position => position;
         public float Radius => radius;
 
+        /// <summary>
+        /// Expands the ripple radius and respawns when it grows past the screen.
+        /// </summary>
         public void Update(float deltaTime)
         {
             radius += deltaTime * velocity;

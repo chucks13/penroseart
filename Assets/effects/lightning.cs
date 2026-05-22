@@ -2,6 +2,9 @@
 // Chuck Sommerville
 
 [System.Serializable]
+/// <summary>
+/// Builds stochastic branching paths outward from center-star tiles.
+/// </summary>
 public class lightning : EffectBase
 {
     float huerot=0;
@@ -11,17 +14,26 @@ public class lightning : EffectBase
     float deltaray = 0f;
     float deltatile = 0f;
     int mode = 0;
+    /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
     public override string DebugText()
     {
         return $"fade: {fadeValue}\n starthue:{starthue}\n deltastart:{deltastart}\n deltaray:{deltaray}\n deltatile:{deltatile}\n mode:{mode}";
     }
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         buffer.Clear();
@@ -38,10 +50,17 @@ public class lightning : EffectBase
         mode = Random.Range(0, 4);
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
+        // Beat pulse scales branching lightning path colors.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
 
         // this selects the center star 5 tiles

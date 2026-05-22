@@ -1,6 +1,9 @@
 ﻿﻿﻿﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
+/// <summary>
+/// Renders section/ring panel patterns and contains an older child-effect split mode.
+/// </summary>
 public class Panels : MixerBase
 {
     private Color[] colors;
@@ -8,15 +11,24 @@ public class Panels : MixerBase
     EffectBase ef0;
     EffectBase ef1;
 
-    public override string DebugText() => "Panels";
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() => "Panels";
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
 
     // Should be called every time an effect is turned on
-    public override void OnStart()
+        /// <summary>
+    /// Initializes per-activation random state before this effect starts drawing.
+    /// </summary>
+public override void OnStart()
     {
         base.OnStart();
         which = Random.Range(0, 2);
@@ -36,6 +48,7 @@ public class Panels : MixerBase
                 ef0.RandomizeTime();
                 ef0.Init();
                 ef0.OnStart();
+                // Child split mode aligns both child effects to the panel beat variant.
                 ef0.beatVariant = this.beatVariant;
                 ef1 = GetRandomEffect();
                 ef1.RandomizeTime();
@@ -51,10 +64,17 @@ public class Panels : MixerBase
     }
 
     // Should be called every time an effect is turned off
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
+        // Beat pulse scales panel colors; child-effect mode, when reachable, aligns children to this variant.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         switch (which)
         {

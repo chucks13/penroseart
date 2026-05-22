@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Performs a linear interpolation between two color arrays using a single fade value from ACN data.
+/// Blends native and external color buffers with independent red, green, and blue mix amounts.
 /// </summary>
 public class RGBBlender : BlenderBase
 {
@@ -11,6 +11,9 @@ public class RGBBlender : BlenderBase
         return "[R G B]";
     }
 
+    /// <summary>
+    /// Blends each RGB channel independently from src1 to src2 using settings [R G B].
+    /// </summary>
     public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
         if (settings.Length > 2)

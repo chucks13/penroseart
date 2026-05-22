@@ -1,4 +1,7 @@
 ﻿[System.Serializable]
+/// <summary>
+/// Legacy transition-as-effect base class retained for reference; the active controller uses TransitionBase instead.
+/// </summary>
 public abstract class Transition : EffectBase {
 
   private int a;

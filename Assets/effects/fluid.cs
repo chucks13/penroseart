@@ -3,6 +3,9 @@ using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Runs a tile-neighbor diffusion simulation and colors the resulting scalar field.
+/// </summary>
 public class fluid : ScreenEffect
 {
     private float[] state1;
@@ -14,10 +17,18 @@ public class fluid : ScreenEffect
     public float scale = 10f;
     public float fneighbors = 2f;
 
+    // This local beatVariant shadows EffectBase.beatVariant, so fluid currently
+    // uses the default variant value unless this field is assigned elsewhere.
     int beatVariant;
-    public override string DebugText() { return $""; }
+        /// <summary>
+    /// Returns text for the Controller debug display while this effect is active.
+    /// </summary>
+public override string DebugText() { return $""; }
 
-    public override void Init()
+        /// <summary>
+    /// Performs one-time setup after reflection creates this effect instance.
+    /// </summary>
+public override void Init()
     {
         base.Init();
     }
@@ -33,7 +44,10 @@ public class fluid : ScreenEffect
         }
     }
 
-    public override void OnEnd() { }
+        /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+public override void OnEnd() { }
 
     void generate()
     {
@@ -59,6 +73,9 @@ public class fluid : ScreenEffect
         state1 = state2;
         state2 = swap;
     }
+    /// <summary>
+    /// Randomly injects energy into the diffusion field.
+    /// </summary>
     void inject()
     {
         if (Random.Range(0, activity) == 0)
@@ -68,12 +85,16 @@ public class fluid : ScreenEffect
         //        for(int i=0;i<2460;i+=820)
         //        state1[455+i] = 20f;
     }
-    public override void Draw()
+        /// <summary>
+    /// Renders one frame into this effect's 900-color buffer.
+    /// </summary>
+public override void Draw()
     {
         slower++;
         if ((slower % 2) == 0)
             generate();
         inject();
+        // Beat pulse scales the palette-colored diffusion field.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         for (int i = 0; i < state1.Length; i++)
         {

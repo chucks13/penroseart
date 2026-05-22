@@ -4,6 +4,9 @@ using System.Collections;
 using Random = UnityEngine.Random;
 
 
+/// <summary>
+/// Optional webcam overlay source that can draw camera-derived colors into the Penrose buffer.
+/// </summary>
 [Serializable]
 public class CameraReader
 {
@@ -46,6 +49,9 @@ public class CameraReader
         return message;
     }
 
+    /// <summary>
+    /// Allocates camera/sample buffers, discovers webcams, requests permission, and starts the active WebCamTexture.
+    /// </summary>
     public void Init(int w,int h,int length)
     {
         width = w;
@@ -75,12 +81,18 @@ public class CameraReader
         webcamTexture.Play();
     }
 
+    /// <summary>
+    /// Seeds the camera overlay clock with a random phase.
+    /// </summary>
     public void RandomizeTime()
     {
         effectTime = Random.Range(0f, 14400f);
         huestep = Random.Range(0f, 1f);
     }
 
+    /// <summary>
+    /// Advances the camera overlay clock from Unity frame time.
+    /// </summary>
     public void UpdateTime()
     {
         effectDelta = Time.deltaTime;
@@ -99,6 +111,9 @@ public class CameraReader
     private float vbrght() { return settings[7]; }
     private float mix() { return settings[8]; }
     private float thresh() { return settings[9] * 0.01f; }
+    /// <summary>
+    /// Samples the camera, maps it through the screen buffer, and mixes it into the destination Penrose buffer.
+    /// </summary>
     public void Draw(Color[] buffer)
     {
         if (Application.HasUserAuthorization(UserAuthorization.WebCam))
@@ -111,6 +126,9 @@ public class CameraReader
         }
     }
 
+    /// <summary>
+    /// Converts current WebCamTexture pixels into a tile-aligned video buffer using ScreenEffect mapping.
+    /// </summary>
     private void RenderCamera(Color[] effectBuffer)
     {
         huestep += effectDelta * huespeed();
@@ -210,6 +228,9 @@ public class CameraReader
         }
         return effectBuffer[i];
     }
+    /// <summary>
+    /// Blends camera-derived colors into the active effect buffer using current camera settings.
+    /// </summary>
     private void mixEffect(Color[] videoBuffer,Color[] effectBuffer)
     {
         for (var i = 0; i < effectBuffer.Length; i++)
@@ -272,6 +293,9 @@ public class CameraReader
     {
     };
 
+    /// <summary>
+    /// Selects a camera by OSC button state.
+    /// </summary>
     private void selectCamera(OscMessage om,int n)
     {
         if(om.GetInt(0)==1)
@@ -286,6 +310,9 @@ public class CameraReader
             }
         }
     }
+    /// <summary>
+    /// Handles OSC page-2 controls for camera overlay parameters and camera selection.
+    /// </summary>
     public void OSCpage2(OscMessage om, ArrayList oms)
     {
         for (int i = 0; i < resets.Length; i++)     // resets
@@ -366,11 +393,17 @@ public class CameraReader
         return;
     }
 
+    /// <summary>
+    /// OSC entry point called by Controller when camera overlay is enabled.
+    /// </summary>
     public void OSCHandler(OscMessage om, ArrayList oms)
     {
         OSCpage2(om, oms);
     }
 
+    /// <summary>
+    /// Enumerates available webcam devices and updates the camera count.
+    /// </summary>
     void FindWebCams()
     {
         foreach (var device in WebCamTexture.devices)

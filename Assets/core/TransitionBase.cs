@@ -2,6 +2,12 @@
 using System;
 using Random = UnityEngine.Random;
 
+/// <summary>
+/// Base contract for effect-to-effect transitions and transition-as-external-blender implementations.
+/// </summary>
+/// <remarks>
+/// Normal transitions blend controller.effects[A] to controller.effects[B] using progress V. Some subclasses also implement Blend for external pixel-source mixing.
+/// </remarks>
 [System.Serializable]
 public abstract class TransitionBase
 {
@@ -11,6 +17,7 @@ public abstract class TransitionBase
 
   protected Controller controller;
 
+  /// <summary>Catalog/display name for this transition. Currently the C# type name.</summary>
   public string Name => GetType().ToString();
 
   private int a;
@@ -23,21 +30,33 @@ public abstract class TransitionBase
   // Defaults to no fader arguments so Blend() implementations can safely use
   // settings.Length before telnet or other controls provide values.
   public float[] settings = Array.Empty<float>();
+
+  /// <summary>
+  /// Parses external blender/telnet fader arguments for transition-as-blender mode.
+  /// </summary>
   public void setFaders(string[] stringArray)
   {
     settings = Array.ConvertAll(stringArray, float.Parse);
   }
 
+  /// <summary>
+  /// Optional external-source blending hook. Normal effect-to-effect transitions use Draw().
+  /// </summary>
   public virtual void Blend(Color[] dest, Color[] src1, Color[] src2)
   {
 
   }
+
+  /// <summary>
+  /// Human-readable fader argument contract for external-source blending.
+  /// </summary>
   public virtual string Usage()
   {
     return "(not implemented yet)";
   }
 
 
+  /// <summary>Source effect index for normal effect-to-effect transitions.</summary>
   public int A
   {
     get => a;
@@ -47,6 +66,7 @@ public abstract class TransitionBase
     }
   }
 
+  /// <summary>Destination effect index for normal effect-to-effect transitions.</summary>
   public int B
   {
     get => b;
@@ -56,15 +76,19 @@ public abstract class TransitionBase
     }
   }
 
+  /// <summary>Transition progress clamped from 0 to 1.</summary>
   public float V
   {
     get => v;
     set => v = Mathf.Clamp01(value);
   }
 
+  /// <summary>Remaining transition progress, equal to 1 - V.</summary>
   public float D => 1f - v;
 
-  // Used for UI display and gets called every frame
+  /// <summary>
+  /// Text displayed in the debug UI while this transition is active.
+  /// </summary>
   public virtual string DebugText() => $"{controller.effects[a].Name} ({D:0.00}) => {controller.effects[b].Name} ({v:0.00})";
 
   /// <summary>
@@ -78,12 +102,18 @@ public abstract class TransitionBase
     buffer = new Color[Penrose.Total];
   }
 
+  /// <summary>
+  /// Seeds effectTime with a random offset so each activation can start from a different phase.
+  /// </summary>
   public void RandomizeTime()
   {
       // Seed with 0 to 4 hours (14400 seconds)
       effectTime = Random.Range(0f, 14400f);
   }
 
+  /// <summary>
+  /// Advances the transition's local clock from Unity's current frame delta.
+  /// </summary>
   public void UpdateTime()
   {
       effectDelta = Time.deltaTime;
@@ -102,7 +132,9 @@ public abstract class TransitionBase
   /// </summary>
   public abstract void OnEnd();
 
-  // Should be called every frame
+  /// <summary>
+  /// Renders one transition frame into <see cref="buffer"/> using effects A and B.
+  /// </summary>
   public abstract void Draw();
 
 }

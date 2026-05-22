@@ -12,6 +12,9 @@ using System.Threading;
 using System.Runtime.InteropServices;
 
 
+/// <summary>
+/// Small background-thread UDP receiver used by PixelReceiver and drums.
+/// </summary>
 public class UDPReceive //: MonoBehaviour
 {
 
@@ -29,6 +32,9 @@ public class UDPReceive //: MonoBehaviour
     public delegate void handler(byte[] data);
     handler thehandler;
 
+    /// <summary>
+    /// Starts a background UDP receive thread on the requested port.
+    /// </summary>
     public UDPReceive(int p, handler myhandler)
     {
         thehandler = myhandler;
@@ -66,6 +72,9 @@ catch ( Exception e ){
     */
 
     // receive thread
+    /// <summary>
+    /// Blocking receive loop that forwards each UDP datagram to the registered handler.
+    /// </summary>
     private void ReceiveData()
     {
 

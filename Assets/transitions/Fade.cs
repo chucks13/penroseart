@@ -1,11 +1,20 @@
 ﻿using UnityEngine;
+/// <summary>
+/// Straight linear crossfade between source and destination effects.
+/// </summary>
 public class Fade : TransitionBase
 {
 
-  public override void OnStart() { buffer.Clear(); }
+    /// <summary>
+  /// Initializes per-run transition state before effect-to-effect blending begins.
+  /// </summary>
+public override void OnStart() { buffer.Clear(); }
   public override void OnEnd() { }
 
-  public override void Draw()
+    /// <summary>
+  /// Draws source and destination effects and writes the transition frame into buffer.
+  /// </summary>
+public override void Draw()
   {
 
     controller.effects[A].Draw();
@@ -14,6 +23,9 @@ public class Fade : TransitionBase
 
   }
 
+  /// <summary>
+  /// Shared linear blend implementation for normal transitions and external blending.
+  /// </summary>
   private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, float D2)
   {
 
@@ -24,7 +36,10 @@ public class Fade : TransitionBase
       dest[i] = colorA + colorB;
     }
   }
-  public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+    /// <summary>
+  /// Uses this transition algorithm as an external-source blender.
+  /// </summary>
+public override void Blend(Color[] dest, Color[] src1, Color[] src2)
   {
     float V2 = 0.5f;
     if (settings.Length > 0)
