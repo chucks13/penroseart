@@ -1,4 +1,4 @@
-﻿﻿using UnityEngine;
+﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
@@ -14,26 +14,26 @@ public class Vortex : EffectBase
 
     public spinner[] spinners;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText()
+    public override string DebugText()
     {
         return $"Vortex: {count}\n";
     }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         count = Random.Range(1, 5);
@@ -46,23 +46,23 @@ public override void OnStart()
         for (int i = 0; i < count; i++)
         {
             spinner sample = new spinner();
-//            sample.palette.blend = (Random.Range(0, 2) == 0);
+            //            sample.palette.blend = (Random.Range(0, 2) == 0);
             sample.twist = twist;
             spinners[i] = sample;
-//            spinners[i].palette = spinners[0].palette;          // make palettes the same
+            //            spinners[i].palette = spinners[0].palette;          // make palettes the same
         }
         buffer.Clear();
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
     public void Update()
     {
-        float deg2rad = (Mathf.PI * 2f)/360f;
+        float deg2rad = (Mathf.PI * 2f) / 360f;
         angle += speed * effectDelta;
-        for (int i=0;i<count;i++)
+        for (int i = 0; i < count; i++)
         {
             spinner sample = spinners[i];
             float local = angle + (i * 360 / count);
@@ -73,10 +73,10 @@ public override void OnEnd() { }
         }
     }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         // Beat pulse scales the nearest-spinner palette result for each tile.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
@@ -97,31 +97,31 @@ public override void Draw()
                 }
             }
             // Draw the point
-            buffer[i] = spinners[which].Draw(i,tiles[i].position) * beatBrightness;
+            buffer[i] = spinners[which].Draw(i, tiles[i].position) * beatBrightness;
         }
     }
 
     [System.Serializable]
     /// <summary>
-/// Moving angular source used by Vortex to determine nearest palette influence.
-/// </summary>
-public class spinner
+    /// Moving angular source used by Vortex to determine nearest palette influence.
+    /// </summary>
+    public class spinner
     {
         public Vector2 center;
-        public int arms =1;
-        public float twist =0.01f;
-        public float angle =0;
+        public int arms = 1;
+        public float twist = 0.01f;
+        public float angle = 0;
         const float rad2once = 1f / (Mathf.PI * 2f);
-        public float speed =0.5f;
-//        public GPalette palette = new GPalette();
+        public float speed = 0.5f;
+        //        public GPalette palette = new GPalette();
 
         /// <summary>
-    /// Samples the spinner's palette contribution for a tile position.
-    /// </summary>
-    public Color Draw(int i,Vector2 position)
+        /// Samples the spinner's palette contribution for a tile position.
+        /// </summary>
+        public Color Draw(int i, Vector2 position)
         {
             Vector2 vect = position - center;
-            float rotate = Mathf.Atan2(vect.y, vect.x) ;
+            float rotate = Mathf.Atan2(vect.y, vect.x);
             float length = Vector2.Distance(center, position);
             rotate += Mathf.PI;
             rotate *= rad2once;

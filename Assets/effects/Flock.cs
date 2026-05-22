@@ -1,4 +1,4 @@
-﻿﻿using Random = UnityEngine.Random;
+﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
 /// <summary>
@@ -12,23 +12,23 @@ public class Flock : EffectBase
     private float cohesion = 1f;
     private float separation = 1.25f;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText() { return $""; }
+    public override string DebugText() { return $""; }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         var min = penrose.Bounds.min;
@@ -43,7 +43,7 @@ public override void OnStart()
         for (int i = 0; i < total; i++)
         {
             Color bcolor;
-                bcolor = Color.HSVToRGB((float)i / total % 1f, 1f, 1f);
+            bcolor = Color.HSVToRGB((float)i / total % 1f, 1f, 1f);
             flock[i] = new Boid(min, max, this)
             {
                 color = bcolor,
@@ -54,15 +54,15 @@ public override void OnStart()
         buffer.Clear();
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         // Beat pulse scales boid brightness after positions are projected to tiles.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
@@ -76,9 +76,9 @@ public override void Draw()
     }
 
     /// <summary>
-/// Small moving particle used by Flock before projection onto the nearest Penrose tile.
-/// </summary>
-public class Boid
+    /// Small moving particle used by Flock before projection onto the nearest Penrose tile.
+    /// </summary>
+    public class Boid
     {
         public Vector2 position;
         public Vector2 velocity;
@@ -96,9 +96,9 @@ public class Boid
         private Vector2 separationVec;
 
         /// <summary>
-    /// Creates one boid within bounds and assigns initial velocity.
-    /// </summary>
-    public Boid(Vector2 min, Vector2 max, Flock parent)
+        /// Creates one boid within bounds and assigns initial velocity.
+        /// </summary>
+        public Boid(Vector2 min, Vector2 max, Flock parent)
         {
             this.min = min;
             this.max = max;
@@ -108,9 +108,9 @@ public class Boid
         }
 
         /// <summary>
-    /// Advances boid position, flock steering, and edge wrapping for one frame.
-    /// </summary>
-    public void Update(float deltaTime)
+        /// Advances boid position, flock steering, and edge wrapping for one frame.
+        /// </summary>
+        public void Update(float deltaTime)
         {
             if (boids == null) return;
 
@@ -127,9 +127,9 @@ public class Boid
         }
 
         /// <summary>
-    /// Wraps boids around Penrose bounds when they leave the visible area.
-    /// </summary>
-    private void CheckEdges()
+        /// Wraps boids around Penrose bounds when they leave the visible area.
+        /// </summary>
+        private void CheckEdges()
         {
             if (position.x > max.x)
                 position.x = min.x;
@@ -141,9 +141,9 @@ public class Boid
         }
 
         /// <summary>
-    /// Applies simple cohesion steering toward neighboring boids.
-    /// </summary>
-    private void UpdateFlock()
+        /// Applies simple cohesion steering toward neighboring boids.
+        /// </summary>
+        private void UpdateFlock()
         {
             alignmentVec = Vector2.zero;
             cohesionVec = Vector2.zero;

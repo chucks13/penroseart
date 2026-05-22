@@ -13,9 +13,9 @@ public class FizzleTransition : TransitionBase
         buffer.Clear();
     }
     /// <summary>
-  /// Builds the fixed randomized tile reveal order used by this transition instance.
-  /// </summary>
-  public void OnInit()
+    /// Builds the fixed randomized tile reveal order used by this transition instance.
+    /// </summary>
+    public void OnInit()
     {
         if (order == null)
         {
@@ -35,23 +35,23 @@ public class FizzleTransition : TransitionBase
     }
 
     /// <summary>
-  /// Creates a fizzle transition and initializes its persistent reveal order.
-  /// </summary>
-  public FizzleTransition()
+    /// Creates a fizzle transition and initializes its persistent reveal order.
+    /// </summary>
+    public FizzleTransition()
     {
         OnInit();
     }
 
 
-      /// <summary>
-  /// Reserved deactivation hook. Controller does not currently call this.
-  /// </summary>
-public override void OnEnd() { }
+    /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+    public override void OnEnd() { }
 
-      /// <summary>
-  /// Draws source and destination effects and writes the transition frame into buffer.
-  /// </summary>
-public override void Draw()
+    /// <summary>
+    /// Draws source and destination effects and writes the transition frame into buffer.
+    /// </summary>
+    public override void Draw()
     {
         controller.effects[A].Draw();
         controller.effects[B].Draw();
@@ -59,9 +59,9 @@ public override void Draw()
     }
 
     /// <summary>
-  /// Shared fixed-order reveal implementation for normal transitions and external blending.
-  /// </summary>
-  private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2)
+    /// Shared fixed-order reveal implementation for normal transitions and external blending.
+    /// </summary>
+    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2)
     {
         if (order == null)
             return;
@@ -79,10 +79,10 @@ public override void Draw()
 
     }
 
-      /// <summary>
-  /// Uses this transition algorithm as an external-source blender.
-  /// </summary>
-public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+    /// <summary>
+    /// Uses this transition algorithm as an external-source blender.
+    /// </summary>
+    public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
         float V2 = 0.5f;
         if (settings.Length > 0)

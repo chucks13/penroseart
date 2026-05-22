@@ -222,7 +222,7 @@ public class OSCReader : MonoBehaviour
 
     Hashtable AddressTable;
 
-   public ArrayList messagesReceived;
+    public ArrayList messagesReceived;
 
     private object ReadThreadLock = new object();
 
@@ -250,10 +250,10 @@ public class OSCReader : MonoBehaviour
         ReadThread.IsBackground = true;
         ReadThread.Start();
 
-//#if UNITY_EDITOR
-//        //UnityEditor.EditorApplication.playmodeStateChanged = HandleOnPlayModeChanged;
-//        UnityEditor.EditorApplication.playModeStateChanged += HandleOnPlayModeChanged;  //FIX FOR UNITY POST 2017
-//#endif
+        //#if UNITY_EDITOR
+        //        //UnityEditor.EditorApplication.playmodeStateChanged = HandleOnPlayModeChanged;
+        //        UnityEditor.EditorApplication.playModeStateChanged += HandleOnPlayModeChanged;  //FIX FOR UNITY POST 2017
+        //#endif
 
     }
 
@@ -270,10 +270,10 @@ public class OSCReader : MonoBehaviour
     /// </summary>
     void OnApplicationPause(bool pauseStatus)
     {
-//#if !UNITY_EDITOR
-//		paused = pauseStatus;
-//		print ("Application paused : " + pauseStatus);
-//#endif
+        //#if !UNITY_EDITOR
+        //		paused = pauseStatus;
+        //		print ("Application paused : " + pauseStatus);
+        //#endif
     }
 
 

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,10 +13,10 @@ public class yinyangmixer : MixerBase
     float spin;
     float drift;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText()
+    public override string DebugText()
     {
         var debugText = string.Empty;
         for (var i = 0; i < 2; i++)
@@ -27,19 +27,19 @@ public override string DebugText()
         return debugText;
     }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
 
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         effects = new EffectBase[2];
@@ -61,18 +61,18 @@ public override void OnStart()
         drift *= (Random.value < 0.5) ? -1f : 1f;
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
 
-        yina += spin * effectDelta * 60f ;
+        yina += spin * effectDelta * 60f;
         for (int i = 0; i < 2; i++)
         {
             effects[i].UpdateTime();
@@ -86,7 +86,7 @@ public override void Draw()
         {
             float w = 20f;
             float a = tiles[i].angle;
-            float r = tiles[i].radius* drift;
+            float r = tiles[i].radius * drift;
             a += yina;
             a += r;
             a += 360000f;
@@ -98,7 +98,7 @@ public override void Draw()
                 buffer[i] = ribbon;
                 continue;
             }
-            if (a > 360-w)
+            if (a > 360 - w)
             {
                 buffer[i] = ribbon;
                 continue;

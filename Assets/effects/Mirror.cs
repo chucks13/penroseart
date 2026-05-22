@@ -1,4 +1,4 @@
-﻿﻿using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,14 +12,14 @@ public class Mirror : MixerBase
     private int[] mirrorList;
     private int[] centerline;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText()
+    public override string DebugText()
     {
         var debugText = string.Empty;
-        debugText +=  $"{sourceEffect.Name}";
- 
+        debugText += $"{sourceEffect.Name}";
+
         return debugText;
     }
     /*
@@ -71,18 +71,18 @@ public override string DebugText()
     }
 
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
@@ -100,15 +100,15 @@ public override void OnStart()
         controller.debugText.text = debugText;
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         sourceEffect.UpdateTime();
         sourceEffect.Draw();
@@ -122,7 +122,7 @@ public override void Draw()
             int groupPointer = mirrorList[1 + i];
             int groupsize = mirrorList[groupPointer];
             Color tileColor = sourceEffect.buffer[mirrorList[groupPointer + 1]];
-            for (int j=0;j< groupsize;j++)
+            for (int j = 0; j < groupsize; j++)
             {
                 buffer[mirrorList[groupPointer + 1 + j]] = tileColor;
             }

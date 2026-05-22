@@ -1,4 +1,4 @@
-﻿﻿
+﻿
 #define ENABLE_SERIAL
 
 using System;
@@ -595,11 +595,13 @@ public class Controller : Singleton<Controller>
 
         // Map the 900 animation tiles to the 1800 physical LEDs
         int[] wires = penrose.JsonRawData.wires;
-        if (serialOutputBuffer.Length != wires.Length) {
+        if (serialOutputBuffer.Length != wires.Length)
+        {
             serialOutputBuffer = new Color[wires.Length];
         }
 
-        for (int i = 0; i < wires.Length; i++) {
+        for (int i = 0; i < wires.Length; i++)
+        {
             // Map physical LED 'i' to simulation tile 'wires[i]/2'
             serialOutputBuffer[i] = data[wires[i] / 2];
         }
@@ -774,7 +776,7 @@ public class Controller : Singleton<Controller>
     public void OscHandler(OscMessage om)
     {
         if (om.address == "/beat")
-            {}
+        { }
 
         ArrayList oms = new ArrayList();        // make a list of replies
         OSCpage1(om, oms);
@@ -1276,10 +1278,10 @@ public class Controller : Singleton<Controller>
         debugText.text += $"\nFPS: {fps},KB{keyboardBase}";
         if (OSCtimer > 0)
         {
-            #if ENABLE_SERIAL
+#if ENABLE_SERIAL
             // Clear serial debug info if OSC text is active to prevent clutter
             if (serial != null) debugText.text = debugText.text.Replace(serial.GetDebugInfo(), "");
-            #endif
+#endif
             debugText.text = OSCtext;
             OSCtimer--;
         }

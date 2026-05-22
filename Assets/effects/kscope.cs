@@ -1,4 +1,4 @@
-﻿﻿﻿﻿// By Chuck Sommerville
+﻿// By Chuck Sommerville
 /*
  * loads images in assets folder, and displays them as kscope
  */
@@ -55,9 +55,9 @@ public class kscope : ScreenEffect
         File.WriteAllLines(directoryPath + "/files.txt", fileNames);
     }
     /// <summary>
-  /// Reads a text file from StreamingAssets.
-  /// </summary>
-  public string LoadTextFile(string fileName)
+    /// Reads a text file from StreamingAssets.
+    /// </summary>
+    public string LoadTextFile(string fileName)
     {
         string filePath = Application.streamingAssetsPath + "/" + fileName;
         string fileContents = "";
@@ -77,9 +77,9 @@ public class kscope : ScreenEffect
         return fileContents;
     }
     /// <summary>
-  /// Loads a PNG file from disk into a Texture2D.
-  /// </summary>
-  public static Texture2D LoadPNG(string filePath)
+    /// Loads a PNG file from disk into a Texture2D.
+    /// </summary>
+    public static Texture2D LoadPNG(string filePath)
     {
         Texture2D tex = null;
         byte[] fileData;
@@ -93,9 +93,9 @@ public class kscope : ScreenEffect
         return tex;
     }
     /// <summary>
-  /// Loads a picture from the active StreamingAssets image folder.
-  /// </summary>
-  public Texture2D LoadPicture(string fileName)
+    /// Loads a picture from the active StreamingAssets image folder.
+    /// </summary>
+    public Texture2D LoadPicture(string fileName)
     {
         string filePath = Application.streamingAssetsPath + "/" + fileName;
         byte[] fileData;
@@ -128,10 +128,10 @@ public class kscope : ScreenEffect
             string fullPath = path + "/" + fileName.TrimEnd('\r');
             if (!fileName.Contains(".png"))
                 continue;
-//            if (fileName.Contains(".meta"))
-//                continue;
-//            if (fileName.Contains(".txt"))
-//                continue;
+            //            if (fileName.Contains(".meta"))
+            //                continue;
+            //            if (fileName.Contains(".txt"))
+            //                continue;
             Texture2D tex;
             try
             {
@@ -151,10 +151,10 @@ public class kscope : ScreenEffect
         return texList;
 
     }
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText()
+    public override string DebugText()
     {
         return $"file {fname} ";
     }
@@ -190,9 +190,9 @@ public override string DebugText()
         }
     }
     /// <summary>
-  /// Patches centerline tiles omitted by mirror shape data before mirror replication.
-  /// </summary>
-  private void fixCenterLineDraw()
+    /// Patches centerline tiles omitted by mirror shape data before mirror replication.
+    /// </summary>
+    private void fixCenterLineDraw()
     {
         for (int i = 0; i < centerline.Length; i++)
         {
@@ -201,10 +201,10 @@ public override string DebugText()
         }
 
     }
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
         colorTex = readDirectory($"/images/color");
@@ -248,10 +248,10 @@ public override void Init()
         }
         return newTex;
     }
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;

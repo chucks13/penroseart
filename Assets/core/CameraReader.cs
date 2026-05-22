@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using UnityEngine;
 using System.Collections;
 using Random = UnityEngine.Random;
@@ -24,12 +24,12 @@ public class CameraReader
     private protected int[] age;            // countdown times for when pixel was activated
     public float effectTime;
     public float effectDelta;
-//    public Color border;                    // used as an effect color
+    //    public Color border;                    // used as an effect color
     public float huestep = 0;               // hue animate rate
     private int currentCameraIdx = 0;
-     private int[] effects = { 0, 1, -1 };
-    private float[] defaults = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f,0.5f };
-    private float[] settings = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f,0.5f };
+    private int[] effects = { 0, 1, -1 };
+    private float[] defaults = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0.5f };
+    private float[] settings = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0.5f };
     private string[] knobs = new string[10] { "/2/fader1", "/2/fader2", "/2/fader3", "/2/fader4", "/2/fader5", "/2/fader6", "/2/fader7", "/2/fader8", "/2/fader9", "/2/rotary1", };
     private string[] resets = new string[8] { "/2/push1", "/2/push2", "/2/push3", "/2/push4", "/2/push5", "/2/push6", "/2/push7", "/2/push8" };
 
@@ -52,17 +52,17 @@ public class CameraReader
     /// <summary>
     /// Allocates camera/sample buffers, discovers webcams, requests permission, and starts the active WebCamTexture.
     /// </summary>
-    public void Init(int w,int h,int length)
+    public void Init(int w, int h, int length)
     {
         width = w;
         height = h;
- 
+
         // create the 2d buffer
         screenBuffer = new Color[width * height];
 
         for (int i = 0; i < resets.Length; i++)     // resets
         {
-           settings[i] = defaults[i];
+            settings[i] = defaults[i];
         }
 
         expandMin = 0;
@@ -104,10 +104,10 @@ public class CameraReader
     /// </summary>
     private int length() { return (int)(settings[0] * 100); }
     private float huespeed() { return settings[1]; }
-    private float hue3() { return (settings[2]+ huestep) %1; }
+    private float hue3() { return (settings[2] + huestep) % 1; }
     private float hue4() { return (settings[3] + huestep) % 1; }
     private float hue5() { return (settings[4] + huestep) % 1; }
-    private float rainbow() { return (settings[5]* 0.15f)%1; }
+    private float rainbow() { return (settings[5] * 0.15f) % 1; }
     private float vbrght() { return settings[7]; }
     private float mix() { return settings[8]; }
     private float thresh() { return settings[9] * 0.01f; }
@@ -132,7 +132,7 @@ public class CameraReader
     private void RenderCamera(Color[] effectBuffer)
     {
         huestep += effectDelta * huespeed();
-        if (mix()==0.0f)
+        if (mix() == 0.0f)
             return;
         // sample webcamTexture down to screenBuffer
         int blocksize = webcamTexture.width / width;
@@ -140,21 +140,21 @@ public class CameraReader
         int centery = webcamTexture.height / 2;
         float fraction = 1.0f / (float)(blocksize * blocksize);
 
-        int y1 = centery - ((height/2) * blocksize) ;
+        int y1 = centery - ((height / 2) * blocksize);
         for (var sy = 0; sy < height; sy++)
         {
-            int x1 = centerx - ((width/2) * blocksize) ;
+            int x1 = centerx - ((width / 2) * blocksize);
             for (var sx = 0; sx < width; sx++)
             {
                 Color sample = Color.black;
-                for (int x=0; x<blocksize;x++)
+                for (int x = 0; x < blocksize; x++)
                 {
-                    for(int y=0;y<blocksize;y++)
+                    for (int y = 0; y < blocksize; y++)
                     {
-                        sample += webcamTexture.GetPixel(x1+x,y1+y)* fraction;
+                        sample += webcamTexture.GetPixel(x1 + x, y1 + y) * fraction;
                     }
                 }
-                screenBuffer[((width-1)-sx) + (sy * width)] = sample;
+                screenBuffer[((width - 1) - sx) + (sy * width)] = sample;
                 x1 += blocksize;
             }
             y1 += blocksize;
@@ -164,9 +164,9 @@ public class CameraReader
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in localBuffer);
         buildAgeMask(localBuffer, thresh(), length());
 
-//        Expand(localBuffer);               // expand to cover full range
-//        huestep += 0.001f;
-//        saturate(localBuffer, huestep,1f,1f);             // saturate
+        //        Expand(localBuffer);               // expand to cover full range
+        //        huestep += 0.001f;
+        //        saturate(localBuffer, huestep,1f,1f);             // saturate
         mixEffect(localBuffer, effectBuffer);       // add color effects
     }
 
@@ -177,7 +177,7 @@ public class CameraReader
      * float threshold delta squareed it has to pass to reset the age
      * int timout age setting when the threshold is crossed
      */
-    private void buildAgeMask(Color[] videoBuffer, float threshold,int timout)
+    private void buildAgeMask(Color[] videoBuffer, float threshold, int timout)
     {
         for (var i = 0; i < videoBuffer.Length; i++)
         {
@@ -200,50 +200,50 @@ public class CameraReader
      * int type not used at this time,  will be the effect type
      */
 
-    private Color getColor(int i,int effect, Color[] videoBuffer, Color[] effectBuffer)
+    private Color getColor(int i, int effect, Color[] videoBuffer, Color[] effectBuffer)
     {
-        switch(effect)
+        switch (effect)
         {
             case 0:
                 return videoBuffer[i];
             case 1:
                 return effectBuffer[i];
             case 2:
-            {
-                Color c = videoBuffer[i];
-                float H, S, V;
-                float h = 0.0f;     //float h delta to add to the hue
-                float s = 1.0f;     // float s  new saturation value
-                float v = 1.0f;     // float v  new v value
+                {
+                    Color c = videoBuffer[i];
+                    float H, S, V;
+                    float h = 0.0f;     //float h delta to add to the hue
+                    float s = 1.0f;     // float s  new saturation value
+                    float v = 1.0f;     // float v  new v value
 
-                Color.RGBToHSV(c, out H, out S, out V);
-                return Color.HSVToRGB((H + hue3()) % 1f, s, v);
-            }
+                    Color.RGBToHSV(c, out H, out S, out V);
+                    return Color.HSVToRGB((H + hue3()) % 1f, s, v);
+                }
             case 3:
                 return Color.HSVToRGB(hue4(), 1f, vbrght());
             case 4:
                 return Color.HSVToRGB(hue5(), 1f, vbrght());
             case 5:
-                return Color.HSVToRGB((((float)age[i])*rainbow()+huestep)%1f, 1f, 1f);
+                return Color.HSVToRGB((((float)age[i]) * rainbow() + huestep) % 1f, 1f, 1f);
         }
         return effectBuffer[i];
     }
     /// <summary>
     /// Blends camera-derived colors into the active effect buffer using current camera settings.
     /// </summary>
-    private void mixEffect(Color[] videoBuffer,Color[] effectBuffer)
+    private void mixEffect(Color[] videoBuffer, Color[] effectBuffer)
     {
         for (var i = 0; i < effectBuffer.Length; i++)
         {
             Color c = effectBuffer[i];                       // default copy
-            if (age[i] ==0)
+            if (age[i] == 0)
                 c = getColor(i, effects[0], videoBuffer, effectBuffer);
             else
             {
-                if (age[i]>0)
+                if (age[i] > 0)
                     c = getColor(i, effects[1], videoBuffer, effectBuffer);
             }
-            effectBuffer[i] = Color.Lerp(effectBuffer[i],c, mix());
+            effectBuffer[i] = Color.Lerp(effectBuffer[i], c, mix());
         }
 
     }
@@ -260,9 +260,9 @@ public class CameraReader
     {
         float max = 0.0f;
         float min = 1.0f;
-        for(int i=0;i< buffer.Length;i++)
+        for (int i = 0; i < buffer.Length; i++)
         {
-            Color c = buffer[i]; 
+            Color c = buffer[i];
             if (c.r > max) max = c.r;
             if (c.g > max) max = c.g;
             if (c.b > max) max = c.b;
@@ -296,12 +296,12 @@ public class CameraReader
     /// <summary>
     /// Selects a camera by OSC button state.
     /// </summary>
-    private void selectCamera(OscMessage om,int n)
+    private void selectCamera(OscMessage om, int n)
     {
-        if(om.GetInt(0)==1)
+        if (om.GetInt(0) == 1)
         {
             WebCamDevice[] devices = WebCamTexture.devices;
-            if (n<devices.Length)
+            if (n < devices.Length)
             {
                 webcamTexture.Stop();
                 webcamTexture.deviceName = devices[n].name;
@@ -335,7 +335,7 @@ public class CameraReader
 
         if (om.address == "/2/nav4")       // switch cameras
         {
-            selectCamera(om,0);
+            selectCamera(om, 0);
             return;
         }
 
@@ -365,12 +365,12 @@ public class CameraReader
             for (int i = 0; i < knobs.Length; i++)
                 oms.Add(makemessage(knobs[i], settings[i]));
             for (int i = 0; i < 3; i++)
-                oms.Add(makemessage("/6/toggle" +( 33 + (i * 8) + effects[i]), 1.0f));
+                oms.Add(makemessage("/6/toggle" + (33 + (i * 8) + effects[i]), 1.0f));
             return;
         }
-        if(om.address=="/ping")
+        if (om.address == "/ping")
         {
-            if(pingstate<10)
+            if (pingstate < 10)
             {
                 oms.Add(makemessage(knobs[pingstate], settings[pingstate]));
 
@@ -381,13 +381,13 @@ public class CameraReader
                 int row = button / 8;
                 int column = button % 8;
                 bool state = effects[row] == column;
-                oms.Add(makemessage("/6/toggle" +( 33 + button), state?1f:0f));
+                oms.Add(makemessage("/6/toggle" + (33 + button), state ? 1f : 0f));
 
             }
 
 
             pingstate++;
-            pingstate %=( 10+24);
+            pingstate %= (10 + 24);
 
         }
         return;

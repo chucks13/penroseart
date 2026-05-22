@@ -6,12 +6,14 @@ using UnityEngine;
 /// <remarks>
 /// Child effects are created and driven manually by the mixer, not by the top-level Controller catalog.
 /// </remarks>
-public abstract class MixerBase : EffectBase {
+public abstract class MixerBase : EffectBase
+{
 
     /// <summary>
     /// Runs the normal EffectBase setup. Present as an explicit lifecycle marker for mixer subclasses.
     /// </summary>
-    public override void Init() {
+    public override void Init()
+    {
         base.Init();
     }
 

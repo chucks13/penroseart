@@ -15,9 +15,9 @@ public class SliderScript : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        _slider.onValueChanged.AddListener((v)=> 
+        _slider.onValueChanged.AddListener((v) =>
         {
-            controller.brightness =(byte) v;
+            controller.brightness = (byte)v;
             _slidertext.text = v.ToString("000");
         });
     }

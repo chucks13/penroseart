@@ -1,4 +1,4 @@
-﻿﻿using UnityEngine;
+﻿using UnityEngine;
 // Chuck Sommerville
 
 [System.Serializable]
@@ -7,10 +7,10 @@
 /// </summary>
 public class lightning : EffectBase
 {
-    float huerot=0;
+    float huerot = 0;
     float fadeValue;
     float starthue;
-    float deltastart=0f;
+    float deltastart = 0f;
     float deltaray = 0f;
     float deltatile = 0f;
     int mode = 0;
@@ -22,18 +22,18 @@ public class lightning : EffectBase
         return $"fade: {fadeValue}\n starthue:{starthue}\n deltastart:{deltastart}\n deltaray:{deltaray}\n deltatile:{deltatile}\n mode:{mode}";
     }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         buffer.Clear();
@@ -44,21 +44,21 @@ public override void OnStart()
         deltaray = Random.Range(0, 2) == 0 ? 0f : 0.2f;
         deltatile = Random.Range(0, 2) == 0 ? 0f : 0.02f;
         // set random directions
-        deltastart *= Random.Range(0, 2) == 0 ?1f:-1f;
+        deltastart *= Random.Range(0, 2) == 0 ? 1f : -1f;
         deltaray *= Random.Range(0, 2) == 0 ? 1f : -1f;
         deltatile *= Random.Range(0, 2) == 0 ? 1f : -1f;
         mode = Random.Range(0, 4);
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         // Beat pulse scales branching lightning path colors.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
@@ -85,11 +85,11 @@ public override void Draw()
                 // color the current tile
                 float currentRadius = tiles[currentIdx].radius;
                 Color strokeColor;
-                if(mode!=0)
-                    strokeColor = APalette.read((tilehue+10000f) % 1.0f, true);
+                if (mode != 0)
+                    strokeColor = APalette.read((tilehue + 10000f) % 1.0f, true);
                 else
-                    strokeColor = Color.HSVToRGB((tilehue+10000f) % 1.0f, 1, 1);
-                
+                    strokeColor = Color.HSVToRGB((tilehue + 10000f) % 1.0f, 1, 1);
+
                 buffer[currentIdx] = strokeColor * beatBrightness;
                 tilehue += deltatile;
                 // find possible paths

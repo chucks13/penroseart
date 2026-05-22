@@ -70,7 +70,7 @@ public class PixelReceiver
                 buffer[j] = new Color32(r, g, b, 255);
                 j++;
             }
-            
+
             timeout = 100; // Keep the display active
         }
     }

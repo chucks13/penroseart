@@ -24,9 +24,9 @@ public class GPalette
 
     // init function
     /// <summary>
-  /// Copies source colors into the fixed palette table, optionally interpolating across all 256 entries.
-  /// </summary>
-  private void Populate(Color[] initialvalues, bool blendtype = false)
+    /// Copies source colors into the fixed palette table, optionally interpolating across all 256 entries.
+    /// </summary>
+    private void Populate(Color[] initialvalues, bool blendtype = false)
     {
         Color[] list = initialvalues;
         length = list.Length;
@@ -37,17 +37,17 @@ public class GPalette
 
     // array constructor
     /// <summary>
-  /// Creates a palette from explicit Color entries.
-  /// </summary>
-  public GPalette(Color[] initialvalues, bool blendtype = false)
+    /// Creates a palette from explicit Color entries.
+    /// </summary>
+    public GPalette(Color[] initialvalues, bool blendtype = false)
     {
         Populate(initialvalues, blendtype);
     }
 
     /// <summary>
-  /// Parses a comma-separated numeric RGB list into Color values.
-  /// </summary>
-  private Color[] listFromString(string list)
+    /// Parses a comma-separated numeric RGB list into Color values.
+    /// </summary>
+    private Color[] listFromString(string list)
     {
         string[] colors = list.Split(',');
         length = colors.Length;
@@ -62,9 +62,9 @@ public class GPalette
     }
     // string constructor
     /// <summary>
-  /// Creates a palette from a serialized RGB component list.
-  /// </summary>
-  public GPalette(string list, bool blendtype = false)
+    /// Creates a palette from a serialized RGB component list.
+    /// </summary>
+    public GPalette(string list, bool blendtype = false)
     {
         Color[] values = listFromString(list);
         Populate(values, blendtype);
@@ -73,9 +73,9 @@ public class GPalette
     // random constructor
     // general read
     /// <summary>
-  /// Samples the palette at normalized position i, optionally interpolating between entries.
-  /// </summary>
-  public Color read(float i, bool doblend=false)
+    /// Samples the palette at normalized position i, optionally interpolating between entries.
+    /// </summary>
+    public Color read(float i, bool doblend = false)
     {
         // check looping
         if (doblend)
@@ -135,9 +135,9 @@ public class AnimPalette
     GPalette customPalette;
 
     /// <summary>
-  /// Loads palette definitions from Controller.paletteSource and initializes the active palette transition state.
-  /// </summary>
-  public AnimPalette()
+    /// Loads palette definitions from Controller.paletteSource and initializes the active palette transition state.
+    /// </summary>
+    public AnimPalette()
     {
         // built in palettes
         // leadables
@@ -155,8 +155,8 @@ public class AnimPalette
         string palettedata = Controller.Instance.paletteSource;
         processhex(palettedata);
         processgradient(palettedata);
-// if no loadable palettes, load default palettes
-        if (palettes.Count==0)
+        // if no loadable palettes, load default palettes
+        if (palettes.Count == 0)
         {
             for (int i = 0; i < StaticSamples.Length; i++)
             {
@@ -171,11 +171,11 @@ public class AnimPalette
         customPalette = new GPalette(customSource);
     }
     /// <summary>
-  /// Starts a transition toward a randomly selected loaded palette.
-  /// </summary>
-  public void Change()
+    /// Starts a transition toward a randomly selected loaded palette.
+    /// </summary>
+    public void Change()
     {
-        if(tween==0f)
+        if (tween == 0f)
         {
             next = palettes[Random.Range(0, palettes.Count)];
             tween = transitionTime;
@@ -184,13 +184,13 @@ public class AnimPalette
     }
 
     /// <summary>
-  /// Advances animated palette fade and rotation state.
-  /// </summary>
-  public void Update()
+    /// Advances animated palette fade and rotation state.
+    /// </summary>
+    public void Update()
     {
-        if(tween>0f)
+        if (tween > 0f)
         {
-            tween -=Time.deltaTime;
+            tween -= Time.deltaTime;
             if (tween <= 0f)
             {
                 current = next;
@@ -202,9 +202,9 @@ public class AnimPalette
     }
 
     /// <summary>
-  /// Samples the currently animated palette at normalized position i.
-  /// </summary>
-  public Color read(float i, bool doblend = false)
+    /// Samples the currently animated palette at normalized position i.
+    /// </summary>
+    public Color read(float i, bool doblend = false)
     {
         if (tween == 0f)
             return current.read(i);
@@ -213,9 +213,9 @@ public class AnimPalette
     }
 
     /// <summary>
-  /// Reads a text file from StreamingAssets.
-  /// </summary>
-  private string readfile(string fileName)
+    /// Reads a text file from StreamingAssets.
+    /// </summary>
+    private string readfile(string fileName)
     {
         try
         {
@@ -224,17 +224,17 @@ public class AnimPalette
             sr.Close();
             return fileContents;
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             return "";
         }
-    
+
     }
 
     /// <summary>
-  /// Returns true if a parsed palette name has not already been loaded.
-  /// </summary>
-  public bool isNewName(string pname)
+    /// Returns true if a parsed palette name has not already been loaded.
+    /// </summary>
+    public bool isNewName(string pname)
     {
         int x;
         for (x = 0; x < names.Count; x++)
@@ -248,9 +248,9 @@ public class AnimPalette
     }
 
     /// <summary>
-  /// Parses FastLED-style DEFINE_GRADIENT_PALETTE hex palette definitions.
-  /// </summary>
-  public void processhex(string fileContents)
+    /// Parses FastLED-style DEFINE_GRADIENT_PALETTE hex palette definitions.
+    /// </summary>
+    public void processhex(string fileContents)
     {
         while (true)
         {
@@ -273,18 +273,18 @@ public class AnimPalette
 
     }
     /// <summary>
-  /// Loads and parses a hex gradient palette file from StreamingAssets.
-  /// </summary>
-  public void LoadHexGradientFile(string fileName)
+    /// Loads and parses a hex gradient palette file from StreamingAssets.
+    /// </summary>
+    public void LoadHexGradientFile(string fileName)
     {
-        processhex( readfile(fileName));
+        processhex(readfile(fileName));
 
     }
 
     /// <summary>
-  /// Parses plain gradient palette data into runtime palette tables.
-  /// </summary>
-  public void processgradient(string fileContents)
+    /// Parses plain gradient palette data into runtime palette tables.
+    /// </summary>
+    public void processgradient(string fileContents)
     {
         while (true)
         {
@@ -315,17 +315,17 @@ public class AnimPalette
 
     }
     /// <summary>
-  /// Loads and parses a plain gradient palette file from StreamingAssets.
-  /// </summary>
-  public void LoadGradientFile(string fileName)
+    /// Loads and parses a plain gradient palette file from StreamingAssets.
+    /// </summary>
+    public void LoadGradientFile(string fileName)
     {
-        processgradient( readfile(fileName));
+        processgradient(readfile(fileName));
     }
 
     /// <summary>
-  /// Maps a normalized position through parsed gradient stops.
-  /// </summary>
-  private Color Map2Palette(float f,colortab[] source)
+    /// Maps a normalized position through parsed gradient stops.
+    /// </summary>
+    private Color Map2Palette(float f, colortab[] source)
     {
         for (int y = 1; y < source.Length; y++)               // for each input pair entry
         {
@@ -346,10 +346,10 @@ public class AnimPalette
         public float i;
         public Color c;
     };
-     /// <summary>
-  /// Converts comma-separated gradient stop data into color-table entries.
-  /// </summary>
-  private colortab[] data2colortab(string data)
+    /// <summary>
+    /// Converts comma-separated gradient stop data into color-table entries.
+    /// </summary>
+    private colortab[] data2colortab(string data)
     {
         // cleanup
         data = data.Replace("\n", "");
@@ -357,20 +357,20 @@ public class AnimPalette
         data = data.Replace(" ", "");
         string[] subs = data.Split(',');
         // build
-        colortab[] table = new colortab[subs.Length/4];
+        colortab[] table = new colortab[subs.Length / 4];
         int x = 0;
-        for (int y = 0; y < table.Length;y++ )
+        for (int y = 0; y < table.Length; y++)
         {
-            if((x+3)>subs.Length)
+            if ((x + 3) > subs.Length)
             {
                 break;
             }
             table[y] = new colortab();
-            table[y].i = float.Parse(subs[x++])/255f;
+            table[y].i = float.Parse(subs[x++]) / 255f;
             byte r = byte.Parse(subs[x++]);
             byte g = byte.Parse(subs[x++]);
             byte b = byte.Parse(subs[x++]);
-            table[y].c = new Color32(r,g,b,0);
+            table[y].c = new Color32(r, g, b, 0);
         }
         return table;
     }

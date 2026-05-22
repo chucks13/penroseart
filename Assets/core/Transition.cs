@@ -2,34 +2,41 @@
 /// <summary>
 /// Legacy transition-as-effect base class retained for reference; the active controller uses TransitionBase instead.
 /// </summary>
-public abstract class Transition : EffectBase {
+public abstract class Transition : EffectBase
+{
 
-  private int a;
-  private int b;
-  private float v;
+    private int a;
+    private int b;
+    private float v;
 
-  public int A {
-    get => a;
-    set {
-      if(value >= 0 && value < controller.effects.Length) a = value;
+    public int A
+    {
+        get => a;
+        set
+        {
+            if (value >= 0 && value < controller.effects.Length) a = value;
+        }
     }
-  }
 
-  public int B {
-    get => b;
-    set {
-      if(value >= 0 && value < controller.effects.Length) b = value;
+    public int B
+    {
+        get => b;
+        set
+        {
+            if (value >= 0 && value < controller.effects.Length) b = value;
+        }
     }
-  }
 
-  public float V {
-    get => v;
-    set {
-      if(value >= 0f && value <= 1f) v = value;
+    public float V
+    {
+        get => v;
+        set
+        {
+            if (value >= 0f && value <= 1f) v = value;
+        }
     }
-  }
 
-  public float ProgressRemaining => 1f - V;
-  
-  
+    public float ProgressRemaining => 1f - V;
+
+
 }

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿using System;
+﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -63,9 +63,9 @@ public class Waterfall : ScreenEffect
     {
         // Beat pulse scales the waterfall colors after droplet/background sampling.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
-        for(int x = 0; x < width; x++)
+        for (int x = 0; x < width; x++)
         {
-            for(int y = 0; y < height; y++)
+            for (int y = 0; y < height; y++)
             {
                 var screen = new Vector2();
                 screen.x = x;
@@ -90,15 +90,15 @@ public class Waterfall : ScreenEffect
                 }
                 screenBuffer[x + (y * width)] = APalette.read(color % 1f, true) * beatBrightness;
             }
+        }
+        // convert the 2D Matrix buffer to a tile buffer
+        ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
     }
-    // convert the 2D Matrix buffer to a tile buffer
-    ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
-  }
 
     /// <summary>
-/// Falling screen-space drop used by the Waterfall effect.
-/// </summary>
-public class Drop
+    /// Falling screen-space drop used by the Waterfall effect.
+    /// </summary>
+    public class Drop
     {
         public Vector2 position;
         public float radius;
@@ -106,9 +106,9 @@ public class Drop
         public float intensity;
 
         /// <summary>
-    /// Creates a falling drop with random position, speed, and size.
-    /// </summary>
-    public Drop()
+        /// Creates a falling drop with random position, speed, and size.
+        /// </summary>
+        public Drop()
         {
             position = new Vector2(Random.Range(0, width), Random.Range(height, height * 10));
             radius = Random.Range(0.2f, 2f);
@@ -117,9 +117,9 @@ public class Drop
         }
 
         /// <summary>
-    /// Moves the drop downward and respawns it above the screen after it exits.
-    /// </summary>
-    public void Update(float deltaTime)
+        /// Moves the drop downward and respawns it above the screen after it exits.
+        /// </summary>
+        public void Update(float deltaTime)
         {
             var velocity = new Vector2();
             velocity.x = 0f;

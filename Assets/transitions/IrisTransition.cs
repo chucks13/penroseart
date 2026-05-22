@@ -11,28 +11,28 @@ public class IrisTransition : TransitionBase
     int direction;
     float diagonalsize;
 
-      /// <summary>
-  /// Performs one-time transition setup after reflection creates this instance.
-  /// </summary>
-public override void Init()
+    /// <summary>
+    /// Performs one-time transition setup after reflection creates this instance.
+    /// </summary>
+    public override void Init()
     {
         base.Init();
         CacheGeometry();
     }
 
-      /// <summary>
-  /// Initializes per-run transition state before effect-to-effect blending begins.
-  /// </summary>
-public override void OnStart()
+    /// <summary>
+    /// Initializes per-run transition state before effect-to-effect blending begins.
+    /// </summary>
+    public override void OnStart()
     {
         buffer.Clear();
         direction = Random.Range(0, 2);
     }
 
-      /// <summary>
-  /// Reserved deactivation hook. Controller does not currently call this.
-  /// </summary>
-public override void OnEnd() { }
+    /// <summary>
+    /// Reserved deactivation hook. Controller does not currently call this.
+    /// </summary>
+    public override void OnEnd() { }
 
     /// <summary>
     /// Cache Penrose bounds once so transition-as-blender usage does not depend
@@ -46,10 +46,10 @@ public override void OnEnd() { }
         diagonalsize = diagonal.magnitude / 2f;
     }
 
-      /// <summary>
-  /// Draws source and destination effects and writes the transition frame into buffer.
-  /// </summary>
-public override void Draw()
+    /// <summary>
+    /// Draws source and destination effects and writes the transition frame into buffer.
+    /// </summary>
+    public override void Draw()
     {
         controller.effects[A].Draw();
         controller.effects[B].Draw();
@@ -58,9 +58,9 @@ public override void Draw()
     }
 
     /// <summary>
-  /// Shared radial iris implementation for normal transitions and external blending.
-  /// </summary>
-  private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, int dir)
+    /// Shared radial iris implementation for normal transitions and external blending.
+    /// </summary>
+    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, int dir)
     {
         Color[] a1 = src1;
         Color[] b1 = src2;
@@ -91,10 +91,10 @@ public override void Draw()
         }
 
     }
-      /// <summary>
-  /// Uses this transition algorithm as an external-source blender.
-  /// </summary>
-public override void Blend(Color[] dest, Color[] src1, Color[] src2)
+    /// <summary>
+    /// Uses this transition algorithm as an external-source blender.
+    /// </summary>
+    public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
         float V2 = 0.5f;
         int d = 0;
@@ -105,10 +105,10 @@ public override void Blend(Color[] dest, Color[] src1, Color[] src2)
                 d = 1;
         Draw2(dest, src1, src2, V2, d);
     }
-      /// <summary>
-  /// Returns the external-blender fader argument format for this transition.
-  /// </summary>
-public override string Usage()
+    /// <summary>
+    /// Returns the external-blender fader argument format for this transition.
+    /// </summary>
+    public override string Usage()
     {
         return "[ratio] [direction (0,1)]";
     }

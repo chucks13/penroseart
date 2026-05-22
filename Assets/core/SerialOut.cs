@@ -35,9 +35,9 @@ public class SerialOut
     private HashSet<string> connectingPorts = new HashSet<string>();
     private int targetBaudRate;
     private float lastDiscoveryTime = 0f;
-    
+
     private bool threadsRunning = false;
-    
+
     private Color[] simulationFrameCopy = new Color[Penrose.Total];
     private byte globalLevel = 0;
 
@@ -47,10 +47,10 @@ public class SerialOut
     private const byte BOARD_TYPE_LED = 0x01;
     private const int MAX_PIXELS_PER_SEGMENT = 300; // Sanity limit for buffer allocation
     private const byte CMD_QUERY = 0x3F; // '?'
-    private const byte CMD_DATA  = 0x44; // 'D'
+    private const byte CMD_DATA = 0x44; // 'D'
     private const byte CMD_LATCH = 0x4C; // 'L'
-    private const byte CMD_SYNC  = 0x53; // 'S'
-    private const byte ACK_BYTE  = 0x06;
+    private const byte CMD_SYNC = 0x53; // 'S'
+    private const byte ACK_BYTE = 0x06;
     private const byte NACK_BYTE = 0x15;
 
     /// <summary>
@@ -59,7 +59,7 @@ public class SerialOut
     public void Init(int baudRate)
     {
         // 2,000,000 baud is required for 900 pixels @ 60fps (~1.6Mbps raw data)
-        this.targetBaudRate = 2000000; 
+        this.targetBaudRate = 2000000;
         threadsRunning = true;
         DiscoverBoards();
     }
@@ -105,8 +105,8 @@ public class SerialOut
         // 2. Add new boards
         foreach (string portName in ports)
         {
-            if (!activeBoards.Any(b => b.PortName == portName) && 
-                !ignoredPorts.Contains(portName) && 
+            if (!activeBoards.Any(b => b.PortName == portName) &&
+                !ignoredPorts.Contains(portName) &&
                 !connectingPorts.Contains(portName))
             {
                 // Fire and forget connection task to avoid blocking the render thread
@@ -125,7 +125,7 @@ public class SerialOut
         try
         {
             sp = new SerialPort(portName, targetBaudRate);
-            sp.ReadTimeout = 500; 
+            sp.ReadTimeout = 500;
             sp.WriteTimeout = 1000;
             sp.WriteBufferSize = 65536; // Large buffer to handle USB burst jitter
 
@@ -137,7 +137,7 @@ public class SerialOut
             sp.Open();
 
             Debug.Log($"[SerialOut] {portName} opened. Waiting 2s for ESP32 bootloader...");
-            await Task.Delay(2000); 
+            await Task.Delay(2000);
             sp.DiscardInBuffer();
 
             Debug.Log($"[SerialOut] {portName}: Sending Handshake Query '?'...");
@@ -145,7 +145,7 @@ public class SerialOut
 
             byte[] header = new byte[1];
             int bytesRead = await Task.Run(() => sp.Read(header, 0, 1));
-            if (bytesRead == 0) 
+            if (bytesRead == 0)
             {
                 // One last try to discard any lingering boot noise
                 sp.DiscardInBuffer();
@@ -153,7 +153,7 @@ public class SerialOut
             }
 
             byte boardType = header[0];
-            
+
             // Read 1 byte for the config payload size
             byte[] sizeHeader = new byte[1];
             int sizeRead = await Task.Run(() => sp.Read(sizeHeader, 0, 1));
@@ -164,18 +164,19 @@ public class SerialOut
             {
                 throw new Exception($"Unsupported board type: 0x{boardType:X2}");
             }
-            
+
             Debug.Log($"[SerialOut] {portName}: LED Driver identified.");
 
-            S2MiniBoard board = new S2MiniBoard { 
-                Port = sp, 
+            S2MiniBoard board = new S2MiniBoard
+            {
+                Port = sp,
                 PortName = portName
             };
 
             // Read N bytes as defined by payloadSize
             byte[] rangeData = new byte[payloadSize];
             int read = 0;
-            while (read < payloadSize) 
+            while (read < payloadSize)
             {
                 int r = await Task.Run(() => sp.Read(rangeData, read, payloadSize - read));
                 if (r == 0) throw new Exception("Timeout reading mapping range.");
@@ -190,9 +191,9 @@ public class SerialOut
             // Total the pixels to size the bulk transfer buffer correctly
             board.TotalPixels = board.Segments.Sum(s => s.Count);
             board.ReusableBuffer = new byte[5 + (board.TotalPixels * 3) + 1]; // CMD_DATA + Header(4) + Pixels + CMD_LATCH
-            
+
             board.IsReady = true;
-            
+
             // Spawn dedicated I/O thread for this specific board
             board.BoardThread = new Thread(() => BoardIOThreadLoop(board));
             board.BoardThread.IsBackground = true;
@@ -227,7 +228,7 @@ public class SerialOut
             board.Port.DiscardInBuffer();
             board.Port.DiscardOutBuffer();
             board.Port.Write(new byte[] { CMD_SYNC }, 0, 1);
-            
+
             board.Port.ReadTimeout = 600; // Wait for the S2 Mini to flush and respond
             int response = board.Port.ReadByte();
             // Any standard response (ACK or NACK) means the command loop is alive
@@ -246,11 +247,12 @@ public class SerialOut
             board.FrameSignal.WaitOne();
             if (!threadsRunning || !board.IsReady) break;
 
-            try {
+            try
+            {
                 // Pack the buffer for this specific board's segments on the background thread
                 int p = 0;
                 var seg = board.Segments[0]; // Assuming unified range for now
-                
+
                 board.ReusableBuffer[p++] = CMD_DATA;
                 board.ReusableBuffer[p++] = (byte)(seg.StartIndex >> 8);
                 board.ReusableBuffer[p++] = (byte)(seg.StartIndex & 0xFF);
@@ -263,14 +265,17 @@ public class SerialOut
                     for (int i = 0; i < seg.Count; i++)
                     {
                         int globalIdx = seg.StartIndex + i;
-                        if (globalIdx < simulationFrameCopy.Length) {
+                        if (globalIdx < simulationFrameCopy.Length)
+                        {
                             Color c = simulationFrameCopy[globalIdx];
                             // Apply brightness level and pack into bytes
                             // Explicitly converting here on the background thread
                             board.ReusableBuffer[p++] = (byte)(c.r * globalLevel);
                             board.ReusableBuffer[p++] = (byte)(c.g * globalLevel);
                             board.ReusableBuffer[p++] = (byte)(c.b * globalLevel);
-                        } else {
+                        }
+                        else
+                        {
                             board.ReusableBuffer[p++] = 0; board.ReusableBuffer[p++] = 0; board.ReusableBuffer[p++] = 0;
                         }
                     }
@@ -279,7 +284,8 @@ public class SerialOut
                 board.ReusableBuffer[p++] = CMD_LATCH;
                 // Use the underlying stream for lower overhead in some Mono versions
                 board.Port.BaseStream.Write(board.ReusableBuffer, 0, board.ReusableBuffer.Length);
-            } catch { board.IsReady = false; }
+            }
+            catch { board.IsReady = false; }
         }
     }
 
@@ -301,9 +307,10 @@ public class SerialOut
 
         // 1. Snapshot the simulation data for the IO thread
         globalLevel = level;
-        
+
         // Ensure copy buffer matches simulation data size (1800)
-        if (simulationFrameCopy.Length != data.Length) {
+        if (simulationFrameCopy.Length != data.Length)
+        {
             simulationFrameCopy = new Color[data.Length];
         }
 
@@ -338,11 +345,13 @@ public class SerialOut
             }
         }
 
-        if (connectingPorts.Count > 0) {
+        if (connectingPorts.Count > 0)
+        {
             sb.Append($"\nConnecting: {string.Join(", ", connectingPorts)}");
         }
 
-        if (ignoredPorts.Count > 0) {
+        if (ignoredPorts.Count > 0)
+        {
             sb.Append($"\nFailed/Ignored: {string.Join(", ", ignoredPorts)}");
         }
 

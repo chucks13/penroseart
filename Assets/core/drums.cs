@@ -15,7 +15,7 @@ using Random = UnityEngine.Random;
 /// transition has rendered.
 /// </remarks>
 [Serializable]
-public class drums 
+public class drums
 {
     /// <summary>Active Penrose model used for tile positions.</summary>
     protected Penrose penrose;
@@ -51,16 +51,16 @@ public class drums
     /// Five fixed overlay centers as x/y pairs: right-lower, right-upper,
     /// center, left-upper, left-lower.
     /// </summary>
-    public float[] points = {  10f,-5f,   10f,5f,       0f,0f,   -10f, 5f,        -10f,-5f     };
+    public float[] points = { 10f, -5f, 10f, 5f, 0f, 0f, -10f, 5f, -10f, -5f };
 
     /// <summary>Display colors for the five drum hit pads.</summary>
     private Color[] colors = { Color.green, Color.yellow, Color.cyan, new Color(0xff, 0xa5, 0x00), Color.red };//};
 
     /// <summary>Initial hit diameter used by UDP trigger packets.</summary>
-    public float diameter=8;
+    public float diameter = 8;
 
     /// <summary>Acceleration factor for shrinking hit overlays.</summary>
-    public float shrink =128f;
+    public float shrink = 128f;
     [HideInInspector]
 
     /// <summary>Debug label for this overlay.</summary>
@@ -101,32 +101,32 @@ public class drums
     /// moving annulus with a color derived from the ring index. After drawing,
     /// hit radii shrink and ring lifetimes decay using <see cref="effectDelta"/>.
     /// </remarks>
-    public void Draw(Color[] destBuffer)        
+    public void Draw(Color[] destBuffer)
     {
-   
+
         for (int i = 0; i < destBuffer.Length; i++)
         {
 
-            float x = tiles[i].center.x; 
+            float x = tiles[i].center.x;
             float y = tiles[i].center.y;
             int k = 0;
-            for(int j=0;j<5;j++)
+            for (int j = 0; j < 5; j++)
             {
                 float dx = points[k++] - x;
                 float dy = points[k++] - y;
                 dx = dx * dx;
                 dy = dy * dy;
-                float r2 = dx+dy;       // radius squared
+                float r2 = dx + dy;       // radius squared
                 float v = hits[j];      // hit radius
                 float v2 = v / 2;
-                if (r2 < (v*v))
+                if (r2 < (v * v))
                 {
-                    if (r2 < (v2*v2))
+                    if (r2 < (v2 * v2))
                         destBuffer[i] = Color.black;
                     else
                         destBuffer[i] = colors[j];
                 }
-                if(rings[j]>0)
+                if (rings[j] > 0)
                 {
                     v = 5f - rings[j];      // ring progress
                     v *= 10;
@@ -157,7 +157,7 @@ public class drums
                 hits[j] = 0;
                 speed[j] = 0;
             }
-            if(rings[j]>0)
+            if (rings[j] > 0)
             {
                 rings[j] -= 12f * effectDelta; // Equivalent to 0.2 per frame at 60fps
                 if (rings[j] < 0)
@@ -204,9 +204,9 @@ public class drums
     /// </summary>
     /// <param name="i">Zero-based hit index.</param>
     /// <param name="p">Strength multiplier. Current code maps 1.0 to radius 5.</param>
-    public void hit(int i,float p)
+    public void hit(int i, float p)
     {
-        if((i>=0)&&(i<5))
+        if ((i >= 0) && (i < 5))
         {
             hits[i] = p * 5f;
             speed[i] = 0f;
@@ -222,7 +222,7 @@ public class drums
     {
         if ((i > 0) && (i < 6))
         {
-            rings[i-1] = 5f;
+            rings[i - 1] = 5f;
         }
     }
 
@@ -239,28 +239,28 @@ public class drums
             if (data[i + 4] > 20)
                 hits[i] = diameter;
         }
-     }
+    }
 
     /// <summary>
     /// Handles OSC page-3 drum controls and appends any replies to <paramref name="oms"/>.
     /// </summary>
     private void OSCpage3(OscMessage om, ArrayList oms)
     {
-        if (om.address=="/disk")      // test the drums
+        if (om.address == "/disk")      // test the drums
         {
             ring(om.GetInt(0), 1f);
         }
 
         if (om.address.StartsWith("/3/toggle"))      // test the drums
         {
-            if(om.GetInt(0)==1)
+            if (om.GetInt(0) == 1)
             {
                 int pad = int.Parse(om.address.Substring(9));
                 hit(pad - 1, 1f);
 
             }
         }
-        if(om.address.StartsWith("/3/rotary"))
+        if (om.address.StartsWith("/3/rotary"))
         {
 
         }

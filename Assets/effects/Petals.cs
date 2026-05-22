@@ -1,23 +1,25 @@
-﻿﻿using System;
+﻿using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
 /// Colors packed loop, starball, and star shape groups with layered petal-style palettes.
 /// </summary>
-public class Petals : ScreenEffect {
+public class Petals : ScreenEffect
+{
     private Color[] colors;
     private float background;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText() { return$""; }
+    public override string DebugText() { return $""; }
 
-      /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart() {
+    public override void OnStart()
+    {
         base.OnStart();
         colors = new Color[4];
         for (int i = 0; i < 4; i++)
@@ -27,15 +29,16 @@ public override void OnStart() {
         background = Random.value;
     }
 
-      /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-      /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw() {
+    public override void Draw()
+    {
         // Beat pulse scales the layered shape colors for this frame.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         background += effectDelta * 0.1f;

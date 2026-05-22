@@ -8,91 +8,93 @@ using Random = UnityEngine.Random;
 /// Effects are plain C# objects created by Factory&lt;EffectBase&gt;. Controller calls Init once, OnStart on activation, UpdateTime and Draw every active frame.
 /// </remarks>
 [System.Serializable]
-public abstract class EffectBase {
+public abstract class EffectBase
+{
 
-  [HideInInspector]
-  public Color[] buffer;
- // public int initialIndex;
-  public Controller controller;
-  private Factory<EffectBase> factory;
-
-  public float effectTime;
-  public float effectDelta;
     [HideInInspector]
- // public int sortIndex;
+    public Color[] buffer;
+    // public int initialIndex;
+    public Controller controller;
+    private Factory<EffectBase> factory;
 
-  protected Penrose penrose;
-  protected Penrose.TileData[] tiles;
-  public static AnimPalette APalette=new AnimPalette();
+    public float effectTime;
+    public float effectDelta;
+    [HideInInspector]
+    // public int sortIndex;
 
-  /// <summary>Current shared beat data from the controller's BeatManager.</summary>
-  public BeatData beat => controller.beatManager.beatData;
-  /// <summary>Shared beat helper used for rhythmic effect behavior.</summary>
-  public BeatManager beatManager => controller.beatManager;
-  /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
-  public bool IsBeatActive => controller.beatManager.IsActive;
+    protected Penrose penrose;
+    protected Penrose.TileData[] tiles;
+    public static AnimPalette APalette = new AnimPalette();
 
-  /// <summary>Whether this effect should apply beat brightness/time/color behavior.</summary>
-  public bool beatEnable = true;
-  /// <summary>Rhythmic personality selected during OnStart().</summary>
-  public int beatVariant;
+    /// <summary>Current shared beat data from the controller's BeatManager.</summary>
+    public BeatData beat => controller.beatManager.beatData;
+    /// <summary>Shared beat helper used for rhythmic effect behavior.</summary>
+    public BeatManager beatManager => controller.beatManager;
+    /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
+    public bool IsBeatActive => controller.beatManager.IsActive;
 
-  /// <summary>Catalog/display name for this effect. Currently the C# type name.</summary>
-  public string Name => GetType().ToString();
-   
-  /// <summary>
-  /// Text displayed in the debug UI while this effect is active.
-  /// </summary>
-  public abstract string DebugText();
+    /// <summary>Whether this effect should apply beat brightness/time/color behavior.</summary>
+    public bool beatEnable = true;
+    /// <summary>Rhythmic personality selected during OnStart().</summary>
+    public int beatVariant;
 
-  /// <summary>
-  /// One-time setup after reflection creates the effect. Binds Controller, Penrose, tile data, and the 900-color buffer.
-  /// </summary>
-  public virtual void Init() {
-    factory = new Factory<EffectBase>();
-    controller = Controller.Instance;
-    penrose = controller.penrose;
-    tiles = penrose.Tiles;
-    buffer     = new Color[Penrose.Total];
-  }
+    /// <summary>Catalog/display name for this effect. Currently the C# type name.</summary>
+    public string Name => GetType().ToString();
 
-  /// <summary>
-  /// Seeds effectTime with a random offset so reactivated effects do not always start from the same phase.
-  /// </summary>
-  public void RandomizeTime()
-  {
-      // Seed with 0 to 4 hours (14400 seconds)
-      effectTime = Random.Range(0f, 14400f);
-  }
+    /// <summary>
+    /// Text displayed in the debug UI while this effect is active.
+    /// </summary>
+    public abstract string DebugText();
 
-  /// <summary>
-  /// Advances the effect's local clock from Unity's current frame delta.
-  /// </summary>
-  public void UpdateTime()
-  {
-      effectDelta = Time.deltaTime;
-      effectTime += effectDelta;
-  }
+    /// <summary>
+    /// One-time setup after reflection creates the effect. Binds Controller, Penrose, tile data, and the 900-color buffer.
+    /// </summary>
+    public virtual void Init()
+    {
+        factory = new Factory<EffectBase>();
+        controller = Controller.Instance;
+        penrose = controller.penrose;
+        tiles = penrose.Tiles;
+        buffer = new Color[Penrose.Total];
+    }
 
-  /// <summary>
-  /// Per-activation setup called every time Controller or a mixer turns this effect on.
-  /// </summary>
-  public virtual void OnStart()
-  {
-      beatEnable = true;
-      beatVariant = beatManager.GetRandomVariant();
-  }
+    /// <summary>
+    /// Seeds effectTime with a random offset so reactivated effects do not always start from the same phase.
+    /// </summary>
+    public void RandomizeTime()
+    {
+        // Seed with 0 to 4 hours (14400 seconds)
+        effectTime = Random.Range(0f, 14400f);
+    }
 
-  /// <summary>
-  /// Reserved for future effect deactivation cleanup. The current controller
-  /// does not call OnEnd(); effects should not rely on it yet.
-  /// </summary>
-  public abstract void OnEnd();
+    /// <summary>
+    /// Advances the effect's local clock from Unity's current frame delta.
+    /// </summary>
+    public void UpdateTime()
+    {
+        effectDelta = Time.deltaTime;
+        effectTime += effectDelta;
+    }
 
-  /// <summary>
-  /// Renders one frame into <see cref="buffer"/>.
-  /// </summary>
-  public abstract void Draw();
+    /// <summary>
+    /// Per-activation setup called every time Controller or a mixer turns this effect on.
+    /// </summary>
+    public virtual void OnStart()
+    {
+        beatEnable = true;
+        beatVariant = beatManager.GetRandomVariant();
+    }
+
+    /// <summary>
+    /// Reserved for future effect deactivation cleanup. The current controller
+    /// does not call OnEnd(); effects should not rely on it yet.
+    /// </summary>
+    public abstract void OnEnd();
+
+    /// <summary>
+    /// Renders one frame into <see cref="buffer"/>.
+    /// </summary>
+    public abstract void Draw();
 
     /// <summary>
     /// Creates a random non-identical effect instance for mixer/wrapper child use.

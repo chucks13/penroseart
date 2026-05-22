@@ -1,4 +1,4 @@
-﻿﻿﻿﻿using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,24 +11,24 @@ public class TileShapes : EffectBase
     private Color color;
     private int[] shape;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText() => randomColor ? "Color: random" : $"Color: {color.ToString()}";
+    public override string DebugText() => randomColor ? "Color: random" : $"Color: {color.ToString()}";
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
     // Should be called every time an effect is turned on
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         if (Random.value > 0.5f)
@@ -42,7 +42,7 @@ public override void OnStart()
             color = Color.HSVToRGB(Random.value, 1f, 1f);
         }
 
-        switch(Random.Range(0,9))
+        switch (Random.Range(0, 9))
         {
             case 0:
                 shape = penrose.JsonRawData.shapes.lines0;
@@ -79,21 +79,21 @@ public override void OnStart()
     }
 
     // Should be called every time an effect is turned off
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         // Beat pulse scales randomly selected shape flashes.
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
-        count = count/5;
+        count = count / 5;
         for (int i = 0; i < count; i++)
         {
 
@@ -103,14 +103,14 @@ public override void Draw()
                 color = color; // Logic remains the same, using the class variable
 
 
-            int loop = Random.Range(0, shape[0]); 
+            int loop = Random.Range(0, shape[0]);
             int list = shape[1 + loop];
             int start = list + 1;
             int end = start + shape[list];
-            for(int j=start;j<end;j++)
+            for (int j = start; j < end; j++)
             {
                 int idx = shape[j];
-                if(idx>=0)
+                if (idx >= 0)
                     buffer[idx] = color * beatBrightness;
             }
         }

@@ -1,11 +1,12 @@
-﻿﻿using Random = UnityEngine.Random;
+﻿using Random = UnityEngine.Random;
 using UnityEngine;
 using System.Numerics;
 
 /// <summary>
 /// Animates packed Penrose loop shape groups over a background color.
 /// </summary>
-public class AnimateLoops : EffectBase {
+public class AnimateLoops : EffectBase
+{
 
     private Color[] colors;
     private float background;
@@ -13,26 +14,27 @@ public class AnimateLoops : EffectBase {
     string shapeName;
     private int distortionMode; // 0: Brightness, 1: Color, 2: Time
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText()
+    public override string DebugText()
     {
         string[] modeNames = { "Brightness", "Color", "Time Warp" };
         return $"shape: {shapeName}\nBeat Mode: {modeNames[distortionMode]}";
     }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init() {
-    base.Init();
-  }
+    public override void Init()
+    {
+        base.Init();
+    }
 
-      /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         shape = penrose.JsonRawData.shapes.loops;
@@ -58,15 +60,15 @@ public override void OnStart()
         background = Random.value;
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() {  }
+    public override void OnEnd() { }
 
-      /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;

@@ -1,4 +1,4 @@
-﻿﻿﻿﻿
+﻿
 using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -20,15 +20,15 @@ public class fluid : ScreenEffect
     // This local beatVariant shadows EffectBase.beatVariant, so fluid currently
     // uses the default variant value unless this field is assigned elsewhere.
     int beatVariant;
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText() { return $""; }
+    public override string DebugText() { return $""; }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
@@ -44,10 +44,10 @@ public override void Init()
         }
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
     void generate()
     {
@@ -57,7 +57,7 @@ public override void OnEnd() { }
             float count = 0;
             for (int j = 0; j < tiles[i].neighbors.Length; j++)
             {
-                int n=tiles[i].neighbors[j].tileIdx; 
+                int n = tiles[i].neighbors[j].tileIdx;
                 if (n >= 0)
                 {
                     total += state1[n];
@@ -85,10 +85,10 @@ public override void OnEnd() { }
         //        for(int i=0;i<2460;i+=820)
         //        state1[455+i] = 20f;
     }
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         slower++;
         if ((slower % 2) == 0)

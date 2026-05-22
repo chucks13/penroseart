@@ -1,4 +1,4 @@
-﻿﻿using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// Combines two child effects using a Perlin noise mask and colored border band.
@@ -9,10 +9,10 @@ public class NoiseMixer : MixerBase
     private EffectBase[] effects;
     private Color border;
 
-        /// <summary>
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-public override string DebugText()
+    public override string DebugText()
     {
         var debugText = string.Empty;
         for (var i = 0; i < 2; i++)
@@ -23,18 +23,18 @@ public override string DebugText()
         return debugText;
     }
 
-        /// <summary>
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
-public override void Init()
+    public override void Init()
     {
         base.Init();
     }
 
-        /// <summary>
+    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
-public override void OnStart()
+    public override void OnStart()
     {
         base.OnStart();
         effects = new EffectBase[2];
@@ -55,15 +55,15 @@ public override void OnStart()
         controller.debugText.text = debugText;
     }
 
-        /// <summary>
+    /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
-public override void OnEnd() { }
+    public override void OnEnd() { }
 
-        /// <summary>
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
-public override void Draw()
+    public override void Draw()
     {
         for (int i = 0; i < 2; i++)
         {
