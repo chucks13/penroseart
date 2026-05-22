@@ -60,6 +60,7 @@ public class GPalette
         }
         return values;
     }
+
     // string constructor
     /// <summary>
     /// Creates a palette from a serialized RGB component list.
