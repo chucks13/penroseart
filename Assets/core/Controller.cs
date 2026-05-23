@@ -1037,7 +1037,8 @@ public class Controller : Singleton<Controller>
 #if ENABLE_SERIAL
         // Active hardware output path for desktop controller builds.
         serial = new SerialOut();
-        serial.Init(230400);
+        // 2,000,000 baud is required for 900 pixels @ 60fps (~1.6Mbps raw data)
+        serial.Init(2000000);
         Debug.Log("[Controller] Serial Output Enabled.");
 #endif
 

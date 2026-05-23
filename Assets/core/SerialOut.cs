@@ -54,12 +54,12 @@ public class SerialOut
     private const byte NACK_BYTE = 0x15;
 
     /// <summary>
-    /// Starts serial board discovery. The current implementation uses the class target baud rate.
+    /// Stores the target baud rate and starts serial board discovery. Over USB CDC the
+    /// requested rate is effectively symbolic, since the link runs at native USB speed.
     /// </summary>
     public void Init(int baudRate)
     {
-        // 2,000,000 baud is required for 900 pixels @ 60fps (~1.6Mbps raw data)
-        this.targetBaudRate = 2000000;
+        this.targetBaudRate = baudRate;
         threadsRunning = true;
         DiscoverBoards();
     }
