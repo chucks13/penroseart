@@ -1,0 +1,21 @@
+{
+  "name": "RaveSystem.Osc.Tests",
+  "rootNamespace": "RaveSystem.Osc.Tests",
+  "references": [
+    "RaveSystem.Osc"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}
