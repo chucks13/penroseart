@@ -43,7 +43,7 @@ public sealed class OscFormatException : OscException {
 
 /// <summary>
 ///     Thrown when an OSC address or address pattern is invalid: missing leading <c>/</c>, contains a
-///     reserved character in a position the OSC 1.0 grammar disallows, or unbalanced <c>[</c>/<c>{</c>
+///     reserved character in a position the OSC grammar disallows, or unbalanced <c>[</c>/<c>{</c>
 ///     in a pattern.
 /// </summary>
 public sealed class OscAddressException : OscException {

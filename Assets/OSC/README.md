@@ -5,32 +5,36 @@ Origin: RaveSystem.Osc; adapted for PenroseArt's Unity runtime.
 
 # RaveSystem.Osc
 
-A general-purpose, allocation-conscious .NET implementation of [OSC 1.0](https://opensoundcontrol.stanford.edu/spec-1_0.html).
+A general-purpose, allocation-conscious .NET implementation of OSC 1.1, using the [OSC 1.0 specification](https://opensoundcontrol.stanford.edu/spec-1_0.html), the official [OSC 1.1 note](https://opensoundcontrol.stanford.edu/spec-1_1.html), and the [OSC 1.1 NIME paper](https://ccrma.stanford.edu/groups/osc/files/2009-NIME-OSC-1.1.pdf) as the standards sources.
 
 `RaveSystem.Osc` is a self-contained library. It has no references to RaveSystem domain types and is intended to be reusable by any .NET consumer that needs to send, receive, encode, decode, or dispatch Open Sound Control messages.
 
 ## Status
 
-Feature-complete against the OSC 1.0 specification. All public types are in place. Test suite covers the spec example bytes verbatim plus per-tag round-trip encode/decode.
+Feature-complete for the OSC 1.1 core behaviors implemented in this library. All public types are in place. Test suite covers the OSC example bytes verbatim plus per-tag round-trip encode/decode and OSC 1.1 path/stream additions.
 
-## Implements (full OSC 1.0)
+## Standards target
 
-- **Wire format**: messages and bundles per the OSC 1.0 specification.
-- **All 14 OSC 1.0 type tags**: `i f s b h d t T F N I m c r S`, plus the `[ ]` array delimiters for nested arguments.
+- **OSC 1.1 core**: messages, bundles, type tags, timetags, `//` path-traversing patterns, required support for `T F N I t`, Impulse/bang naming for `I`, and SLIP packet framing for stream transports.
+- **OSCQuery**: separate HTTP/JSON/WebSocket discovery protocol; not part of the core wire encoder/decoder.
+
+## Implements
+
+- **Wire format**: messages and bundles per the OSC specifications.
+- **OSC core type tags**: `i f s b h d t T F N I m c r S`, plus the `[ ]` array delimiters for nested arguments.
 - **Bundles**: `#bundle` envelope with NTP time tags; nested bundles supported.
 - **NTP time tags**: 64-bit fixed-point, 1900-01-01 UTC epoch, integer-only conversion (no floating-point drift).
 - **Address validation**: literal-address checks (sender-registered handler addresses) and pattern-address checks (sender-on-the-wire addresses).
-- **Address pattern matching**: full OSC 1.0 wildcard support (`?`, `*`, `[abc]`, `[a-z]`, `[!abc]`, `{foo,bar}`), including the spec edge cases (backwards ranges as literal sets, `!` only at start, trailing/leading `-` literal).
+- **Address pattern matching**: full OSC wildcard support (`?`, `*`, `//`, `[abc]`, `[a-z]`, `[!abc]`, `{foo,bar}`), including the spec edge cases (backwards ranges as literal sets, `!` only at start, trailing/leading `-` literal).
 - **Address-space dispatch**: handler registration and routing for receiver-side use, with bundle decomposition and timetag forwarding.
 - **UDP transport**: sender and receiver, broadcast-capable, allocation-free per send/receive after warm-up.
+- **SLIP stream framing**: OSC 1.1 packet framing helpers for TCP, serial, WebSocket, or other stream adapters.
 
-## Does NOT implement (out of OSC 1.0 scope)
+## Not implemented yet
 
-- **OSC 1.1 features**. The 1.1 NIME 2009 proposal introduces `//` xpath patterns, payload-bearing `T`/`F` arguments, and deprecates `I`/`N`. It is a separate proposal, not a successor.
-- **OSCQuery**. A separate spec layered on top of OSC; belongs in its own library.
-- **TCP-OSC framing**. SLIP framing for stream transport is not part of OSC 1.0; it can be added later as an additional transport without breaking the UDP API.
-
-These omissions are intentional and not a deferred backlog. They live outside the OSC 1.0 specification.
+- **OSCQuery**. A separate spec layered beside OSC for HTTP/JSON address-space discovery and optional WebSocket streaming.
+- **First-class TCP/serial/WebSocket transports**. `OscSlipFraming` provides the packet framing primitive; actual stream socket adapters are additive transport work.
+- **OSC 1.1 optional type reservations beyond the concrete tags in this library**. The 1.1 paper references additional recommended optional types but does not publish the full table in the paper text; implement only from authoritative sources.
 
 ## Quick start
 
@@ -110,19 +114,16 @@ OSC wire-format, address, writer-state, and reader-state failures surface throug
 - `OscWriterStateException` — writer used out of order. DEBUG-only; release builds elide the state-machine checks.
 - `OscReaderStateException` — reader used out of order: read before `ReadAddress`, read before `MoveNext`, read twice without an intervening `MoveNext`, or read after `MoveNext` returned `false`. Raised in all build configurations.
 
-## Performance notes
+## Unity port notes
 
-The encoder, decoder, pattern matcher, and dispatch path are designed to be allocation-free per call after one-time setup. Specifically:
+This copy targets PenroseArt's Unity runtime (`netstandard2.1`, C# 9). It keeps the RaveSystem OSC API and wire-format behavior, but a few upstream implementation details were downgraded from modern .NET so Unity can compile it:
 
-- **`OscWriter` and `OscReader`** are `ref struct`s. They live entirely on the stack and never escape to the heap. Tag-string buffering uses C# 12 `[InlineArray]` on the writer for the common case; callers can provide a larger scratch span to the `OscWriter` overload for messages with more than 60 type tags.
-- **String encoding** uses a single static strict-ASCII `Encoding` instance configured with `EncoderFallback.ExceptionFallback` so non-ASCII input throws `OscFormatException` rather than silently substituting `?`.
-- **Address validation** uses `SearchValues<char>` (.NET 8+) for the reserved-character set so the JIT can vectorize the lookup.
-- **`OscDispatcher`** uses an immutable-snapshot pattern (`volatile Registration[]`) so dispatch reads the registration list without locking and without per-dispatch allocation; only `Register`/`Unregister` allocate (a new array under a lock).
-- **`OscUdpSender`** caches its destination as a `SocketAddress` and uses the .NET 8+ `Socket.SendTo(ReadOnlySpan<byte>, SocketFlags, SocketAddress)` overload, the documented allocation-free send path. `Send` is `[MethodImpl(AggressiveInlining)]`.
-- **`OscUdpSocket`** uses a single 64 KB buffer and a single `SocketAddress` reused across receives via the `Socket.ReceiveFromAsync(Memory<byte>, SocketFlags, SocketAddress, CancellationToken)` overload. `ValueTask<int>` avoids the `Task` allocation when the receive completes synchronously.
-- **Address pattern matcher byte overload** stack-allocates up to 1024 chars and falls back to `ArrayPool<char>.Shared` for pathologically long patterns, so the common path never touches the heap and the rare large-pattern path uses a pooled buffer.
-
-This makes the library suitable for tight-loop broadcasters (e.g., 30 Hz device-state projection) without GC pressure.
+- **`OscWriter` and `OscReader`** remain `ref struct`s. Writer tag-string scratch storage uses a small managed byte array instead of C# 12 `[InlineArray]`.
+- **String encoding** still uses a single static strict-ASCII `Encoding` instance configured with `EncoderFallback.ExceptionFallback` so non-ASCII input throws `OscFormatException` rather than silently substituting `?`.
+- **Address validation** uses a simple string lookup for reserved characters instead of .NET 8 `SearchValues<char>`.
+- **`OscDispatcher`** keeps the immutable-snapshot registration pattern (`volatile Registration[]`) but uses `object` locks and `System.Threading.Timer` instead of `Lock`, `TimeProvider`, and `ITimer`.
+- **`OscUdpSender` and `OscUdpSocket`** use socket APIs available to Unity's .NET Standard profile. They may allocate around send/reply where upstream .NET 8+ uses span-based socket overloads.
+- **Address pattern matcher byte overload** still stack-allocates up to 1024 chars and falls back to `ArrayPool<char>.Shared` for pathologically long patterns.
 
 ## License
 

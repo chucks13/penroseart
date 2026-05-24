@@ -17,15 +17,17 @@ using System.Buffers.Binary;
 namespace RaveSystem.Osc {
 
 /// <summary>
-///     OSC 1.0 type tag identifiers. Enum values are the literal ASCII codes of the on-wire
+///     OSC type tag identifiers. Enum values are the literal ASCII codes of the on-wire
 ///     type tag characters, so a token can be cast to <see cref="byte" /> and written directly
 ///     into a type tag string with no translation step.
 /// </summary>
 /// <remarks>
 ///     OSC 1.0 defines four "required" types (i, f, s, b) and ten "non-standard" but widely
-///     supported types (h, d, t, T, F, N, I, m, c, r, S). Array delimiters [ and ] are also
+///     supported types (h, d, t, T, F, N, I, m, c, r, S). OSC 1.1 promotes the
+///     <see cref="True" />, <see cref="False" />, <see cref="Null" />, <see cref="Impulse" />,
+///     and <see cref="TimeTag" /> tags to required support. Array delimiters [ and ] are also
 ///     defined here for completeness. <see cref="True" />, <see cref="False" />,
-///     <see cref="Null" />, and <see cref="Infinitum" /> have no payload bytes:
+///     <see cref="Null" />, and <see cref="Impulse" /> have no payload bytes:
 ///     the value is encoded entirely by the tag.
 ///     <para>
 ///     Member names follow the OSC spec convention of <c>tag-letter</c> + <c>bit-width</c>
@@ -64,8 +66,8 @@ public enum OscToken : byte {
     /// <summary>Null / nil. No payload bytes. Tag <c>N</c>.</summary>
     Null = (byte)'N',
 
-    /// <summary>Impulse / infinitum / "bang". No payload bytes. Tag <c>I</c>.</summary>
-    Infinitum = (byte)'I',
+    /// <summary>Impulse / bang event trigger. No payload bytes. Tag <c>I</c>.</summary>
+    Impulse = (byte)'I',
 
     /// <summary>4-byte MIDI message: port, status, data1, data2. Tag <c>m</c>.</summary>
     Midi = (byte)'m',

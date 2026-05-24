@@ -17,17 +17,18 @@ using System.Buffers.Binary;
 namespace RaveSystem.Osc {
 
 /// <summary>
-///     OSC 1.0 address pattern matcher. A <em>pattern</em> is the address a sender places in
-///     a message; it may contain wildcards (<c>?</c>, <c>*</c>, <c>[...]</c>, <c>{...}</c>) that
+///     OSC 1.1-compatible address pattern matcher. A <em>pattern</em> is the address a sender places in
+///     a message; it may contain wildcards (<c>?</c>, <c>*</c>, <c>//</c>, <c>[...]</c>, <c>{...}</c>) that
 ///     a receiver expands at dispatch time. <see cref="Matches(ReadOnlySpan{char}, ReadOnlySpan{char})" />
 ///     tests a pattern against a literal address (such as a registered handler address) and
 ///     returns whether the pattern would dispatch to that address.
 /// </summary>
 /// <remarks>
-///     Per OSC 1.0:
+///     Per OSC 1.0 and the OSC 1.1 path-traversal addition:
 ///     <list type="bullet">
 ///         <item><c>?</c> matches any single character within a pattern part (never <c>/</c>).</item>
 ///         <item><c>*</c> matches zero or more characters within a pattern part (never <c>/</c>).</item>
+///         <item><c>//</c> matches across zero or more whole address parts.</item>
 ///         <item><c>[abc]</c> matches one of the listed characters.</item>
 ///         <item><c>[a-z]</c> matches one character in the range, inclusive.</item>
 ///         <item><c>[!abc]</c> matches one character NOT in the listed set. <c>!</c> negates only at position 0; <c>^</c> is literal.</item>
@@ -136,7 +137,7 @@ public static class OscAddressPattern {
                 error = $"OSC pattern contains invalid character at index {i} (char 0x{(int)c:X2})";
                 return false;
             }
-            if (c == '/' && i > 0 && pattern[i - 1] == '/') {
+            if (c == '/' && i > 0 && pattern[i - 1] == '/' && (i + 1 >= pattern.Length || (i > 1 && pattern[i - 2] == '/'))) {
                 error = $"OSC pattern contains empty path part at index {i}";
                 return false;
             }
@@ -188,6 +189,10 @@ public static class OscAddressPattern {
         int pi = 0, ai = 0;
         while (pi < pattern.Length) {
             var pc = pattern[pi];
+
+            if (pc == '/' && pi + 1 < pattern.Length && pattern[pi + 1] == '/') {
+                return MatchPathTraversal(pattern[(pi + 2)..], address[ai..]);
+            }
 
             if (pc == '*') {
                 pi++;
@@ -249,6 +254,19 @@ public static class OscAddressPattern {
         }
 
         return ai == address.Length;
+    }
+
+    private static bool MatchPathTraversal(ReadOnlySpan<char> tail, ReadOnlySpan<char> address) {
+        if (MatchSubPattern(tail, address)) {
+            return true;
+        }
+
+        for (var i = 0; i < address.Length; i++) {
+            if (address[i] == '/' && MatchSubPattern(tail, address[(i + 1)..])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool MatchAlternatives(ReadOnlySpan<char> alts, ReadOnlySpan<char> tail, ReadOnlySpan<char> address) {

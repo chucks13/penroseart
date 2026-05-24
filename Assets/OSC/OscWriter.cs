@@ -18,7 +18,7 @@ using System.Buffers;
 namespace RaveSystem.Osc {
 
 /// <summary>
-///     Span-based OSC 1.0 message encoder. The caller owns the destination buffer and the writer
+///     Span-based OSC 1.1-compatible message encoder. The caller owns the destination buffer and the writer
 ///     tracks the current position into it. Encoding allocates nothing on the heap on the happy
 ///     path. Address validation always runs so malformed outbound packets fail truthfully;
 ///     state machine checks and overflow checks are in <c>[Conditional("DEBUG")]</c> sections,
@@ -33,9 +33,9 @@ namespace RaveSystem.Osc {
 ///         <item>Call <see cref="Finish" /> to emit the type tag string and return the byte length.</item>
 ///     </list>
 ///     Tagless tokens (<see cref="OscToken.True" />, <see cref="OscToken.False" />,
-///     <see cref="OscToken.Null" />, <see cref="OscToken.Infinitum" />) are emitted by
+///     <see cref="OscToken.Null" />, <see cref="OscToken.Impulse" />) are emitted by
 ///     <see cref="WriteTrue" />, <see cref="WriteFalse" />, <see cref="WriteNull" />,
-///     <see cref="WriteInfinitum" />: they update the type tag string but write no payload.
+///     <see cref="WriteImpulse" />: they update the type tag string but write no payload.
 ///     Arrays use <see cref="ArrayStart" /> / <see cref="ArrayEnd" />.
 /// </remarks>
 public ref struct OscWriter {
@@ -173,8 +173,8 @@ public ref struct OscWriter {
     /// <summary>Appends a null/nil (tag <c>N</c>, no payload).</summary>
     public void WriteNull() => AppendTypeTag(OscToken.Null);
 
-    /// <summary>Appends an impulse / infinitum (tag <c>I</c>, no payload).</summary>
-    public void WriteInfinitum() => AppendTypeTag(OscToken.Infinitum);
+    /// <summary>Appends an impulse / bang event trigger (tag <c>I</c>, no payload).</summary>
+    public void WriteImpulse() => AppendTypeTag(OscToken.Impulse);
 
     /// <summary>Appends a MIDI message argument (tag <c>m</c>).</summary>
     public void WriteMidi(OscMidi value) {
@@ -340,7 +340,7 @@ public ref struct OscWriter {
     }
 
     private static void ValidateAddress(ReadOnlySpan<char> address) =>
-        // Senders may send pattern addresses (with wildcards) per OSC 1.0; validate as pattern,
+        // Senders may send pattern addresses (with wildcards) per OSC; validate as pattern,
         // not as literal. Handler registration on the receiver side validates as literal.
         OscAddressPattern.ValidatePattern(address);
 

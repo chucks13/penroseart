@@ -68,6 +68,47 @@ public sealed class OscPacketTests {
         Assert.Throws<OscFormatException>(() => OscPacket.Classify(Encoding.ASCII.GetBytes("#bad\0\0\0\0")));
     }
 
+    [Test]
+    public void AddressPatternSupportsOsc11DoubleSlashTraversal() {
+        Assert.That(OscAddressPattern.Matches("//spherical", "/position/spherical"), Is.True);
+        Assert.That(OscAddressPattern.Matches("//spherical", "/rig/deck/1/spherical"), Is.True);
+        Assert.That(OscAddressPattern.Matches("/position//frequency", "/position/cartesian/player/1/frequency"), Is.True);
+        Assert.That(OscAddressPattern.Matches("/position//frequency", "/rotation/frequency"), Is.False);
+    }
+
+    [Test]
+    public void SlipFramingRoundTripsEscapedOsc11StreamPacket() {
+        var packet = new byte[] { 0x01, OscSlipFraming.End, OscSlipFraming.Esc, 0x02 };
+        var frame = new byte[8];
+        var decoded = new byte[4];
+
+        var frameLength = OscSlipFraming.EncodePacket(packet, frame);
+        Assert.That(frame.AsSpan(0, frameLength).ToArray(), Is.EqualTo(new byte[] {
+            OscSlipFraming.End,
+            0x01,
+            OscSlipFraming.Esc,
+            OscSlipFraming.EscEnd,
+            OscSlipFraming.Esc,
+            OscSlipFraming.EscEsc,
+            0x02,
+            OscSlipFraming.End,
+        }));
+
+        var decodedLength = OscSlipFraming.DecodePacket(frame.AsSpan(0, frameLength), decoded);
+        Assert.That(decoded.AsSpan(0, decodedLength).ToArray(), Is.EqualTo(packet));
+    }
+
+    [Test]
+    public void SlipFramingReportsRequiredLengthWhenDestinationIsTooSmall() {
+        var destination = new byte[3];
+
+        var success = OscSlipFraming.TryEncodePacket(new byte[] { OscSlipFraming.End }, destination, out var written, out var requiredLength);
+
+        Assert.That(success, Is.False);
+        Assert.That(written, Is.EqualTo(0));
+        Assert.That(requiredLength, Is.EqualTo(4));
+    }
+
     private static void WriteIntElement(ref OscBundleWriter bundle, string address, int value) {
         var element = bundle.BeginElement();
         var writer = new OscWriter(element);

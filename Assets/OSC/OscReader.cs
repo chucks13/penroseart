@@ -18,7 +18,7 @@ using System.Buffers;
 namespace RaveSystem.Osc {
 
 /// <summary>
-///     Span-based OSC 1.0 message decoder. Parses the address, walks the type tag string,
+///     Span-based OSC 1.1-compatible message decoder. Parses the address, walks the type tag string,
 ///     and exposes one <c>ReadXxx</c> method per supported tag. Allocates only when explicitly
 ///     materializing strings or blobs as managed objects (see <see cref="ReadStringAlloc" />
 ///     and <see cref="ReadBlobAlloc" />); the span-returning forms allocate nothing.
@@ -179,7 +179,7 @@ public ref struct OscReader {
             case OscToken.True:
             case OscToken.False:
             case OscToken.Null:
-            case OscToken.Infinitum:
+            case OscToken.Impulse:
             case OscToken.ArrayStart:
             case OscToken.ArrayEnd:
                 break;

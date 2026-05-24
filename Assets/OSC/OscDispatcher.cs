@@ -28,7 +28,7 @@ namespace RaveSystem.Osc {
 public delegate void OscMessageHandler(ReadOnlySpan<byte> address, ref OscReader reader, OscTimeTag bundleTimeTag);
 
 /// <summary>
-///     OSC 1.0 receiver-side dispatcher. Maintains a registration list of (literal address,
+///     OSC receiver-side dispatcher. Maintains a registration list of (literal address,
 ///     handler) pairs and routes incoming packets through <see cref="OscAddressPattern" />
 ///     to every handler whose address matches the packet's pattern. Bundles are decomposed
 ///     recursively; each contained message is dispatched independently with the bundle's
