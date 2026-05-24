@@ -71,27 +71,28 @@ public sealed class RaveOscReceiver : MonoBehaviour
             return;
         }
 
-        var beatData = beatManager.beatData;
-        beatData.active = true;
+        ApplySnapshotToBeatData(latest, beatManager.beatData);
+    }
 
-        if (latest.HasBpm && latest.Bpm > 0f)
+    /// <summary>Copies beat-relevant Rave OSC values into PenroseArt's shared beat data.</summary>
+    public static void ApplySnapshotToBeatData(RaveOscSnapshot snapshot, BeatData beatData)
+    {
+        if (beatData == null)
         {
-            beatData.bpm = latest.Bpm;
-        }
-
-        if (latest.HasBeatInBar && latest.BeatInBar >= 1 && latest.BeatInBar <= beatData.beatsPerMeasure)
-        {
-            beatData.currentBeat = latest.BeatInBar - 1;
+            return;
         }
 
-        if (latest.HasOnBeat && latest.OnBeat)
-        {
-            beatData.timeEvent = 0;
-        }
-        else if (latest.HasNextBeatMs && latest.NextBeatMs >= 0)
-        {
-            beatData.timeEvent = -latest.NextBeatMs;
-        }
+        var hasUsableBeat = snapshot.Bpm > 0f;
+        beatData.active = hasUsableBeat;
+        beatData.bpm = hasUsableBeat ? snapshot.Bpm : 120f;
+        beatData.currentBeat = snapshot.BeatInBar >= 1 && snapshot.BeatInBar <= beatData.beatsPerMeasure
+            ? snapshot.BeatInBar - 1
+            : 0;
+        beatData.onBeat = snapshot.OnBeat;
+        beatData.beatPulse = Mathf.Clamp01(snapshot.BeatPulse);
+        beatData.timeEvent = snapshot.OnBeat
+            ? 0
+            : snapshot.NextBeatMs >= 0 ? -snapshot.NextBeatMs : 0;
     }
 
     private void StartListening()

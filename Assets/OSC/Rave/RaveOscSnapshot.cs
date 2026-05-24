@@ -15,6 +15,9 @@ public struct RaveOscSnapshot {
     public bool HasBeat;
     public int Beat;
 
+    public bool HasTotalBeats;
+    public int TotalBeats;
+
     public bool HasBar;
     public int Bar;
 
@@ -26,6 +29,9 @@ public struct RaveOscSnapshot {
 
     public bool HasOnBeat;
     public bool OnBeat;
+
+    public bool HasBeatPulse;
+    public float BeatPulse;
 
     public bool HasLow;
     public float Low;
@@ -41,6 +47,18 @@ public struct RaveOscSnapshot {
 
     public bool HasPhase;
     public string? Phase;
+
+    public bool HasPhaseBeatsLeft;
+    public int PhaseBeatsLeft;
+
+    public bool HasEnergy;
+    public string? Energy;
+
+    public bool HasEnergyNext;
+    public string? EnergyNext;
+
+    public bool HasEnergyMsLeft;
+    public int EnergyMsLeft;
 
     public override string ToString() {
         var bpm = HasBpm ? Bpm.ToString("0.##") : "?";

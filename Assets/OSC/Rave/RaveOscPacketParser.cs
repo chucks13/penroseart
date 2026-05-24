@@ -27,6 +27,10 @@ public sealed class RaveOscPacketParser : IDisposable {
             snapshot.HasBeat = true;
             snapshot.Beat = value;
         });
+        RegisterInt("/rave/onair/total_beats", (ref RaveOscSnapshot snapshot, int value) => {
+            snapshot.HasTotalBeats = true;
+            snapshot.TotalBeats = value;
+        });
         RegisterInt("/rave/onair/bar", (ref RaveOscSnapshot snapshot, int value) => {
             snapshot.HasBar = true;
             snapshot.Bar = value;
@@ -42,6 +46,10 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterInt("/rave/onair/on_beat", (ref RaveOscSnapshot snapshot, int value) => {
             snapshot.HasOnBeat = true;
             snapshot.OnBeat = value != 0;
+        });
+        RegisterFloat("/rave/onair/beat_pulse", (ref RaveOscSnapshot snapshot, float value) => {
+            snapshot.HasBeatPulse = true;
+            snapshot.BeatPulse = value;
         });
         RegisterFloat("/rave/onair/low", (ref RaveOscSnapshot snapshot, float value) => {
             snapshot.HasLow = true;
@@ -62,6 +70,22 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterString("/rave/onair/phase", (ref RaveOscSnapshot snapshot, string value) => {
             snapshot.HasPhase = true;
             snapshot.Phase = value;
+        });
+        RegisterInt("/rave/onair/phase_beats_left", (ref RaveOscSnapshot snapshot, int value) => {
+            snapshot.HasPhaseBeatsLeft = true;
+            snapshot.PhaseBeatsLeft = value;
+        });
+        RegisterString("/rave/onair/energy", (ref RaveOscSnapshot snapshot, string value) => {
+            snapshot.HasEnergy = true;
+            snapshot.Energy = value;
+        });
+        RegisterString("/rave/onair/energy_next", (ref RaveOscSnapshot snapshot, string value) => {
+            snapshot.HasEnergyNext = true;
+            snapshot.EnergyNext = value;
+        });
+        RegisterInt("/rave/onair/energy_ms_left", (ref RaveOscSnapshot snapshot, int value) => {
+            snapshot.HasEnergyMsLeft = true;
+            snapshot.EnergyMsLeft = value;
         });
     }
 

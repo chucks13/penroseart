@@ -18,6 +18,17 @@ public class Flock : EffectBase
     public override string DebugText() { return $""; }
 
     /// <summary>
+    /// Maps Rave beat pulse to flock movement speed. Disabled beat movement stays at normal speed.
+    /// </summary>
+    public static float GetBeatSpeedMultiplier(float beatPulse, bool beatEnabled)
+    {
+        if (!beatEnabled) return 1f;
+
+        float shapedPulse = Mathf.Pow(Mathf.Clamp01(beatPulse), 1.5f);
+        return Mathf.Lerp(0.25f, 3.0f, shapedPulse);
+    }
+
+    /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
     public override void Init()
@@ -64,14 +75,13 @@ public class Flock : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales boid brightness after positions are projected to tiles.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float speedMultiplier = GetBeatSpeedMultiplier(beat.beatPulse, beatEnable && beat.active);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
         {
             var f = flock[i];
-            f.Update(effectDelta);
-            buffer[controller.penrose.GetIndexFromPosition(f.position)] = f.color * beatBrightness;
+            f.Update(effectDelta * speedMultiplier);
+            buffer[controller.penrose.GetIndexFromPosition(f.position)] = f.color;
         }
     }
 

@@ -15,7 +15,7 @@ public class BeatData
     /// Master switch for beat-reactive behavior. When false, BeatManager helpers
     /// return non-pulsing values and effects should render normally.
     /// </summary>
-    public bool active = true;
+    public bool active;
 
     /// <summary>Tempo in beats per minute for the simulated beat clock.</summary>
     public float bpm = 120.0f;
@@ -25,6 +25,12 @@ public class BeatData
     /// the previous beat; negative means milliseconds until the next beat.
     /// </summary>
     public int timeEvent;
+
+    /// <summary>Normalized OSC beat pulse: <c>1</c> on the beat, decaying toward <c>0</c>.</summary>
+    public float beatPulse;
+
+    /// <summary>True while the current beat source reports that playback is on a beat.</summary>
+    public bool onBeat;
 
     /// <summary>Number of beats in the repeating measure.</summary>
     public int beatsPerMeasure = 4;
@@ -44,52 +50,17 @@ public class BeatData
 [Serializable]
 public class BeatManager
 {
-    /// <summary>Current simulated beat state.</summary>
+    /// <summary>Current beat state. Defaults are inert until OSC supplies live data.</summary>
     public BeatData beatData = new BeatData();
-
-    /// <summary>Last absolute beat number seen by <see cref="Update"/>.</summary>
-    private int _lastTotalBeats = -1;
-
-    /// <summary>True for only the first frame after the simulated beat index changes.</summary>
-    private bool _isBeatTriggered = false;
 
     /// <summary>Shorthand for whether the shared beat clock is active.</summary>
     public bool IsActive => beatData.active;
 
     /// <summary>
-    /// Advances the simulated beat clock from Unity time.
+    /// Reserved update hook. Beat data is populated by OSC, not by a local Unity-time clock.
     /// </summary>
-    /// <remarks>
-    /// The beat clock is deterministic from <see cref="Time.time"/> and BPM. It does
-    /// not accumulate delta time, so changing BPM immediately changes the computed
-    /// phase. <see cref="BeatData.timeEvent"/> is signed so effects can know whether
-    /// the closest beat is behind or ahead.
-    /// </remarks>
     public void Update()
     {
-        if (!beatData.active || beatData.bpm <= 0) return;
-
-        float secondsPerBeat = 60f / beatData.bpm;
-        float totalTime = Time.time;
-
-        // Detect if this frame is the start of a new beat.
-        int totalBeats = Mathf.FloorToInt(totalTime / secondsPerBeat);
-        _isBeatTriggered = (totalBeats != _lastTotalBeats);
-        _lastTotalBeats = totalBeats;
-
-        // Calculate current beat in the measure.
-        beatData.currentBeat = totalBeats % beatData.beatsPerMeasure;
-
-        // Calculate time within the current beat cycle.
-        float cycleTime = totalTime % secondsPerBeat;
-        float msSince = cycleTime * 1000f;
-        float msUntil = (secondsPerBeat - cycleTime) * 1000f;
-
-        // Positive = since last beat, negative = until next beat.
-        if (msSince <= msUntil)
-            beatData.timeEvent = (int)msSince;
-        else
-            beatData.timeEvent = -(int)msUntil;
     }
 
     /// <summary>
@@ -135,24 +106,8 @@ public class BeatManager
     {
         if (!enable || !beatData.active) return maxBrightness;
 
-        float msPerBeat = 60000f / Mathf.Max(beatData.bpm, 1f);
-
-        // Standard normalized distance: 0 at the beat, 1 at the midpoint between beats.
-        float dist = Mathf.Abs(beatData.timeEvent);
-        float normDist = Mathf.Clamp01(dist / (msPerBeat * 0.5f));
-
-        // Higher-frequency variants reuse the same nearest-beat distance inside
-        // shorter subdivisions.
-        float msPer8th = msPerBeat * 0.5f;
-        float norm8thDist = Mathf.Clamp01((dist % msPer8th) / (msPer8th * 0.5f));
-        float msPer16th = msPerBeat * 0.25f;
-        float norm16thDist = Mathf.Clamp01((dist % msPer16th) / (msPer16th * 0.5f));
-
-        // Use a high power (x^4) to keep brightness high for most of the beat.
-        // This prevents the "too dark" feeling while still providing a sharp rhythmic kick.
-        float standardPulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(normDist, 4.0f));
-        float doublePulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(norm8thDist, 4.0f));
-        float quadPulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(norm16thDist, 4.0f));
+        // RaveSystem provides the beat pulse directly over OSC. Do not synthesize a second local envelope here.
+        float standardPulse = Mathf.Lerp(minBrightness, maxBrightness, Mathf.Clamp01(beatData.beatPulse));
 
         switch (variant)
         {
@@ -163,9 +118,9 @@ public class BeatManager
             case 3: // Measure Start (Beat 1)
                 return (beatData.currentBeat == 0) ? standardPulse : maxBrightness;
             case 5: // 8th Notes
-                return doublePulse;
+                return standardPulse;
             case 6: // 16th Notes
-                return quadPulse;
+                return standardPulse;
             case 4: // Syncopated (1 and 4)
                 return (beatData.currentBeat == 0 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
             case 0: // Every Beat
@@ -204,7 +159,7 @@ public class BeatManager
     /// </remarks>
     public bool IsBeatTriggered(int variant)
     {
-        if (!beatData.active || !_isBeatTriggered) return false;
+        if (!beatData.active || !beatData.onBeat) return false;
 
         if (variant == 1 && beatData.currentBeat % 2 != 0) return false;
         if (variant == 2 && beatData.currentBeat % 2 == 0) return false;

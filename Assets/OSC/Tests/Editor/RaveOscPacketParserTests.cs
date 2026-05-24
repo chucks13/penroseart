@@ -16,32 +16,44 @@ public sealed class RaveOscPacketParserTests {
         var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
         WriteFloat(ref bundle, "/rave/onair/bpm", 128.5f);
         WriteInt(ref bundle, "/rave/onair/beat", 64);
+        WriteInt(ref bundle, "/rave/onair/total_beats", 384);
         WriteInt(ref bundle, "/rave/onair/bar", 16);
         WriteInt(ref bundle, "/rave/onair/beat_in_bar", 3);
         WriteInt(ref bundle, "/rave/onair/next_beat_ms", 123);
         WriteInt(ref bundle, "/rave/onair/on_beat", 1);
+        WriteFloat(ref bundle, "/rave/onair/beat_pulse", 0.625f);
         WriteFloat(ref bundle, "/rave/onair/low", 0.25f);
         WriteFloat(ref bundle, "/rave/onair/mid", 0.5f);
         WriteFloat(ref bundle, "/rave/onair/high", 0.75f);
         WriteInt(ref bundle, "/rave/onair/drop_in", 1);
         WriteString(ref bundle, "/rave/onair/phase", "Drop");
+        WriteInt(ref bundle, "/rave/onair/phase_beats_left", 12);
+        WriteString(ref bundle, "/rave/onair/energy", "High");
+        WriteString(ref bundle, "/rave/onair/energy_next", "Mid");
+        WriteInt(ref bundle, "/rave/onair/energy_ms_left", 4567);
 
         using var parser = new RaveOscPacketParser();
         var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
 
-        Assert.That(dispatched, Is.EqualTo(11));
+        Assert.That(dispatched, Is.EqualTo(17));
         Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
         Assert.That(snapshot.Bpm, Is.EqualTo(128.5f));
         Assert.That(snapshot.Beat, Is.EqualTo(64));
+        Assert.That(snapshot.TotalBeats, Is.EqualTo(384));
         Assert.That(snapshot.Bar, Is.EqualTo(16));
         Assert.That(snapshot.BeatInBar, Is.EqualTo(3));
         Assert.That(snapshot.NextBeatMs, Is.EqualTo(123));
         Assert.That(snapshot.OnBeat, Is.True);
+        Assert.That(snapshot.BeatPulse, Is.EqualTo(0.625f));
         Assert.That(snapshot.Low, Is.EqualTo(0.25f));
         Assert.That(snapshot.Mid, Is.EqualTo(0.5f));
         Assert.That(snapshot.High, Is.EqualTo(0.75f));
         Assert.That(snapshot.DropIn, Is.True);
         Assert.That(snapshot.Phase, Is.EqualTo("Drop"));
+        Assert.That(snapshot.PhaseBeatsLeft, Is.EqualTo(12));
+        Assert.That(snapshot.Energy, Is.EqualTo("High"));
+        Assert.That(snapshot.EnergyNext, Is.EqualTo("Mid"));
+        Assert.That(snapshot.EnergyMsLeft, Is.EqualTo(4567));
         Assert.That(parser.TryTakeSnapshot(out _), Is.False);
     }
 
