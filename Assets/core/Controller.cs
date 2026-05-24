@@ -264,8 +264,11 @@ public class Controller : Singleton<Controller>
     // OSC, frame timing, and private frame state
     // ---------------------------------------------------------------------
 
-    /// <summary>Runtime OSC reader component added to the Controller GameObject.</summary>
+    /// <summary>Legacy TouchOSC reader component added to the Controller GameObject.</summary>
     private OSCReader osc;
+
+    /// <summary>RaveSystem OSC receiver backed by the new RaveSystem.Osc stack.</summary>
+    private RaveOscReceiver raveOsc;
 
     /// <summary>Frames remaining before the latest OSC debug text is cleared.</summary>
     private int OSCtimer;
@@ -1007,6 +1010,7 @@ public class Controller : Singleton<Controller>
         // own UDP listeners.
         osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
         osc.SetAllMessageHandler(OscHandler);
+        raveOsc = gameObject.AddComponent<RaveOscReceiver>();
         drum = new drums();
         drum.RandomizeTime();
         drum.Init();
@@ -1221,6 +1225,8 @@ public class Controller : Singleton<Controller>
         if (Input.GetKeyDown("0")) drum.ring(5, 1f);
         drum.Update();
         beatManager.Update();
+        if (raveOsc != null)
+            raveOsc.ApplyTo(beatManager);
         // 5. Main visual generation. Either draw the special NYE overlay, the
         // active transition, or the active effect into penrose.buffer.
         if (NYE)

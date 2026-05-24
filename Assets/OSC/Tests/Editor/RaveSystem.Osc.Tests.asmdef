@@ -2,7 +2,8 @@
   "name": "RaveSystem.Osc.Tests",
   "rootNamespace": "RaveSystem.Osc.Tests",
   "references": [
-    "RaveSystem.Osc"
+    "RaveSystem.Osc",
+    "PenroseArt.RaveOsc"
   ],
   "includePlatforms": [
     "Editor"
