@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Penrose Waveform Designer</title>
+    <style>
+        body { 
+            background: #1a1a1a; 
+            color: #e0e0e0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 50px;
+        }
+        canvas { 
+            background: #000; 
+            border: 2px solid #444; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .controls { 
+            margin-top: 20px; 
+            display: flex; 
+            flex-direction: column;
+            gap: 10px; 
+            background: #333; 
+            padding: 15px; 
+            border-radius: 8px;
+        }
+        input { background: #222; color: #fff; border: 1px solid #555; padding: 5px; width: 60px; }
+    </style>
+</head>
+<body>
+    <canvas id="waveCanvas" width="800" height="400"></canvas>
+    <div class="controls">
+        <div class="input-group">
+            <label>Wave Sequence (1,2,4,8): </label>
+            <input type="text" id="waveSequence" value="11111111" style="width: 400px; letter-spacing: 2px;">
+        </div>
+        <div class="input-group">
+            <label>Amplitude Sequence (0-8): </label>
+            <input type="text" id="amplitudeSequence" value="8" style="width: 400px; letter-spacing: 2px;">
+        </div>
+    </div>
+    <script src="generator.js"></script>
+</body>
+</html>
