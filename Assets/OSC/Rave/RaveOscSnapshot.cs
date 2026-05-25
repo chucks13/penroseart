@@ -8,29 +8,32 @@ namespace PenroseArt.RaveOsc {
 
 /// <summary>Focused on-air beat position from <c>/rave/onair/beat</c>.</summary>
 [Serializable]
-public struct RaveBeatPosition {
+public struct BeatPosition {
     public int current;
     public int total;
 }
 
 /// <summary>Focused on-air bar position from <c>/rave/onair/bar</c>.</summary>
 [Serializable]
-public struct RaveBarPosition {
+public struct BarPosition {
     public int current;
     public int nextMs;
 }
 
 /// <summary>Low/mid/high normalized waveform energy values from <c>/rave/onair/levels</c>.</summary>
 [Serializable]
-public struct RaveLevels {
+public struct Levels {
     public float low;
     public float mid;
     public float high;
 }
 
-/// <summary>Grouped RaveSystem phase or energy run state.</summary>
+/// <summary>
+/// Current/next named beat state used by phase and energy projections.
+/// Mirrors RaveSystem's track phase state shape: labels, active flag, beat count, length, and remaining count.
+/// </summary>
 [Serializable]
-public struct RaveNamedState {
+public struct PhaseState {
     public string? current;
     public string? next;
     public bool active;
@@ -39,9 +42,12 @@ public struct RaveNamedState {
     public int remaining;
 }
 
-/// <summary>Grouped RaveSystem countdown state for drop and fill regions.</summary>
+/// <summary>
+/// Countdown beat state used by drop and fill projections.
+/// Mirrors RaveSystem's track countdown state shape: active flag, beat count, length, and remaining count.
+/// </summary>
 [Serializable]
-public struct RaveCountdownState {
+public struct CountdownState {
     public bool active;
     public int countBeats;
     public int lengthBeats;
@@ -57,18 +63,18 @@ public sealed class RaveOnAirSnapshot {
     public string playersLive = "";
     public string track = "";
     public float bpm;
-    public RaveBeatPosition beat;
-    public RaveBarPosition bar;
+    public BeatPosition beat;
+    public BarPosition bar;
     public int beatInBar;
     public int[] beatsCountMs = new int[4];
     public bool[] onBeats = new bool[4];
     public int beatAverageMs;
     public float beatPulse;
-    public RaveLevels levels;
-    public RaveNamedState phaseState;
-    public RaveCountdownState dropState;
-    public RaveCountdownState fillState;
-    public RaveNamedState energyState;
+    public Levels levels;
+    public PhaseState phaseState;
+    public CountdownState dropState;
+    public CountdownState fillState;
+    public PhaseState energyState;
 
     /// <summary>Creates a deep copy so background OSC updates cannot mutate a returned snapshot.</summary>
     public RaveOnAirSnapshot Clone() {

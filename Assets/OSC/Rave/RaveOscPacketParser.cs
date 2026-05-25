@@ -67,19 +67,19 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private delegate void SnapshotStringSetter(RaveOnAirSnapshot snapshot, string value);
 
-    private delegate void SnapshotBeatPositionSetter(RaveOnAirSnapshot snapshot, RaveBeatPosition value);
+    private delegate void SnapshotBeatPositionSetter(RaveOnAirSnapshot snapshot, BeatPosition value);
 
-    private delegate void SnapshotBarPositionSetter(RaveOnAirSnapshot snapshot, RaveBarPosition value);
+    private delegate void SnapshotBarPositionSetter(RaveOnAirSnapshot snapshot, BarPosition value);
 
     private delegate void SnapshotIntArraySetter(RaveOnAirSnapshot snapshot, int[] value);
 
     private delegate void SnapshotBoolArraySetter(RaveOnAirSnapshot snapshot, bool[] value);
 
-    private delegate void SnapshotLevelsSetter(RaveOnAirSnapshot snapshot, RaveLevels value);
+    private delegate void SnapshotLevelsSetter(RaveOnAirSnapshot snapshot, Levels value);
 
-    private delegate void SnapshotNamedStateSetter(RaveOnAirSnapshot snapshot, RaveNamedState value);
+    private delegate void SnapshotNamedStateSetter(RaveOnAirSnapshot snapshot, PhaseState value);
 
-    private delegate void SnapshotCountdownStateSetter(RaveOnAirSnapshot snapshot, RaveCountdownState value);
+    private delegate void SnapshotCountdownStateSetter(RaveOnAirSnapshot snapshot, CountdownState value);
 
     private delegate void SnapshotUpdater(RaveOnAirSnapshot snapshot);
 
@@ -106,7 +106,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private void RegisterBeatPosition(string address, SnapshotBeatPositionSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new RaveBeatPosition {
+            var value = new BeatPosition {
                 current = ReadNextInt(address, ref reader),
                 total = ReadNextInt(address, ref reader),
             };
@@ -116,7 +116,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private void RegisterBarPosition(string address, SnapshotBarPositionSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new RaveBarPosition {
+            var value = new BarPosition {
                 current = ReadNextInt(address, ref reader),
                 nextMs = ReadNextInt(address, ref reader),
             };
@@ -150,7 +150,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private void RegisterLevels(string address, SnapshotLevelsSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new RaveLevels {
+            var value = new Levels {
                 low = ReadNextFloat(address, ref reader),
                 mid = ReadNextFloat(address, ref reader),
                 high = ReadNextFloat(address, ref reader),
@@ -161,7 +161,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private void RegisterNamedState(string address, SnapshotNamedStateSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new RaveNamedState {
+            var value = new PhaseState {
                 current = ReadNextString(address, ref reader),
                 next = ReadNextString(address, ref reader),
                 active = ReadNextInt(address, ref reader) != 0,
@@ -175,7 +175,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private void RegisterCountdownState(string address, SnapshotCountdownStateSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new RaveCountdownState {
+            var value = new CountdownState {
                 active = ReadNextInt(address, ref reader) != 0,
                 countBeats = ReadNextInt(address, ref reader),
                 lengthBeats = ReadNextInt(address, ref reader),

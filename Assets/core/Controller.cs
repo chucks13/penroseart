@@ -1224,9 +1224,9 @@ public class Controller : Singleton<Controller>
         if (Input.GetKeyDown("9")) drum.ring(4, 1f);
         if (Input.GetKeyDown("0")) drum.ring(5, 1f);
         drum.Update();
-        beatManager.Update();
         if (raveOsc != null)
             raveOsc.ApplyTo(beatManager);
+        beatManager.Update();
         // 5. Main visual generation. Either draw the special NYE overlay, the
         // active transition, or the active effect into penrose.buffer.
         if (NYE)

@@ -71,6 +71,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
         }
 
         ApplySnapshotToBeatData(latest, beatManager.beatData);
+        beatManager.MarkExternalBeatDataApplied();
     }
 
     /// <summary>Stores raw Rave OSC values and derives the compatibility beat fields Penrose effects already use.</summary>

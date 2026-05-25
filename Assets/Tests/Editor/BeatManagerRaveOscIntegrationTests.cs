@@ -6,21 +6,83 @@ using PenroseArt.RaveOsc;
 public sealed class BeatManagerRaveOscIntegrationTests
 {
     [Test]
-    public void BeatManagerUpdateDoesNotSynthesizeLocalBeatState()
+    public void BeatManagerUpdateSynthesizesOnBeatWhenNoLiveBeatDataExists()
     {
-        var beatManager = new BeatManager();
+        var beatManager = new BeatManager
+        {
+            simulatedBpm = 120f,
+        };
         beatManager.beatData.active = false;
-        beatManager.beatData.bpm = 111f;
-        beatManager.beatData.currentBeat = 2;
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.beatData.active, Is.True);
+        Assert.That(beatManager.beatData.playersLive, Is.EqualTo("SIM"));
+        Assert.That(beatManager.beatData.track, Is.EqualTo("Simulated Beat"));
+        Assert.That(beatManager.beatData.bpm, Is.EqualTo(120f));
+        Assert.That(beatManager.beatData.beatAverageMs, Is.EqualTo(500));
+        Assert.That(beatManager.beatData.beatInBar, Is.EqualTo(1));
+        Assert.That(beatManager.beatData.currentBeat, Is.EqualTo(0));
+        Assert.That(beatManager.beatData.beatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
+        Assert.That(beatManager.beatData.onBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(beatManager.beatData.offBeats, Is.EqualTo(new[] { false, false, false, false }));
+    }
+
+    [Test]
+    public void BeatManagerUpdateSynthesizesOffBeatHalfwayBetweenSimulatedBeats()
+    {
+        var beatManager = new BeatManager
+        {
+            simulatedBpm = 120f,
+        };
+        beatManager.beatData.active = false;
+
+        beatManager.Update(0.25f);
+
+        Assert.That(beatManager.beatData.beatInBar, Is.EqualTo(1));
+        Assert.That(beatManager.beatData.beatsCountMs, Is.EqualTo(new[] { 1750, 250, 750, 1250 }));
+        Assert.That(beatManager.beatData.onBeats, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.beatData.offBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
+        Assert.That(beatManager.beatData.offBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.beatData.offBeatPulse, Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [Test]
+    public void BeatManagerUpdateDoesNotSimulateWhenSimulatedBpmIsUnavailable()
+    {
+        var beatManager = new BeatManager
+        {
+            simulatedBpm = 0f,
+        };
+        beatManager.beatData.active = false;
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.beatData.active, Is.False);
+        Assert.That(beatManager.beatData.nextBeatMs, Is.EqualTo(-1));
+        Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0f));
+    }
+
+    [Test]
+    public void BeatManagerUpdateDoesNotOverwriteLiveBeatData()
+    {
+        var beatManager = new BeatManager
+        {
+            simulatedBpm = 120f,
+        };
+        beatManager.beatData.active = true;
+        beatManager.beatData.bpm = 128f;
         beatManager.beatData.beatInBar = 3;
-        beatManager.beatData.onBeats = new[] { false, false, false, false };
+        beatManager.beatData.currentBeat = 2;
         beatManager.beatData.beatPulse = 0.25f;
+        beatManager.MarkExternalBeatDataApplied();
 
-        beatManager.Update();
+        beatManager.Update(0f);
 
-        Assert.That(beatManager.beatData.bpm, Is.EqualTo(111f));
+        Assert.That(beatManager.beatData.bpm, Is.EqualTo(128f));
+        Assert.That(beatManager.beatData.beatInBar, Is.EqualTo(3));
         Assert.That(beatManager.beatData.currentBeat, Is.EqualTo(2));
-        Assert.That(beatManager.beatData.onBeat, Is.False);
         Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0.25f));
     }
 
@@ -71,6 +133,17 @@ public sealed class BeatManagerRaveOscIntegrationTests
             offBeatsCountMs = new[] { -1, -1, -1, -1 },
             offBeats = new[] { true, true, true, true },
         };
+
+        Assert.That(beatData.nextBeatMs, Is.EqualTo(-1));
+        Assert.That(beatData.onBeat, Is.False);
+        Assert.That(beatData.nextOffBeatMs, Is.EqualTo(-1));
+        Assert.That(beatData.offBeat, Is.False);
+    }
+
+    [Test]
+    public void BeatDataDefaultsToUnavailableCountdowns()
+    {
+        var beatData = new BeatData();
 
         Assert.That(beatData.nextBeatMs, Is.EqualTo(-1));
         Assert.That(beatData.onBeat, Is.False);
@@ -302,18 +375,18 @@ public sealed class BeatManagerRaveOscIntegrationTests
             playersLive = "4,2",
             track = "Artist - Track",
             bpm = 128.5f,
-            beat = new RaveBeatPosition { current = 64, total = 384 },
-            bar = new RaveBarPosition { current = 16, nextMs = 777 },
+            beat = new BeatPosition { current = 64, total = 384 },
+            bar = new BarPosition { current = 16, nextMs = 777 },
             beatInBar = 3,
             beatsCountMs = new[] { 100, 200, 300, 400 },
             onBeats = new[] { false, false, onBeatForBeat3, false },
             beatAverageMs = 468,
             beatPulse = 0.625f,
-            levels = new RaveLevels { low = 0.25f, mid = 0.5f, high = 0.75f },
-            phaseState = new RaveNamedState { current = "Drop", next = "Break", active = true, countBeats = 12, lengthBeats = 32, remaining = 8 },
-            dropState = new RaveCountdownState { active = true, countBeats = 0, lengthBeats = 32, remaining = 2 },
-            fillState = new RaveCountdownState { active = false, countBeats = 16, lengthBeats = 8, remaining = 1 },
-            energyState = new RaveNamedState { current = "High", next = "Mid", active = true, countBeats = 4, lengthBeats = 16, remaining = 2 },
+            levels = new Levels { low = 0.25f, mid = 0.5f, high = 0.75f },
+            phaseState = new PhaseState { current = "Drop", next = "Break", active = true, countBeats = 12, lengthBeats = 32, remaining = 8 },
+            dropState = new CountdownState { active = true, countBeats = 0, lengthBeats = 32, remaining = 2 },
+            fillState = new CountdownState { active = false, countBeats = 16, lengthBeats = 8, remaining = 1 },
+            energyState = new PhaseState { current = "High", next = "Mid", active = true, countBeats = 4, lengthBeats = 16, remaining = 2 },
         };
     }
 }
