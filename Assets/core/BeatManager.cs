@@ -259,14 +259,14 @@ public class BeatManager
     /// <summary>Sentinel used when a simulated countdown is not available.</summary>
     private const int UnavailableMs = -1;
 
-    /// <summary>Current beat state. Defaults are inert until OSC or the local simulator supplies data.</summary>
-    public BeatData beatData = new BeatData();
-
     /// <summary>
     /// Local fallback tempo used when no live Rave OSC beat data is active.
     /// Set this to 0 or below to disable local beat simulation.
     /// </summary>
     public float simulatedBpm = 120f;
+
+    /// <summary>Current beat state. Defaults are inert until OSC or the local simulator supplies data.</summary>
+    public BeatData beatData = new BeatData();
 
     /// <summary>Tracks whether the currently active beatData values were generated locally rather than received from OSC.</summary>
     private bool usingSimulatedBeatData;
