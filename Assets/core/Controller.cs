@@ -671,7 +671,7 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Resolves the live force-effect override to an effect catalog index by case-insensitive substring match.
+    /// Resolves the live force-effect override to an effect catalog index by case-insensitive prefix match.
     /// </summary>
     private bool TryGetForcedEffectIndex(out int effectIndex)
     {
@@ -681,7 +681,7 @@ public class Controller : Singleton<Controller>
 
         for (int i = 0; i < effects.Length; i++)
         {
-            if (effects[i].Name.IndexOf(forceEffectName, StringComparison.OrdinalIgnoreCase) >= 0)
+            if (effects[i].Name.StartsWith(forceEffectName, StringComparison.OrdinalIgnoreCase))
             {
                 effectIndex = i;
                 return true;
