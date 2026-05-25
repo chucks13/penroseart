@@ -1,4 +1,3 @@
-// Copyright © 2026 Hunter Luisi. All rights reserved.
 
 #nullable enable
 

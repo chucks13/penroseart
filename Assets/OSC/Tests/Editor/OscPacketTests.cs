@@ -1,6 +1,3 @@
-// Copyright © 2026 Hunter Luisi. All rights reserved.
-// Origin: RaveSystem.Osc; adapted for PenroseArt's Unity runtime.
-
 #nullable enable
 using System;
 using System.Text;

@@ -1,12 +1,12 @@
 using UnityEngine;
 using System;
+using PenroseArt.RaveOsc;
 
 /// <summary>
-/// Mutable beat-clock state shared with effects through <see cref="BeatManager"/>.
+/// Mutable Rave on-air beat and phrase state shared with effects through <see cref="BeatManager"/>.
 /// </summary>
 /// <remarks>
-/// This is not currently driven by external OSC or MIDI. <see cref="BeatManager.Update"/>
-/// derives the beat position from Unity's <see cref="Time.time"/> and the configured BPM.
+/// Live values come from RaveSystem OSC. Defaults are inert fallback values used before OSC is available.
 /// </remarks>
 [Serializable]
 public class BeatData
@@ -17,30 +17,174 @@ public class BeatData
     /// </summary>
     public bool active;
 
-    /// <summary>Tempo in beats per minute for the simulated beat clock.</summary>
-    public float bpm = 120.0f;
+    /// <summary>CSV of live on-air player numbers ordered newest on-air first.</summary>
+    public string playersLive = "";
 
-    /// <summary>
-    /// Milliseconds to the nearest beat event. Positive means milliseconds since
-    /// the previous beat; negative means milliseconds until the next beat.
-    /// </summary>
-    public int timeEvent;
+    /// <summary>Focused on-air track display text.</summary>
+    public string track = "";
 
-    /// <summary>Normalized OSC beat pulse: <c>1</c> on the beat, decaying toward <c>0</c>.</summary>
+    /// <summary>Focused on-air effective tempo in beats per minute.</summary>
+    public float bpm;
+
+    /// <summary>Focused on-air beat position from /rave/onair/beat.</summary>
+    public RaveBeatPosition beat;
+
+    /// <summary>Focused on-air bar position from /rave/onair/bar.</summary>
+    public RaveBarPosition bar;
+
+    /// <summary>Focused on-air 1-based beat label inside the current bar.</summary>
+    public int beatInBar;
+
+    /// <summary>Milliseconds until beat labels 1 through 4.</summary>
+    public int[] beatsCountMs = new int[4];
+
+    /// <summary>Beat-label gates for beat labels 1 through 4.</summary>
+    public bool[] onBeats = new bool[4];
+
+    /// <summary>Milliseconds until offbeat labels 1 through 4, derived from OSC beat countdowns.</summary>
+    public int[] offBeatsCountMs = new[] { -1, -1, -1, -1 };
+
+    /// <summary>Offbeat-label gates for offbeats after beat labels 1 through 4.</summary>
+    public bool[] offBeats = new bool[4];
+
+    /// <summary>Normalized offbeat pulse: 1 on the offbeat, decaying toward 0 until the next offbeat.</summary>
+    public float offBeatPulse;
+
+    /// <summary>Average beat duration in milliseconds across live players with usable timing.</summary>
+    public int beatAverageMs;
+
+    /// <summary>Normalized OSC beat pulse: 1 on the beat, decaying toward 0.</summary>
     public float beatPulse;
 
-    /// <summary>True while the current beat source reports that playback is on a beat.</summary>
-    public bool onBeat;
+    /// <summary>Average low/mid/high waveform energy across live players.</summary>
+    public RaveLevels levels;
+
+    /// <summary>Grouped phase state for the focused on-air track.</summary>
+    public RaveNamedState phaseState;
+
+    /// <summary>Grouped drop countdown state for the focused on-air track.</summary>
+    public RaveCountdownState dropState;
+
+    /// <summary>Grouped fill countdown state for the focused on-air track.</summary>
+    public RaveCountdownState fillState;
+
+    /// <summary>Grouped energy-run state for the focused on-air track.</summary>
+    public RaveNamedState energyState;
+
+    /// <summary>Milliseconds until the nearest upcoming beat label, read from <see cref="beatsCountMs"/>.</summary>
+    public int nextBeatMs => ReadIntAt(beatsCountMs, IndexOfSmallestNonNegative(beatsCountMs));
+
+    /// <summary>True while the nearest upcoming beat label gate is active, read from <see cref="onBeats"/>.</summary>
+    public bool onBeat => ReadBoolAt(onBeats, IndexOfSmallestNonNegative(beatsCountMs));
+
+    /// <summary>Milliseconds until the nearest upcoming offbeat, read from <see cref="offBeatsCountMs"/>.</summary>
+    public int nextOffBeatMs => ReadIntAt(offBeatsCountMs, IndexOfSmallestNonNegative(offBeatsCountMs));
+
+    /// <summary>True while the nearest upcoming offbeat is active, read from <see cref="offBeats"/>.</summary>
+    public bool offBeat => ReadBoolAt(offBeats, IndexOfSmallestNonNegative(offBeatsCountMs));
 
     /// <summary>Number of beats in the repeating measure.</summary>
     public int beatsPerMeasure = 4;
 
     /// <summary>Zero-based beat index inside the current measure.</summary>
     public int currentBeat;
+
+    /// <summary>Copies the latest OSC-shaped on-air snapshot into this application beat model.</summary>
+    public void CopyFrom(RaveOnAirSnapshot snapshot)
+    {
+        playersLive = snapshot.playersLive ?? "";
+        track = snapshot.track ?? "";
+        bpm = snapshot.bpm;
+        beat = snapshot.beat;
+        bar = snapshot.bar;
+        beatInBar = snapshot.beatInBar;
+        beatsCountMs = CopyFour(snapshot.beatsCountMs);
+        onBeats = CopyFour(snapshot.onBeats);
+        beatAverageMs = snapshot.beatAverageMs;
+        beatPulse = snapshot.beatPulse;
+        levels = snapshot.levels;
+        phaseState = snapshot.phaseState;
+        dropState = snapshot.dropState;
+        fillState = snapshot.fillState;
+        energyState = snapshot.energyState;
+    }
+
+    /// <summary>Returns the smallest non-negative beat countdown, or <paramref name="fallback"/> when unavailable.</summary>
+    public int GetNextBeatMs(int fallback = -1)
+    {
+        var result = int.MaxValue;
+        for (var i = 0; i < beatsCountMs.Length; i++)
+        {
+            var value = beatsCountMs[i];
+            if (value >= 0 && value < result)
+            {
+                result = value;
+            }
+        }
+        return result == int.MaxValue ? fallback : result;
+    }
+
+    /// <summary>Returns the on-beat gate for a 1-based beat-in-bar label.</summary>
+    public bool IsOnBeat(int beatInBar)
+    {
+        var index = beatInBar - 1;
+        return index >= 0 && index < onBeats.Length && onBeats[index];
+    }
+
+    private static int IndexOfSmallestNonNegative(int[] source)
+    {
+        if (source == null)
+        {
+            return -1;
+        }
+
+        var resultIndex = -1;
+        var resultValue = int.MaxValue;
+        for (var i = 0; i < source.Length; i++)
+        {
+            var value = source[i];
+            if (value >= 0 && value < resultValue)
+            {
+                resultIndex = i;
+                resultValue = value;
+            }
+        }
+        return resultIndex;
+    }
+
+    private static int ReadIntAt(int[] source, int index)
+    {
+        return source != null && index >= 0 && index < source.Length ? source[index] : -1;
+    }
+
+    private static bool ReadBoolAt(bool[] source, int index)
+    {
+        return source != null && index >= 0 && index < source.Length && source[index];
+    }
+
+    private static int[] CopyFour(int[] source)
+    {
+        var copy = new int[4];
+        if (source != null)
+        {
+            Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
+        }
+        return copy;
+    }
+
+    private static bool[] CopyFour(bool[] source)
+    {
+        var copy = new bool[4];
+        if (source != null)
+        {
+            Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
+        }
+        return copy;
+    }
 }
 
 /// <summary>
-/// Simulated beat clock and beat-reactive helper methods used by effects.
+/// Rave OSC beat state container and beat-reactive helper methods used by effects.
 /// </summary>
 /// <remarks>
 /// Controller owns one BeatManager and calls <see cref="Update"/> once per frame.
@@ -107,25 +251,28 @@ public class BeatManager
         if (!enable || !beatData.active) return maxBrightness;
 
         // RaveSystem provides the beat pulse directly over OSC. Do not synthesize a second local envelope here.
-        float standardPulse = Mathf.Lerp(minBrightness, maxBrightness, Mathf.Clamp01(beatData.beatPulse));
+        float beatPulse = Mathf.Lerp(minBrightness, maxBrightness, Mathf.Clamp01(beatData.beatPulse));
+        float offBeatPulse = Mathf.Lerp(minBrightness, maxBrightness, Mathf.Clamp01(beatData.offBeatPulse));
+        float eighthNotePulse = Mathf.Lerp(minBrightness, maxBrightness, Mathf.Max(Mathf.Clamp01(beatData.beatPulse), Mathf.Clamp01(beatData.offBeatPulse)));
 
         switch (variant)
         {
-            case 1: // Beats 1 & 3
-                return (beatData.currentBeat == 0 || beatData.currentBeat == 2) ? standardPulse : maxBrightness;
-            case 2: // Beats 2 & 4
-                return (beatData.currentBeat == 1 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
-            case 3: // Measure Start (Beat 1)
-                return (beatData.currentBeat == 0) ? standardPulse : maxBrightness;
-            case 5: // 8th Notes
-                return standardPulse;
-            case 6: // 16th Notes
-                return standardPulse;
-            case 4: // Syncopated (1 and 4)
-                return (beatData.currentBeat == 0 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
             case 0: // Every Beat
+                return beatPulse;
+            case 1: // Beats 1 & 3
+                return (beatData.currentBeat == 0 || beatData.currentBeat == 2) ? beatPulse : maxBrightness;
+            case 2: // Beats 2 & 4
+                return (beatData.currentBeat == 1 || beatData.currentBeat == 3) ? beatPulse : maxBrightness;
+            case 3: // Measure Start (Beat 1)
+                return (beatData.currentBeat == 0) ? beatPulse : maxBrightness;
+            case 4: // Syncopated (1 and 4)
+                return (beatData.currentBeat == 0 || beatData.currentBeat == 3) ? beatPulse : maxBrightness;
+            case 5: // Offbeat Pulse
+                return offBeatPulse;
+            case 6: // Eighth Notes
+                return eighthNotePulse;
             default:
-                return standardPulse;
+                return beatPulse;
         }
     }
 

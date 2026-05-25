@@ -9,6 +9,8 @@ This repo is a Unity-hosted C# creative/hardware runtime for the Penrose Wall LE
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
 - Preserve the current creative-coding / installation-controller style unless the user explicitly asks for a larger architecture change.
 - Prefer small, direct changes to the existing systems over new frameworks, service layers, ScriptableObject registries, prefab hierarchies, or generic abstractions.
+- Small and direct does not mean smallest possible diff. If the touched system's shape is the problem, fix that shape within the requested scope instead of layering a workaround onto it.
+- When the user asks to replace a source of truth or data model, make the existing core system reflect the new model and update its real consumers. Do not import new runtime data into a side snapshot while leaving the application on the old model unless the user asks for a staged migration.
 - Do not "normalize" the project into typical enterprise Unity patterns without approval.
 - This project is not primarily TDD-driven. Add pragmatic tests when changing testable core logic, protocol handling, mapping, palette/beat behavior, or new abstractions; do not create heavy test infrastructure for purely visual tuning unless requested.
 
@@ -23,10 +25,10 @@ Start with these before adding new structures:
 - `Assets/core/MixerBase.cs` - base for effects that own child effects and combine or transform their buffers.
 - `Assets/core/TransitionBase.cs` - base for transitions between effects and some external-source blend behavior.
 - `Assets/core/helpers/Factory.cs` - reflection-based discovery and instantiation of effect, transition, and blender classes.
-- `Assets/core/helpers/GPalette.cs` and `Assets/core/BeatManager.cs` - shared color and rhythm systems.
+- `Assets/core/helpers/GPalette.cs` and `Assets/core/BeatManager.cs` - shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope.
 - `Assets/core/SerialOut.cs`, `Assets/OSCReader.cs`, `Assets/core/PixelReceiver.cs`, and `Assets/core/drums.cs` - hardware/control/input paths.
 
-`Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it.
+`Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it. Small wiring changes needed to connect an approved runtime model change are allowed; broad Controller restructuring still requires explicit approval.
 
 ## Adding Effects, Transitions, and Blenders
 
@@ -81,5 +83,6 @@ Start with these before adding new structures:
 - Do not replace the buffer/effect architecture with prefab-heavy Unity composition unless explicitly requested.
 - Do not add large dependency-injection, event-bus, service-layer, or package architectures for one-off changes.
 - Do not create manual registries for effects/transitions/blenders when `Factory<T>` already handles discovery.
+- Do not preserve a compatibility path that leaves the active runtime using stale data. If the user asks for a new live source of truth, migrate the relevant consumers to it.
 - Do not silently change hardware output modes or protocol details.
 - Do not treat generated Unity files as stable hand-authored source.

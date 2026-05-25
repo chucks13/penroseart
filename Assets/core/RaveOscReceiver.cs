@@ -1,4 +1,3 @@
-// Copyright © 2026 Hunter Luisi. All rights reserved.
 // Receives RaveSystem OSC broadcasts through the new RaveSystem.Osc stack.
 
 using System;
@@ -17,7 +16,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     private readonly object errorLock = new object();
     private OscUdpSocket socket;
     private RaveOscPacketParser parser;
-    private RaveOscSnapshot latest;
+    private RaveOnAirSnapshot latest = new RaveOnAirSnapshot();
     private Exception pendingError;
     private bool hasPendingError;
     private bool hasSnapshot;
@@ -26,7 +25,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     public bool HasSnapshot => hasSnapshot;
 
     /// <summary>The latest decoded Rave on-air values.</summary>
-    public RaveOscSnapshot Latest => latest;
+    public RaveOnAirSnapshot Latest => latest;
 
     private void Awake()
     {
@@ -74,25 +73,102 @@ public sealed class RaveOscReceiver : MonoBehaviour
         ApplySnapshotToBeatData(latest, beatManager.beatData);
     }
 
-    /// <summary>Copies beat-relevant Rave OSC values into PenroseArt's shared beat data.</summary>
-    public static void ApplySnapshotToBeatData(RaveOscSnapshot snapshot, BeatData beatData)
+    /// <summary>Stores raw Rave OSC values and derives the compatibility beat fields Penrose effects already use.</summary>
+    public static void ApplySnapshotToBeatData(RaveOnAirSnapshot snapshot, BeatData beatData)
     {
-        if (beatData == null)
+        if (snapshot == null || beatData == null)
         {
             return;
         }
 
-        var hasUsableBeat = snapshot.Bpm > 0f;
+        beatData.CopyFrom(snapshot);
+
+        var hasUsableBeat = beatData.bpm > 0f;
         beatData.active = hasUsableBeat;
-        beatData.bpm = hasUsableBeat ? snapshot.Bpm : 120f;
-        beatData.currentBeat = snapshot.BeatInBar >= 1 && snapshot.BeatInBar <= beatData.beatsPerMeasure
-            ? snapshot.BeatInBar - 1
+        beatData.currentBeat = beatData.beatInBar >= 1 && beatData.beatInBar <= beatData.beatsPerMeasure
+            ? beatData.beatInBar - 1
             : 0;
-        beatData.onBeat = snapshot.OnBeat;
-        beatData.beatPulse = Mathf.Clamp01(snapshot.BeatPulse);
-        beatData.timeEvent = snapshot.OnBeat
-            ? 0
-            : snapshot.NextBeatMs >= 0 ? -snapshot.NextBeatMs : 0;
+        DeriveOffBeats(beatData, hasUsableBeat);
+    }
+
+    private static void DeriveOffBeats(BeatData beatData, bool hasUsableBeat)
+    {
+        var offBeatCounts = new[] { -1, -1, -1, -1 };
+        var offBeatGates = new bool[4];
+        beatData.offBeatPulse = 0f;
+        if (!hasUsableBeat || beatData.beatAverageMs <= 0 || beatData.beatsCountMs == null || beatData.beatsCountMs.Length < 4)
+        {
+            beatData.offBeatsCountMs = offBeatCounts;
+            beatData.offBeats = offBeatGates;
+            return;
+        }
+
+        var activeWindowMs = beatData.beatAverageMs * 0.25f;
+        var measureMs = beatData.beatAverageMs * 4f;
+        var nearestOffBeatMs = float.MaxValue;
+
+        for (var i = 0; i < offBeatCounts.Length; i++)
+        {
+            var nextBeatIndex = (i + 1) % offBeatCounts.Length;
+            var startBeatMs = beatData.beatsCountMs[i];
+            var nextBeatMs = beatData.beatsCountMs[nextBeatIndex];
+            if (startBeatMs < 0 || nextBeatMs < 0)
+            {
+                continue;
+            }
+
+            var beatGapMs = (float)(nextBeatMs - startBeatMs);
+            if (beatGapMs <= 0f)
+            {
+                beatGapMs += measureMs;
+            }
+
+            var halfGapMs = beatGapMs * 0.5f;
+            var offBeatMs = nextBeatMs - halfGapMs;
+            if (offBeatMs < 0f)
+            {
+                offBeatMs += measureMs;
+            }
+            nearestOffBeatMs = Mathf.Min(nearestOffBeatMs, offBeatMs);
+
+            if (nextBeatMs > halfGapMs)
+            {
+                offBeatCounts[i] = Mathf.RoundToInt(offBeatMs);
+                continue;
+            }
+
+            var elapsedSinceOffBeatMs = halfGapMs - nextBeatMs;
+            if (elapsedSinceOffBeatMs <= activeWindowMs)
+            {
+                offBeatCounts[i] = 0;
+                offBeatGates[i] = true;
+                continue;
+            }
+
+            offBeatCounts[i] = Mathf.RoundToInt(measureMs - elapsedSinceOffBeatMs);
+        }
+
+        if (nearestOffBeatMs != float.MaxValue)
+        {
+            var nextOffBeatInCycleMs = nearestOffBeatMs % beatData.beatAverageMs;
+            var elapsedSinceNearestOffBeatMs = nextOffBeatInCycleMs <= 0f ? 0f : beatData.beatAverageMs - nextOffBeatInCycleMs;
+            beatData.offBeatPulse = GetPulse(elapsedSinceNearestOffBeatMs, beatData.beatAverageMs);
+        }
+
+        beatData.offBeatsCountMs = offBeatCounts;
+        beatData.offBeats = offBeatGates;
+    }
+
+    private static float GetPulse(float elapsedMs, float durationMs)
+    {
+        if (durationMs <= 0f)
+        {
+            return 0f;
+        }
+
+        var phase = Mathf.Clamp01(elapsedMs / durationMs);
+        var smoothStep = phase * phase * (3f - (2f * phase));
+        return 1f - smoothStep;
     }
 
     private void StartListening()
