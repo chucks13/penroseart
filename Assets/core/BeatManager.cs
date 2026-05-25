@@ -110,13 +110,46 @@ public class BeatManager
     }
 
     /// <summary>
+    /// Returns a normalized beat position ranging from -1 to 1.
+    /// 0 is exactly on the beat, -1 is halfway before, 1 is halfway after.
+    /// If the variant gating is inactive for the current beat, it returns 0.
+    /// </summary>
+    public float GetBeat(int variant)
+    {
+        if (!beatData.active || beatData.bpm <= 0) return 0f;
+
+        float msPerBeat = 60000f / beatData.bpm;
+        float halfBeat = msPerBeat * 0.5f;
+
+        if (variant == 5 || variant == 6)
+        {
+            float subDivMs = (variant == 5) ? halfBeat : msPerBeat * 0.25f;
+            float cycle = (Time.time * 1000f) % subDivMs;
+            float distSub = (cycle <= subDivMs * 0.5f) ? cycle : cycle - subDivMs;
+            return distSub / (subDivMs * 0.5f);
+        }
+
+        bool isPulsingBeat = true;
+        switch (variant)
+        {
+            case 1: isPulsingBeat = (beatData.currentBeat == 0 || beatData.currentBeat == 2); break;
+            case 2: isPulsingBeat = (beatData.currentBeat == 1 || beatData.currentBeat == 3); break;
+            case 3: isPulsingBeat = (beatData.currentBeat == 0); break;
+            case 4: isPulsingBeat = (beatData.currentBeat == 0 || beatData.currentBeat == 3); break;
+        }
+
+        if (!isPulsingBeat) return 0f;
+
+        return beatData.timeEvent / halfBeat;
+    }
+
+    /// <summary>
     /// Calculates a beat-synced brightness multiplier.
     /// </summary>
     /// <remarks>
     /// The returned pulse is highest on the selected beat and decays toward
     /// <paramref name="minBrightness"/> halfway between beats. The x^4 curve keeps
     /// most of the beat bright while still creating a sharp rhythmic kick.
-    ///
     /// Current variant mapping in code:
     /// - 0: every beat
     /// - 1: beats 1 and 3
@@ -135,43 +168,11 @@ public class BeatManager
     {
         if (!enable || !beatData.active) return maxBrightness;
 
-        float msPerBeat = 60000f / Mathf.Max(beatData.bpm, 1f);
+        float beatVal = GetBeat(variant);
+        // Use a high power (x^4) curve to create a sharp kick at the beat center
+        float pulseIntensity = Mathf.Pow(Mathf.Abs(beatVal), 4.0f);
 
-        // Standard normalized distance: 0 at the beat, 1 at the midpoint between beats.
-        float dist = Mathf.Abs(beatData.timeEvent);
-        float normDist = Mathf.Clamp01(dist / (msPerBeat * 0.5f));
-
-        // Higher-frequency variants reuse the same nearest-beat distance inside
-        // shorter subdivisions.
-        float msPer8th = msPerBeat * 0.5f;
-        float norm8thDist = Mathf.Clamp01((dist % msPer8th) / (msPer8th * 0.5f));
-        float msPer16th = msPerBeat * 0.25f;
-        float norm16thDist = Mathf.Clamp01((dist % msPer16th) / (msPer16th * 0.5f));
-
-        // Use a high power (x^4) to keep brightness high for most of the beat.
-        // This prevents the "too dark" feeling while still providing a sharp rhythmic kick.
-        float standardPulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(normDist, 4.0f));
-        float doublePulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(norm8thDist, 4.0f));
-        float quadPulse = Mathf.Lerp(maxBrightness, minBrightness, Mathf.Pow(norm16thDist, 4.0f));
-
-        switch (variant)
-        {
-            case 1: // Beats 1 & 3
-                return (beatData.currentBeat == 0 || beatData.currentBeat == 2) ? standardPulse : maxBrightness;
-            case 2: // Beats 2 & 4
-                return (beatData.currentBeat == 1 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
-            case 3: // Measure Start (Beat 1)
-                return (beatData.currentBeat == 0) ? standardPulse : maxBrightness;
-            case 5: // 8th Notes
-                return doublePulse;
-            case 6: // 16th Notes
-                return quadPulse;
-            case 4: // Syncopated (1 and 4)
-                return (beatData.currentBeat == 0 || beatData.currentBeat == 3) ? standardPulse : maxBrightness;
-            case 0: // Every Beat
-            default:
-                return standardPulse;
-        }
+        return Mathf.Lerp(maxBrightness, minBrightness, pulseIntensity);
     }
 
     /// <summary>
@@ -186,11 +187,9 @@ public class BeatManager
         if (!beatData.active)
             return currentTime;
 
-        // Pulse is 1.0 on the beat and approaches 0.0 between beats.
-        float pulse = GetBeatBrightness(variant, 1.0f, 0.0f);
-
-        // Surge the local time value forward on the beat.
-        return currentTime + (pulse * intensity);
+        // Pulse magnitude is highest (1.0) on the beat and approaches 0.0 between beats.
+        float pulseMagnitude = 1.0f - Mathf.Pow(Mathf.Abs(GetBeat(variant)), 4.0f);
+        return currentTime + (pulseMagnitude * intensity);
     }
 
     /// <summary>
