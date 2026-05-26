@@ -1,0 +1,14 @@
+[
+  {
+    "name": "1 beat per measure",
+    "sequence": "11111111",
+    "amplitude": "888888",
+    "energy": 0
+  },
+  {
+    "name": "2 beats oper measure",
+    "sequence": "2222222222222222",
+    "amplitude": "888888888",
+    "energy": 2
+  }
+]

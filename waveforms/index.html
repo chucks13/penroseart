@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Penrose Waveform Designer</title>
+    <style>
+        body { 
+            background: #1a1a1a; 
+            color: #e0e0e0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 50px;
+        }
+        canvas { 
+            background: #000; 
+            border: 2px solid #444; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .controls { 
+            margin-top: 20px; 
+            display: flex; 
+            flex-direction: column;
+            gap: 10px; 
+            background: #333; 
+            padding: 15px; 
+            border-radius: 8px;
+        }
+        .input-group { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+        .management-group { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
+        input, select { background: #222; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; }
+        button { 
+            padding: 8px 15px; 
+            cursor: pointer; 
+            background: #444; 
+            color: white; 
+            border: none; 
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        button:hover { background: #555; }
+        .btn-danger:hover { background: #c62828; }
+        .btn-success { background: #2e7d32; }
+        .btn-success:hover { background: #388e3c; }
+    </style>
+</head>
+<body>
+    <canvas id="waveCanvas" width="800" height="400"></canvas>
+    <div class="controls">
+        <div class="management-group">
+            <select id="waveList" style="flex-grow: 1;"></select>
+            <button onclick="addWaveform()">+ Add New</button>
+            <button onclick="deleteWaveform()" class="btn-danger">Delete</button>
+            <button onclick="exportJSON()" class="btn-success">Export JSON</button>
+        </div>
+
+        <div class="input-group">
+            <label>Name: </label>
+            <input type="text" id="waveName" placeholder="Waveform name..." style="flex-grow: 1;">
+            <label>Energy: </label>
+            <input type="number" id="waveEnergy" value="0" style="width: 80px;">
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #555; width: 100%; margin: 10px 0;">
+
+        <div class="input-group">
+            <label>Wave Sequence (1,2,4,8): </label>
+            <input type="text" id="waveSequence" value="11111111" style="width: 400px; letter-spacing: 2px;">
+        </div>
+        <div class="input-group">
+            <label>Amplitude Sequence (0-8): </label>
+            <input type="text" id="amplitudeSequence" value="8" style="width: 400px; letter-spacing: 2px;">
+        </div>
+    </div>
+    <script src="generator.js"></script>
+</body>
+</html>

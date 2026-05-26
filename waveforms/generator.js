@@ -2,6 +2,110 @@ const canvas = document.getElementById('waveCanvas');
 const ctx = canvas.getContext('2d');
 const inputSequence = document.getElementById('waveSequence');
 const inputAmplitude = document.getElementById('amplitudeSequence');
+const inputName = document.getElementById('waveName');
+const inputEnergy = document.getElementById('waveEnergy');
+const waveList = document.getElementById('waveList');
+
+let waveforms = [];
+let currentIndex = -1;
+
+// Initialize persistence and UI
+async function init() {
+    try {
+        const response = await fetch('penrose_waveforms.json');
+        if (response.ok) {
+            waveforms = await response.json();
+            updateListUI();
+            if (waveforms.length > 0) {
+                selectWaveform(0);
+            }
+        }
+    } catch (e) {
+        console.warn("penrose_waveforms.json not found or could not be loaded. Starting with empty list.");
+    }
+}
+
+function updateListUI() {
+    if (!waveList) return;
+    waveList.innerHTML = '';
+    waveforms.forEach((w, i) => {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${w.name || 'Unnamed'} (E: ${w.energy || 0})`;
+        if (i === currentIndex) option.selected = true;
+        waveList.appendChild(option);
+    });
+}
+
+function selectWaveform(index) {
+    currentIndex = index;
+    const w = waveforms[index];
+    if (w) {
+        if (inputName) inputName.value = w.name || "";
+        if (inputSequence) inputSequence.value = w.sequence || "1";
+        if (inputAmplitude) inputAmplitude.value = w.amplitude || "8";
+        if (inputEnergy) inputEnergy.value = w.energy || 0;
+        updateListUI();
+    }
+}
+
+window.addWaveform = function() {
+    const newWave = {
+        name: "New Waveform",
+        sequence: "1",
+        amplitude: "8",
+        energy: 0
+    };
+    waveforms.push(newWave);
+    currentIndex = waveforms.length - 1;
+    selectWaveform(currentIndex);
+};
+
+window.saveWaveform = function() {
+    if (currentIndex === -1) return;
+    waveforms[currentIndex] = {
+        name: inputName ? inputName.value : "Unnamed",
+        sequence: inputSequence ? inputSequence.value : "1",
+        amplitude: inputAmplitude ? inputAmplitude.value : "8",
+        energy: inputEnergy ? parseInt(inputEnergy.value) || 0 : 0
+    };
+    updateListUI();
+};
+
+window.deleteWaveform = function() {
+    if (currentIndex === -1) return;
+    waveforms.splice(currentIndex, 1);
+    currentIndex = waveforms.length > 0 ? 0 : -1;
+    updateListUI();
+    if (currentIndex !== -1) selectWaveform(currentIndex);
+};
+
+window.exportJSON = function() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(waveforms, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "penrose_waveforms.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+};
+
+if (waveList) {
+    waveList.addEventListener('change', (e) => {
+        selectWaveform(parseInt(e.target.value));
+    });
+}
+
+// Auto-save on input change
+[inputSequence, inputAmplitude, inputName, inputEnergy].forEach(el => {
+    if (el) {
+        el.addEventListener('input', () => {
+            if (currentIndex !== -1) {
+                saveWaveform();
+            }
+        });
+    }
+});
 
 function draw() {
     const w = canvas.width;
@@ -109,4 +213,5 @@ function draw() {
     requestAnimationFrame(draw);
 }
 
+init();
 draw();
