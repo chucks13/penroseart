@@ -31,10 +31,12 @@ public class SerialOut
     }
 
     private List<S2MiniBoard> activeBoards = new List<S2MiniBoard>();
-    private HashSet<string> ignoredPorts = new HashSet<string>();
+    private Dictionary<string, float> ignoredPorts = new Dictionary<string, float>();
     private HashSet<string> connectingPorts = new HashSet<string>();
+    private readonly object stateLock = new object();
     private int targetBaudRate;
     private float lastDiscoveryTime = 0f;
+    private const float RetryIgnoredInterval = 10.0f; // Seconds before retrying a failed port
 
     private bool threadsRunning = false;
 
@@ -82,35 +84,46 @@ public class SerialOut
         string[] ports = SerialPort.GetPortNames();
         lastScannedPorts = ports;
 
-        // Cleanup ignored ports that are no longer physically present so they can be retried if replugged
-        ignoredPorts.RemoveWhere(p => !ports.Contains(p));
-
-        // 1. Remove disconnected or failed boards
-        for (int i = activeBoards.Count - 1; i >= 0; i--)
+        lock (stateLock)
         {
-            bool stillPresent = ports.Contains(activeBoards[i].PortName);
-            if (!stillPresent || !activeBoards[i].IsReady)
+            // 1. Cleanup ignored ports: remove if vanished from OS OR if retry timer expired
+            List<string> toRemove = new List<string>();
+            foreach (var kvp in ignoredPorts)
             {
-                Debug.Log($"[SerialOut] Removing board {activeBoards[i].PortName} (Present: {stillPresent}, Ready: {activeBoards[i].IsReady})");
-                activeBoards[i].FrameSignal.Set(); // Wake thread to exit
-                if (activeBoards[i].Port.IsOpen)
+                if (!ports.Contains(kvp.Key) || (Time.time - kvp.Value) > RetryIgnoredInterval)
                 {
-                    activeBoards[i].Port.Close();
-                    activeBoards[i].Port.Dispose();
+                    toRemove.Add(kvp.Key);
                 }
-                activeBoards.RemoveAt(i);
             }
-        }
+            foreach (var p in toRemove) ignoredPorts.Remove(p);
 
-        // 2. Add new boards
-        foreach (string portName in ports)
-        {
-            if (!activeBoards.Any(b => b.PortName == portName) &&
-                !ignoredPorts.Contains(portName) &&
-                !connectingPorts.Contains(portName))
+            // 2. Remove disconnected or failed boards
+            for (int i = activeBoards.Count - 1; i >= 0; i--)
             {
-                // Fire and forget connection task to avoid blocking the render thread
-                _ = TryConnectBoardAsync(portName);
+                bool stillPresent = ports.Contains(activeBoards[i].PortName);
+                if (!stillPresent || !activeBoards[i].IsReady)
+                {
+                    Debug.Log($"[SerialOut] Removing board {activeBoards[i].PortName} (Present: {stillPresent}, Ready: {activeBoards[i].IsReady})");
+                    activeBoards[i].FrameSignal.Set(); // Wake thread to exit
+                    if (activeBoards[i].Port.IsOpen)
+                    {
+                        activeBoards[i].Port.Close();
+                        activeBoards[i].Port.Dispose();
+                    }
+                    activeBoards.RemoveAt(i);
+                }
+            }
+
+            // 3. Add new boards
+            foreach (string portName in ports)
+            {
+                if (!activeBoards.Any(b => b.PortName == portName) &&
+                    !ignoredPorts.ContainsKey(portName) &&
+                    !connectingPorts.Contains(portName))
+                {
+                    // Fire and forget connection task to avoid blocking the render thread
+                    _ = TryConnectBoardAsync(portName);
+                }
             }
         }
     }
@@ -120,7 +133,8 @@ public class SerialOut
     /// </summary>
     private async Task TryConnectBoardAsync(string portName)
     {
-        connectingPorts.Add(portName);
+        lock (stateLock) connectingPorts.Add(portName);
+        
         SerialPort sp = null;
         try
         {
@@ -199,13 +213,14 @@ public class SerialOut
             board.BoardThread.IsBackground = true;
             board.BoardThread.Start();
 
-            activeBoards.Add(board);
+            lock (stateLock) activeBoards.Add(board);
             Debug.Log($"[SerialOut] Connected LED Driver on {portName} with {count} pixels.");
         }
         catch (Exception e)
         {
             Debug.LogWarning($"[SerialOut] Failed to initialize port {portName}: {e.Message}");
-            ignoredPorts.Add(portName);
+            lock (stateLock) ignoredPorts[portName] = Time.time;
+            
             if (sp != null)
             {
                 if (sp.IsOpen) sp.Close();
@@ -214,7 +229,7 @@ public class SerialOut
         }
         finally
         {
-            connectingPorts.Remove(portName);
+            lock (stateLock) connectingPorts.Remove(portName);
         }
     }
 
@@ -294,33 +309,42 @@ public class SerialOut
     /// </summary>
     public void send(Color[] data, byte level)
     {
-        // Handle Hot-Plugging Discovery - Only scan if no boards are active or every 5s
-        // SerialPort.GetPortNames() is an extremely expensive blocking call.
-        float interval = activeBoards.Count > 0 ? 5.0f : DiscoveryInterval;
-        if (Time.time - lastDiscoveryTime > interval)
+        int activeCount = 0;
+        lock (stateLock)
         {
-            DiscoverBoards();
-            lastDiscoveryTime = Time.time;
+            activeCount = activeBoards.Count;
+
+            // Handle Hot-Plugging Discovery - Only scan if no boards are active or every 5s
+            // SerialPort.GetPortNames() is an extremely expensive blocking call.
+            float interval = activeCount > 0 ? 5.0f : DiscoveryInterval;
+            if (Time.time - lastDiscoveryTime > interval)
+            {
+                DiscoverBoards();
+                lastDiscoveryTime = Time.time;
+            }
+
+            if (activeCount == 0) return;
+
+            // 1. Snapshot the simulation data for the IO thread
+            globalLevel = level;
+
+            // Ensure copy buffer matches simulation data size (1800)
+            if (simulationFrameCopy.Length != data.Length)
+            {
+                simulationFrameCopy = new Color[data.Length];
+            }
+
+            // Use a high-speed array copy instead of a per-element loop
+            Array.Copy(data, simulationFrameCopy, data.Length);
         }
 
-        if (activeBoards.Count == 0) return;
-
-        // 1. Snapshot the simulation data for the IO thread
-        globalLevel = level;
-
-        // Ensure copy buffer matches simulation data size (1800)
-        if (simulationFrameCopy.Length != data.Length)
+        // 2. Signal threads to transmit. We do this in a separate loop to keep the lock duration short.
+        lock (stateLock)
         {
-            simulationFrameCopy = new Color[data.Length];
-        }
-
-        // Use a high-speed array copy instead of a per-element loop
-        Array.Copy(data, simulationFrameCopy, data.Length);
-
-        // 2. Signal threads to pack their specific segments and transmit
-        foreach (var board in activeBoards)
-        {
-            if (board.IsReady) board.FrameSignal.Set();
+            foreach (var board in activeBoards)
+            {
+                if (board.IsReady) board.FrameSignal.Set();
+            }
         }
     }
 
@@ -334,25 +358,28 @@ public class SerialOut
         // Show all COM ports currently reported by the OS
         sb.Append("\nOS Ports: ").Append(lastScannedPorts.Length > 0 ? string.Join(", ", lastScannedPorts) : "None");
 
-        if (activeBoards.Count > 0)
+        lock (stateLock)
         {
-            sb.Append("\nActive Penrose Boards:");
-            foreach (var board in activeBoards)
+            if (activeBoards.Count > 0)
             {
-                // Show specific pixel ranges for each segment on this board
-                string ranges = string.Join(", ", board.Segments.Select(s => $"[{s.StartIndex}-{s.StartIndex + s.Count - 1}]"));
-                sb.Append($"\n  - {board.PortName}: {ranges}");
+                sb.Append("\nActive Penrose Boards:");
+                foreach (var board in activeBoards)
+                {
+                    // Show specific pixel ranges for each segment on this board
+                    string ranges = string.Join(", ", board.Segments.Select(s => $"[{s.StartIndex}-{s.StartIndex + s.Count - 1}]"));
+                    sb.Append($"\n  - {board.PortName}: {ranges}");
+                }
             }
-        }
 
-        if (connectingPorts.Count > 0)
-        {
-            sb.Append($"\nConnecting: {string.Join(", ", connectingPorts)}");
-        }
+            if (connectingPorts.Count > 0)
+            {
+                sb.Append($"\nConnecting: {string.Join(", ", connectingPorts)}");
+            }
 
-        if (ignoredPorts.Count > 0)
-        {
-            sb.Append($"\nFailed/Ignored: {string.Join(", ", ignoredPorts)}");
+            if (ignoredPorts.Count > 0)
+            {
+                sb.Append($"\nFailed/Ignored: {string.Join(", ", ignoredPorts.Keys)}");
+            }
         }
 
         return sb.ToString();
