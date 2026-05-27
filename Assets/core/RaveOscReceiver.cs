@@ -20,6 +20,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     private Exception pendingError;
     private bool hasPendingError;
     private bool hasSnapshot;
+    private bool receivedSinceCheck;
 
     /// <summary>True after at least one recognized Rave OSC value has been received.</summary>
     public bool HasSnapshot => hasSnapshot;
@@ -38,6 +39,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
         {
             latest = snapshot;
             hasSnapshot = true;
+            receivedSinceCheck = true;
         }
 
         Exception error = null;
@@ -62,16 +64,36 @@ public sealed class RaveOscReceiver : MonoBehaviour
         StopListening();
     }
 
-    /// <summary>Applies the latest Rave beat data to PenroseArt's shared beat manager.</summary>
+    /// <summary>
+    /// While live OSC is the chosen beat source, pushes the latest decoded snapshot into the shared beat data
+    /// every frame. Does nothing when the simulator owns the beat — the source itself is chosen at effect
+    /// boundaries via <see cref="ConsumeFreshPlayingBeat"/> + <see cref="BeatManager.SetLiveBeatSource"/>.
+    /// </summary>
     public void ApplyTo(BeatManager beatManager)
     {
-        if (!hasSnapshot || beatManager == null)
+        if (beatManager == null || !hasSnapshot || !beatManager.IsLiveSource)
         {
             return;
         }
 
         ApplySnapshotToBeatData(latest, beatManager.beatData);
-        beatManager.MarkExternalBeatDataApplied();
+    }
+
+    /// <summary>
+    /// Effect-boundary liveness check used to pick the beat source. True only when RaveSystem is actively
+    /// broadcasting a real beat right now: a fresh packet has arrived since the previous check AND the latest
+    /// snapshot carries a playing tempo (bpm &gt; 0). Reading it clears the "fresh since last check" flag.
+    /// </summary>
+    /// <remarks>
+    /// Requiring a fresh packet rejects a frozen last snapshot left behind when RaveSystem closes or the network
+    /// drops; requiring bpm &gt; 0 rejects RaveSystem's idle broadcast (it transmits bpm=0 at 30 Hz when nothing
+    /// is on air). Either condition failing hands the next effect to the simulator; both passing reclaims live.
+    /// </remarks>
+    public bool ConsumeFreshPlayingBeat()
+    {
+        var fresh = receivedSinceCheck;
+        receivedSinceCheck = false;
+        return fresh && latest.bpm > 0f;
     }
 
     /// <summary>Stores raw Rave OSC values and derives the compatibility beat fields Penrose effects already use.</summary>
