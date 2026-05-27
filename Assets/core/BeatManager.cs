@@ -226,29 +226,21 @@ public class BeatData
 [Serializable]
 public class BeatManager
 {
-    /// <summary>Variant 0: every quarter-note beat uses the main beat pulse.</summary>
-    private const int VariantEveryBeat = 0;
+    // The constants below name the beat-label gates used by IsBeatTriggered, the legacy discrete-event path
+    // (spawns, palette changes) that deliberately survived the Waveform migration. They are NOT a variant
+    // enumeration: continuous brightness now flows through GetWaveform + Waveform.Evaluate, and random
+    // selection bounds on the live Pool length rather than a fixed variant count. Their values intentionally
+    // match the seed Pool order in SeedDefaultPool (index 1 = "beats 1 & 3", 2 = "beats 2 & 4",
+    // 3 = "measure start"), so a variant gates the same beats it brightens as long as that seed order holds.
 
-    /// <summary>Variant 1: quarter-note beats 1 and 3 use the main beat pulse.</summary>
+    /// <summary>Beat-label gate for the "beats 1 and 3" variant (seed Pool index 1).</summary>
     private const int VariantBeatsOneAndThree = 1;
 
-    /// <summary>Variant 2: quarter-note beats 2 and 4 use the main beat pulse.</summary>
+    /// <summary>Beat-label gate for the "beats 2 and 4" variant (seed Pool index 2).</summary>
     private const int VariantBeatsTwoAndFour = 2;
 
-    /// <summary>Variant 3: only the first beat of the measure uses the main beat pulse.</summary>
+    /// <summary>Beat-label gate for the "measure start" variant (seed Pool index 3).</summary>
     private const int VariantMeasureStart = 3;
-
-    /// <summary>Variant 4: quarter-note beats 1 and 4 use the main beat pulse.</summary>
-    private const int VariantBeatsOneAndFour = 4;
-
-    /// <summary>Variant 5: offbeat eighth-note positions use the derived offbeat pulse.</summary>
-    private const int VariantOffbeat = 5;
-
-    /// <summary>Variant 6: every eighth note uses whichever pulse, beat or offbeat, is currently stronger.</summary>
-    private const int VariantEighthNotes = 6;
-
-    /// <summary>Exclusive upper bound for full random variant selection.</summary>
-    private const int VariantCount = 7;
 
     /// <summary>Exclusive upper bound for lower-intensity random variants that avoid offbeat/eighth-note motion.</summary>
     private const int ChillVariantCount = 5;
@@ -270,6 +262,36 @@ public class BeatManager
 
     /// <summary>Tracks whether the currently active beatData values were generated locally rather than received from OSC.</summary>
     private bool usingSimulatedBeatData;
+
+    /// <summary>
+    /// The Waveform Pool: the Presets random selection draws from and that <c>int</c> variants index into.
+    /// Loaded lazily via <see cref="EnsurePool"/> — file-first from <c>penrose_waveforms.txt</c> in
+    /// StreamingAssets, falling back to the built-in seed Pool only when that file is missing or unparseable.
+    /// </summary>
+    private Waveform[] waveformPool;
+
+    /// <summary>
+    /// Preset names parallel to <see cref="waveformPool"/> (same index), in the GPalette <c>names</c>/<c>palettes</c>
+    /// style. Kept for meaningful load logging and future by-name Preset lookup; the runtime brightness path
+    /// indexes by <c>int</c> and does not require them.
+    /// </summary>
+    private string[] waveformPoolNames;
+
+    /// <summary>
+    /// Wall-wide Waveform override. <c>-1</c> means "Auto": every effect rolls its own random variant in
+    /// <c>OnStart()</c> exactly as it always has. Any value &gt;= 0 locks the whole wall to that single
+    /// Waveform Pool index — <see cref="GetRandomVariant"/> and <see cref="GetRandomVariantChill"/> stop
+    /// rolling and return it, so each newly started effect inherits the lock and the wall keeps one rhythm.
+    /// </summary>
+    /// <remarks>
+    /// Driven two-way by the Waveform Pool selector in the BeatData inspector: writing it locks/releases the
+    /// wall live, and the selector reads it back to show the current state. <see cref="NonSerializedAttribute"/>
+    /// on purpose — a lock is a live performance choice, not a saved scene default, so every session starts in
+    /// Auto. Effects already re-read their <c>beatVariant</c> each frame, so a lock that only future effects
+    /// pick up would lag; the selector additionally pokes the on-screen effect's variant for an instant change.
+    /// </remarks>
+    [NonSerialized]
+    public int activeVariant = -1;
 
     /// <summary>Shorthand for whether the shared beat state is active.</summary>
     public bool IsActive => beatData != null && beatData.active;
@@ -319,35 +341,196 @@ public class BeatManager
         usingSimulatedBeatData = false;
     }
 
-    /// <summary>Returns a random beat-variant index for effect activation.</summary>
+    /// <summary>Returns a random Waveform index drawn from the full Pool, for effect activation.</summary>
     public int GetRandomVariant()
     {
-        return UnityEngine.Random.Range(0, VariantCount);
-    }
-
-    /// <summary>Returns a random lower-intensity beat variant, excluding offbeat and eighth-note variants.</summary>
-    public int GetRandomVariantChill()
-    {
-        return UnityEngine.Random.Range(0, ChillVariantCount);
+        EnsurePool();
+        // Honor a wall-wide lock so every effect that starts uses the chosen Waveform. Clamp defensively: the
+        // Pool can shrink when penrose_waveforms.txt is re-saved with fewer entries while a higher lock is held.
+        if (activeVariant >= 0)
+        {
+            return Mathf.Clamp(activeVariant, 0, waveformPool.Length - 1);
+        }
+        return UnityEngine.Random.Range(0, waveformPool.Length);
     }
 
     /// <summary>
-    /// Calculates a beat-synced brightness multiplier from Rave OSC beat and offbeat pulses.
+    /// Returns a random lower-intensity Waveform index, excluding the busier offbeat/eighth-note Presets.
     /// </summary>
     /// <remarks>
-    /// Variant mapping:
-    /// - 0: every beat
-    /// - 1: beats 1 and 3
-    /// - 2: beats 2 and 4
-    /// - 3: measure start / beat 1
-    /// - 4: syncopated beats 1 and 4
-    /// - 5: offbeat pulse
-    /// - 6: eighth notes, using the stronger of the beat and offbeat pulses
-    /// Unknown variants intentionally fall back to the every-beat brightness so effect code degrades visibly but safely.
+    /// The "chill" subset is the lower-index range of the Pool (the seed Pool lists the calmer Presets
+    /// first). This index split is a placeholder: energy/mood-filtered selection driven by OSC
+    /// <c>energy_state</c> is deferred until that incoming data is finalized.
     /// </remarks>
-    /// <param name="variant">Beat variant selector using the mapping above.</param>
-    /// <param name="maxBrightness">Brightness value at full pulse or when the variant is not currently gated.</param>
-    /// <param name="minBrightness">Brightness value at zero pulse.</param>
+    public int GetRandomVariantChill()
+    {
+        EnsurePool();
+        // A wall-wide lock wins here too, so the chill path can never bypass the chosen Waveform.
+        if (activeVariant >= 0)
+        {
+            return Mathf.Clamp(activeVariant, 0, waveformPool.Length - 1);
+        }
+        var chillCount = Mathf.Clamp(ChillVariantCount, 1, waveformPool.Length);
+        return UnityEngine.Random.Range(0, chillCount);
+    }
+
+    /// <summary>
+    /// Normalized position within the current bar in [0..1): 0 on the downbeat, approaching 1 at the next.
+    /// </summary>
+    /// <remarks>
+    /// This is the always-running clock the Waveform Synthesizer evaluates against. It is derived uniformly
+    /// for both the local simulator and live OSC from <see cref="beatData"/>: the current 1-based beat label
+    /// plus the fraction elapsed into that beat. The intra-beat fraction is read from the *next* beat label's
+    /// countdown — not the nearest, which reads 0 during the on-beat gate window and would jump. In the
+    /// simulator this equals positionSeconds / measureDuration exactly; in live OSC it is as fresh as the
+    /// incoming snapshots (the same staleness profile as <see cref="BeatData.beatPulse"/>) and should be
+    /// validated against real Rave timing once OSC becomes the active beat source.
+    /// </remarks>
+    public float BarPhase
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return 0f;
+            }
+
+            var beatsPerMeasure = beatData.beatsPerMeasure > 0 ? beatData.beatsPerMeasure : BeatSlotCount;
+            var label = beatData.beatInBar;
+            if (label < 1 || label > beatsPerMeasure)
+            {
+                return 0f; // beat label not yet known / inert
+            }
+
+            // Read the countdown to the *next* beat label so the fraction grows 0 -> 1 across this beat.
+            var nextSlot = label % beatsPerMeasure; // 0-based slot of the next label (wraps last -> 0)
+            var countdowns = beatData.beatsCountMs;
+            var msToNext = countdowns != null && nextSlot >= 0 && nextSlot < countdowns.Length
+                ? countdowns[nextSlot]
+                : UnavailableMs;
+
+            var intraBeatPhase = 0f;
+            if (beatData.beatAverageMs > 0 && msToNext >= 0)
+            {
+                intraBeatPhase = Mathf.Clamp01(1f - ((float)msToNext / beatData.beatAverageMs));
+            }
+
+            return ((label - 1) + intraBeatPhase) / beatsPerMeasure;
+        }
+    }
+
+    /// <summary>Returns the Waveform for a Pool index, clamping an unknown index to the Beat Pulse (index 0).</summary>
+    /// <remarks>
+    /// Out-of-range maps to index 0 (the Beat Pulse / every-beat), matching the old "unknown variant
+    /// degrades to every-beat" behavior. We deliberately do not log here — this runs every frame and
+    /// random selection only ever produces valid indices.
+    /// </remarks>
+    public Waveform GetWaveform(int variant)
+    {
+        EnsurePool();
+        var index = variant >= 0 && variant < waveformPool.Length ? variant : 0;
+        return waveformPool[index];
+    }
+
+    /// <summary>Loads the Pool on first use if it has not been populated yet.</summary>
+    /// <remarks>
+    /// Guarded so the file is read exactly once per session (this runs every frame via <see cref="GetWaveform"/>):
+    /// once the Pool is non-empty — whether from the file or the seed fallback — it is never re-read.
+    /// </remarks>
+    private void EnsurePool()
+    {
+        if (waveformPool != null && waveformPool.Length > 0)
+        {
+            return;
+        }
+
+        LoadWaveformPool();
+    }
+
+    /// <summary>
+    /// Loads the Pool file-first, falling back to the built-in seed Pool only when the file is missing or
+    /// yields no parseable Presets. The fallback is always logged — there is no silent substitution.
+    /// </summary>
+    private void LoadWaveformPool()
+    {
+        // The Pool format lives in one place — WaveformPool — so this read path can never disagree with the
+        // editor's write path. ReadFileOrEmpty already logs a present-but-unreadable file as an error.
+        var entries = WaveformPool.Parse(WaveformPool.ReadFileOrEmpty());
+        if (entries.Count > 0)
+        {
+            waveformPoolNames = new string[entries.Count];
+            waveformPool = new Waveform[entries.Count];
+            for (var i = 0; i < entries.Count; i++)
+            {
+                waveformPoolNames[i] = entries[i].name;
+                waveformPool[i] = entries[i].waveform;
+            }
+
+            Debug.Log($"[Waveform] Loaded {waveformPool.Length} Preset(s) from {WaveformPool.FileName}: " +
+                      $"{string.Join(", ", waveformPoolNames)}");
+            return;
+        }
+
+        Debug.LogWarning($"[Waveform] {WaveformPool.FileName} is missing, empty, or had no parseable " +
+                         "DEFINE_WAVEFORM entries — falling back to the built-in seed Pool.");
+        SeedDefaultPool();
+    }
+
+    /// <summary>
+    /// Seeds the Pool in-memory with the seven legacy beat variants as Waveforms, in their original index order.
+    /// </summary>
+    /// <remarks>
+    /// This is the fallback when <see cref="WaveformPoolFileName"/> is absent or unparseable, and the bootstrap
+    /// content the file ships with. The index order is load-bearing: it keeps the existing <c>int beatVariant</c>
+    /// currency resolving to the same rhythmic intent, and <see cref="IsBeatTriggered"/>'s gate labels (1/2/3) are
+    /// coupled to it. Each entry uses the canonical Beat Pulse rounding; gated beats are amplitude 0 (the gate),
+    /// and the offbeat is a half-beat phase offset.
+    /// </remarks>
+    private void SeedDefaultPool()
+    {
+        var r = Waveform.BeatPulseRounding;
+        waveformPoolNames = new[]
+        {
+            "beat pulse", "beats 1 and 3", "beats 2 and 4", "measure start",
+            "beats 1 and 4", "offbeat", "every eighth",
+        };
+        waveformPool = new[]
+        {
+            Waveform.Parse("QQQQ", "8888", r, 0f),         // 0 every beat — the Beat Pulse
+            Waveform.Parse("QQQQ", "8080", r, 0f),         // 1 beats 1 & 3
+            Waveform.Parse("QQQQ", "0808", r, 0f),         // 2 beats 2 & 4
+            Waveform.Parse("QQQQ", "8000", r, 0f),         // 3 measure start
+            Waveform.Parse("QQQQ", "8008", r, 0f),         // 4 beats 1 & 4
+            Waveform.Parse("QQQQ", "8888", r, 0.5f),       // 5 offbeat (half-beat phase offset)
+            Waveform.Parse("EEEEEEEE", "88888888", r, 0f), // 6 every eighth note
+        };
+    }
+
+    /// <summary>
+    /// Calculates a beat-synced brightness multiplier by evaluating the variant's Waveform against the live Bar Phase.
+    /// </summary>
+    /// <remarks>
+    /// This is the single migration seam from the old seven-way rhythm switch to the Waveform model. The
+    /// <paramref name="variant"/> selector no longer indexes a hardcoded <c>switch</c>; it indexes the Waveform Pool.
+    /// <see cref="GetWaveform"/> resolves it to a <see cref="Waveform"/>, which <see cref="Waveform.Evaluate"/>
+    /// turns into a unipolar [0..1] envelope at the current <see cref="BarPhase"/>. That envelope is then mapped
+    /// into the requested brightness range.
+    ///
+    /// The envelope is symmetric around every enabled beat: it peaks (1) on the beat and falls to 0 at the midpoint
+    /// between beats, so <paramref name="maxBrightness"/> lands on the beat and <paramref name="minBrightness"/> in
+    /// the trough. A skipped beat (Amplitude 0) sits flat at <paramref name="minBrightness"/>.
+    ///
+    /// Note the behavior delta from the legacy switch: gated variants (e.g. measure-start) used to snap their
+    /// off-beats to <paramref name="maxBrightness"/>; under the Waveform model a gated (Amplitude-0) beat instead
+    /// rests at the <paramref name="minBrightness"/> floor, because 0 amplitude means a silent Hump, not "full on."
+    ///
+    /// An out-of-range or unknown variant resolves to Waveform 0 (the Beat Pulse) inside <see cref="GetWaveform"/>,
+    /// so effect code degrades visibly to the canonical pulse rather than throwing. The ~18 effect call sites are
+    /// unchanged by this swap.
+    /// </remarks>
+    /// <param name="variant">Waveform Pool selector; resolved to a <see cref="Waveform"/> by <see cref="GetWaveform"/>.</param>
+    /// <param name="maxBrightness">Brightness emitted at the envelope peak (on the beat), or when disabled/inactive.</param>
+    /// <param name="minBrightness">Brightness emitted at the envelope trough (the midpoint between beats).</param>
     /// <param name="enable">If false, returns <paramref name="maxBrightness"/> with no pulsing.</param>
     /// <returns>A brightness multiplier between <paramref name="minBrightness"/> and <paramref name="maxBrightness"/>.</returns>
     public float GetBeatBrightness(int variant, float maxBrightness = 1.0f, float minBrightness = 0.85f, bool enable = true)
@@ -357,24 +540,8 @@ public class BeatManager
             return maxBrightness;
         }
 
-        switch (variant)
-        {
-            case VariantBeatsOneAndThree:
-                return BeatLabelMatchesCurrent(1, 3) ? BeatPulseBrightness(minBrightness, maxBrightness) : maxBrightness;
-            case VariantBeatsTwoAndFour:
-                return BeatLabelMatchesCurrent(2, 4) ? BeatPulseBrightness(minBrightness, maxBrightness) : maxBrightness;
-            case VariantMeasureStart:
-                return BeatLabelMatchesCurrent(1) ? BeatPulseBrightness(minBrightness, maxBrightness) : maxBrightness;
-            case VariantBeatsOneAndFour:
-                return BeatLabelMatchesCurrent(1, 4) ? BeatPulseBrightness(minBrightness, maxBrightness) : maxBrightness;
-            case VariantOffbeat:
-                return PulseToBrightness(beatData.offBeatPulse, minBrightness, maxBrightness);
-            case VariantEighthNotes:
-                return PulseToBrightness(GetEighthNotePulse(), minBrightness, maxBrightness);
-            case VariantEveryBeat:
-            default:
-                return BeatPulseBrightness(minBrightness, maxBrightness);
-        }
+        var envelope = GetWaveform(variant).Evaluate(BarPhase);
+        return Mathf.Lerp(minBrightness, maxBrightness, envelope);
     }
 
     /// <summary>
@@ -559,24 +726,6 @@ public class BeatManager
         return ((value % modulus) + modulus) % modulus;
     }
 
-    /// <summary>Returns the beat pulse converted into the requested brightness range.</summary>
-    private float BeatPulseBrightness(float minBrightness, float maxBrightness)
-    {
-        return PulseToBrightness(beatData.beatPulse, minBrightness, maxBrightness);
-    }
-
-    /// <summary>Returns true when the current musical beat label matches either supplied label.</summary>
-    private bool BeatLabelMatchesCurrent(int firstBeatLabel, int secondBeatLabel)
-    {
-        return BeatLabelMatches(GetCurrentBeatLabel(), firstBeatLabel, secondBeatLabel);
-    }
-
-    /// <summary>Returns true when the current musical beat label matches the supplied label.</summary>
-    private bool BeatLabelMatchesCurrent(int beatLabel)
-    {
-        return BeatLabelMatches(GetCurrentBeatLabel(), beatLabel);
-    }
-
     /// <summary>Returns true when a musical beat label equals either accepted label.</summary>
     private static bool BeatLabelMatches(int beatLabel, int firstBeatLabel, int secondBeatLabel)
     {
@@ -587,12 +736,6 @@ public class BeatManager
     private static bool BeatLabelMatches(int beatLabel, int acceptedBeatLabel)
     {
         return beatLabel == acceptedBeatLabel;
-    }
-
-    /// <summary>Returns the stronger normalized pulse across quarter-note and offbeat positions.</summary>
-    private float GetEighthNotePulse()
-    {
-        return Mathf.Max(Mathf.Clamp01(beatData.beatPulse), Mathf.Clamp01(beatData.offBeatPulse));
     }
 
     /// <summary>
@@ -607,11 +750,5 @@ public class BeatManager
 
         // Legacy fallback for tests or older callers that only populated currentBeat.
         return beatData.currentBeat + 1;
-    }
-
-    /// <summary>Clamps a normalized pulse and maps it into the requested brightness range.</summary>
-    private static float PulseToBrightness(float pulse, float minBrightness, float maxBrightness)
-    {
-        return Mathf.Lerp(minBrightness, maxBrightness, Mathf.Clamp01(pulse));
     }
 }

@@ -187,6 +187,22 @@ public class Controller : Singleton<Controller>
     /// </summary>
     private int currentEffect;
 
+    /// <summary>
+    /// The beat variant (Waveform Pool index) of the effect currently on screen, or <c>-1</c> when no single
+    /// effect owns the frame (startup gap or mid-transition, where <see cref="currentEffect"/> is -1).
+    /// </summary>
+    /// <remarks>
+    /// Exposes the otherwise-private on-screen variant to the Waveform Pool selector in the BeatData inspector so
+    /// it can show what the wall is actually pulsing to in "Auto" mode (the read-back), and so locking a specific
+    /// Waveform can retarget the live effect's pulse immediately instead of waiting for the next effect to start.
+    /// This is an editor/inspector affordance; the runtime selection model is unchanged.
+    /// </remarks>
+    public int CurrentBeatVariant
+    {
+        get => (currentEffect >= 0 && currentEffect < effects.Length) ? effects[currentEffect].beatVariant : -1;
+        set { if (currentEffect >= 0 && currentEffect < effects.Length) effects[currentEffect].beatVariant = value; }
+    }
+
     /// <summary>Keyboard bank: A-W select effects 0-22 or 23-45 depending on this value.</summary>
     private int keyboardBase = 0;
 
