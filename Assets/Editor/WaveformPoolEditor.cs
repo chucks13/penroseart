@@ -98,7 +98,7 @@ public sealed class WaveformPoolEditor : EditorWindow
             drafts.Add(new Draft
             {
                 name = entry.name,
-                sequence = entry.waveform.sequence,
+                sequence = entry.waveform.sequence.ToUpperInvariant(),
                 amplitude = entry.waveform.amplitude,
                 rounding = entry.waveform.rounding,
                 offset = entry.waveform.offset,
@@ -297,19 +297,19 @@ public sealed class WaveformPoolEditor : EditorWindow
 
             var d = drafts[selected];
 
-            // Sequence/amplitude rebuild the humps, so they commit through DelayedTextField (Enter / focus loss) to
-            // keep Waveform.Parse — and its malformation log — off the per-keystroke path.
+            // Sequence/amplitude rebuild the humps. We use TextField instead of DelayedTextField so the
+            // envelope plot updates live as you type.
             EditorGUI.BeginChangeCheck();
-            var newName = EditorGUILayout.DelayedTextField("Name", d.name);
-            var newSeq = EditorGUILayout.DelayedTextField("Sequence", d.sequence);
+            var newName = EditorGUILayout.TextField("Name", d.name);
+            var newSeq = EditorGUILayout.TextField("Sequence", d.sequence);
             EditorGUILayout.LabelField(" ", SequenceHint, EditorStyles.wordWrappedMiniLabel);
-            var newAmp = EditorGUILayout.DelayedTextField("Amplitude", d.amplitude);
+            var newAmp = EditorGUILayout.TextField("Amplitude", d.amplitude);
             EditorGUILayout.LabelField(" ", AmplitudeHint, EditorStyles.wordWrappedMiniLabel);
             var structuralChanged = EditorGUI.EndChangeCheck();
             if (structuralChanged)
             {
                 d.name = newName;
-                d.sequence = newSeq;
+                d.sequence = newSeq.ToUpperInvariant();
                 d.amplitude = newAmp;
                 d.RebuildPreview();
                 SetDirty(true);
