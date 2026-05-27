@@ -260,8 +260,21 @@ public class BeatManager
     /// <summary>Current beat state. Defaults are inert until OSC or the local simulator supplies data.</summary>
     public BeatData beatData = new BeatData();
 
-    /// <summary>Tracks whether the currently active beatData values were generated locally rather than received from OSC.</summary>
-    private bool usingSimulatedBeatData;
+    /// <summary>
+    /// Which source currently owns <see cref="beatData"/>: <c>true</c> = live RaveSystem OSC (pushed in by
+    /// <see cref="RaveOscReceiver.ApplyTo"/> every frame), <c>false</c> = the local simulator.
+    /// </summary>
+    /// <remarks>
+    /// The source is re-chosen only at effect boundaries via <see cref="SetLiveBeatSource"/>, never mid-effect:
+    /// effects already roll fresh state in <c>OnStart()</c>, so the boundary is the natural, glitch-free handoff.
+    /// RaveSystem broadcasts continuously at 30 Hz, so "OSC went away" is either no packets at all (app/network
+    /// gone) or packets carrying bpm=0 (nothing on air). Both resolve at the next boundary: no fresh playing beat
+    /// -> simulator; a fresh playing beat -> live again. Defaults to the simulator until OSC proves usable.
+    /// </remarks>
+    private bool liveBeatActive;
+
+    /// <summary>True while live RaveSystem OSC owns the beat; false while the local simulator drives it.</summary>
+    public bool IsLiveSource => liveBeatActive;
 
     /// <summary>
     /// The Waveform Pool: the Presets random selection draws from and that <c>int</c> variants index into.
@@ -321,8 +334,9 @@ public class BeatManager
             beatData = new BeatData();
         }
 
-        if (beatData.active && !usingSimulatedBeatData)
+        if (liveBeatActive)
         {
+            // Live RaveSystem OSC owns beatData this effect; RaveOscReceiver.ApplyTo writes it each frame.
             return;
         }
 
@@ -335,10 +349,26 @@ public class BeatManager
         ApplySimulatedBeat(timeSeconds);
     }
 
-    /// <summary>Marks the current beatData as externally supplied so the local simulator will not overwrite active live data.</summary>
-    public void MarkExternalBeatDataApplied()
+    /// <summary>
+    /// Chooses the beat source for the effect that is starting now: <paramref name="live"/> = live RaveSystem
+    /// OSC, otherwise the local simulator. Called once per effect boundary from <see cref="Controller"/>.
+    /// </summary>
+    /// <remarks>
+    /// Logged on every change of source (never silent). When this turns live off, the next <see cref="Update"/>
+    /// resumes the simulator on <see cref="simulatedBpm"/>; when it turns live on, <see cref="Update"/> stands
+    /// aside and lets <see cref="RaveOscReceiver.ApplyTo"/> keep <see cref="beatData"/> current.
+    /// </remarks>
+    public void SetLiveBeatSource(bool live)
     {
-        usingSimulatedBeatData = false;
+        if (live == liveBeatActive)
+        {
+            return;
+        }
+
+        liveBeatActive = live;
+        Debug.Log(live
+            ? "[BeatManager] Beat source -> LIVE RaveSystem OSC (fresh playing beat at effect change)."
+            : $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); no live RaveSystem beat at effect change.");
     }
 
     /// <summary>Returns a random Waveform index drawn from the full Pool, for effect activation.</summary>
@@ -622,17 +652,14 @@ public class BeatManager
         beatData.offBeatPulse = GetPulse(elapsedSinceOffBeatSeconds, beatDurationSeconds);
         beatData.offBeatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, beatDurationSeconds * 0.5f, offBeat, offBeatIndex);
         beatData.offBeats = BuildGates(offBeat, offBeatIndex);
-        usingSimulatedBeatData = true;
     }
 
-    /// <summary>Clears locally simulated values when fallback BPM is disabled.</summary>
+    /// <summary>
+    /// Clears beatData to an inert state. Reached only in simulator mode when <see cref="simulatedBpm"/> is
+    /// disabled (&lt;= 0), so there is no live data to protect here — live mode returns earlier in <see cref="Update"/>.
+    /// </summary>
     private void ClearSimulatedBeatData()
     {
-        if (!usingSimulatedBeatData && beatData.active)
-        {
-            return;
-        }
-
         beatData.active = false;
         beatData.playersLive = "";
         beatData.track = "";
@@ -646,7 +673,6 @@ public class BeatManager
         beatData.onBeats = new bool[BeatSlotCount];
         beatData.offBeatsCountMs = CreateUnavailableCountdowns();
         beatData.offBeats = new bool[BeatSlotCount];
-        usingSimulatedBeatData = false;
     }
 
     /// <summary>Builds label-ordered countdowns for either beat or offbeat slots.</summary>

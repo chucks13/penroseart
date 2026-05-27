@@ -76,7 +76,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
         beatManager.beatData.beatInBar = 3;
         beatManager.beatData.currentBeat = 2;
         beatManager.beatData.beatPulse = 0.25f;
-        beatManager.MarkExternalBeatDataApplied();
+        beatManager.SetLiveBeatSource(true);
 
         beatManager.Update(0f);
 
