@@ -86,3 +86,17 @@ Start with these before adding new structures:
 - Do not preserve a compatibility path that leaves the active runtime using stale data. If the user asks for a new live source of truth, migrate the relevant consumers to it.
 - Do not silently change hardware output modes or protocol details.
 - Do not treat generated Unity files as stable hand-authored source.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live as markdown files under `.scratch/<feature-slug>/` in this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles, default strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as a `Status:` line in each issue file. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
