@@ -252,10 +252,17 @@ public class BeatManager
     private const int UnavailableMs = -1;
 
     /// <summary>
-    /// Local fallback tempo used when no live Rave OSC beat data is active.
-    /// Set this to 0 or below to disable local beat simulation.
+    /// Local fallback tempo used when no live Rave OSC beat data is active and
+    /// <see cref="simulatedBeatEnabled"/> allows the simulator to run.
     /// </summary>
     public float simulatedBpm = 120f;
+
+    /// <summary>
+    /// Whether the local fallback simulator may synthesize beat data when no live Rave OSC beat is active.
+    /// Turn this off to make "no live beat" a real no-beat state for effects: <see cref="BeatData.active"/>
+    /// and <see cref="IsActive"/> become false.
+    /// </summary>
+    public bool simulatedBeatEnabled = true;
 
     /// <summary>Current beat state. Defaults are inert until OSC or the local simulator supplies data.</summary>
     public BeatData beatData = new BeatData();
@@ -313,8 +320,9 @@ public class BeatManager
     /// Updates the fallback beat simulator from Unity time.
     /// </summary>
     /// <remarks>
-    /// Live OSC remains the source of truth. Simulation only runs when live data is inactive
-    /// or when the previous frame was already simulated.
+    /// Live OSC remains the source of truth. Simulation only runs when live data is inactive, the simulator is
+    /// enabled, and <see cref="simulatedBpm"/> is positive. Otherwise <see cref="beatData"/> is cleared to the
+    /// standard no-beat state exposed through <see cref="IsActive"/>.
     /// </remarks>
     public void Update()
     {
@@ -340,7 +348,7 @@ public class BeatManager
             return;
         }
 
-        if (simulatedBpm <= 0f)
+        if (!simulatedBeatEnabled || simulatedBpm <= 0f)
         {
             ClearSimulatedBeatData();
             return;
@@ -355,7 +363,8 @@ public class BeatManager
     /// </summary>
     /// <remarks>
     /// Logged on every change of source (never silent). When this turns live off, the next <see cref="Update"/>
-    /// resumes the simulator on <see cref="simulatedBpm"/>; when it turns live on, <see cref="Update"/> stands
+    /// either resumes the simulator on <see cref="simulatedBpm"/> or clears <see cref="beatData"/> to the no-beat
+    /// state when <see cref="simulatedBeatEnabled"/> is false; when it turns live on, <see cref="Update"/> stands
     /// aside and lets <see cref="RaveOscReceiver.ApplyTo"/> keep <see cref="beatData"/> current.
     /// </remarks>
     public void SetLiveBeatSource(bool live)
@@ -368,7 +377,9 @@ public class BeatManager
         liveBeatActive = live;
         Debug.Log(live
             ? "[BeatManager] Beat source -> LIVE RaveSystem OSC (fresh playing beat at effect change)."
-            : $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); no live RaveSystem beat at effect change.");
+            : simulatedBeatEnabled && simulatedBpm > 0f
+                ? $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); no live RaveSystem beat at effect change."
+                : "[BeatManager] Beat source -> NONE; no live RaveSystem beat and simulated beat is disabled.");
     }
 
     /// <summary>Returns a random Waveform index drawn from the full Pool, for effect activation.</summary>
@@ -655,8 +666,9 @@ public class BeatManager
     }
 
     /// <summary>
-    /// Clears beatData to an inert state. Reached only in simulator mode when <see cref="simulatedBpm"/> is
-    /// disabled (&lt;= 0), so there is no live data to protect here — live mode returns earlier in <see cref="Update"/>.
+    /// Clears beatData to the standard no-beat state. Reached only in simulator mode when the simulator is off
+    /// or <see cref="simulatedBpm"/> is disabled (&lt;= 0), so there is no live data to protect here — live mode
+    /// returns earlier in <see cref="Update"/>.
     /// </summary>
     private void ClearSimulatedBeatData()
     {

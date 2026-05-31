@@ -65,6 +65,27 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
+    public void BeatManagerUpdateDoesNotSimulateWhenSimulatorIsDisabled()
+    {
+        var beatManager = new BeatManager
+        {
+            simulatedBpm = 120f,
+            simulatedBeatEnabled = false,
+        };
+        beatManager.beatData.active = true;
+        beatManager.beatData.beatPulse = 1f;
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsActive, Is.False);
+        Assert.That(beatManager.beatData.active, Is.False);
+        Assert.That(beatManager.beatData.nextBeatMs, Is.EqualTo(-1));
+        Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0f));
+        Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(1f));
+        Assert.That(beatManager.IsBeatTriggered(0), Is.False);
+    }
+
+    [Test]
     public void BeatManagerUpdateDoesNotOverwriteLiveBeatData()
     {
         var beatManager = new BeatManager
