@@ -272,11 +272,9 @@ public class BeatManager
     /// <see cref="RaveOscReceiver.ApplyTo"/> every frame), <c>false</c> = the local simulator.
     /// </summary>
     /// <remarks>
-    /// The source is re-chosen only at effect boundaries via <see cref="SetLiveBeatSource"/>, never mid-effect:
-    /// effects already roll fresh state in <c>OnStart()</c>, so the boundary is the natural, glitch-free handoff.
-    /// RaveSystem broadcasts continuously at 30 Hz, so "OSC went away" is either no packets at all (app/network
-    /// gone) or packets carrying bpm=0 (nothing on air). Both resolve at the next boundary: no fresh playing beat
-    /// -> simulator; a fresh playing beat -> live again. Defaults to the simulator until OSC proves usable.
+    /// The source is controlled by <see cref="RaveOscReceiver.ApplyTo"/> every frame from UDP 7000 transport
+    /// liveness. Any recognized RaveSystem on-air OSC packet makes this live immediately; when packets stop,
+    /// the receiver switches this back to the simulator/no-beat fallback.
     /// </remarks>
     private bool liveBeatActive;
 
@@ -358,8 +356,7 @@ public class BeatManager
     }
 
     /// <summary>
-    /// Chooses the beat source for the effect that is starting now: <paramref name="live"/> = live RaveSystem
-    /// OSC, otherwise the local simulator. Called once per effect boundary from <see cref="Controller"/>.
+    /// Chooses the beat source: <paramref name="live"/> = live RaveSystem OSC, otherwise the local simulator.
     /// </summary>
     /// <remarks>
     /// Logged on every change of source (never silent). When this turns live off, the next <see cref="Update"/>
@@ -376,10 +373,10 @@ public class BeatManager
 
         liveBeatActive = live;
         Debug.Log(live
-            ? "[BeatManager] Beat source -> LIVE RaveSystem OSC (fresh playing beat at effect change)."
+            ? "[BeatManager] Beat source -> LIVE RaveSystem OSC (UDP 7000 broadcasting)."
             : simulatedBeatEnabled && simulatedBpm > 0f
-                ? $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); no live RaveSystem beat at effect change."
-                : "[BeatManager] Beat source -> NONE; no live RaveSystem beat and simulated beat is disabled.");
+                ? $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); RaveSystem OSC is not broadcasting."
+                : "[BeatManager] Beat source -> NONE; RaveSystem OSC is not broadcasting and simulated beat is disabled.");
     }
 
     /// <summary>Returns a random Waveform index drawn from the full Pool, for effect activation.</summary>

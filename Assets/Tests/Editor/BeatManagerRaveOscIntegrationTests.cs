@@ -108,6 +108,18 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
+    public void RaveOscBroadcastLivenessFollowsRecognizedUdp7000Packets()
+    {
+        const float lastPacketTime = 10f;
+        const float threeSixtyHzIntervals = 3f / 60f;
+
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: false, lastPacketTime, lastPacketTime), Is.False);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, lastPacketTime, lastPacketTime), Is.True);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, lastPacketTime, lastPacketTime + threeSixtyHzIntervals - 0.001f), Is.True);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, lastPacketTime, lastPacketTime + threeSixtyHzIntervals + 0.001f), Is.False);
+    }
+
+    [Test]
     public void BeatDataCurrentBeatPropertiesReadActiveOnBeatSlotFromCountdownArrays()
     {
         var beatData = new BeatData
@@ -364,17 +376,20 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void GetBeatBrightnessUsesBeatAndOffBeatPulsesForMusicalVariants()
+    public void GetBeatBrightnessUsesBarPhaseWaveformsForMusicalVariants()
     {
         var beatManager = new BeatManager();
         beatManager.beatData.active = true;
+        beatManager.beatData.beatInBar = 1;
+        beatManager.beatData.beatAverageMs = 500;
+        beatManager.beatData.beatsCountMs = new[] { 0, 250, 750, 1250 };
         beatManager.beatData.beatPulse = 0.25f;
         beatManager.beatData.offBeatPulse = 0.75f;
-        beatManager.beatData.currentBeat = 0;
 
-        Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.5f), Is.EqualTo(0.625f).Within(0.0001f));
-        Assert.That(beatManager.GetBeatBrightness(5, 1f, 0.5f), Is.EqualTo(0.875f).Within(0.0001f));
-        Assert.That(beatManager.GetBeatBrightness(6, 1f, 0.5f), Is.EqualTo(0.875f).Within(0.0001f));
+        Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(0.0001f));
+        Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.5f), Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(beatManager.GetBeatBrightness(5, 1f, 0.5f), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(beatManager.GetBeatBrightness(6, 1f, 0.5f), Is.EqualTo(1f).Within(0.0001f));
     }
 
     [Test]

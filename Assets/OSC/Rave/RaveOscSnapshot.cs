@@ -6,14 +6,14 @@ using System;
 
 namespace PenroseArt.RaveOsc {
 
-/// <summary>Focused on-air beat position from <c>/rave/onair/beat</c>.</summary>
+/// <summary>Focused on-air beat position from <c>/rave/onair/beat</c> and <c>/rave/onair/total_beats</c>.</summary>
 [Serializable]
 public struct BeatPosition {
     public int current;
     public int total;
 }
 
-/// <summary>Focused on-air bar position from <c>/rave/onair/bar</c>.</summary>
+/// <summary>Focused on-air bar position from <c>/rave/onair/bar</c> and <c>/rave/onair/next_bar_ms</c>.</summary>
 [Serializable]
 public struct BarPosition {
     public int current;
@@ -62,15 +62,15 @@ public struct CountdownState {
 public sealed class RaveOnAirSnapshot {
     public string playersLive = "";
     public string track = "";
-    public float bpm;
-    public BeatPosition beat;
-    public BarPosition bar;
-    public int beatInBar;
-    public int[] beatsCountMs = new int[4];
+    public float bpm = -1f;
+    public BeatPosition beat = new BeatPosition { current = -1, total = -1 };
+    public BarPosition bar = new BarPosition { current = -1, nextMs = -1 };
+    public int beatInBar = -1;
+    public int[] beatsCountMs = new[] { -1, -1, -1, -1 };
     public bool[] onBeats = new bool[4];
-    public int beatAverageMs;
+    public int beatAverageMs = -1;
     public float beatPulse;
-    public Levels levels;
+    public Levels levels = new Levels { low = -1f, mid = -1f, high = -1f };
     public PhaseState phaseState;
     public CountdownState dropState;
     public CountdownState fillState;

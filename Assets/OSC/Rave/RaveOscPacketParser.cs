@@ -21,8 +21,26 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterString("/rave/onair/players_live", (snapshot, value) => snapshot.playersLive = value);
         RegisterString("/rave/onair/track", (snapshot, value) => snapshot.track = value);
         RegisterFloat("/rave/onair/bpm", (snapshot, value) => snapshot.bpm = value);
-        RegisterBeatPosition("/rave/onair/beat", (snapshot, value) => snapshot.beat = value);
-        RegisterBarPosition("/rave/onair/bar", (snapshot, value) => snapshot.bar = value);
+        RegisterInt("/rave/onair/beat", (snapshot, value) => {
+            var beat = snapshot.beat;
+            beat.current = value;
+            snapshot.beat = beat;
+        });
+        RegisterInt("/rave/onair/total_beats", (snapshot, value) => {
+            var beat = snapshot.beat;
+            beat.total = value;
+            snapshot.beat = beat;
+        });
+        RegisterInt("/rave/onair/bar", (snapshot, value) => {
+            var bar = snapshot.bar;
+            bar.current = value;
+            snapshot.bar = bar;
+        });
+        RegisterInt("/rave/onair/next_bar_ms", (snapshot, value) => {
+            var bar = snapshot.bar;
+            bar.nextMs = value;
+            snapshot.bar = bar;
+        });
         RegisterInt("/rave/onair/beat_in_bar", (snapshot, value) => snapshot.beatInBar = value);
         RegisterFourInts("/rave/onair/beats_count_ms", (snapshot, value) => snapshot.beatsCountMs = value);
         RegisterFourBools("/rave/onair/on_beats", (snapshot, value) => snapshot.onBeats = value);
@@ -67,10 +85,6 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private delegate void SnapshotStringSetter(RaveOnAirSnapshot snapshot, string value);
 
-    private delegate void SnapshotBeatPositionSetter(RaveOnAirSnapshot snapshot, BeatPosition value);
-
-    private delegate void SnapshotBarPositionSetter(RaveOnAirSnapshot snapshot, BarPosition value);
-
     private delegate void SnapshotIntArraySetter(RaveOnAirSnapshot snapshot, int[] value);
 
     private delegate void SnapshotBoolArraySetter(RaveOnAirSnapshot snapshot, bool[] value);
@@ -100,26 +114,6 @@ public sealed class RaveOscPacketParser : IDisposable {
     private void RegisterString(string address, SnapshotStringSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
             var value = ReadSingleString(address, ref reader);
-            UpdateSnapshot(snapshot => setter(snapshot, value));
-        });
-    }
-
-    private void RegisterBeatPosition(string address, SnapshotBeatPositionSetter setter) {
-        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new BeatPosition {
-                current = ReadNextInt(address, ref reader),
-                total = ReadNextInt(address, ref reader),
-            };
-            UpdateSnapshot(snapshot => setter(snapshot, value));
-        });
-    }
-
-    private void RegisterBarPosition(string address, SnapshotBarPositionSetter setter) {
-        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new BarPosition {
-                current = ReadNextInt(address, ref reader),
-                nextMs = ReadNextInt(address, ref reader),
-            };
             UpdateSnapshot(snapshot => setter(snapshot, value));
         });
     }

@@ -9,53 +9,59 @@ namespace RaveSystem.Osc.Tests {
 
 public sealed class RaveOscPacketParserTests {
     [Test]
-    public void DispatchReadsRaveOnAirBundlesIntoOscShapedSnapshot() {
-        var packet = new byte[2048];
-        var core = new OscBundleWriter(packet, OscTimeTag.Immediately);
-        WriteString(ref core, "/rave/onair/players_live", "4,2");
-        WriteString(ref core, "/rave/onair/track", "Artist - Track");
-        WriteFloat(ref core, "/rave/onair/bpm", 128.5f);
-        WriteTwoInts(ref core, "/rave/onair/beat", 64, 384);
-        WriteTwoInts(ref core, "/rave/onair/bar", 16, 777);
-        WriteInt(ref core, "/rave/onair/beat_in_bar", 3);
-        WriteFourInts(ref core, "/rave/onair/beats_count_ms", 100, 200, 300, 400);
-        WriteFourInts(ref core, "/rave/onair/on_beats", 0, 0, 1, 0);
-        WriteInt(ref core, "/rave/onair/beat_avg_ms", 468);
-        WriteFloat(ref core, "/rave/onair/beat_pulse", 0.625f);
-        WriteThreeFloats(ref core, "/rave/onair/levels", 0.25f, 0.5f, 0.75f);
+    public void DispatchReadsCurrentRaveOnAirLaneBundlesIntoOscShapedSnapshot() {
+        var continuousPacket = new byte[2048];
+        var continuous = new OscBundleWriter(continuousPacket, OscTimeTag.Immediately);
+        WriteFloat(ref continuous, "/rave/onair/bpm", 128.5f);
+        WriteInt(ref continuous, "/rave/onair/beat", 64);
+        WriteInt(ref continuous, "/rave/onair/bar", 16);
+        WriteInt(ref continuous, "/rave/onair/next_bar_ms", 777);
+        WriteInt(ref continuous, "/rave/onair/beat_in_bar", 3);
+        WriteFourInts(ref continuous, "/rave/onair/beats_count_ms", 100, 200, 300, 400);
+        WriteFourInts(ref continuous, "/rave/onair/on_beats", 0, 0, 1, 0);
+        WriteInt(ref continuous, "/rave/onair/beat_avg_ms", 468);
+        WriteFloat(ref continuous, "/rave/onair/beat_pulse", 0.625f);
+        WriteThreeFloats(ref continuous, "/rave/onair/levels", 0.25f, 0.5f, 0.75f);
 
         using var parser = new RaveOscPacketParser();
-        var coreDispatches = parser.Dispatch(packet.AsSpan(0, core.Finish()));
+        var continuousDispatches = parser.Dispatch(continuousPacket.AsSpan(0, continuous.Finish()));
 
-        Assert.That(coreDispatches, Is.EqualTo(11));
-        Assert.That(parser.TryTakeSnapshot(out var coreSnapshot), Is.True);
-        Assert.That(coreSnapshot.playersLive, Is.EqualTo("4,2"));
-        Assert.That(coreSnapshot.track, Is.EqualTo("Artist - Track"));
-        Assert.That(coreSnapshot.bpm, Is.EqualTo(128.5f));
-        Assert.That(coreSnapshot.beat.current, Is.EqualTo(64));
-        Assert.That(coreSnapshot.beat.total, Is.EqualTo(384));
-        Assert.That(coreSnapshot.bar.current, Is.EqualTo(16));
-        Assert.That(coreSnapshot.bar.nextMs, Is.EqualTo(777));
-        Assert.That(coreSnapshot.beatInBar, Is.EqualTo(3));
-        Assert.That(coreSnapshot.beatsCountMs, Is.EqualTo(new[] { 100, 200, 300, 400 }));
-        Assert.That(coreSnapshot.onBeats, Is.EqualTo(new[] { false, false, true, false }));
-        Assert.That(coreSnapshot.beatAverageMs, Is.EqualTo(468));
-        Assert.That(coreSnapshot.beatPulse, Is.EqualTo(0.625f));
-        Assert.That(coreSnapshot.levels.low, Is.EqualTo(0.25f));
-        Assert.That(coreSnapshot.levels.mid, Is.EqualTo(0.5f));
-        Assert.That(coreSnapshot.levels.high, Is.EqualTo(0.75f));
+        Assert.That(continuousDispatches, Is.EqualTo(10));
+        Assert.That(parser.TryTakeSnapshot(out var continuousSnapshot), Is.True);
+        Assert.That(continuousSnapshot.bpm, Is.EqualTo(128.5f));
+        Assert.That(continuousSnapshot.beat.current, Is.EqualTo(64));
+        Assert.That(continuousSnapshot.beat.total, Is.EqualTo(-1));
+        Assert.That(continuousSnapshot.bar.current, Is.EqualTo(16));
+        Assert.That(continuousSnapshot.bar.nextMs, Is.EqualTo(777));
+        Assert.That(continuousSnapshot.beatInBar, Is.EqualTo(3));
+        Assert.That(continuousSnapshot.beatsCountMs, Is.EqualTo(new[] { 100, 200, 300, 400 }));
+        Assert.That(continuousSnapshot.onBeats, Is.EqualTo(new[] { false, false, true, false }));
+        Assert.That(continuousSnapshot.beatAverageMs, Is.EqualTo(468));
+        Assert.That(continuousSnapshot.beatPulse, Is.EqualTo(0.625f));
+        Assert.That(continuousSnapshot.levels.low, Is.EqualTo(0.25f));
+        Assert.That(continuousSnapshot.levels.mid, Is.EqualTo(0.5f));
+        Assert.That(continuousSnapshot.levels.high, Is.EqualTo(0.75f));
 
-        var phrasePacket = new byte[1024];
-        var phrase = new OscBundleWriter(phrasePacket, OscTimeTag.Immediately);
-        WriteNamedState(ref phrase, "/rave/onair/phase_state", "Drop", "Break", 1, 12, 32, 8);
-        WriteCountdownState(ref phrase, "/rave/onair/drop_state", 1, 0, 32, 2);
-        WriteCountdownState(ref phrase, "/rave/onair/fill_state", 0, 16, 8, 1);
-        WriteNamedState(ref phrase, "/rave/onair/energy_state", "High", "Mid", 1, 4, 16, 2);
+        var discretePacket = new byte[1024];
+        var discrete = new OscBundleWriter(discretePacket, OscTimeTag.Immediately);
+        WriteString(ref discrete, "/rave/onair/players_live", "4,2");
+        WriteString(ref discrete, "/rave/onair/track", "Artist - Track");
+        WriteInt(ref discrete, "/rave/onair/total_beats", 384);
+        WriteNamedState(ref discrete, "/rave/onair/phase_state", "Drop", "Break", 1, 12, 32, 8);
+        WriteCountdownState(ref discrete, "/rave/onair/drop_state", 1, 0, 32, 2);
+        WriteCountdownState(ref discrete, "/rave/onair/fill_state", 0, 16, 8, 1);
+        WriteNamedState(ref discrete, "/rave/onair/energy_state", "High", "Mid", 1, 4, 16, 2);
 
-        var phraseDispatches = parser.Dispatch(phrasePacket.AsSpan(0, phrase.Finish()));
+        var discreteDispatches = parser.Dispatch(discretePacket.AsSpan(0, discrete.Finish()));
 
-        Assert.That(phraseDispatches, Is.EqualTo(4));
+        Assert.That(discreteDispatches, Is.EqualTo(7));
         Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        Assert.That(snapshot.playersLive, Is.EqualTo("4,2"));
+        Assert.That(snapshot.track, Is.EqualTo("Artist - Track"));
+        Assert.That(snapshot.beat.current, Is.EqualTo(64));
+        Assert.That(snapshot.beat.total, Is.EqualTo(384));
+        Assert.That(snapshot.bar.current, Is.EqualTo(16));
+        Assert.That(snapshot.bar.nextMs, Is.EqualTo(777));
         Assert.That(snapshot.phaseState.current, Is.EqualTo("Drop"));
         Assert.That(snapshot.phaseState.next, Is.EqualTo("Break"));
         Assert.That(snapshot.phaseState.active, Is.True);
@@ -97,15 +103,6 @@ public sealed class RaveOscPacketParserTests {
         var writer = new OscWriter(element);
         writer.WriteAddress(address);
         writer.WriteInt32(value);
-        bundle.EndElement(writer.Finish());
-    }
-
-    private static void WriteTwoInts(ref OscBundleWriter bundle, string address, int first, int second) {
-        var element = bundle.BeginElement();
-        var writer = new OscWriter(element);
-        writer.WriteAddress(address);
-        writer.WriteInt32(first);
-        writer.WriteInt32(second);
         bundle.EndElement(writer.Finish());
     }
 

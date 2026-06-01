@@ -12,6 +12,8 @@ using UnityEngine;
 public sealed class RaveOscReceiver : MonoBehaviour
 {
     private const int RaveBroadcastPort = 7000;
+    private const float RaveBroadcastRateHz = 60f;
+    private const float BroadcastSilenceTimeoutSeconds = 3f / RaveBroadcastRateHz;
 
     private readonly object errorLock = new object();
     private OscUdpSocket socket;
@@ -20,13 +22,16 @@ public sealed class RaveOscReceiver : MonoBehaviour
     private Exception pendingError;
     private bool hasPendingError;
     private bool hasSnapshot;
-    private bool receivedSinceCheck;
+    private float lastRecognizedPacketTime = float.NegativeInfinity;
 
     /// <summary>True after at least one recognized Rave OSC value has been received.</summary>
     public bool HasSnapshot => hasSnapshot;
 
     /// <summary>The latest decoded Rave on-air values.</summary>
     public RaveOnAirSnapshot Latest => latest;
+
+    /// <summary>True while recognized RaveSystem OSC is arriving on UDP 7000.</summary>
+    public bool IsBroadcasting => HasRecentRecognizedPacket(Time.realtimeSinceStartup);
 
     private void Awake()
     {
@@ -39,7 +44,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
         {
             latest = snapshot;
             hasSnapshot = true;
-            receivedSinceCheck = true;
+            lastRecognizedPacketTime = Time.realtimeSinceStartup;
         }
 
         Exception error = null;
@@ -65,13 +70,26 @@ public sealed class RaveOscReceiver : MonoBehaviour
     }
 
     /// <summary>
-    /// While live OSC is the chosen beat source, pushes the latest decoded snapshot into the shared beat data
-    /// every frame. Does nothing when the simulator owns the beat — the source itself is chosen at effect
-    /// boundaries via <see cref="ConsumeFreshPlayingBeat"/> + <see cref="BeatManager.SetLiveBeatSource"/>.
+    /// Chooses the shared beat source from RaveSystem transport liveness and, while broadcasting,
+    /// pushes the latest decoded snapshot into the shared beat data every frame.
     /// </summary>
+    /// <remarks>
+    /// Any recognized Rave on-air OSC value on UDP 7000 makes the BeatManager live immediately. When
+    /// recognized values stop arriving for three 60 Hz broadcast intervals, the BeatManager returns to its
+    /// local fallback/no-beat path. Beat activity itself is still data-driven: an idle RaveSystem broadcast
+    /// keeps the source live while <see cref="ApplySnapshotToBeatData"/> marks <see cref="BeatData.active"/>
+    /// false from the sentinel payload.
+    /// </remarks>
     public void ApplyTo(BeatManager beatManager)
     {
-        if (beatManager == null || !hasSnapshot || !beatManager.IsLiveSource)
+        if (beatManager == null)
+        {
+            return;
+        }
+
+        var broadcasting = IsBroadcasting;
+        beatManager.SetLiveBeatSource(broadcasting);
+        if (!broadcasting || !hasSnapshot)
         {
             return;
         }
@@ -79,21 +97,15 @@ public sealed class RaveOscReceiver : MonoBehaviour
         ApplySnapshotToBeatData(latest, beatManager.beatData);
     }
 
-    /// <summary>
-    /// Effect-boundary liveness check used to pick the beat source. True only when RaveSystem is actively
-    /// broadcasting a real beat right now: a fresh packet has arrived since the previous check AND the latest
-    /// snapshot carries a playing tempo (bpm &gt; 0). Reading it clears the "fresh since last check" flag.
-    /// </summary>
-    /// <remarks>
-    /// Requiring a fresh packet rejects a frozen last snapshot left behind when RaveSystem closes or the network
-    /// drops; requiring bpm &gt; 0 rejects RaveSystem's idle broadcast (it transmits bpm=0 at 30 Hz when nothing
-    /// is on air). Either condition failing hands the next effect to the simulator; both passing reclaims live.
-    /// </remarks>
-    public bool ConsumeFreshPlayingBeat()
+    /// <summary>Returns true while the last recognized Rave OSC value is still within the UDP 7000 broadcast cadence.</summary>
+    public static bool IsBroadcastingAt(bool hasSnapshot, float lastRecognizedPacketTime, float now)
     {
-        var fresh = receivedSinceCheck;
-        receivedSinceCheck = false;
-        return fresh && latest.bpm > 0f;
+        return hasSnapshot && now - lastRecognizedPacketTime <= BroadcastSilenceTimeoutSeconds;
+    }
+
+    private bool HasRecentRecognizedPacket(float now)
+    {
+        return IsBroadcastingAt(hasSnapshot, lastRecognizedPacketTime, now);
     }
 
     /// <summary>Stores raw Rave OSC values and derives the compatibility beat fields Penrose effects already use.</summary>

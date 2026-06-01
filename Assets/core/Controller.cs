@@ -399,7 +399,6 @@ public class Controller : Singleton<Controller>
         effects[currentEffect].RandomizeTime();
 
         effects[currentEffect].OnStart();
-        RefreshBeatSourceForNewEffect();
 
     }
 
@@ -681,25 +680,12 @@ public class Controller : Singleton<Controller>
         currentEffect = i;
         effects[currentEffect].RandomizeTime();
         effects[currentEffect].OnStart();
-        RefreshBeatSourceForNewEffect();
         timer.Set(time);
         timer.Reset();
         effectText.text = effects[currentEffect].Name;
         // turn on the button
     }
 
-    /// <summary>
-    /// Re-picks the wall's beat source at an effect boundary: live RaveSystem OSC when it is broadcasting a real
-    /// beat right now, otherwise the local simulator. Effects already roll fresh state in <c>OnStart()</c>, so the
-    /// boundary is the natural place to hand the wall between live and simulated rhythm with no mid-effect glitch
-    /// and no timer. RaveSystem broadcasts continuously at 30 Hz, so a dropped feed (no packets) or an idle feed
-    /// (bpm=0) both read as "not a live beat" here and fall back to the simulator until a real beat returns.
-    /// </summary>
-    private void RefreshBeatSourceForNewEffect()
-    {
-        bool liveUsable = raveOsc != null && raveOsc.ConsumeFreshPlayingBeat();
-        beatManager.SetLiveBeatSource(liveUsable);
-    }
 
     /// <summary>
     /// Resolves the live force-effect override to an effect catalog index by case-insensitive prefix match.
@@ -1142,7 +1128,6 @@ public class Controller : Singleton<Controller>
 
         effects[transition.B].RandomizeTime();
         effects[transition.B].OnStart();
-        RefreshBeatSourceForNewEffect();
 
         timer.Set(transitionTime);
         timer.Reset();
