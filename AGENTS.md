@@ -4,6 +4,13 @@
 
 This repo is a Unity-hosted C# creative/hardware runtime for the Penrose Wall LED installation. Follow the existing project shape instead of turning it into a conventional Unity application.
 
+## Default Memory Reads
+
+Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, read these Memory Vault entries in addition to normal startup context:
+
+- `penroseart-unity-test-runner-editor-open-options` - explains `scripts/unity-tests.sh`, the open-Editor `PenroseUnityTestBridge`, and why direct Unity batchmode fails when the project is already open.
+- `penroseart-unity-osc-workflow-improvements` - records the OSC compile/test scripts and Unity Test Framework command details.
+
 ## Development Philosophy
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
