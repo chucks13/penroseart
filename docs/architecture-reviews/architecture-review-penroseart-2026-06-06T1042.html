@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — penroseart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-2">
+        <h1 class="font-serif text-3xl">Architecture review — <span class="text-indigo-700">penroseart</span></h1>
+        <p class="text-sm text-slate-500">2026-06-06 · 27 effects · 7 transitions · 2 blenders · core ≈ 2,500 LOC</p>
+        <div class="flex gap-5 text-xs text-slate-500 pt-1">
+          <span><span class="inline-block w-3 h-3 border border-slate-400 bg-white align-middle mr-1"></span>module</span>
+          <span><span class="inline-block w-4 border-t-2 border-dashed border-slate-400 align-middle mr-1"></span>seam</span>
+          <span><span class="inline-block w-4 border-t-2 border-red-600 align-middle mr-1"></span>leak</span>
+          <span><span class="inline-block w-3 h-3 deep align-middle mr-1"></span>deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-10">
+
+        <!-- ───────────────────────── C1 ───────────────────────── -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-xl">1 · Deepen the Beat Pulse interface on EffectBase</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-medium">Strong</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">Assets/core/EffectBase.cs · Assets/core/BeatManager.cs:573 · 20 effect files (21 call sites)</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">Before — interface as wide as the idiom</p>
+              <div class="space-y-1.5">
+                <div class="border border-slate-300 bg-white rounded px-2 py-1 text-xs font-mono">Ripple: GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable)</div>
+                <div class="border border-slate-300 bg-white rounded px-2 py-1 text-xs font-mono">Tunnel: GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable)</div>
+                <div class="border border-slate-300 bg-white rounded px-2 py-1 text-xs font-mono">Julia: GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable)</div>
+                <div class="border border-slate-300 bg-white rounded px-2 py-1 text-xs font-mono">Vortex: GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable)</div>
+                <div class="text-center text-xs text-slate-400 font-mono">… ×17 more</div>
+              </div>
+              <p class="text-xs text-red-600 mt-3">Every effect passes its <em>own fields</em> (beatVariant, beatEnable) back across the seam.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">After — deep accessor</p>
+              <div class="deep rounded-lg p-4 text-white">
+                <p class="text-xs uppercase tracking-wider text-emerald-300">EffectBase</p>
+                <p class="font-mono text-sm mt-1 border-b border-slate-600 pb-2">BeatBrightness(min = 0.5f)</p>
+                <div class="text-xs font-mono text-slate-400 mt-2 space-y-0.5">
+                  <p>· closes over beatVariant</p>
+                  <p>· closes over beatEnable</p>
+                  <p>· walks controller→beatManager chain</p>
+                </div>
+              </div>
+              <div class="mt-3 space-y-1">
+                <div class="border border-slate-300 bg-white rounded px-2 py-1 text-xs font-mono">Ripple: BeatBrightness()</div>
+                <div class="text-center text-xs text-slate-400 font-mono">… ×20</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> The Waveform rhythm machinery (ADR-0001) is deep, but its <em>consumption interface</em> is shallow: 21 call sites repeat the same four-argument incantation, handing the effect's own state back to <code class="text-xs bg-stone-100 px-1 rounded">BeatManager</code> through a three-link chain (effect → controller → beatManager).</p>
+          <p class="text-sm"><strong>Solution.</strong> One accessor on <code class="text-xs bg-stone-100 px-1 rounded">EffectBase</code> absorbs the idiom; <code class="text-xs bg-stone-100 px-1 rounded">GetBeatBrightness</code> stays for the few non-default callers (Noise, AnimateLoops hue-shift).</p>
+          <ul class="text-sm list-disc pl-5 space-y-0.5">
+            <li>leverage: one interface, 21 call sites</li>
+            <li>locality: rhythm consumption changes in one place</li>
+            <li>deletion test: complexity reappears ×21 — earns its keep</li>
+            <li>tests hit one interface, not 20 effects</li>
+          </ul>
+        </article>
+
+        <!-- ───────────────────────── C2 ───────────────────────── -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-xl">2 · One home for child-effect ownership</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-medium">Strong</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">Assets/core/MixerBase.cs · Assets/core/EffectBase.cs:101 · Mirror.cs · ShapeGlitch.cs · Panels.cs · NoiseMixer.cs · RandomEffectsMixer.cs · yinyangmixer.cs</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — ritual ×7, guard ×3</p>
+              <pre class="mermaid">
+flowchart TB
+  subgraph guarded["MixerBase (filters mixers)"]
+    NM[NoiseMixer]
+    RM[RandomEffectsMixer]
+    YY[yinyangmixer]
+  end
+  subgraph unguarded["plain EffectBase (same-name filter only)"]
+    MI[Mirror]
+    SG[ShapeGlitch]
+    PA["Panels (×2)"]
+  end
+  R["GetRandomEffect()<br/>RandomizeTime()<br/>Init()<br/>OnStart()"]
+  NM --> R
+  RM --> R
+  YY --> R
+  MI -.->|"can spawn a mixer"| R
+  SG -.->|"can spawn a mixer"| R
+  PA -.->|"can spawn a mixer"| R
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class MI,SG,PA leak
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4 flex flex-col justify-center">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">After — MixerBase passes the deletion test</p>
+              <div class="deep rounded-lg p-4 text-white">
+                <p class="text-xs uppercase tracking-wider text-emerald-300">MixerBase</p>
+                <p class="font-mono text-sm mt-1 border-b border-slate-600 pb-2">SpawnChild() → EffectBase</p>
+                <div class="text-xs font-mono text-slate-400 mt-2 space-y-0.5">
+                  <p>· non-mixer filter (recursion guard)</p>
+                  <p>· RandomizeTime → Init → OnStart order</p>
+                  <p>· beatEnable suppression policy</p>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                <span class="border border-slate-300 bg-white rounded px-2 py-0.5 text-xs font-mono">NoiseMixer</span>
+                <span class="border border-slate-300 bg-white rounded px-2 py-0.5 text-xs font-mono">RandomEffectsMixer</span>
+                <span class="border border-slate-300 bg-white rounded px-2 py-0.5 text-xs font-mono">yinyangmixer</span>
+                <span class="border border-slate-300 bg-white rounded px-2 py-0.5 text-xs font-mono">Mirror</span>
+                <span class="border border-slate-300 bg-white rounded px-2 py-0.5 text-xs font-mono">ShapeGlitch</span>
+                <span class="border border-slate-300 bg-white rounded px-2 py-0.5 text-xs font-mono">Panels</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> <code class="text-xs bg-stone-100 px-1 rounded">MixerBase</code> is shallow — 33 lines, a pass-through <code class="text-xs bg-stone-100 px-1 rounded">Init()</code>, one filter loop. The real child-lifecycle contract (spawn → randomize time → Init → OnStart, in that order, plus rhythm suppression) is a hidden interface re-implemented at 7 sites in 6 files. Three of those files (<code class="text-xs bg-stone-100 px-1 rounded">Mirror</code>, <code class="text-xs bg-stone-100 px-1 rounded">ShapeGlitch</code>, <code class="text-xs bg-stone-100 px-1 rounded">Panels</code>) bypass <code class="text-xs bg-stone-100 px-1 rounded">MixerBase</code>, so the recursion guard does not apply — verified: <code class="text-xs bg-stone-100 px-1 rounded">EffectBase.GetRandomEffect()</code> only excludes same-name effects.</p>
+          <p class="text-sm"><strong>Solution.</strong> Deepen <code class="text-xs bg-stone-100 px-1 rounded">MixerBase</code>: child spawning, lifecycle ordering, and the recursion guard become its implementation; the three stray child-owning effects move under it (or call its helper).</p>
+          <ul class="text-sm list-disc pl-5 space-y-0.5">
+            <li>locality: child lifecycle bugs concentrate in one module</li>
+            <li>recursion guard covers all 6 child-owners</li>
+            <li>hidden ordering contract becomes implementation</li>
+            <li>delete 7 copies of the ritual</li>
+          </ul>
+        </article>
+
+        <!-- ───────────────────────── C3 ───────────────────────── -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-xl">3 · Wire expansion belongs to the Penrose model</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-medium">Strong</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">Assets/core/Controller.cs:581–593 (ACN/UDP) · Assets/core/Controller.cs:615–625 (serial) · Assets/core/Penrose.cs</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">Before — mapping smeared across two output paths</p>
+              <div class="space-y-2">
+                <div class="h-14 border-l-4 border-red-600 bg-white rounded-r px-3 py-1.5">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">sendSerialFrame · Controller.cs:615</p>
+                  <p class="font-mono text-xs text-red-700">wires[i]/2 → physical LED order</p>
+                </div>
+                <div class="h-14 border-l-4 border-red-600 bg-white rounded-r px-3 py-1.5">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">sendUDPFrame · Controller.cs:581</p>
+                  <p class="font-mono text-xs text-red-700">wires[i]/2 → physical LED order <span class="text-slate-400">(same mapping, second copy)</span></p>
+                </div>
+                <div class="h-10 border-l-4 border-slate-300 bg-white rounded-r px-3 py-1.5">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">Penrose — owns <span class="font-mono">JsonRawData.wires</span> but not the mapping</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">After — mapping is Penrose's implementation</p>
+              <div class="deep rounded-lg p-4 text-white mb-2">
+                <p class="text-xs uppercase tracking-wider text-emerald-300">Penrose</p>
+                <p class="font-mono text-sm mt-1 border-b border-slate-600 pb-2">ExpandToWires(tiles, physical)</p>
+                <p class="text-xs font-mono text-slate-400 mt-2">· 900 tiles → 1800 LEDs · wires[i]/2 · pure, headless-testable</p>
+              </div>
+              <div class="flex gap-2">
+                <div class="flex-1 border border-slate-300 bg-white rounded px-2 py-1.5">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">serial adapter</p>
+                  <p class="font-mono text-xs">frame pack + send</p>
+                </div>
+                <div class="flex-1 border border-slate-300 bg-white rounded px-2 py-1.5">
+                  <p class="text-xs uppercase tracking-wider text-slate-500">ACN adapter (legacy)</p>
+                  <p class="font-mono text-xs">universe pack + send</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">Two adapters = real seam.</p>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> The tile→physical-LED contract (<code class="text-xs bg-stone-100 px-1 rounded">wires[i]/2</code>) leaks out of Penrose into Controller, duplicated in the serial and legacy ACN paths. A wiring change means two edits; frame packing for the hardware is untestable.</p>
+          <p class="text-sm"><strong>Solution.</strong> Penrose — which already owns the wires data — exposes the expansion; both output paths consume it. Behavior-preserving.</p>
+          <ul class="text-sm list-disc pl-5 space-y-0.5">
+            <li>locality: wiring contract lives where the data lives</li>
+            <li>two adapters (serial, ACN) justify the seam</li>
+            <li>tests: pure 900→1800 mapping, headless</li>
+            <li>delete one duplicated loop</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">⚠ Touches the serial/ACN output path — AGENTS.md requires explicit sign-off before changing hardware paths, even behavior-preserving refactors. Validate against the board contract.</div>
+        </article>
+
+        <!-- ───────────────────────── C4 ───────────────────────── -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-xl">4 · Deepen palette loading to match the Waveform Pool</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">Worth exploring</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">Assets/core/helpers/GPalette.cs (AnimPalette ctor :140, readfile :218, processhex :253, processgradient :287) · exemplar: Waveform Pool (ADR-0001)</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">Before — AnimPalette constructor</p>
+              <div class="border border-slate-300 bg-white rounded p-3 space-y-1.5 text-xs font-mono">
+                <p class="text-red-700">reads Controller.Instance.paletteSource <span class="text-slate-400">← singleton leak at construction</span></p>
+                <p class="text-red-700">readfile(): catch (Exception) → "" <span class="text-slate-400">← failure becomes "no palettes"</span></p>
+                <p>processhex(text) <span class="text-slate-400">← twin macro scanners,</span></p>
+                <p>processgradient(text) <span class="text-slate-400">&nbsp;&nbsp;same IndexOf/substring walk</span></p>
+              </div>
+              <p class="text-xs text-red-600 mt-2">Cannot test parsing without a live Controller; cannot tell "empty file" from "could not read."</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">After — the shape the Pool already proved</p>
+              <div class="deep rounded-lg p-4 text-white">
+                <p class="text-xs uppercase tracking-wider text-emerald-300">Palette module</p>
+                <p class="font-mono text-sm mt-1 border-b border-slate-600 pb-2">Parse(text) → palettes</p>
+                <p class="text-xs font-mono text-slate-400 mt-2">· pure: one DEFINE-macro walk for hex + gradient<br/>· logs malformed entries, never silently empty</p>
+              </div>
+              <div class="border border-slate-300 bg-white rounded px-3 py-1.5 mt-2 text-xs font-mono">file read at the edge — missing ≠ unreadable <span class="text-slate-400">(as WaveformPool.ReadFileOrEmpty does)</span></div>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> Two hand-rolled parsers for the two StreamingAssets text formats, in two shapes: the Waveform Pool's parse is pure and tested (15 tests); <code class="text-xs bg-stone-100 px-1 rounded">AnimPalette</code> mixes file I/O, a Controller-singleton read, and twin macro scanners inside a constructor, and converts every I/O failure into an empty palette set.</p>
+          <p class="text-sm"><strong>Solution.</strong> Reshape palette loading to the Pool's proven form: pure parse, file read at the edge, failures visible. Same creative-coding idiom — no new framework.</p>
+          <ul class="text-sm list-disc pl-5 space-y-0.5">
+            <li>tests: palettedata.txt parsing, headless</li>
+            <li>failures surface instead of vanishing</li>
+            <li>one parse idiom across both data files</li>
+            <li>interface shrinks; constructor stops owning I/O</li>
+          </ul>
+        </article>
+
+        <!-- ───────────────────────── C5 ───────────────────────── -->
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-xl">5 · Name the playing ⇄ transition state machine</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-medium">Speculative</span>
+              <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-600">Assets/core/Controller.cs (inTransition flag, timer callbacks, deck draws ~:1084–1131) · Assets/core/TransitionBase.cs</p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-3">Before — implicit, smeared</p>
+              <div class="space-y-1.5 text-xs font-mono">
+                <div class="border border-slate-300 bg-white rounded px-2 py-1">bool inTransition <span class="text-slate-400">— the whole state model</span></div>
+                <div class="border border-slate-300 bg-white rounded px-2 py-1">Timer callback decides next state</div>
+                <div class="border border-slate-300 bg-white rounded px-2 py-1">deck draw + OnStart scattered in callbacks</div>
+                <div class="border border-red-300 bg-white rounded px-2 py-1 text-red-700">transitions reach back into controller.effects[A], [B]</div>
+              </div>
+              <p class="text-xs text-red-600 mt-2">Testing a transition means driving Controller.Update() in a scene.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — one named module inside Controller</p>
+              <pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  Playing --> Transitioning : effect timer ends /<br/>draw from decks
+  Transitioning --> Playing : transition timer ends /<br/>promote B
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">Controller keeps ownership; the show schedule becomes one testable module with a small interface.</p>
+            </div>
+          </div>
+
+          <p class="text-sm"><strong>Problem.</strong> The effect/transition alternation — the heart of the show — is an implicit state machine spread across a boolean, timer callbacks, and deck plumbing. Its rules can only be exercised through a full scene.</p>
+          <p class="text-sm"><strong>Solution.</strong> Concentrate the alternation (states, deck draws, A/B handoff) into one named module Controller owns and drives. Not a Controller breakup — a deepening of one responsibility inside it.</p>
+          <ul class="text-sm list-disc pl-5 space-y-0.5">
+            <li>locality: show-scheduling rules in one place</li>
+            <li>tests: state transitions without a scene</li>
+            <li>transitions stop reaching across the seam for effects[A/B]</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">⚠ Controller is intentionally central (AGENTS.md): any restructuring beyond small wiring needs explicit approval. Surfaced because the friction is real — the state machine is the least-testable core behavior — but this card is a question, not a plan.</div>
+        </article>
+
+      </section>
+
+      <!-- ───────────────────────── smaller observations ───────────────────────── -->
+      <section class="rounded-xl border border-slate-200 bg-white p-6 space-y-2">
+        <h2 class="font-serif text-lg">Smaller observations <span class="text-sm text-slate-400 font-sans">(noted, not candidates)</span></h2>
+        <ul class="text-sm list-disc pl-5 space-y-1 text-slate-700">
+          <li><code class="text-xs bg-stone-100 px-1 rounded">Assets/core/Transition.cs</code> — documented legacy class ("retained for reference"); concrete subclasses would still be Factory-discovered as effects.</li>
+          <li><code class="text-xs bg-stone-100 px-1 rounded">EffectBase.OnEnd()</code> exists but is never invoked — a hidden non-contract; effect authors may rely on it.</li>
+          <li><code class="text-xs bg-stone-100 px-1 rounded">ScreenEffect</code> statics (width/height/neighbors) initialize on first subclass init — fine single-threaded, but an undocumented part of the interface.</li>
+          <li><code class="text-xs bg-stone-100 px-1 rounded">BeatDataDrawer</code> (~1,000 lines) names BeatData fields as strings — renames in BeatData silently break the drawer.</li>
+        </ul>
+      </section>
+
+      <!-- ───────────────────────── top recommendation ───────────────────────── -->
+      <section id="top-recommendation" class="rounded-xl deep text-white p-8 space-y-3">
+        <p class="text-xs uppercase tracking-wider text-emerald-300">Top recommendation</p>
+        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-emerald-400 underline-offset-4">1 · Deepen the Beat Pulse interface on EffectBase</a></h2>
+        <p class="text-sm text-slate-300 max-w-3xl">Highest leverage for the least risk: 21 verified call sites collapse onto one accessor, no hardware path is touched, and it finishes what ADR-0001 started — the Waveform Synthesizer is already deep; this deepens the side that consumes it. Candidate 2 is the natural second: it turns the one module that currently fails the deletion test (MixerBase) into one that passes it, and closes a real recursion-guard gap.</p>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-2">Vocabulary: module · interface · implementation · depth · seam · adapter · leverage · locality — per the deepening-review glossary. Domain terms per CONTEXT.md.</footer>
+    </main>
+  </body>
+</html>
