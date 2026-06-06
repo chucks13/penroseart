@@ -4,6 +4,8 @@
 
 This repo is a Unity-hosted C# creative/hardware runtime for the Penrose Wall LED installation. Follow the existing project shape instead of turning it into a conventional Unity application.
 
+Navigation/editing: Serena first — the global Trust Your Tools urge-mapping applies; activate Serena project `penroseart` before repo navigation or edits.
+
 ## Default Memory Reads
 
 Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, read these Memory Vault entries in addition to normal startup context:
