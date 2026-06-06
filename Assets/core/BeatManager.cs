@@ -63,20 +63,20 @@ public class BeatData
     /// <summary>Normalized OSC beat pulse: 1 on the beat, decaying toward 0.</summary>
     public float beatPulse;
 
-    /// <summary>Average low/mid/high waveform energy across live players.</summary>
-    public Levels levels;
+    /// <summary>Average low/mid/high waveform energy across live players. -1 sentinels mean unavailable.</summary>
+    public Levels levels = Levels.Unavailable;
 
-    /// <summary>Grouped phase state for the focused on-air track.</summary>
-    public PhaseState phaseState;
+    /// <summary>Grouped phase state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
+    public PhaseState phaseState = PhaseState.Unavailable;
 
-    /// <summary>Grouped drop countdown state for the focused on-air track.</summary>
-    public CountdownState dropState;
+    /// <summary>Grouped drop countdown state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
+    public CountdownState dropState = CountdownState.Unavailable;
 
-    /// <summary>Grouped fill countdown state for the focused on-air track.</summary>
-    public CountdownState fillState;
+    /// <summary>Grouped fill countdown state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
+    public CountdownState fillState = CountdownState.Unavailable;
 
-    /// <summary>Grouped energy-run state for the focused on-air track.</summary>
-    public PhaseState energyState;
+    /// <summary>Grouped energy-run state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
+    public PhaseState energyState = PhaseState.Unavailable;
 
     /// <summary>Milliseconds until the nearest upcoming beat label, read from <see cref="beatsCountMs"/>.</summary>
     public int nextBeatMs => ReadIntAt(beatsCountMs, IndexOfNearestCountdown(beatsCountMs));
@@ -224,7 +224,7 @@ public class BeatData
 /// and pass that variant into the helper methods below.
 /// </remarks>
 [Serializable]
-public class BeatManager
+public partial class BeatManager
 {
     // The constants below name the beat-label gates used by IsBeatTriggered, the legacy discrete-event path
     // (spawns, palette changes) that deliberately survived the Waveform migration. They are NOT a variant
@@ -342,17 +342,24 @@ public class BeatManager
 
         if (liveBeatActive)
         {
-            // Live RaveSystem OSC owns beatData this effect; RaveOscReceiver.ApplyTo writes it each frame.
+            // Live RaveSystem OSC owns beatData; RaveOscReceiver.ApplyTo wrote it earlier this frame
+            // (Controller calls ApplyTo immediately before this Update).
+            UpdateLevelsSmoothing(timeSeconds);
             return;
         }
 
         if (!simulatedBeatEnabled || simulatedBpm <= 0f)
         {
             ClearSimulatedBeatData();
-            return;
+        }
+        else
+        {
+            ApplySimulatedBeat(timeSeconds);
         }
 
-        ApplySimulatedBeat(timeSeconds);
+        // Smoothing runs after beatData has settled for this frame so the cooked Levels queries never
+        // lag the transport by a frame or smooth from stale data across a live/simulated switch.
+        UpdateLevelsSmoothing(timeSeconds);
     }
 
     /// <summary>
@@ -440,21 +447,45 @@ public class BeatManager
                 return 0f; // beat label not yet known / inert
             }
 
-            // Read the countdown to the *next* beat label so the fraction grows 0 -> 1 across this beat.
-            var nextSlot = label % beatsPerMeasure; // 0-based slot of the next label (wraps last -> 0)
-            var countdowns = beatData.beatsCountMs;
-            var msToNext = countdowns != null && nextSlot >= 0 && nextSlot < countdowns.Length
-                ? countdowns[nextSlot]
-                : UnavailableMs;
-
-            var intraBeatPhase = 0f;
-            if (beatData.beatAverageMs > 0 && msToNext >= 0)
-            {
-                intraBeatPhase = Mathf.Clamp01(1f - ((float)msToNext / beatData.beatAverageMs));
-            }
-
-            return ((label - 1) + intraBeatPhase) / beatsPerMeasure;
+            return ((label - 1) + IntraBeatFraction()) / beatsPerMeasure;
         }
+    }
+
+    /// <summary>
+    /// Fraction elapsed into the current beat in [0..1], or 0 when the beat clock cannot supply it.
+    /// </summary>
+    /// <remarks>
+    /// This is the sub-beat half of <see cref="BarPhase"/>, shared with the cooked phrase-progress
+    /// queries (Fill/Drop/Phase) so all beat-smoothed motion uses one clock. The fraction is read from
+    /// the *next* beat label's countdown — not the nearest, which reads 0 during the on-beat gate window
+    /// and would jump.
+    /// </remarks>
+    private float IntraBeatFraction()
+    {
+        if (!IsActive)
+        {
+            return 0f;
+        }
+
+        var beatsPerMeasure = beatData.beatsPerMeasure > 0 ? beatData.beatsPerMeasure : BeatSlotCount;
+        var label = beatData.beatInBar;
+        if (label < 1 || label > beatsPerMeasure)
+        {
+            return 0f;
+        }
+
+        var nextSlot = label % beatsPerMeasure; // 0-based slot of the next label (wraps last -> 0)
+        var countdowns = beatData.beatsCountMs;
+        var msToNext = countdowns != null && nextSlot >= 0 && nextSlot < countdowns.Length
+            ? countdowns[nextSlot]
+            : UnavailableMs;
+
+        if (beatData.beatAverageMs > 0 && msToNext >= 0)
+        {
+            return Mathf.Clamp01(1f - ((float)msToNext / beatData.beatAverageMs));
+        }
+
+        return 0f;
     }
 
     /// <summary>Returns the Waveform for a Pool index, clamping an unknown index to the Beat Pulse (index 0).</summary>
@@ -660,6 +691,26 @@ public class BeatManager
         beatData.offBeatPulse = GetPulse(elapsedSinceOffBeatSeconds, beatDurationSeconds);
         beatData.offBeatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, beatDurationSeconds * 0.5f, offBeat, offBeatIndex);
         beatData.offBeats = BuildGates(offBeat, offBeatIndex);
+
+        ClearPhraseAndLevelState();
+    }
+
+    /// <summary>
+    /// Resets levels and the phrase states (phase/drop/fill/energy) to their unavailable sentinels.
+    /// </summary>
+    /// <remarks>
+    /// The simulator is a clock, not a musical analysis, so it must never present phrase data. Running
+    /// this every simulated frame also flushes stale live values left in <see cref="beatData"/> (including
+    /// scene-serialized ones) after a RaveSystem broadcast stops, so the cooked queries on this class
+    /// return null instead of replaying the last live Fill/Drop/Energy forever.
+    /// </remarks>
+    private void ClearPhraseAndLevelState()
+    {
+        beatData.levels = PenroseArt.RaveOsc.Levels.Unavailable;
+        beatData.phaseState = PhaseState.Unavailable;
+        beatData.dropState = CountdownState.Unavailable;
+        beatData.fillState = CountdownState.Unavailable;
+        beatData.energyState = PhaseState.Unavailable;
     }
 
     /// <summary>
@@ -682,6 +733,7 @@ public class BeatManager
         beatData.onBeats = new bool[BeatSlotCount];
         beatData.offBeatsCountMs = CreateUnavailableCountdowns();
         beatData.offBeats = new bool[BeatSlotCount];
+        ClearPhraseAndLevelState();
     }
 
     /// <summary>Builds label-ordered countdowns for either beat or offbeat slots.</summary>

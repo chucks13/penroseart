@@ -649,7 +649,7 @@ public class Controller : Singleton<Controller>
         Debug.Log($"Transitions ({transitions.Length}):\n{FormatCatalog(factory.Names)}");
     }
     /// <summary>
-    /// Builds the external-source blender catalog. Blenders have no Init or OnStart lifecycle hook.
+    /// Builds the external-source blender catalog and runs each blender's one-time Init.
     /// </summary>
     private void SetupBlenders()
     {
@@ -659,10 +659,11 @@ public class Controller : Singleton<Controller>
         for (int i = 0; i < blenders.Length; i++)
         {
             blenders[i] = factory.Create(factory.Types[i]);
+            blenders[i].Init();
         }
 
-        // BlenderBase has no Init/OnStart contract. Concrete blenders are
-        // ready after construction; transition startup remains transition-only.
+        // Blenders have an Init contract (Controller/beatManager binding) but still no OnStart:
+        // they are ready after Init, and transition startup remains transition-only.
         Debug.Log($"Blenders ({blenders.Length}):\n{FormatCatalog(factory.Names)}");
 
     }

@@ -17,6 +17,12 @@ public abstract class TransitionBase
 
     protected Controller controller;
 
+    /// <summary>
+    /// Shared beat helper used for rhythmic transition behavior, mirroring <see cref="EffectBase.beatManager"/>.
+    /// Pull musical state through its cooked nullable queries (Envelope/Fill/Drop/Energy/Phase/Levels).
+    /// </summary>
+    public BeatManager beatManager => controller.beatManager;
+
     /// <summary>Catalog/display name for this transition. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
 

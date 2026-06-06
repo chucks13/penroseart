@@ -86,6 +86,30 @@ public abstract class EffectBase
     }
 
     /// <summary>
+    /// Cooked beat brightness multiplier for this effect, closing over <see cref="beatEnable"/> and
+    /// <see cref="beatVariant"/>: Synced Mode pulses between <paramref name="minBrightness"/> and 1
+    /// on this effect's Waveform; Default Mode (no beat clock, or beat response disabled) holds steady at 1.
+    /// </summary>
+    protected float BeatBrightness(float minBrightness = 0.5f)
+    {
+        return beatEnable && beatManager.Envelope(beatVariant) is { } envelope
+            ? Mathf.Lerp(minBrightness, 1f, envelope)
+            : 1f;
+    }
+
+    /// <summary>
+    /// Beat-warped effect time, closing over <see cref="beatEnable"/>, <see cref="beatVariant"/>, and
+    /// <see cref="effectTime"/>: Synced Mode kicks the clock forward by <paramref name="intensity"/> on
+    /// the beat without changing the stored <see cref="effectTime"/>; Default Mode returns it unchanged.
+    /// </summary>
+    protected float BeatTime(float intensity = 0.2f)
+    {
+        return beatEnable && beatManager.Envelope(beatVariant) is { } envelope
+            ? effectTime + (envelope * intensity)
+            : effectTime;
+    }
+
+    /// <summary>
     /// Reserved for future effect deactivation cleanup. The current controller
     /// does not call OnEnd(); effects should not rely on it yet.
     /// </summary>

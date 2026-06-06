@@ -158,7 +158,9 @@ public sealed class RaveOscPacketParser : IDisposable {
             var value = new PhaseState {
                 current = ReadNextString(address, ref reader),
                 next = ReadNextString(address, ref reader),
-                active = ReadNextInt(address, ref reader) != 0,
+                // Tri-state passthrough: -1 unavailable / 0 upcoming / 1 active. A != 0 collapse here
+                // would turn "unavailable" into "active now".
+                active = ReadNextInt(address, ref reader),
                 countBeats = ReadNextInt(address, ref reader),
                 lengthBeats = ReadNextInt(address, ref reader),
                 remaining = ReadNextInt(address, ref reader),
@@ -170,7 +172,9 @@ public sealed class RaveOscPacketParser : IDisposable {
     private void RegisterCountdownState(string address, SnapshotCountdownStateSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
             var value = new CountdownState {
-                active = ReadNextInt(address, ref reader) != 0,
+                // Tri-state passthrough: -1 unavailable / 0 upcoming / 1 active. A != 0 collapse here
+                // would turn "unavailable" into "active now".
+                active = ReadNextInt(address, ref reader),
                 countBeats = ReadNextInt(address, ref reader),
                 lengthBeats = ReadNextInt(address, ref reader),
                 remaining = ReadNextInt(address, ref reader),

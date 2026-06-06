@@ -1,0 +1,396 @@
+#nullable enable
+
+using NUnit.Framework;
+using PenroseArt.RaveOsc;
+using UnityEngine;
+
+/// <summary>
+/// Pins the cooked rhythm query layer from ADR-0002: nullable queries on BeatManager where null
+/// always means "not available right now", tri-state mapping (-1 → null, 0 → upcoming, 1 → in
+/// progress), beat-smoothed phrase progress, Levels smoothing, and the Color Bank forms.
+/// </summary>
+public sealed class BeatManagerCookedQueriesTests
+{
+    /// <summary>
+    /// A BeatManager pinned to the live source so Update never overwrites the beat data the test
+    /// writes. The clock matches the BarPhase fixture pinned by the integration tests:
+    /// beat 1 of 4, 250 ms to the next of 500 ms average → BarPhase 0.125, intra-beat fraction 0.5.
+    /// </summary>
+    private static BeatManager CreateLiveBeatManager()
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.beatData.active = true;
+        beatManager.beatData.beatInBar = 1;
+        beatManager.beatData.beatAverageMs = 500;
+        beatManager.beatData.beatsCountMs = new[] { 0, 250, 750, 1250 };
+        return beatManager;
+    }
+
+    // --- Envelope ---
+
+    [Test]
+    public void EnvelopeIsNullWithoutBeatClock()
+    {
+        var beatManager = new BeatManager();
+        beatManager.beatData.active = false;
+
+        Assert.That(beatManager.Envelope(0), Is.Null);
+    }
+
+    [Test]
+    public void EnvelopeEvaluatesVariantWaveformAtBarPhase()
+    {
+        var beatManager = CreateLiveBeatManager();
+
+        // Same fixture as GetBeatBrightnessUsesBarPhaseWaveformsForMusicalVariants: at BarPhase 0.125
+        // the Beat Pulse trough reads 0 and the offbeat variant peak reads 1.
+        Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(0.0001f));
+        Assert.That(beatManager.Envelope(0), Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(beatManager.Envelope(5), Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    // --- Fill / Drop two-phase cooking ---
+
+    [Test]
+    public void FillIsNullWhenTriStateIsUnavailable()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.fillState = CountdownState.Unavailable;
+
+        Assert.That(beatManager.Fill, Is.Null);
+    }
+
+    [Test]
+    public void FillIsNullOnDefaultBeatData()
+    {
+        var beatManager = new BeatManager();
+
+        Assert.That(beatManager.Fill, Is.Null);
+        Assert.That(beatManager.Drop, Is.Null);
+        Assert.That(beatManager.Energy, Is.Null);
+        Assert.That(beatManager.Phase, Is.Null);
+        Assert.That(beatManager.Levels, Is.Null);
+    }
+
+    [Test]
+    public void FillCountsDownWhileUpcoming()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 };
+
+        var fill = beatManager.Fill;
+
+        Assert.That(fill, Is.Not.Null);
+        Assert.That(fill!.Value.inProgress, Is.False);
+        Assert.That(fill.Value.beatsUntilStart, Is.EqualTo(16));
+        Assert.That(fill.Value.progress, Is.EqualTo(0f));
+        Assert.That(fill.Value.lengthBeats, Is.EqualTo(8));
+        Assert.That(fill.Value.remaining, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FillReportsBeatSmoothedProgressWhileInProgress()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 1 };
+
+        var fill = beatManager.Fill;
+
+        // 2 of 8 beats elapsed plus the 0.5 intra-beat fraction from the shared beat clock.
+        Assert.That(fill, Is.Not.Null);
+        Assert.That(fill!.Value.inProgress, Is.True);
+        Assert.That(fill.Value.beatsUntilStart, Is.Null);
+        Assert.That(fill.Value.progress, Is.EqualTo(0.3125f).Within(0.0001f));
+    }
+
+    [Test]
+    public void FillMapsWireUnknownsToNullFieldsInsideAValidState()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = -1 };
+
+        var fill = beatManager.Fill;
+
+        Assert.That(fill, Is.Not.Null);
+        Assert.That(fill!.Value.beatsUntilStart, Is.Null);
+        Assert.That(fill.Value.lengthBeats, Is.Null);
+        Assert.That(fill.Value.remaining, Is.Null);
+    }
+
+    [Test]
+    public void DropMirrorsFillCooking()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.dropState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 2 };
+
+        var drop = beatManager.Drop;
+
+        Assert.That(drop, Is.Not.Null);
+        Assert.That(drop!.Value.inProgress, Is.True);
+        Assert.That(drop.Value.beatsUntilStart, Is.Null);
+        Assert.That(drop.Value.progress, Is.EqualTo(0.3125f).Within(0.0001f));
+        Assert.That(drop.Value.remaining, Is.EqualTo(2));
+    }
+
+    // --- Energy (closed vocabulary) ---
+
+    [Test]
+    public void EnergyParsesClosedVocabularyOnce()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+
+        var energy = beatManager.Energy;
+
+        Assert.That(energy, Is.Not.Null);
+        Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.High));
+        Assert.That(energy.Value.next, Is.EqualTo(EnergyLevel.Mid));
+        Assert.That(energy.Value.beatsUntilChange, Is.EqualTo(4));
+        Assert.That(energy.Value.normalized, Is.EqualTo(1f));
+        Assert.That(energy.Value.direction, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void EnergyParsesLabelsCaseInsensitively()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.energyState = new PhaseState { current = "low", next = "HIGH", active = 1, countBeats = 8, lengthBeats = 16, remaining = 1 };
+
+        var energy = beatManager.Energy;
+
+        Assert.That(energy, Is.Not.Null);
+        Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.Low));
+        Assert.That(energy.Value.next, Is.EqualTo(EnergyLevel.High));
+        Assert.That(energy.Value.normalized, Is.EqualTo(0f));
+        Assert.That(energy.Value.direction, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void EnergyDegradesToNullOnUnrecognizedLabelNeverToAWrongTier()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.energyState = new PhaseState { current = "Banana", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+
+        Assert.That(beatManager.Energy, Is.Null);
+    }
+
+    [Test]
+    public void EnergyIsNullWhenTriStateIsUnavailable()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.energyState = new PhaseState { current = "High", next = "Mid", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+
+        Assert.That(beatManager.Energy, Is.Null);
+    }
+
+    [Test]
+    public void EnergyTreatsUnknownNextLabelAsSteadyDirection()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.energyState = new PhaseState { current = "Mid", next = "", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+
+        var energy = beatManager.Energy;
+
+        Assert.That(energy, Is.Not.Null);
+        Assert.That(energy!.Value.next, Is.Null);
+        Assert.That(energy.Value.direction, Is.EqualTo(0));
+    }
+
+    // --- Track Phase (open vocabulary) ---
+
+    [Test]
+    public void PhasePassesOpenVocabularyLabelsThroughAndCooksStructure()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.phaseState = new PhaseState { current = "Chorus 2", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+
+        var phase = beatManager.Phase;
+
+        Assert.That(phase, Is.Not.Null);
+        Assert.That(phase!.Value.label, Is.EqualTo("Chorus 2"));
+        Assert.That(phase.Value.next, Is.EqualTo("Break"));
+        Assert.That(phase.Value.inPhase, Is.True);
+        Assert.That(phase.Value.beatsUntilNext, Is.EqualTo(12));
+        Assert.That(phase.Value.lengthBeats, Is.EqualTo(32));
+        Assert.That(phase.Value.remaining, Is.EqualTo(8));
+        // (32 - 12) elapsed beats plus the 0.5 intra-beat fraction, over 32.
+        Assert.That(phase.Value.progress, Is.EqualTo(0.640625f).Within(0.0001f));
+    }
+
+    [Test]
+    public void PhaseIsNullWithoutALabelOrWhenUnavailable()
+    {
+        var beatManager = CreateLiveBeatManager();
+
+        beatManager.beatData.phaseState = new PhaseState { current = "", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        Assert.That(beatManager.Phase, Is.Null);
+
+        beatManager.beatData.phaseState = new PhaseState { current = "Drop", next = "Break", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        Assert.That(beatManager.Phase, Is.Null);
+    }
+
+    // --- Levels smoothing and the Color Bank ---
+
+    [Test]
+    public void LevelsAreNullBeforeAnyLiveSamples()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.Levels, Is.Null);
+        Assert.That(beatManager.LevelsRgb, Is.Null);
+        Assert.That(beatManager.LevelsHue, Is.Null);
+        Assert.That(beatManager.LevelsPalette, Is.Null);
+    }
+
+    [Test]
+    public void LevelsSnapToTheFirstLiveSample()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+
+        beatManager.Update(0f);
+
+        var levels = beatManager.Levels;
+        Assert.That(levels, Is.Not.Null);
+        Assert.That(levels!.Value.low, Is.EqualTo(0.2f).Within(0.0001f));
+        Assert.That(levels.Value.mid, Is.EqualTo(0.4f).Within(0.0001f));
+        Assert.That(levels.Value.high, Is.EqualTo(0.8f).Within(0.0001f));
+    }
+
+    [Test]
+    public void LevelsRiseOnAttackAndFallOnRelease()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.levelsAttackSeconds = 0.1f;
+        beatManager.levelsReleaseSeconds = 0.4f;
+        beatManager.beatData.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.Update(0f);
+
+        // Rising low band uses the attack time-constant.
+        beatManager.beatData.levels = new Levels { low = 1f, mid = 0.4f, high = 0.8f };
+        beatManager.Update(0.1f);
+        var expectedAttack = 0.2f + ((1f - 0.2f) * (1f - Mathf.Exp(-0.1f / 0.1f)));
+        Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedAttack).Within(0.0001f));
+
+        // Falling low band uses the slower release time-constant.
+        beatManager.beatData.levels = new Levels { low = 0f, mid = 0.4f, high = 0.8f };
+        beatManager.Update(0.2f);
+        var expectedRelease = expectedAttack + ((0f - expectedAttack) * (1f - Mathf.Exp(-0.1f / 0.4f)));
+        Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedRelease).Within(0.0001f));
+        Assert.That(beatManager.Levels!.Value.mid, Is.EqualTo(0.4f).Within(0.0001f));
+    }
+
+    [Test]
+    public void LevelsResetInsteadOfReleasingFromStaleValuesAfterAGap()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.levels = new Levels { low = 0.9f, mid = 0.9f, high = 0.9f };
+        beatManager.Update(0f);
+
+        beatManager.beatData.levels = Levels.Unavailable;
+        beatManager.Update(0.1f);
+        Assert.That(beatManager.Levels, Is.Null);
+
+        // The next live sample snaps in fresh; nothing decays from the pre-gap 0.9.
+        beatManager.beatData.levels = new Levels { low = 0.1f, mid = 0.1f, high = 0.1f };
+        beatManager.Update(0.2f);
+        Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(0.1f).Within(0.0001f));
+    }
+
+    [Test]
+    public void LevelsRgbMapsBandsStraightOntoChannels()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.Update(0f);
+
+        var color = beatManager.LevelsRgb;
+
+        Assert.That(color, Is.Not.Null);
+        Assert.That(color!.Value.r, Is.EqualTo(0.2f).Within(0.0001f));
+        Assert.That(color.Value.g, Is.EqualTo(0.4f).Within(0.0001f));
+        Assert.That(color.Value.b, Is.EqualTo(0.8f).Within(0.0001f));
+        Assert.That(color.Value.a, Is.EqualTo(1f));
+    }
+
+    [Test]
+    public void LevelsHueTracksTheSpectralCentroid()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.levels = new Levels { low = 0f, mid = 0f, high = 0.8f };
+        beatManager.Update(0f);
+
+        var color = beatManager.LevelsHue;
+        var expected = Color.HSVToRGB(2f / 3f, 1f, 0.8f);
+
+        Assert.That(color, Is.Not.Null);
+        Assert.That(color!.Value.r, Is.EqualTo(expected.r).Within(0.0001f));
+        Assert.That(color.Value.g, Is.EqualTo(expected.g).Within(0.0001f));
+        Assert.That(color.Value.b, Is.EqualTo(expected.b).Within(0.0001f));
+    }
+
+    [Test]
+    public void LevelsHueIsBlackAtSilence()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.levels = new Levels { low = 0f, mid = 0f, high = 0f };
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.LevelsHue, Is.EqualTo((Color?)Color.black));
+    }
+
+    [Test]
+    public void LevelsPaletteIsNullWithoutALiveController()
+    {
+        // The palette-mediated form needs the Controller-owned AnimPalette; in headless edit-mode
+        // tests there must be no Controller, and the query must say "unavailable" rather than spawn one.
+        Assume.That(Controller.HasInstance, Is.False, "These tests assume no live Controller in the scene.");
+
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.Levels, Is.Not.Null);
+        Assert.That(beatManager.LevelsPalette, Is.Null);
+    }
+
+    // --- Source transitions ---
+
+    [Test]
+    public void SimulatorClearsPhraseAndLevelStateToUnavailable()
+    {
+        // Stale live values (or stale scene-serialized values) must not replay through the cooked
+        // queries once the simulator owns the beat: the simulator is a clock, not a musical analysis.
+        var beatManager = new BeatManager { simulatedBpm = 120f };
+        beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
+        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
+        beatManager.beatData.phaseState = new PhaseState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        beatManager.beatData.energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsActive, Is.True, "the simulated beat clock itself stays active");
+        Assert.That(beatManager.Envelope(0), Is.Not.Null);
+        Assert.That(beatManager.Fill, Is.Null);
+        Assert.That(beatManager.Drop, Is.Null);
+        Assert.That(beatManager.Phase, Is.Null);
+        Assert.That(beatManager.Energy, Is.Null);
+        Assert.That(beatManager.Levels, Is.Null);
+    }
+
+    [Test]
+    public void NoBeatStateClearsEverythingIncludingTheEnvelope()
+    {
+        var beatManager = new BeatManager { simulatedBpm = 120f, simulatedBeatEnabled = false };
+        beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsActive, Is.False);
+        Assert.That(beatManager.Envelope(0), Is.Null);
+        Assert.That(beatManager.Fill, Is.Null);
+    }
+}

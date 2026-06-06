@@ -26,32 +26,54 @@ public struct Levels {
     public float low;
     public float mid;
     public float high;
+
+    /// <summary>Levels value whose bands are all unavailable (-1 sentinels).</summary>
+    public static Levels Unavailable => new Levels { low = -1f, mid = -1f, high = -1f };
 }
 
 /// <summary>
 /// Current/next named beat state used by phase and energy projections.
-/// Mirrors RaveSystem's track phase state shape: labels, active flag, beat count, length, and remaining count.
+/// Mirrors RaveSystem's track phase state shape: labels, tri-state active value, beat count, length, and remaining count.
 /// </summary>
 [Serializable]
 public struct PhaseState {
     public string? current;
     public string? next;
-    public bool active;
+
+    /// <summary>
+    /// RaveSystem tri-state: <c>1</c> = active now, <c>0</c> = counting to the next occurrence,
+    /// <c>-1</c> = unavailable. Mirrors <c>TrackCountdownState.Active</c>; do not collapse to a bool.
+    /// </summary>
+    public int active;
+
     public int countBeats;
     public int lengthBeats;
     public int remaining;
+
+    /// <summary>Phase state whose fields are all unavailable (-1 sentinels, empty labels).</summary>
+    public static PhaseState Unavailable =>
+        new PhaseState { current = null, next = null, active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
 }
 
 /// <summary>
 /// Countdown beat state used by drop and fill projections.
-/// Mirrors RaveSystem's track countdown state shape: active flag, beat count, length, and remaining count.
+/// Mirrors RaveSystem's track countdown state shape: tri-state active value, beat count, length, and remaining count.
 /// </summary>
 [Serializable]
 public struct CountdownState {
-    public bool active;
+    /// <summary>
+    /// RaveSystem tri-state: <c>1</c> = active now, <c>0</c> = counting to the next occurrence,
+    /// <c>-1</c> = unavailable. Mirrors <c>TrackCountdownState.Active</c>; do not collapse to a bool.
+    /// </summary>
+    public int active;
+
     public int countBeats;
     public int lengthBeats;
     public int remaining;
+
+    /// <summary>Countdown state whose fields are all unavailable (-1 sentinels).</summary>
+    public static CountdownState Unavailable =>
+        new CountdownState { active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
 }
 
 /// <summary>
@@ -70,11 +92,11 @@ public sealed class RaveOnAirSnapshot {
     public bool[] onBeats = new bool[4];
     public int beatAverageMs = -1;
     public float beatPulse;
-    public Levels levels = new Levels { low = -1f, mid = -1f, high = -1f };
-    public PhaseState phaseState;
-    public CountdownState dropState;
-    public CountdownState fillState;
-    public PhaseState energyState;
+    public Levels levels = Levels.Unavailable;
+    public PhaseState phaseState = PhaseState.Unavailable;
+    public CountdownState dropState = CountdownState.Unavailable;
+    public CountdownState fillState = CountdownState.Unavailable;
+    public PhaseState energyState = PhaseState.Unavailable;
 
     /// <summary>Creates a deep copy so background OSC updates cannot mutate a returned snapshot.</summary>
     public RaveOnAirSnapshot Clone() {

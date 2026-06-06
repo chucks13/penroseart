@@ -11,8 +11,26 @@ public abstract class BlenderBase
     // settings.Length before telnet or other controls provide values.
     public float[] settings = Array.Empty<float>();
 
+    protected Controller controller;
+
+    /// <summary>
+    /// Shared beat helper used for rhythmic blend behavior, mirroring <see cref="EffectBase.beatManager"/>
+    /// and <see cref="TransitionBase.beatManager"/>. Pull musical state through its cooked nullable
+    /// queries (Envelope/Fill/Drop/Energy/Phase/Levels).
+    /// </summary>
+    public BeatManager beatManager => controller.beatManager;
+
     /// <summary>Catalog/display name for this blender. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
+
+    /// <summary>
+    /// Called once after reflection creates the blender instance, mirroring <see cref="TransitionBase.Init"/>.
+    /// Binds the Controller so <see cref="beatManager"/> is usable from <see cref="Blend"/>.
+    /// </summary>
+    public virtual void Init()
+    {
+        controller = Controller.Instance;
+    }
 
     /// <summary>
     /// Parses external blender/telnet fader arguments into numeric settings.

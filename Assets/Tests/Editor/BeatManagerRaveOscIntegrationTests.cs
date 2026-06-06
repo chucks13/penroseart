@@ -213,21 +213,21 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatData.levels.high, Is.EqualTo(0.75f));
         Assert.That(beatData.phaseState.current, Is.EqualTo("Drop"));
         Assert.That(beatData.phaseState.next, Is.EqualTo("Break"));
-        Assert.That(beatData.phaseState.active, Is.True);
+        Assert.That(beatData.phaseState.active, Is.EqualTo(1));
         Assert.That(beatData.phaseState.countBeats, Is.EqualTo(12));
         Assert.That(beatData.phaseState.lengthBeats, Is.EqualTo(32));
         Assert.That(beatData.phaseState.remaining, Is.EqualTo(8));
-        Assert.That(beatData.dropState.active, Is.True);
+        Assert.That(beatData.dropState.active, Is.EqualTo(1));
         Assert.That(beatData.dropState.countBeats, Is.EqualTo(0));
         Assert.That(beatData.dropState.lengthBeats, Is.EqualTo(32));
         Assert.That(beatData.dropState.remaining, Is.EqualTo(2));
-        Assert.That(beatData.fillState.active, Is.False);
+        Assert.That(beatData.fillState.active, Is.EqualTo(0));
         Assert.That(beatData.fillState.countBeats, Is.EqualTo(16));
         Assert.That(beatData.fillState.lengthBeats, Is.EqualTo(8));
         Assert.That(beatData.fillState.remaining, Is.EqualTo(1));
         Assert.That(beatData.energyState.current, Is.EqualTo("High"));
         Assert.That(beatData.energyState.next, Is.EqualTo("Mid"));
-        Assert.That(beatData.energyState.active, Is.True);
+        Assert.That(beatData.energyState.active, Is.EqualTo(1));
         Assert.That(beatData.energyState.countBeats, Is.EqualTo(4));
         Assert.That(beatData.energyState.lengthBeats, Is.EqualTo(16));
         Assert.That(beatData.energyState.remaining, Is.EqualTo(2));
@@ -419,10 +419,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
             beatAverageMs = 468,
             beatPulse = 0.625f,
             levels = new Levels { low = 0.25f, mid = 0.5f, high = 0.75f },
-            phaseState = new PhaseState { current = "Drop", next = "Break", active = true, countBeats = 12, lengthBeats = 32, remaining = 8 },
-            dropState = new CountdownState { active = true, countBeats = 0, lengthBeats = 32, remaining = 2 },
-            fillState = new CountdownState { active = false, countBeats = 16, lengthBeats = 8, remaining = 1 },
-            energyState = new PhaseState { current = "High", next = "Mid", active = true, countBeats = 4, lengthBeats = 16, remaining = 2 },
+            phaseState = new PhaseState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 },
+            dropState = new CountdownState { active = 1, countBeats = 0, lengthBeats = 32, remaining = 2 },
+            fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 },
+            energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 },
         };
     }
 }
