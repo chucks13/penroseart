@@ -110,13 +110,45 @@ public sealed class BeatManagerRaveOscIntegrationTests
     [Test]
     public void RaveOscBroadcastLivenessFollowsRecognizedUdp7000Packets()
     {
-        const float lastPacketTime = 10f;
-        const float threeSixtyHzIntervals = 3f / 60f;
+        // The grace window is 15 broadcast intervals (0.25 s) so UDP burst loss and frame hitches
+        // cannot flap the beat source; each flap wipes the cooked phrase/Levels state downstream.
+        const float fifteenSixtyHzIntervals = 15f / 60f;
 
-        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: false, lastPacketTime, lastPacketTime), Is.False);
-        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, lastPacketTime, lastPacketTime), Is.True);
-        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, lastPacketTime, lastPacketTime + threeSixtyHzIntervals - 0.001f), Is.True);
-        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, lastPacketTime, lastPacketTime + threeSixtyHzIntervals + 0.001f), Is.False);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: false, 0f), Is.False);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, 0f), Is.True);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, fifteenSixtyHzIntervals - 0.001f), Is.True);
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, fifteenSixtyHzIntervals + 0.001f), Is.False);
+
+        // Before any recognized packet, elapsed time reads as infinity and liveness must stay off.
+        Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, float.PositiveInfinity), Is.False);
+    }
+
+    [Test]
+    public void BeatManagerLiveSourceDoesNotSimulateWhenOscSnapshotHasSentinelBpm()
+    {
+        var beatManager = new BeatManager
+        {
+            simulatedBpm = 120f,
+        };
+        var snapshot = new RaveOnAirSnapshot
+        {
+            bpm = -1f,
+            beatInBar = -1,
+            beatPulse = 0f,
+            beatAverageMs = -1,
+            beatsCountMs = new[] { -1, -1, -1, -1 },
+            onBeats = new[] { false, false, false, false },
+        };
+
+        beatManager.SetLiveBeatSource(true);
+        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatManager.beatData);
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsLiveSource, Is.True);
+        Assert.That(beatManager.beatData.active, Is.False);
+        Assert.That(beatManager.beatData.bpm, Is.EqualTo(-1f));
+        Assert.That(beatManager.beatData.playersLive, Is.EqualTo(""));
+        Assert.That(beatManager.beatData.track, Is.EqualTo(""));
     }
 
     [Test]

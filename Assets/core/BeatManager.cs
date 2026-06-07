@@ -252,14 +252,14 @@ public partial class BeatManager
     private const int UnavailableMs = -1;
 
     /// <summary>
-    /// Local fallback tempo used when no live Rave OSC beat data is active and
+    /// Local fallback tempo used when no live Rave OSC source is active and
     /// <see cref="simulatedBeatEnabled"/> allows the simulator to run.
     /// </summary>
     public float simulatedBpm = 120f;
 
     /// <summary>
-    /// Whether the local fallback simulator may synthesize beat data when no live Rave OSC beat is active.
-    /// Turn this off to make "no live beat" a real no-beat state for effects: <see cref="BeatData.active"/>
+    /// Whether the local fallback simulator may synthesize beat data when no live Rave OSC source is active.
+    /// Turn this off to make "no live source" a real no-beat state for effects: <see cref="BeatData.active"/>
     /// and <see cref="IsActive"/> become false.
     /// </summary>
     public bool simulatedBeatEnabled = true;
@@ -318,7 +318,7 @@ public partial class BeatManager
     /// Updates the fallback beat simulator from Unity time.
     /// </summary>
     /// <remarks>
-    /// Live OSC remains the source of truth. Simulation only runs when live data is inactive, the simulator is
+    /// Live OSC remains the source of truth. Simulation only runs when the live OSC source is inactive, the simulator is
     /// enabled, and <see cref="simulatedBpm"/> is positive. Otherwise <see cref="beatData"/> is cleared to the
     /// standard no-beat state exposed through <see cref="IsActive"/>.
     /// </remarks>
@@ -715,7 +715,7 @@ public partial class BeatManager
 
     /// <summary>
     /// Clears beatData to the standard no-beat state. Reached only in simulator mode when the simulator is off
-    /// or <see cref="simulatedBpm"/> is disabled (&lt;= 0), so there is no live data to protect here — live mode
+    /// or <see cref="simulatedBpm"/> is disabled (&lt;= 0), so there is no live OSC source to protect here — live mode
     /// returns earlier in <see cref="Update"/>.
     /// </summary>
     private void ClearSimulatedBeatData()

@@ -1,3 +1,6 @@
+// Copyright © 2026 Hunter Luisi. All rights reserved.
+// Tests for PenroseArt's Unity-adapted RaveSystem.Osc code.
+
 #nullable enable
 using System;
 using System.Text;

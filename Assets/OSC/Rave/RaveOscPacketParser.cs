@@ -1,3 +1,4 @@
+// Copyright © 2026 Hunter Luisi. All rights reserved.
 // RaveSystem OSC client packet parser for PenroseArt.
 
 #nullable enable
@@ -53,8 +54,32 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterNamedState("/rave/onair/energy_state", (snapshot, value) => snapshot.energyState = value);
     }
 
-    /// <summary>Dispatches one raw OSC packet. Bundles are decoded recursively by <see cref="OscDispatcher" />.</summary>
-    public int Dispatch(ReadOnlySpan<byte> packet) => _dispatcher.Dispatch(packet);
+    /// <summary>
+    /// Dispatches one raw Rave on-air OSC packet using local receive-time delivery.
+    /// </summary>
+    /// <remarks>
+    /// RaveSystem on-air packets are live telemetry. Bundle timetags document sender time, but they
+    /// must not delay delivery: across hosts, a small clock skew makes every <c>OscTimeTag.Now</c>
+    /// packet look "future" to the receiver. The generic OSC dispatcher keeps standard scheduling
+    /// behavior; this adapter unwraps bundles and dispatches their message elements immediately.
+    /// </remarks>
+    public int Dispatch(ReadOnlySpan<byte> packet) => DispatchLivePacket(packet);
+
+    private int DispatchLivePacket(ReadOnlySpan<byte> packet) {
+        var kind = OscPacket.Classify(packet);
+        return kind == OscPacketKind.Bundle
+            ? DispatchLiveBundle(packet)
+            : _dispatcher.Dispatch(packet);
+    }
+
+    private int DispatchLiveBundle(ReadOnlySpan<byte> bundle) {
+        var bundleReader = new OscBundleReader(bundle);
+        var dispatched = 0;
+        while (bundleReader.HasMoreElements) {
+            dispatched += DispatchLivePacket(bundleReader.ReadNextElement());
+        }
+        return dispatched;
+    }
 
     /// <summary>Returns the latest snapshot without clearing the pending-update flag.</summary>
     public RaveOnAirSnapshot Snapshot {

@@ -1,3 +1,6 @@
+// Copyright © 2026 Hunter Luisi. All rights reserved.
+// Tests for PenroseArt's Rave OSC Unity adapter.
+
 #nullable enable
 
 using System;
@@ -83,6 +86,23 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(snapshot.energyState.lengthBeats, Is.EqualTo(16));
         Assert.That(snapshot.energyState.remaining, Is.EqualTo(2));
         Assert.That(parser.TryTakeSnapshot(out _), Is.False);
+    }
+
+    [Test]
+    public void DispatchIgnoresFutureBundleTimeTagsForLiveOnAirStream() {
+        var packet = new byte[512];
+        var futureTimeTag = OscTimeTag.FromDateTimeOffset(DateTimeOffset.UtcNow.AddSeconds(30));
+        var bundle = new OscBundleWriter(packet, futureTimeTag);
+        WriteFloat(ref bundle, "/rave/onair/bpm", 128.5f);
+        WriteInt(ref bundle, "/rave/onair/beat", 64);
+
+        using var parser = new RaveOscPacketParser();
+        var dispatches = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+        Assert.That(dispatches, Is.EqualTo(2));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        Assert.That(snapshot.bpm, Is.EqualTo(128.5f));
+        Assert.That(snapshot.beat.current, Is.EqualTo(64));
     }
 
     [Test]

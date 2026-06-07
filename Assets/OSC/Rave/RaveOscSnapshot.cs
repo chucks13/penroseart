@@ -1,3 +1,4 @@
+// Copyright © 2026 Hunter Luisi. All rights reserved.
 // RaveSystem OSC client state for PenroseArt.
 
 #nullable enable
