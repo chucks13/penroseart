@@ -199,8 +199,8 @@ public class Controller : Singleton<Controller>
     /// </remarks>
     public int CurrentBeatVariant
     {
-        get => (currentEffect >= 0 && currentEffect < effects.Length) ? effects[currentEffect].beatVariant : -1;
-        set { if (currentEffect >= 0 && currentEffect < effects.Length) effects[currentEffect].beatVariant = value; }
+        get => (effects != null && currentEffect >= 0 && currentEffect < effects.Length) ? effects[currentEffect].beatVariant : -1;
+        set { if (effects != null && currentEffect >= 0 && currentEffect < effects.Length) effects[currentEffect].beatVariant = value; }
     }
 
     /// <summary>Keyboard bank: A-W select effects 0-22 or 23-45 depending on this value.</summary>
