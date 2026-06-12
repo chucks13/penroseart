@@ -7,7 +7,6 @@
 /// </summary>
 public class lightning : EffectBase
 {
-    float huerot = 0;
     float fadeValue;
     float starthue;
     float deltastart = 0f;

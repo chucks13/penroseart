@@ -26,7 +26,6 @@ public class CameraReader
     public float effectDelta;
     //    public Color border;                    // used as an effect color
     public float huestep = 0;               // hue animate rate
-    private int currentCameraIdx = 0;
     private int[] effects = { 0, 1, -1 };
     private float[] defaults = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0.5f };
     private float[] settings = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0.5f };
@@ -212,7 +211,6 @@ public class CameraReader
                 {
                     Color c = videoBuffer[i];
                     float H, S, V;
-                    float h = 0.0f;     //float h delta to add to the hue
                     float s = 1.0f;     // float s  new saturation value
                     float v = 1.0f;     // float v  new v value
 

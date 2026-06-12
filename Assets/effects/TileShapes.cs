@@ -99,8 +99,6 @@ public class TileShapes : EffectBase
 
             if (randomColor)
                 color = Color.HSVToRGB(Random.value, 1f, 1f);
-            else
-                color = color; // Logic remains the same, using the class variable
 
 
             int loop = Random.Range(0, shape[0]);

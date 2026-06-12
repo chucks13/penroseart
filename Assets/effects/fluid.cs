@@ -17,9 +17,6 @@ public class fluid : ScreenEffect
     public float scale = 10f;
     public float fneighbors = 2f;
 
-    // This local beatVariant shadows EffectBase.beatVariant, so fluid currently
-    // uses the default variant value unless this field is assigned elsewhere.
-    int beatVariant;
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>

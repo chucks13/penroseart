@@ -28,7 +28,6 @@ If `dotnet build` still reports missing `System.IO.Ports`, Unity-generated proje
 ```text
 Assets/core/SerialOut.cs(5,17): error CS0234: The type or namespace name 'Ports' does not exist in the namespace 'System.IO'
 Assets/core/SerialOut.cs(14,16): error CS0246: The type or namespace name 'SerialPort' could not be found
-Assets/effects/fluid.cs(17,9): warning CS0108: 'fluid.beatVariant' hides inherited member 'EffectBase.beatVariant'.
 ```
 
 Notes:
@@ -71,12 +70,11 @@ Example Unity batch build shape to adapt after a build method exists:
 
 ## Diagnostics found during investigation
 
-LSP diagnostics on key files reported these warnings:
-
-- `Assets/core/Controller.cs`: unawaited `sendACN(...)` calls in `sendUDPFrame()`; obsolete `UnityWebRequest.isNetworkError` / `isHttpError`; obsolete `Object.FindObjectOfType<T>()`.
-- `Assets/core/Penrose.cs`: unreachable code in `dumpVerticies()`.
-
-These were not fixed during investigation; they are useful cleanup targets before relying on warnings as a quality gate.
+The compiler warnings found during the original investigation (unawaited `sendACN(...)` tasks,
+obsolete `UnityWebRequest`/`FindObjectOfType` APIs, dead `dumpVerticies()` code, the `fluid`
+`beatVariant` shadow, and assorted unused locals/fields) were all fixed in the 2026-06 warning
+cleanup. Both `Assembly-CSharp` and `Assembly-CSharp-Editor` now compile with zero warnings, so
+warnings are usable as a quality gate: a warning in a build means new debt.
 
 ## Hardware/runtime validation
 

@@ -225,8 +225,10 @@ public class AnimPalette
             sr.Close();
             return fileContents;
         }
-        catch (Exception e)
+        catch (Exception)
         {
+            // A missing/unreadable palette file degrades to "nothing to parse"; callers
+            // treat the empty string as no palettes from this source.
             return "";
         }
 

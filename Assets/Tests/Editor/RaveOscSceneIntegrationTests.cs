@@ -15,7 +15,7 @@ public sealed class RaveOscSceneIntegrationTests
         Assert.That(scene.isLoaded, Is.True);
         Assert.That(scene.path, Is.EqualTo(SampleScenePath));
 
-        var controller = Object.FindFirstObjectByType<Controller>();
+        var controller = Object.FindAnyObjectByType<Controller>();
         Assert.That(controller, Is.Not.Null);
         Assert.That(controller.gameObject.scene.path, Is.EqualTo(SampleScenePath));
         Assert.That(controller.gameObject.GetComponent<RaveOscReceiver>(), Is.Null,

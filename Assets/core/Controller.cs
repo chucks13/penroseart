@@ -192,7 +192,7 @@ public class Controller : Singleton<Controller>
     /// effect owns the frame (startup gap or mid-transition, where <see cref="currentEffect"/> is -1).
     /// </summary>
     /// <remarks>
-    /// Exposes the otherwise-private on-screen variant to the Waveform Pool selector in the BeatData inspector so
+    /// Exposes the otherwise-private on-screen variant to the Waveform Pool selector in the BeatManager dashboard so
     /// it can show what the wall is actually pulsing to in "Auto" mode (the read-back), and so locking a specific
     /// Waveform can retarget the live effect's pulse immediately instead of waiting for the next effect to start.
     /// This is an editor/inspector affordance; the runtime selection model is unchanged.
@@ -516,6 +516,17 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
+    /// Observes a fire-and-forget E1.31 send: the render loop must not block on UDP, but a faulted
+    /// send must surface as an error instead of dying as an unobserved task.
+    /// </summary>
+    private static void ObserveAcnSend(Task sendTask)
+    {
+        sendTask.ContinueWith(
+            t => Debug.LogError($"E1.31 ACN send failed: {t.Exception?.GetBaseException().Message}"),
+            TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    /// <summary>
     /// Sends the current 900-tile frame to the local PREP_CAPTURE pixel feedback port in chunked RGB packets.
     /// </summary>
     private void SendPixelData(Color[] data, byte seq)
@@ -597,9 +608,9 @@ public class Controller : Singleton<Controller>
         int universe = 1;
         for (ptr1 = 0; ptr1 < (5400 - 510); ptr1 += 510)
         {
-            sendACN(universe++, udpFrameBuffer, ptr1, 510);
+            ObserveAcnSend(sendACN(universe++, udpFrameBuffer, ptr1, 510));
         }
-        sendACN(universe, udpFrameBuffer, ptr1, 5400 - ptr1);
+        ObserveAcnSend(sendACN(universe, udpFrameBuffer, ptr1, 5400 - ptr1));
         acnheader[111] = sequence++;
     }
 
@@ -932,7 +943,7 @@ public class Controller : Singleton<Controller>
 
         yield return request.SendWebRequest();
 
-        if (request.isNetworkError || request.isHttpError)
+        if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.ProtocolError)
         {
             //            Debug.Log(request.error);
         }
@@ -998,7 +1009,7 @@ public class Controller : Singleton<Controller>
         // bounds, mesh generation, and the preview color buffer. Effects must
         // not be initialized until this completes because EffectBase.Init()
         // caches penrose.Tiles.
-        penrose = GameObject.FindObjectOfType<Penrose>();
+        penrose = FindAnyObjectByType<Penrose>();
         penrose.Init();
 
         // Seed the on-screen configuration controls from serialized fields.

@@ -89,9 +89,10 @@ catch ( Exception e ){
                 byte[] data = client.Receive(ref anyIP);
                 thehandler(data);
             }
-            catch (Exception err)
+            catch (Exception)
             {
-                //               print(err.ToString());
+                // Tolerated: Receive throws when the socket closes or a datagram is bad; the
+                // listener loop keeps serving subsequent packets instead of killing the thread.
             }
         }
     }

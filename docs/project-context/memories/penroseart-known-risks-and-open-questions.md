@@ -109,7 +109,6 @@ These are not necessarily current bugs, but they matter for reliability/hardware
 
 - `Panels` chooses `which = Random.Range(0, 2)`, so `case 2` branches appear unreachable because Unity integer `Random.Range(0, 2)` returns 0 or 1.
 - `Controller.startEffect` is serialized but current `SetupEffects()` ignores it.
-- LSP diagnostics reported unreachable code in `Penrose.dumpVerticies()`.
 
 ## Testing gap
 
