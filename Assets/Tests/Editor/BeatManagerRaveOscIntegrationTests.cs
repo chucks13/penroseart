@@ -12,40 +12,39 @@ public sealed class BeatManagerRaveOscIntegrationTests
         {
             simulatedBpm = 120f,
         };
-        beatManager.beatData.active = false;
 
         beatManager.Update(0f);
 
-        Assert.That(beatManager.beatData.active, Is.True);
+        Assert.That(beatManager.IsActive, Is.True);
         Assert.That(beatManager.beatData.playersLive, Is.EqualTo("SIM"));
         Assert.That(beatManager.beatData.track, Is.EqualTo("Simulated Beat"));
         Assert.That(beatManager.beatData.bpm, Is.EqualTo(120f));
         Assert.That(beatManager.beatData.beatAverageMs, Is.EqualTo(500));
         Assert.That(beatManager.beatData.beatInBar, Is.EqualTo(1));
-        Assert.That(beatManager.beatData.currentBeat, Is.EqualTo(0));
         Assert.That(beatManager.beatData.beatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
         Assert.That(beatManager.beatData.onBeats, Is.EqualTo(new[] { true, false, false, false }));
         Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(1f).Within(0.0001f));
-        Assert.That(beatManager.beatData.offBeats, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { false, false, false, false }));
     }
 
     [Test]
-    public void BeatManagerUpdateSynthesizesOffBeatHalfwayBetweenSimulatedBeats()
+    public void BeatManagerUpdateDerivesOffBeatHalfwayBetweenSimulatedBeats()
     {
         var beatManager = new BeatManager
         {
             simulatedBpm = 120f,
         };
-        beatManager.beatData.active = false;
 
         beatManager.Update(0.25f);
 
         Assert.That(beatManager.beatData.beatInBar, Is.EqualTo(1));
         Assert.That(beatManager.beatData.beatsCountMs, Is.EqualTo(new[] { 1750, 250, 750, 1250 }));
         Assert.That(beatManager.beatData.onBeats, Is.EqualTo(new[] { false, false, false, false }));
-        Assert.That(beatManager.beatData.offBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
-        Assert.That(beatManager.beatData.offBeats, Is.EqualTo(new[] { true, false, false, false }));
-        Assert.That(beatManager.beatData.offBeatPulse, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
+        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.OffBeatPulse, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(beatManager.NextOffBeatMs, Is.EqualTo(0));
+        Assert.That(beatManager.OffBeat, Is.True);
     }
 
     [Test]
@@ -55,11 +54,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
         {
             simulatedBpm = 0f,
         };
-        beatManager.beatData.active = false;
 
         beatManager.Update(0f);
 
-        Assert.That(beatManager.beatData.active, Is.False);
+        Assert.That(beatManager.IsActive, Is.False);
         Assert.That(beatManager.beatData.nextBeatMs, Is.EqualTo(-1));
         Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0f));
     }
@@ -72,15 +70,15 @@ public sealed class BeatManagerRaveOscIntegrationTests
             simulatedBpm = 120f,
             simulatedBeatEnabled = false,
         };
-        beatManager.beatData.active = true;
+        beatManager.beatData.bpm = 128f;
         beatManager.beatData.beatPulse = 1f;
 
         beatManager.Update(0f);
 
         Assert.That(beatManager.IsActive, Is.False);
-        Assert.That(beatManager.beatData.active, Is.False);
         Assert.That(beatManager.beatData.nextBeatMs, Is.EqualTo(-1));
         Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0f));
+        Assert.That(beatManager.Pulse, Is.Null);
         Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(1f));
         Assert.That(beatManager.IsBeatTriggered(0), Is.False);
     }
@@ -92,10 +90,8 @@ public sealed class BeatManagerRaveOscIntegrationTests
         {
             simulatedBpm = 120f,
         };
-        beatManager.beatData.active = true;
         beatManager.beatData.bpm = 128f;
         beatManager.beatData.beatInBar = 3;
-        beatManager.beatData.currentBeat = 2;
         beatManager.beatData.beatPulse = 0.25f;
         beatManager.SetLiveBeatSource(true);
 
@@ -103,7 +99,6 @@ public sealed class BeatManagerRaveOscIntegrationTests
 
         Assert.That(beatManager.beatData.bpm, Is.EqualTo(128f));
         Assert.That(beatManager.beatData.beatInBar, Is.EqualTo(3));
-        Assert.That(beatManager.beatData.currentBeat, Is.EqualTo(2));
         Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0.25f));
     }
 
@@ -111,7 +106,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
     public void RaveOscBroadcastLivenessFollowsRecognizedUdp7000Packets()
     {
         // The grace window is 15 broadcast intervals (0.25 s) so UDP burst loss and frame hitches
-        // cannot flap the beat source; each flap wipes the cooked phrase/Levels state downstream.
+        // cannot flap the beat source; each flap wipes the contrived phrase/Levels state downstream.
         const float fifteenSixtyHzIntervals = 15f / 60f;
 
         Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: false, 0f), Is.False);
@@ -141,68 +136,60 @@ public sealed class BeatManagerRaveOscIntegrationTests
         };
 
         beatManager.SetLiveBeatSource(true);
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatManager.beatData);
+        beatManager.beatData.CopyFrom(snapshot);
         beatManager.Update(0f);
 
         Assert.That(beatManager.IsLiveSource, Is.True);
-        Assert.That(beatManager.beatData.active, Is.False);
+        Assert.That(beatManager.IsActive, Is.False);
         Assert.That(beatManager.beatData.bpm, Is.EqualTo(-1f));
         Assert.That(beatManager.beatData.playersLive, Is.EqualTo(""));
         Assert.That(beatManager.beatData.track, Is.EqualTo(""));
+        Assert.That(beatManager.Bpm, Is.Null);
+        Assert.That(beatManager.Track, Is.Null);
+        Assert.That(beatManager.PlayersLive, Is.Null);
     }
 
     [Test]
-    public void BeatDataCurrentBeatPropertiesReadActiveOnBeatSlotFromCountdownArrays()
+    public void BeatDataNearestBeatPropertiesReadActiveOnBeatSlotFromCountdownArrays()
     {
         var beatData = new BeatData
         {
             beatInBar = 3,
             beatsCountMs = new[] { 1900, 2900, 0, 900 },
             onBeats = new[] { false, false, true, false },
-            offBeatsCountMs = new[] { 250, 1250, 2250, 3250 },
-            offBeats = new[] { true, false, false, false },
         };
 
         Assert.That(beatData.nextBeatMs, Is.EqualTo(0));
         Assert.That(beatData.onBeat, Is.True);
-        Assert.That(beatData.nextOffBeatMs, Is.EqualTo(250));
-        Assert.That(beatData.offBeat, Is.True);
+        Assert.That(beatData.currentOnBeat, Is.True);
     }
 
     [Test]
-    public void BeatDataCurrentBeatPropertiesUseNextCountdownSlotAfterOnBeatGate()
+    public void BeatDataNearestBeatPropertiesUseNextCountdownSlotAfterOnBeatGate()
     {
         var beatData = new BeatData
         {
             beatInBar = 3,
             beatsCountMs = new[] { 1700, 2700, 3700, 700 },
             onBeats = new[] { false, false, false, false },
-            offBeatsCountMs = new[] { 1950, 450, 950, 1450 },
-            offBeats = new[] { false, true, false, false },
         };
 
         Assert.That(beatData.nextBeatMs, Is.EqualTo(700));
         Assert.That(beatData.onBeat, Is.False);
-        Assert.That(beatData.nextOffBeatMs, Is.EqualTo(450));
-        Assert.That(beatData.offBeat, Is.True);
     }
 
     [Test]
-    public void BeatDataCurrentBeatPropertiesAreInertWhenCountdownsAreUnavailable()
+    public void BeatDataNearestBeatPropertiesAreInertWhenCountdownsAreUnavailable()
     {
         var beatData = new BeatData
         {
             beatInBar = -1,
             beatsCountMs = new[] { -1, -1, -1, -1 },
             onBeats = new[] { true, true, true, true },
-            offBeatsCountMs = new[] { -1, -1, -1, -1 },
-            offBeats = new[] { true, true, true, true },
         };
 
         Assert.That(beatData.nextBeatMs, Is.EqualTo(-1));
         Assert.That(beatData.onBeat, Is.False);
-        Assert.That(beatData.nextOffBeatMs, Is.EqualTo(-1));
-        Assert.That(beatData.offBeat, Is.False);
     }
 
     [Test]
@@ -212,22 +199,16 @@ public sealed class BeatManagerRaveOscIntegrationTests
 
         Assert.That(beatData.nextBeatMs, Is.EqualTo(-1));
         Assert.That(beatData.onBeat, Is.False);
-        Assert.That(beatData.nextOffBeatMs, Is.EqualTo(-1));
-        Assert.That(beatData.offBeat, Is.False);
     }
 
     [Test]
-    public void ApplySnapshotStoresRawRaveOnAirDataAsBeatData()
+    public void CopyFromStoresRawRaveOnAirDataAsBeatData()
     {
-        var beatData = new BeatData
-        {
-            beatsPerMeasure = 4,
-        };
+        var beatData = new BeatData();
         var snapshot = BuildSnapshot(onBeatForBeat3: true);
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatData.CopyFrom(snapshot);
 
-        Assert.That(beatData.active, Is.True);
         Assert.That(beatData.playersLive, Is.EqualTo("4,2"));
         Assert.That(beatData.track, Is.EqualTo("Artist - Track"));
         Assert.That(beatData.bpm, Is.EqualTo(128.5f));
@@ -266,14 +247,13 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void ApplySnapshotDerivesCompatibilityBeatFieldsFromStructuredOnAirData()
+    public void CopyFromExposesNearestBeatCountdownHelpers()
     {
-        var beatData = new BeatData { beatsPerMeasure = 4 };
+        var beatData = new BeatData();
         var snapshot = BuildSnapshot(onBeatForBeat3: true);
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatData.CopyFrom(snapshot);
 
-        Assert.That(beatData.currentBeat, Is.EqualTo(2));
         Assert.That(beatData.nextBeatMs, Is.EqualTo(100));
         Assert.That(beatData.GetNextBeatMs(), Is.EqualTo(100));
         Assert.That(beatData.onBeat, Is.False);
@@ -281,12 +261,12 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void ApplySnapshotUsesBeatCountdownWhenCurrentBeatGateIsOff()
+    public void CopyFromUsesBeatCountdownWhenCurrentBeatGateIsOff()
     {
-        var beatData = new BeatData { beatsPerMeasure = 4 };
+        var beatData = new BeatData();
         var snapshot = BuildSnapshot(onBeatForBeat3: false);
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatData.CopyFrom(snapshot);
 
         Assert.That(beatData.onBeat, Is.False);
         Assert.That(beatData.nextBeatMs, Is.EqualTo(100));
@@ -294,19 +274,15 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void ApplySnapshotDisablesBeatDataWhenRaveHasNoUsableBeat()
+    public void LiveSentinelSnapshotDisablesBeatAndOffBeatDerivation()
     {
-        var beatData = new BeatData
-        {
-            active = true,
-            currentBeat = 2,
-            beatInBar = 3,
-            onBeats = new[] { false, false, true, false },
-            beatPulse = 1f,
-        };
-        beatData.bpm = 128f;
-        beatData.playersLive = "4";
-        beatData.track = "Track";
+        var beatManager = new BeatManager();
+        beatManager.beatData.bpm = 128f;
+        beatManager.beatData.beatInBar = 3;
+        beatManager.beatData.onBeats = new[] { false, false, true, false };
+        beatManager.beatData.beatPulse = 1f;
+        beatManager.beatData.playersLive = "4";
+        beatManager.beatData.track = "Track";
 
         var snapshot = new RaveOnAirSnapshot
         {
@@ -318,105 +294,82 @@ public sealed class BeatManagerRaveOscIntegrationTests
             onBeats = new[] { false, false, false, false },
         };
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatManager.SetLiveBeatSource(true);
+        beatManager.beatData.CopyFrom(snapshot);
+        beatManager.Update(0f);
 
-        Assert.That(beatData.active, Is.False);
-        Assert.That(beatData.bpm, Is.EqualTo(-1f));
-        Assert.That(beatData.currentBeat, Is.EqualTo(0));
-        Assert.That(beatData.GetNextBeatMs(), Is.EqualTo(-1));
-        Assert.That(beatData.onBeat, Is.False);
-        Assert.That(beatData.offBeatsCountMs, Is.EqualTo(new[] { -1, -1, -1, -1 }));
-        Assert.That(beatData.offBeats, Is.EqualTo(new[] { false, false, false, false }));
-        Assert.That(beatData.beatPulse, Is.EqualTo(0f));
-        Assert.That(beatData.playersLive, Is.EqualTo(""));
-        Assert.That(beatData.track, Is.EqualTo(""));
+        Assert.That(beatManager.IsActive, Is.False);
+        Assert.That(beatManager.beatData.bpm, Is.EqualTo(-1f));
+        Assert.That(beatManager.beatData.GetNextBeatMs(), Is.EqualTo(-1));
+        Assert.That(beatManager.beatData.onBeat, Is.False);
+        Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { -1, -1, -1, -1 }));
+        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.beatData.beatPulse, Is.EqualTo(0f));
+        Assert.That(beatManager.beatData.playersLive, Is.EqualTo(""));
+        Assert.That(beatManager.beatData.track, Is.EqualTo(""));
+        Assert.That(beatManager.NextOffBeatMs, Is.Null);
+        Assert.That(beatManager.OffBeat, Is.Null);
+        Assert.That(beatManager.OffBeatPulse, Is.Null);
     }
 
     [Test]
-    public void ApplySnapshotDerivesOffBeatArraysFromOscBeatCountdowns()
+    public void UpdateDerivesOffBeatArraysFromOscBeatCountdowns()
     {
-        var beatData = new BeatData();
-        var snapshot = new RaveOnAirSnapshot
-        {
-            bpm = 120f,
-            beatAverageMs = 500,
-            beatsCountMs = new[] { 1750, 250, 750, 1250 },
-            onBeats = new[] { false, false, false, false },
-        };
+        var beatManager = CreateLiveBeatManager(beatsCountMs: new[] { 1750, 250, 750, 1250 });
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatManager.Update(0f);
 
-        Assert.That(beatData.offBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
-        Assert.That(beatData.offBeats, Is.EqualTo(new[] { true, false, false, false }));
-        Assert.That(beatData.offBeatPulse, Is.EqualTo(1f));
+        Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
+        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.OffBeatPulse, Is.EqualTo(1f));
+        Assert.That(beatManager.NextOffBeatMs, Is.EqualTo(0));
+        Assert.That(beatManager.OffBeat, Is.True);
     }
 
     [Test]
-    public void ApplySnapshotUsesActualCountdownGapForOffBeatMidpoint()
+    public void UpdateUsesActualCountdownGapForOffBeatMidpoint()
     {
-        var beatData = new BeatData();
-        var snapshot = new RaveOnAirSnapshot
-        {
-            bpm = 120f,
-            beatAverageMs = 500,
-            beatsCountMs = new[] { 1800, 200, 800, 1300 },
-            onBeats = new[] { false, false, false, false },
-        };
+        var beatManager = CreateLiveBeatManager(beatsCountMs: new[] { 1800, 200, 800, 1300 });
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatManager.Update(0f);
 
-        Assert.That(beatData.offBeatsCountMs[0], Is.EqualTo(0));
-        Assert.That(beatData.offBeats[0], Is.True);
+        Assert.That(beatManager.OffBeatsCountMs[0], Is.EqualTo(0));
+        Assert.That(beatManager.OffBeats[0], Is.True);
     }
 
     [Test]
-    public void ApplySnapshotKeepsOffBeatGateOpenForQuarterOfAverageBeat()
+    public void UpdateKeepsOffBeatGateOpenForQuarterOfAverageBeat()
     {
-        var beatData = new BeatData();
-        var snapshot = new RaveOnAirSnapshot
-        {
-            bpm = 120f,
-            beatAverageMs = 500,
-            beatsCountMs = new[] { 1700, 200, 700, 1200 },
-            onBeats = new[] { false, false, false, false },
-        };
+        var beatManager = CreateLiveBeatManager(beatsCountMs: new[] { 1700, 200, 700, 1200 });
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatManager.Update(0f);
 
-        Assert.That(beatData.offBeatsCountMs, Is.EqualTo(new[] { 0, 450, 950, 1450 }));
-        Assert.That(beatData.offBeats, Is.EqualTo(new[] { true, false, false, false }));
-        Assert.That(beatData.offBeatPulse, Is.EqualTo(0.972f).Within(0.001f));
+        Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 0, 450, 950, 1450 }));
+        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.OffBeatPulse, Is.EqualTo(0.972f).Within(0.001f));
     }
 
     [Test]
-    public void ApplySnapshotTurnsOffBeatGateOffAfterQuarterOfAverageBeat()
+    public void UpdateTurnsOffBeatGateOffAfterQuarterOfAverageBeat()
     {
-        var beatData = new BeatData();
-        var snapshot = new RaveOnAirSnapshot
-        {
-            bpm = 120f,
-            beatAverageMs = 500,
-            beatsCountMs = new[] { 1570, 70, 570, 1070 },
-            onBeats = new[] { false, false, false, false },
-        };
+        var beatManager = CreateLiveBeatManager(beatsCountMs: new[] { 1570, 70, 570, 1070 });
 
-        RaveOscReceiver.ApplySnapshotToBeatData(snapshot, beatData);
+        beatManager.Update(0f);
 
-        Assert.That(beatData.offBeatsCountMs, Is.EqualTo(new[] { 1820, 320, 820, 1320 }));
-        Assert.That(beatData.offBeats, Is.EqualTo(new[] { false, false, false, false }));
-        Assert.That(beatData.offBeatPulse, Is.EqualTo(0.705f).Within(0.001f));
+        Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 1820, 320, 820, 1320 }));
+        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.OffBeatPulse, Is.EqualTo(0.705f).Within(0.001f));
     }
 
     [Test]
     public void GetBeatBrightnessUsesBarPhaseWaveformsForMusicalVariants()
     {
         var beatManager = new BeatManager();
-        beatManager.beatData.active = true;
+        beatManager.beatData.bpm = 128f;
         beatManager.beatData.beatInBar = 1;
         beatManager.beatData.beatAverageMs = 500;
         beatManager.beatData.beatsCountMs = new[] { 0, 250, 750, 1250 };
         beatManager.beatData.beatPulse = 0.25f;
-        beatManager.beatData.offBeatPulse = 0.75f;
 
         Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(0.0001f));
         Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.5f), Is.EqualTo(0.5f).Within(0.0001f));
@@ -428,12 +381,23 @@ public sealed class BeatManagerRaveOscIntegrationTests
     public void IsBeatTriggeredUsesRaveOnBeatValue()
     {
         var beatManager = new BeatManager();
-        beatManager.beatData.active = true;
+        beatManager.beatData.bpm = 128f;
         beatManager.beatData.beatInBar = 1;
         beatManager.beatData.onBeats = new[] { true, false, false, false };
-        beatManager.beatData.currentBeat = 0;
 
         Assert.That(beatManager.IsBeatTriggered(0), Is.True);
+    }
+
+    /// <summary>Builds a live-sourced BeatManager whose transport carries the supplied beat countdowns.</summary>
+    private static BeatManager CreateLiveBeatManager(int[] beatsCountMs)
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.beatData.bpm = 120f;
+        beatManager.beatData.beatAverageMs = 500;
+        beatManager.beatData.beatsCountMs = beatsCountMs;
+        beatManager.beatData.onBeats = new[] { false, false, false, false };
+        return beatManager;
     }
 
     private static RaveOnAirSnapshot BuildSnapshot(bool onBeatForBeat3)

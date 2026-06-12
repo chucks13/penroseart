@@ -75,7 +75,7 @@ public class Flock : EffectBase
     /// </summary>
     public override void Draw()
     {
-        float speedMultiplier = GetBeatSpeedMultiplier(beat.beatPulse, beatEnable && beat.active);
+        float speedMultiplier = GetBeatSpeedMultiplier(beatManager.Pulse ?? 0f, beatEnable && beatManager.IsActive);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
         {

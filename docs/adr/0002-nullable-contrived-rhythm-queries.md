@@ -1,19 +1,20 @@
-# Nullable cooked rhythm queries
+# Nullable contrived rhythm queries
 
 RaveSystem broadcasts 17 `/rave/onair/*` values at 60 Hz; PenroseArt parses all of them
 into `BeatData`, but until now only the beat clock had consumers — energy, track phase,
 drop, fill, and levels arrived, were displayed in the Inspector, and were read by nothing.
 This ADR defines the consumption interface through which effects and transitions pull
 **all** musical state, replacing the previous mixed idioms (4-arg `GetBeatBrightness`,
-hand-rolled gates, raw `BeatData` field reads). Terms in `CONTEXT.md` (Cooked Value,
+hand-rolled gates, raw `BeatData` field reads). Terms in `CONTEXT.md` (Contrived Value,
 Default/Synced Mode, Color Bank, Fill, Drop, Energy, Levels, Track Phase).
 
 ## Transport keeps sentinels; requests return nullables
 `BeatData` stays plain serialized fields with `-1` sentinels — Unity's serializer does not
-serialize `Nullable<T>`, and Inspector/`BeatDataDrawer` visibility is a debugging
-requirement. The cooked query layer on `BeatManager` returns nullable types (`FillInfo?`,
-`Color?`, `float?`); `null` means "not available right now." Sentinel-reading lives only
-in the cooked layer; sentinels never cross into effect math. Rejected: tester-doer
+serialize `Nullable<T>`, and Inspector visibility is a debugging
+requirement. The query layer on `BeatManager` returns nullable types (`PhraseEventInfo?`,
+`Color?`, `float?`); `null` means "not available right now" — a valid, expected musical
+state (a track may simply have no upcoming drop), never an error. Sentinel-reading lives
+only in the query layer; sentinels never cross into effect math. Rejected: tester-doer
 `Has*`/neutral pairs (runtime-tolerant but the compiler enforces nothing) and nullable
 fields in `BeatData` (breaks serialization). C# 9 (Unity 6000.4) supports both nullable
 forms; `Assets/OSC` already compiles `#nullable enable`.
@@ -33,25 +34,33 @@ this with `active = ReadNextInt(...) != 0` (`RaveOscPacketParser.cs:160,172`), s
 Fix: snapshot and `BeatData` keep `int active` (-1/0/1) mirroring RaveSystem's
 `TrackCountdownState`; queries map `-1 → null`, `0 → upcoming`, `1 → in progress`.
 
-## Fill and Drop are two-phase structs
-`FillInfo?` / `DropInfo?` are non-null whenever phrase data is valid and expose both
-sides of the boundary: `beatsUntilStart` when upcoming, `progress` (Bar-Phase-smoothed,
-not integer-stepped) when in progress, plus `lengthBeats`/`remaining`. Rejected:
-active-only visibility — anticipation ("start the transition two beats early, land on
-the drop") is the choreographically valuable half and is already on the wire.
+## Fill and Drop share one two-phase shape
+`Fill` and `Drop` each return a `PhraseEventInfo?` — one struct shape, two instances —
+non-null whenever the wire state is available. `inProgress` is the only state flag;
+everything else is values: `beatsUntilStart`/`msUntilStart`/`anticipation` while
+upcoming, `beatsUntilEnd`/`progress` (Bar-Phase-smoothed, not integer-stepped) while in
+progress, plus `lengthBeats`/`remaining`. `anticipation` fills 0→1 over the last
+32 beats before the start (counting up to something fills); `msUntilStart` is contrived
+from `beat_avg_ms` exactly as the OSC schema delegates to clients. "No more left in this
+track" is not a third state: it is ordinary values (`beatsUntilStart == null`,
+`remaining == 0`) — zero is a number, null means no value. Rejected: active-only
+visibility — anticipation ("start the transition two beats early, land on the drop") is
+the choreographically valuable half and is already on the wire. Also rejected: an
+upcoming/in-progress/spent status enum — the nulls and counts already carry it.
 
 ## Energy is typed; Track Phase stays thin
 Energy's vocabulary is closed (`Low/Mid/High`, RaveSystem `PhraseEnergy`), so it parses
-**once** to an enum in the cooked layer: `EnergyInfo?` with level, next, beats-until-change,
-normalized float, and direction. An unrecognized label degrades to `null`, never to a wrong
+**once** to an enum in the query layer: `EnergyInfo?` with level, next, beats-until-change,
+normalized float, direction, and the same-energy run's progress/length/changes-remaining.
+An unrecognized label degrades to `null`, never to a wrong
 enum. Track Phase labels are an open vocabulary ("Chorus 2", "Up 1"), so `PhaseInfo?`
-passes labels through and cooks only the structure (countdowns, progress). No keyword
+passes labels through and contrives only the structure (countdowns, progress). No keyword
 parsing pretending the phase vocabulary is closed.
 
 ## Levels are smoothed; the Color Bank has three forms
 `LevelsInfo?` delivers normalized low/mid/high with attack/release smoothing applied once
 in BeatManager (tunable — flicker is the enemy, strobing is the point; settings are
-test-driven). The Color Bank cooks three optional color forms: raw RGB (rhythm as
+test-driven). The Color Bank contrives three optional color forms: raw RGB (rhythm as
 brightness), hue/saturation (rhythm as color change), palette-mediated (cohesive with the
 active GPalette). Wall-wide use of raw levels can reproduce the flicker hazard that made
 ADR-0001 exclude 32nd notes; the smoothing floor is the corresponding safeguard.
@@ -65,7 +74,7 @@ growth) and a static `BeatManager.Instance` (second singleton, weaker test seam)
 Per-effect derivations live on `EffectBase`, closing over effect-owned state:
 `BeatBrightness(min = 0.5f)` and `BeatTime(intensity)`, both built on the primitive
 `BeatManager.Envelope(variant)` (`float?`, null = no beat clock). Principle: **BeatManager
-cooks the shared dish; the effect side adds per-effect seasoning** (variant, enable, min).
+contrives the shared signals; the effect side adds per-effect seasoning** (variant, enable, min).
 
 Retired after migration, not wrapped: the 4-arg `BeatManager.GetBeatBrightness`
 (21 call sites passed the effect's own fields back across the seam), `GetBeatTime`
@@ -73,6 +82,18 @@ Retired after migration, not wrapped: the 4-arg `BeatManager.GetBeatBrightness`
 `IsBeatActive` as the availability idiom — nullability is the availability signal.
 This is deliberate unification for a live installation: one convention, no coexisting
 idioms.
+
+## Raw values flow through the same seam
+
+`BeatData` is transport only: exactly what the source (live OSC or the simulator) said,
+wire-shaped with sentinels, serialized for Inspector debugging. Locally derived stored
+state (the offbeat gate/pulse machinery, `active`, `currentBeat`) moves out of `BeatData`
+into BeatManager-owned state, beside the levels smoothing. Raw values effects may want
+(BPM, track, beat-in-bar, beat pulse) are exposed as nullable passthrough queries on
+`BeatManager`, so effects pull any field — raw or contrived — through one surface and
+sentinels still never cross the seam. Effects never read `BeatData` directly. Rejected:
+letting effects read `BeatData` for raw fields — it re-opens the sentinel leak and couples
+effects to the wire shape.
 
 ## Consequences
 
@@ -82,5 +103,5 @@ idioms.
   parser tri-state fix gets regression tests.
 - Energy/Track Phase wire semantics are still under research on the RaveSystem side;
   the structs encode today's contract and may evolve with it.
-- `BeatData` remains Inspector-visible and sentinel-based; `BeatDataDrawer` is unaffected
-  except where the tri-state `active` fields change from `bool` to `int`.
+- `BeatData` remains Inspector-visible and sentinel-based, as the raw foldout of the
+  single unified BeatManager dashboard drawer (one drawer for raw and contrived values).

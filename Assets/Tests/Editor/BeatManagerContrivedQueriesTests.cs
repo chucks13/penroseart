@@ -5,11 +5,11 @@ using PenroseArt.RaveOsc;
 using UnityEngine;
 
 /// <summary>
-/// Pins the cooked rhythm query layer from ADR-0002: nullable queries on BeatManager where null
+/// Pins the contrived rhythm query layer from ADR-0002: nullable queries on BeatManager where null
 /// always means "not available right now", tri-state mapping (-1 → null, 0 → upcoming, 1 → in
 /// progress), beat-smoothed phrase progress, Levels smoothing, and the Color Bank forms.
 /// </summary>
-public sealed class BeatManagerCookedQueriesTests
+public sealed class BeatManagerContrivedQueriesTests
 {
     /// <summary>
     /// A BeatManager pinned to the live source so Update never overwrites the beat data the test
@@ -20,7 +20,7 @@ public sealed class BeatManagerCookedQueriesTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.active = true;
+        beatManager.beatData.bpm = 128f; // positive BPM = usable beat clock (IsActive derives from this)
         beatManager.beatData.beatInBar = 1;
         beatManager.beatData.beatAverageMs = 500;
         beatManager.beatData.beatsCountMs = new[] { 0, 250, 750, 1250 };
@@ -32,8 +32,7 @@ public sealed class BeatManagerCookedQueriesTests
     [Test]
     public void EnvelopeIsNullWithoutBeatClock()
     {
-        var beatManager = new BeatManager();
-        beatManager.beatData.active = false;
+        var beatManager = new BeatManager(); // fresh transport carries no BPM, so no beat clock
 
         Assert.That(beatManager.Envelope(0), Is.Null);
     }
@@ -50,7 +49,7 @@ public sealed class BeatManagerCookedQueriesTests
         Assert.That(beatManager.Envelope(5), Is.EqualTo(1f).Within(0.0001f));
     }
 
-    // --- Fill / Drop two-phase cooking ---
+    // --- Fill / Drop phrase events ---
 
     [Test]
     public void FillIsNullWhenTriStateIsUnavailable()
@@ -84,7 +83,11 @@ public sealed class BeatManagerCookedQueriesTests
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.inProgress, Is.False);
         Assert.That(fill.Value.beatsUntilStart, Is.EqualTo(16));
-        Assert.That(fill.Value.progress, Is.EqualTo(0f));
+        Assert.That(fill.Value.msUntilStart, Is.EqualTo(8000)); // 16 beats × the 500 ms average interval
+        Assert.That(fill.Value.progress, Is.Null);
+        Assert.That(fill.Value.beatsUntilEnd, Is.Null);
+        // (32 - (16 - 0.5 intra-beat)) / 32 of the anticipation window already elapsed.
+        Assert.That(fill.Value.anticipation, Is.EqualTo(0.515625f).Within(0.0001f));
         Assert.That(fill.Value.lengthBeats, Is.EqualTo(8));
         Assert.That(fill.Value.remaining, Is.EqualTo(1));
     }
@@ -101,6 +104,9 @@ public sealed class BeatManagerCookedQueriesTests
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.inProgress, Is.True);
         Assert.That(fill.Value.beatsUntilStart, Is.Null);
+        Assert.That(fill.Value.msUntilStart, Is.Null);
+        Assert.That(fill.Value.anticipation, Is.Null);
+        Assert.That(fill.Value.beatsUntilEnd, Is.EqualTo(6));
         Assert.That(fill.Value.progress, Is.EqualTo(0.3125f).Within(0.0001f));
     }
 
@@ -114,8 +120,53 @@ public sealed class BeatManagerCookedQueriesTests
 
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.beatsUntilStart, Is.Null);
+        Assert.That(fill.Value.msUntilStart, Is.Null);
+        Assert.That(fill.Value.anticipation, Is.Null);
         Assert.That(fill.Value.lengthBeats, Is.Null);
         Assert.That(fill.Value.remaining, Is.Null);
+    }
+
+    [Test]
+    public void FillWithNoMoreOccurrencesIsValuesNotAThirdState()
+    {
+        var beatManager = CreateLiveBeatManager();
+        // The wire shape when the track HAS fills but they are all behind the playhead:
+        // still available (active 0), no known next start, zero occurrences left.
+        beatManager.beatData.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = 0 };
+
+        var fill = beatManager.Fill;
+
+        Assert.That(fill, Is.Not.Null);
+        Assert.That(fill!.Value.inProgress, Is.False);
+        Assert.That(fill.Value.beatsUntilStart, Is.Null);
+        Assert.That(fill.Value.anticipation, Is.Null);
+        Assert.That(fill.Value.remaining, Is.EqualTo(0)); // zero is a valid number, not a state
+    }
+
+    [Test]
+    public void AnticipationIsNullOutsideTheWindowAndFullAtTheStart()
+    {
+        var beatManager = CreateLiveBeatManager();
+
+        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = BeatManager.AnticipationWindowBeats + 1, lengthBeats = 16, remaining = 1 };
+        Assert.That(beatManager.Drop!.Value.anticipation, Is.Null);
+
+        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = 0, lengthBeats = 16, remaining = 1 };
+        Assert.That(beatManager.Drop!.Value.anticipation, Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [Test]
+    public void MsUntilStartIsNullWithoutAUsableBeatInterval()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.beatAverageMs = -1;
+        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 16, remaining = 1 };
+
+        var drop = beatManager.Drop;
+
+        Assert.That(drop, Is.Not.Null);
+        Assert.That(drop!.Value.beatsUntilStart, Is.EqualTo(16));
+        Assert.That(drop.Value.msUntilStart, Is.Null);
     }
 
     [Test]
@@ -129,6 +180,7 @@ public sealed class BeatManagerCookedQueriesTests
         Assert.That(drop, Is.Not.Null);
         Assert.That(drop!.Value.inProgress, Is.True);
         Assert.That(drop.Value.beatsUntilStart, Is.Null);
+        Assert.That(drop.Value.beatsUntilEnd, Is.EqualTo(6));
         Assert.That(drop.Value.progress, Is.EqualTo(0.3125f).Within(0.0001f));
         Assert.That(drop.Value.remaining, Is.EqualTo(2));
     }
@@ -149,6 +201,10 @@ public sealed class BeatManagerCookedQueriesTests
         Assert.That(energy.Value.beatsUntilChange, Is.EqualTo(4));
         Assert.That(energy.Value.normalized, Is.EqualTo(1f));
         Assert.That(energy.Value.direction, Is.EqualTo(-1));
+        // (16 - 4 + 0.5 intra-beat) / 16 of the same-energy run already elapsed.
+        Assert.That(energy.Value.runProgress, Is.EqualTo(0.78125f).Within(0.0001f));
+        Assert.That(energy.Value.runLengthBeats, Is.EqualTo(16));
+        Assert.That(energy.Value.changesRemaining, Is.EqualTo(2));
     }
 
     [Test]
@@ -361,7 +417,7 @@ public sealed class BeatManagerCookedQueriesTests
     [Test]
     public void SimulatorClearsPhraseAndLevelStateToUnavailable()
     {
-        // Stale live values (or stale scene-serialized values) must not replay through the cooked
+        // Stale live values (or stale scene-serialized values) must not replay through the contrived
         // queries once the simulator owns the beat: the simulator is a clock, not a musical analysis.
         var beatManager = new BeatManager { simulatedBpm = 120f };
         beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };

@@ -120,9 +120,9 @@ A per-Waveform shift, measured in beats, that slides the whole Waveform along th
 A per-waveform scalar in `[0..1]` controlling hump shape. At 0 the peak is sharp/pointed; rising first rounds the peak toward a cosine dome, then continues to grow a **flat top** — a plateau pinned at 1 around the beat. Higher rounding keeps the wall at full brightness for longer near the beat ("brighter longer"); the trough between beats still falls to 0 at every setting.
 _Avoid_: "smoothing", "easing" (overloaded); treating it as a true low-pass filter.
 
-**Cooked Value**:
-A ready-to-use value BeatManager prepares from raw broadcast state — gated, normalized, smoothed, and beat-synced. The request side of the seam: when a cooked value is unavailable it is `null`, and the consumer chooses its own fallback. Raw transport (`BeatData`, the OSC wire) keeps `-1` sentinels; `null` is the public face of "not valid." Shared signals cook on BeatManager; per-effect seasoning (variant, enable, minimum brightness) cooks on the effect side, which is the only place that knows it.
-_Avoid_: effects reading raw broadcast fields directly; sentinel values crossing into effect math.
+**Contrived Value**:
+A ready-to-use value BeatManager builds from raw broadcast state — gated, normalized, smoothed, beat-synced, or otherwise shaped for effects. The counterpart of a **Raw Value**, which BeatManager passes through unchanged (BPM, track name, beat-in-bar, beat pulse). Both kinds are pulled through the same nullable queries on BeatManager: `null` is a valid, expected state meaning "this value isn't there right now" — a track may have no upcoming drop, the wire may not carry levels — and every consumer chooses its own fallback. Raw transport (`BeatData`, the OSC wire) keeps `-1` sentinels internally; `null` is the public face of "not available." Shared signals are contrived once on BeatManager; per-effect seasoning (variant, enable, minimum brightness) stays on the effect side, which is the only place that knows it.
+_Avoid_: "cooked" (retired term); effects reading `BeatData` directly — raw values flow through BeatManager queries too; sentinel values crossing into effect math; treating `null` as an error instead of an ordinary musical state.
 
 **Default Mode / Synced Mode**:
 The two personalities every rhythm-aware effect or transition has. Default Mode is its way of working when a requested signal is unavailable (`null`) — the effect must look intentional on its own. Synced Mode is its way of working when the signal is live. Branch once per frame (`is { } x`) for dual-personality behavior, or fold inline (`?? fallback`) for simple modulation.
@@ -146,5 +146,5 @@ _Avoid_: treating Energy labels as open text; confusing Energy (phrase-level int
 The live low/mid/high audio band magnitudes, normalized — each band carries its own rhythm. Delivered smoothed (tunable): flicker (unintentional jitter) is the enemy; strobing (intentional rhythm) is the point.
 
 **Color Bank**:
-The set of beat-synced colors cooked from the Levels for effects to pull from — or ignore. Three forms: raw RGB (bands as channel brightness, black to bright — rhythm as brightness), hue/saturation (rhythm as color change), and palette-mediated (bands choose positions within the active palette, keeping the wall's look cohesive).
+The set of beat-synced colors contrived from the Levels for effects to pull from — or ignore. Three forms: raw RGB (bands as channel brightness, black to bright — rhythm as brightness), hue/saturation (rhythm as color change), and palette-mediated (bands choose positions within the active palette, keeping the wall's look cohesive).
 _Avoid_: treating the Bank as mandatory; bypassing the palette system without meaning to.

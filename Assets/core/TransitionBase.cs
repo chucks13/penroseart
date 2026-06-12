@@ -19,7 +19,7 @@ public abstract class TransitionBase
 
     /// <summary>
     /// Shared beat helper used for rhythmic transition behavior, mirroring <see cref="EffectBase.beatManager"/>.
-    /// Pull musical state through its cooked nullable queries (Envelope/Fill/Drop/Energy/Phase/Levels).
+    /// Pull musical state through its nullable queries (raw and contrived: Envelope/Fill/Drop/Energy/Phase/Levels/Pulse/...).
     /// </summary>
     public BeatManager beatManager => controller.beatManager;
 

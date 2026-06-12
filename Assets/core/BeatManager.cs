@@ -3,11 +3,14 @@ using PenroseArt.RaveOsc;
 using UnityEngine;
 
 /// <summary>
-/// Mutable Rave on-air beat, phrase, level, and offbeat state shared with effects through <see cref="BeatManager"/>.
+/// Transport-only beat, phrase, and level state: exactly what the active source (live RaveSystem OSC or
+/// the local simulator) last said, with wire sentinels intact.
 /// </summary>
 /// <remarks>
-/// Live values come from RaveSystem OSC. Defaults are inert fallback values used before OSC is available.
-/// The field names intentionally mirror the incoming OSC snapshot shape so Unity can serialize and display them directly.
+/// The field names intentionally mirror the incoming OSC snapshot shape so Unity can serialize and display
+/// them directly. Locally derived state (offbeats, beat availability) is contrived by <see cref="BeatManager"/>;
+/// effects never read this class directly — raw values flow through the nullable queries on
+/// <see cref="BeatManager"/> instead (ADR-0002).
 /// </remarks>
 [Serializable]
 public class BeatData
@@ -17,12 +20,6 @@ public class BeatData
 
     /// <summary>Sentinel used when OSC has not supplied a usable beat countdown.</summary>
     private const int UnavailableMs = -1;
-
-    /// <summary>
-    /// Master switch for beat-reactive behavior. When false, BeatManager helpers
-    /// return non-pulsing values and effects should render normally.
-    /// </summary>
-    public bool active;
 
     /// <summary>CSV of live on-air player numbers ordered newest on-air first.</summary>
     public string playersLive = "";
@@ -47,15 +44,6 @@ public class BeatData
 
     /// <summary>Beat-label gates for beat labels 1 through 4.</summary>
     public bool[] onBeats = new bool[BeatSlotCount];
-
-    /// <summary>Milliseconds until offbeat labels 1 through 4, derived from OSC beat countdowns.</summary>
-    public int[] offBeatsCountMs = CreateUnavailableCountdowns();
-
-    /// <summary>Offbeat-label gates for offbeats after beat labels 1 through 4.</summary>
-    public bool[] offBeats = new bool[BeatSlotCount];
-
-    /// <summary>Normalized offbeat pulse: 1 on the offbeat, decaying toward 0 until the next offbeat.</summary>
-    public float offBeatPulse;
 
     /// <summary>Average beat duration in milliseconds across live players with usable timing.</summary>
     public int beatAverageMs;
@@ -86,21 +74,6 @@ public class BeatData
 
     /// <summary>True while the current musical beat label gate is active.</summary>
     public bool currentOnBeat => IsOnBeat(beatInBar);
-
-    /// <summary>Milliseconds until the nearest upcoming offbeat, read from <see cref="offBeatsCountMs"/>.</summary>
-    public int nextOffBeatMs => ReadIntAt(offBeatsCountMs, IndexOfNearestCountdown(offBeatsCountMs));
-
-    /// <summary>True while the nearest upcoming offbeat is active, read from <see cref="offBeats"/>.</summary>
-    public bool offBeat => ReadBoolAt(offBeats, IndexOfNearestCountdown(offBeatsCountMs));
-
-    /// <summary>Number of beats in the repeating measure.</summary>
-    public int beatsPerMeasure = BeatSlotCount;
-
-    /// <summary>
-    /// Zero-based compatibility beat index inside the current measure.
-    /// Prefer <see cref="beatInBar"/> for new code because Rave OSC uses musical 1-based labels.
-    /// </summary>
-    public int currentBeat;
 
     /// <summary>Copies the latest OSC-shaped on-air snapshot into this application beat model.</summary>
     public void CopyFrom(RaveOnAirSnapshot snapshot)
@@ -142,7 +115,7 @@ public class BeatData
     }
 
     /// <summary>Finds the array slot with the smallest available non-negative countdown.</summary>
-    private static int IndexOfNearestCountdown(int[] source)
+    internal static int IndexOfNearestCountdown(int[] source)
     {
         if (source == null)
         {
@@ -164,13 +137,13 @@ public class BeatData
     }
 
     /// <summary>Reads a countdown value if the requested slot exists; otherwise returns the unavailable sentinel.</summary>
-    private static int ReadIntAt(int[] source, int index)
+    internal static int ReadIntAt(int[] source, int index)
     {
         return source != null && index >= 0 && index < source.Length ? source[index] : UnavailableMs;
     }
 
     /// <summary>Reads a beat/offbeat gate if the requested slot exists; otherwise returns false.</summary>
-    private static bool ReadBoolAt(bool[] source, int index)
+    internal static bool ReadBoolAt(bool[] source, int index)
     {
         return source != null && index >= 0 && index < source.Length && source[index];
     }
@@ -259,8 +232,8 @@ public partial class BeatManager
 
     /// <summary>
     /// Whether the local fallback simulator may synthesize beat data when no live Rave OSC source is active.
-    /// Turn this off to make "no live source" a real no-beat state for effects: <see cref="BeatData.active"/>
-    /// and <see cref="IsActive"/> become false.
+    /// Turn this off to make "no live source" a real no-beat state for effects: <see cref="IsActive"/>
+    /// becomes false.
     /// </summary>
     public bool simulatedBeatEnabled = true;
 
@@ -302,7 +275,7 @@ public partial class BeatManager
     /// rolling and return it, so each newly started effect inherits the lock and the wall keeps one rhythm.
     /// </summary>
     /// <remarks>
-    /// Driven two-way by the Waveform Pool selector in the BeatData inspector: writing it locks/releases the
+    /// Driven two-way by the Waveform Pool selector in the BeatManager dashboard: writing it locks/releases the
     /// wall live, and the selector reads it back to show the current state. <see cref="NonSerializedAttribute"/>
     /// on purpose — a lock is a live performance choice, not a saved scene default, so every session starts in
     /// Auto. Effects already re-read their <c>beatVariant</c> each frame, so a lock that only future effects
@@ -311,8 +284,30 @@ public partial class BeatManager
     [NonSerialized]
     public int activeVariant = -1;
 
-    /// <summary>Shorthand for whether the shared beat state is active.</summary>
-    public bool IsActive => beatData != null && beatData.active;
+    // ---- Derived beat state -------------------------------------------------------------------
+    // Contrived locally from the transport fields once per frame, identically for the live and
+    // simulated sources (ADR-0002: BeatData is transport-only; locally derived state lives here).
+
+    /// <summary>Milliseconds until offbeat labels 1 through 4, derived from the beat countdowns.</summary>
+    private int[] offBeatsCountMs = CreateUnavailableCountdowns();
+
+    /// <summary>Offbeat-label gates for offbeats after beat labels 1 through 4.</summary>
+    private bool[] offBeats = new bool[BeatSlotCount];
+
+    /// <summary>Normalized offbeat pulse: 1 on the offbeat, decaying toward 0 until the next offbeat.</summary>
+    private float offBeatPulse;
+
+    /// <summary>Derived offbeat countdowns in label order. Dashboard/test view — effects use the nullable queries.</summary>
+    public int[] OffBeatsCountMs => offBeatsCountMs;
+
+    /// <summary>Derived offbeat gates in label order. Dashboard/test view — effects use the nullable queries.</summary>
+    public bool[] OffBeats => offBeats;
+
+    /// <summary>
+    /// True while a usable beat clock is present: the transport carries a positive BPM (live RaveSystem
+    /// OSC or the running simulator). Derived, never stored — BeatData is transport-only.
+    /// </summary>
+    public bool IsActive => beatData != null && beatData.bpm > 0f;
 
     /// <summary>
     /// Updates the fallback beat simulator from Unity time.
@@ -344,11 +339,8 @@ public partial class BeatManager
         {
             // Live RaveSystem OSC owns beatData; RaveOscReceiver.ApplyTo wrote it earlier this frame
             // (Controller calls ApplyTo immediately before this Update).
-            UpdateLevelsSmoothing(timeSeconds);
-            return;
         }
-
-        if (!simulatedBeatEnabled || simulatedBpm <= 0f)
+        else if (!simulatedBeatEnabled || simulatedBpm <= 0f)
         {
             ClearSimulatedBeatData();
         }
@@ -357,8 +349,9 @@ public partial class BeatManager
             ApplySimulatedBeat(timeSeconds);
         }
 
-        // Smoothing runs after beatData has settled for this frame so the cooked Levels queries never
-        // lag the transport by a frame or smooth from stale data across a live/simulated switch.
+        // Derivation and smoothing run after beatData has settled for this frame so the contrived
+        // queries never lag the transport by a frame or smooth from stale data across a source switch.
+        DeriveBeatState();
         UpdateLevelsSmoothing(timeSeconds);
     }
 
@@ -384,6 +377,90 @@ public partial class BeatManager
             : simulatedBeatEnabled && simulatedBpm > 0f
                 ? $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); RaveSystem OSC is not broadcasting."
                 : "[BeatManager] Beat source -> NONE; RaveSystem OSC is not broadcasting and simulated beat is disabled.");
+    }
+
+    /// <summary>
+    /// Contrives the locally derived beat state from the transport fields — identically for the live
+    /// and simulated sources. Runs once per frame from <see cref="Update"/> after the active source
+    /// has written <see cref="beatData"/>.
+    /// </summary>
+    private void DeriveBeatState()
+    {
+        DeriveOffBeats();
+    }
+
+    /// <summary>
+    /// Derives offbeat countdowns, gates, and the offbeat pulse from the beat countdowns: each offbeat is
+    /// the exact midpoint between adjacent beat labels. A reached offbeat holds its countdown at 0 and its
+    /// gate open for a quarter of the average beat, then counts down to the same offbeat in the next bar.
+    /// </summary>
+    private void DeriveOffBeats()
+    {
+        var offBeatCounts = CreateUnavailableCountdowns();
+        var offBeatGates = new bool[BeatSlotCount];
+        offBeatPulse = 0f;
+        if (!IsActive || beatData.beatAverageMs <= 0 ||
+            beatData.beatsCountMs == null || beatData.beatsCountMs.Length < BeatSlotCount)
+        {
+            offBeatsCountMs = offBeatCounts;
+            offBeats = offBeatGates;
+            return;
+        }
+
+        var activeWindowMs = beatData.beatAverageMs * 0.25f;
+        var measureMs = beatData.beatAverageMs * (float)BeatSlotCount;
+        var nearestOffBeatMs = float.MaxValue;
+
+        for (var i = 0; i < offBeatCounts.Length; i++)
+        {
+            var nextBeatIndex = (i + 1) % offBeatCounts.Length;
+            var startBeatMs = beatData.beatsCountMs[i];
+            var nextBeatMs = beatData.beatsCountMs[nextBeatIndex];
+            if (startBeatMs < 0 || nextBeatMs < 0)
+            {
+                continue;
+            }
+
+            var beatGapMs = (float)(nextBeatMs - startBeatMs);
+            if (beatGapMs <= 0f)
+            {
+                beatGapMs += measureMs;
+            }
+
+            var halfGapMs = beatGapMs * 0.5f;
+            var offBeatMs = nextBeatMs - halfGapMs;
+            if (offBeatMs < 0f)
+            {
+                offBeatMs += measureMs;
+            }
+            nearestOffBeatMs = Mathf.Min(nearestOffBeatMs, offBeatMs);
+
+            if (nextBeatMs > halfGapMs)
+            {
+                offBeatCounts[i] = Mathf.RoundToInt(offBeatMs);
+                continue;
+            }
+
+            var elapsedSinceOffBeatMs = halfGapMs - nextBeatMs;
+            if (elapsedSinceOffBeatMs <= activeWindowMs)
+            {
+                offBeatCounts[i] = 0;
+                offBeatGates[i] = true;
+                continue;
+            }
+
+            offBeatCounts[i] = Mathf.RoundToInt(measureMs - elapsedSinceOffBeatMs);
+        }
+
+        if (nearestOffBeatMs != float.MaxValue)
+        {
+            var nextOffBeatInCycleMs = nearestOffBeatMs % beatData.beatAverageMs;
+            var elapsedSinceNearestOffBeatMs = nextOffBeatInCycleMs <= 0f ? 0f : beatData.beatAverageMs - nextOffBeatInCycleMs;
+            offBeatPulse = GetPulse(elapsedSinceNearestOffBeatMs, beatData.beatAverageMs);
+        }
+
+        offBeatsCountMs = offBeatCounts;
+        offBeats = offBeatGates;
     }
 
     /// <summary>Returns a random Waveform index drawn from the full Pool, for effect activation.</summary>
@@ -440,14 +517,13 @@ public partial class BeatManager
                 return 0f;
             }
 
-            var beatsPerMeasure = beatData.beatsPerMeasure > 0 ? beatData.beatsPerMeasure : BeatSlotCount;
             var label = beatData.beatInBar;
-            if (label < 1 || label > beatsPerMeasure)
+            if (label < 1 || label > BeatSlotCount)
             {
                 return 0f; // beat label not yet known / inert
             }
 
-            return ((label - 1) + IntraBeatFraction()) / beatsPerMeasure;
+            return ((label - 1) + IntraBeatFraction()) / (float)BeatSlotCount;
         }
     }
 
@@ -455,7 +531,7 @@ public partial class BeatManager
     /// Fraction elapsed into the current beat in [0..1], or 0 when the beat clock cannot supply it.
     /// </summary>
     /// <remarks>
-    /// This is the sub-beat half of <see cref="BarPhase"/>, shared with the cooked phrase-progress
+    /// This is the sub-beat half of <see cref="BarPhase"/>, shared with the contrived phrase-progress
     /// queries (Fill/Drop/Phase) so all beat-smoothed motion uses one clock. The fraction is read from
     /// the *next* beat label's countdown — not the nearest, which reads 0 during the on-beat gate window
     /// and would jump.
@@ -467,14 +543,13 @@ public partial class BeatManager
             return 0f;
         }
 
-        var beatsPerMeasure = beatData.beatsPerMeasure > 0 ? beatData.beatsPerMeasure : BeatSlotCount;
         var label = beatData.beatInBar;
-        if (label < 1 || label > beatsPerMeasure)
+        if (label < 1 || label > BeatSlotCount)
         {
             return 0f;
         }
 
-        var nextSlot = label % beatsPerMeasure; // 0-based slot of the next label (wraps last -> 0)
+        var nextSlot = label % BeatSlotCount; // 0-based slot of the next label (wraps last -> 0)
         var countdowns = beatData.beatsCountMs;
         var msToNext = countdowns != null && nextSlot >= 0 && nextSlot < countdowns.Length
             ? countdowns[nextSlot]
@@ -660,12 +735,15 @@ public partial class BeatManager
         }
     }
 
-    /// <summary>Writes a complete four-beat simulated snapshot into BeatData for the supplied clock time.</summary>
+    /// <summary>Writes a complete four-beat simulated snapshot into the transport-shaped BeatData fields.</summary>
+    /// <remarks>
+    /// The simulator writes only what the wire would carry; offbeats and other derived state are
+    /// contrived afterwards by <see cref="DeriveBeatState"/>, exactly as for live OSC data.
+    /// </remarks>
     private void ApplySimulatedBeat(float timeSeconds)
     {
         var beatDurationSeconds = 60f / simulatedBpm;
         var measureDurationSeconds = beatDurationSeconds * BeatSlotCount;
-        var beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);
         var gateDurationSeconds = beatDurationSeconds * 0.25f;
         var positionSeconds = Mathf.Repeat(timeSeconds, measureDurationSeconds);
         var beatIndex = Mathf.FloorToInt(positionSeconds / beatDurationSeconds);
@@ -673,24 +751,14 @@ public partial class BeatManager
         var elapsedSinceBeatSeconds = positionSeconds - beatStartSeconds;
         var onBeat = elapsedSinceBeatSeconds < gateDurationSeconds;
 
-        beatData.active = true;
         beatData.playersLive = "SIM";
         beatData.track = "Simulated Beat";
         beatData.bpm = simulatedBpm;
         beatData.beatInBar = beatIndex + 1;
-        beatData.currentBeat = beatIndex;
-        beatData.beatsPerMeasure = BeatSlotCount;
-        beatData.beatAverageMs = beatAverageMs;
+        beatData.beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);
         beatData.beatPulse = GetPulse(elapsedSinceBeatSeconds, beatDurationSeconds);
-        beatData.beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, 0f, onBeat, beatIndex);
+        beatData.beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, onBeat, beatIndex);
         beatData.onBeats = BuildGates(onBeat, beatIndex);
-
-        var offBeatIndex = GetOffBeatIndex(positionSeconds, beatDurationSeconds);
-        var elapsedSinceOffBeatSeconds = GetElapsedSinceOffBeat(positionSeconds, beatDurationSeconds, offBeatIndex);
-        var offBeat = elapsedSinceOffBeatSeconds < gateDurationSeconds;
-        beatData.offBeatPulse = GetPulse(elapsedSinceOffBeatSeconds, beatDurationSeconds);
-        beatData.offBeatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, beatDurationSeconds * 0.5f, offBeat, offBeatIndex);
-        beatData.offBeats = BuildGates(offBeat, offBeatIndex);
 
         ClearPhraseAndLevelState();
     }
@@ -701,7 +769,7 @@ public partial class BeatManager
     /// <remarks>
     /// The simulator is a clock, not a musical analysis, so it must never present phrase data. Running
     /// this every simulated frame also flushes stale live values left in <see cref="beatData"/> (including
-    /// scene-serialized ones) after a RaveSystem broadcast stops, so the cooked queries on this class
+    /// scene-serialized ones) after a RaveSystem broadcast stops, so the contrived queries on this class
     /// return null instead of replaying the last live Fill/Drop/Energy forever.
     /// </remarks>
     private void ClearPhraseAndLevelState()
@@ -716,34 +784,29 @@ public partial class BeatManager
     /// <summary>
     /// Clears beatData to the standard no-beat state. Reached only in simulator mode when the simulator is off
     /// or <see cref="simulatedBpm"/> is disabled (&lt;= 0), so there is no live OSC source to protect here — live mode
-    /// returns earlier in <see cref="Update"/>.
+    /// is handled before this in <see cref="Update"/>.
     /// </summary>
     private void ClearSimulatedBeatData()
     {
-        beatData.active = false;
         beatData.playersLive = "";
         beatData.track = "";
-        beatData.bpm = simulatedBpm;
+        beatData.bpm = UnavailableMs; // wire sentinel: no usable tempo, so IsActive derives to false
         beatData.beatInBar = 0;
-        beatData.currentBeat = 0;
         beatData.beatAverageMs = 0;
         beatData.beatPulse = 0f;
-        beatData.offBeatPulse = 0f;
         beatData.beatsCountMs = CreateUnavailableCountdowns();
         beatData.onBeats = new bool[BeatSlotCount];
-        beatData.offBeatsCountMs = CreateUnavailableCountdowns();
-        beatData.offBeats = new bool[BeatSlotCount];
         ClearPhraseAndLevelState();
     }
 
-    /// <summary>Builds label-ordered countdowns for either beat or offbeat slots.</summary>
-    private static int[] BuildCountdowns(float positionSeconds, float beatDurationSeconds, float slotOffsetSeconds, bool currentGate, int currentIndex)
+    /// <summary>Builds label-ordered beat countdowns for the simulated clock.</summary>
+    private static int[] BuildCountdowns(float positionSeconds, float beatDurationSeconds, bool currentGate, int currentIndex)
     {
         var measureDurationSeconds = beatDurationSeconds * BeatSlotCount;
         var countdowns = new int[BeatSlotCount];
         for (var i = 0; i < countdowns.Length; i++)
         {
-            var slotSeconds = (i * beatDurationSeconds) + slotOffsetSeconds;
+            var slotSeconds = i * beatDurationSeconds;
             var deltaSeconds = slotSeconds - positionSeconds;
             if (i == currentIndex && currentGate)
             {
@@ -782,18 +845,10 @@ public partial class BeatManager
     }
 
     /// <summary>Returns the currently active offbeat slot for the supplied position inside the measure.</summary>
-    private static int GetOffBeatIndex(float positionSeconds, float beatDurationSeconds)
-    {
-        return Mod(Mathf.FloorToInt((positionSeconds - (beatDurationSeconds * 0.5f)) / beatDurationSeconds), BeatSlotCount);
-    }
+    
 
     /// <summary>Returns seconds elapsed since the most recent offbeat midpoint.</summary>
-    private static float GetElapsedSinceOffBeat(float positionSeconds, float beatDurationSeconds, int offBeatIndex)
-    {
-        var offBeatSeconds = (offBeatIndex * beatDurationSeconds) + (beatDurationSeconds * 0.5f);
-        var elapsed = positionSeconds - offBeatSeconds;
-        return elapsed >= 0f ? elapsed : elapsed + (beatDurationSeconds * BeatSlotCount);
-    }
+    
 
     /// <summary>Returns a smooth normalized pulse that is 1 at the event and decays toward 0 before the next event.</summary>
     private static float GetPulse(float elapsedSeconds, float durationSeconds)
@@ -808,10 +863,7 @@ public partial class BeatManager
     }
 
     /// <summary>Positive modulo helper for wrapping negative offbeat indexes back into four beat slots.</summary>
-    private static int Mod(int value, int modulus)
-    {
-        return ((value % modulus) + modulus) % modulus;
-    }
+    
 
     /// <summary>Returns true when a musical beat label equals either accepted label.</summary>
     private static bool BeatLabelMatches(int beatLabel, int firstBeatLabel, int secondBeatLabel)
@@ -826,16 +878,15 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Returns the current musical 1-based beat label, falling back to the legacy zero-based field when needed.
+    /// Returns the current musical 1-based beat label, treating an unknown label as the downbeat.
     /// </summary>
     private int GetCurrentBeatLabel()
     {
-        if (beatData.beatInBar >= 1 && beatData.beatInBar <= beatData.beatsPerMeasure)
+        if (beatData.beatInBar >= 1 && beatData.beatInBar <= BeatSlotCount)
         {
             return beatData.beatInBar;
         }
 
-        // Legacy fallback for tests or older callers that only populated currentBeat.
-        return beatData.currentBeat + 1;
+        return 1;
     }
 }

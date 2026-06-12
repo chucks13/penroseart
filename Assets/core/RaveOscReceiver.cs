@@ -17,7 +17,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     private const float RaveBroadcastRateHz = 60f;
 
     // Liveness grace window: 15 broadcast intervals (0.25 s). Wide enough that UDP burst loss and
-    // editor/runtime frame hitches cannot flap the beat source (each flap wipes the cooked phrase and
+    // editor/runtime frame hitches cannot flap the beat source (each flap wipes the contrived phrase and
     // Levels state downstream), while a real RaveSystem disconnect still falls back within a quarter
     // second. The original 3-interval (50 ms) window flapped on any frame hitch longer than 50 ms.
     private const float BroadcastSilenceTimeoutSeconds = 15f / RaveBroadcastRateHz;
@@ -99,8 +99,9 @@ public sealed class RaveOscReceiver : MonoBehaviour
     /// <remarks>
     /// Source selection is transport-only: any recognized Rave on-air OSC value on UDP 7000 makes the
     /// BeatManager live immediately. Payload sentinels such as <c>bpm = -1</c> are valid data and are
-    /// applied exactly as received; cooked queries expose unavailable values as null instead of letting
-    /// the simulator overwrite an active OSC stream.
+    /// applied exactly as received; the contrived queries expose unavailable values as null instead of
+    /// letting the simulator overwrite an active OSC stream. BeatData receives only what the wire said —
+    /// derived state (offbeats, availability) is contrived by <see cref="BeatManager.Update"/> afterwards.
     /// </remarks>
     public void ApplyTo(BeatManager beatManager)
     {
@@ -118,7 +119,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
             return;
         }
 
-        ApplySnapshotToBeatData(latest, beatManager.beatData);
+        beatManager.beatData.CopyFrom(latest);
     }
 
     /// <summary>Returns true while the last recognized Rave OSC value is within the liveness grace window.</summary>
@@ -170,104 +171,6 @@ public sealed class RaveOscReceiver : MonoBehaviour
         }
 
         return (float)((Stopwatch.GetTimestamp() - last) / (double)Stopwatch.Frequency);
-    }
-
-    /// <summary>Stores raw Rave OSC values and derives the compatibility beat fields Penrose effects already use.</summary>
-    public static void ApplySnapshotToBeatData(RaveOnAirSnapshot snapshot, BeatData beatData)
-    {
-        if (snapshot == null || beatData == null)
-        {
-            return;
-        }
-
-        beatData.CopyFrom(snapshot);
-
-        var hasUsableBeat = beatData.bpm > 0f;
-        beatData.active = hasUsableBeat;
-        beatData.currentBeat = beatData.beatInBar >= 1 && beatData.beatInBar <= beatData.beatsPerMeasure
-            ? beatData.beatInBar - 1
-            : 0;
-        DeriveOffBeats(beatData, hasUsableBeat);
-    }
-
-    private static void DeriveOffBeats(BeatData beatData, bool hasUsableBeat)
-    {
-        var offBeatCounts = new[] { -1, -1, -1, -1 };
-        var offBeatGates = new bool[4];
-        beatData.offBeatPulse = 0f;
-        if (!hasUsableBeat || beatData.beatAverageMs <= 0 || beatData.beatsCountMs == null || beatData.beatsCountMs.Length < 4)
-        {
-            beatData.offBeatsCountMs = offBeatCounts;
-            beatData.offBeats = offBeatGates;
-            return;
-        }
-
-        var activeWindowMs = beatData.beatAverageMs * 0.25f;
-        var measureMs = beatData.beatAverageMs * 4f;
-        var nearestOffBeatMs = float.MaxValue;
-
-        for (var i = 0; i < offBeatCounts.Length; i++)
-        {
-            var nextBeatIndex = (i + 1) % offBeatCounts.Length;
-            var startBeatMs = beatData.beatsCountMs[i];
-            var nextBeatMs = beatData.beatsCountMs[nextBeatIndex];
-            if (startBeatMs < 0 || nextBeatMs < 0)
-            {
-                continue;
-            }
-
-            var beatGapMs = (float)(nextBeatMs - startBeatMs);
-            if (beatGapMs <= 0f)
-            {
-                beatGapMs += measureMs;
-            }
-
-            var halfGapMs = beatGapMs * 0.5f;
-            var offBeatMs = nextBeatMs - halfGapMs;
-            if (offBeatMs < 0f)
-            {
-                offBeatMs += measureMs;
-            }
-            nearestOffBeatMs = Mathf.Min(nearestOffBeatMs, offBeatMs);
-
-            if (nextBeatMs > halfGapMs)
-            {
-                offBeatCounts[i] = Mathf.RoundToInt(offBeatMs);
-                continue;
-            }
-
-            var elapsedSinceOffBeatMs = halfGapMs - nextBeatMs;
-            if (elapsedSinceOffBeatMs <= activeWindowMs)
-            {
-                offBeatCounts[i] = 0;
-                offBeatGates[i] = true;
-                continue;
-            }
-
-            offBeatCounts[i] = Mathf.RoundToInt(measureMs - elapsedSinceOffBeatMs);
-        }
-
-        if (nearestOffBeatMs != float.MaxValue)
-        {
-            var nextOffBeatInCycleMs = nearestOffBeatMs % beatData.beatAverageMs;
-            var elapsedSinceNearestOffBeatMs = nextOffBeatInCycleMs <= 0f ? 0f : beatData.beatAverageMs - nextOffBeatInCycleMs;
-            beatData.offBeatPulse = GetPulse(elapsedSinceNearestOffBeatMs, beatData.beatAverageMs);
-        }
-
-        beatData.offBeatsCountMs = offBeatCounts;
-        beatData.offBeats = offBeatGates;
-    }
-
-    private static float GetPulse(float elapsedMs, float durationMs)
-    {
-        if (durationMs <= 0f)
-        {
-            return 0f;
-        }
-
-        var phase = Mathf.Clamp01(elapsedMs / durationMs);
-        var smoothStep = phase * phase * (3f - (2f * phase));
-        return 1f - smoothStep;
     }
 
     private void StartListening()

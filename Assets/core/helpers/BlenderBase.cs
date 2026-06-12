@@ -15,7 +15,7 @@ public abstract class BlenderBase
 
     /// <summary>
     /// Shared beat helper used for rhythmic blend behavior, mirroring <see cref="EffectBase.beatManager"/>
-    /// and <see cref="TransitionBase.beatManager"/>. Pull musical state through its cooked nullable
+    /// and <see cref="TransitionBase.beatManager"/>. Pull musical state through its nullable
     /// queries (Envelope/Fill/Drop/Energy/Phase/Levels).
     /// </summary>
     public BeatManager beatManager => controller.beatManager;

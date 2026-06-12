@@ -1,4 +1,4 @@
-// Cooked rhythm query layer for BeatManager (ADR-0002: nullable cooked rhythm queries).
+// Contrived rhythm query layer for BeatManager (ADR-0002: nullable contrived rhythm queries).
 
 #nullable enable
 
@@ -16,77 +16,66 @@ public enum EnergyLevel
 }
 
 /// <summary>
-/// Cooked two-phase Fill state: a short build-up flourish (typically one measure, 4-8 beats) that
-/// effects can anticipate before it starts and ride while it plays.
+/// Contrived phrase-event state shared by Fill and Drop: an event effects can anticipate before it
+/// starts and ride while it plays. <see cref="BeatManager.Fill"/> and <see cref="BeatManager.Drop"/>
+/// each return their own instance of this shape.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Fill"/>; null there means no Fill data is available right now.
-/// Within a non-null value, null fields mean the wire did not supply that detail.
+/// Null from the query means no data is on the wire right now (nothing on air, no track analysis, or
+/// the track contains none of these events at all). Within a non-null value, null fields are ordinary
+/// musical state — "no start is known" — and 0 is just a number: <c>remaining == 0</c> means the
+/// track's events are all behind the playhead. <see cref="inProgress"/> is the only state flag;
+/// everything else is values.
 /// </remarks>
-public readonly struct FillInfo
+public readonly struct PhraseEventInfo
 {
-    /// <summary>True while the Fill is playing now; false while counting down to the next one.</summary>
+    /// <summary>True while the event is playing now; false otherwise.</summary>
     public readonly bool inProgress;
 
-    /// <summary>Whole beats until the Fill starts. Null while in progress, or when the wire did not say.</summary>
+    /// <summary>Whole beats until the event starts. Null while in progress, or when no next start is known.</summary>
     public readonly int? beatsUntilStart;
 
-    /// <summary>Beat-smoothed progress through the Fill in [0..1]. 0 while the Fill is upcoming.</summary>
-    public readonly float progress;
+    /// <summary>
+    /// Milliseconds until the event starts, contrived as <see cref="beatsUntilStart"/> × the average
+    /// beat interval (beat-quantized, not sub-beat smooth). Null when either side is unavailable.
+    /// </summary>
+    public readonly int? msUntilStart;
 
-    /// <summary>Total Fill length in beats. Null when the wire did not say.</summary>
+    /// <summary>Whole beats until the event ends. Null unless in progress.</summary>
+    public readonly int? beatsUntilEnd;
+
+    /// <summary>Beat-smoothed progress through the event in [0..1]. Null unless in progress.</summary>
+    public readonly float? progress;
+
+    /// <summary>
+    /// Beat-smoothed countdown ramp that fills 0→1 as the start approaches over the last
+    /// <see cref="BeatManager.AnticipationWindowBeats"/> beats (counting up to something fills).
+    /// Null while in progress, outside the window, or when no next start is known.
+    /// </summary>
+    public readonly float? anticipation;
+
+    /// <summary>Length in beats of the current event (while in progress) or the next one. Null when the wire did not say.</summary>
     public readonly int? lengthBeats;
 
-    /// <summary>Remaining Fill occurrences in this track. Null when the wire did not say.</summary>
+    /// <summary>Remaining occurrences in this track. 0 means none left; null when the wire did not say.</summary>
     public readonly int? remaining;
 
-    public FillInfo(bool inProgress, int? beatsUntilStart, float progress, int? lengthBeats, int? remaining)
+    public PhraseEventInfo(bool inProgress, int? beatsUntilStart, int? msUntilStart, int? beatsUntilEnd,
+        float? progress, float? anticipation, int? lengthBeats, int? remaining)
     {
         this.inProgress = inProgress;
         this.beatsUntilStart = beatsUntilStart;
+        this.msUntilStart = msUntilStart;
+        this.beatsUntilEnd = beatsUntilEnd;
         this.progress = progress;
+        this.anticipation = anticipation;
         this.lengthBeats = lengthBeats;
         this.remaining = remaining;
     }
 }
 
 /// <summary>
-/// Cooked two-phase Drop state, mirroring <see cref="FillInfo"/>: effects can anticipate an upcoming
-/// Drop ("land the transition on it") and ride it while it plays.
-/// </summary>
-/// <remarks>
-/// Returned by <see cref="BeatManager.Drop"/>; null there means no Drop data is available right now.
-/// Within a non-null value, null fields mean the wire did not supply that detail.
-/// </remarks>
-public readonly struct DropInfo
-{
-    /// <summary>True while the Drop is playing now; false while counting down to the next one.</summary>
-    public readonly bool inProgress;
-
-    /// <summary>Whole beats until the Drop starts. Null while in progress, or when the wire did not say.</summary>
-    public readonly int? beatsUntilStart;
-
-    /// <summary>Beat-smoothed progress through the Drop in [0..1]. 0 while the Drop is upcoming.</summary>
-    public readonly float progress;
-
-    /// <summary>Total Drop length in beats. Null when the wire did not say.</summary>
-    public readonly int? lengthBeats;
-
-    /// <summary>Remaining Drop occurrences in this track. Null when the wire did not say.</summary>
-    public readonly int? remaining;
-
-    public DropInfo(bool inProgress, int? beatsUntilStart, float progress, int? lengthBeats, int? remaining)
-    {
-        this.inProgress = inProgress;
-        this.beatsUntilStart = beatsUntilStart;
-        this.progress = progress;
-        this.lengthBeats = lengthBeats;
-        this.remaining = remaining;
-    }
-}
-
-/// <summary>
-/// Cooked phrase Energy: the track's current intensity tier parsed once into the closed
+/// Contrived phrase Energy: the track's current intensity tier parsed once into the closed
 /// <see cref="EnergyLevel"/> vocabulary, with where it is heading next.
 /// </summary>
 /// <remarks>
@@ -110,19 +99,32 @@ public readonly struct EnergyInfo
     /// <summary>Where the energy is heading: +1 rising, -1 falling, 0 steady or unknown.</summary>
     public readonly int direction;
 
-    public EnergyInfo(EnergyLevel level, EnergyLevel? next, int? beatsUntilChange, float normalized, int direction)
+    /// <summary>Beat-smoothed progress through the current same-energy run in [0..1]. Null when the run shape is unknown.</summary>
+    public readonly float? runProgress;
+
+    /// <summary>Total length in beats of the current same-energy run. Null when the wire did not say.</summary>
+    public readonly int? runLengthBeats;
+
+    /// <summary>Energy changes still ahead in this track. 0 means none left; null when the wire did not say.</summary>
+    public readonly int? changesRemaining;
+
+    public EnergyInfo(EnergyLevel level, EnergyLevel? next, int? beatsUntilChange, float normalized, int direction,
+        float? runProgress, int? runLengthBeats, int? changesRemaining)
     {
         this.level = level;
         this.next = next;
         this.beatsUntilChange = beatsUntilChange;
         this.normalized = normalized;
         this.direction = direction;
+        this.runProgress = runProgress;
+        this.runLengthBeats = runLengthBeats;
+        this.changesRemaining = changesRemaining;
     }
 }
 
 /// <summary>
-/// Cooked Track Phase: open-vocabulary section labels passed through untouched, with the countdown
-/// structure cooked into usable numbers.
+/// Contrived Track Phase: open-vocabulary section labels passed through untouched, with the countdown
+/// structure contrived into usable numbers.
 /// </summary>
 /// <remarks>
 /// Returned by <see cref="BeatManager.Phase"/>; null there means no phase data is available right now.
@@ -146,13 +148,13 @@ public readonly struct PhaseInfo
     /// <summary>Total length of the current phase in beats. Null when the wire did not say.</summary>
     public readonly int? lengthBeats;
 
-    /// <summary>Remaining phase changes in this track. Null when the wire did not say.</summary>
+    /// <summary>Remaining phase changes in this track. 0 means none left; null when the wire did not say.</summary>
     public readonly int? remaining;
 
-    /// <summary>Beat-smoothed progress through the current phase in [0..1]. 0 when not in a phase.</summary>
-    public readonly float progress;
+    /// <summary>Beat-smoothed progress through the current phase in [0..1]. Null when not in a phase or the shape is unknown.</summary>
+    public readonly float? progress;
 
-    public PhaseInfo(string label, string? next, bool inPhase, int? beatsUntilNext, int? lengthBeats, int? remaining, float progress)
+    public PhaseInfo(string label, string? next, bool inPhase, int? beatsUntilNext, int? lengthBeats, int? remaining, float? progress)
     {
         this.label = label;
         this.next = next;
@@ -165,7 +167,7 @@ public readonly struct PhaseInfo
 }
 
 /// <summary>
-/// Cooked Levels: normalized low/mid/high band energy with BeatManager's attack/release smoothing
+/// Contrived Levels: normalized low/mid/high band energy with BeatManager's attack/release smoothing
 /// already applied, so effects can drive the wall from them without re-implementing anti-flicker.
 /// </summary>
 /// <remarks>
@@ -192,7 +194,7 @@ public readonly struct LevelsInfo
 }
 
 /// <summary>
-/// The cooked rhythm query layer (ADR-0002). Effects and transitions pull all musical state through
+/// The contrived rhythm query layer (ADR-0002). Effects and transitions pull all musical state through
 /// these nullable queries: null always means "not available right now", and the caller owns its
 /// Default Mode fallback (<c>?? fallback</c>) or Synced Mode branch (<c>is { } x</c>).
 /// </summary>
@@ -236,52 +238,159 @@ public partial class BeatManager
         return GetWaveform(variant).Evaluate(BarPhase);
     }
 
-    /// <summary>Cooked Fill state, or null when no Fill data is available right now.</summary>
-    public FillInfo? Fill
+    // ---- Raw passthrough queries --------------------------------------------------------------
+    // BeatData is transport-only and never read by effects; these expose its raw values through the
+    // same nullable seam as the contrived queries, with wire sentinels mapped to null. Null is an
+    // ordinary musical state ("this value isn't there right now"), never an error (ADR-0002).
+
+    /// <summary>Focused on-air tempo in BPM, or null when no usable beat clock is present.</summary>
+    public float? Bpm
     {
         get
         {
-            var data = beatData;
-            if (data == null || data.fillState.active < 0)
+            if (!IsActive)
             {
                 return null;
             }
 
-            var state = data.fillState;
-            var inProgress = state.active > 0;
-            return new FillInfo(
-                inProgress,
-                CookBeatsUntilStart(inProgress, state.countBeats),
-                inProgress ? CookPhraseProgress(state.countBeats, state.lengthBeats) : 0f,
-                NonNegativeOrNull(state.lengthBeats),
-                NonNegativeOrNull(state.remaining));
+            return beatData.bpm;
         }
     }
 
-    /// <summary>Cooked Drop state, or null when no Drop data is available right now.</summary>
-    public DropInfo? Drop
+    /// <summary>Raw beat pulse — 1 on the beat decaying toward 0 — or null when no beat clock is present.</summary>
+    public float? Pulse
     {
         get
         {
-            var data = beatData;
-            if (data == null || data.dropState.active < 0)
+            if (!IsActive)
             {
                 return null;
             }
 
-            var state = data.dropState;
-            var inProgress = state.active > 0;
-            return new DropInfo(
-                inProgress,
-                CookBeatsUntilStart(inProgress, state.countBeats),
-                inProgress ? CookPhraseProgress(state.countBeats, state.lengthBeats) : 0f,
-                NonNegativeOrNull(state.lengthBeats),
-                NonNegativeOrNull(state.remaining));
+            return beatData.beatPulse;
         }
     }
+
+    /// <summary>Derived offbeat pulse — 1 on the offbeat decaying toward 0 — or null when no beat clock is present.</summary>
+    public float? OffBeatPulse
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return offBeatPulse;
+        }
+    }
+
+    /// <summary>Musical 1-based beat label inside the current bar, or null when the label is unknown.</summary>
+    public int? BeatInBar
+    {
+        get
+        {
+            if (!IsActive || beatData.beatInBar < 1 || beatData.beatInBar > BeatSlotCount)
+            {
+                return null;
+            }
+
+            return beatData.beatInBar;
+        }
+    }
+
+    /// <summary>Milliseconds until the nearest upcoming beat label, or null when unavailable.</summary>
+    public int? NextBeatMs
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return NonNegativeOrNull(beatData.nextBeatMs);
+        }
+    }
+
+    /// <summary>Milliseconds until the nearest upcoming offbeat, or null when unavailable.</summary>
+    public int? NextOffBeatMs
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return NonNegativeOrNull(BeatData.ReadIntAt(offBeatsCountMs, BeatData.IndexOfNearestCountdown(offBeatsCountMs)));
+        }
+    }
+
+    /// <summary>True while the nearest upcoming beat label gate is open, or null when no beat clock is present.</summary>
+    public bool? OnBeat
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return beatData.onBeat;
+        }
+    }
+
+    /// <summary>True while the nearest upcoming offbeat gate is open, or null when no beat clock is present.</summary>
+    public bool? OffBeat
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return BeatData.ReadBoolAt(offBeats, BeatData.IndexOfNearestCountdown(offBeatsCountMs));
+        }
+    }
+
+    /// <summary>Focused on-air track text, or null when nothing usable is on air.</summary>
+    public string? Track
+    {
+        get
+        {
+            if (beatData == null || string.IsNullOrEmpty(beatData.track))
+            {
+                return null;
+            }
+
+            return beatData.track;
+        }
+    }
+
+    /// <summary>CSV of live on-air player numbers (newest first), or null when none are live.</summary>
+    public string? PlayersLive
+    {
+        get
+        {
+            if (beatData == null || string.IsNullOrEmpty(beatData.playersLive))
+            {
+                return null;
+            }
+
+            return beatData.playersLive;
+        }
+    }
+
+    /// <summary>Contrived Fill event, or null when no Fill data is available right now.</summary>
+    public PhraseEventInfo? Fill => beatData != null ? ContrivePhraseEvent(beatData.fillState) : null;
+
+    /// <summary>Contrived Drop event, or null when no Drop data is available right now.</summary>
+    public PhraseEventInfo? Drop => beatData != null ? ContrivePhraseEvent(beatData.dropState) : null;
 
     /// <summary>
-    /// Cooked phrase Energy, or null when Energy is unavailable or the wire label is outside the
+    /// Contrived phrase Energy, or null when Energy is unavailable or the wire label is outside the
     /// Low/Mid/High vocabulary.
     /// </summary>
     public EnergyInfo? Energy
@@ -302,16 +411,20 @@ public partial class BeatManager
 
             EnergyLevel? next = TryParseEnergyLevel(state.next, out var nextLevel) ? nextLevel : (EnergyLevel?)null;
             var direction = next is { } heading ? Math.Sign((int)heading - (int)level) : 0;
+            var inRun = state.active > 0;
             return new EnergyInfo(
                 level,
                 next,
                 NonNegativeOrNull(state.countBeats),
                 (int)level * 0.5f,
-                direction);
+                direction,
+                inRun ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null,
+                NonNegativeOrNull(state.lengthBeats),
+                NonNegativeOrNull(state.remaining));
         }
     }
 
-    /// <summary>Cooked Track Phase, or null when no phase data is available right now.</summary>
+    /// <summary>Contrived Track Phase, or null when no phase data is available right now.</summary>
     public PhaseInfo? Phase
     {
         get
@@ -331,7 +444,7 @@ public partial class BeatManager
                 NonNegativeOrNull(state.countBeats),
                 NonNegativeOrNull(state.lengthBeats),
                 NonNegativeOrNull(state.remaining),
-                inPhase ? CookPhraseProgress(state.countBeats, state.lengthBeats) : 0f);
+                inPhase ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null);
         }
     }
 
@@ -502,26 +615,78 @@ public partial class BeatManager
         return current + ((target - current) * alpha);
     }
 
-    /// <summary>Beats until an upcoming phrase event starts: null while in progress or when unknown.</summary>
-    private static int? CookBeatsUntilStart(bool inProgress, int countBeats)
+    /// <summary>How many beats out the anticipation ramp starts rising. 32 beats = 8 bars at 4/4.</summary>
+    public const int AnticipationWindowBeats = 32;
+
+    /// <summary>
+    /// Contrives the shared Fill/Drop shape from one wire countdown state. Null when the wire says the
+    /// state is unavailable (tri-state -1); otherwise every field is derived honestly — countdown fields
+    /// null while in progress, progress fields null while upcoming, sentinels mapped to null once here.
+    /// </summary>
+    private PhraseEventInfo? ContrivePhraseEvent(CountdownState state)
     {
-        return !inProgress && countBeats >= 0 ? countBeats : (int?)null;
+        if (state.active < 0)
+        {
+            return null;
+        }
+
+        var inProgress = state.active > 0;
+        var beatsUntilStart = inProgress ? (int?)null : NonNegativeOrNull(state.countBeats);
+        return new PhraseEventInfo(
+            inProgress,
+            beatsUntilStart,
+            ContriveMsForBeats(beatsUntilStart),
+            inProgress ? NonNegativeOrNull(state.countBeats) : (int?)null,
+            inProgress ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null,
+            inProgress ? (float?)null : ContriveAnticipation(beatsUntilStart),
+            NonNegativeOrNull(state.lengthBeats),
+            NonNegativeOrNull(state.remaining));
     }
 
     /// <summary>
-    /// Progress through an in-progress phrase event in [0..1], smoothed with the intra-beat fraction of
-    /// the shared beat clock so it sweeps instead of stepping once per beat. 0 when the wire did not
-    /// supply usable length/countdown data.
+    /// Progress toward a phrase boundary in [0..1], smoothed with the intra-beat fraction of the shared
+    /// beat clock so it sweeps instead of stepping once per beat. Null when the wire did not supply
+    /// usable length/countdown data.
     /// </summary>
-    private float CookPhraseProgress(int beatsToBoundary, int lengthBeats)
+    private float? ContriveProgressOrNull(int beatsToBoundary, int lengthBeats)
     {
         if (lengthBeats <= 0 || beatsToBoundary < 0 || beatsToBoundary > lengthBeats)
         {
-            return 0f;
+            return null;
         }
 
         var elapsedBeats = (lengthBeats - beatsToBoundary) + IntraBeatFraction();
         return Mathf.Clamp01(elapsedBeats / lengthBeats);
+    }
+
+    /// <summary>
+    /// Countdown ramp that fills 0→1 as a phrase event's start approaches over the last
+    /// <see cref="AnticipationWindowBeats"/> beats, smoothed with the intra-beat fraction.
+    /// Null when no start is known or it is still outside the window.
+    /// </summary>
+    private float? ContriveAnticipation(int? beatsUntilStart)
+    {
+        if (beatsUntilStart is not { } beats || beats > AnticipationWindowBeats)
+        {
+            return null;
+        }
+
+        var remainingBeats = beats - IntraBeatFraction();
+        return Mathf.Clamp01((AnticipationWindowBeats - remainingBeats) / AnticipationWindowBeats);
+    }
+
+    /// <summary>
+    /// Converts a whole-beat countdown to milliseconds via the wire's average beat interval, as the OSC
+    /// schema delegates to clients. Null when either side is unavailable.
+    /// </summary>
+    private int? ContriveMsForBeats(int? beats)
+    {
+        if (beats is not { } wholeBeats || beatData == null || beatData.beatAverageMs <= 0)
+        {
+            return null;
+        }
+
+        return wholeBeats * beatData.beatAverageMs;
     }
 
     /// <summary>Maps the transport's -1 "unknown" sentinel to null; passes real non-negative values through.</summary>

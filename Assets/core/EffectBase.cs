@@ -27,7 +27,7 @@ public abstract class EffectBase
     public static AnimPalette APalette = new AnimPalette();
 
     /// <summary>Current shared beat data from the controller's BeatManager.</summary>
-    public BeatData beat => controller.beatManager.beatData;
+    
     /// <summary>Shared beat helper used for rhythmic effect behavior.</summary>
     public BeatManager beatManager => controller.beatManager;
     /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
@@ -86,7 +86,7 @@ public abstract class EffectBase
     }
 
     /// <summary>
-    /// Cooked beat brightness multiplier for this effect, closing over <see cref="beatEnable"/> and
+    /// Contrived beat brightness multiplier for this effect, closing over <see cref="beatEnable"/> and
     /// <see cref="beatVariant"/>: Synced Mode pulses between <paramref name="minBrightness"/> and 1
     /// on this effect's Waveform; Default Mode (no beat clock, or beat response disabled) holds steady at 1.
     /// </summary>

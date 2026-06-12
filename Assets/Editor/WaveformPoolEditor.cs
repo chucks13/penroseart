@@ -71,7 +71,7 @@ public sealed class WaveformPoolEditor : EditorWindow
     private bool dirty;
     private Vector2 listScroll;
 
-    // Preview visuals mirror the BeatData inspector strip so an authored shape reads the same in both places.
+    // Preview visuals mirror the BeatManager dashboard strip so an authored shape reads the same in both places.
     private static readonly Color TrackColor = new Color(0.055f, 0.065f, 0.085f);
     private static readonly Color GridColor = new Color(1f, 1f, 1f, 0.07f);
     private static readonly Color CurveColor = new Color(0.12f, 0.92f, 1f);
@@ -357,7 +357,7 @@ public sealed class WaveformPoolEditor : EditorWindow
     }
 
     /// <summary>Plots one bar of the envelope: dark track, 4/4 beat gridlines, and the anti-aliased curve (orange when
-    /// malformed). No playhead — this is the authoring view; the live playhead lives on the BeatData inspector.</summary>
+    /// malformed). No playhead — this is the authoring view; the live playhead lives on the BeatManager dashboard.</summary>
     private static void DrawPlot(Rect rect, Waveform wf)
     {
         EditorGUI.DrawRect(rect, TrackColor);

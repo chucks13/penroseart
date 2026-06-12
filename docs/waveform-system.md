@@ -143,7 +143,7 @@ This single-owner rule is why the format is dead simple to parse and serialize �
 
 ## Property drawer visualization
 
-The existing `BeatData` custom drawer (`Assets/Editor/BeatDataDrawer.cs`) gains a Waveform view. Layout (the "Option C" design):
+The BeatManager dashboard drawer (`Assets/Editor/BeatManagerDrawer.cs`, which absorbed the original `BeatDataDrawer`) carries the Waveform view. Layout (the "Option C" design):
 
 - **Left ¾** — the full one-bar Waveform rendered statically from its notation: the merged Hump envelope across the bar, beat gridlines behind it.
 - **Right ¼** — the **live playhead**: a marker tracking the current Bar Phase across the same envelope, showing where "now" sits and the brightness being emitted.

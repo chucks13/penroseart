@@ -138,7 +138,6 @@ public sealed class WaveformTests
     public void BarPhase_IsZeroOnTheSimulatedDownbeat()
     {
         var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.beatData.active = false;
         beatManager.Update(0f); // synthesizes beat 1 with a full 500 ms countdown to the next beat
         Assert.That(beatManager.BarPhase, Is.EqualTo(0f).Within(Tol));
     }
@@ -147,7 +146,6 @@ public sealed class WaveformTests
     public void BarPhase_AdvancesProportionallyWithinTheBar()
     {
         var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.beatData.active = false;
         beatManager.Update(0.25f); // 0.25 s = half of one 0.5 s beat = 1/8 of a 4-beat bar
         Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(Tol));
     }
@@ -158,12 +156,10 @@ public sealed class WaveformTests
     public void GetBeatBrightness_MapsPeakToMaxAndTroughToMin()
     {
         var onBeat = new BeatManager { simulatedBpm = 120f };
-        onBeat.beatData.active = false;
         onBeat.Update(0f); // BarPhase 0 → Beat Pulse peak → maxBrightness
         Assert.That(onBeat.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(1f).Within(Tol));
 
         var offBeat = new BeatManager { simulatedBpm = 120f };
-        offBeat.beatData.active = false;
         offBeat.Update(0.25f); // BarPhase 0.125 → Beat Pulse trough → minBrightness
         Assert.That(offBeat.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(0.85f).Within(Tol));
     }
@@ -172,7 +168,6 @@ public sealed class WaveformTests
     public void GetBeatBrightness_DisabledReturnsMaxBrightness()
     {
         var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.beatData.active = false;
         beatManager.Update(0.25f); // would be a trough if enabled
         Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.85f, enable: false), Is.EqualTo(1f).Within(Tol));
     }
