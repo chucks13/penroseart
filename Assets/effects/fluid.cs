@@ -98,7 +98,7 @@ public class fluid : ScreenEffect
             float v = state1[i] * scale;
             v += 1000.5f;
             v %= 1f;
-            buffer[i] = APalette.read(v) * beatBrightness;
+            buffer[i] = APalette.read(v+beatBrightness);// * beatBrightness;
         }
     }
 
