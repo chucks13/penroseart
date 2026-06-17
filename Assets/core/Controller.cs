@@ -1,4 +1,4 @@
-﻿
+﻿﻿
 #define ENABLE_SERIAL
 
 using System;
@@ -1222,6 +1222,13 @@ public class Controller : Singleton<Controller>
         {
             forceEffect = !forceEffect;
             Debug.Log($"[Nova] Testing override: {forceEffect}");
+        }
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            int target = inTransition ? transitions[currentTransition].B : currentEffect;
+            JumpToEffect(target, effectTime);
+            Debug.Log($"[Controller] Restarted effect: {effectText.text}");
         }
 
         if (Input.anyKey)
