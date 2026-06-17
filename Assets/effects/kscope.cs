@@ -32,6 +32,7 @@ public class kscope : ScreenEffect
     int texHeight;
     int centerX;
     int centerY;
+    int beatMode;
     float positionX;
     float positionY;
     float motionX;
@@ -289,6 +290,7 @@ public class kscope : ScreenEffect
         centerY = texHeight / 2;
         angle = 0;
         aspeed = Random.Range(-1, 2) / 100f;
+        beatMode = Random.Range(0, 3);
     }
 
     /// <summary>
@@ -312,10 +314,16 @@ public class kscope : ScreenEffect
         {
             Init();
         }
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
 
+        float localDelta = effectDelta;
 
-        positionX += motionX * effectDelta * 60f;
-        positionY += motionY * effectDelta * 60f;
+        if (beatMode < 2)
+            localDelta = beatManager.GetBeatTime(beatVariant, effectDelta, 0.002f);
+
+        positionX += motionX * localDelta * 60f;
+        positionY += motionY * localDelta * 60f;
+
         double m11 = Math.Cos(angle);
         double m12 = -Math.Sin(angle);
         double m21 = Math.Sin(angle);
@@ -353,15 +361,14 @@ public class kscope : ScreenEffect
                     y2 = (texHeight - 1) - y2;
 
                 var color = currentTex.GetPixel((int)x2, (int)y2);
-
-                if (mode == 0)         // full color
+                if (mode != 0)
+                    color = APalette.read(color.r % 1f, true);
+                if (beatMode > 0)
                 {
-                    screenBuffer[x + (y * width)] = color;
+                    Color.RGBToHSV(color, out float h, out float s, out float v);
+                    color = Color.HSVToRGB((h + beatBrightness) % 1f, s, v);
                 }
-                else         // mono
-                {
-                    screenBuffer[x + (y * width)] = APalette.read(color.r % 1f, true);
-                }
+                screenBuffer[x + (y * width)] = color;
             }
         }
         // convert the 2D Matrix buffer to a tile buffer
