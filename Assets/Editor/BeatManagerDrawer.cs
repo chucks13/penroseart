@@ -296,21 +296,10 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     /// </summary>
     private static int ResolveDisplayVariant(BeatManager beatManager, Object owner)
     {
-        if (beatManager.activeVariant >= 0)
-        {
-            return beatManager.activeVariant;
-        }
-
-        if (Application.isPlaying && owner is Controller controller)
-        {
-            var current = controller.CurrentBeatVariant;
-            if (current >= 0)
-            {
-                return current;
-            }
-        }
-
-        return 0;
+        // Editor-context step only: figure out the on-screen effect's variant (Play Mode only — the effects
+        // array does not exist in Edit Mode), then let the runtime decide lock vs on-screen vs fallback.
+        var onScreenVariant = (Application.isPlaying && owner is Controller controller) ? controller.CurrentBeatVariant : -1;
+        return beatManager.ResolveDisplayVariant(onScreenVariant);
     }
 
     /// <summary>Draws the serialized BeatManager fields (beatData, simulator and smoothing tunables) normally.</summary>
@@ -612,6 +601,8 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     /// <param name="currentVariant">The on-screen effect's variant, or -1 mid-transition/startup.</param>
     private static bool TryGetLiveWall(out BeatManager beatManager, out int activeVariant, out int currentVariant)
     {
+        // Editor instance-resolution guard, one consumer today. If a second consumer needs to drive the wall
+        // safely from the editor, this is the extraction point for a shared LiveWall adapter.
         beatManager = null;
         activeVariant = -1;
         currentVariant = -1;
@@ -667,20 +658,17 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     {
         if (dropdownIndex <= 0)
         {
-            beatManager.activeVariant = -1;
-            Debug.Log("[Waveform] Wall released to Auto — effects roll their own beat variant again.");
+            beatManager.ReleaseToAuto();
             return;
         }
 
-        var variant = dropdownIndex - 1;
-        beatManager.activeVariant = variant;
+        // Lock semantics (clamp, log) live on BeatManager so they are testable; the editor only supplies the
+        // chosen index and the one-line on-screen retarget that needs the effects array.
+        beatManager.LockVariant(dropdownIndex - 1);
         if (Controller.HasInstance)
         {
-            Controller.Instance.CurrentBeatVariant = variant; // immediate: retarget the effect already on screen
+            Controller.Instance.CurrentBeatVariant = beatManager.activeVariant; // immediate: retarget the effect on screen
         }
-
-        var name = (variant >= 0 && variant < waveformPoolNames.Length) ? waveformPoolNames[variant] : variant.ToString();
-        Debug.Log($"[Waveform] Wall locked to '{name}' (variant {variant}) — every effect uses this until set to Auto.");
     }
 
     /// <summary>

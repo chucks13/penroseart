@@ -98,6 +98,10 @@ _Avoid_: treating Presets as the only way to get a Waveform, as a fixed hardcode
 **Pool** (the curated Preset set):
 The hand-vetted collection of Presets that random selection draws from, so a random pick is always musically sensible. It is the **runtime source of truth** for available Presets, persisted as a **hand-editable text file in `StreamingAssets`** — in the spirit of `palettedata.txt`: named entries, plain notation, `//` comments, blank lines ignored, creatable by hand in any text editor. It is **read** at runtime by raw C# in `BeatManager` (same `StreamReader` + hand-rolled parse pattern the palettes use) and can also be **authored** in the Unity Inspector via the Waveform property drawer. A file — not a scene-serialized field — so the Editor-only authoring side and the runtime synth side stay decoupled, and a human is a first-class author alongside the drawer. The 7 legacy variants seed the default Pool. Inline specs bypass the Pool entirely.
 
+**Wall Variant Lock** (a.k.a. **Auto** when released):
+The wall-wide override that pins every effect to a single Pool Preset, so the whole installation pulses to one chosen rhythm instead of each effect rolling its own. Its released state is **Auto**: each effect picks its own variant as it starts. Engaging the lock fixes future effect starts *and* retargets the effect already on screen, so the change is immediate; releasing it returns the wall to Auto. Surfaced two-way in the Beat Manager dashboard's Waveform selector.
+_Avoid_: conflating the lock (wall-wide, persists across effect changes) with an effect's own per-instance variant choice.
+
 **Visual Tool** (the waveform "designer" web app):
 A standalone browser sketchpad for *seeing* what a Waveform's notation looks like before committing it. Purely a visualizer/design aid — it is not the authoring pipeline and the runtime does not depend on it or its exported JSON.
 

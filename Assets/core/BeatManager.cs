@@ -497,6 +497,59 @@ public partial class BeatManager
     }
 
     /// <summary>
+    /// Locks the whole wall to a single Waveform Pool variant — the engaged state of the Wall Variant Lock.
+    /// </summary>
+    /// <remarks>
+    /// Ensures the Pool is loaded, then clamps <paramref name="poolIndex"/> into it, so a lock request always
+    /// pins a real Preset and never resolves to the <c>-1</c> Auto sentinel (use <see cref="ReleaseToAuto"/> for
+    /// that). The change is logged: a silent change to what the whole wall is playing is exactly the invisible
+    /// state the project forbids. This does NOT retarget the effect already on screen — that one step needs the
+    /// effects array and stays a Controller concern (see <c>Controller.CurrentBeatVariant</c>).
+    /// </remarks>
+    /// <param name="poolIndex">The Pool index to lock to; clamped to <c>[0, pool-1]</c>.</param>
+    public void LockVariant(int poolIndex)
+    {
+        EnsurePool();
+        var count = waveformPool?.Length ?? 0;
+        activeVariant = count > 0 ? Mathf.Clamp(poolIndex, 0, count - 1) : Mathf.Max(0, poolIndex);
+
+        var name = (waveformPoolNames != null && activeVariant < waveformPoolNames.Length)
+            ? waveformPoolNames[activeVariant]
+            : activeVariant.ToString();
+        Debug.Log($"[Waveform] Wall locked to '{name}' (variant {activeVariant}) — every effect uses this until set to Auto.");
+    }
+
+    /// <summary>
+    /// Releases the Wall Variant Lock back to <b>Auto</b>: every effect rolls its own variant in <c>OnStart()</c>
+    /// again. Logged for the same reason <see cref="LockVariant"/> is.
+    /// </summary>
+    public void ReleaseToAuto()
+    {
+        activeVariant = -1;
+        Debug.Log("[Waveform] Wall released to Auto — effects roll their own beat variant again.");
+    }
+
+    /// <summary>
+    /// Resolves which variant a read-back display should show: the wall lock when one is held, otherwise the
+    /// caller-supplied on-screen effect variant, otherwise Pool index 0.
+    /// </summary>
+    /// <remarks>
+    /// Pure — the on-screen variant is passed in, not reached for via Controller — so it is testable without a
+    /// live Controller and cannot drift from the lock semantics above.
+    /// </remarks>
+    /// <param name="onScreenVariant">The variant the on-screen effect is using, or <c>-1</c> when none
+    /// (startup, mid-transition, or Edit Mode).</param>
+    public int ResolveDisplayVariant(int onScreenVariant)
+    {
+        if (activeVariant >= 0)
+        {
+            return activeVariant;
+        }
+
+        return onScreenVariant >= 0 ? onScreenVariant : 0;
+    }
+
+    /// <summary>
     /// Normalized position within the current bar in [0..1): 0 on the downbeat, approaching 1 at the next.
     /// </summary>
     /// <remarks>
