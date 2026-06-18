@@ -21,6 +21,9 @@ This map summarizes the project-authored runtime code. It is meant as an orienta
 | `Assets/core/TransitionBase.cs` | Base for effect-to-effect transitions and transition-as-blender behavior. |
 | `Assets/core/Transition.cs` | Legacy/orphaned transition shape inheriting `EffectBase`; not used by the current controller. |
 | `Assets/core/BeatManager.cs` | Simulated/debug beat clock and beat-reactive helper functions. |
+| `Assets/core/BeatManagerQueries.cs` | Contrived rhythm-query layer (ADR-0002): the nullable `PhraseEventInfo`/`EnergyInfo`/`PhaseInfo`/`LevelsInfo` shapes and the `BeatManager` queries that build them. |
+| `Assets/core/PhraseEventView.cs` | Display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Shared by the Beat Manager inspector and any future telnet/OSC readout. |
+| `Assets/core/RhythmText.cs` | Shared text formatting for the rhythm queries' nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/core/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
 | `Assets/core/SerialOut.cs` | USB serial hardware discovery and frame sending for S2 Mini / ESP32 boards. |
 | `Assets/core/PixelReceiver.cs` | UDP pixel-source receiver for external frame blending. |
