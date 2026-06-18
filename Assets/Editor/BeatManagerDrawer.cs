@@ -823,55 +823,20 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private static void DrawPhraseEventContent(Rect content, PhraseEventInfo info, Color nowColor,
         Color soonColor, Color meterColor)
     {
+        var view = PhraseEventView.Of(info);
+
         var chip = TakeLeft(ref content, StatusChipWidth);
-        var chipColor = info.inProgress ? nowColor
-            : info.beatsUntilStart != null ? soonColor
-            : PhraseEventIdleChipColor;
-        DrawStatusChip(chip, BuildPhraseEventChipLabel(info), chipColor);
+        var chipColor = view.State switch
+        {
+            PhraseEventState.Now => nowColor,
+            PhraseEventState.Soon => soonColor,
+            _ => PhraseEventIdleChipColor,
+        };
+        DrawStatusChip(chip, view.Chip, chipColor);
 
         var right = TakeRight(ref content, RightTextWidth);
-        DrawMeter(content, GetPhraseEventMeterValue(info), meterColor);
-        GUI.Label(right, BuildPhraseEventReadout(info), valueStyle);
-    }
-
-    /// <summary>
-    /// Test seam: the Fill/Drop chip label — NOW while in progress, "IN n" while a start is known,
-    /// — when neither (nothing upcoming; the null shows as null).
-    /// </summary>
-    internal static string BuildPhraseEventChipLabel(PhraseEventInfo info)
-    {
-        if (info.inProgress)
-        {
-            return "NOW";
-        }
-
-        return info.beatsUntilStart is { } beats ? $"IN {beats}" : "—";
-    }
-
-    /// <summary>
-    /// Test seam: the Fill/Drop bar value — progress while in progress, the anticipation ramp while
-    /// counting down (counting up to something fills), empty otherwise.
-    /// </summary>
-    internal static float GetPhraseEventMeterValue(PhraseEventInfo info)
-    {
-        return info.inProgress ? info.progress ?? 0f : info.anticipation ?? 0f;
-    }
-
-    /// <summary>Test seam: the Fill/Drop right-hand readout text.</summary>
-    internal static string BuildPhraseEventReadout(PhraseEventInfo info)
-    {
-        if (info.inProgress)
-        {
-            return $"ends in {FormatBeats(info.beatsUntilEnd)} · len {FormatCount(info.lengthBeats)} · ×{FormatCount(info.remaining)}";
-        }
-
-        if (info.beatsUntilStart is { } beats)
-        {
-            var head = info.msUntilStart is { } ms ? $"in {ms / 1000f:0.0}s" : $"in {beats}b";
-            return $"{head} · len {FormatCount(info.lengthBeats)} · ×{FormatCount(info.remaining)}";
-        }
-
-        return $"next — · ×{FormatCount(info.remaining)}";
+        DrawMeter(content, view.Meter, meterColor);
+        GUI.Label(right, view.Readout, valueStyle);
     }
 
     /// <summary>Draws the Energy row: tier chip, normalized meter, and where the energy is heading.</summary>
@@ -892,9 +857,9 @@ public sealed class BeatManagerDrawer : PropertyDrawer
 
         var arrow = energy.direction > 0 ? "↗" : energy.direction < 0 ? "↘" : "→";
         var heading = energy.next is { } next
-            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {FormatBeats(energy.beatsUntilChange)}"
+            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {RhythmText.Beats(energy.beatsUntilChange)}"
             : "steady";
-        GUI.Label(right, $"{heading} · ×{FormatCount(energy.changesRemaining)}", valueStyle);
+        GUI.Label(right, $"{heading} · ×{RhythmText.Count(energy.changesRemaining)}", valueStyle);
     }
 
     /// <summary>Draws the Phase row: the open-vocabulary section label, progress, and the upcoming section.</summary>
@@ -914,8 +879,8 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         DrawMeter(content, phase.progress ?? 0f, PhaseMeterColor);
 
         var heading = phase.next != null
-            ? $"→ {phase.next} in {FormatBeats(phase.beatsUntilNext)}"
-            : $"len {FormatCount(phase.lengthBeats)}";
+            ? $"→ {phase.next} in {RhythmText.Beats(phase.beatsUntilNext)}"
+            : $"len {RhythmText.Count(phase.lengthBeats)}";
         GUI.Label(right, heading, valueStyle);
     }
 
@@ -1048,18 +1013,6 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         var right = new Rect(rect.xMax - width, rect.y, width, rect.height);
         rect = new Rect(rect.x, rect.y, Mathf.Max(0f, rect.width - width - SegmentGap), rect.height);
         return right;
-    }
-
-    /// <summary>Formats a nullable beat count ("16b"), using — when the contrived value is null.</summary>
-    private static string FormatBeats(int? value)
-    {
-        return value is { } beats ? $"{beats}b" : "—";
-    }
-
-    /// <summary>Formats a nullable count, using — when the contrived value is null.</summary>
-    private static string FormatCount(int? value)
-    {
-        return value is { } count ? count.ToString() : "—";
     }
 
     /// <summary>Formats a nullable millisecond countdown, using -- when the countdown is unavailable.</summary>
