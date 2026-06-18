@@ -39,7 +39,11 @@ public class Factory<T> where T : class
                  myType => myType.IsClass && !myType.IsAbstract &&
                            myType.IsSubclassOf(typeof(T)) &&
                            !myType.IsDefined(typeof(RuntimeCatalogIgnoreAttribute), false)
-               ).OrderBy(myType => myType.FullName, StringComparer.Ordinal).ToArray());
+               )
+               // Case-insensitive so lowercase-named effect types (e.g. kscope, lightning) interleave
+               // alphabetically with the PascalCase ones instead of being exiled below them; OrdinalIgnoreCase
+               // stays deterministic/culture-invariant and drives both the catalog dropdown and runtime effects[].
+               .OrderBy(myType => myType.FullName, StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     /// <summary>
