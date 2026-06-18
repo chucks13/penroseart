@@ -2,7 +2,17 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-unity_bin="${UNITY_BIN:-/Applications/Unity/Hub/Editor/6000.4.7f1/Unity.app/Contents/MacOS/Unity}"
+
+# Resolve the Unity editor binary. The default tracks the project's own editor version from
+# ProjectSettings/ProjectVersion.txt (Unity's source of truth), so editor upgrades don't require
+# editing this script. Override UNITY_BIN for a non-default install location or CI.
+project_version_file="$repo_root/ProjectSettings/ProjectVersion.txt"
+editor_version="$(awk '/^m_EditorVersion:/ {print $2; exit}' "$project_version_file" 2>/dev/null || true)"
+if [ -z "${UNITY_BIN:-}" ] && [ -z "$editor_version" ]; then
+  printf 'ERROR: could not read m_EditorVersion from %s and UNITY_BIN is unset.\n' "$project_version_file" >&2
+  exit 1
+fi
+unity_bin="${UNITY_BIN:-/Applications/Unity/Hub/Editor/$editor_version/Unity.app/Contents/MacOS/Unity}"
 results_file="${UNITY_TEST_RESULTS:-/tmp/penrose-unity-tests.xml}"
 log_file="${UNITY_TEST_LOG:-/tmp/penrose-unity-tests.log}"
 platform="${UNITY_TEST_PLATFORM:-EditMode}"
