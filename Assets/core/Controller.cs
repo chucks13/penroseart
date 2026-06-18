@@ -164,12 +164,27 @@ public class Controller : Singleton<Controller>
     // Effect forcing and playback state
     // ---------------------------------------------------------------------
 
-    [Header("Nova Testing Technique")]
-    [Tooltip("If true, immediately stops transitions and locks playback to the named effect below.")]
-    public bool forceEffect = false;
-
-    [Tooltip("If not empty, matches the effect name substring used by the live force override.")]
-    public string forceEffectName = "";
+    [Header("Effect Lock")]
+    /// <summary>
+    /// The held effect, as a single source of truth for whether the wall rotates or stays put.
+    /// <para>
+    /// <c>-1</c> is the <b>Random</b> sentinel: the deck rotates normally (see <see cref="OnTimerFinished"/>),
+    /// and this is the default so a fresh scene behaves exactly like the old unlocked state. Any value
+    /// <c>&gt;= 0</c> is an index into <see cref="effects"/> that is <b>held</b>: the timer state machine and
+    /// the deck never switch away from it until this is set back to <c>-1</c>.
+    /// </para>
+    /// <para>
+    /// Replaces the former <c>forceEffect</c> (bool) + <c>forceEffectName</c> (string prefix) pair: the bool is
+    /// now simply "is this <c>&gt;= 0</c>", and the target is the value itself. The inspector renders this as a
+    /// catalog dropdown via <c>EffectSelectorDrawer</c> (row 0 = Random); pressing <c>Escape</c> resets it to
+    /// <c>-1</c>. The blank <c>EmptyEffect</c> template is never selectable because <see cref="Factory{T}"/>
+    /// excludes its <c>[RuntimeCatalogIgnore]</c> type from <see cref="effects"/> entirely.
+    /// </para>
+    /// </summary>
+    [Tooltip("Random (-1) lets the deck rotate normally. Any other choice holds that effect and stops the " +
+             "random switching until you pick Random again. Escape also resets this to Random.")]
+    [EffectSelector]
+    public int heldEffect = -1;
 
     /// <summary>Whether to create and draw the optional camera overlay.</summary>
     public bool useCamera;
@@ -700,44 +715,44 @@ public class Controller : Singleton<Controller>
 
 
     /// <summary>
-    /// Resolves the live force-effect override to an effect catalog index by case-insensitive prefix match.
+    /// Resolves <see cref="heldEffect"/> to a playable catalog index, or reports that the wall is free to rotate.
     /// </summary>
-    private bool TryGetForcedEffectIndex(out int effectIndex)
+    /// <param name="effectIndex">The held effect's index in <see cref="effects"/> when the method returns true.</param>
+    /// <returns>
+    /// <c>true</c> when an effect is held (<see cref="heldEffect"/> is a valid index into <see cref="effects"/>);
+    /// <c>false</c> for the <c>-1</c> Random sentinel — and also defensively for an out-of-range or pre-setup value,
+    /// so a stale/garbage index degrades to normal rotation instead of throwing.
+    /// </returns>
+    private bool TryGetHeldEffectIndex(out int effectIndex)
     {
         effectIndex = -1;
-        if (!forceEffect || string.IsNullOrWhiteSpace(forceEffectName) || effects == null)
+
+        // -1 is the Random sentinel; anything outside the catalog is treated the same way (rotate, do not throw).
+        if (heldEffect < 0 || effects == null || heldEffect >= effects.Length)
             return false;
 
-        for (int i = 0; i < effects.Length; i++)
-        {
-            if (effects[i].Name.StartsWith(forceEffectName, StringComparison.OrdinalIgnoreCase))
-            {
-                effectIndex = i;
-                return true;
-            }
-        }
-
-        return false;
+        effectIndex = heldEffect;
+        return true;
     }
 
     /// <summary>
-    /// Applies the live force-effect override during Update, cancelling transitions when needed.
+    /// Per-frame hook (called from <see cref="Update"/>) that keeps the wall on the held effect while one is held.
     /// </summary>
-    private void ApplyForceEffectOverride()
+    /// <remarks>
+    /// No-op for the <c>-1</c> Random sentinel. When an effect is held but the wall is mid-transition or showing a
+    /// different effect — e.g. because the held effect was just changed in the dropdown, or the deck had rotated
+    /// elsewhere before the lock — this cancels any transition and enters the held effect immediately rather than
+    /// waiting for the next timer tick.
+    /// </remarks>
+    private void ApplyHeldEffect()
     {
-        if (!forceEffect)
+        if (!TryGetHeldEffectIndex(out int heldEffectIndex))
             return;
 
-        if (!TryGetForcedEffectIndex(out int forcedEffectIndex))
-            return;
-
-        if (inTransition || currentEffect != forcedEffectIndex)
+        if (inTransition || currentEffect != heldEffectIndex)
         {
-            // Inspector/keyboard force is a live override: cancel transitions and
-            // enter the requested effect immediately instead of waiting for the deck.
-            JumpToEffect(forcedEffectIndex, effectTime);
+            JumpToEffect(heldEffectIndex, effectTime);
         }
-
     }
     /// <summary>
     /// Handles page-1 OSC controls for brightness, effect jumps, and runtime UI feedback.
@@ -1079,29 +1094,30 @@ public class Controller : Singleton<Controller>
 
 
     /// <summary>
-    /// Selects the next effect index, using forceEffectName when active or the rotating effect deck otherwise.
+    /// Picks the next effect: the held effect when one is held, otherwise the next card off the rotating deck.
     /// </summary>
     private int GetNewEffectIndex()
     {
-        // Keep random deck selection as the default, but let the live testing
-        // override choose future targets while forceEffect remains enabled.
-        if (TryGetForcedEffectIndex(out int forcedEffectIndex))
-            return forcedEffectIndex;
+        // A held effect (heldEffect >= 0) always wins; the -1 Random sentinel falls through to deck rotation,
+        // which is the default behavior.
+        if (TryGetHeldEffectIndex(out int heldEffectIndex))
+            return heldEffectIndex;
 
         return pullCard(effectDeck);
     }
 
     /// <summary>
-    /// Timer state-machine callback. Alternates between effect playback and transition playback unless forceEffect is active.
+    /// Timer state-machine callback. Alternates between effect playback and transition playback, unless an effect
+    /// is held (<see cref="heldEffect"/> &gt;= 0), in which case it stays parked on that effect.
     /// </summary>
     private void OnTimerFinished()
     {
-        // Force mode owns the state machine. If an operator/dev has requested a
-        // specific effect, timer expiry should not transition away from it.
-        if (TryGetForcedEffectIndex(out int forcedEffectIndex))
+        // A held effect owns the state machine: timer expiry must not transition away from it. The -1 Random
+        // sentinel skips this block and falls through to the normal effect/transition alternation below.
+        if (TryGetHeldEffectIndex(out int heldEffectIndex))
         {
-            if (inTransition || currentEffect != forcedEffectIndex)
-                JumpToEffect(forcedEffectIndex, effectTime);
+            if (inTransition || currentEffect != heldEffectIndex)
+                JumpToEffect(heldEffectIndex, effectTime);
             else
                 timer.Reset();
 
@@ -1215,13 +1231,14 @@ public class Controller : Singleton<Controller>
         }
         EffectBase.APalette.Update();
 
-        // 3. Local keyboard/debug input. Escape toggles live force mode; A-W
-        // jump directly to effect indexes; X switches the keyboard bank.
-        // Nova Technique: Escape key toggles the testing override on/off
+        // 3. Local keyboard/debug input. Escape releases any held effect back to
+        // Random; A-W jump directly to effect indexes; X switches the keyboard bank.
+        // Escape is the quick "let it rotate again" key: it sets heldEffect back to
+        // the -1 Random sentinel, which the inspector dropdown mirrors as row 0.
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            forceEffect = !forceEffect;
-            Debug.Log($"[Nova] Testing override: {forceEffect}");
+            heldEffect = -1;
+            Debug.Log("[Controller] Effect lock released — back to Random (deck rotation).");
         }
 
         if (Input.GetKeyDown(KeyCode.Space))
@@ -1245,7 +1262,7 @@ public class Controller : Singleton<Controller>
         }
         if (Input.GetKeyDown(KeyCode.X)) keyboardBase = 1 - keyboardBase;       // toggle base
 
-        ApplyForceEffectOverride();
+        ApplyHeldEffect();
 
         // 4. Drum test keys and global rhythm update.
         // test drums
