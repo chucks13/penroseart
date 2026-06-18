@@ -13,7 +13,7 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// Loads StreamingAssets textures and maps them through kaleidoscope/mirror patterns.
 /// </summary>
-public class kscope : ScreenEffect
+public class Kscope : ScreenEffect
 {
     public class picture
     {

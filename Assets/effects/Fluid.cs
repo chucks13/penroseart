@@ -6,7 +6,7 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// Runs a tile-neighbor diffusion simulation and colors the resulting scalar field.
 /// </summary>
-public class fluid : ScreenEffect
+public class Fluid : ScreenEffect
 {
     private float[] state1;
     private float[] state2;

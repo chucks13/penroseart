@@ -5,7 +5,7 @@
 /// <summary>
 /// Builds stochastic branching paths outward from center-star tiles.
 /// </summary>
-public class lightning : EffectBase
+public class Lightning : EffectBase
 {
     float fadeValue;
     float starthue;

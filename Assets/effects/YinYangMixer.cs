@@ -5,7 +5,7 @@ using UnityEngine;
 /// <summary>
 /// Splits two child effects into rotating yin-yang-like angular regions.
 /// </summary>
-public class yinyangmixer : MixerBase
+public class YinYangMixer : MixerBase
 {
 
     private EffectBase[] effects;
