@@ -11,6 +11,7 @@ public class MetaBalls : ScreenEffect
     private Vector2 screen;
     private int total = 8;
     private float radius = 1f;
+    int beatMode;
 
     /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
@@ -32,6 +33,7 @@ public class MetaBalls : ScreenEffect
     {
         base.OnStart();
         // Randomize logic was commented out in original class
+        beatMode = Random.Range(0, 3);
 
         balls = new Ball[total];
         for (int i = 0; i < balls.Length; i++) { balls[i] = new Ball(); }
@@ -48,7 +50,13 @@ public class MetaBalls : ScreenEffect
     public override void Draw()
     {
         // Beat pulse scales metaball color output for this frame.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
+        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
+
+        float localDelta = effectDelta;
+
+        if (beatMode < 2)
+            localDelta = beatManager.GetBeatTime(beatVariant, effectDelta, 0.05f);
 
         buffer.Fade();
 
@@ -62,13 +70,23 @@ public class MetaBalls : ScreenEffect
                 var sum = 0f;
                 for (int i = 0; i < balls.Length; i++)
                 {
-                    balls[i].Update(effectDelta);
+                    balls[i].Update(localDelta);
                     var d = Vector2.Distance(screen, balls[i].Position);
                     sum += radius / d;
                 }
 
                 sum = sum.Clamp();
-                screenBuffer[idx] = APalette.read(sum, true) * beatBrightness;
+                Color color = APalette.read(sum, true);
+
+                if (beatMode > 0)
+                {
+                    Color.RGBToHSV(color, out float h, out float s, out float v);
+                    h += beatHue;
+                    v *= beatBrightness;
+                    color = Color.HSVToRGB(h % 1f, s, v);
+                }
+
+                screenBuffer[idx] = color;
             }
         }
 
