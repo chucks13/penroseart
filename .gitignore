@@ -21,3 +21,6 @@
 # IDE specific files
 .vs/
 *.dotsettings
+
+# Transient agent/coordination scratch (issues, PRDs, runbooks)
+/.scratch/
