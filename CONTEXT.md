@@ -15,7 +15,7 @@ Manages the main loop, effect switching, overlays, input, and hardware output.
 - **Deck System**: Ensures variety by drawing effects/transitions from the top half of a rotating deck and moving selected entries to the bottom.
 - **State Machine**: Alternates between a playing state (generative effects) and a transition state (blending between effects).
 - **Timing**: Defaults to 10 seconds per effect with a 2 second transition.
-- **Testing Override (Nova Technique)**: Allows locking selection to effects whose names match `forceEffectName`, toggled via the Inspector or the `Escape` key.
+- **Held Effect**: A single selection that either lets the wall rotate or pins it to one effect. The **Random** state lets the Deck System rotate normally; choosing a specific effect *holds* it, suppressing both rotation and transitions until Random is chosen again. Selected from the Inspector's effect dropdown (Random is the default first entry); the `Escape` key always returns to Random. The blank effect template is never offered, since it is excluded from the runtime effect catalog.
 
 ### 2. Beat Manager (Synchronization)
 
