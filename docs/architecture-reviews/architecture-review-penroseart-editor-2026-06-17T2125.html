@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PenroseArt — Editor Scripts Architecture Review</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+</script>
+<style>
+  body { background: #0a0b10; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .card { background: linear-gradient(180deg, #11131b 0%, #0d0f16 100%); border: 1px solid #1f2330; }
+  .swatch { box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .deep { background: repeating-linear-gradient(45deg, #122 0 8px, #0f2027 8px 16px); }
+  .shallow { background: #1a1410; }
+  .arrow { color: #4cc9f0; }
+  .tag { letter-spacing:.12em; }
+</style>
+</head>
+<body class="text-slate-200">
+<div class="max-w-6xl mx-auto px-6 py-10">
+
+  <!-- Header -->
+  <header class="mb-10">
+    <p class="tag text-xs text-cyan-400 mb-2">PENROSEART · ARCHITECTURE REVIEW</p>
+    <h1 class="text-3xl font-semibold text-white">Property Drawers &amp; Editor Scripts</h1>
+    <p class="text-slate-400 mt-3 max-w-3xl">
+      Deepening opportunities in <span class="mono text-slate-300">Assets/Editor/</span>. The focus is
+      <strong>locality</strong> and <strong>testability</strong>: the editor layer is where the wall's
+      live state, the <em>Waveform Pool</em>, the <em>rhythm queries</em>, and the new <em>Held Effect</em>
+      selector all get surfaced and edited — and right now most of that lives in one 1,286-line drawer with
+      no internal seams.
+    </p>
+  </header>
+
+  <!-- Current module map -->
+  <section class="card rounded-xl p-6 mb-10">
+    <h2 class="text-lg font-medium text-white mb-1">The editor layer today</h2>
+    <p class="text-slate-400 text-sm mb-5">Four modules. One is a giant; the rest are thin. The arrows show who reaches into the live runtime and who touches the Waveform Pool file.</p>
+    <div class="grid md:grid-cols-2 gap-6 items-start">
+      <div class="mermaid">
+graph TD
+    BMD["BeatManagerDrawer.cs<br/><b>1286 lines</b><br/>PropertyDrawer"]:::big
+    WPE["WaveformPoolEditor.cs<br/>391 lines<br/>EditorWindow"]:::mid
+    ESD["EffectSelectorDrawer.cs<br/>85 lines<br/>PropertyDrawer"]:::small
+    CE["ControllerEditor.cs<br/>23 lines<br/>Editor (repaint hook)"]:::small
+
+    WP[("WaveformPool<br/>Parse / Serialize<br/>ReadFileOrEmpty / FilePath")]:::rt
+    CTRL[("Controller.Instance<br/>BeatManager.activeVariant<br/>CurrentBeatVariant")]:::rt
+    FAC[("Factory&lt;EffectBase&gt;")]:::rt
+
+    BMD -->|mtime-cached read| WP
+    WPE -->|read + write| WP
+    BMD -->|pokes live wall| CTRL
+    ESD -->|edits serialized int| FAC
+    CE -.->|RequiresConstantRepaint| BMD
+
+    classDef big fill:#3a1620,stroke:#e0567a,color:#fff;
+    classDef mid fill:#1d2430,stroke:#4cc9f0,color:#dbeafe;
+    classDef small fill:#16202a,stroke:#2b6c80,color:#cbd5e1;
+    classDef rt fill:#101820,stroke:#3a7,color:#9fe;
+      </div>
+      <div class="text-sm text-slate-300 space-y-3">
+        <p><span class="mono text-rose-300">BeatManagerDrawer</span> fuses <strong>three</strong> concerns
+          behind a single <span class="mono">OnGUI</span>: (1) reaching into the live wall and writing to it,
+          (2) caching the Waveform Pool file, (3) ~30 hand-rolled IMGUI rendering helpers.</p>
+        <p>Its <span class="mono">CustomPropertyDrawer</span> <em>external</em> interface is genuinely small and deep —
+          that is not the problem. The problem is it has <strong>no internal seams</strong>: the policy with real
+          invariants (don't spawn a Controller; retarget the live effect; log every change) can only be exercised
+          by driving 1,286 lines of immediate-mode GUI.</p>
+        <p class="text-slate-400">Two consumers already share <span class="mono">WaveformPool</span>, so pool <em>IO</em>
+          is correctly factored. What is <em>not</em> factored: live-wall policy, the inspector's visual vocabulary,
+          and the presentation of rhythm queries.</p>
+      </div>
+    </div>
+  </section>
+
+  <h2 class="text-xl font-semibold text-white mb-5">Candidates</h2>
+
+  <!-- CANDIDATE 1 -->
+  <article class="card rounded-xl p-6 mb-8">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <p class="tag text-xs text-cyan-400">CANDIDATE 1</p>
+        <h3 class="text-xl font-semibold text-white">Extract the live-wall selection policy as a deep, testable module</h3>
+      </div>
+      <span class="shrink-0 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Strong</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="space-y-4 text-sm">
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Files</p>
+          <p class="mono text-slate-300">BeatManagerDrawer.cs · <span class="text-slate-500">TryGetLiveWall, ApplyWallSelection, ResolveDisplayVariant</span><br/>Controller.cs · BeatManager.cs</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Problem</p>
+          <p>The act of <em>reading and changing what the wall is playing</em> lives as private statics in an IMGUI drawer.
+            <span class="mono">ApplyWallSelection</span> carries load-bearing invariants — guard on
+            <span class="mono">Controller.HasInstance</span> so touching the wall never <em>spawns</em> a Controller GameObject;
+            writing <span class="mono">activeVariant</span> must also poke <span class="mono">CurrentBeatVariant</span> to retarget
+            the on-screen effect; every change must log. None of this is testable, and the same
+            "change the wall safely" need now recurs for the <em>Held Effect</em> path (Escape → −1, dropdown → hold).</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Solution</p>
+          <p>Introduce a small <strong>module</strong> — a "live wall" handle — whose <strong>interface</strong> is three things:
+            <span class="mono">TryGet(out WallState)</span>, <span class="mono">SelectVariant(int)</span>, and
+            <span class="mono">DisplayVariant</span>. The anti-spawn guard, the retarget-and-log behavior, and the
+            Auto/locked resolution sit <em>behind</em> that seam. Drawers consume it; they no longer reach into
+            <span class="mono">Controller.Instance</span> directly.</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Benefits</p>
+          <ul class="list-disc list-inside space-y-1 text-slate-300">
+            <li><strong>Locality:</strong> the "don't spawn a Controller / retarget / log" rules live in one place, not scattered as a comment in a 1,286-line file.</li>
+            <li><strong>Leverage:</strong> the Held Effect drawer and any future wall control get the safe-change behavior for free instead of re-deriving the guards.</li>
+            <li><strong>Testability:</strong> the interface <em>is</em> the test surface — you can assert "select 3 → activeVariant 3, CurrentBeatVariant 3, one log line" without an IMGUI repaint.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- before/after viz -->
+      <div class="space-y-4">
+        <div class="rounded-lg p-4 shallow border border-rose-500/20">
+          <p class="text-xs tag text-rose-300 mb-3">BEFORE — policy trapped inside the drawer</p>
+          <div class="border border-rose-400/30 rounded p-3 mono text-xs leading-relaxed">
+            <div class="text-rose-200">OnGUI ( 1286 lines )</div>
+            <div class="ml-3 mt-1 text-slate-400">│ EnsureStyles, 30× Draw…()</div>
+            <div class="ml-3 text-amber-300">│ TryGetLiveWall ── reaches Controller.Instance</div>
+            <div class="ml-3 text-amber-300">│ ApplyWallSelection ── guards + poke + log</div>
+            <div class="ml-3 text-slate-400">│ EnsureWaveformPool (mtime cache)</div>
+            <div class="ml-3 mt-1 text-rose-300">no internal seam → untestable policy</div>
+          </div>
+        </div>
+        <div class="text-center arrow text-2xl">↓</div>
+        <div class="rounded-lg p-4 deep border border-emerald-500/20">
+          <p class="text-xs tag text-emerald-300 mb-3">AFTER — deep module behind a small seam</p>
+          <div class="border border-emerald-400/30 rounded p-3 mono text-xs leading-relaxed bg-black/30">
+            <div class="text-emerald-200">LiveWall&nbsp;&nbsp;<span class="text-slate-500">// 3-method interface</span></div>
+            <div class="ml-3 text-emerald-100">TryGet(out state)</div>
+            <div class="ml-3 text-emerald-100">SelectVariant(int)</div>
+            <div class="ml-3 text-emerald-100">DisplayVariant</div>
+            <div class="ml-3 mt-1 text-slate-400">└ hides guard + retarget + log</div>
+          </div>
+          <div class="text-center text-slate-500 text-xs mt-2">BeatManagerDrawer ─┐</div>
+          <div class="text-center text-slate-500 text-xs">EffectSelectorDrawer ─┴→ LiveWall</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 text-sm text-slate-400 border-t border-slate-700/50 pt-3">
+      <strong class="text-slate-300">Deletion test:</strong> delete this module and the anti-spawn guard, the retarget-poke,
+      and the log re-appear at every editor site that wants to change the wall — complexity <em>concentrates</em>, so the seam earns its keep.
+      <span class="text-amber-300/80">Caveat (honesty):</span> only one editor today pokes the wall directly, so by the strict
+      "two adapters = real seam" rule this is borderline — but the second consumer is already arriving via Held Effect, and the
+      payoff here is testability of real invariants, not just reuse.
+    </div>
+  </article>
+
+  <!-- CANDIDATE 2 -->
+  <article class="card rounded-xl p-6 mb-8">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <p class="tag text-xs text-cyan-400">CANDIDATE 2</p>
+        <h3 class="text-xl font-semibold text-white">A shared inspector-rendering vocabulary (meters · chips · swatches · panel · styles)</h3>
+      </div>
+      <span class="shrink-0 text-xs font-semibold px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">Worth exploring</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="space-y-4 text-sm">
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Files</p>
+          <p class="mono text-slate-300">BeatManagerDrawer.cs · <span class="text-slate-500">DrawMeter, DrawStatusChip, DrawSwatch, DrawPanelBackground, EnsureStyles, ~40 color tokens</span><br/>EffectSelectorDrawer.cs · WaveformPoolEditor.cs (DrawPlot)</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Problem</p>
+          <p>The "Penrose inspector look" — the track+fill+shine meter, the rounded status chip, the bordered swatch, the
+            dark panel, the cached <span class="mono">GUIStyle</span> set, the color palette — exists only as private statics
+            inside <span class="mono">BeatManagerDrawer</span>. <span class="mono">EffectSelectorDrawer</span> and
+            <span class="mono">WaveformPoolEditor</span> each re-roll their own primitives. There is no shared visual module,
+            so the look can drift and every new drawer starts from raw <span class="mono">EditorGUI</span>.</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Solution</p>
+          <p>Lift the primitives into a small <strong>InspectorWidgets</strong> module: <span class="mono">Meter(rect, value, color)</span>,
+            <span class="mono">Chip(rect, label, color)</span>, <span class="mono">Swatch(rect, label, color?)</span>,
+            <span class="mono">Panel(rect, accent)</span>, plus the shared palette and styles. The shine/clamp/track math
+            and color tokens live once, behind a tiny interface.</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Benefits</p>
+          <ul class="list-disc list-inside space-y-1 text-slate-300">
+            <li><strong>Locality:</strong> change the meter shine or a band color in one module, every drawer updates.</li>
+            <li><strong>Leverage:</strong> a new drawer learns four widget calls instead of <span class="mono">EditorGUI.DrawRect</span> math.</li>
+            <li><strong>Depth:</strong> small interface, real implementation (AA, clamping, shine, style caching) hidden.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="rounded-lg p-4 shallow border border-rose-500/20">
+          <p class="text-xs tag text-rose-300 mb-3">BEFORE — each drawer re-rolls primitives</p>
+          <div class="grid grid-cols-3 gap-2 text-[11px] mono">
+            <div class="border border-slate-600 rounded p-2">BeatManagerDrawer<br/><span class="text-slate-500">DrawMeter, Chip, Swatch…</span></div>
+            <div class="border border-slate-600 rounded p-2">EffectSelector<br/><span class="text-slate-500">raw Popup</span></div>
+            <div class="border border-slate-600 rounded p-2">WaveformPoolEditor<br/><span class="text-slate-500">DrawPlot, own colors</span></div>
+          </div>
+          <p class="text-rose-300 text-xs mt-3">3 copies of "the look" · drift-prone</p>
+        </div>
+        <div class="text-center arrow text-2xl">↓</div>
+        <div class="rounded-lg p-4 deep border border-emerald-500/20">
+          <p class="text-xs tag text-emerald-300 mb-3">AFTER — one widget module, shared look</p>
+          <div class="border border-emerald-400/30 rounded p-3 mono text-xs bg-black/30 mb-2">
+            <span class="text-emerald-200">InspectorWidgets</span>
+            <span class="text-slate-500"> · Meter · Chip · Swatch · Panel · palette</span>
+          </div>
+          <div class="flex gap-2 justify-center text-[11px] mono text-slate-400">
+            <span class="border border-emerald-500/30 rounded px-2 py-1">BeatManagerDrawer</span>
+            <span class="border border-emerald-500/30 rounded px-2 py-1">EffectSelector</span>
+            <span class="border border-emerald-500/30 rounded px-2 py-1">PoolEditor</span>
+          </div>
+          <div class="mt-2 flex justify-center gap-1">
+            <div class="w-16 h-3 rounded swatch" style="background:linear-gradient(90deg,#12ec ,#0a1a20)"></div>
+            <div class="w-10 h-3 rounded swatch" style="background:#0a4d2a"></div>
+            <div class="w-6 h-3 rounded swatch" style="background:#6699ff"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 text-sm text-slate-400 border-t border-slate-700/50 pt-3">
+      <strong class="text-slate-300">Seam reality check:</strong> two-and-a-half consumers exist (the dense BeatManager dashboard,
+      the tiny Held Effect popup, the Pool plot). The dashboard is by far the heaviest user, so start by making its primitives
+      <em>public within the editor module</em> and let the lighter drawers opt in — don't force the thin popup through a heavy widget API it doesn't need.
+    </div>
+  </article>
+
+  <!-- CANDIDATE 3 -->
+  <article class="card rounded-xl p-6 mb-8">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <p class="tag text-xs text-cyan-400">CANDIDATE 3</p>
+        <h3 class="text-xl font-semibold text-white">Move rhythm-query <em>presentation</em> to the data, not drawer "test seams"</h3>
+      </div>
+      <span class="shrink-0 text-xs font-semibold px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">Worth exploring</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="space-y-4 text-sm">
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Files</p>
+          <p class="mono text-slate-300">BeatManagerDrawer.cs · <span class="text-slate-500">BuildPhraseEventChipLabel, GetPhraseEventMeterValue, BuildPhraseEventReadout (marked "Test seam")</span><br/>BeatManager.cs · PhraseEventInfo / Energy / Phase types</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Problem</p>
+          <p>Three formatting functions are <span class="mono">internal static</span> precisely so tests can reach them —
+            the textbook smell of <em>"pure functions extracted for testability, but the bug lives in how they're called."</em>
+            Tests cross a seam that is <strong>past</strong> the drawer's real interface, into its private rendering helpers.
+            The logic is presentation <em>of</em> a <span class="mono">PhraseEventInfo</span> (Fill/Drop), yet it lives away from the data it formats.</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Solution</p>
+          <p>Give the contrived <em>rhythm queries</em> a presentation <strong>module</strong> co-located with their data —
+            e.g. <span class="mono">PhraseEventView(info) → { chip, meter, readout }</span>. The drawer calls it; tests target
+            it directly as a legitimate interface, not as a reached-around private.</p>
+        </div>
+        <div>
+          <p class="text-slate-400 uppercase tracking-wide text-xs mb-1">Benefits</p>
+          <ul class="list-disc list-inside space-y-1 text-slate-300">
+            <li><strong>Locality:</strong> "how a Fill/Drop reads" sits next to what a Fill/Drop <em>is</em>.</li>
+            <li><strong>Honest test surface:</strong> the interface you test is the interface the drawer uses — no <span class="mono">internal</span> back door.</li>
+            <li><strong>Leverage:</strong> the same view formats the Beat dashboard and, later, any OSC/telnet/debug readout of the same queries.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="rounded-lg p-4 shallow border border-rose-500/20">
+          <p class="text-xs tag text-rose-300 mb-3">BEFORE — tests reach <em>past</em> the interface</p>
+          <div class="mono text-xs leading-relaxed border border-rose-400/30 rounded p-3">
+            <div class="text-slate-300">BeatManagerDrawer</div>
+            <div class="ml-3 text-slate-500">OnGUI ──(real interface)</div>
+            <div class="ml-3 text-amber-300">internal BuildPhraseEventChipLabel ◄┐</div>
+            <div class="ml-3 text-amber-300">internal GetPhraseEventMeterValue ◄┤</div>
+            <div class="ml-3 text-amber-300">internal BuildPhraseEventReadout ◄┤</div>
+            <div class="mt-2 text-rose-300">Tests ───────────────────────────┘ (around the seam)</div>
+          </div>
+        </div>
+        <div class="text-center arrow text-2xl">↓</div>
+        <div class="rounded-lg p-4 deep border border-emerald-500/20">
+          <p class="text-xs tag text-emerald-300 mb-3">AFTER — one view, tested at its own seam</p>
+          <div class="mono text-xs leading-relaxed border border-emerald-400/30 rounded p-3 bg-black/30">
+            <div class="text-emerald-200">PhraseEventView(info)</div>
+            <div class="ml-3 text-emerald-100">→ { chip, meter, readout }</div>
+            <div class="mt-2 text-slate-400">BeatManagerDrawer ──uses──►</div>
+            <div class="text-slate-400">Tests ──────────────uses──►</div>
+            <div class="text-emerald-300 mt-1">same interface, no back door</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-5 text-sm text-slate-400 border-t border-slate-700/50 pt-3">
+      <strong class="text-slate-300">Lowest-risk first cut.</strong> These are already pure functions with tests — this is
+      relocation + renaming for locality, not new behavior. Pairs naturally with ADR-0002 (nullable rhythm queries):
+      the view decides how <span class="mono">null → "—"</span> reads, in one place.
+    </div>
+  </article>
+
+  <!-- CANDIDATE 4 -->
+  <article class="card rounded-xl p-6 mb-10">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <p class="tag text-xs text-cyan-400">CANDIDATE 4</p>
+        <h3 class="text-xl font-semibold text-white">Waveform-Pool mtime cache — leave it (for now)</h3>
+      </div>
+      <span class="shrink-0 text-xs font-semibold px-3 py-1 rounded-full bg-slate-500/15 text-slate-300 border border-slate-500/30">Speculative</span>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6 items-center">
+      <div class="text-sm space-y-3">
+        <p><span class="mono text-slate-300">EnsureWaveformPool</span> reloads the pool only when the file's write-time changes —
+          a genuinely deep little behavior. It's tempting to extract as <span class="mono">WaveformPool.Cached</span>.</p>
+        <p><strong>But the deletion test says wait.</strong> The underlying IO (<span class="mono">Parse / Serialize / ReadFileOrEmpty / FilePath</span>)
+          is <em>already</em> a shared module used by both the drawer and the Pool editor. Only the drawer needs the
+          <em>cache</em> — one consumer. That's a hypothetical seam, not a real one. Extracting now adds an interface no second caller needs.</p>
+        <p class="text-slate-400">Revisit if a second live reader of the pool appears (e.g. an OSC-driven pool reload), at which point the
+          cache becomes a real shared seam.</p>
+      </div>
+      <div class="rounded-lg p-4 border border-slate-600/40 bg-black/20">
+        <div class="mermaid">
+graph LR
+    D[BeatManagerDrawer] -->|needs cache| C{{mtime cache}}
+    C --> WP[(WaveformPool IO)]
+    E[WaveformPoolEditor] -->|no cache| WP
+    classDef g fill:#101820,stroke:#3a7,color:#9fe;
+    class WP g;
+        </div>
+        <p class="text-xs text-slate-500 mt-2 text-center">One consumer of the cache → don't extract yet.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- TOP RECOMMENDATION -->
+  <section class="rounded-xl p-6 border border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 to-transparent mb-10">
+    <p class="tag text-xs text-emerald-300 mb-2">TOP RECOMMENDATION</p>
+    <h2 class="text-2xl font-semibold text-white mb-3">Start with Candidate 1 — the live-wall seam</h2>
+    <p class="text-slate-300 text-sm max-w-3xl mb-4">
+      It is the highest-leverage move: it carves the one piece of <strong>real, invariant-bearing policy</strong>
+      (don't spawn a Controller, retarget the on-screen effect, log every change) out of a 1,286-line drawer and puts it
+      behind a three-method <strong>interface</strong> that is finally testable. It also establishes the editor↔runtime
+      <strong>seam</strong> that the new <em>Held Effect</em> drawer — and every future wall control — should sit on, so the
+      drawer count grows without re-deriving the guards. Candidates 2 and 3 then fall out cleanly against that spine.
+    </p>
+    <p class="text-slate-400 text-sm max-w-3xl">
+      If you'd rather take the <strong>lowest-risk</strong> first step, do <strong>Candidate 3</strong> instead — it's pure
+      relocation of already-tested functions and immediately removes the "tested around the interface" smell. Candidate 2
+      is the natural follow-on once a second drawer (Held Effect) proves the shared-widget seam is real rather than hypothetical.
+    </p>
+  </section>
+
+  <footer class="text-center text-xs text-slate-600 pb-6">
+    Architecture vocabulary: <span class="mono">/codebase-design</span> · Domain vocabulary: <span class="mono">CONTEXT.md</span> ·
+    Decisions not re-litigated: ADR-0001/0002/0003
+  </footer>
+
+</div>
+</body>
+</html>
