@@ -81,7 +81,6 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private const float WaveformSelectorGap = 6f;
     private const float WaveformStripHeight = 46f;
     private const float WaveformValueWidth = 46f;
-    private const int WaveformPlotSamples = 96;
 
     // Horizontal anatomy of a query row: label column, optional status chip, meter, right-aligned readout.
     private const float QueryRowLabelWidth = 70f;
@@ -153,12 +152,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private static readonly Color OffBeatFlashColor = new Color(1f, 0.42f, 0.92f);
     private static readonly Color OffBeatInactiveColor = new Color(0.34f, 0.24f, 0.38f, 1f);
     private static readonly Color OffBeatDisabledColor = new Color(0.34f, 0.24f, 0.38f, 0.55f);
-    private static readonly Color WaveformTrackColor = new Color(0.055f, 0.065f, 0.085f);
-    private static readonly Color WaveformGridColor = new Color(1f, 1f, 1f, 0.07f);
-    private static readonly Color WaveformCurveColor = new Color(0.12f, 0.92f, 1f);
     private static readonly Color WaveformCurveIdleColor = new Color(0.34f, 0.42f, 0.47f);
-    private static readonly Color WaveformPlayheadColor = new Color(1f, 0.92f, 0.35f);
-    private static readonly Color WaveformPlayheadLineColor = new Color(1f, 0.92f, 0.35f, 0.55f);
     private static readonly Color EnvelopeMeterColor = new Color(0.12f, 0.92f, 1f);
     private static readonly Color FillNowChipColor = new Color(0.10f, 0.42f, 0.22f);
     private static readonly Color FillSoonChipColor = new Color(0.08f, 0.28f, 0.20f);
@@ -751,51 +745,22 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         var plotRight = rect.xMax - WaveformValueWidth - 6f;
         var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
 
-        EditorGUI.DrawRect(plot, WaveformTrackColor);
-
-        // Beat gridlines at quarter-note fractions (0, ¼, ½, ¾, and the closing bar edge).
-        for (var i = 0; i <= BeatSlotCount; i++)
-        {
-            var gx = Mathf.Floor(plot.x + (plot.width * (i / (float)BeatSlotCount)));
-            EditorGUI.DrawRect(new Rect(gx, plot.y, 1f, plot.height), WaveformGridColor);
-        }
-
         var wf = SelectedWaveform();
-        const float vPad = 3f; // keep the peak (1) and trough (0) off the very edges of the track
-        var top = plot.y + vPad;
-        var bottom = plot.yMax - vPad;
 
-        // The smooth envelope: Handles anti-aliased polyline, which only renders during a Repaint event.
-        if (Event.current.type == EventType.Repaint && plot.width > 1f)
-        {
-            var points = new Vector3[WaveformPlotSamples + 1];
-            for (var i = 0; i <= WaveformPlotSamples; i++)
-            {
-                var p = i / (float)WaveformPlotSamples;
-                var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Evaluate(p)));
-                points[i] = new Vector3(plot.x + (plot.width * p), y, 0f);
-            }
+        // Shared plot draws track/grid/curve and, while live, the aligned playhead; the curve color carries
+        // this view's active/idle state.
+        WaveformPlot.Draw(plot, wf, active ? WaveformPlot.Curve : WaveformCurveIdleColor, active ? barPhase : (float?)null);
 
-            Handles.color = active ? WaveformCurveColor : WaveformCurveIdleColor;
-            Handles.DrawAAPolyLine(2.5f, points);
-        }
-
-        // Live playhead: vertical line + dot at the emitted brightness, with a numeric readout to the right.
+        // Numeric readout to the right of the plot — dashboard-only, laid out outside the shared plot rect.
+        var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
         if (active)
         {
-            var phase = Mathf.Repeat(barPhase, 1f);
-            var px = plot.x + (plot.width * phase);
-            EditorGUI.DrawRect(new Rect(Mathf.Floor(px), plot.y, 1f, plot.height), WaveformPlayheadLineColor);
-
             var emitted = Mathf.Clamp01(wf.Evaluate(barPhase));
-            var dotY = Mathf.Lerp(bottom, top, emitted);
-            EditorGUI.DrawRect(new Rect(px - 3f, dotY - 3f, 6f, 6f), WaveformPlayheadColor);
-
-            GUI.Label(new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height), $"{emitted:0.00}", valueStyle);
+            GUI.Label(readout, $"{emitted:0.00}", valueStyle);
         }
         else
         {
-            GUI.Label(new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height), "--", valueStyle);
+            GUI.Label(readout, "--", valueStyle);
         }
     }
 

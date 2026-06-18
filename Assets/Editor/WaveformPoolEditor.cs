@@ -71,13 +71,9 @@ public sealed class WaveformPoolEditor : EditorWindow
     private bool dirty;
     private Vector2 listScroll;
 
-    // Preview visuals mirror the BeatManager dashboard strip so an authored shape reads the same in both places.
-    private static readonly Color TrackColor = new Color(0.055f, 0.065f, 0.085f);
-    private static readonly Color GridColor = new Color(1f, 1f, 1f, 0.07f);
-    private static readonly Color CurveColor = new Color(0.12f, 0.92f, 1f);
+    // The plot look (track/grid/curve, gridlines, sample count) lives in WaveformPlot; only this view's
+    // malformed-state curve color stays here.
     private static readonly Color MalformedCurveColor = new Color(1f, 0.55f, 0.3f);
-    private const int PlotSamples = 128;
-    private const int BeatSlots = Waveform.BeatsPerBar; // 4/4 gridlines
 
     private const string SequenceHint = "Note-value tokens, one per Hump: W=whole H=half Q=quarter E=eighth S=sixteenth (widths sum to one bar).";
     private const string AmplitudeHint = "One digit 0-8 per Hump (digit/8). 0 is the gate — a silent Hump is a skipped beat.";
@@ -360,32 +356,8 @@ public sealed class WaveformPoolEditor : EditorWindow
     /// malformed). No playhead — this is the authoring view; the live playhead lives on the BeatManager dashboard.</summary>
     private static void DrawPlot(Rect rect, Waveform wf)
     {
-        EditorGUI.DrawRect(rect, TrackColor);
-
-        for (var i = 0; i <= BeatSlots; i++)
-        {
-            var gx = Mathf.Floor(rect.x + (rect.width * (i / (float)BeatSlots)));
-            EditorGUI.DrawRect(new Rect(gx, rect.y, 1f, rect.height), GridColor);
-        }
-
-        if (Event.current.type != EventType.Repaint || rect.width <= 1f)
-        {
-            return;
-        }
-
-        const float vPad = 4f; // keep peak (1) and trough (0) just off the track edges
-        var top = rect.y + vPad;
-        var bottom = rect.yMax - vPad;
-
-        var points = new Vector3[PlotSamples + 1];
-        for (var i = 0; i <= PlotSamples; i++)
-        {
-            var p = i / (float)PlotSamples;
-            var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Evaluate(p)));
-            points[i] = new Vector3(rect.x + (rect.width * p), y, 0f);
-        }
-
-        Handles.color = wf.IsMalformed ? MalformedCurveColor : CurveColor;
-        Handles.DrawAAPolyLine(2.5f, points);
+        // The shared primitive draws the track, gridlines, and AA curve; the pool view is static (no
+        // playhead) and shows a malformed envelope in orange.
+        WaveformPlot.Draw(rect, wf, wf.IsMalformed ? MalformedCurveColor : WaveformPlot.Curve);
     }
 }
