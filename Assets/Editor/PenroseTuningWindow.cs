@@ -3,8 +3,8 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Standalone authoring window for Penrose runtime tuning. The Transitions tab edits saved Transition Settings;
-/// Play Mode steering is wired in a later slice.
+/// Standalone authoring window for Penrose runtime tuning. The Transitions tab edits saved Transition Settings
+/// and, in Play Mode, steers the Director's staged Next Transition.
 /// </summary>
 public sealed class PenroseTuningWindow : EditorWindow
 {
@@ -18,6 +18,7 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 settingsScroll;
     private TransitionSettingsAsset selectedAsset;
     private SerializedObject selectedSerializedObject;
+    private bool settingsChangedSinceLastSave;
 
     [MenuItem("Window/Penrose/Tuning")]
     public static void Open()
@@ -31,7 +32,23 @@ public sealed class PenroseTuningWindow : EditorWindow
     private void OnEnable()
     {
         titleContent = new GUIContent("Penrose Tuning");
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         ReloadTransitions();
+    }
+
+    private void OnDisable()
+    {
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        SavePendingSettingsAssets();
+    }
+
+    private void OnInspectorUpdate()
+    {
+        if (Application.isPlaying)
+        {
+            Repaint();
+        }
     }
 
     private void OnGUI()
@@ -73,19 +90,36 @@ public sealed class PenroseTuningWindow : EditorWindow
 
     private void DrawTransitionsTab()
     {
+        TryGetLiveController(out var liveController);
+        if (liveController != null)
+        {
+            SyncSelectedTransitionFromDirector(liveController);
+        }
+
         using (new EditorGUILayout.HorizontalScope())
         {
-            DrawTransitionList();
-            DrawSelectedTransitionSettings();
+            DrawTransitionList(liveController);
+            DrawSelectedTransitionSettings(liveController);
         }
     }
 
-    private void DrawTransitionList()
+    private void DrawTransitionList(Controller liveController)
     {
-        using (new EditorGUILayout.VerticalScope(GUILayout.Width(240f)))
+        using (new EditorGUILayout.VerticalScope(GUILayout.Width(260f)))
         {
             EditorGUILayout.LabelField("Transitions", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("Edit Mode settings authoring. Play Mode steering is added in the next slice.", MessageType.None);
+            if (liveController != null && liveController.director != null)
+            {
+                EditorGUILayout.HelpBox("Play Mode: selection mirrors Director Next Transition. Click a Transition to stage it through the Director.", MessageType.None);
+            }
+            else if (Application.isPlaying)
+            {
+                EditorGUILayout.HelpBox("Play Mode is running, but the live Director is not ready yet. Settings authoring still works.", MessageType.Warning);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("Edit Mode: select a Transition to edit its saved settings asset.", MessageType.None);
+            }
 
             using (var scroll = new EditorGUILayout.ScrollViewScope(transitionListScroll, GUI.skin.box))
             {
@@ -99,9 +133,10 @@ public sealed class PenroseTuningWindow : EditorWindow
                         GUI.backgroundColor = new Color(0.3f, 0.55f, 0.7f);
                     }
 
-                    if (GUILayout.Button(transitionNames[i], EditorStyles.miniButton))
+                    var label = isSelected ? $"▶ {transitionNames[i]}" : transitionNames[i];
+                    if (GUILayout.Button(label, EditorStyles.miniButton))
                     {
-                        SelectTransition(i);
+                        SelectTransition(i, liveController);
                         GUI.FocusControl(null);
                     }
 
@@ -111,10 +146,21 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
-    private void DrawSelectedTransitionSettings()
+    private void DrawSelectedTransitionSettings(Controller liveController)
     {
         using (new EditorGUILayout.VerticalScope())
         {
+            if (liveController != null)
+            {
+                DrawPlayModeTransitionSteering(liveController);
+                EditorGUILayout.Space();
+            }
+            else if (Application.isPlaying)
+            {
+                EditorGUILayout.HelpBox("No live Controller is ready yet. The saved settings workflow is still available.", MessageType.Warning);
+                EditorGUILayout.Space();
+            }
+
             if (selectedTransitionIndex < 0 || selectedTransitionIndex >= transitionTypes.Length)
             {
                 EditorGUILayout.HelpBox("Select a Transition to edit its saved settings asset.", MessageType.Info);
@@ -154,6 +200,50 @@ public sealed class PenroseTuningWindow : EditorWindow
                 {
                     selectedSerializedObject.ApplyModifiedProperties();
                     EditorUtility.SetDirty(selectedAsset);
+                    settingsChangedSinceLastSave = true;
+                }
+            }
+        }
+    }
+
+    private void DrawPlayModeTransitionSteering(Controller liveController)
+    {
+        var directorReady = liveController.director != null;
+        var directorStatus = liveController.DirectorStatus;
+        var switcherStatus = liveController.SwitcherStatus;
+
+        EditorGUILayout.LabelField("Play Mode Steering", EditorStyles.boldLabel);
+        using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+        {
+            EditorGUILayout.LabelField("Director Next Transition", FormatCatalogChoice(directorStatus.NextTransitionIndex, directorStatus.NextTransitionName));
+            EditorGUILayout.LabelField("Director Next Effect", FormatCatalogChoice(directorStatus.NextEffectIndex, directorStatus.NextEffectName));
+
+            var activeTransition = !switcherStatus.Ready
+                ? "Not Ready"
+                : switcherStatus.IsTransitioning
+                    ? FormatCatalogChoice(switcherStatus.CurrentTransitionIndex, switcherStatus.CurrentTransitionName)
+                    : "None — Mechanical Switcher is showing an Effect";
+            EditorGUILayout.LabelField("Mechanical Switcher Active Transition", activeTransition);
+            EditorGUILayout.LabelField("Mechanical Switcher Stage", string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
+            EditorGUILayout.LabelField("Current Effect", FormatCatalogChoice(switcherStatus.CurrentEffectIndex, switcherStatus.CurrentEffectName));
+            if (switcherStatus.IsTransitioning)
+            {
+                EditorGUILayout.LabelField("Transition Target Effect", FormatCatalogChoice(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
+            }
+
+            using (new EditorGUI.DisabledScope(!directorReady || !IsValidTransitionIndex(selectedTransitionIndex)))
+            {
+                EditorGUI.BeginChangeCheck();
+                var holdSelected = EditorGUILayout.ToggleLeft("Hold Selected Transition", directorStatus.HoldSelectedTransition);
+                if (EditorGUI.EndChangeCheck() && directorReady)
+                {
+                    if (holdSelected)
+                    {
+                        liveController.director.SetNextTransition(selectedTransitionIndex);
+                    }
+
+                    liveController.director.SetHoldSelectedTransition(holdSelected);
+                    Repaint();
                 }
             }
         }
@@ -164,7 +254,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         EditorGUILayout.LabelField("Effects", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
             "Effects tuning will follow the same selection and Hold Selected pattern later. " +
-            "This slice only implements Transition Settings authoring.",
+            "This slice implements Transitions settings authoring and Play Mode steering.",
             MessageType.Info);
     }
 
@@ -181,17 +271,88 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        selectedTransitionIndex = Mathf.Clamp(selectedTransitionIndex, 0, transitionTypes.Length - 1);
-        SelectTransition(selectedTransitionIndex);
+        SetSelectedTransitionIndex(Mathf.Clamp(selectedTransitionIndex, 0, transitionTypes.Length - 1));
     }
 
-    private void SelectTransition(int index)
+    private void SelectTransition(int index, Controller liveController)
+    {
+        if (liveController != null && liveController.director != null)
+        {
+            liveController.director.SetNextTransition(index);
+        }
+
+        SetSelectedTransitionIndex(index);
+    }
+
+    private void SetSelectedTransitionIndex(int index)
     {
         selectedTransitionIndex = index;
         settingsScroll = Vector2.zero;
         selectedAsset = null;
         selectedSerializedObject = null;
         EnsureSelectedAsset();
+    }
+
+    private void SyncSelectedTransitionFromDirector(Controller liveController)
+    {
+        if (liveController.director == null)
+        {
+            return;
+        }
+
+        var nextTransitionIndex = liveController.DirectorStatus.NextTransitionIndex;
+        if (!IsValidTransitionIndex(nextTransitionIndex) || nextTransitionIndex == selectedTransitionIndex)
+        {
+            return;
+        }
+
+        SetSelectedTransitionIndex(nextTransitionIndex);
+    }
+
+    private static bool TryGetLiveController(out Controller liveController)
+    {
+        liveController = null;
+        if (!Application.isPlaying || !Controller.HasInstance)
+        {
+            return false;
+        }
+
+        liveController = Controller.Instance;
+        return liveController != null;
+    }
+
+    private bool IsValidTransitionIndex(int index)
+    {
+        return index >= 0 && index < transitionTypes.Length;
+    }
+
+    private static string FormatCatalogChoice(int index, string name)
+    {
+        if (index < 0)
+        {
+            return "None";
+        }
+
+        return string.IsNullOrEmpty(name) ? $"#{index}" : $"{name} (#{index})";
+    }
+
+    private void OnPlayModeStateChanged(PlayModeStateChange state)
+    {
+        if (state == PlayModeStateChange.ExitingPlayMode)
+        {
+            SavePendingSettingsAssets();
+        }
+    }
+
+    private void SavePendingSettingsAssets()
+    {
+        if (!settingsChangedSinceLastSave)
+        {
+            return;
+        }
+
+        AssetDatabase.SaveAssets();
+        settingsChangedSinceLastSave = false;
     }
 
     private void EnsureSelectedAsset()
@@ -225,6 +386,7 @@ public sealed class PenroseTuningWindow : EditorWindow
             transitionTypes[selectedTransitionIndex],
             transition.CodeDefaults);
         selectedSerializedObject = new SerializedObject(selectedAsset);
+        settingsChangedSinceLastSave = false;
         Repaint();
     }
 
