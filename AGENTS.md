@@ -12,6 +12,20 @@ This repo no longer uses a DOX `AGENTS.md` hierarchy. Do not recreate child `AGE
 
 `AGENTS.md` is the one physical root instruction file. `CLAUDE.md` and `GEMINI.md` are symlinks to it. Edit `AGENTS.md` directly.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked as local markdown under `.scratch/<feature-slug>/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the default status strings: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Start Here
 
 - `README.md` — current orientation and runtime loop.
