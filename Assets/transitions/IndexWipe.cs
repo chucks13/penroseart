@@ -4,6 +4,15 @@
 /// </summary>
 public class IndexWipe : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.None,
+            runwayBeats: 4,
+            tailBeats: 0,
+            TransitionShape.IndexWipe,
+            TransitionIntensity.Medium);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
 
     /// <summary>
     /// Initializes per-run transition state before effect-to-effect blending begins.

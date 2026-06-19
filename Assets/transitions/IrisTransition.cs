@@ -7,6 +7,15 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class IrisTransition : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.HandlesDrop,
+            runwayBeats: 4,
+            tailBeats: 4,
+            TransitionShape.Iris,
+            TransitionIntensity.High);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
 
     int direction;
     float diagonalsize;

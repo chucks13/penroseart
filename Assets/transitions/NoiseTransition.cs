@@ -8,6 +8,16 @@ using UnityEngine;
 /// </summary>
 public class NoiseTransition : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.HandlesDrop | global::Repertoire.RespondsToEnergy,
+            runwayBeats: 4,
+            tailBeats: 4,
+            TransitionShape.Noise,
+            TransitionIntensity.High);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
+
     private Color border;
     public override void OnStart()
     {

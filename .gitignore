@@ -15,6 +15,7 @@
 *.pidb
 *.log
 *.meta
+.DS_Store
 # Except keep .meta files inside Assets
 !/[Aa]ssets/**/*.meta
 

@@ -168,7 +168,7 @@ public class Controller : Singleton<Controller>
     /// <summary>
     /// The held effect, as a single source of truth for whether the wall rotates or stays put.
     /// <para>
-    /// <c>-1</c> is the <b>Random</b> sentinel: the deck rotates normally (see <see cref="OnTimerFinished"/>),
+    /// <c>-1</c> is the <b>Random</b> sentinel: the deck rotates normally through the Director,
     /// and this is the default so a fresh scene behaves exactly like the old unlocked state. Any value
     /// <c>&gt;= 0</c> is an index into <see cref="effects"/> that is <b>held</b>: the timer state machine and
     /// the deck never switch away from it until this is set back to <c>-1</c>.
@@ -214,9 +214,32 @@ public class Controller : Singleton<Controller>
     /// </remarks>
     public int CurrentBeatVariant
     {
-        get => (effects != null && currentEffect >= 0 && currentEffect < effects.Length) ? effects[currentEffect].beatVariant : -1;
-        set { if (effects != null && currentEffect >= 0 && currentEffect < effects.Length) effects[currentEffect].beatVariant = value; }
+        get
+        {
+            int index = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+            return (effects != null && index >= 0 && index < effects.Length) ? effects[index].beatVariant : -1;
+        }
+        set
+        {
+            int index = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+            if (effects != null && index >= 0 && index < effects.Length) effects[index].beatVariant = value;
+        }
     }
+
+    /// <summary>Read-only Director sequencing snapshot for inspectors and status displays.</summary>
+    public DirectorStatus DirectorStatus => director != null ? director.Status : DirectorStatus.NotReady;
+
+    /// <summary>Read-only Mechanical Switcher stage snapshot for inspectors and status displays.</summary>
+    public SwitcherStatus SwitcherStatus => switcher != null ? switcher.Status : SwitcherStatus.NotReady;
+
+    /// <summary>Latest render-pipeline debug text captured before HUD filtering.</summary>
+    public string LastRenderDebugText => lastRenderDebugText;
+
+    /// <summary>Latest compact top-line HUD text shown on screen.</summary>
+    public string LastRuntimeHudLine => lastRuntimeHudLine;
+
+    /// <summary>Latest compact detail HUD text shown on screen.</summary>
+    public string LastRuntimeDetailLine => lastRuntimeDetailLine;
 
     /// <summary>Keyboard bank: A-W select effects 0-22 or 23-45 depending on this value.</summary>
     private int keyboardBase = 0;
@@ -268,8 +291,26 @@ public class Controller : Singleton<Controller>
     /// <summary>UI label showing the active effect or transition name.</summary>
     public TextMeshProUGUI effectText;
 
-    /// <summary>UI label showing effect debug text, OSC text, FPS, and serial state.</summary>
+    /// <summary>UI label showing compact runtime status plus optional verbose debug details.</summary>
     public TextMeshProUGUI debugText;
+
+    [Header("Runtime HUD")]
+    /// <summary>Whether the simulator overlay should show compact runtime status text.</summary>
+    public bool showRuntimeHud = true;
+
+    /// <summary>When true, the bottom HUD includes effect/transition debug text and transport details.</summary>
+    public bool showVerboseRuntimeHud = false;
+
+    /// <summary>Alpha applied to the compact HUD text so it does not dominate the wall preview.</summary>
+    [Range(0.15f, 1f)]
+    public float runtimeHudAlpha = 0.78f;
+
+    /// <summary>Whether Controller should resize the legacy scene text into a compact non-blocking HUD at startup.</summary>
+    public bool configureCompactHudLayout = true;
+
+    [Header("Director Debug Logging")]
+    /// <summary>Writes tagged Director/Switcher sequencing diagnostics to the Unity log for post-run debugging.</summary>
+    public bool logDirectorSwitching = true;
 
     /// <summary>UI label listing local IPv4 addresses.</summary>
     public TextMeshProUGUI myIPText;
@@ -283,11 +324,19 @@ public class Controller : Singleton<Controller>
     [HideInInspector]
     public TransitionBase[] transitions;
 
+    /// <summary>Mechanical renderer/swapper for the currently staged effect or transition.</summary>
+    [HideInInspector]
+    public Switcher switcher;
+
+    /// <summary>Decision layer that owns sequencing cadence and stage-directed cues.</summary>
+    [HideInInspector]
+    public Director director;
+
     /// <summary>Scene Penrose model and preview mesh component.</summary>
     [HideInInspector]
     public Penrose penrose;
 
-    /// <summary>Effect/transition phase timer. Its finish event drives <see cref="OnTimerFinished"/>.</summary>
+    /// <summary>Effect/transition phase timer. Its finish event drives <see cref="Director.OnTimerFinished"/>.</summary>
     [HideInInspector]
     public Timer timer;
 
@@ -306,6 +355,15 @@ public class Controller : Singleton<Controller>
 
     /// <summary>Latest OSC message text shown temporarily in the debug label.</summary>
     private String OSCtext;
+
+    /// <summary>Latest effect/transition debug text emitted by the render pipeline.</summary>
+    private string lastRenderDebugText = string.Empty;
+
+    /// <summary>Latest compact top-line HUD text shown on screen.</summary>
+    private string lastRuntimeHudLine = string.Empty;
+
+    /// <summary>Latest compact detail HUD text shown on screen.</summary>
+    private string lastRuntimeDetailLine = string.Empty;
 
     /// <summary>Reusable byte buffer for legacy UDP/E1.31 frame packets.</summary>
     private byte[] udpFrameBuffer;
@@ -701,8 +759,15 @@ public class Controller : Singleton<Controller>
     {
         if (i < 0) return;
         if (i >= effects.Length) return;
+
+        if (director != null)
+        {
+            director.ShowNow(i, time);
+            return;
+        }
+
+        // Startup/fallback path before Director/Switcher are initialized.
         EffectBase.APalette.Change();
-        //select the new effect
         inTransition = false;
         currentEffect = i;
         effects[currentEffect].RandomizeTime();
@@ -710,7 +775,6 @@ public class Controller : Singleton<Controller>
         timer.Set(time);
         timer.Reset();
         effectText.text = effects[currentEffect].Name;
-        // turn on the button
     }
 
 
@@ -723,7 +787,7 @@ public class Controller : Singleton<Controller>
     /// <c>false</c> for the <c>-1</c> Random sentinel — and also defensively for an out-of-range or pre-setup value,
     /// so a stale/garbage index degrades to normal rotation instead of throwing.
     /// </returns>
-    private bool TryGetHeldEffectIndex(out int effectIndex)
+    internal bool TryGetHeldEffectIndex(out int effectIndex)
     {
         effectIndex = -1;
 
@@ -746,6 +810,12 @@ public class Controller : Singleton<Controller>
     /// </remarks>
     private void ApplyHeldEffect()
     {
+        if (director != null)
+        {
+            director.ApplyHold();
+            return;
+        }
+
         if (!TryGetHeldEffectIndex(out int heldEffectIndex))
             return;
 
@@ -796,7 +866,8 @@ public class Controller : Singleton<Controller>
             if (position < 0.12f) effectTime = 1;
         }
 
-        if (currentEffect >= effects.Length)
+        int currentEffectIndex = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+        if (currentEffectIndex >= effects.Length)
         {
             oms.Add(makemessage("/1/reset", 1f - (float)brightness / 255f));
 
@@ -806,9 +877,9 @@ public class Controller : Singleton<Controller>
             oms.Add(makemessage("/1/vscroll1", 1f - (float)brightness / 255f));
             // update the current effect button
             // stream these one at a time for the button matrix
-            if (currentEffect >= 0)
+            if (currentEffectIndex >= 0)
             {
-                osc.Send(makemessage("/1/push" + (pingIndex + 1), (pingIndex == currentEffect) ? 1f : 0f));
+                osc.Send(makemessage("/1/push" + (pingIndex + 1), (pingIndex == currentEffectIndex) ? 1f : 0f));
                 pingIndex++;
                 pingIndex %= effects.Length;
             }
@@ -1011,6 +1082,251 @@ public class Controller : Singleton<Controller>
 #endif
     }
 
+    private void ConfigureRuntimeHud()
+    {
+        if (!configureCompactHudLayout)
+        {
+            return;
+        }
+
+        ConfigureHudText(effectText, true);
+        ConfigureHudText(debugText, false);
+    }
+
+    private void ConfigureHudText(TextMeshProUGUI text, bool topLine)
+    {
+        if (text == null)
+        {
+            return;
+        }
+
+        text.raycastTarget = false;
+        text.enableAutoSizing = false;
+        text.textWrappingMode = topLine ? TextWrappingModes.NoWrap : TextWrappingModes.Normal;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.fontSize = topLine ? 34f : 30f;
+        text.alignment = topLine ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.BottomLeft;
+        text.color = WithAlpha(Color.white, runtimeHudAlpha);
+
+        var rect = text.rectTransform;
+        if (topLine)
+        {
+            rect.anchorMin = new Vector2(0.15f, 1f);
+            rect.anchorMax = new Vector2(0.85f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.offsetMin = new Vector2(0f, -72f);
+            rect.offsetMax = new Vector2(0f, -12f);
+        }
+        else
+        {
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.offsetMin = new Vector2(24f, 18f);
+            rect.offsetMax = new Vector2(-24f, 150f);
+        }
+    }
+
+    private void UpdateRuntimeHud(string renderDebugText, string transientMessage = null)
+    {
+        lastRenderDebugText = renderDebugText ?? string.Empty;
+
+        if (!showRuntimeHud)
+        {
+            lastRuntimeHudLine = string.Empty;
+            lastRuntimeDetailLine = string.Empty;
+            if (effectText != null) effectText.text = string.Empty;
+            if (debugText != null) debugText.text = string.Empty;
+            return;
+        }
+
+        var directorStatus = DirectorStatus;
+        var switcherStatus = SwitcherStatus;
+        lastRuntimeHudLine = BuildRuntimeHudLine(directorStatus, switcherStatus);
+        lastRuntimeDetailLine = BuildRuntimeDetailLine(directorStatus, transientMessage);
+
+        if (effectText != null)
+        {
+            effectText.color = WithAlpha(Color.white, runtimeHudAlpha);
+            effectText.text = lastRuntimeHudLine;
+        }
+
+        if (debugText != null)
+        {
+            debugText.color = WithAlpha(Color.white, Mathf.Clamp01(runtimeHudAlpha * 0.82f));
+            debugText.text = showVerboseRuntimeHud
+                ? BuildVerboseRuntimeDetail(lastRuntimeDetailLine, lastRenderDebugText)
+                : lastRuntimeDetailLine;
+        }
+    }
+
+    private string BuildRuntimeHudLine(DirectorStatus directorStatus, SwitcherStatus switcherStatus)
+    {
+        var stage = FormatStageName(switcherStatus, directorStatus.TransitionProgress);
+        if (directorStatus.Mode == DirectorMode.Hold)
+        {
+            return $"{stage} · HOLD";
+        }
+
+        if (directorStatus.Mode == DirectorMode.Standalone)
+        {
+            return $"{stage} · STANDALONE";
+        }
+
+        if (directorStatus.Mode == DirectorMode.Synced)
+        {
+            return $"{stage} · SYNC";
+        }
+
+        return "Starting Director…";
+    }
+
+    private string BuildRuntimeDetailLine(DirectorStatus directorStatus, string transientMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(transientMessage))
+        {
+            return SanitizeHudLine(transientMessage);
+        }
+
+        var builder = new StringBuilder();
+        if (directorStatus.IsSyncedMode)
+        {
+            AppendIfNotEmpty(builder, directorStatus.PhaseAnchorConfidence.ToString());
+            AppendIfNotEmpty(builder, FormatPhasePosition(directorStatus));
+            AppendIfNotEmpty(builder, FormatLanding(directorStatus));
+            AppendIfNotEmpty(builder, FormatDropCue());
+            AppendIfNotEmpty(builder, directorStatus.BeatsUntilCadenceReady > 0
+                ? $"cadence +{directorStatus.BeatsUntilCadenceReady}b"
+                : "cadence ready");
+            AppendIfNotEmpty(builder, directorStatus.Phase.BeatInBar > 0 ? $"bar beat {directorStatus.Phase.BeatInBar}" : string.Empty);
+        }
+        else if (directorStatus.Mode == DirectorMode.Standalone)
+        {
+            AppendIfNotEmpty(builder, FormatDecision(directorStatus.Decision));
+            AppendIfNotEmpty(builder, $"timer {Mathf.RoundToInt(Mathf.Clamp01(directorStatus.TransitionProgress) * 100f)}%");
+        }
+        else if (directorStatus.Mode == DirectorMode.Hold)
+        {
+            AppendIfNotEmpty(builder, "Director suspended");
+        }
+
+        AppendIfNotEmpty(builder, $"FPS {fps:0}");
+        AppendIfNotEmpty(builder, $"KB{keyboardBase}");
+        return builder.ToString();
+    }
+
+    private string BuildVerboseRuntimeDetail(string detailLine, string renderDebugText)
+    {
+        var builder = new StringBuilder(detailLine ?? string.Empty);
+        AppendIfNotEmpty(builder, SanitizeHudLine(renderDebugText));
+        return builder.ToString();
+    }
+
+    private string FormatStageName(SwitcherStatus status, float progress)
+    {
+        if (!status.Ready)
+        {
+            return "Starting";
+        }
+
+        if (status.IsTransitioning)
+        {
+            return $"{status.SourceEffectName} → {status.TargetEffectName} {Mathf.RoundToInt(Mathf.Clamp01(progress) * 100f)}%";
+        }
+
+        return status.StageName;
+    }
+
+    private static string FormatPhasePosition(DirectorStatus status)
+    {
+        return status.Phase.PhasePosition > 0 ? $"{status.Phase.PhasePosition}/16" : "no phase";
+    }
+
+    private static string FormatLanding(DirectorStatus status)
+    {
+        return status.BeatsUntilLanding >= 0 ? $"landing +{status.BeatsUntilLanding}b" : FormatDecision(status.Decision);
+    }
+
+    private static string FormatDecision(DirectorDecision decision)
+    {
+        switch (decision)
+        {
+            case DirectorDecision.StandaloneTimer:
+                return "timer";
+            case DirectorDecision.StandaloneTransition:
+                return "transition";
+            case DirectorDecision.WaitingForPhase:
+                return "waiting phase";
+            case DirectorDecision.WaitingForRunway:
+                return "waiting runway";
+            case DirectorDecision.WaitingForCadence:
+                return "waiting cadence";
+            case DirectorDecision.CueingTransition:
+                return "cueing";
+            case DirectorDecision.Transitioning:
+                return "transitioning";
+            case DirectorDecision.Hold:
+                return "hold";
+            default:
+                return "not ready";
+        }
+    }
+
+    private string FormatDropCue()
+    {
+        var drop = beatManager.Drop;
+        if (drop is { inProgress: true })
+        {
+            return "Drop now";
+        }
+
+        if (drop is { beatsUntilStart: { } beatsUntilStart })
+        {
+            return $"Drop +{beatsUntilStart}b";
+        }
+
+        return string.Empty;
+    }
+
+    private static string SanitizeHudLine(string text)
+    {
+        return string.IsNullOrWhiteSpace(text)
+            ? string.Empty
+            : text.Replace('\n', ' ').Replace('\r', ' ').Trim();
+    }
+
+    private static void AppendIfNotEmpty(StringBuilder builder, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (builder.Length > 0)
+        {
+            builder.Append(" · ");
+        }
+
+        builder.Append(value);
+    }
+
+    private static Color WithAlpha(Color color, float alpha)
+    {
+        color.a = Mathf.Clamp01(alpha);
+        return color;
+    }
+
+    /// <summary>Writes a tagged sequencing diagnostic line to the Unity log when enabled.</summary>
+    public void LogDirectorSwitching(string message)
+    {
+        if (!logDirectorSwitching)
+        {
+            return;
+        }
+
+        Debug.Log($"[DEBUG-DIR16] frame={Time.frameCount} t={Time.time:0.000} {message}");
+    }
+
     /// <summary>
     /// Unity startup hook. Initializes the scene model, runtime catalogs, input systems, overlays, timer, and active hardware output.
     /// </summary>
@@ -1070,12 +1386,15 @@ public class Controller : Singleton<Controller>
             cameraOverlay.Init((int)penrose.Bounds.size.x, (int)penrose.Bounds.size.y, Penrose.Total);
         }
 
-        // Timer drives effect/transition phase changes. Update() advances it;
-        // OnTimerFinished() is the state-machine callback.
+        // Director owns sequencing cadence; Switcher owns only the mechanical in-flight stage state.
         timer = new Timer(effectTime, false);
-        timer.onFinished += OnTimerFinished;
+        switcher = new Switcher(this, effects, transitions);
+        switcher.SetInitialEffect(currentEffect, currentTransition);
+        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
+        timer.onFinished += director.OnTimerFinished;
 
-        effectText.text = effects[currentEffect].GetType().ToString();
+        ConfigureRuntimeHud();
+        UpdateRuntimeHud(string.Empty);
         StartCoroutine(Fps());
 #if ENABLE_TELNET
         // Optional debug command server. Disabled in normal builds.
@@ -1104,65 +1423,6 @@ public class Controller : Singleton<Controller>
             return heldEffectIndex;
 
         return pullCard(effectDeck);
-    }
-
-    /// <summary>
-    /// Timer state-machine callback. Alternates between effect playback and transition playback, unless an effect
-    /// is held (<see cref="heldEffect"/> &gt;= 0), in which case it stays parked on that effect.
-    /// </summary>
-    private void OnTimerFinished()
-    {
-        // A held effect owns the state machine: timer expiry must not transition away from it. The -1 Random
-        // sentinel skips this block and falls through to the normal effect/transition alternation below.
-        if (TryGetHeldEffectIndex(out int heldEffectIndex))
-        {
-            if (inTransition || currentEffect != heldEffectIndex)
-                JumpToEffect(heldEffectIndex, effectTime);
-            else
-                timer.Reset();
-
-            return;
-        }
-
-        if (inTransition)
-        {
-            // Transition phase finished: promote the transition target to the
-            // active effect, return to normal effect playback, and draw the next
-            // transition card for the following phase change.
-            inTransition = !inTransition;
-            currentEffect = transitions[currentTransition].B;
-            timer.Set(effectTime);
-            timer.Reset();
-            effectText.text = effects[currentEffect].Name;
-            currentTransition = pullCard(transitionDeck);
-            //           if (randomTransition)
-            //               currentTransition = Random.Range(0, transitions.Length);
-            return;
-        }
-
-        // Effect phase finished: configure the selected transition to blend from
-        // the current effect to the next effect, start the destination effect so
-        // it can render during the transition, then switch Update() into
-        // transition drawing mode.
-        inTransition = !inTransition;
-
-        TransitionBase transition = transitions[currentTransition];
-        transition.RandomizeTime();
-        transition.V = 0f;
-        transition.B = GetNewEffectIndex();
-        transition.A = currentEffect;
-        transition.OnStart();
-        EffectBase.APalette.Change();
-
-        effects[transition.B].RandomizeTime();
-        effects[transition.B].OnStart();
-
-        timer.Set(transitionTime);
-        timer.Reset();
-
-        currentEffect = -1;
-
-        effectText.text = transition.Name;
     }
 
     /// <summary>
@@ -1219,7 +1479,13 @@ public class Controller : Singleton<Controller>
 #if PREP_CAPTURE
         diagnosticTime += effectDelta;
 #endif
-        timer.Update(effectDelta);
+        if (raveOsc != null)
+            raveOsc.ApplyTo(beatManager);
+        beatManager.Update();
+
+        // Director reads the freshly-applied beat state: live OSC drives Synced Mode,
+        // while no live source leaves Standalone Mode on its independent timer path.
+        director.Tick(effectDelta);
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
 #endif
@@ -1243,9 +1509,9 @@ public class Controller : Singleton<Controller>
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            int target = inTransition ? transitions[currentTransition].B : currentEffect;
+            int target = switcher.IsTransitioning ? switcher.TransitionTargetEffectIndex : switcher.CurrentEffectIndex;
             JumpToEffect(target, effectTime);
-            Debug.Log($"[Controller] Restarted effect: {effectText.text}");
+            Debug.Log($"[Controller] Restarted effect: {SwitcherStatus.StageName}");
         }
 
         if (Input.anyKey)
@@ -1264,7 +1530,7 @@ public class Controller : Singleton<Controller>
 
         ApplyHeldEffect();
 
-        // 4. Drum test keys and global rhythm update.
+        // 4. Drum test keys and overlay update.
         // test drums
         if (Input.GetKeyDown("1")) drum.hit(0, 1f);
         if (Input.GetKeyDown("2")) drum.hit(1, 1f);
@@ -1277,11 +1543,10 @@ public class Controller : Singleton<Controller>
         if (Input.GetKeyDown("9")) drum.ring(4, 1f);
         if (Input.GetKeyDown("0")) drum.ring(5, 1f);
         drum.Update();
-        if (raveOsc != null)
-            raveOsc.ApplyTo(beatManager);
-        beatManager.Update();
+
         // 5. Main visual generation. Either draw the special NYE overlay, the
         // active transition, or the active effect into penrose.buffer.
+        string renderDebugText;
         if (NYE)
         {
             Color[] buffer = penrose.buffer;
@@ -1289,38 +1554,12 @@ public class Controller : Singleton<Controller>
             {
                 buffer[i] = (Random.Range(0, 16) == 0) ? Color.white : Color.black;
             }
+
+            renderDebugText = "NYE overlay";
         }
         else
         {
-            if (inTransition)
-            {
-                // Transition mode: update transition progress, advance both
-                // participating effects, and let the transition fill its buffer.
-                transitions[currentTransition].V = timer.Value;
-                transitions[currentTransition].UpdateTime();
-
-                int indexA = transitions[currentTransition].A;
-                int indexB = transitions[currentTransition].B;
-
-                effects[indexA].UpdateTime();
-                if (indexA != indexB)
-                    effects[indexB].UpdateTime();
-
-                transitions[currentTransition].Draw();
-                penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
-
-                debugText.text = transitions[currentTransition].DebugText();
-
-            }
-            else
-            {
-                // Effect mode: advance and draw the single active effect.
-                effects[currentEffect].UpdateTime();
-                effects[currentEffect].Draw();
-                penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
-
-                debugText.text = effects[currentEffect].DebugText();
-            }
+            penrose.buffer = switcher.Render(director.TransitionProgress, out renderDebugText);
             if (FilterMode)
                 applyFilter(penrose.buffer);
             drum.Draw(penrose.buffer);
@@ -1333,16 +1572,11 @@ public class Controller : Singleton<Controller>
             cameraOverlay.Draw(penrose.buffer);
         }
 
-        // 7. Debug text: normal effect/transition debug plus FPS/keyboard bank,
-        // temporarily replaced by recent OSC text when OSC traffic arrives.
-        debugText.text += $"\nFPS: {fps},KB{keyboardBase}";
+        // 7. Transient debug notices can temporarily occupy the compact bottom HUD.
+        string transientHudMessage = null;
         if (OSCtimer > 0)
         {
-#if ENABLE_SERIAL
-            // Clear serial debug info if OSC text is active to prevent clutter
-            if (serial != null) debugText.text = debugText.text.Replace(serial.GetDebugInfo(), "");
-#endif
-            debugText.text = OSCtext;
+            transientHudMessage = OSCtext;
             OSCtimer--;
         }
 
@@ -1354,7 +1588,7 @@ public class Controller : Singleton<Controller>
         if (dummyActive)
         {
             makeDummySignal(blendBuffer);
-            debugText.text = "dummy source";
+            transientHudMessage = "dummy source";
             doblend = true;
         }
         else 
@@ -1362,7 +1596,7 @@ public class Controller : Singleton<Controller>
         if (readPixel.Update())
         {
             blendBuffer = (Color[])readPixel.buffer.Clone();
-            debugText.text = "Pixel source";
+            transientHudMessage = "Pixel source";
             doblend = true;
         }
 
@@ -1382,8 +1616,6 @@ public class Controller : Singleton<Controller>
             }
             else
                 penrose.buffer = (Color[])blendBuffer.Clone();
-
-
         }
 
         // 9. Hardware output. Serial is the active compiled path when
@@ -1399,7 +1631,8 @@ public class Controller : Singleton<Controller>
         OSCping();
 
 #if ENABLE_SERIAL
-        if (serial != null) debugText.text += serial.GetDebugInfo();
+        if (serial != null) renderDebugText += serial.GetDebugInfo();
 #endif
+        UpdateRuntimeHud(renderDebugText, transientHudMessage);
     }
 }

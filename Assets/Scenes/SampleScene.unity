@@ -2008,8 +2008,7 @@ MonoBehaviour:
     effectTime: 0
     effectDelta: 0
     huestep: 0
-  forceEffect: 0
-  forceEffectName: 
+  heldEffect: -1
   useCamera: 0
   startEffect: 0
   effectTime: 10
@@ -2070,13 +2069,52 @@ MonoBehaviour:
     timeout: 0
   beatManager:
     simulatedBpm: 120
-    simulatedBeatEnabled: 1
+    simulatedBeatEnabled: 0
     beatData:
-      active: 0
+      playersLive: 
+      track: 
       bpm: 120
-      timeEvent: 0
-      beatsPerMeasure: 4
-      currentBeat: 0
+      beat:
+        current: 0
+        total: 0
+      bar:
+        current: 0
+        nextMs: 0
+      beatInBar: 0
+      beatsCountMs: ffffffffffffffffffffffffffffffff
+      onBeats: 00000000
+      beatAverageMs: 0
+      beatPulse: 0
+      levels:
+        low: -1
+        mid: -1
+        high: -1
+      phaseState:
+        current: 
+        next: 
+        active: -1
+        countBeats: -1
+        lengthBeats: -1
+        remaining: -1
+      dropState:
+        active: -1
+        countBeats: -1
+        lengthBeats: -1
+        remaining: -1
+      fillState:
+        active: -1
+        countBeats: -1
+        lengthBeats: -1
+        remaining: -1
+      energyState:
+        current: 
+        next: 
+        active: -1
+        countBeats: -1
+        lengthBeats: -1
+        remaining: -1
+    levelsAttackSeconds: 0.02
+    levelsReleaseSeconds: 0.15
   effectText: {fileID: 464376788}
   debugText: {fileID: 242027525}
   myIPText: {fileID: 2070754382}

@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Penrose Director UI Mockup</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090f;
+      --panel: #111622;
+      --panel-2: #171d2b;
+      --stroke: rgba(255, 255, 255, 0.12);
+      --text: #f2f6ff;
+      --muted: #9da9bd;
+      --dim: #657189;
+      --cyan: #20f0ff;
+      --cyan-soft: rgba(32, 240, 255, 0.15);
+      --magenta: #ff47b8;
+      --magenta-soft: rgba(255, 71, 184, 0.15);
+      --green: #70ff9d;
+      --green-soft: rgba(112, 255, 157, 0.14);
+      --yellow: #ffe66d;
+      --yellow-soft: rgba(255, 230, 109, 0.14);
+      --red: #ff5f6d;
+      --unity-bg: #383838;
+      --unity-panel: #2d2d2d;
+      --unity-row: #242424;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(32, 240, 255, 0.15), transparent 32rem),
+        radial-gradient(circle at 82% 18%, rgba(255, 71, 184, 0.13), transparent 30rem),
+        linear-gradient(180deg, #0b0e16 0%, var(--bg) 58%, #05060a 100%);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.45;
+    }
+
+    .page {
+      width: min(1480px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 42px 0 64px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 4vw, 58px);
+      letter-spacing: -0.05em;
+      line-height: 0.95;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      max-width: 880px;
+      font-size: 16px;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      gap: 8px 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.035);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      margin-right: 7px;
+      vertical-align: 1px;
+      box-shadow: 0 0 16px currentColor;
+    }
+
+    .cyan { color: var(--cyan); }
+    .magenta { color: var(--magenta); }
+    .green { color: var(--green); }
+    .yellow { color: var(--yellow); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(680px, 1.25fr) minmax(450px, 0.75fr);
+      gap: 26px;
+      align-items: start;
+    }
+
+    .card {
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+      box-shadow: 0 24px 70px rgba(0,0,0,0.42);
+      overflow: hidden;
+    }
+
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 9px;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgba(0,0,0,0.18);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+
+    .sim-wrap { padding: 20px; }
+
+    .sim-note {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .sim-screen {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      min-height: 430px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.2);
+      background:
+        radial-gradient(circle at 50% 48%, rgba(32,240,255,0.20), transparent 10rem),
+        radial-gradient(circle at 45% 48%, rgba(255,71,184,0.17), transparent 14rem),
+        linear-gradient(120deg, #09111e 0%, #06080d 48%, #120716 100%);
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.75);
+    }
+
+    .wall-preview {
+      position: absolute;
+      inset: 38px 52px 42px;
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background:
+        radial-gradient(circle, rgba(32,240,255,0.95) 0 2px, transparent 3px) 0 0 / 36px 31px,
+        radial-gradient(circle, rgba(255,71,184,0.72) 0 2px, transparent 3px) 18px 14px / 36px 31px,
+        radial-gradient(circle, rgba(112,255,157,0.70) 0 1.8px, transparent 3px) 9px 24px / 44px 37px,
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04), transparent 48%);
+      opacity: 0.72;
+      filter: drop-shadow(0 0 7px rgba(32,240,255,0.55));
+      clip-path: polygon(50% 0, 78% 9%, 98% 32%, 91% 66%, 66% 95%, 31% 98%, 8% 71%, 2% 36%, 22% 9%);
+    }
+
+    .wall-preview::after {
+      content: "wall preview remains visually dominant";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: max-content;
+      max-width: 70%;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.58);
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 0.02em;
+    }
+
+    .hud {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: calc(100% - 28px);
+      min-height: 42px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.13);
+      background: rgba(5, 8, 13, 0.68);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+      backdrop-filter: blur(7px);
+      font-family: var(--mono);
+      font-size: clamp(14px, 1.65vw, 22px);
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hud-main { left: 15%; right: 15%; top: 14px; max-width: none; justify-content: flex-start; }
+    .hud-right { right: 14px; top: 68px; max-width: 32%; }
+    .hud-bottom { left: 14px; bottom: 14px; max-width: 66%; color: var(--muted); }
+
+    .hud-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 46px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: var(--cyan-soft);
+      border: 1px solid rgba(32,240,255,0.36);
+      color: var(--cyan);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      font-size: 0.82em;
+    }
+
+    .hud strong { color: var(--text); }
+    .hot { color: var(--yellow); }
+    .ok { color: var(--green); }
+    .dim { color: var(--muted); }
+
+    .toggle-callout {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      max-width: 36%;
+      padding: 7px 9px;
+      border-radius: 9px;
+      border: 1px dashed rgba(255,255,255,0.16);
+      background: rgba(0,0,0,0.28);
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: clamp(10px, 1vw, 12px);
+    }
+
+    .hud-examples {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .mini-screen {
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(0,0,0,0.2);
+      min-height: 124px;
+      font-family: var(--mono);
+    }
+
+    .mini-screen strong {
+      display: block;
+      font-family: var(--sans);
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    .mini-line {
+      display: inline-block;
+      padding: 6px 8px;
+      border-radius: 9px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.28);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    /* Inspector ---------------------------------------------------------- */
+    .inspector {
+      margin: 20px;
+      border: 1px solid #1d1d1d;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--unity-bg);
+      font-family: var(--sans);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .unity-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: #444;
+      border-bottom: 1px solid #1e1e1e;
+      font-weight: 650;
+      color: #e6e6e6;
+    }
+
+    .unity-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, var(--cyan), var(--magenta));
+      box-shadow: 0 0 14px rgba(32,240,255,0.4);
+    }
+
+    .foldout {
+      border-bottom: 1px solid #242424;
+      background: var(--unity-panel);
+    }
+
+    .foldout-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: linear-gradient(180deg, #333, #2c2c2c);
+      border-bottom: 1px solid #222;
+      color: #efefef;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .foldout-title span:first-child::before {
+      content: "▾";
+      margin-right: 7px;
+      color: #cfcfcf;
+    }
+
+    .foldout-body { padding: 10px; }
+
+    .director-panel {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: #151923;
+      margin-bottom: 10px;
+    }
+
+    .panel-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px 12px;
+      background: linear-gradient(90deg, rgba(32,240,255,0.20), rgba(255,71,184,0.12));
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 70px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(32,240,255,0.42);
+      color: var(--cyan);
+      background: rgba(32,240,255,0.10);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      padding: 10px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 112px 1fr;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 5px 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 7px;
+      background: rgba(0,0,0,0.20);
+      font-size: 12px;
+    }
+
+    .kv .k {
+      color: #a8a8a8;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .kv .v {
+      font-family: var(--mono);
+      color: #f7f7f7;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .wide { grid-column: 1 / -1; }
+
+    .meter {
+      position: relative;
+      display: block;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #0d0f14;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .meter > i {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--w, 50%);
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+      box-shadow: 0 0 18px rgba(32,240,255,0.42);
+    }
+
+    .phase-strip {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      gap: 2px;
+      padding: 10px;
+      background: rgba(0,0,0,0.14);
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .beat-cell {
+      min-width: 0;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      color: #9aa2ad;
+      background: #202735;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .beat-cell.one {
+      color: #05070a;
+      background: var(--cyan);
+      font-weight: 900;
+      box-shadow: 0 0 16px rgba(32,240,255,0.5);
+    }
+
+    .beat-cell.now {
+      color: #05070a;
+      background: var(--yellow);
+      font-weight: 900;
+      box-shadow: 0 0 16px rgba(255,230,109,0.45);
+    }
+
+    .beat-cell.runway {
+      color: #0b0c0f;
+      background: linear-gradient(180deg, #ff97d8, var(--magenta));
+      font-weight: 800;
+    }
+
+    .beatmanager-placeholder {
+      margin-top: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(32,240,255,0.2);
+      background: linear-gradient(180deg, #121827, #0f131f);
+      padding: 12px;
+    }
+
+    .bm-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .bm-lines {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .bm-chip {
+      padding: 8px 6px;
+      border-radius: 7px;
+      background: rgba(32,240,255,0.10);
+      border: 1px solid rgba(32,240,255,0.18);
+      color: #dffbff;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .default-fields {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #242424;
+      color: #bdbdbd;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .future { grid-column: 1 / -1; }
+
+    .control-panel {
+      margin: 20px;
+      border-radius: 18px;
+      border: 1px solid var(--stroke);
+      overflow: hidden;
+      background: #0f1320;
+    }
+
+    .cp-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 10px 10px 0;
+      background: #151b28;
+      border-bottom: 1px solid var(--stroke);
+    }
+
+    .cp-tab {
+      padding: 8px 14px;
+      border-radius: 10px 10px 0 0;
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .cp-tab.active {
+      background: var(--cyan-soft);
+      color: var(--cyan);
+    }
+
+    .cp-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      padding: 18px;
+    }
+
+    .cp-box {
+      min-height: 150px;
+      padding: 14px;
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.035);
+    }
+
+    .cp-box h3 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .cp-box p {
+      margin: 0 0 8px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .button {
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--stroke);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .note {
+      margin-top: 22px;
+      padding: 16px 18px;
+      border-left: 3px solid var(--yellow);
+      border-radius: 12px;
+      background: rgba(255,230,109,0.08);
+      color: #f8eeb6;
+    }
+
+    @media (max-width: 1120px) {
+      header { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .hud-examples { grid-template-columns: 1fr; }
+      .cp-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100vw - 24px, 1480px); padding-top: 24px; }
+      .status-grid { grid-template-columns: 1fr; }
+      .hud-right, .toggle-callout { display: none; }
+      .hud-bottom { max-width: calc(100% - 28px); }
+      .cp-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <h1>Penrose Director UI Mockup</h1>
+        <p class="subtitle">
+          Revised to keep the wall preview dominant. The runtime screen gets a readable current stage/effect HUD in a fixed top-center band;
+          the Inspector gets the detailed Director, Phase Lock, and Mechanical Switcher explanation.
+        </p>
+      </div>
+      <div class="legend" aria-label="legend">
+        <span><i class="dot cyan"></i>live/synced</span>
+        <span><i class="dot yellow"></i>current/runway</span>
+        <span><i class="dot magenta"></i>transition/drop</span>
+        <span><i class="dot green"></i>ready/ok</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <div class="card-title">
+          <span>Runtime simulator overlay</span>
+          <span class="tag">minimal HUD · does not cover wall</span>
+        </div>
+        <div class="sim-wrap">
+          <p class="sim-note">
+            Default screen mode should keep the current stage/effect readable in a fixed top-center band, with volatile timing details on the bottom status line. Verbose debug is an opt-in toggle, not the normal overlay.
+          </p>
+          <div class="sim-screen">
+            <div class="wall-preview"></div>
+
+            <div class="hud hud-main">
+              <span><strong>Vortex → NoiseTunnel</strong></span>
+              <span class="dim">·</span>
+              <span class="hud-pill">SYNC</span>
+            </div>
+
+            <div class="hud hud-right">
+              <span>FPS <strong>60</strong></span>
+              <span class="dim">·</span>
+              <span>KB0</span>
+            </div>
+
+            <div class="hud hud-bottom">
+              <span>Structural</span>
+              <span class="dim">·</span>
+              <span class="hot">15/16</span>
+              <span class="dim">·</span>
+              <span>landing <span class="hot">+2b</span></span>
+              <span class="dim">·</span>
+              <span>Drop +2b</span>
+              <span class="dim">·</span>
+              <span>cadence ready</span>
+            </div>
+
+            <div class="toggle-callout">
+              Verbose debug hidden by default. Toggle in Inspector / hotkey when diagnosing.
+            </div>
+          </div>
+
+          <div class="hud-examples">
+            <div class="mini-screen">
+              <strong>Standalone Mode HUD</strong>
+              <span class="mini-line">Vortex · <span class="hot">STANDALONE</span><br />timer 6.2s · FPS 60</span>
+            </div>
+            <div class="mini-screen">
+              <strong>Hold HUD</strong>
+              <span class="mini-line">Vortex · <span class="ok">HOLD</span><br />Director suspended</span>
+            </div>
+            <div class="mini-screen">
+              <strong>Verbose Toggle</strong>
+              <span class="mini-line">SYNC · Structural · beat 95 → 97<br />reason: transitioning · cadence ready</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-title">
+          <span>Controller Inspector</span>
+          <span class="tag">detailed read-only state lives here</span>
+        </div>
+        <div class="inspector">
+          <div class="unity-head"><i class="unity-icon"></i> Controller</div>
+
+          <section class="foldout">
+            <div class="foldout-title"><span>DIRECTOR / STAGE</span><span class="badge">SYNC</span></div>
+            <div class="foldout-body">
+              <div class="director-panel">
+                <div class="panel-banner">
+                  <span>Decision: <strong class="hot">Transitioning to landing</strong></span>
+                  <span>beat <strong>95</strong> / landing <strong class="hot">97</strong></span>
+                </div>
+                <div class="status-grid">
+                  <div class="kv"><span class="k">Current</span><span class="v">Vortex</span></div>
+                  <div class="kv"><span class="k">Target</span><span class="v">NoiseTunnel</span></div>
+                  <div class="kv"><span class="k">Transition</span><span class="v">Swipe</span></div>
+                  <div class="kv"><span class="k">Progress</span><span class="v">0.50</span></div>
+                  <div class="kv"><span class="k">Cadence</span><span class="v ok">ready</span></div>
+                  <div class="kv"><span class="k">Last Change</span><span class="v">beat 81</span></div>
+                  <div class="kv wide"><span class="k">Progress Bar</span><span class="v"><span class="meter"><i style="--w: 50%"></i></span></span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="foldout">
+            <div class="foldout-title"><span>PHASE LOCK DETAILS</span><span class="badge">STRUCTURAL</span></div>
+            <div class="foldout-body">
+              <div class="status-grid">
+                <div class="kv"><span class="k">Phase</span><span class="v hot">15 / 16</span></div>
+                <div class="kv"><span class="k">Bar In Phrase</span><span class="v">4</span></div>
+                <div class="kv"><span class="k">Beat In Bar</span><span class="v">3</span></div>
+                <div class="kv"><span class="k">Grid Agrees</span><span class="v ok">yes</span></div>
+                <div class="kv"><span class="k">One Beat</span><span class="v">81</span></div>
+                <div class="kv"><span class="k">Offset</span><span class="v">0</span></div>
+                <div class="kv"><span class="k">Anchor</span><span class="v">beat 97</span></div>
+                <div class="kv"><span class="k">Runway</span><span class="v hot">2 beats</span></div>
+                <div class="kv wide"><span class="k">Anchor State</span><span class="v">re-anchored from Track Phase</span></div>
+              </div>
+              <div class="phase-strip" aria-label="16 beat phrase strip">
+                <div class="beat-cell one">X</div><div class="beat-cell">2</div><div class="beat-cell">3</div><div class="beat-cell">4</div>
+                <div class="beat-cell">5</div><div class="beat-cell">6</div><div class="beat-cell">7</div><div class="beat-cell">8</div>
+                <div class="beat-cell">9</div><div class="beat-cell">10</div><div class="beat-cell">11</div><div class="beat-cell">12</div>
+                <div class="beat-cell runway">13</div><div class="beat-cell runway">14</div><div class="beat-cell now">15</div><div class="beat-cell runway">16</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="foldout">
+            <div class="foldout-title"><span>BEAT MANAGER</span><span class="badge" style="color: var(--green); border-color: rgba(112,255,157,.35); background: var(--green-soft);">LIVE</span></div>
+            <div class="foldout-body">
+              <div class="beatmanager-placeholder">
+                <div class="bm-head">
+                  <span>Track: Breakdown Loop</span>
+                  <span>128 BPM · players 1</span>
+                </div>
+                <div class="bm-lines">
+                  <div class="bm-chip">BEAT ●○○○</div>
+                  <div class="bm-chip">DROP in 2b</div>
+                  <div class="bm-chip">FILL —</div>
+                  <div class="bm-chip">ENERGY HIGH</div>
+                </div>
+              </div>
+              <div class="default-fields">Existing BeatManager dashboard and regular serialized fields continue below…</div>
+            </div>
+          </section>
+        </div>
+      </article>
+
+      <article class="card future">
+        <div class="card-title">
+          <span>Future optional Penrose Control Panel</span>
+          <span class="tag">dockable EditorWindow · after status model stabilizes</span>
+        </div>
+        <div class="control-panel">
+          <nav class="cp-tabs">
+            <div class="cp-tab active">Stage</div>
+            <div class="cp-tab">Music</div>
+            <div class="cp-tab">Director</div>
+            <div class="cp-tab">Effects</div>
+            <div class="cp-tab">Output</div>
+          </nav>
+          <div class="cp-grid">
+            <section class="cp-box">
+              <h3>Stage</h3>
+              <p>Current: Vortex</p>
+              <p>Next: NoiseTunnel</p>
+              <p>Transition: Swipe 50%</p>
+            </section>
+            <section class="cp-box">
+              <h3>Music Source</h3>
+              <p>LIVE · 128 BPM</p>
+              <p>Beat 95 / 388</p>
+              <p>Phase: Breakdown 15/16</p>
+              <p>Drop: in 2b</p>
+            </section>
+            <section class="cp-box">
+              <h3>Director</h3>
+              <p>Mode: Synced</p>
+              <p>Decision: Transitioning</p>
+              <p>Landing: beat 97</p>
+              <p>Cadence: ready</p>
+            </section>
+            <section class="cp-box">
+              <h3>Actions</h3>
+              <div class="button-row">
+                <span class="button">Hold Current</span>
+                <span class="button">Release Hold</span>
+                <span class="button">Jump Effect…</span>
+                <span class="button">Waveform Pool</span>
+              </div>
+            </section>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <p class="note">
+      Implementation intent: the simulator screen gets a readable current stage/effect HUD in a fixed top-center band, so changing status text does not make the label wander. Detailed Director/Phase state goes to the Inspector. Verbose screen debug should be toggleable, not always on.
+    </p>
+  </main>
+</body>
+</html>

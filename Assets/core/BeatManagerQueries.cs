@@ -196,7 +196,7 @@ public readonly struct LevelsInfo
 /// <summary>
 /// The contrived rhythm query layer (ADR-0002). Effects and transitions pull all musical state through
 /// these nullable queries: null always means "not available right now", and the caller owns its
-/// Default Mode fallback (<c>?? fallback</c>) or Synced Mode branch (<c>is { } x</c>).
+/// Standalone Mode behavior (<c>?? standalone</c>) or Synced Mode branch (<c>is { } x</c>).
 /// </summary>
 /// <remarks>
 /// This is the only place that reads the transport's -1 sentinels and tri-state ints; sentinels never
@@ -257,6 +257,48 @@ public partial class BeatManager
         }
     }
 
+    /// <summary>Focused on-air absolute beat count, or null when the source has not supplied it.</summary>
+    public int? Beat
+    {
+        get
+        {
+            if (!IsActive || beatData.beat.current < 1)
+            {
+                return null;
+            }
+
+            return beatData.beat.current;
+        }
+    }
+
+    /// <summary>Focused on-air track length in beats, or null when the source has not supplied it.</summary>
+    public int? TotalBeats
+    {
+        get
+        {
+            if (!IsActive || beatData.beat.total < 1)
+            {
+                return null;
+            }
+
+            return beatData.beat.total;
+        }
+    }
+
+    /// <summary>Focused on-air bar count, or null when the source has not supplied it.</summary>
+    public int? Bar
+    {
+        get
+        {
+            if (!IsActive || beatData.bar.current < 1)
+            {
+                return null;
+            }
+
+            return beatData.bar.current;
+        }
+    }
+
     /// <summary>Raw beat pulse — 1 on the beat decaying toward 0 — or null when no beat clock is present.</summary>
     public float? Pulse
     {
@@ -282,6 +324,20 @@ public partial class BeatManager
             }
 
             return offBeatPulse;
+        }
+    }
+
+    /// <summary>Fraction elapsed through the current beat in [0..1], or null when no usable beat clock is present.</summary>
+    public float? BeatFraction
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return IntraBeatFraction();
         }
     }
 

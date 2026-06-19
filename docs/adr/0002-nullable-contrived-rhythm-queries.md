@@ -6,7 +6,7 @@ drop, fill, and levels arrived, were displayed in the Inspector, and were read b
 This ADR defines the consumption interface through which effects and transitions pull
 **all** musical state, replacing the previous mixed idioms (4-arg `GetBeatBrightness`,
 hand-rolled gates, raw `BeatData` field reads). Terms in `CONTEXT.md` (Contrived Value,
-Default/Synced Mode, Color Bank, Fill, Drop, Energy, Levels, Track Phase).
+Standalone/Synced Mode, Color Bank, Fill, Drop, Energy, Levels, Track Phase).
 
 ## Transport keeps sentinels; requests return nullables
 `BeatData` stays plain serialized fields with `-1` sentinels — Unity's serializer does not
@@ -20,8 +20,8 @@ fields in `BeatData` (breaks serialization). C# 9 (Unity 6000.4) supports both n
 forms; `Assets/OSC` already compiles `#nullable enable`.
 
 ## Consumers are dual-personality, and they own the fallback
-Every rhythm-aware effect/transition has a **Default Mode** (signal `null`) and a
-**Synced Mode** (signal live): branch with `is { } x`, or fold inline with `?? fallback`.
+Every rhythm-aware effect/transition has a **Standalone response** (that signal is `null`) and a
+**Synced Mode** path (that signal is live): branch with `is { } x`, or fold inline with `?? standalone`.
 The compiler forces every call site to choose its fallback — a forgotten check is a
 compile error, not a silent behavior. Neutral policy belongs to the consumer (an effect
 knows its own neutral color), not to BeatManager.
