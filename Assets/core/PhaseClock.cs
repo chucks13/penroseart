@@ -1,5 +1,3 @@
-using System;
-
 /// <summary>Confidence in where beat 1 of the 16-beat phrase grid sits.</summary>
 public enum PhaseConfidence
 {
@@ -44,7 +42,7 @@ public readonly struct PhaseInput
 public readonly struct PhaseReading
 {
     public static PhaseReading Unavailable { get; } =
-        new PhaseReading(PhaseConfidence.Unlocked, -1, -1, -1, -1, -1, false, -1, -1, true);
+        new PhaseReading(PhaseConfidence.Unlocked, -1, -1, -1, -1, -1, false, true);
 
     public readonly PhaseConfidence Confidence;
     public readonly int PhasePosition;
@@ -53,8 +51,6 @@ public readonly struct PhaseReading
     public readonly int OneOfCurrentPhrase;
     public readonly int Offset;
     public readonly bool CleanGrid;
-    public readonly int PhrasesTotal;
-    public readonly int PhrasesRemaining;
     public readonly bool BeatInBarAgrees;
 
     public PhaseReading(
@@ -65,8 +61,6 @@ public readonly struct PhaseReading
         int oneOfCurrentPhrase,
         int offset,
         bool cleanGrid,
-        int phrasesTotal,
-        int phrasesRemaining,
         bool beatInBarAgrees)
     {
         Confidence = confidence;
@@ -76,8 +70,6 @@ public readonly struct PhaseReading
         OneOfCurrentPhrase = oneOfCurrentPhrase;
         Offset = offset;
         CleanGrid = cleanGrid;
-        PhrasesTotal = phrasesTotal;
-        PhrasesRemaining = phrasesRemaining;
         BeatInBarAgrees = beatInBarAgrees;
     }
 }
@@ -132,8 +124,6 @@ public static class PhaseClock
                 -1,
                 -1,
                 false,
-                -1,
-                -1,
                 true);
         }
         else
@@ -148,15 +138,6 @@ public static class PhaseClock
         var beatInBar = rel % BarBeats + 1;
         var cleanGrid = hasTotal && osc.TotalBeats % PhraseBeats == 0;
 
-        var phrasesTotal = -1;
-        var phrasesRemaining = -1;
-        if (hasTotal)
-        {
-            phrasesTotal = CeilDiv(osc.TotalBeats, PhraseBeats);
-            var beatsLeft = osc.TotalBeats - osc.Beat;
-            phrasesRemaining = beatsLeft <= 0 ? 0 : CeilDiv(beatsLeft, PhraseBeats);
-        }
-
         var beatInBarAgrees = osc.BeatInBar < 1 || beatInBar == osc.BeatInBar;
 
         return new PhaseReading(
@@ -167,12 +148,9 @@ public static class PhaseClock
             oneOfCurrentPhrase,
             offset,
             cleanGrid,
-            phrasesTotal,
-            phrasesRemaining,
             beatInBarAgrees);
     }
 
     private static int Mod(int value, int modulus) => ((value % modulus) + modulus) % modulus;
 
-    private static int CeilDiv(int dividend, int divisor) => (dividend + divisor - 1) / divisor;
 }

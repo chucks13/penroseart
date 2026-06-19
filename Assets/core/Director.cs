@@ -132,17 +132,16 @@ public sealed class Director
         public TransitionPlan(
             int transitionIndex,
             int targetEffectIndex,
-            int startBeat,
-            int impactBeat,
+            TransitionBeatPlan beatPlan,
             TransitionRepertoire repertoire,
             float startTime,
             float secondsPerBeat)
         {
             TransitionIndex = transitionIndex;
             TargetEffectIndex = targetEffectIndex;
-            StartBeat = startBeat;
-            ImpactBeat = impactBeat;
-            CompleteBeat = impactBeat + repertoire.TailBeats;
+            StartBeat = beatPlan.StartBeat;
+            ImpactBeat = beatPlan.ImpactBeat;
+            CompleteBeat = beatPlan.CompleteBeat;
             Repertoire = repertoire;
             StartTime = startTime;
             DurationSeconds = repertoire.DurationBeats * secondsPerBeat;
@@ -476,27 +475,25 @@ public sealed class Director
     {
         impactBeat = -1;
         targetSource = "none";
-        if (phaseInput.PhaseActive != 1 || phaseInput.PhaseCountBeats <= 0 || phaseInput.PhaseLengthBeats <= 0)
+        if (phaseInput.PhaseActive != 1
+            || !PhraseWindow.TryFromTrackPhase(
+                beat,
+                phaseInput.PhaseCountBeats,
+                phaseInput.PhaseLengthBeats,
+                out var phraseWindow))
         {
             return false;
         }
 
-        var phraseBoundaryBeat = beat + phaseInput.PhaseCountBeats;
-        var phraseStartBeat = phraseBoundaryBeat - phaseInput.PhaseLengthBeats;
-        if (phraseStartBeat < 1 || phraseStartBeat > beat)
-        {
-            return false;
-        }
-
-        impactBeat = ResolveTrackPhasePlanImpactBeat(beat, phraseStartBeat, phraseBoundaryBeat, out targetSource);
+        impactBeat = ResolveTrackPhasePlanImpactBeat(beat, phraseWindow, out targetSource);
         return true;
     }
 
-    private int ResolveTrackPhasePlanImpactBeat(int beat, int phraseStartBeat, int phraseBoundaryBeat, out string targetSource)
+    private int ResolveTrackPhasePlanImpactBeat(int beat, PhraseWindow phraseWindow, out string targetSource)
     {
-        if (NeedsTrackPhasePlan(beat, phraseStartBeat, phraseBoundaryBeat))
+        if (NeedsTrackPhasePlan(beat, phraseWindow.StartBeat, phraseWindow.EndBeat))
         {
-            BuildTrackPhasePlan(beat, phraseStartBeat, phraseBoundaryBeat);
+            BuildTrackPhasePlan(beat, phraseWindow);
         }
 
         while (trackPhaseImpactIndex < trackPhaseImpactBeats.Length - 1
@@ -507,7 +504,7 @@ public sealed class Director
 
         var target = trackPhaseImpactBeats.Length > 0
             ? trackPhaseImpactBeats[Mathf.Clamp(trackPhaseImpactIndex, 0, trackPhaseImpactBeats.Length - 1)]
-            : phraseBoundaryBeat;
+            : phraseWindow.EndBeat;
         targetSource = target == trackPhaseBoundaryBeat ? "track-phase-boundary" : "track-phase-slot";
         return target;
     }
@@ -519,23 +516,21 @@ public sealed class Director
             return true;
         }
 
-        var samePhraseWindow = Math.Abs(phraseStartBeat - trackPhaseStartBeat) < PhaseClock.PhraseBeats
-            && Math.Abs(phraseBoundaryBeat - trackPhaseBoundaryBeat) < PhaseClock.PhraseBeats;
+        var samePhraseWindow = Math.Abs(phraseStartBeat - trackPhaseStartBeat) < PhraseWindow.DefaultSlotBeats
+            && Math.Abs(phraseBoundaryBeat - trackPhaseBoundaryBeat) < PhraseWindow.DefaultSlotBeats;
         return !samePhraseWindow;
     }
 
-    private void BuildTrackPhasePlan(int beat, int phraseStartBeat, int phraseBoundaryBeat)
+    private void BuildTrackPhasePlan(int beat, PhraseWindow phraseWindow)
     {
-        trackPhaseStartBeat = phraseStartBeat;
-        trackPhaseBoundaryBeat = phraseBoundaryBeat;
+        trackPhaseStartBeat = phraseWindow.StartBeat;
+        trackPhaseBoundaryBeat = phraseWindow.EndBeat;
         trackPhaseImpactIndex = 0;
 
         var futureInteriorSlots = new List<int>();
-        for (var slotBeat = FirstPhraseSlotOnOrAfter(phraseStartBeat, beat + 1);
-             slotBeat < phraseBoundaryBeat;
-             slotBeat += PhaseClock.PhraseBeats)
+        foreach (var slotBeat in phraseWindow.ImpactSlotsAfter(beat))
         {
-            if (CanChangeAtBeat(slotBeat))
+            if (slotBeat < phraseWindow.EndBeat && CanChangeAtBeat(slotBeat))
             {
                 futureInteriorSlots.Add(slotBeat);
             }
@@ -552,28 +547,16 @@ public sealed class Director
             futureInteriorSlots.RemoveAt(chosenIndex);
         }
 
-        if (CanChangeAtBeat(phraseBoundaryBeat))
+        if (CanChangeAtBeat(phraseWindow.EndBeat))
         {
-            selectedTargets.Add(phraseBoundaryBeat);
+            selectedTargets.Add(phraseWindow.EndBeat);
         }
 
         selectedTargets.Sort();
         trackPhaseImpactBeats = selectedTargets.Count > 0
             ? selectedTargets.ToArray()
-            : new[] { phraseBoundaryBeat };
-        Trace($"TRACK_PHASE_PLAN beat={beat} phraseStart={phraseStartBeat} boundary={phraseBoundaryBeat} targets={FormatBeatList(trackPhaseImpactBeats)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
-    }
-
-    private static int FirstPhraseSlotOnOrAfter(int phraseStartBeat, int beat)
-    {
-        if (beat <= phraseStartBeat)
-        {
-            return phraseStartBeat;
-        }
-
-        var beatsAfterStart = beat - phraseStartBeat;
-        var slotsAfterStart = (beatsAfterStart + PhaseClock.PhraseBeats - 1) / PhaseClock.PhraseBeats;
-        return phraseStartBeat + slotsAfterStart * PhaseClock.PhraseBeats;
+            : new[] { phraseWindow.EndBeat };
+        Trace($"TRACK_PHASE_PLAN beat={beat} phraseStart={phraseWindow.StartBeat} boundary={phraseWindow.EndBeat} targets={FormatBeatList(trackPhaseImpactBeats)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
     }
 
     private void ResetTrackPhasePlan()
@@ -600,7 +583,8 @@ public sealed class Director
         var transitionIndex = nextTransitionIndex;
         var repertoire = controller.transitions[transitionIndex].Repertoire;
         var impactBeat = phaseAnchorLandingBeat;
-        var startBeat = impactBeat - repertoire.RunwayBeats;
+        var beatPlan = TransitionBeatPlan.FromImpactBeat(impactBeat, repertoire);
+        var startBeat = beatPlan.StartBeat;
         var beatsUntilImpact = impactBeat - beat;
         if (beatsUntilImpact < 1 || beatsUntilImpact > repertoire.RunwayBeats)
         {
@@ -616,7 +600,7 @@ public sealed class Director
 
         var preferredRepertoire = PreferredRepertoireForLanding(beatsUntilImpact);
         Trace($"SYNC_CUE beat={beat} start={startBeat} impact={impactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - startBeat)} preferred={preferredRepertoire}");
-        StartSyncedTransition(transitionIndex, startBeat, impactBeat, repertoire, preferredRepertoire);
+        StartSyncedTransition(transitionIndex, beatPlan, repertoire, preferredRepertoire);
     }
 
     private Repertoire PreferredRepertoireForLanding(int beatsUntilLanding)
@@ -628,8 +612,7 @@ public sealed class Director
 
     private void StartSyncedTransition(
         int transitionIndex,
-        int startBeat,
-        int impactBeat,
+        TransitionBeatPlan beatPlan,
         TransitionRepertoire repertoire,
         Repertoire preferredRepertoire)
     {
@@ -639,9 +622,9 @@ public sealed class Director
 
         var secondsPerBeat = CurrentSecondsPerBeat();
         var beatFraction = controller.beatManager.BeatFraction ?? 0f;
-        var elapsedBeats = Mathf.Max(0f, lastSyncedBeat - startBeat + beatFraction);
+        var elapsedBeats = Mathf.Max(0f, lastSyncedBeat - beatPlan.StartBeat + beatFraction);
         var startTime = Time.time - (elapsedBeats * secondsPerBeat);
-        transitionPlan = new TransitionPlan(transitionIndex, targetEffectIndex, startBeat, impactBeat, repertoire, startTime, secondsPerBeat);
+        transitionPlan = new TransitionPlan(transitionIndex, targetEffectIndex, beatPlan, repertoire, startTime, secondsPerBeat);
 
         transitionStartBeat = transitionPlan.StartBeat;
         transitionLandingBeat = transitionPlan.ImpactBeat;

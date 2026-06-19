@@ -225,11 +225,27 @@ An inspection freeze that suspends the Director so a developer can sit on one ef
 _Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; re-asserting the held effect every frame (nothing fights it once the one decider is suspended).
 
 **Track Phase**:
-The named phrase position within the current track as analyzed by RaveSystem — "Intro", "Break", "Drop", "Chorus 2" — with current/next labels, an active/known flag, beats left to the next phase boundary, total phase length in beats, and phases remaining including the current phase. An **open vocabulary**: labels are track-dependent names, never a closed set to parse against. Track Phase boundaries are phase starts: if the 16-beat grid says the one is somewhere else but a Track Phase boundary is coming up, the grid is out of phase and the boundary wins.
-_Avoid_: confusing with **Bar Phase** (position within one measure); treating the labels as an enum; treating the remaining count as only future phases after the current one; keeping an inferred 16-beat grid when Track Phase contradicts it.
+RaveSystem's name for the analyzed phrase signal: current/next phrase labels, whether the phrase is active, beats remaining to the phrase boundary, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window**; it is not the Director's 16-Beat Phase.
+_Avoid_: confusing Track Phase with **Bar Phase** or **16-Beat Phase**; treating phrase labels as an enum; treating the remaining count as only future phrases after the current one.
+
+**Phrase Window**:
+The current musical section span described by Track Phase. It starts on a phrase boundary, contains one or more 16-Beat Phases, and ends on the next phrase boundary.
+_Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; the Director derives transition opportunities from it.
+
+**16-Beat Phase** (a.k.a. **Phase Slot**, **Slot**):
+A fixed 16-beat span inside a Phrase Window. A Slot is a set amount of beats, usually one 16-Beat Phase unless a different length is explicitly named; when selecting transitions, the Director chooses the boundary at the end of a Slot as a possible impact beat.
+_Avoid_: using "phase" when the whole Phrase Window is meant; assuming Slots have arbitrary lengths without saying so.
+
+**Phase Boundary**:
+The one beat where a 16-Beat Phase starts or ends. A phrase boundary is always also a Phase Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final transition impact.
+_Avoid_: calling every bar downbeat a Phase Boundary; a Phase Boundary is the 16-beat one, not every 4-beat bar one.
+
+**Selected Impact Beat**:
+A Phase Boundary chosen by the Director as the beat where an A-to-B Transition's Impact Point should land. The Director may choose interior Slot boundaries and always includes the final phrase boundary.
+_Avoid_: equating the Selected Impact Beat with Transition Completion when the transition has Tail; the impact can land before completion.
 
 **Phase Count**:
-The Director's 1-based count within the current 16-beat subdivision of a Track Phase: `elapsed_in_phrase = length_beats - count_beats`, then `count_16 = (elapsed_in_phrase % 16) + 1`. A 4-beat transition starts at count 13 so the change lands on the next X: `13, 14, 15, 16, X`.
+The Director's 1-based count within the current 16-Beat Phase. A 4-beat Runway starts at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
 **Fill**:
