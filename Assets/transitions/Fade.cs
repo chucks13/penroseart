@@ -10,7 +10,8 @@ public class Fade : TransitionBase
             runwayBeats: 4,
             tailBeats: 0,
             TransitionShape.Blend,
-            TransitionIntensity.Subtle);
+            TransitionIntensity.Subtle,
+            defaultDurationSeconds: 4f);
 
     public override TransitionRepertoire Repertoire => DefaultRepertoire;
 

@@ -13,7 +13,8 @@ public class FizzleTransition : TransitionBase
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.Dissolve,
-            TransitionIntensity.High);
+            TransitionIntensity.High,
+            defaultDurationSeconds: 4f);
 
     public override TransitionRepertoire Repertoire => DefaultRepertoire;
 

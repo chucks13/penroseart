@@ -2117,6 +2117,11 @@ MonoBehaviour:
     levelsReleaseSeconds: 0.15
   effectText: {fileID: 464376788}
   debugText: {fileID: 242027525}
+  showRuntimeHud: 1
+  showVerboseRuntimeHud: 0
+  runtimeHudAlpha: 0.78
+  configureCompactHudLayout: 1
+  logDirectorSwitching: 1
   myIPText: {fileID: 2070754382}
   penrose: {fileID: 0}
   effectDelta: 0

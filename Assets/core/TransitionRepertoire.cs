@@ -24,20 +24,22 @@ public enum TransitionIntensity
 /// Timing and musical-use contract that a Transition advertises to the Director.
 /// </summary>
 /// <remarks>
-/// A transition moves from A to B over <see cref="DurationBeats"/>. The Director schedules
-/// the transition so the <see cref="RunwayBeats"/> lead-in reaches the <see cref="ImpactPoint"/>
-/// on the key musical beat; completion can happen on that same beat or after it depending on
-/// <see cref="TailBeats"/>.
+/// A transition moves from A to B over <see cref="DurationBeats"/> in Synced Mode.
+/// The Director schedules the transition so the <see cref="RunwayBeats"/> lead-in reaches
+/// the <see cref="ImpactPoint"/> on the key musical beat; completion can happen on that same
+/// beat or after it depending on <see cref="TailBeats"/>. Standalone Mode uses
+/// <see cref="DefaultDurationSeconds"/> for the same A-to-B motion.
 /// </remarks>
 public readonly struct TransitionRepertoire
 {
-    /// <summary>Default transition contract: a four-beat blend that completes on the impact beat.</summary>
+    /// <summary>Default transition contract: a four-beat blend with a four-second Standalone duration.</summary>
     public static TransitionRepertoire Default { get; } = FromRunwayAndTail(
         Repertoire.None,
         runwayBeats: 4,
         tailBeats: 0,
         TransitionShape.Blend,
-        TransitionIntensity.Subtle);
+        TransitionIntensity.Subtle,
+        defaultDurationSeconds: 4f);
 
     /// <summary>Musical situations this transition is suited for, such as Drop or Energy changes.</summary>
     public readonly Repertoire Tags;
@@ -54,6 +56,9 @@ public readonly struct TransitionRepertoire
     /// <summary>How forcefully this transition reads as a musical move.</summary>
     public readonly TransitionIntensity Intensity;
 
+    /// <summary>Default Standalone Mode A-to-B transition duration in seconds.</summary>
+    public readonly float DefaultDurationSeconds;
+
     /// <summary>Total A-to-B transition duration in beats.</summary>
     public int DurationBeats => RunwayBeats + TailBeats;
 
@@ -68,7 +73,8 @@ public readonly struct TransitionRepertoire
         int runwayBeats,
         int tailBeats,
         TransitionShape shape,
-        TransitionIntensity intensity)
+        TransitionIntensity intensity,
+        float defaultDurationSeconds)
     {
         if (runwayBeats <= 0)
         {
@@ -80,11 +86,13 @@ public readonly struct TransitionRepertoire
             throw new ArgumentOutOfRangeException(nameof(tailBeats), tailBeats, "Tail cannot be negative.");
         }
 
+
         Tags = tags;
         RunwayBeats = runwayBeats;
         TailBeats = tailBeats;
         Shape = shape;
         Intensity = intensity;
+        DefaultDurationSeconds = defaultDurationSeconds;
     }
 
     /// <summary>
@@ -95,8 +103,9 @@ public readonly struct TransitionRepertoire
         int runwayBeats,
         int tailBeats,
         TransitionShape shape,
-        TransitionIntensity intensity)
+        TransitionIntensity intensity,
+        float defaultDurationSeconds)
     {
-        return new TransitionRepertoire(tags, runwayBeats, tailBeats, shape, intensity);
+        return new TransitionRepertoire(tags, runwayBeats, tailBeats, shape, intensity, defaultDurationSeconds);
     }
 }

@@ -742,11 +742,13 @@ public sealed class Director
         }
 
         var transitionIndex = nextTransitionIndex;
+        var transitionRepertoire = controller.transitions[transitionIndex].Repertoire;
+        var transitionDurationSeconds = transitionRepertoire.DefaultDurationSeconds;
         var targetEffectIndex = PullEffect(Repertoire.None);
-        Trace($"STANDALONE_TRANSITION_START transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} durationSeconds={controller.transitionTime:0.###}");
+        Trace($"STANDALONE_TRANSITION_START transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} durationSeconds={transitionDurationSeconds:0.###}");
         switcher.StartTransition(targetEffectIndex, transitionIndex);
         controller.currentTransition = transitionIndex;
-        standaloneTimer.Set(controller.transitionTime);
+        standaloneTimer.Set(transitionDurationSeconds);
         standaloneTimer.Reset();
         TransitionProgress = 0f;
     }

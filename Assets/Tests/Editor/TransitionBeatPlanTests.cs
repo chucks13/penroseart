@@ -10,7 +10,8 @@ public sealed class TransitionBeatPlanTests
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.Dissolve,
-            TransitionIntensity.High);
+            TransitionIntensity.High,
+            defaultDurationSeconds: 4f);
 
         var plan = TransitionBeatPlan.FromImpactBeat(609, repertoire);
 
@@ -27,7 +28,8 @@ public sealed class TransitionBeatPlanTests
             runwayBeats: 4,
             tailBeats: 0,
             TransitionShape.Blend,
-            TransitionIntensity.Subtle);
+            TransitionIntensity.Subtle,
+            defaultDurationSeconds: 4f);
 
         var plan = TransitionBeatPlan.FromImpactBeat(609, repertoire);
 

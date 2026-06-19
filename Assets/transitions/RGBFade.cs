@@ -11,7 +11,8 @@ public class RGBFade : TransitionBase
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.ChannelBlend,
-            TransitionIntensity.Medium);
+            TransitionIntensity.Medium,
+            defaultDurationSeconds: 4f);
 
     public override TransitionRepertoire Repertoire => DefaultRepertoire;
 

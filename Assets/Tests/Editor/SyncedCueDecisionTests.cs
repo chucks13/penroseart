@@ -87,6 +87,7 @@ public sealed class SyncedCueDecisionTests
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.Dissolve,
-            TransitionIntensity.High);
+            TransitionIntensity.High,
+            defaultDurationSeconds: 4f);
     }
 }

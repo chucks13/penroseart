@@ -49,12 +49,14 @@ public class Controller : Singleton<Controller>
     /// <summary>
     /// External pixel-source blenders discovered by <see cref="Factory{T}"/>.
     /// </summary>
+    [NonSerialized]
     public BlenderBase[] blenders;
 
     /// <summary>
     /// Optional active external-source blender selected by telnet/debug paths.
     /// When set, incoming PixelReceiver data is blended with the native buffer.
     /// </summary>
+    [NonSerialized]
     public BlenderBase ActiveBlender = null;
 
     /// <summary>
@@ -261,8 +263,11 @@ public class Controller : Singleton<Controller>
     /// </summary>
     public int currentTransition;
 
-    /// <summary>Seconds for each effect-to-effect transition.</summary>
-    public float transitionTime = 2f;
+    /// <summary>
+    /// Legacy serialized transition duration retained for scene compatibility.
+    /// Active Standalone Mode transition timing now comes from each transition's repertoire.
+    /// </summary>
+    public float transitionTime = 4f;
 
     // ---------------------------------------------------------------------
     // Scene-provided source data and helper systems
@@ -337,6 +342,7 @@ public class Controller : Singleton<Controller>
     public Penrose penrose;
 
     /// <summary>Effect/transition phase timer. Its finish event drives <see cref="Director.OnTimerFinished"/>.</summary>
+    [NonSerialized]
     [HideInInspector]
     public Timer timer;
 

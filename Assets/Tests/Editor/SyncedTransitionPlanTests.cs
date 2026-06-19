@@ -58,7 +58,8 @@ public sealed class SyncedTransitionPlanTests
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.Dissolve,
-            TransitionIntensity.High);
+            TransitionIntensity.High,
+            defaultDurationSeconds: 4f);
         var beatPlan = TransitionBeatPlan.FromImpactBeat(609, repertoire);
         return new SyncedTransitionPlan(
             transitionIndex: 3,

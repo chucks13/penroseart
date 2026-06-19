@@ -12,6 +12,7 @@ public class DirectionalWipe : TransitionBase
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.DirectionalWipe;
     private const TransitionIntensity Intensity = TransitionIntensity.Medium;
+    private const float DefaultDurationSeconds = 4f;
 
     private const float RandomDirectionRangeRadians = Mathf.PI * 2f;
     private const float ExternalBlendDefaultProgress = 0.5f;
@@ -30,7 +31,8 @@ public class DirectionalWipe : TransitionBase
             RunwayBeats,
             TailBeats,
             Shape,
-            Intensity);
+            Intensity,
+            DefaultDurationSeconds);
 
     public override TransitionRepertoire Repertoire => DefaultRepertoire;
 

@@ -14,7 +14,8 @@ public class NoiseTransition : TransitionBase
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.Noise,
-            TransitionIntensity.High);
+            TransitionIntensity.High,
+            defaultDurationSeconds: 4f);
 
     public override TransitionRepertoire Repertoire => DefaultRepertoire;
 

@@ -10,7 +10,8 @@ public class IndexWipe : TransitionBase
             runwayBeats: 4,
             tailBeats: 0,
             TransitionShape.IndexWipe,
-            TransitionIntensity.Medium);
+            TransitionIntensity.Medium,
+            defaultDurationSeconds: 4f);
 
     public override TransitionRepertoire Repertoire => DefaultRepertoire;
 
