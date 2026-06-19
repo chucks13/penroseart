@@ -1168,9 +1168,9 @@ public class Controller : Singleton<Controller>
             return $"HOLD · {stage} · Director suspended";
         }
 
-        if (directorStatus.Mode == DirectorMode.Default)
+        if (directorStatus.Mode == DirectorMode.Standalone)
         {
-            return $"{stage} · DEFAULT · {FormatDecision(directorStatus.Decision)}";
+            return $"{stage} · STANDALONE · {FormatDecision(directorStatus.Decision)}";
         }
 
         if (directorStatus.Mode == DirectorMode.Synced)
@@ -1197,7 +1197,7 @@ public class Controller : Singleton<Controller>
                 : "cadence ready");
             AppendIfNotEmpty(builder, directorStatus.Phase.BeatInBar > 0 ? $"bar beat {directorStatus.Phase.BeatInBar}" : string.Empty);
         }
-        else if (directorStatus.Mode == DirectorMode.Default)
+        else if (directorStatus.Mode == DirectorMode.Standalone)
         {
             AppendIfNotEmpty(builder, $"timer {Mathf.RoundToInt(Mathf.Clamp01(directorStatus.TransitionProgress) * 100f)}%");
         }
@@ -1247,9 +1247,9 @@ public class Controller : Singleton<Controller>
     {
         switch (decision)
         {
-            case DirectorDecision.DefaultTimer:
+            case DirectorDecision.StandaloneTimer:
                 return "timer";
-            case DirectorDecision.DefaultTransition:
+            case DirectorDecision.StandaloneTransition:
                 return "transition";
             case DirectorDecision.WaitingForPhase:
                 return "waiting phase";
@@ -1479,8 +1479,8 @@ public class Controller : Singleton<Controller>
             raveOsc.ApplyTo(beatManager);
         beatManager.Update();
 
-        // Director reads the freshly-applied beat state: live OSC drives synced 16-beat scheduling,
-        // while no live source leaves Default Mode on its independent timer path.
+        // Director reads the freshly-applied beat state: live OSC drives Synced Mode,
+        // while no live source leaves Standalone Mode on its independent timer path.
         director.Tick(effectDelta);
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands

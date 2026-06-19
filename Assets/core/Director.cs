@@ -5,7 +5,7 @@ using UnityEngine;
 public enum DirectorMode
 {
     NotReady,
-    Default,
+    Standalone,
     Synced,
     Hold
 }
@@ -14,8 +14,8 @@ public enum DirectorMode
 public enum DirectorDecision
 {
     NotReady,
-    DefaultTimer,
-    DefaultTransition,
+    StandaloneTimer,
+    StandaloneTransition,
     WaitingForPhase,
     WaitingForRunway,
     WaitingForCadence,
@@ -144,7 +144,7 @@ public sealed class Director
 
     private readonly Controller controller;
     private readonly Switcher switcher;
-    private readonly Timer defaultTimer;
+    private readonly Timer standaloneTimer;
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
 
@@ -169,7 +169,7 @@ public sealed class Director
     private int trackPhaseImpactIndex;
 
     /// <summary>
-    /// Progress for the current mechanical transition. Default Mode uses the legacy timer;
+    /// Progress for the current mechanical transition. Standalone Mode uses the legacy timer;
     /// Synced Mode derives it from the live beat count so the Switcher never interprets timing.
     /// </summary>
     public float TransitionProgress { get; private set; }
@@ -183,9 +183,8 @@ public sealed class Director
     /// <summary>Absolute beat where the current phase anchor next lands, or -1 when unlocked.</summary>
     public int PhaseAnchorLandingBeat => phaseAnchorLandingBeat;
 
-    /// <summary>Whether live beat data is currently allowed to drive sequencing.</summary>
-    public bool IsSyncedMode => controller.beatManager.IsLiveSource
-        && controller.beatManager.Beat is { };
+    /// <summary>Whether live OSC data is currently driving sequencing.</summary>
+    public bool IsSyncedMode => controller.beatManager.IsLiveSource;
 
     /// <summary>Current read-only sequencing snapshot for runtime HUDs and inspector diagnostics.</summary>
     public DirectorStatus Status => BuildStatus();
@@ -193,14 +192,14 @@ public sealed class Director
     public Director(
         Controller controller,
         Switcher switcher,
-        Timer defaultTimer,
+        Timer standaloneTimer,
         int[] effectDeck,
         int[] transitionDeck,
         int initialTransitionIndex)
     {
         this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
         this.switcher = switcher ?? throw new ArgumentNullException(nameof(switcher));
-        this.defaultTimer = defaultTimer ?? throw new ArgumentNullException(nameof(defaultTimer));
+        this.standaloneTimer = standaloneTimer ?? throw new ArgumentNullException(nameof(standaloneTimer));
         this.effectDeck = effectDeck ?? throw new ArgumentNullException(nameof(effectDeck));
         this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
         nextTransitionIndex = initialTransitionIndex;
@@ -211,16 +210,24 @@ public sealed class Director
     {
         LogModeIfChanged();
 
-        if (IsSyncedMode && controller.beatManager.Beat is { } beat)
+        if (IsSyncedMode)
         {
-            TickSyncedMode(beat);
+            if (controller.beatManager.Beat is { } beat)
+            {
+                TickSyncedMode(beat);
+            }
+            else
+            {
+                TransitionProgress = 0f;
+            }
+
             return;
         }
 
-        TickDefaultMode(deltaTime);
+        TickStandaloneMode(deltaTime);
     }
 
-    /// <summary>Immediate developer/manual effect selection. Resets Default Mode cadence.</summary>
+    /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence.</summary>
     public void ShowNow(int effectIndex, float durationSeconds)
     {
         Trace($"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
@@ -229,8 +236,8 @@ public sealed class Director
         ResetTrackPhasePlan();
         MarkChangedOnCurrentBeat();
         TransitionProgress = 0f;
-        defaultTimer.Set(durationSeconds);
-        defaultTimer.Reset();
+        standaloneTimer.Set(durationSeconds);
+        standaloneTimer.Reset();
     }
 
     /// <summary>
@@ -249,7 +256,7 @@ public sealed class Director
         }
     }
 
-    /// <summary>Default Mode timer callback.</summary>
+    /// <summary>Standalone Mode timer callback.</summary>
     public void OnTimerFinished()
     {
         if (IsSyncedMode)
@@ -258,8 +265,8 @@ public sealed class Director
             return;
         }
 
-        Trace($"TIMER_FINISHED_DEFAULT transitioning={switcher.IsTransitioning} progress={TransitionProgress:0.###}");
-        RunDefaultModeTimerDecision();
+        Trace($"TIMER_FINISHED_STANDALONE transitioning={switcher.IsTransitioning} progress={TransitionProgress:0.###}");
+        RunStandaloneTimerDecision();
     }
 
     private DirectorStatus BuildStatus()
@@ -273,7 +280,7 @@ public sealed class Director
             ? Math.Max(0, MinimumChangeCadenceBeats - (currentBeat - lastChangeBeat))
             : 0;
 
-        var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Default;
+        var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
         var decision = ResolveDecision(isHeld, isSynced, beatsUntilLanding, beatsUntilCadenceReady, runwayBeats);
 
         return new DirectorStatus(
@@ -306,7 +313,7 @@ public sealed class Director
 
         if (!isSynced)
         {
-            return switcher.IsTransitioning ? DirectorDecision.DefaultTransition : DirectorDecision.DefaultTimer;
+            return switcher.IsTransitioning ? DirectorDecision.StandaloneTransition : DirectorDecision.StandaloneTimer;
         }
 
         if (switcher.IsTransitioning)
@@ -329,7 +336,7 @@ public sealed class Director
             : DirectorDecision.WaitingForRunway;
     }
 
-    private void TickDefaultMode(float deltaTime)
+    private void TickStandaloneMode(float deltaTime)
     {
         phaseReading = PhaseReading.Unavailable;
         hasPhaseAnchor = false;
@@ -337,9 +344,9 @@ public sealed class Director
         phaseAnchorLandingBeat = -1;
         transitionPlan = default;
         ResetTrackPhasePlan();
-        TransitionProgress = defaultTimer.Value;
-        defaultTimer.Update(deltaTime);
-        TransitionProgress = defaultTimer.Value;
+        TransitionProgress = standaloneTimer.Value;
+        standaloneTimer.Update(deltaTime);
+        TransitionProgress = standaloneTimer.Value;
     }
 
     private void TickSyncedMode(int beat)
@@ -632,7 +639,7 @@ public sealed class Director
             ? DirectorMode.Hold
             : IsSyncedMode
                 ? DirectorMode.Synced
-                : DirectorMode.Default;
+                : DirectorMode.Standalone;
 
         if (mode == lastLoggedMode)
         {
@@ -736,18 +743,18 @@ public sealed class Director
         return beats == null || beats.Length == 0 ? "none" : string.Join(",", beats);
     }
 
-    private void RunDefaultModeTimerDecision()
+    private void RunStandaloneTimerDecision()
     {
         if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
         {
-            Trace($"DEFAULT_HOLD held={FormatEffect(heldEffectIndex)} transitioning={switcher.IsTransitioning} current={FormatEffect(switcher.CurrentEffectIndex)}");
+            Trace($"STANDALONE_HOLD held={FormatEffect(heldEffectIndex)} transitioning={switcher.IsTransitioning} current={FormatEffect(switcher.CurrentEffectIndex)}");
             if (switcher.IsTransitioning || switcher.CurrentEffectIndex != heldEffectIndex)
             {
                 ShowNow(heldEffectIndex, controller.effectTime);
             }
             else
             {
-                defaultTimer.Reset();
+                standaloneTimer.Reset();
             }
 
             return;
@@ -755,24 +762,24 @@ public sealed class Director
 
         if (switcher.IsTransitioning)
         {
-            Trace($"DEFAULT_TRANSITION_COMPLETE_REQUEST progress={TransitionProgress:0.###} target={FormatEffect(switcher.TransitionTargetEffectIndex)} transition={FormatTransition(switcher.CurrentTransitionIndex)}");
+            Trace($"STANDALONE_TRANSITION_COMPLETE_REQUEST progress={TransitionProgress:0.###} target={FormatEffect(switcher.TransitionTargetEffectIndex)} transition={FormatTransition(switcher.CurrentTransitionIndex)}");
             switcher.CompleteTransition();
-            defaultTimer.Set(controller.effectTime);
-            defaultTimer.Reset();
+            standaloneTimer.Set(controller.effectTime);
+            standaloneTimer.Reset();
             TransitionProgress = 0f;
             nextTransitionIndex = PullCard(transitionDeck);
             controller.currentTransition = nextTransitionIndex;
-            Trace($"DEFAULT_TRANSITION_COMPLETE_DONE current={FormatEffect(switcher.CurrentEffectIndex)} nextTransition={FormatTransition(nextTransitionIndex)}");
+            Trace($"STANDALONE_TRANSITION_COMPLETE_DONE current={FormatEffect(switcher.CurrentEffectIndex)} nextTransition={FormatTransition(nextTransitionIndex)}");
             return;
         }
 
         var transitionIndex = nextTransitionIndex;
         var targetEffectIndex = PullEffect(Repertoire.None);
-        Trace($"DEFAULT_TRANSITION_START transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} durationSeconds={controller.transitionTime:0.###}");
+        Trace($"STANDALONE_TRANSITION_START transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} durationSeconds={controller.transitionTime:0.###}");
         switcher.StartTransition(targetEffectIndex, transitionIndex);
         controller.currentTransition = transitionIndex;
-        defaultTimer.Set(controller.transitionTime);
-        defaultTimer.Reset();
+        standaloneTimer.Set(controller.transitionTime);
+        standaloneTimer.Reset();
         TransitionProgress = 0f;
     }
 

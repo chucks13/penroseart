@@ -10,7 +10,7 @@ using UnityEngine;
 /// (quarter-note beat dots and offbeat markers on the left, beat/offbeat/eighth pulse meters on the right,
 /// countdown chips below); the Waveform strip with its two-way wall selector; and the contrived rhythm
 /// query rows (ADR-0002), each rendered exactly as effects consume it — a meter/value when non-null
-/// (Synced Mode) and a dimmed null marker when null (the caller's Default Mode). The raw serialized
+/// (Synced Mode) and a dimmed null marker when null (the caller's Standalone response). The raw serialized
 /// fields, including <c>beatData</c> via Unity's plain default foldout, follow underneath as the
 /// raw-values debug view.
 ///
@@ -89,7 +89,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private const float PhaseLabelWidth = 90f;
     private const float SegmentGap = 6f;
 
-    private const string NullValueText = "—  null → Default Mode";
+    private const string NullValueText = "—  null → Standalone";
 
     private const string EnvelopeTooltip =
         "Envelope(variant): the Waveform Pool envelope evaluated at the current Bar Phase — the primitive under " +
@@ -358,7 +358,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         var queriesY = stripRect.yMax + SectionGap;
         GUI.Label(new Rect(content.x, queriesY, content.width * 0.5f, QueriesHeaderHeight), "RHYTHM QUERIES", queriesHeaderStyle);
         GUI.Label(new Rect(content.x + (content.width * 0.5f), queriesY, content.width * 0.5f, QueriesHeaderHeight),
-            "— = null → Default Mode", hintStyle);
+            "— = null → Standalone", hintStyle);
 
         var y = queriesY + QueriesHeaderHeight + QueriesHeaderGap;
         DrawEnvelopeRow(new Rect(content.x, y, content.width, QueryRowHeight), beatManager, owner);
@@ -948,7 +948,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         return new Rect(row.x + QueryRowLabelWidth + 4f, row.y, Mathf.Max(0f, row.width - QueryRowLabelWidth - 4f), row.height);
     }
 
-    /// <summary>Draws the dimmed marker for a query that is currently null — the consumer's Default Mode.</summary>
+    /// <summary>Draws the dimmed marker for a query that is currently null — the consumer's Standalone response.</summary>
     private static void DrawNullValue(Rect content)
     {
         GUI.Label(content, NullValueText, nullStyle);

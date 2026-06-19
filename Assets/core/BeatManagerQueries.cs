@@ -196,7 +196,7 @@ public readonly struct LevelsInfo
 /// <summary>
 /// The contrived rhythm query layer (ADR-0002). Effects and transitions pull all musical state through
 /// these nullable queries: null always means "not available right now", and the caller owns its
-/// Default Mode fallback (<c>?? fallback</c>) or Synced Mode branch (<c>is { } x</c>).
+/// Standalone Mode behavior (<c>?? standalone</c>) or Synced Mode branch (<c>is { } x</c>).
 /// </summary>
 /// <remarks>
 /// This is the only place that reads the transport's -1 sentinels and tri-state ints; sentinels never

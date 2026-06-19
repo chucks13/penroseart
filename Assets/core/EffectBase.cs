@@ -94,7 +94,7 @@ public abstract class EffectBase
     /// <summary>
     /// Contrived beat brightness multiplier for this effect, closing over <see cref="beatEnable"/> and
     /// <see cref="beatVariant"/>: Synced Mode pulses between <paramref name="minBrightness"/> and 1
-    /// on this effect's Waveform; Default Mode (no beat clock, or beat response disabled) holds steady at 1.
+    /// on this effect's Waveform; Standalone Mode (no beat clock, or beat response disabled) holds steady at 1.
     /// </summary>
     protected float BeatBrightness(float minBrightness = 0.5f)
     {
@@ -106,7 +106,7 @@ public abstract class EffectBase
     /// <summary>
     /// Beat-warped effect time, closing over <see cref="beatEnable"/>, <see cref="beatVariant"/>, and
     /// <see cref="effectTime"/>: Synced Mode kicks the clock forward by <paramref name="intensity"/> on
-    /// the beat without changing the stored <see cref="effectTime"/>; Default Mode returns it unchanged.
+    /// the beat without changing the stored <see cref="effectTime"/>; Standalone Mode returns it unchanged.
     /// </summary>
     protected float BeatTime(float intensity = 0.2f)
     {
