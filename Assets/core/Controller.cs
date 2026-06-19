@@ -1195,6 +1195,7 @@ public class Controller : Singleton<Controller>
         }
 
         var builder = new StringBuilder();
+        AppendIfNotEmpty(builder, FormatNextMove(directorStatus));
         if (directorStatus.IsSyncedMode)
         {
             AppendIfNotEmpty(builder, directorStatus.PhaseAnchorConfidence.ToString());
@@ -1241,6 +1242,18 @@ public class Controller : Singleton<Controller>
         }
 
         return status.StageName;
+    }
+
+    private static string FormatNextMove(DirectorStatus status)
+    {
+        if (status.NextEffectIndex < 0 && status.NextTransitionIndex < 0)
+        {
+            return string.Empty;
+        }
+
+        var nextEffect = status.NextEffectIndex >= 0 ? status.NextEffectName : "—";
+        var nextTransition = status.NextTransitionIndex >= 0 ? status.NextTransitionName : "—";
+        return $"next {nextEffect} via {nextTransition}";
     }
 
     private static string FormatPhasePosition(DirectorStatus status)

@@ -53,10 +53,14 @@ public sealed class ControllerEditor : Editor
         DrawRow("Mode", directorStatus.Mode.ToString());
         DrawRow("Decision", directorStatus.Decision.ToString());
         DrawRow("Stage", switcherStatus.StageName);
-        DrawRow("Current", FormatIndexedName(switcherStatus.CurrentEffectIndex, switcherStatus.CurrentEffectName));
-        DrawRow("Source", FormatIndexedName(switcherStatus.SourceEffectIndex, switcherStatus.SourceEffectName));
-        DrawRow("Target", FormatIndexedName(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
-        DrawRow("Transition", FormatIndexedName(switcherStatus.CurrentTransitionIndex, switcherStatus.CurrentTransitionName));
+        DrawRow("Current Effect", FormatIndexedName(switcherStatus.CurrentEffectIndex, switcherStatus.CurrentEffectName));
+        DrawRow("Next Effect", FormatIndexedName(directorStatus.NextEffectIndex, directorStatus.NextEffectName));
+        DrawRow("Source Effect", FormatIndexedName(switcherStatus.SourceEffectIndex, switcherStatus.SourceEffectName));
+        DrawRow("Target Effect", FormatIndexedName(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
+        DrawRow("Active Transition", FormatIndexedName(switcherStatus.CurrentTransitionIndex, switcherStatus.CurrentTransitionName));
+        DrawRow("Next Transition", FormatIndexedName(directorStatus.NextTransitionIndex, directorStatus.NextTransitionName));
+        DrawRow("Hold Selected Effect", directorStatus.HoldSelectedEffect ? "On" : "Off");
+        DrawRow("Hold Selected Transition", directorStatus.HoldSelectedTransition ? "On" : "Off");
         DrawRow("Current Beat", FormatBeat(directorStatus.CurrentBeat));
         DrawRow("Last Change", FormatBeat(directorStatus.LastChangeBeat));
         DrawRow("Landing", FormatBeat(directorStatus.TransitionLandingBeat));
