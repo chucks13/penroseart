@@ -536,32 +536,38 @@ public sealed class Director
 
     private void TryStartSyncedCue(int beat)
     {
-        if (!hasPhaseAnchor || lastCueBeat == beat)
+        if (!hasPhaseAnchor)
         {
             return;
         }
 
         var transitionIndex = nextTransitionIndex;
         var repertoire = controller.transitions[transitionIndex].Repertoire;
-        var impactBeat = phaseAnchorLandingBeat;
-        var beatPlan = TransitionBeatPlan.FromImpactBeat(impactBeat, repertoire);
-        var startBeat = beatPlan.StartBeat;
-        var beatsUntilImpact = impactBeat - beat;
-        if (!beatPlan.IsCueBeat(beat))
+        var lastCue = lastCueBeat >= 0 ? (int?)lastCueBeat : null;
+        var previousImpactBeat = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        var cueDecision = SyncedCueDecision.Evaluate(
+            beat,
+            phaseAnchorLandingBeat,
+            repertoire,
+            lastCue,
+            previousImpactBeat,
+            MinimumChangeCadenceBeats);
+
+        if (cueDecision.Kind == SyncedCueDecisionKind.Wait)
         {
             return;
         }
 
-        if (!CanChangeAtBeat(impactBeat))
+        if (cueDecision.BlockedByCadence)
         {
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} impact={impactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} impact={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
             lastCueBeat = beat;
             return;
         }
 
-        var preferredRepertoire = PreferredRepertoireForLanding(beatsUntilImpact);
-        Trace($"SYNC_CUE beat={beat} start={startBeat} impact={impactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - startBeat)} preferred={preferredRepertoire}");
-        StartSyncedTransition(transitionIndex, beatPlan, repertoire, preferredRepertoire);
+        var preferredRepertoire = PreferredRepertoireForLanding(cueDecision.BeatsUntilImpact);
+        Trace($"SYNC_CUE beat={beat} start={cueDecision.BeatPlan.StartBeat} impact={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueDecision.BeatPlan.StartBeat)} preferred={preferredRepertoire}");
+        StartSyncedTransition(transitionIndex, cueDecision.BeatPlan, repertoire, preferredRepertoire);
     }
 
     private Repertoire PreferredRepertoireForLanding(int beatsUntilLanding)
