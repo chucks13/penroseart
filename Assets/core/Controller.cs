@@ -1104,26 +1104,26 @@ public class Controller : Singleton<Controller>
         text.enableAutoSizing = false;
         text.textWrappingMode = topLine ? TextWrappingModes.NoWrap : TextWrappingModes.Normal;
         text.overflowMode = TextOverflowModes.Ellipsis;
-        text.fontSize = topLine ? 16f : 24f;
+        text.fontSize = topLine ? 34f : 30f;
         text.alignment = topLine ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.BottomLeft;
         text.color = WithAlpha(Color.white, runtimeHudAlpha);
 
         var rect = text.rectTransform;
         if (topLine)
         {
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
+            rect.anchorMin = new Vector2(0.15f, 1f);
+            rect.anchorMax = new Vector2(0.85f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
-            rect.offsetMin = new Vector2(12f, -44f);
-            rect.offsetMax = new Vector2(-12f, -12f);
+            rect.offsetMin = new Vector2(0f, -72f);
+            rect.offsetMax = new Vector2(0f, -12f);
         }
         else
         {
             rect.anchorMin = new Vector2(0f, 0f);
             rect.anchorMax = new Vector2(1f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
-            rect.offsetMin = new Vector2(12f, 12f);
-            rect.offsetMax = new Vector2(-12f, 116f);
+            rect.offsetMin = new Vector2(24f, 18f);
+            rect.offsetMax = new Vector2(-24f, 150f);
         }
     }
 
@@ -1165,17 +1165,17 @@ public class Controller : Singleton<Controller>
         var stage = FormatStageName(switcherStatus, directorStatus.TransitionProgress);
         if (directorStatus.Mode == DirectorMode.Hold)
         {
-            return $"HOLD · {stage} · Director suspended";
+            return $"{stage} · HOLD";
         }
 
         if (directorStatus.Mode == DirectorMode.Standalone)
         {
-            return $"{stage} · STANDALONE · {FormatDecision(directorStatus.Decision)}";
+            return $"{stage} · STANDALONE";
         }
 
         if (directorStatus.Mode == DirectorMode.Synced)
         {
-            return $"{stage} · SYNC · {directorStatus.PhaseAnchorConfidence} · {FormatPhasePosition(directorStatus)} · {FormatLanding(directorStatus)}";
+            return $"{stage} · SYNC";
         }
 
         return "Starting Director…";
@@ -1191,6 +1191,9 @@ public class Controller : Singleton<Controller>
         var builder = new StringBuilder();
         if (directorStatus.IsSyncedMode)
         {
+            AppendIfNotEmpty(builder, directorStatus.PhaseAnchorConfidence.ToString());
+            AppendIfNotEmpty(builder, FormatPhasePosition(directorStatus));
+            AppendIfNotEmpty(builder, FormatLanding(directorStatus));
             AppendIfNotEmpty(builder, FormatDropCue());
             AppendIfNotEmpty(builder, directorStatus.BeatsUntilCadenceReady > 0
                 ? $"cadence +{directorStatus.BeatsUntilCadenceReady}b"
@@ -1199,11 +1202,12 @@ public class Controller : Singleton<Controller>
         }
         else if (directorStatus.Mode == DirectorMode.Standalone)
         {
+            AppendIfNotEmpty(builder, FormatDecision(directorStatus.Decision));
             AppendIfNotEmpty(builder, $"timer {Mathf.RoundToInt(Mathf.Clamp01(directorStatus.TransitionProgress) * 100f)}%");
         }
         else if (directorStatus.Mode == DirectorMode.Hold)
         {
-            AppendIfNotEmpty(builder, "hold");
+            AppendIfNotEmpty(builder, "Director suspended");
         }
 
         AppendIfNotEmpty(builder, $"FPS {fps:0}");

@@ -205,24 +205,24 @@
       align-items: center;
       gap: 8px;
       max-width: calc(100% - 28px);
-      min-height: 30px;
-      padding: 6px 9px;
+      min-height: 42px;
+      padding: 8px 12px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.13);
       background: rgba(5, 8, 13, 0.68);
       box-shadow: 0 4px 18px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
       backdrop-filter: blur(7px);
       font-family: var(--mono);
-      font-size: clamp(11px, 1.25vw, 15px);
+      font-size: clamp(14px, 1.65vw, 22px);
       line-height: 1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .hud-main { left: 14px; top: 14px; }
-    .hud-right { right: 14px; top: 14px; max-width: 32%; }
-    .hud-bottom { left: 14px; bottom: 14px; max-width: 50%; color: var(--muted); }
+    .hud-main { left: 15%; right: 15%; top: 14px; max-width: none; justify-content: flex-start; }
+    .hud-right { right: 14px; top: 68px; max-width: 32%; }
+    .hud-bottom { left: 14px; bottom: 14px; max-width: 66%; color: var(--muted); }
 
     .hud-pill {
       display: inline-flex;
@@ -633,7 +633,7 @@
       <div>
         <h1>Penrose Director UI Mockup</h1>
         <p class="subtitle">
-          Revised to keep the wall preview dominant. The runtime screen gets a tiny HUD for current state;
+          Revised to keep the wall preview dominant. The runtime screen gets a readable current stage/effect HUD in a fixed top-center band;
           the Inspector gets the detailed Director, Phase Lock, and Mechanical Switcher explanation.
         </p>
       </div>
@@ -653,7 +653,7 @@
         </div>
         <div class="sim-wrap">
           <p class="sim-note">
-            Default screen mode should be one compact HUD line plus maybe a tiny transient status line. Verbose debug is an opt-in toggle, not the normal overlay.
+            Default screen mode should keep the current stage/effect readable in a fixed top-center band, with volatile timing details on the bottom status line. Verbose debug is an opt-in toggle, not the normal overlay.
           </p>
           <div class="sim-screen">
             <div class="wall-preview"></div>
@@ -662,12 +662,6 @@
               <span><strong>Vortex → NoiseTunnel</strong></span>
               <span class="dim">·</span>
               <span class="hud-pill">SYNC</span>
-              <span class="dim">·</span>
-              <span>Structural</span>
-              <span class="dim">·</span>
-              <span class="hot">15/16</span>
-              <span class="dim">·</span>
-              <span>landing <span class="hot">+2b</span></span>
             </div>
 
             <div class="hud hud-right">
@@ -677,11 +671,15 @@
             </div>
 
             <div class="hud hud-bottom">
+              <span>Structural</span>
+              <span class="dim">·</span>
+              <span class="hot">15/16</span>
+              <span class="dim">·</span>
+              <span>landing <span class="hot">+2b</span></span>
+              <span class="dim">·</span>
               <span>Drop +2b</span>
               <span class="dim">·</span>
               <span>cadence ready</span>
-              <span class="dim">·</span>
-              <span>Live OSC</span>
             </div>
 
             <div class="toggle-callout">
@@ -692,11 +690,11 @@
           <div class="hud-examples">
             <div class="mini-screen">
               <strong>Standalone Mode HUD</strong>
-              <span class="mini-line"><span class="hot">STANDALONE</span> · Vortex · timer 6.2s</span>
+              <span class="mini-line">Vortex · <span class="hot">STANDALONE</span><br />timer 6.2s · FPS 60</span>
             </div>
             <div class="mini-screen">
               <strong>Hold HUD</strong>
-              <span class="mini-line"><span class="ok">HOLD</span> · Vortex · Director suspended</span>
+              <span class="mini-line">Vortex · <span class="ok">HOLD</span><br />Director suspended</span>
             </div>
             <div class="mini-screen">
               <strong>Verbose Toggle</strong>
@@ -828,7 +826,7 @@
     </section>
 
     <p class="note">
-      Implementation intent: the simulator screen gets a tiny operational HUD that avoids covering the art. Detailed Director/Phase state goes to the Inspector. Verbose screen debug should be toggleable, not always on.
+      Implementation intent: the simulator screen gets a readable current stage/effect HUD in a fixed top-center band, so changing status text does not make the label wander. Detailed Director/Phase state goes to the Inspector. Verbose screen debug should be toggleable, not always on.
     </p>
   </main>
 </body>
