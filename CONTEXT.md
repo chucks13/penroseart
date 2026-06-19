@@ -73,6 +73,22 @@ Android, iOS, and WebGL serial support are not covered by the desktop `System.IO
 
 > Shared glossary for **every** term used across the Penrose project — rhythm, visuals, hardware, control, tooling, anything we need a single agreed meaning for so everyone is on the same page. Not limited to beat/rhythm. Definitions describe what each concept *is*, not how it is implemented. (The sections above are an architecture guide and intentionally do carry implementation detail; this section does not.) Add a term here the moment it needs a canonical meaning.
 
+**Play Mode**:
+Unity Editor state where the wall runtime is actually running: effects render, the Director makes choices, transitions execute, inputs may be live, and authoring tweaks are judged by watching the moving wall. Tuning changes made in Play Mode should persist when the run stops unless explicitly discarded.
+_Avoid_: treating Play Mode edits as throwaway previews; confusing Play Mode with a built standalone Player.
+
+**Edit Mode**:
+Unity Editor state where the wall runtime is not running. Authoring changes made here configure the next run but are not being judged against a live moving wall.
+_Avoid_: assuming Edit Mode authoring is the only durable authoring path; forcing creative tuning to happen without seeing the wall in motion.
+
+**Tuning Window**:
+The Unity authoring window used to watch and adjust Performers while the wall is running or stopped. It shows Effects and Transitions as lists, displays the selected Performer's Settings, and can steer the Director's Next Effect or Next Transition without taking timing ownership away from the Director.
+_Avoid_: burying live creative tuning in ordinary Inspector fields; making a fake preview path that does not exercise the Director and Switcher.
+
+**Hold Selected**:
+A Tuning Window mode where the selected Effect or Transition remains the Director's next choice after each move completes. Turning it off returns that choice to normal random selection.
+_Avoid_: confusing this with Held Effect; Hold Selected keeps the Director/Switcher path running, while Held Effect freezes rotation around one on-wall Effect.
+
 **Waveform**:
 A one-bar rhythmic brightness envelope built by **merging humps end-to-end in time** — each hump occupies its own time slot and has a width (subdivision) and a height (amplitude). Humps are never summed or layered on top of each other. Values are **unipolar `[0..1]`**: 1 at a peak (on the beat), 0 in the troughs between beats. It is an envelope, never a bipolar audio wave — there is no negative half and 0 is the trough, not a midpoint.
 _Avoid_: "adding waves together" (they are concatenated in time, not summed); "true wave" / "−1 to 1" (it is unipolar); "signal", "curve".
@@ -144,6 +160,14 @@ _Avoid_: effects that freeze, glitch, or go dark when OSC is absent; calling Sta
 The decision layer that owns *what* plays on the wall and *when* it changes — it directs, making every choice about what happens on the wall. A Performer's Repertoire and the live song structure (Track Phase, Fill, Drop, Energy, Levels) are inputs to that choice, never overrides of it. In Synced Mode, active whenever OSC data is present, it changes from musical timing — Track Phase Phrase Windows when available, otherwise the usable timing the OSC signal provides. In Standalone Mode, when no OSC data is available, it changes on the self-running timer. It decides only — it never draws a buffer or runs a transition itself; the Switcher executes its calls.
 _Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; folding buffer or transition execution into the Director.
 
+**Next Transition**:
+The Transition already chosen for the Director's next A-to-B move. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Director still owns the timing and phase alignment.
+_Avoid_: choosing the Transition at the last moment; treating the selected next Transition as permission to bypass Runway, Tail, or Impact Point timing.
+
+**Next Effect**:
+The Effect already chosen as the destination for the Director's next A-to-B move. It lets a person know what the wall is moving toward and gives tuning tools something concrete to show before the move begins.
+_Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to preview or tune the next destination.
+
 **Phase Anchor**:
 The Director's current musical target for the next structural transition. Track Phase defines a phrase window: the current phrase starts at a phrase boundary, contains 16-beat phase slots, and ends at the next phrase boundary. The Director plans the phrase as a list: choose a random number of eligible interior 16-beat slots, always include the ending phrase boundary as the mandatory final slot, then advance through that list one impact at a time. When only beat/grid evidence is available, the anchor is the best known 16-beat grid point; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
 _Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure. Live Track Phase windows define the phrase slots; inferred grid points are only for weaker evidence.
@@ -181,8 +205,16 @@ A Transition is a move from the current on-wall Effect (**A**) toward the destin
 _Avoid_: treating every Transition as if its only musical goal is to complete on the key beat; some Transitions want the hit in the middle and resolve afterward.
 
 **Transition Repertoire**:
-The part of a Transition's Repertoire that tells the Director what kind of A-to-B move it offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast a Transition that fits the available phrase timing instead of assuming all Transitions are interchangeable. These are class-level artistic defaults owned by each Transition, not live operator settings.
-_Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; timing shape is part of what the Transition advertises; moving these defaults into scene data before there is a real need for live authoring.
+The part of a Transition's Repertoire that tells the Director what kind of A-to-B move it offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast a Transition that fits the available phrase timing instead of assuming all Transitions are interchangeable. These are artistic defaults owned by each Transition; authoring tools may edit their saved values, but the Repertoire remains the Transition's declaration to the Director, not a live command from the Director.
+_Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; timing shape is part of what the Transition advertises; treating Repertoire as per-cue instructions or as state the Director sets.
+
+**Transition Settings**:
+Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings are what a person tunes while watching the wall; they become the Transition's saved artistic defaults until restored. They are not emergency runtime overrides or edge-case guards.
+_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using Settings to protect against low-consequence glitches that naturally self-correct.
+
+**Code Defaults**:
+The transition-authored baseline values used to create or restore Transition Settings. Code Defaults live with the Transition's source so changing a Transition and changing its intended defaults stay together.
+_Avoid_: making saved Settings the only source of truth; forcing artists to hunt generated asset files just to return to the Transition's intended defaults.
 
 **Transition Shape**:
 The broad visual family of an A-to-B Transition — e.g. Blend, Channel Blend, Directional Wipe, Index Wipe, Dissolve, Iris, or Noise. Shape helps the Director avoid treating two same-duration Transitions as equivalent when they read very differently on the wall.
