@@ -89,9 +89,6 @@ public sealed class Switcher
     /// <summary>Display name for the effect or transition currently on stage.</summary>
     public string CurrentName => isTransitioning ? transitions[currentTransitionIndex].Name : effects[currentEffectIndex].Name;
 
-    /// <summary>Repertoire advertised by the active effect, or None while a transition owns the frame.</summary>
-    public Repertoire CurrentEffectRepertoire => CurrentEffectIndex >= 0 ? effects[CurrentEffectIndex].Repertoire : Repertoire.None;
-
     /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
     public SwitcherStatus Status => BuildStatus();
 

@@ -168,7 +168,7 @@ public class Controller : Singleton<Controller>
     /// <summary>
     /// The held effect, as a single source of truth for whether the wall rotates or stays put.
     /// <para>
-    /// <c>-1</c> is the <b>Random</b> sentinel: the deck rotates normally (see <see cref="OnTimerFinished"/>),
+    /// <c>-1</c> is the <b>Random</b> sentinel: the deck rotates normally through the Director,
     /// and this is the default so a fresh scene behaves exactly like the old unlocked state. Any value
     /// <c>&gt;= 0</c> is an index into <see cref="effects"/> that is <b>held</b>: the timer state machine and
     /// the deck never switch away from it until this is set back to <c>-1</c>.
@@ -336,7 +336,7 @@ public class Controller : Singleton<Controller>
     [HideInInspector]
     public Penrose penrose;
 
-    /// <summary>Effect/transition phase timer. Its finish event drives <see cref="OnTimerFinished"/>.</summary>
+    /// <summary>Effect/transition phase timer. Its finish event drives <see cref="Director.OnTimerFinished"/>.</summary>
     [HideInInspector]
     public Timer timer;
 
@@ -1419,16 +1419,6 @@ public class Controller : Singleton<Controller>
             return heldEffectIndex;
 
         return pullCard(effectDeck);
-    }
-
-    /// <summary>
-    /// Timer state-machine callback. Alternates between effect playback and transition playback, unless an effect
-    /// is held (<see cref="heldEffect"/> &gt;= 0), in which case it stays parked on that effect.
-    /// </summary>
-    private void OnTimerFinished()
-    {
-        // Retained only while the staged refactor lands; Start wires Timer directly to Director.
-        director?.OnTimerFinished();
     }
 
     /// <summary>

@@ -34,12 +34,8 @@ public readonly struct DirectorStatus
         DirectorDecision.NotReady,
         false,
         false,
-        false,
         PhaseConfidence.Unlocked,
         PhaseReading.Unavailable,
-        -1,
-        -1,
-        -1,
         -1,
         -1,
         -1,
@@ -51,17 +47,13 @@ public readonly struct DirectorStatus
     public readonly DirectorMode Mode;
     public readonly DirectorDecision Decision;
     public readonly bool IsSyncedMode;
-    public readonly bool IsHeld;
     public readonly bool HasPhaseAnchor;
     public readonly PhaseConfidence PhaseAnchorConfidence;
     public readonly PhaseReading Phase;
     public readonly int PhaseAnchorLandingBeat;
-    public readonly int LastSyncedBeat;
     public readonly int LastChangeBeat;
-    public readonly int TransitionStartBeat;
     public readonly int TransitionLandingBeat;
     public readonly int BeatsUntilLanding;
-    public readonly int BeatsUntilRunway;
     public readonly int BeatsUntilCadenceReady;
     public readonly float TransitionProgress;
 
@@ -69,36 +61,28 @@ public readonly struct DirectorStatus
         DirectorMode mode,
         DirectorDecision decision,
         bool isSyncedMode,
-        bool isHeld,
         bool hasPhaseAnchor,
         PhaseConfidence phaseAnchorConfidence,
         PhaseReading phase,
         int phaseAnchorLandingBeat,
-        int lastSyncedBeat,
         int lastChangeBeat,
-        int transitionStartBeat,
         int transitionLandingBeat,
         int currentBeat,
         int beatsUntilLanding,
-        int beatsUntilRunway,
         int beatsUntilCadenceReady,
         float transitionProgress)
     {
         Mode = mode;
         Decision = decision;
         IsSyncedMode = isSyncedMode;
-        IsHeld = isHeld;
         HasPhaseAnchor = hasPhaseAnchor;
         PhaseAnchorConfidence = phaseAnchorConfidence;
         Phase = phase;
         PhaseAnchorLandingBeat = phaseAnchorLandingBeat;
-        LastSyncedBeat = lastSyncedBeat;
         LastChangeBeat = lastChangeBeat;
-        TransitionStartBeat = transitionStartBeat;
         TransitionLandingBeat = transitionLandingBeat;
         CurrentBeat = currentBeat;
         BeatsUntilLanding = beatsUntilLanding;
-        BeatsUntilRunway = beatsUntilRunway;
         BeatsUntilCadenceReady = beatsUntilCadenceReady;
         TransitionProgress = transitionProgress;
     }
@@ -199,9 +183,6 @@ public sealed class Director
     /// <summary>Absolute beat where the current phase anchor next lands, or -1 when unlocked.</summary>
     public int PhaseAnchorLandingBeat => phaseAnchorLandingBeat;
 
-    /// <summary>Last live OSC beat observed by the Director, or -1 before Synced Mode starts.</summary>
-    public int LastSyncedBeat => lastSyncedBeat;
-
     /// <summary>Whether live beat data is currently allowed to drive sequencing.</summary>
     public bool IsSyncedMode => controller.beatManager.IsLiveSource
         && controller.beatManager.Beat is { };
@@ -288,7 +269,6 @@ public sealed class Director
         var currentBeat = isSynced && controller.beatManager.Beat is { } beat ? beat : -1;
         var beatsUntilLanding = hasPhaseAnchor && currentBeat >= 0 ? phaseAnchorLandingBeat - currentBeat : -1;
         var runwayBeats = NextTransitionRepertoire.RunwayBeats;
-        var beatsUntilRunway = beatsUntilLanding >= 0 ? beatsUntilLanding - runwayBeats : -1;
         var beatsUntilCadenceReady = currentBeat >= 0 && lastChangeBeat != int.MinValue
             ? Math.Max(0, MinimumChangeCadenceBeats - (currentBeat - lastChangeBeat))
             : 0;
@@ -300,18 +280,14 @@ public sealed class Director
             mode,
             decision,
             isSynced,
-            isHeld,
             hasPhaseAnchor,
             phaseAnchorConfidence,
             phaseReading,
             phaseAnchorLandingBeat,
-            lastSyncedBeat,
             lastChangeBeat,
-            transitionStartBeat,
             transitionLandingBeat,
             currentBeat,
             beatsUntilLanding,
-            beatsUntilRunway,
             beatsUntilCadenceReady,
             TransitionProgress);
     }
