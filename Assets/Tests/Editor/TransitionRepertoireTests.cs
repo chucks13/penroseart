@@ -42,7 +42,7 @@ public sealed class TransitionRepertoireTests
     {
         AssertRepertoire(new Fade().Repertoire, Repertoire.None, 4, 0, TransitionShape.Blend, TransitionIntensity.Subtle);
         AssertRepertoire(new RGBFade().Repertoire, Repertoire.RespondsToEnergy, 4, 4, TransitionShape.ChannelBlend, TransitionIntensity.Medium);
-        AssertRepertoire(new DirectionalWipe().Repertoire, Repertoire.None, 4, 0, TransitionShape.DirectionalWipe, TransitionIntensity.Medium);
+        AssertRepertoire(new DirectionalWipe().Repertoire, Repertoire.RespondsToEnergy, 4, 4, TransitionShape.DirectionalWipe, TransitionIntensity.Medium);
         AssertRepertoire(new IndexWipe().Repertoire, Repertoire.None, 4, 0, TransitionShape.IndexWipe, TransitionIntensity.Medium);
         AssertRepertoire(new FizzleTransition().Repertoire, Repertoire.HandlesDrop, 4, 4, TransitionShape.Dissolve, TransitionIntensity.High);
         AssertRepertoire(new IrisTransition().Repertoire, Repertoire.HandlesDrop, 4, 4, TransitionShape.Iris, TransitionIntensity.High);
