@@ -785,24 +785,12 @@ public sealed class Director
 
     private int PullEffect(Repertoire preferredRepertoire)
     {
-        if (preferredRepertoire == Repertoire.None)
-        {
-            return PullCard(effectDeck);
-        }
-
-        for (var i = 0; i < effectDeck.Length; i++)
-        {
-            var effectIndex = effectDeck[i];
-            if ((controller.effects[effectIndex].Repertoire & preferredRepertoire) == 0)
-            {
-                continue;
-            }
-
-            RemoveDeckCardAt(effectDeck, i);
-            return effectIndex;
-        }
-
-        return PullCard(effectDeck);
+        return EffectDeckSelection.PullNext(
+            effectDeck,
+            switcher.CurrentEffectIndex,
+            preferredRepertoire,
+            effectIndex => controller.effects[effectIndex].Repertoire,
+            (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
     }
 
     private void MarkChangedOnCurrentBeat()
