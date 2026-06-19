@@ -42,6 +42,12 @@ public abstract class EffectBase
     public string Name => GetType().ToString();
 
     /// <summary>
+    /// Musical-structure behavior this effect advertises to the Director.
+    /// Subclasses override this when they can intentionally express Fill, Drop, or Energy cues.
+    /// </summary>
+    public virtual Repertoire Repertoire => Repertoire.None;
+
+    /// <summary>
     /// Text displayed in the debug UI while this effect is active.
     /// </summary>
     public abstract string DebugText();

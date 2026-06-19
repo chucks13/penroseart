@@ -113,6 +113,14 @@ _Avoid_: equating it with the raw OSC scalar; the runtime regenerates a shaped p
 The normalized position within the current measure (0 on the downbeat, 1 at the next downbeat). The clock every Waveform is evaluated against. Derived from the live beat timing and kept locked to the DJ.
 _Avoid_: "beat phase" when the whole measure is meant.
 
+**Bar** (a.k.a. **Measure**):
+Four beats — "4-on-the-floor." The unit the Director's changes align to. The whole rhythmic structure runs on **powers of four**: 4 beats to a Bar, and Phrase lengths are multiples of four Bars (16, 32, 64 beats). A Bar boundary falls every 4 beats, but the Director changes no more often than every 4 Bars (16 beats).
+_Avoid_: assuming arbitrary bar lengths — the wall assumes a 4/4, powers-of-four structure.
+
+**The One**:
+The first beat of a Bar — the downbeat. **Every Director change lands on the one**, never mid-bar. Counting is musical and **1-based: there is no beat zero** — the first beat is "the one," and a countdown to a change runs "4, 3, 2, 1, change," with the change landing on the *next* one. (The internal Bar Phase clock is a 0..1 normalization used for math; the one is the musical-facing count, not a zero index.)
+_Avoid_: zero-based or off-by-one counting; landing a change mid-bar; conflating the musical count with the 0..1 Bar Phase value.
+
 **Offbeat** (a.k.a. **Half-Step**):
 A Beat Pulse shifted by half a beat so it peaks on the "&". Expressed as a Waveform carrying a **Phase Offset** of half a beat; the same shaping (width, amplitude, rounding) then applies as for any Waveform.
 _Avoid_: confusing "half-step" with its pitch-theory meaning (a semitone). Here it is strictly the half-beat rhythmic position, the "&" between beats.
@@ -125,22 +133,70 @@ A per-waveform scalar in `[0..1]` controlling hump shape. At 0 the peak is sharp
 _Avoid_: "smoothing", "easing" (overloaded); treating it as a true low-pass filter.
 
 **Contrived Value**:
-A ready-to-use value BeatManager builds from raw broadcast state — gated, normalized, smoothed, beat-synced, or otherwise shaped for effects. The counterpart of a **Raw Value**, which BeatManager passes through unchanged (BPM, track name, beat-in-bar, beat pulse). Both kinds are pulled through the same nullable queries on BeatManager: `null` is a valid, expected state meaning "this value isn't there right now" — a track may have no upcoming drop, the wire may not carry levels — and every consumer chooses its own fallback. Raw transport (`BeatData`, the OSC wire) keeps `-1` sentinels internally; `null` is the public face of "not available." Shared signals are contrived once on BeatManager; per-effect seasoning (variant, enable, minimum brightness) stays on the effect side, which is the only place that knows it.
+A ready-to-use value BeatManager builds from raw broadcast state — gated, normalized, smoothed, beat-synced, or otherwise shaped for effects. The counterpart of a **Raw Value**, which BeatManager passes through unchanged (BPM, track name, beat-in-bar, beat pulse). Both kinds are pulled through the same nullable queries on BeatManager: `null` is a valid, expected state meaning "this value isn't there right now" — a track may have no upcoming drop, the wire may not carry levels — and every consumer chooses its own Default Mode response. Raw transport (`BeatData`, the OSC wire) keeps `-1` sentinels internally; `null` is the public face of "not available." Shared signals are contrived once on BeatManager; per-effect seasoning (variant, enable, minimum brightness) stays on the effect side, which is the only place that knows it.
 _Avoid_: "cooked" (retired term); effects reading `BeatData` directly — raw values flow through BeatManager queries too; sentinel values crossing into effect math; treating `null` as an error instead of an ordinary musical state.
 
 **Default Mode / Synced Mode**:
-The two personalities every rhythm-aware effect or transition has. Default Mode is its way of working when a requested signal is unavailable (`null`) — the effect must look intentional on its own. Synced Mode is its way of working when the signal is live. Branch once per frame (`is { } x`) for dual-personality behavior, or fold inline (`?? fallback`) for simple modulation.
-_Avoid_: effects that freeze, glitch, or go dark when data is absent.
+The two personalities every rhythm-aware effect or transition has. Synced Mode is its way of working when the signal is live; Default Mode is its way of working when the signal is unavailable (`null`) — and it must look fully intentional on its own. This is a **preference, not a fallback**: the wall prefers live data and works deliberately without it, so neither mode is degraded. Branch once per frame (`is { } x`) for dual-personality behavior, or fold inline (`?? default`) for simple modulation.
+_Avoid_: effects that freeze, glitch, or go dark when data is absent; calling Default Mode a "fallback" — it is a first-class preference, not degraded functionality.
+
+**Director**:
+The decision layer that owns *what* plays on the wall and *when* it changes — it directs, making every choice about what happens on the wall. A Performer's Repertoire and the live song structure (Track Phase, Fill, Drop, Energy, Levels) are inputs to that choice, never overrides of it. It carries the same two personalities as everything else: in Synced Mode it changes on musical boundaries — always landing on the one (the bar downbeat), no more often than four bars, with change options derived from the phrase length in powers of four; in Default Mode (no live beat) it changes on a timer — the legacy behaviour. This is a preference for live structure, not a degraded fallback — both modes are fully intentional. It decides only — it never draws a buffer or runs a transition itself; the Switcher executes its calls.
+_Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; folding buffer or transition execution into the Director.
+
+**Phase Anchor**:
+The Director's current understanding of the 16-beat grid inside the current musical phrase. It comes from Track Phase when that data is present; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
+_Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure.
+
+**Phase Lock**:
+The Director's ongoing effort to keep Performer changes aligned to the Phase Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
+_Avoid_: assuming the wall is either perfectly synced or unsynced forever; phase lock is continuously maintained.
+
+**Phase Confidence**:
+How strongly the current Phase Anchor is trusted, from unknown, to beat-in-bar guess, to absolute-beat assumption, to track-end cross-check, to true Track Phase structure. Confidence describes the evidence for where the one is, not how good the visual looks.
+_Avoid_: treating all beat-derived anchors as equally musical; Track Phase is stronger evidence than plain beat count.
+
+**Coast**:
+Continuing on the last known Phase Anchor when Track Phase data temporarily disappears. Coasting preserves the last musical grid until fresh phrase data returns or no anchor has ever been known.
+_Avoid_: calling this a fallback; it is the deliberate Synced Mode behavior for intermittent phrase visibility.
+
+**Re-anchor**:
+Replacing the current Phase Anchor with a new one when fresh Track Phase data appears or contradicts the grid being coasted. Re-anchoring is how the wall gets back in phase after startup, data gaps, song position changes, or loop-like movement the current data can reveal.
+_Avoid_: layering multiple anchors; the Director has one current phase anchor.
+
+**Performer**:
+The umbrella for anything the Director can put on the wall — an Effect, Transition, or Mixer — seen as something called on stage rather than as a class. The Director casts Performers; the Switcher moves them on and off.
+_Avoid_: "dancer" (the early metaphor); using "Performer" when you specifically mean an Effect vs a Transition vs a Mixer.
+
+**Repertoire**:
+What a Performer advertises it can do, so the Director can cast it knowingly — e.g. handles Fills, is Drop-capable, responds to Energy. The Director reads a Performer's Repertoire to decide whether to have the Performer express a musical event itself or to supply the move another way; the Director always decides, and the Repertoire only tells it which options exist.
+_Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
+
+**Cue**:
+The Director's directive for a change. A Cue is not the change itself — it *triggers* one: a Cue aimed at the stage triggers the Switcher to swap dancers (via a Cut, Transition, or Mixer), and a Cue aimed at the on-screen effect triggers it to respond ("respond to this fill", "play at this energy"). An effect-directed Cue follows the same nullable, preference-driven contract as the rhythm queries — the effect reads the parts it understands, uses its own defaults for anything unset (an ordinary state, never degraded), and pulls the live event data itself from the Beat Manager. A Cue carries intent, never pixel-level commands.
+_Avoid_: "call" (collides with calling a Performer on stage); treating a Cue as the change itself rather than the directive that triggers it; a Cue that micromanages a Performer's internal parameters.
+
+**Mechanical Switcher** (a.k.a. **Switcher**):
+The mechanism that executes the Director's stage-directed Cues. It owns the in-flight transition (which Performer is leaving, which is arriving, how far along) and realizes a swap one of three ways: a **Cut** (instant), a **Transition** (blended — looser at a phrase boundary, tightly timed to land on a Drop), or a **Mixer** (bringing in another effect, including the temporary self-reverting mix that expresses a Fill the on-screen effect can't). It moves Performers on and off the wall and never decides what or when. Kept separate from the Director so decision and mechanism stay independent.
+_Avoid_: putting timing or musical decisions in the Switcher; the Director drawing buffers or running transitions itself; calling it "dumb" instead of describing it as execution-only.
+
+**Hold**:
+An inspection freeze that suspends the Director so a developer can sit on one effect, watch it, and tweak its settings live — a development affordance, not normal show operation. It is not a selection input and not a second decider: while held, the Director stops advancing entirely (no rotation, no Cues, no transitions) and simply keeps the chosen Performer on screen; releasing it resumes directing. Conceptually general — the ability to halt any running thing to inspect it — though the first concrete use is holding an effect.
+_Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; re-asserting the held effect every frame (nothing fights it once the one decider is suspended).
 
 **Track Phase**:
-The named phrase position within the current track as analyzed by RaveSystem — "Intro", "Break", "Drop", "Chorus 2" — with current/next labels and beat countdowns to the boundary. An **open vocabulary**: labels are track-dependent names, never a closed set to parse against.
-_Avoid_: confusing with **Bar Phase** (position within one measure); treating the labels as an enum.
+The named phrase position within the current track as analyzed by RaveSystem — "Intro", "Break", "Drop", "Chorus 2" — with current/next labels, an active/known flag, beats left to the next phase boundary, total phase length in beats, and phases remaining including the current phase. An **open vocabulary**: labels are track-dependent names, never a closed set to parse against.
+_Avoid_: confusing with **Bar Phase** (position within one measure); treating the labels as an enum; treating the remaining count as only future phases after the current one.
+
+**Phase Count**:
+The Director's 1-based count within the current 16-beat subdivision of a Track Phase: `elapsed_in_phrase = length_beats - count_beats`, then `count_16 = (elapsed_in_phrase % 16) + 1`. A 4-beat transition starts at count 13 so the change lands on the next X: `13, 14, 15, 16, X`.
+_Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
 **Fill**:
-A short transitional phrase burst — usually four to eight beats, a measure or slightly more — between sections. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). Fill-only behavior — overlays, quick effect switches, one-shot interactions — is a first-class visual move.
+A short transitional phrase burst — usually four to eight beats, a measure or slightly more — between sections. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). A Fill is expressed as a **highlight in place** — an overlay, accent, or one-shot interaction on whatever is already on screen — and never changes which effect is playing (that is a Drop's move). The Director decides how it is expressed: it has the on-screen effect highlight the Fill when that effect's Repertoire can, or it brings in a temporary mix to do so.
 
 **Drop**:
-The climactic section boundary of a track. Same two-sided visibility as a Fill: a countdown to it, then progress through it. The anticipation side (landing a transition *on* the drop, beats ahead) is the choreographically valuable half.
+The climactic section boundary of a track. Same two-sided visibility as a Fill: a countdown to it, then progress through it. Unlike a Fill, a Drop **can change who is on stage**. The Director decides the move: it has the on-screen effect enter a drop-state in place when that effect's Repertoire can, or it swaps Performers. Either way the move must land *on* the drop — the anticipation side (scheduling the change beats ahead so it completes exactly on the boundary) is the valuable half, and the reason a Drop transition is timed more tightly than an ordinary phrase-boundary one.
 
 **Phrase Event View** (`PhraseEventView`):
 The canonical display model of a phrase event (a **Fill** or a **Drop**): its status chip, meter fill, one-line readout, and a Now/Soon/Idle state, all derived from the phrase-event query in one place so every surface — the Beat Manager dashboard today, any telnet/OSC/debug readout later — presents a Fill or Drop the same way. It is the presentation counterpart of the Fill/Drop *data*: what a phrase event **is** stays separate from how it **reads**.

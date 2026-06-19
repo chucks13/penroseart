@@ -26,6 +26,12 @@ public abstract class TransitionBase
     /// <summary>Catalog/display name for this transition. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
 
+    /// <summary>
+    /// Musical-structure behavior this transition advertises to the Director.
+    /// Transition subclasses override this when their motion can intentionally land on musical events.
+    /// </summary>
+    public virtual Repertoire Repertoire => Repertoire.None;
+
     private int a;
     private int b;
     private float v;

@@ -214,8 +214,16 @@ public class Controller : Singleton<Controller>
     /// </remarks>
     public int CurrentBeatVariant
     {
-        get => (effects != null && currentEffect >= 0 && currentEffect < effects.Length) ? effects[currentEffect].beatVariant : -1;
-        set { if (effects != null && currentEffect >= 0 && currentEffect < effects.Length) effects[currentEffect].beatVariant = value; }
+        get
+        {
+            int index = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+            return (effects != null && index >= 0 && index < effects.Length) ? effects[index].beatVariant : -1;
+        }
+        set
+        {
+            int index = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+            if (effects != null && index >= 0 && index < effects.Length) effects[index].beatVariant = value;
+        }
     }
 
     /// <summary>Keyboard bank: A-W select effects 0-22 or 23-45 depending on this value.</summary>
@@ -282,6 +290,14 @@ public class Controller : Singleton<Controller>
     /// <summary>Runtime catalog of transitions created by <see cref="SetupTransitions"/>.</summary>
     [HideInInspector]
     public TransitionBase[] transitions;
+
+    /// <summary>Mechanical renderer/swapper for the currently staged effect or transition.</summary>
+    [HideInInspector]
+    public Switcher switcher;
+
+    /// <summary>Decision layer that owns sequencing cadence and stage-directed cues.</summary>
+    [HideInInspector]
+    public Director director;
 
     /// <summary>Scene Penrose model and preview mesh component.</summary>
     [HideInInspector]
@@ -701,8 +717,15 @@ public class Controller : Singleton<Controller>
     {
         if (i < 0) return;
         if (i >= effects.Length) return;
+
+        if (director != null)
+        {
+            director.ShowNow(i, time);
+            return;
+        }
+
+        // Startup/fallback path before Director/Switcher are initialized.
         EffectBase.APalette.Change();
-        //select the new effect
         inTransition = false;
         currentEffect = i;
         effects[currentEffect].RandomizeTime();
@@ -710,7 +733,6 @@ public class Controller : Singleton<Controller>
         timer.Set(time);
         timer.Reset();
         effectText.text = effects[currentEffect].Name;
-        // turn on the button
     }
 
 
@@ -723,7 +745,7 @@ public class Controller : Singleton<Controller>
     /// <c>false</c> for the <c>-1</c> Random sentinel — and also defensively for an out-of-range or pre-setup value,
     /// so a stale/garbage index degrades to normal rotation instead of throwing.
     /// </returns>
-    private bool TryGetHeldEffectIndex(out int effectIndex)
+    internal bool TryGetHeldEffectIndex(out int effectIndex)
     {
         effectIndex = -1;
 
@@ -746,6 +768,12 @@ public class Controller : Singleton<Controller>
     /// </remarks>
     private void ApplyHeldEffect()
     {
+        if (director != null)
+        {
+            director.ApplyHold();
+            return;
+        }
+
         if (!TryGetHeldEffectIndex(out int heldEffectIndex))
             return;
 
@@ -796,7 +824,8 @@ public class Controller : Singleton<Controller>
             if (position < 0.12f) effectTime = 1;
         }
 
-        if (currentEffect >= effects.Length)
+        int currentEffectIndex = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+        if (currentEffectIndex >= effects.Length)
         {
             oms.Add(makemessage("/1/reset", 1f - (float)brightness / 255f));
 
@@ -806,9 +835,9 @@ public class Controller : Singleton<Controller>
             oms.Add(makemessage("/1/vscroll1", 1f - (float)brightness / 255f));
             // update the current effect button
             // stream these one at a time for the button matrix
-            if (currentEffect >= 0)
+            if (currentEffectIndex >= 0)
             {
-                osc.Send(makemessage("/1/push" + (pingIndex + 1), (pingIndex == currentEffect) ? 1f : 0f));
+                osc.Send(makemessage("/1/push" + (pingIndex + 1), (pingIndex == currentEffectIndex) ? 1f : 0f));
                 pingIndex++;
                 pingIndex %= effects.Length;
             }
@@ -1070,12 +1099,14 @@ public class Controller : Singleton<Controller>
             cameraOverlay.Init((int)penrose.Bounds.size.x, (int)penrose.Bounds.size.y, Penrose.Total);
         }
 
-        // Timer drives effect/transition phase changes. Update() advances it;
-        // OnTimerFinished() is the state-machine callback.
+        // Director owns sequencing cadence; Switcher owns only the mechanical in-flight stage state.
         timer = new Timer(effectTime, false);
-        timer.onFinished += OnTimerFinished;
+        switcher = new Switcher(this, effects, transitions);
+        switcher.SetInitialEffect(currentEffect, currentTransition);
+        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
+        timer.onFinished += director.OnTimerFinished;
 
-        effectText.text = effects[currentEffect].GetType().ToString();
+        effectText.text = switcher.CurrentName;
         StartCoroutine(Fps());
 #if ENABLE_TELNET
         // Optional debug command server. Disabled in normal builds.
@@ -1112,57 +1143,8 @@ public class Controller : Singleton<Controller>
     /// </summary>
     private void OnTimerFinished()
     {
-        // A held effect owns the state machine: timer expiry must not transition away from it. The -1 Random
-        // sentinel skips this block and falls through to the normal effect/transition alternation below.
-        if (TryGetHeldEffectIndex(out int heldEffectIndex))
-        {
-            if (inTransition || currentEffect != heldEffectIndex)
-                JumpToEffect(heldEffectIndex, effectTime);
-            else
-                timer.Reset();
-
-            return;
-        }
-
-        if (inTransition)
-        {
-            // Transition phase finished: promote the transition target to the
-            // active effect, return to normal effect playback, and draw the next
-            // transition card for the following phase change.
-            inTransition = !inTransition;
-            currentEffect = transitions[currentTransition].B;
-            timer.Set(effectTime);
-            timer.Reset();
-            effectText.text = effects[currentEffect].Name;
-            currentTransition = pullCard(transitionDeck);
-            //           if (randomTransition)
-            //               currentTransition = Random.Range(0, transitions.Length);
-            return;
-        }
-
-        // Effect phase finished: configure the selected transition to blend from
-        // the current effect to the next effect, start the destination effect so
-        // it can render during the transition, then switch Update() into
-        // transition drawing mode.
-        inTransition = !inTransition;
-
-        TransitionBase transition = transitions[currentTransition];
-        transition.RandomizeTime();
-        transition.V = 0f;
-        transition.B = GetNewEffectIndex();
-        transition.A = currentEffect;
-        transition.OnStart();
-        EffectBase.APalette.Change();
-
-        effects[transition.B].RandomizeTime();
-        effects[transition.B].OnStart();
-
-        timer.Set(transitionTime);
-        timer.Reset();
-
-        currentEffect = -1;
-
-        effectText.text = transition.Name;
+        // Retained only while the staged refactor lands; Start wires Timer directly to Director.
+        director?.OnTimerFinished();
     }
 
     /// <summary>
@@ -1219,7 +1201,7 @@ public class Controller : Singleton<Controller>
 #if PREP_CAPTURE
         diagnosticTime += effectDelta;
 #endif
-        timer.Update(effectDelta);
+        director.Tick(effectDelta);
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
 #endif
@@ -1243,7 +1225,7 @@ public class Controller : Singleton<Controller>
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            int target = inTransition ? transitions[currentTransition].B : currentEffect;
+            int target = switcher.IsTransitioning ? switcher.TransitionTargetEffectIndex : switcher.CurrentEffectIndex;
             JumpToEffect(target, effectTime);
             Debug.Log($"[Controller] Restarted effect: {effectText.text}");
         }
@@ -1292,35 +1274,8 @@ public class Controller : Singleton<Controller>
         }
         else
         {
-            if (inTransition)
-            {
-                // Transition mode: update transition progress, advance both
-                // participating effects, and let the transition fill its buffer.
-                transitions[currentTransition].V = timer.Value;
-                transitions[currentTransition].UpdateTime();
-
-                int indexA = transitions[currentTransition].A;
-                int indexB = transitions[currentTransition].B;
-
-                effects[indexA].UpdateTime();
-                if (indexA != indexB)
-                    effects[indexB].UpdateTime();
-
-                transitions[currentTransition].Draw();
-                penrose.buffer = (Color[])transitions[currentTransition].buffer.Clone();
-
-                debugText.text = transitions[currentTransition].DebugText();
-
-            }
-            else
-            {
-                // Effect mode: advance and draw the single active effect.
-                effects[currentEffect].UpdateTime();
-                effects[currentEffect].Draw();
-                penrose.buffer = (Color[])effects[currentEffect].buffer.Clone();
-
-                debugText.text = effects[currentEffect].DebugText();
-            }
+            penrose.buffer = switcher.Render(director.TransitionProgress, out var switcherDebugText);
+            debugText.text = switcherDebugText;
             if (FilterMode)
                 applyFilter(penrose.buffer);
             drum.Draw(penrose.buffer);
