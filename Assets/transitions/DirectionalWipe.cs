@@ -5,7 +5,7 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class DirectionalWipe : TransitionBase
 {
-    // Hand-tuned DirectionalWipe settings. Keep these together so the transition
+    // Hand-tuned DirectionalWipe Code Defaults. Keep these together so the transition
     // can be adjusted by hand without hunting through the implementation.
     private const global::Repertoire DefaultTags = global::Repertoire.RespondsToEnergy;
     private const int RunwayBeats = 4;
@@ -14,10 +14,10 @@ public class DirectionalWipe : TransitionBase
     private const TransitionIntensity Intensity = TransitionIntensity.Medium;
     private const float DefaultDurationSeconds = 4f;
 
-    private const float RandomDirectionRangeRadians = Mathf.PI * 2f;
     private const float ExternalBlendDefaultProgress = 0.5f;
     private const float ExternalBlendDefaultAngleRadians = 0f;
 
+    private const float RandomDirectionRangeRadians = Mathf.PI * 2f;
     private const float ReactiveEdgeWidth = 0.055f;
     private const float BaseEdgeBrightnessBoost = 0.15f;
     private const float LowBandResponseGain = 2f;
@@ -25,16 +25,26 @@ public class DirectionalWipe : TransitionBase
     private const float BaseEdgeBrightnessLift = 0.025f;
     private const float MaxLowBandBrightnessLift = 0.14f;
 
-    private static readonly TransitionRepertoire DefaultRepertoire =
-        TransitionRepertoire.FromRunwayAndTail(
-            DefaultTags,
-            RunwayBeats,
-            TailBeats,
-            Shape,
-            Intensity,
-            DefaultDurationSeconds);
-
-    public override TransitionRepertoire Repertoire => DefaultRepertoire;
+    protected override TransitionSettings BuildCodeDefaults()
+    {
+        return new TransitionSettings
+        {
+            Tags = DefaultTags,
+            RunwayBeats = RunwayBeats,
+            TailBeats = TailBeats,
+            Shape = Shape,
+            Intensity = Intensity,
+            DefaultDurationSeconds = DefaultDurationSeconds,
+            ExternalBlendDefaultProgress = ExternalBlendDefaultProgress,
+            ExternalBlendDefaultAngleRadians = ExternalBlendDefaultAngleRadians,
+            DirectionalReactiveEdgeWidth = ReactiveEdgeWidth,
+            DirectionalBaseEdgeBrightnessBoost = BaseEdgeBrightnessBoost,
+            DirectionalLowBandResponseGain = LowBandResponseGain,
+            DirectionalMaxLowBandBrightnessBoost = MaxLowBandBrightnessBoost,
+            DirectionalBaseEdgeBrightnessLift = BaseEdgeBrightnessLift,
+            DirectionalMaxLowBandBrightnessLift = MaxLowBandBrightnessLift,
+        };
+    }
 
     float angle;
     float diagonalsize;
@@ -92,13 +102,13 @@ public class DirectionalWipe : TransitionBase
     {
         controller.effects[A].Draw();
         controller.effects[B].Draw();
-        Draw2(buffer, controller.effects[A].buffer, controller.effects[B].buffer, V, angle);
+        Draw2(buffer, controller.effects[A].buffer, controller.effects[B].buffer, V, angle, EffectiveSettings);
     }
 
     /// <summary>
     /// Shared directional wipe implementation for normal transitions and external blending.
     /// </summary>
-    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, float Angle2)
+    private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, float Angle2, TransitionSettings transitionSettings)
     {
         float lowBandLevel = CurrentLowBandLevel();
 
@@ -107,8 +117,8 @@ public class DirectionalWipe : TransitionBase
             Vector2 point = rotate(controller.penrose.tiles[i].position, Angle2);
             float projectedProgress = (point.x + diagonalsize / 2f) / diagonalsize;
             Color baseColor = projectedProgress >= V2 ? src1[i] : src2[i];
-            float edgePresence = EdgePresence(projectedProgress, V2);
-            dest[i] = ApplyLowBandEdgeBrightness(baseColor, edgePresence, lowBandLevel);
+            float edgePresence = EdgePresence(projectedProgress, V2, transitionSettings.DirectionalReactiveEdgeWidth);
+            dest[i] = ApplyLowBandEdgeBrightness(baseColor, edgePresence, lowBandLevel, transitionSettings);
         }
     }
 
@@ -127,7 +137,12 @@ public class DirectionalWipe : TransitionBase
     /// </summary>
     public static float EdgePresence(float projectedProgress, float transitionProgress)
     {
-        return 1f - Mathf.Clamp01(Mathf.Abs(projectedProgress - transitionProgress) / ReactiveEdgeWidth);
+        return EdgePresence(projectedProgress, transitionProgress, ReactiveEdgeWidth);
+    }
+
+    private static float EdgePresence(float projectedProgress, float transitionProgress, float reactiveEdgeWidth)
+    {
+        return 1f - Mathf.Clamp01(Mathf.Abs(projectedProgress - transitionProgress) / reactiveEdgeWidth);
     }
 
     /// <summary>
@@ -149,6 +164,26 @@ public class DirectionalWipe : TransitionBase
             color.a);
     }
 
+    private static Color ApplyLowBandEdgeBrightness(
+        Color color,
+        float edgePresence,
+        float lowBandLevel,
+        TransitionSettings transitionSettings)
+    {
+        float edge = Mathf.Clamp01(edgePresence);
+        if (edge <= 0f)
+        {
+            return color;
+        }
+
+        float reactiveInfluence = edge * Mathf.Clamp01(lowBandLevel * transitionSettings.DirectionalLowBandResponseGain);
+        return new Color(
+            BrightenChannel(color.r, edge, reactiveInfluence, transitionSettings),
+            BrightenChannel(color.g, edge, reactiveInfluence, transitionSettings),
+            BrightenChannel(color.b, edge, reactiveInfluence, transitionSettings),
+            color.a);
+    }
+
     private static float BrightenChannel(float channel, float edgePresence, float reactiveInfluence)
     {
         return Mathf.Clamp01(
@@ -157,18 +192,27 @@ public class DirectionalWipe : TransitionBase
             + reactiveInfluence * MaxLowBandBrightnessLift);
     }
 
+    private static float BrightenChannel(float channel, float edgePresence, float reactiveInfluence, TransitionSettings transitionSettings)
+    {
+        return Mathf.Clamp01(
+            channel * (1f + edgePresence * transitionSettings.DirectionalBaseEdgeBrightnessBoost + reactiveInfluence * transitionSettings.DirectionalMaxLowBandBrightnessBoost)
+            + edgePresence * transitionSettings.DirectionalBaseEdgeBrightnessLift
+            + reactiveInfluence * transitionSettings.DirectionalMaxLowBandBrightnessLift);
+    }
+
     /// <summary>
     /// Uses this transition algorithm as an external-source blender.
     /// </summary>
     public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
-        float V2 = ExternalBlendDefaultProgress;
-        float Angle2 = ExternalBlendDefaultAngleRadians;
+        var effectiveSettings = EffectiveSettings;
+        float V2 = effectiveSettings.ExternalBlendDefaultProgress;
+        float Angle2 = effectiveSettings.ExternalBlendDefaultAngleRadians;
         if (settings.Length > 0)
             V2 = settings[0];
         if (settings.Length > 1)
             Angle2 = settings[1];
-        Draw2(dest, src1, src2, V2, Angle2);
+        Draw2(dest, src1, src2, V2, Angle2, effectiveSettings);
     }
     /// <summary>
     /// Returns the external-blender fader argument format for this transition.

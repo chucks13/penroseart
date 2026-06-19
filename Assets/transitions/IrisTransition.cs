@@ -7,16 +7,29 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class IrisTransition : TransitionBase
 {
-    private static readonly TransitionRepertoire DefaultRepertoire =
-        TransitionRepertoire.FromRunwayAndTail(
-            global::Repertoire.HandlesDrop,
-            runwayBeats: 4,
-            tailBeats: 4,
-            TransitionShape.Iris,
-            TransitionIntensity.High,
-            defaultDurationSeconds: 4f);
+    private const global::Repertoire DefaultTags = global::Repertoire.HandlesDrop;
+    private const int RunwayBeats = 4;
+    private const int TailBeats = 4;
+    private const TransitionShape Shape = TransitionShape.Iris;
+    private const TransitionIntensity Intensity = TransitionIntensity.High;
+    private const float DefaultDurationSeconds = 4f;
+    private const float ExternalBlendDefaultProgress = 0.5f;
+    private const float ExternalBlendDefaultDirection = 0f;
 
-    public override TransitionRepertoire Repertoire => DefaultRepertoire;
+    protected override TransitionSettings BuildCodeDefaults()
+    {
+        return new TransitionSettings
+        {
+            Tags = DefaultTags,
+            RunwayBeats = RunwayBeats,
+            TailBeats = TailBeats,
+            Shape = Shape,
+            Intensity = Intensity,
+            DefaultDurationSeconds = DefaultDurationSeconds,
+            ExternalBlendDefaultProgress = ExternalBlendDefaultProgress,
+            ExternalBlendDefaultDirection = ExternalBlendDefaultDirection,
+        };
+    }
 
     int direction;
     float diagonalsize;
@@ -106,13 +119,13 @@ public class IrisTransition : TransitionBase
     /// </summary>
     public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
-        float V2 = 0.5f;
-        int d = 0;
+        var effectiveSettings = EffectiveSettings;
+        float V2 = effectiveSettings.ExternalBlendDefaultProgress;
+        int d = effectiveSettings.ExternalBlendDefaultDirection > 0.5f ? 1 : 0;
         if (settings.Length > 0)
             V2 = settings[0];
         if (settings.Length > 1)
-            if (settings[1] > 0.5f)
-                d = 1;
+            d = settings[1] > 0.5f ? 1 : 0;
         Draw2(dest, src1, src2, V2, d);
     }
     /// <summary>

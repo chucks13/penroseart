@@ -5,16 +5,27 @@
 /// </summary>
 public class RGBFade : TransitionBase
 {
-    private static readonly TransitionRepertoire DefaultRepertoire =
-        TransitionRepertoire.FromRunwayAndTail(
-            global::Repertoire.RespondsToEnergy,
-            runwayBeats: 4,
-            tailBeats: 4,
-            TransitionShape.ChannelBlend,
-            TransitionIntensity.Medium,
-            defaultDurationSeconds: 4f);
+    private const global::Repertoire DefaultTags = global::Repertoire.RespondsToEnergy;
+    private const int RunwayBeats = 4;
+    private const int TailBeats = 4;
+    private const TransitionShape Shape = TransitionShape.ChannelBlend;
+    private const TransitionIntensity Intensity = TransitionIntensity.Medium;
+    private const float DefaultDurationSeconds = 4f;
+    private const float ExternalBlendDefaultProgress = 0.5f;
 
-    public override TransitionRepertoire Repertoire => DefaultRepertoire;
+    protected override TransitionSettings BuildCodeDefaults()
+    {
+        return new TransitionSettings
+        {
+            Tags = DefaultTags,
+            RunwayBeats = RunwayBeats,
+            TailBeats = TailBeats,
+            Shape = Shape,
+            Intensity = Intensity,
+            DefaultDurationSeconds = DefaultDurationSeconds,
+            ExternalBlendDefaultProgress = ExternalBlendDefaultProgress,
+        };
+    }
 
     /// <summary>
     /// Initializes per-run transition state before effect-to-effect blending begins.
@@ -60,7 +71,7 @@ public class RGBFade : TransitionBase
     /// </summary>
     public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
-        float V2 = 0.5f;
+        float V2 = EffectiveSettings.ExternalBlendDefaultProgress;
         if (settings.Length > 0)
             V2 = settings[0];
 
@@ -71,7 +82,7 @@ public class RGBFade : TransitionBase
     /// </summary>
     public override string Usage()
     {
-        return "[ratio] [borderHue]";
+        return "[ratio]";
     }
 
 

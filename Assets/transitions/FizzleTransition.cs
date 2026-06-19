@@ -7,16 +7,27 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class FizzleTransition : TransitionBase
 {
-    private static readonly TransitionRepertoire DefaultRepertoire =
-        TransitionRepertoire.FromRunwayAndTail(
-            global::Repertoire.HandlesDrop,
-            runwayBeats: 4,
-            tailBeats: 4,
-            TransitionShape.Dissolve,
-            TransitionIntensity.High,
-            defaultDurationSeconds: 4f);
+    private const global::Repertoire DefaultTags = global::Repertoire.HandlesDrop;
+    private const int RunwayBeats = 4;
+    private const int TailBeats = 4;
+    private const TransitionShape Shape = TransitionShape.Dissolve;
+    private const TransitionIntensity Intensity = TransitionIntensity.High;
+    private const float DefaultDurationSeconds = 4f;
+    private const float ExternalBlendDefaultProgress = 0.5f;
 
-    public override TransitionRepertoire Repertoire => DefaultRepertoire;
+    protected override TransitionSettings BuildCodeDefaults()
+    {
+        return new TransitionSettings
+        {
+            Tags = DefaultTags,
+            RunwayBeats = RunwayBeats,
+            TailBeats = TailBeats,
+            Shape = Shape,
+            Intensity = Intensity,
+            DefaultDurationSeconds = DefaultDurationSeconds,
+            ExternalBlendDefaultProgress = ExternalBlendDefaultProgress,
+        };
+    }
 
     short[] order = null;
     public override void OnStart()
@@ -95,7 +106,7 @@ public class FizzleTransition : TransitionBase
     /// </summary>
     public override void Blend(Color[] dest, Color[] src1, Color[] src2)
     {
-        float V2 = 0.5f;
+        float V2 = EffectiveSettings.ExternalBlendDefaultProgress;
         if (settings.Length > 0)
             V2 = settings[0];
         Draw2(dest, src1, src2, V2);
