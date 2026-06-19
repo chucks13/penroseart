@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>High-level cadence source currently driving the Director.</summary>
@@ -523,40 +522,19 @@ public sealed class Director
 
     private void BuildTrackPhasePlan(int beat, PhraseWindow phraseWindow)
     {
-        trackPhaseStartBeat = phraseWindow.StartBeat;
-        trackPhaseBoundaryBeat = phraseWindow.EndBeat;
+        var plan = PhraseImpactPlan.Build(
+            phraseWindow,
+            beat,
+            CanChangeAtBeat,
+            (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
+
+        trackPhaseStartBeat = plan.PhraseStartBeat;
+        trackPhaseBoundaryBeat = plan.PhraseEndBeat;
+        trackPhaseImpactBeats = plan.ImpactBeats;
         trackPhaseImpactIndex = 0;
 
-        var futureInteriorSlots = new List<int>();
-        foreach (var slotBeat in phraseWindow.ImpactSlotsAfter(beat))
-        {
-            if (slotBeat < phraseWindow.EndBeat && CanChangeAtBeat(slotBeat))
-            {
-                futureInteriorSlots.Add(slotBeat);
-            }
-        }
-
-        var selectedTargets = new List<int>();
-        var interiorTransitionCount = futureInteriorSlots.Count > 0
-            ? UnityEngine.Random.Range(0, futureInteriorSlots.Count + 1)
-            : 0;
-        for (var i = 0; i < interiorTransitionCount; i++)
-        {
-            var chosenIndex = UnityEngine.Random.Range(0, futureInteriorSlots.Count);
-            selectedTargets.Add(futureInteriorSlots[chosenIndex]);
-            futureInteriorSlots.RemoveAt(chosenIndex);
-        }
-
-        if (CanChangeAtBeat(phraseWindow.EndBeat))
-        {
-            selectedTargets.Add(phraseWindow.EndBeat);
-        }
-
-        selectedTargets.Sort();
-        trackPhaseImpactBeats = selectedTargets.Count > 0
-            ? selectedTargets.ToArray()
-            : new[] { phraseWindow.EndBeat };
-        Trace($"TRACK_PHASE_PLAN beat={beat} phraseStart={phraseWindow.StartBeat} boundary={phraseWindow.EndBeat} targets={FormatBeatList(trackPhaseImpactBeats)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
+        var interiorTransitionCount = Math.Max(0, trackPhaseImpactBeats.Length - 1);
+        Trace($"TRACK_PHASE_PLAN beat={beat} phraseStart={trackPhaseStartBeat} boundary={trackPhaseBoundaryBeat} targets={FormatBeatList(trackPhaseImpactBeats)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
     }
 
     private void ResetTrackPhasePlan()
