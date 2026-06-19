@@ -27,10 +27,25 @@ public abstract class TransitionBase
     public string Name => GetType().ToString();
 
     /// <summary>
-    /// Musical-structure timing and event behavior this transition advertises to the Director.
-    /// Transition subclasses override this when their A-to-B motion has a specific impact point or musical role.
+    /// Code-authored baseline used when no saved Transition Settings asset exists and when restoring defaults.
     /// </summary>
-    public virtual TransitionRepertoire Repertoire => TransitionRepertoire.Default;
+    public TransitionSettings CodeDefaults => BuildCodeDefaults();
+
+    /// <summary>
+    /// Saved settings when present, otherwise this Transition's Code Defaults. This is read live so Play Mode edits affect future decisions.
+    /// </summary>
+    protected TransitionSettings EffectiveSettings => TransitionSettingsProvider.Resolve(GetType(), CodeDefaults);
+
+    /// <summary>
+    /// Musical-structure timing and event behavior this transition advertises to the Director.
+    /// </summary>
+    public virtual TransitionRepertoire Repertoire => EffectiveSettings.ToRepertoire();
+
+    /// <summary>Builds this Transition's code-authored settings baseline.</summary>
+    protected virtual TransitionSettings BuildCodeDefaults()
+    {
+        return TransitionSettings.FromRepertoire(TransitionRepertoire.Default);
+    }
 
     private int a;
     private int b;

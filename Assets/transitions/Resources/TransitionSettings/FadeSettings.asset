@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ce8a1dd4452f439f9d89d2898dcafe3, type: 3}
+  m_Name: FadeSettings
+  m_EditorClassIdentifier: Assembly-CSharp::TransitionSettingsAsset
+  transitionTypeName: Fade
+  settings:
+    Tags: 0
+    RunwayBeats: 4
+    TailBeats: 0
+    Shape: 0
+    Intensity: 0
+    DefaultDurationSeconds: 4
+    ExternalBlendDefaultProgress: 0.5
+    ExternalBlendDefaultAngleRadians: 0
+    ExternalBlendDefaultDirection: 0
+    ExternalBlendDefaultBorderHue: 0
+    DirectionalReactiveEdgeWidth: 0.055
+    DirectionalBaseEdgeBrightnessBoost: 0.15
+    DirectionalLowBandResponseGain: 2
+    DirectionalMaxLowBandBrightnessBoost: 0.85
+    DirectionalBaseEdgeBrightnessLift: 0.025
+    DirectionalMaxLowBandBrightnessLift: 0.14
+    NoiseScale: 0.07
+    NoiseProgressRange: 1.1
+    NoiseBorderWidth: 0.1
