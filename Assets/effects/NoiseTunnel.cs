@@ -17,6 +17,7 @@ public class NoiseTunnel : EffectBase
     private float colorDelta;
     private int style;
     private int direction;
+    int beatMode;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -47,6 +48,8 @@ public class NoiseTunnel : EffectBase
         style = Random.Range(0, 3);
         direction = Random.Range(0, 2);
         buffer.Clear();
+        beatVariant=beatManager.GetRandomVariantChill();
+        beatMode = Random.Range(0,3);
     }
 
     /// <summary>
@@ -60,7 +63,10 @@ public class NoiseTunnel : EffectBase
     public override void Draw()
     {
         // Beat pulse scales the final tunnel colors without changing tunnel phase.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
+        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
+        float beatTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
+        float localTime = effectTime;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -76,7 +82,9 @@ public class NoiseTunnel : EffectBase
                 d3 = 10000 - d3;
             }
 
-            float z = effectTime * speed;
+            if (beatMode < 2)
+                localTime = beatTime;
+            float z = localTime * speed;
 
             switch (style)
             {
@@ -94,15 +102,22 @@ public class NoiseTunnel : EffectBase
             n *= amplifier;
             //n = Mathf.Abs(n);
 
-            int v = (int)n;
-            Color c;
-            if ((v & 1) == 0)
+            int v1 = (int)n;
+            Color color;
+            if ((v1 & 1) == 0)
             {
-                c = Color.HSVToRGB((n + colorDelta) % 1f, 1f, 1);
+                color = Color.HSVToRGB((n + colorDelta) % 1f, 1f, 1);
+                if (beatMode > 0)
+                {
+                    Color.RGBToHSV(color, out float h, out float s, out float v);
+                    h += beatHue;
+                    v *= beatBrightness;
+                    color = Color.HSVToRGB(h % 1f, s, v);
+                }
             }
             else
-                c = Color.black;
-            buffer[i] = c * beatBrightness;
+                color = Color.black;
+            buffer[i] = color * beatBrightness;
         }
     }
 }
