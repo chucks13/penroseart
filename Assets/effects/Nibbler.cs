@@ -12,6 +12,7 @@ public class Nibbler : EffectBase
     private bool randomColor;
     private Color color;
     private float fade;
+    int beatMode;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -51,6 +52,7 @@ public class Nibbler : EffectBase
 
         fade = Random.Range(0.97f, 0.999f);
         buffer.Clear();
+        beatMode = Random.Range(0, 2);
     }
 
     /// <summary>
@@ -64,7 +66,8 @@ public class Nibbler : EffectBase
     public override void Draw()
     {
         // Beat pulse scales walker trail colors as they are written into the fading buffer.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
+        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
         buffer.Fade(fade);
         int count = (int)(effectDelta * 300f);
         for (int y = 0; y < Count; y++)
@@ -73,6 +76,13 @@ public class Nibbler : EffectBase
             {
                 current[y] = tiles[current[y]].GetRandomNeighbor();
                 Color c = randomColor ? Color.HSVToRGB(Random.value, 1f, 1f) : color;
+
+                if (beatMode > 0)
+                {
+                    Color.RGBToHSV(color, out float h, out float s, out float v);
+                    h += beatHue;
+                    color = Color.HSVToRGB(h % 1f, s, v);
+                }
 
                 buffer[current[y]] = c * beatBrightness;
             }
