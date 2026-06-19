@@ -29,4 +29,10 @@ public readonly struct TransitionBeatPlan
             impactBeat,
             impactBeat + repertoire.TailBeats);
     }
+
+    /// <summary>Whether the beat is inside the Runway window before the Impact Point.</summary>
+    public bool IsCueBeat(int beat)
+    {
+        return beat >= StartBeat && beat < ImpactBeat;
+    }
 }

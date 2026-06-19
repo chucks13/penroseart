@@ -586,7 +586,7 @@ public sealed class Director
         var beatPlan = TransitionBeatPlan.FromImpactBeat(impactBeat, repertoire);
         var startBeat = beatPlan.StartBeat;
         var beatsUntilImpact = impactBeat - beat;
-        if (beatsUntilImpact < 1 || beatsUntilImpact > repertoire.RunwayBeats)
+        if (!beatPlan.IsCueBeat(beat))
         {
             return;
         }
@@ -732,7 +732,8 @@ public sealed class Director
 
     private bool CanChangeAtBeat(int beat)
     {
-        return lastChangeBeat == int.MinValue || beat - lastChangeBeat >= MinimumChangeCadenceBeats;
+        var previousImpactBeat = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        return ChangeCadence.CanChangeAt(beat, previousImpactBeat, MinimumChangeCadenceBeats);
     }
 
     private void Trace(string message)
