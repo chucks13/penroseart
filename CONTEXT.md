@@ -169,8 +169,8 @@ The Effect already chosen as the destination for the Director's next A-to-B move
 _Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to preview or tune the next destination.
 
 **Phase Anchor**:
-The Director's current musical target for the next structural transition. Track Phase defines a phrase window: the current phrase starts at a phrase boundary, contains 16-beat phase slots, and ends at the next phrase boundary. The Director plans the phrase as a list: choose a random number of eligible interior 16-beat slots, always include the ending phrase boundary as the mandatory final slot, then advance through that list one impact at a time. When only beat/grid evidence is available, the anchor is the best known 16-beat grid point; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
-_Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure. Live Track Phase windows define the phrase slots; inferred grid points are only for weaker evidence.
+The Director's current musical target for the next structural transition: a selected Phase Boundary or phrase boundary. Track Phase defines a Phrase Window; the Director may choose interior Phase Boundaries inside that window and must include the ending phrase boundary, then advances one selected impact at a time. When only beat/grid evidence is available, the anchor is the best known Phase Boundary; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
+_Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure. Live Track Phase windows define the phrase boundaries and interior Phase Boundaries; inferred grid points are only for weaker evidence.
 
 **Phase Lock**:
 The Director's ongoing effort to keep Performer changes aligned to the Phase Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
@@ -188,6 +188,10 @@ _Avoid_: calling this a fallback; it is the deliberate Synced Mode behavior for 
 Replacing the current Phase Anchor with a new one when fresh Track Phase data appears or contradicts the grid being coasted. Re-anchoring is how the wall gets back in phase after startup, data gaps, song position changes, or loop-like movement the current data can reveal.
 _Avoid_: layering multiple anchors; the Director has one current phase anchor.
 
+**Loop**:
+A live repeated section of the current music. Loops are powers of four and usually preserve Phase, but they can rewind or repeat beat numbers in ways that make absolute beat progress stale. A Loop inside the same Phrase Window is a new pass through the same structure: it should keep the Phrase Window's selected Phase Boundaries and move the Director's cursor back to the next selected boundary after the current beat, not create a new Phrase Window or reroll the selection.
+_Avoid_: assuming a Loop means the wall is out of phase; assuming old absolute progress remains valid after a loop rewind; treating a same-window Loop as a new Phrase Window.
+
 **Beat Rewind**:
 A substantial backward jump in the live beat count, usually a new loop pass or new track position. The Director treats a rewind of at least 16 beats as a new pass: it clears stale cue state and stops comparing future phrase targets against old absolute beat numbers. Small one- or two-beat backsteps are ignored as transport jitter. Rewind handling is not a separate scheduler — current Track Phase still supplies the phrase target.
 _Avoid_: modeling loop windows, transport state machines, or speculative loop plans; the Director only needs current phrase data, a 16-beat minimum, and transition impact/tail timing.
@@ -201,16 +205,16 @@ What a Performer advertises it can do, so the Director can cast it knowingly —
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **A-to-B Transition**:
-A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Different Transitions can make different musical promises about where the important beat should land along that A-to-B movement.
-_Avoid_: treating every Transition as if its only musical goal is to complete on the key beat; some Transitions want the hit in the middle and resolve afterward.
+A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; a Transition's total Runway plus Tail should never exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Phrase Window or Phase Boundary decisions.
+_Avoid_: treating every Transition as if its only goal is to complete on a Phase Boundary; treating transition progress, completion, or busy state as music-structure evidence.
 
 **Transition Repertoire**:
-The part of a Transition's Repertoire that tells the Director what kind of A-to-B move it offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast a Transition that fits the available phrase timing instead of assuming all Transitions are interchangeable. These are artistic defaults owned by each Transition; authoring tools may edit their saved values, but the Repertoire remains the Transition's declaration to the Director, not a live command from the Director.
+The Director-facing declaration of the A-to-B move a Transition offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast and schedule a Transition that fits the selected Phase Boundary instead of assuming all Transitions are interchangeable.
 _Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; timing shape is part of what the Transition advertises; treating Repertoire as per-cue instructions or as state the Director sets.
 
 **Transition Settings**:
-Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings are what a person tunes while watching the wall; they become the Transition's saved artistic defaults until restored. They are not emergency runtime overrides or edge-case guards.
-_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using Settings to protect against low-consequence glitches that naturally self-correct.
+Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Director reads that declaration to decide when to start the A-to-B move. Settings and the Settings Editor enforce valid Transition Duration, including the 12-beat maximum, so the Director does not need compensating scheduling logic.
+_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings.
 
 **Code Defaults**:
 The transition-authored baseline values used to create or restore Transition Settings. Code Defaults live with the Transition's source so changing a Transition and changing its intended defaults stay together.
@@ -225,20 +229,20 @@ How forcefully a Transition reads as a musical move: Subtle, Medium, or High. In
 _Avoid_: treating Intensity as brightness or audio level; it describes the visual force of the Transition itself.
 
 **Impact Point**:
-The musically-important point inside an A-to-B Transition — the progress value where the key phase beat should hit. An Impact Point of 1 means the beat lands when B is fully established; an Impact Point of 0.5 means the beat lands at the dramatic middle of the Transition and the movement may continue afterward. The Director times the Impact Point, not necessarily the Completion.
-_Avoid_: calling this "completion" or "landing" when the Transition still has Tail after the beat; assuming the key beat always wants progress 1.
+A Transition-local progress point where that Transition's main visual hit happens. The Director aligns the Impact Point to a chosen Phase Boundary, but the Impact Point is not itself Phase or Phrase structure; it only describes where the Transition should be in its own A-to-B motion when it hits its mark.
+_Avoid_: treating Impact Point as a phrase boundary, Phase Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
 
 **Transition Duration**:
-The full musical length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail.
+The full length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail, and should never exceed 12 beats.
 _Avoid_: using Duration when only the pre-impact lead time is meant; that lead time is the Runway.
 
 **Runway**:
-The lead-in before a Transition's Impact Point — how many beats before the key phase beat the Director must start the Transition so it reaches the Impact Point on time. Runway is derived from the Transition's Duration and Impact Point.
+The lead-in before a Transition's Impact Point — how many beats before the chosen Phase Boundary the Director must start the Transition so the Impact Point reaches that boundary on time. Runway is derived from the Transition's Duration and Impact Point.
 _Avoid_: using Runway to mean the whole Transition; a Transition can continue after impact.
 
 **Tail**:
-The part of a Transition after the Impact Point. Tail lets the wall hit the key beat at the Transition's dramatic center and then finish resolving to B afterward.
-_Avoid_: treating post-impact motion as late or wrong; for some Transitions the Tail is intentional.
+The part of a Transition after the Impact Point. Tail is visual resolution to B after the Transition has hit its mark; it has no effect on Phrase Window, Phase Boundary, or Phase Anchor decisions.
+_Avoid_: treating post-impact motion as late or wrong; treating Tail completion as a musical scheduling event.
 
 **Transition Completion**:
 The moment an A-to-B Transition has fully reached B. Completion may happen on the same beat as the Impact Point or after it, depending on the Transition Repertoire.
@@ -257,27 +261,27 @@ An inspection freeze that suspends the Director so a developer can sit on one ef
 _Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; re-asserting the held effect every frame (nothing fights it once the one decider is suspended).
 
 **Track Phase**:
-RaveSystem's name for the analyzed phrase signal: current/next phrase labels, whether the phrase is active, beats remaining to the phrase boundary, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window**; it is not the Director's 16-Beat Phase.
-_Avoid_: confusing Track Phase with **Bar Phase** or **16-Beat Phase**; treating phrase labels as an enum; treating the remaining count as only future phrases after the current one.
+RaveSystem's name for the analyzed phrase signal: current/next phrase labels, active state, beats remaining to the phrase boundary, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window** in song structure; it is not the wall's **Phase**. In the current OSC stream, available Track Phase frames report active while unavailable frames report unavailable.
+_Avoid_: confusing Track Phase with **Bar Phase** or **Phase**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Phrase Window**:
-The current musical section span described by Track Phase. It starts on a phrase boundary, contains one or more 16-Beat Phases, and ends on the next phrase boundary.
-_Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; the Director derives transition opportunities from it.
+The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Phases, and is usually at least 8 bars / 32 beats while often doubling or extending from there. When a new Phrase Window begins, that is the moment to derive its Phase Boundaries and choose which interior ones may receive transitions.
+_Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; choosing transition targets without reference to the current Phrase Window.
 
-**16-Beat Phase** (a.k.a. **Phase Slot**, **Slot**):
-A fixed 16-beat span inside a Phrase Window. A Slot is a set amount of beats, usually one 16-Beat Phase unless a different length is explicitly named; when selecting transitions, the Director chooses the boundary at the end of a Slot as a possible impact beat.
-_Avoid_: using "phase" when the whole Phrase Window is meant; assuming Slots have arbitrary lengths without saying so.
+**Phase** (a.k.a. **16-Beat Phase**):
+A fixed 4-bar / 16-beat timing unit inside a Phrase Window. The wall uses Phase Boundaries as its minimum switching cadence; a Phrase Window can contain several Phases, and the Director may choose some interior Phase Boundaries rather than switching at every one.
+_Avoid_: using "phase" when the whole Phrase Window is meant; assuming every Phase Boundary must trigger a transition.
 
 **Phase Boundary**:
-The one beat where a 16-Beat Phase starts or ends. A phrase boundary is always also a Phase Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final transition impact.
+The beat where a Phase starts or ends. A phrase boundary is always also a Phase Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final transition impact.
 _Avoid_: calling every bar downbeat a Phase Boundary; a Phase Boundary is the 16-beat one, not every 4-beat bar one.
 
-**Selected Impact Beat**:
-A Phase Boundary chosen by the Director as the beat where an A-to-B Transition's Impact Point should land. The Director may choose interior Slot boundaries and always includes the final phrase boundary.
-_Avoid_: equating the Selected Impact Beat with Transition Completion when the transition has Tail; the impact can land before completion.
+**Selected Phase Boundary**:
+A Phase Boundary chosen by the Director as a transition target. The Director may choose interior Phase Boundaries and always includes the final phrase boundary; a Transition may then use its local Impact Point to hit that selected boundary at the right moment.
+_Avoid_: calling this an Impact Point or treating it as Transition Completion; Impact Point is local to a Transition, while Selected Phase Boundary belongs to the music grid.
 
 **Phase Count**:
-The Director's 1-based count within the current 16-Beat Phase. A 4-beat Runway starts at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
+The Director's 1-based count within the current Phase. A 4-beat Runway starts at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
 **Fill**:
