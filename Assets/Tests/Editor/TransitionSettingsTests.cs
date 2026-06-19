@@ -94,6 +94,68 @@ public sealed class TransitionSettingsTests
         Assert.That(repertoire.TailBeats, Is.EqualTo(2));
     }
 
+    [Test]
+    public void ToRepertoireAcceptsRunwayAndTailAtOrBelowTwelveBeats()
+    {
+        var settings = new TransitionSettings
+        {
+            RunwayBeats = 5,
+            TailBeats = 1,
+        };
+
+        var repertoire = settings.ToRepertoire();
+
+        Assert.That(repertoire.RunwayBeats, Is.EqualTo(5));
+        Assert.That(repertoire.TailBeats, Is.EqualTo(1));
+        Assert.That(repertoire.DurationBeats, Is.EqualTo(6));
+    }
+
+    [Test]
+    public void ToRepertoireRejectsRunwayAndTailAboveTwelveBeats()
+    {
+        var settings = new TransitionSettings
+        {
+            RunwayBeats = 10,
+            TailBeats = 3,
+        };
+
+        Assert.That(() => settings.ToRepertoire(), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void EditorConstrainDurationReducesTailToKeepRunwayPlusTailAtTwelveBeats()
+    {
+        var settings = new TransitionSettings
+        {
+            RunwayBeats = 10,
+            TailBeats = 5,
+        };
+
+        var changed = TransitionSettingsAssetUtility.ConstrainDuration(settings);
+
+        Assert.That(changed, Is.True);
+        Assert.That(settings.RunwayBeats, Is.EqualTo(10));
+        Assert.That(settings.TailBeats, Is.EqualTo(2));
+        Assert.That(settings.DurationBeats, Is.EqualTo(12));
+    }
+
+    [Test]
+    public void EditorConstrainDurationCapsRunwayWhenRunwayAloneExceedsTwelveBeats()
+    {
+        var settings = new TransitionSettings
+        {
+            RunwayBeats = 15,
+            TailBeats = 3,
+        };
+
+        var changed = TransitionSettingsAssetUtility.ConstrainDuration(settings);
+
+        Assert.That(changed, Is.True);
+        Assert.That(settings.RunwayBeats, Is.EqualTo(12));
+        Assert.That(settings.TailBeats, Is.EqualTo(0));
+        Assert.That(settings.DurationBeats, Is.EqualTo(12));
+    }
+
     private static void AssertSettings(
         TransitionSettings actual,
         global::Repertoire tags,

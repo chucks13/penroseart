@@ -16,6 +16,12 @@ public sealed class TransitionSettings
     public TransitionIntensity Intensity = TransitionIntensity.Subtle;
     [Min(0.01f)] public float DefaultDurationSeconds = 4f;
 
+    /// <summary>Total authored A-to-B transition duration in beats.</summary>
+    public int DurationBeats => RunwayBeats + TailBeats;
+
+    /// <summary>Whether Runway plus Tail satisfies the authoring duration contract.</summary>
+    public bool HasValidDuration => IsValidDuration(RunwayBeats, TailBeats);
+
     [Header("External Blend Defaults")]
     [Range(0f, 1f)] public float ExternalBlendDefaultProgress = 0.5f;
     public float ExternalBlendDefaultAngleRadians;
@@ -35,9 +41,37 @@ public sealed class TransitionSettings
     [Min(0f)] public float NoiseProgressRange = 1.1f;
     [Min(0f)] public float NoiseBorderWidth = 0.1f;
 
+    /// <summary>Returns whether the supplied Runway and Tail satisfy the duration contract.</summary>
+    public static bool IsValidDuration(int runwayBeats, int tailBeats)
+    {
+        return runwayBeats >= 1
+            && tailBeats >= 0
+            && runwayBeats + tailBeats <= TransitionRepertoire.MaxDurationBeats;
+    }
+
+    /// <summary>Message suitable for editor feedback when Runway plus Tail is invalid.</summary>
+    public static string DurationValidationMessage(int runwayBeats, int tailBeats)
+    {
+        var durationBeats = runwayBeats + tailBeats;
+        return $"Transition Duration is Runway + Tail and must be at most {TransitionRepertoire.MaxDurationBeats} beats; current duration is {durationBeats} beats.";
+    }
+
+    /// <summary>Throws when the saved Runway and Tail cannot become a Director-facing repertoire.</summary>
+    public void ValidateDuration()
+    {
+        if (!HasValidDuration)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(TailBeats),
+                TailBeats,
+                DurationValidationMessage(RunwayBeats, TailBeats));
+        }
+    }
+
     /// <summary>Builds the Director-facing repertoire contract from the saved authoring values.</summary>
     public TransitionRepertoire ToRepertoire()
     {
+        ValidateDuration();
         return TransitionRepertoire.FromRunwayAndTail(
             Tags,
             RunwayBeats,

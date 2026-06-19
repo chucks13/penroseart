@@ -14,7 +14,7 @@ public enum SyncedCueDecisionKind
 }
 
 /// <summary>
-/// Evaluates the beat-denominated cue window for a selected Synced Mode impact beat.
+/// Evaluates the beat-denominated cue window for a selected Synced Mode Phase Boundary.
 /// </summary>
 public readonly struct SyncedCueDecision
 {
@@ -40,13 +40,13 @@ public readonly struct SyncedCueDecision
     /// </summary>
     public static SyncedCueDecision Evaluate(
         int currentBeat,
-        int selectedImpactBeat,
+        int selectedPhaseBoundary,
         TransitionRepertoire transitionRepertoire,
         int? lastCueBeat,
-        int? previousImpactBeat,
+        int? previousSelectedPhaseBoundary,
         int minimumChangeCadenceBeats)
     {
-        var beatPlan = TransitionBeatPlan.FromImpactBeat(selectedImpactBeat, transitionRepertoire);
+        var beatPlan = TransitionBeatPlan.FromSelectedPhaseBoundary(selectedPhaseBoundary, transitionRepertoire);
         if (lastCueBeat == currentBeat)
         {
             return new SyncedCueDecision(SyncedCueDecisionKind.Wait, beatPlan, currentBeat);
@@ -57,7 +57,7 @@ public readonly struct SyncedCueDecision
             return new SyncedCueDecision(SyncedCueDecisionKind.Wait, beatPlan, currentBeat);
         }
 
-        if (!ChangeCadence.CanChangeAt(selectedImpactBeat, previousImpactBeat, minimumChangeCadenceBeats))
+        if (!ChangeCadence.CanChangeAt(selectedPhaseBoundary, previousSelectedPhaseBoundary, minimumChangeCadenceBeats))
         {
             return new SyncedCueDecision(SyncedCueDecisionKind.BlockedByCadence, beatPlan, currentBeat);
         }

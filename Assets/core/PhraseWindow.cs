@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// Musical phrase span derived from Track Phase, with 16-beat impact slots for Director scheduling.
+/// Musical phrase span derived from Track Phase, with Phase Boundaries for Director scheduling.
 /// </summary>
 public readonly struct PhraseWindow
 {
-    /// <summary>Default length of one 16-Beat Phase / Phase Slot.</summary>
-    public const int DefaultSlotBeats = 16;
+    /// <summary>Default length of one Phase: four bars / sixteen beats.</summary>
+    public const int DefaultPhaseBeats = 16;
 
     /// <summary>Absolute beat where the Phrase Window starts.</summary>
     public readonly int StartBeat;
@@ -51,32 +51,42 @@ public readonly struct PhraseWindow
     }
 
     /// <summary>
+    /// Returns whether two Phrase Windows have the same scheduling identity.
+    /// </summary>
+    public bool HasSameTimingIdentity(PhraseWindow other)
+    {
+        return StartBeat == other.StartBeat
+            && EndBeat == other.EndBeat
+            && LengthBeats == other.LengthBeats;
+    }
+
+    /// <summary>
     /// Enumerates future Phase Boundaries after the supplied beat, including the phrase boundary.
     /// </summary>
-    public IEnumerable<int> ImpactSlotsAfter(int beat, int slotBeats = DefaultSlotBeats)
+    public IEnumerable<int> PhaseBoundariesAfter(int beat, int phaseBeats = DefaultPhaseBeats)
     {
-        if (slotBeats <= 0)
+        if (phaseBeats <= 0)
         {
             yield break;
         }
 
-        var slotBeat = FirstSlotBoundaryAfter(beat, slotBeats);
-        for (; slotBeat <= EndBeat; slotBeat += slotBeats)
+        var boundaryBeat = FirstPhaseBoundaryAfter(beat, phaseBeats);
+        for (; boundaryBeat <= EndBeat; boundaryBeat += phaseBeats)
         {
-            yield return slotBeat;
+            yield return boundaryBeat;
         }
     }
 
-    private int FirstSlotBoundaryAfter(int beat, int slotBeats)
+    private int FirstPhaseBoundaryAfter(int beat, int phaseBeats)
     {
-        var firstBoundary = StartBeat + slotBeats;
+        var firstBoundary = StartBeat + phaseBeats;
         if (beat < firstBoundary)
         {
             return firstBoundary;
         }
 
         var beatsSinceFirstBoundary = beat - firstBoundary;
-        var slotsToSkip = beatsSinceFirstBoundary / slotBeats + 1;
-        return firstBoundary + (slotsToSkip * slotBeats);
+        var boundariesToSkip = beatsSinceFirstBoundary / phaseBeats + 1;
+        return firstBoundary + (boundariesToSkip * phaseBeats);
     }
 }

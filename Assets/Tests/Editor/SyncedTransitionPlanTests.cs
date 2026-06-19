@@ -60,7 +60,7 @@ public sealed class SyncedTransitionPlanTests
             TransitionShape.Dissolve,
             TransitionIntensity.High,
             defaultDurationSeconds: 4f);
-        var beatPlan = TransitionBeatPlan.FromImpactBeat(609, repertoire);
+        var beatPlan = TransitionBeatPlan.FromSelectedPhaseBoundary(609, repertoire);
         return new SyncedTransitionPlan(
             transitionIndex: 3,
             targetEffectIndex: 7,

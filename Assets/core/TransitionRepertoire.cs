@@ -32,6 +32,9 @@ public enum TransitionIntensity
 /// </remarks>
 public readonly struct TransitionRepertoire
 {
+    /// <summary>Maximum allowed Runway + Tail duration, leaving room inside the 16-beat cadence.</summary>
+    public const int MaxDurationBeats = 12;
+
     /// <summary>Default transition contract: a four-beat blend with a four-second Standalone duration.</summary>
     public static TransitionRepertoire Default { get; } = FromRunwayAndTail(
         Repertoire.None,
@@ -86,6 +89,14 @@ public readonly struct TransitionRepertoire
             throw new ArgumentOutOfRangeException(nameof(tailBeats), tailBeats, "Tail cannot be negative.");
         }
 
+        var durationBeats = runwayBeats + tailBeats;
+        if (durationBeats > MaxDurationBeats)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tailBeats),
+                tailBeats,
+                $"Runway plus Tail cannot exceed {MaxDurationBeats} beats.");
+        }
 
         Tags = tags;
         RunwayBeats = runwayBeats;

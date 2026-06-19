@@ -1,12 +1,12 @@
 /// <summary>
-/// Beat-domain timing for an A-to-B Transition around a Selected Impact Beat.
+/// Beat-domain timing for an A-to-B Transition around a Selected Phase Boundary.
 /// </summary>
 public readonly struct TransitionBeatPlan
 {
     /// <summary>Absolute beat where the transition should start.</summary>
     public readonly int StartBeat;
 
-    /// <summary>Selected Impact Beat where the transition's Impact Point should land.</summary>
+    /// <summary>Selected Phase Boundary where the transition's Impact Point should land.</summary>
     public readonly int ImpactBeat;
 
     /// <summary>Absolute beat where the transition should fully complete.</summary>
@@ -20,14 +20,14 @@ public readonly struct TransitionBeatPlan
     }
 
     /// <summary>
-    /// Creates the beat plan for a transition whose Impact Point lands on the selected impact beat.
+    /// Creates the beat plan for a transition whose Impact Point lands on the Selected Phase Boundary.
     /// </summary>
-    public static TransitionBeatPlan FromImpactBeat(int impactBeat, TransitionRepertoire repertoire)
+    public static TransitionBeatPlan FromSelectedPhaseBoundary(int selectedPhaseBoundary, TransitionRepertoire repertoire)
     {
         return new TransitionBeatPlan(
-            impactBeat - repertoire.RunwayBeats,
-            impactBeat,
-            impactBeat + repertoire.TailBeats);
+            selectedPhaseBoundary - repertoire.RunwayBeats,
+            selectedPhaseBoundary,
+            selectedPhaseBoundary + repertoire.TailBeats);
     }
 
     /// <summary>Whether the beat is inside the Runway window before the Impact Point.</summary>

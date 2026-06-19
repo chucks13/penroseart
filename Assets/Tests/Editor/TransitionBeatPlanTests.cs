@@ -3,7 +3,7 @@ using NUnit.Framework;
 public sealed class TransitionBeatPlanTests
 {
     [Test]
-    public void FromImpactBeatAppliesRunwayAndTail()
+    public void FromSelectedPhaseBoundaryAppliesRunwayAndTail()
     {
         var repertoire = TransitionRepertoire.FromRunwayAndTail(
             Repertoire.None,
@@ -13,7 +13,7 @@ public sealed class TransitionBeatPlanTests
             TransitionIntensity.High,
             defaultDurationSeconds: 4f);
 
-        var plan = TransitionBeatPlan.FromImpactBeat(609, repertoire);
+        var plan = TransitionBeatPlan.FromSelectedPhaseBoundary(609, repertoire);
 
         Assert.That(plan.StartBeat, Is.EqualTo(605));
         Assert.That(plan.ImpactBeat, Is.EqualTo(609));
@@ -31,7 +31,7 @@ public sealed class TransitionBeatPlanTests
             TransitionIntensity.Subtle,
             defaultDurationSeconds: 4f);
 
-        var plan = TransitionBeatPlan.FromImpactBeat(609, repertoire);
+        var plan = TransitionBeatPlan.FromSelectedPhaseBoundary(609, repertoire);
 
         Assert.That(plan.IsCueBeat(604), Is.False);
         Assert.That(plan.IsCueBeat(605), Is.True);

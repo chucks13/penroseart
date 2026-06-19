@@ -1,11 +1,12 @@
 /// <summary>
-/// Minimum beat spacing between Director-selected impact beats.
+/// Minimum beat spacing between Director-selected Phase Boundaries.
 /// </summary>
 public static class ChangeCadence
 {
-    /// <summary>Whether a selected impact beat is far enough from the previous impact.</summary>
-    public static bool CanChangeAt(int selectedImpactBeat, int? previousImpactBeat, int minimumBeats)
+    /// <summary>Whether a selected Phase Boundary is far enough from the previous selected boundary.</summary>
+    public static bool CanChangeAt(int selectedPhaseBoundary, int? previousSelectedPhaseBoundary, int minimumBeats)
     {
-        return previousImpactBeat is not { } previous || selectedImpactBeat - previous >= minimumBeats;
+        return previousSelectedPhaseBoundary is not { } previous
+            || selectedPhaseBoundary - previous >= minimumBeats;
     }
 }

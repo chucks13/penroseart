@@ -23,6 +23,46 @@ public static class TransitionSettingsAssetUtility
     }
 
     /// <summary>Creates the settings asset if missing, initialized from Code Defaults.</summary>
+    /// <summary>
+    /// Clamps editable Runway and Tail values so saved settings never exceed the transition duration limit.
+    /// </summary>
+    public static bool ConstrainDuration(TransitionSettings settings)
+    {
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        var changed = false;
+        if (settings.RunwayBeats < 1)
+        {
+            settings.RunwayBeats = 1;
+            changed = true;
+        }
+
+        if (settings.TailBeats < 0)
+        {
+            settings.TailBeats = 0;
+            changed = true;
+        }
+
+        if (settings.RunwayBeats > TransitionRepertoire.MaxDurationBeats)
+        {
+            settings.RunwayBeats = TransitionRepertoire.MaxDurationBeats;
+            settings.TailBeats = 0;
+            return true;
+        }
+
+        var maxTailBeats = TransitionRepertoire.MaxDurationBeats - settings.RunwayBeats;
+        if (settings.TailBeats > maxTailBeats)
+        {
+            settings.TailBeats = maxTailBeats;
+            changed = true;
+        }
+
+        return changed;
+    }
+
     public static TransitionSettingsAsset EnsureAsset(
         Type transitionType,
         TransitionSettings codeDefaults,
@@ -43,6 +83,12 @@ public static class TransitionSettingsAssetUtility
         var asset = AssetDatabase.LoadAssetAtPath<TransitionSettingsAsset>(assetPath);
         if (asset != null)
         {
+            if (ConstrainDuration(asset.Settings))
+            {
+                EditorUtility.SetDirty(asset);
+                AssetDatabase.SaveAssets();
+            }
+
             return asset;
         }
 

@@ -148,10 +148,11 @@ public sealed class Director
     private int lastLoggedSyncedBeat = -1;
     private int lastLoggedTransitionBeat = -1;
     private PhaseInput phaseInput = new PhaseInput(-1, -1, -1, -1, -1, -1);
-    private int trackPhaseStartBeat = -1;
-    private int trackPhaseBoundaryBeat = -1;
-    private int[] trackPhaseImpactBeats = Array.Empty<int>();
-    private int trackPhaseImpactIndex;
+    private int selectedBoundaryPhraseStartBeat = -1;
+    private int selectedBoundaryPhraseEndBeat = -1;
+    private int selectedBoundaryPhraseLengthBeats = -1;
+    private int[] selectedPhaseBoundaries = Array.Empty<int>();
+    private int selectedPhaseBoundaryIndex;
 
     /// <summary>
     /// Progress for the current mechanical transition. Standalone Mode uses the legacy timer;
@@ -267,7 +268,7 @@ public sealed class Director
         Trace($"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
         switcher.ShowNow(effectIndex);
         transitionPlan = default;
-        ResetTrackPhasePlan();
+        ResetSelectedPhaseBoundaryPlan();
         MarkChangedOnCurrentBeat();
         TransitionProgress = 0f;
         standaloneTimer.Set(durationSeconds);
@@ -384,7 +385,7 @@ public sealed class Director
         phaseAnchorConfidence = PhaseConfidence.Unlocked;
         phaseAnchorLandingBeat = -1;
         transitionPlan = default;
-        ResetTrackPhasePlan();
+        ResetSelectedPhaseBoundaryPlan();
         TransitionProgress = standaloneTimer.Value;
         standaloneTimer.Update(deltaTime);
         TransitionProgress = standaloneTimer.Value;
@@ -399,11 +400,7 @@ public sealed class Director
         if (beatRewoundToNewPass)
         {
             lastCueBeat = -1;
-            ResetTrackPhasePlan();
-            if (lastChangeBeat > beat)
-            {
-                lastChangeBeat = int.MinValue;
-            }
+            lastChangeBeat = int.MinValue;
         }
 
         if (controller.TryGetHeldEffectIndex(out _))
@@ -412,7 +409,7 @@ public sealed class Director
             return;
         }
 
-        RefreshPhaseAnchor(beat);
+        RefreshPhaseAnchor(beat, beatRewoundToNewPass);
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, beatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
 
@@ -426,7 +423,7 @@ public sealed class Director
         TryStartSyncedCue(beat);
     }
 
-    private void RefreshPhaseAnchor(int beat)
+    private void RefreshPhaseAnchor(int beat, bool beatRewoundToNewPass)
     {
         var previousLandingBeat = phaseAnchorLandingBeat;
         var previousConfidence = phaseAnchorConfidence;
@@ -434,7 +431,7 @@ public sealed class Director
         phaseReading = PhaseClock.Resolve(phaseInput);
         if (phaseReading.Confidence != PhaseConfidence.Unlocked)
         {
-            phaseAnchorLandingBeat = ResolvePhaseImpactBeat(beat, out var targetSource);
+            phaseAnchorLandingBeat = ResolveSelectedPhaseBoundary(beat, beatRewoundToNewPass, out var targetSource);
             hasPhaseAnchor = true;
             phaseAnchorConfidence = phaseReading.Confidence;
             if (phaseAnchorLandingBeat != previousLandingBeat || phaseAnchorConfidence != previousConfidence)
@@ -482,91 +479,104 @@ public sealed class Director
         }
     }
 
-    private int ResolvePhaseImpactBeat(int beat, out string targetSource)
+    private int ResolveSelectedPhaseBoundary(int beat, bool beatRewoundToNewPass, out string targetSource)
     {
-        if (TryResolveTrackPhaseImpactBeat(beat, out var trackPhaseImpactBeat, out targetSource))
+        if (TryResolveTrackPhaseBoundary(beat, beatRewoundToNewPass, out var selectedPhaseBoundary, out targetSource))
         {
-            return trackPhaseImpactBeat;
+            return selectedPhaseBoundary;
         }
 
-        ResetTrackPhasePlan();
+        ResetSelectedPhaseBoundaryPlan();
         targetSource = "phase-clock-grid";
         return GetLandingBeatFromPhasePosition(beat, phaseReading.PhasePosition);
     }
 
-    private bool TryResolveTrackPhaseImpactBeat(int beat, out int impactBeat, out string targetSource)
+    private bool TryResolveTrackPhaseBoundary(
+        int beat,
+        bool beatRewoundToNewPass,
+        out int selectedPhaseBoundary,
+        out string targetSource)
     {
-        impactBeat = -1;
+        selectedPhaseBoundary = -1;
         targetSource = "none";
-        if (phaseInput.PhaseActive != 1
-            || !PhraseWindow.TryFromTrackPhase(
-                beat,
-                phaseInput.PhaseCountBeats,
-                phaseInput.PhaseLengthBeats,
-                out var phraseWindow))
+        if (!PhraseWindow.TryFromTrackPhase(
+            beat,
+            phaseInput.PhaseCountBeats,
+            phaseInput.PhaseLengthBeats,
+            out var phraseWindow))
         {
             return false;
         }
 
-        impactBeat = ResolveTrackPhasePlanImpactBeat(beat, phraseWindow, out targetSource);
+        selectedPhaseBoundary = ResolveSelectedPhaseBoundaryFromPlan(beat, phraseWindow, beatRewoundToNewPass, out targetSource);
         return true;
     }
 
-    private int ResolveTrackPhasePlanImpactBeat(int beat, PhraseWindow phraseWindow, out string targetSource)
+    private int ResolveSelectedPhaseBoundaryFromPlan(
+        int beat,
+        PhraseWindow phraseWindow,
+        bool beatRewoundToNewPass,
+        out string targetSource)
     {
-        if (NeedsTrackPhasePlan(beat, phraseWindow.StartBeat, phraseWindow.EndBeat))
+        if (NeedsSelectedPhaseBoundaryPlan(beat, phraseWindow))
         {
-            BuildTrackPhasePlan(beat, phraseWindow);
+            BuildSelectedPhaseBoundaryPlan(beat, phraseWindow);
+        }
+        else if (beatRewoundToNewPass)
+        {
+            selectedPhaseBoundaryIndex = 0;
         }
 
-        while (trackPhaseImpactIndex < trackPhaseImpactBeats.Length - 1
-            && trackPhaseImpactBeats[trackPhaseImpactIndex] <= beat)
+        while (selectedPhaseBoundaryIndex < selectedPhaseBoundaries.Length - 1
+            && selectedPhaseBoundaries[selectedPhaseBoundaryIndex] <= beat)
         {
-            trackPhaseImpactIndex++;
+            selectedPhaseBoundaryIndex++;
         }
 
-        var target = trackPhaseImpactBeats.Length > 0
-            ? trackPhaseImpactBeats[Mathf.Clamp(trackPhaseImpactIndex, 0, trackPhaseImpactBeats.Length - 1)]
+        var target = selectedPhaseBoundaries.Length > 0
+            ? selectedPhaseBoundaries[Mathf.Clamp(selectedPhaseBoundaryIndex, 0, selectedPhaseBoundaries.Length - 1)]
             : phraseWindow.EndBeat;
-        targetSource = target == trackPhaseBoundaryBeat ? "track-phase-boundary" : "track-phase-slot";
+        targetSource = target == selectedBoundaryPhraseEndBeat ? "track-phase-boundary" : "selected-phase-boundary";
         return target;
     }
 
-    private bool NeedsTrackPhasePlan(int beat, int phraseStartBeat, int phraseBoundaryBeat)
+    private bool NeedsSelectedPhaseBoundaryPlan(int beat, PhraseWindow phraseWindow)
     {
-        if (trackPhaseImpactBeats.Length == 0 || trackPhaseImpactBeats[trackPhaseImpactBeats.Length - 1] <= beat)
+        if (selectedPhaseBoundaries.Length == 0 || selectedPhaseBoundaries[selectedPhaseBoundaries.Length - 1] <= beat)
         {
             return true;
         }
 
-        var samePhraseWindow = Math.Abs(phraseStartBeat - trackPhaseStartBeat) < PhraseWindow.DefaultSlotBeats
-            && Math.Abs(phraseBoundaryBeat - trackPhaseBoundaryBeat) < PhraseWindow.DefaultSlotBeats;
-        return !samePhraseWindow;
+        return selectedBoundaryPhraseStartBeat != phraseWindow.StartBeat
+            || selectedBoundaryPhraseEndBeat != phraseWindow.EndBeat
+            || selectedBoundaryPhraseLengthBeats != phraseWindow.LengthBeats;
     }
 
-    private void BuildTrackPhasePlan(int beat, PhraseWindow phraseWindow)
+    private void BuildSelectedPhaseBoundaryPlan(int beat, PhraseWindow phraseWindow)
     {
-        var plan = PhraseImpactPlan.Build(
+        var plan = SelectedPhaseBoundaryPlan.Build(
             phraseWindow,
             beat,
             CanChangeAtBeat,
             (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
 
-        trackPhaseStartBeat = plan.PhraseStartBeat;
-        trackPhaseBoundaryBeat = plan.PhraseEndBeat;
-        trackPhaseImpactBeats = plan.ImpactBeats;
-        trackPhaseImpactIndex = 0;
+        selectedBoundaryPhraseStartBeat = plan.PhraseStartBeat;
+        selectedBoundaryPhraseEndBeat = plan.PhraseEndBeat;
+        selectedBoundaryPhraseLengthBeats = phraseWindow.LengthBeats;
+        selectedPhaseBoundaries = plan.SelectedPhaseBoundaries;
+        selectedPhaseBoundaryIndex = 0;
 
-        var interiorTransitionCount = Math.Max(0, trackPhaseImpactBeats.Length - 1);
-        Trace($"TRACK_PHASE_PLAN beat={beat} phraseStart={trackPhaseStartBeat} boundary={trackPhaseBoundaryBeat} targets={FormatBeatList(trackPhaseImpactBeats)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
+        var interiorTransitionCount = Math.Max(0, selectedPhaseBoundaries.Length - 1);
+        Trace($"SELECTED_PHASE_BOUNDARY_PLAN beat={beat} phraseStart={selectedBoundaryPhraseStartBeat} phraseEnd={selectedBoundaryPhraseEndBeat} phraseLength={selectedBoundaryPhraseLengthBeats} targets={FormatBeatList(selectedPhaseBoundaries)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
     }
 
-    private void ResetTrackPhasePlan()
+    private void ResetSelectedPhaseBoundaryPlan()
     {
-        trackPhaseStartBeat = -1;
-        trackPhaseBoundaryBeat = -1;
-        trackPhaseImpactBeats = Array.Empty<int>();
-        trackPhaseImpactIndex = 0;
+        selectedBoundaryPhraseStartBeat = -1;
+        selectedBoundaryPhraseEndBeat = -1;
+        selectedBoundaryPhraseLengthBeats = -1;
+        selectedPhaseBoundaries = Array.Empty<int>();
+        selectedPhaseBoundaryIndex = 0;
     }
 
     private static int GetLandingBeatFromPhasePosition(int beat, int phasePosition)
@@ -588,13 +598,13 @@ public sealed class Director
         ValidateEffectIndex(targetEffectIndex);
         var repertoire = controller.transitions[transitionIndex].Repertoire;
         var lastCue = lastCueBeat >= 0 ? (int?)lastCueBeat : null;
-        var previousImpactBeat = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
         var cueDecision = SyncedCueDecision.Evaluate(
             beat,
             phaseAnchorLandingBeat,
             repertoire,
             lastCue,
-            previousImpactBeat,
+            previousSelectedPhaseBoundary,
             MinimumChangeCadenceBeats);
 
         if (cueDecision.Kind == SyncedCueDecisionKind.Wait)
@@ -604,13 +614,13 @@ public sealed class Director
 
         if (cueDecision.BlockedByCadence)
         {
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} impact={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} selectedBoundary={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
             lastCueBeat = beat;
             return;
         }
 
         var preferredRepertoire = PreferredRepertoireForLanding(cueDecision.BeatsUntilImpact);
-        Trace($"SYNC_CUE beat={beat} start={cueDecision.BeatPlan.StartBeat} impact={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueDecision.BeatPlan.StartBeat)} preferred={preferredRepertoire} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)}");
+        Trace($"SYNC_CUE beat={beat} start={cueDecision.BeatPlan.StartBeat} selectedBoundary={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueDecision.BeatPlan.StartBeat)} preferred={preferredRepertoire} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)}");
         StartSyncedTransition(transitionIndex, targetEffectIndex, cueDecision.BeatPlan, repertoire, preferredRepertoire);
     }
 
@@ -639,6 +649,7 @@ public sealed class Director
 
         transitionStartBeat = transitionPlan.StartBeat;
         transitionLandingBeat = transitionPlan.ImpactBeat;
+        MarkChangedOnBeat(transitionLandingBeat);
         lastCueBeat = lastSyncedBeat;
         lastLoggedTransitionBeat = -1;
         TransitionProgress = transitionPlan.Progress(Time.time);
@@ -671,7 +682,6 @@ public sealed class Director
         {
             Trace($"SYNC_TRANSITION_COMPLETE_REQUEST beat={beat} previousBeat={FormatBeat(previousBeat)} rewound={beatRewoundToNewPass} impact={update.ImpactBeat} plannedImpact={transitionPlan.ImpactBeat} complete={transitionPlan.CompleteBeat} progress={TransitionProgress:0.###} target={FormatEffect(switcher.TransitionTargetEffectIndex)} transition={FormatTransition(switcher.CurrentTransitionIndex)}");
             switcher.CompleteTransition();
-            MarkChangedOnBeat(update.ImpactBeat);
             StageNextChoices(Repertoire.None);
             transitionPlan = default;
             TransitionProgress = 0f;
@@ -746,8 +756,8 @@ public sealed class Director
 
     private bool CanChangeAtBeat(int beat)
     {
-        var previousImpactBeat = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
-        return ChangeCadence.CanChangeAt(beat, previousImpactBeat, MinimumChangeCadenceBeats);
+        var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        return ChangeCadence.CanChangeAt(beat, previousSelectedPhaseBoundary, MinimumChangeCadenceBeats);
     }
 
     private void Trace(string message)

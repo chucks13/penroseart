@@ -196,9 +196,17 @@ public sealed class PenroseTuningWindow : EditorWindow
                 var settingsProperty = selectedSerializedObject.FindProperty("settings");
                 EditorGUI.BeginChangeCheck();
                 EditorGUILayout.PropertyField(settingsProperty, includeChildren: true);
+                EditorGUILayout.HelpBox(
+                    TransitionSettings.DurationValidationMessage(selectedAsset.Settings.RunwayBeats, selectedAsset.Settings.TailBeats),
+                    MessageType.Info);
                 if (EditorGUI.EndChangeCheck())
                 {
                     selectedSerializedObject.ApplyModifiedProperties();
+                    if (TransitionSettingsAssetUtility.ConstrainDuration(selectedAsset.Settings))
+                    {
+                        selectedSerializedObject.Update();
+                    }
+
                     EditorUtility.SetDirty(selectedAsset);
                     settingsChangedSinceLastSave = true;
                 }
@@ -349,6 +357,11 @@ public sealed class PenroseTuningWindow : EditorWindow
         if (!settingsChangedSinceLastSave)
         {
             return;
+        }
+
+        if (selectedAsset != null && TransitionSettingsAssetUtility.ConstrainDuration(selectedAsset.Settings))
+        {
+            EditorUtility.SetDirty(selectedAsset);
         }
 
         AssetDatabase.SaveAssets();

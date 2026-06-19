@@ -70,6 +70,55 @@ public sealed class DirectorSyncedTailTests
         Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(623));
     }
 
+    [Test]
+    public void StartingTailedTransitionMarksCadenceAtSelectedPhaseBoundary()
+    {
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.IsTransitioning, Is.True, "The setup should cue a tailed transition toward beat 609.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void NextTransitionCanCueAfterTailedTransitionCompletes()
+    {
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+        ForceTransitionCompleteAtImpact(impactBeat: 609);
+
+        SetTrackPhaseBeat(621, phaseActive: 0, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(switcher.IsTransitioning, Is.False, "The first tailed transition should complete before the next cue is considered.");
+
+        director.Tick(0f);
+
+        Assert.That(switcher.IsTransitioning, Is.True, "The Director should cue the next transition once cadence allows after Tail completion.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(625));
+    }
+
+    [Test]
+    public void SameWindowBeatRewindKeepsSelectedPhaseBoundaryPlanAndMovesCursorBack()
+    {
+        SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+        director.Tick(0f);
+        SetSelectedPhaseBoundaryPlan(
+            phraseStartBeat: 577,
+            phraseEndBeat: 641,
+            phraseLengthBeats: 64,
+            selectedBoundaries: new[] { 593, 641 },
+            selectedIndex: 1);
+        SetDirectorField("lastChangeBeat", 578);
+
+        SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+        director.Tick(0f);
+
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(int.MinValue));
+        Assert.That(GetDirectorField<int[]>("selectedPhaseBoundaries"), Is.EqualTo(new[] { 593, 641 }));
+    }
+
     private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
     {
         controller.beatManager.beatData.bpm = 120f;
@@ -89,7 +138,7 @@ public sealed class DirectorSyncedTailTests
     private void ForceTransitionCompleteAtImpact(int impactBeat)
     {
         var repertoire = controller.transitions[0].Repertoire;
-        var beatPlan = TransitionBeatPlan.FromImpactBeat(impactBeat, repertoire);
+        var beatPlan = TransitionBeatPlan.FromSelectedPhaseBoundary(impactBeat, repertoire);
         var completePlan = new SyncedTransitionPlan(
             transitionIndex: 0,
             targetEffectIndex: switcher.TransitionTargetEffectIndex,
@@ -100,6 +149,34 @@ public sealed class DirectorSyncedTailTests
         typeof(Director)
             .GetField("transitionPlan", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(director, completePlan);
+    }
+
+    private void SetSelectedPhaseBoundaryPlan(
+        int phraseStartBeat,
+        int phraseEndBeat,
+        int phraseLengthBeats,
+        int[] selectedBoundaries,
+        int selectedIndex)
+    {
+        SetDirectorField("selectedBoundaryPhraseStartBeat", phraseStartBeat);
+        SetDirectorField("selectedBoundaryPhraseEndBeat", phraseEndBeat);
+        SetDirectorField("selectedBoundaryPhraseLengthBeats", phraseLengthBeats);
+        SetDirectorField("selectedPhaseBoundaries", selectedBoundaries);
+        SetDirectorField("selectedPhaseBoundaryIndex", selectedIndex);
+    }
+
+    private void SetDirectorField(string fieldName, object value)
+    {
+        typeof(Director)
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(director, value);
+    }
+
+    private T GetDirectorField<T>(string fieldName)
+    {
+        return (T)typeof(Director)
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(director);
     }
 
     private static void SetControllerSingleton(Controller instance)

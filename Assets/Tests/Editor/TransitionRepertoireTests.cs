@@ -40,6 +40,20 @@ public sealed class TransitionRepertoireTests
         Assert.That(repertoire.HasTail, Is.True);
     }
 
+    [Test]
+    public void FromRunwayAndTailRejectsDurationAboveTwelveBeats()
+    {
+        Assert.That(
+            () => TransitionRepertoire.FromRunwayAndTail(
+                Repertoire.None,
+                runwayBeats: 10,
+                tailBeats: 3,
+                TransitionShape.Blend,
+                TransitionIntensity.Subtle,
+                defaultDurationSeconds: 4f),
+            Throws.TypeOf<System.ArgumentOutOfRangeException>());
+    }
+
 
     [Test]
     public void ConcreteTransitionsAdvertiseTweakableDefaultRepertoires()

@@ -7,10 +7,10 @@ public sealed class SyncedCueDecisionTests
     {
         var decision = SyncedCueDecision.Evaluate(
             currentBeat: 604,
-            selectedImpactBeat: 609,
+            selectedPhaseBoundary: 609,
             transitionRepertoire: FourBeatRunway(),
             lastCueBeat: null,
-            previousImpactBeat: null,
+            previousSelectedPhaseBoundary: null,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(decision.Kind, Is.EqualTo(SyncedCueDecisionKind.Wait));
@@ -23,10 +23,10 @@ public sealed class SyncedCueDecisionTests
     {
         var decision = SyncedCueDecision.Evaluate(
             currentBeat: 605,
-            selectedImpactBeat: 609,
+            selectedPhaseBoundary: 609,
             transitionRepertoire: FourBeatRunway(),
             lastCueBeat: null,
-            previousImpactBeat: null,
+            previousSelectedPhaseBoundary: null,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(decision.Kind, Is.EqualTo(SyncedCueDecisionKind.Cue));
@@ -39,10 +39,10 @@ public sealed class SyncedCueDecisionTests
     {
         var decision = SyncedCueDecision.Evaluate(
             currentBeat: 609,
-            selectedImpactBeat: 609,
+            selectedPhaseBoundary: 609,
             transitionRepertoire: FourBeatRunway(),
             lastCueBeat: null,
-            previousImpactBeat: null,
+            previousSelectedPhaseBoundary: null,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(decision.Kind, Is.EqualTo(SyncedCueDecisionKind.Wait));
@@ -54,10 +54,10 @@ public sealed class SyncedCueDecisionTests
     {
         var decision = SyncedCueDecision.Evaluate(
             currentBeat: 605,
-            selectedImpactBeat: 609,
+            selectedPhaseBoundary: 609,
             transitionRepertoire: FourBeatRunway(),
             lastCueBeat: null,
-            previousImpactBeat: 600,
+            previousSelectedPhaseBoundary: 600,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(decision.Kind, Is.EqualTo(SyncedCueDecisionKind.BlockedByCadence));
@@ -70,10 +70,10 @@ public sealed class SyncedCueDecisionTests
     {
         var decision = SyncedCueDecision.Evaluate(
             currentBeat: 605,
-            selectedImpactBeat: 609,
+            selectedPhaseBoundary: 609,
             transitionRepertoire: FourBeatRunway(),
             lastCueBeat: 605,
-            previousImpactBeat: null,
+            previousSelectedPhaseBoundary: null,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(decision.Kind, Is.EqualTo(SyncedCueDecisionKind.Wait));
