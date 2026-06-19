@@ -81,7 +81,6 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private const float WaveformSelectorGap = 6f;
     private const float WaveformStripHeight = 46f;
     private const float WaveformValueWidth = 46f;
-    private const int WaveformPlotSamples = 96;
 
     // Horizontal anatomy of a query row: label column, optional status chip, meter, right-aligned readout.
     private const float QueryRowLabelWidth = 70f;
@@ -153,12 +152,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private static readonly Color OffBeatFlashColor = new Color(1f, 0.42f, 0.92f);
     private static readonly Color OffBeatInactiveColor = new Color(0.34f, 0.24f, 0.38f, 1f);
     private static readonly Color OffBeatDisabledColor = new Color(0.34f, 0.24f, 0.38f, 0.55f);
-    private static readonly Color WaveformTrackColor = new Color(0.055f, 0.065f, 0.085f);
-    private static readonly Color WaveformGridColor = new Color(1f, 1f, 1f, 0.07f);
-    private static readonly Color WaveformCurveColor = new Color(0.12f, 0.92f, 1f);
     private static readonly Color WaveformCurveIdleColor = new Color(0.34f, 0.42f, 0.47f);
-    private static readonly Color WaveformPlayheadColor = new Color(1f, 0.92f, 0.35f);
-    private static readonly Color WaveformPlayheadLineColor = new Color(1f, 0.92f, 0.35f, 0.55f);
     private static readonly Color EnvelopeMeterColor = new Color(0.12f, 0.92f, 1f);
     private static readonly Color FillNowChipColor = new Color(0.10f, 0.42f, 0.22f);
     private static readonly Color FillSoonChipColor = new Color(0.08f, 0.28f, 0.20f);
@@ -751,51 +745,22 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         var plotRight = rect.xMax - WaveformValueWidth - 6f;
         var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
 
-        EditorGUI.DrawRect(plot, WaveformTrackColor);
-
-        // Beat gridlines at quarter-note fractions (0, ¼, ½, ¾, and the closing bar edge).
-        for (var i = 0; i <= BeatSlotCount; i++)
-        {
-            var gx = Mathf.Floor(plot.x + (plot.width * (i / (float)BeatSlotCount)));
-            EditorGUI.DrawRect(new Rect(gx, plot.y, 1f, plot.height), WaveformGridColor);
-        }
-
         var wf = SelectedWaveform();
-        const float vPad = 3f; // keep the peak (1) and trough (0) off the very edges of the track
-        var top = plot.y + vPad;
-        var bottom = plot.yMax - vPad;
 
-        // The smooth envelope: Handles anti-aliased polyline, which only renders during a Repaint event.
-        if (Event.current.type == EventType.Repaint && plot.width > 1f)
-        {
-            var points = new Vector3[WaveformPlotSamples + 1];
-            for (var i = 0; i <= WaveformPlotSamples; i++)
-            {
-                var p = i / (float)WaveformPlotSamples;
-                var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Evaluate(p)));
-                points[i] = new Vector3(plot.x + (plot.width * p), y, 0f);
-            }
+        // Shared plot draws track/grid/curve and, while live, the aligned playhead; the curve color carries
+        // this view's active/idle state.
+        WaveformPlot.Draw(plot, wf, active ? WaveformPlot.Curve : WaveformCurveIdleColor, active ? barPhase : (float?)null);
 
-            Handles.color = active ? WaveformCurveColor : WaveformCurveIdleColor;
-            Handles.DrawAAPolyLine(2.5f, points);
-        }
-
-        // Live playhead: vertical line + dot at the emitted brightness, with a numeric readout to the right.
+        // Numeric readout to the right of the plot — dashboard-only, laid out outside the shared plot rect.
+        var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
         if (active)
         {
-            var phase = Mathf.Repeat(barPhase, 1f);
-            var px = plot.x + (plot.width * phase);
-            EditorGUI.DrawRect(new Rect(Mathf.Floor(px), plot.y, 1f, plot.height), WaveformPlayheadLineColor);
-
             var emitted = Mathf.Clamp01(wf.Evaluate(barPhase));
-            var dotY = Mathf.Lerp(bottom, top, emitted);
-            EditorGUI.DrawRect(new Rect(px - 3f, dotY - 3f, 6f, 6f), WaveformPlayheadColor);
-
-            GUI.Label(new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height), $"{emitted:0.00}", valueStyle);
+            GUI.Label(readout, $"{emitted:0.00}", valueStyle);
         }
         else
         {
-            GUI.Label(new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height), "--", valueStyle);
+            GUI.Label(readout, "--", valueStyle);
         }
     }
 
@@ -858,55 +823,20 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private static void DrawPhraseEventContent(Rect content, PhraseEventInfo info, Color nowColor,
         Color soonColor, Color meterColor)
     {
+        var view = PhraseEventView.Of(info);
+
         var chip = TakeLeft(ref content, StatusChipWidth);
-        var chipColor = info.inProgress ? nowColor
-            : info.beatsUntilStart != null ? soonColor
-            : PhraseEventIdleChipColor;
-        DrawStatusChip(chip, BuildPhraseEventChipLabel(info), chipColor);
+        var chipColor = view.State switch
+        {
+            PhraseEventState.Now => nowColor,
+            PhraseEventState.Soon => soonColor,
+            _ => PhraseEventIdleChipColor,
+        };
+        DrawStatusChip(chip, view.Chip, chipColor);
 
         var right = TakeRight(ref content, RightTextWidth);
-        DrawMeter(content, GetPhraseEventMeterValue(info), meterColor);
-        GUI.Label(right, BuildPhraseEventReadout(info), valueStyle);
-    }
-
-    /// <summary>
-    /// Test seam: the Fill/Drop chip label — NOW while in progress, "IN n" while a start is known,
-    /// — when neither (nothing upcoming; the null shows as null).
-    /// </summary>
-    internal static string BuildPhraseEventChipLabel(PhraseEventInfo info)
-    {
-        if (info.inProgress)
-        {
-            return "NOW";
-        }
-
-        return info.beatsUntilStart is { } beats ? $"IN {beats}" : "—";
-    }
-
-    /// <summary>
-    /// Test seam: the Fill/Drop bar value — progress while in progress, the anticipation ramp while
-    /// counting down (counting up to something fills), empty otherwise.
-    /// </summary>
-    internal static float GetPhraseEventMeterValue(PhraseEventInfo info)
-    {
-        return info.inProgress ? info.progress ?? 0f : info.anticipation ?? 0f;
-    }
-
-    /// <summary>Test seam: the Fill/Drop right-hand readout text.</summary>
-    internal static string BuildPhraseEventReadout(PhraseEventInfo info)
-    {
-        if (info.inProgress)
-        {
-            return $"ends in {FormatBeats(info.beatsUntilEnd)} · len {FormatCount(info.lengthBeats)} · ×{FormatCount(info.remaining)}";
-        }
-
-        if (info.beatsUntilStart is { } beats)
-        {
-            var head = info.msUntilStart is { } ms ? $"in {ms / 1000f:0.0}s" : $"in {beats}b";
-            return $"{head} · len {FormatCount(info.lengthBeats)} · ×{FormatCount(info.remaining)}";
-        }
-
-        return $"next — · ×{FormatCount(info.remaining)}";
+        DrawMeter(content, view.Meter, meterColor);
+        GUI.Label(right, view.Readout, valueStyle);
     }
 
     /// <summary>Draws the Energy row: tier chip, normalized meter, and where the energy is heading.</summary>
@@ -927,9 +857,9 @@ public sealed class BeatManagerDrawer : PropertyDrawer
 
         var arrow = energy.direction > 0 ? "↗" : energy.direction < 0 ? "↘" : "→";
         var heading = energy.next is { } next
-            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {FormatBeats(energy.beatsUntilChange)}"
+            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {RhythmText.Beats(energy.beatsUntilChange)}"
             : "steady";
-        GUI.Label(right, $"{heading} · ×{FormatCount(energy.changesRemaining)}", valueStyle);
+        GUI.Label(right, $"{heading} · ×{RhythmText.Count(energy.changesRemaining)}", valueStyle);
     }
 
     /// <summary>Draws the Phase row: the open-vocabulary section label, progress, and the upcoming section.</summary>
@@ -949,8 +879,8 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         DrawMeter(content, phase.progress ?? 0f, PhaseMeterColor);
 
         var heading = phase.next != null
-            ? $"→ {phase.next} in {FormatBeats(phase.beatsUntilNext)}"
-            : $"len {FormatCount(phase.lengthBeats)}";
+            ? $"→ {phase.next} in {RhythmText.Beats(phase.beatsUntilNext)}"
+            : $"len {RhythmText.Count(phase.lengthBeats)}";
         GUI.Label(right, heading, valueStyle);
     }
 
@@ -1083,18 +1013,6 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         var right = new Rect(rect.xMax - width, rect.y, width, rect.height);
         rect = new Rect(rect.x, rect.y, Mathf.Max(0f, rect.width - width - SegmentGap), rect.height);
         return right;
-    }
-
-    /// <summary>Formats a nullable beat count ("16b"), using — when the contrived value is null.</summary>
-    private static string FormatBeats(int? value)
-    {
-        return value is { } beats ? $"{beats}b" : "—";
-    }
-
-    /// <summary>Formats a nullable count, using — when the contrived value is null.</summary>
-    private static string FormatCount(int? value)
-    {
-        return value is { } count ? count.ToString() : "—";
     }
 
     /// <summary>Formats a nullable millisecond countdown, using -- when the countdown is unavailable.</summary>

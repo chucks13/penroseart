@@ -142,6 +142,14 @@ A short transitional phrase burst — usually four to eight beats, a measure or 
 **Drop**:
 The climactic section boundary of a track. Same two-sided visibility as a Fill: a countdown to it, then progress through it. The anticipation side (landing a transition *on* the drop, beats ahead) is the choreographically valuable half.
 
+**Phrase Event View** (`PhraseEventView`):
+The canonical display model of a phrase event (a **Fill** or a **Drop**): its status chip, meter fill, one-line readout, and a Now/Soon/Idle state, all derived from the phrase-event query in one place so every surface — the Beat Manager dashboard today, any telnet/OSC/debug readout later — presents a Fill or Drop the same way. It is the presentation counterpart of the Fill/Drop *data*: what a phrase event **is** stays separate from how it **reads**.
+_Avoid_: duplicating "how a Fill/Drop reads" per surface; folding the chip *color* (an editor concern) into the view — color is the caller's decision, the view only classifies the state.
+
+**Rhythm Text** (`RhythmText`):
+The shared text vocabulary for the nullable beat/count values of the rhythm queries (**Phrase Event View**, **Energy**, **Track Phase**) — a beat count reads as "16b", a plain count as its number, and **`null` reads as "—"**. One vocabulary so every rhythm-query readout speaks the same way, keeping the **Contrived Value** rule that "null means not-available" visible in the UI.
+_Avoid_: re-deriving the "—"-for-null formatting per row; treating "—" as an error rather than the ordinary absent state.
+
 **Energy**:
 The track's current intensity as a closed three-step vocabulary — Low, Mid, High — with the next level and a beat countdown to the change. Direction (rising/falling/steady) follows from comparing current and next; "rising, change in 8 beats" is the build-up signal.
 _Avoid_: treating Energy labels as open text; confusing Energy (phrase-level intensity) with Levels (instantaneous audio bands).
