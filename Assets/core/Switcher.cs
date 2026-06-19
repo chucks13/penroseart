@@ -2,6 +2,63 @@ using System;
 using UnityEngine;
 
 /// <summary>
+/// Read-only snapshot of the Mechanical Switcher's current stage state for HUDs and inspectors.
+/// </summary>
+public readonly struct SwitcherStatus
+{
+    public static SwitcherStatus NotReady { get; } = new SwitcherStatus(
+        false,
+        false,
+        -1,
+        string.Empty,
+        -1,
+        string.Empty,
+        -1,
+        string.Empty,
+        -1,
+        string.Empty,
+        string.Empty);
+
+    public readonly bool Ready;
+    public readonly bool IsTransitioning;
+    public readonly int CurrentEffectIndex;
+    public readonly string CurrentEffectName;
+    public readonly int SourceEffectIndex;
+    public readonly string SourceEffectName;
+    public readonly int TargetEffectIndex;
+    public readonly string TargetEffectName;
+    public readonly int CurrentTransitionIndex;
+    public readonly string CurrentTransitionName;
+    public readonly string StageName;
+
+    public SwitcherStatus(
+        bool ready,
+        bool isTransitioning,
+        int currentEffectIndex,
+        string currentEffectName,
+        int sourceEffectIndex,
+        string sourceEffectName,
+        int targetEffectIndex,
+        string targetEffectName,
+        int currentTransitionIndex,
+        string currentTransitionName,
+        string stageName)
+    {
+        Ready = ready;
+        IsTransitioning = isTransitioning;
+        CurrentEffectIndex = currentEffectIndex;
+        CurrentEffectName = currentEffectName;
+        SourceEffectIndex = sourceEffectIndex;
+        SourceEffectName = sourceEffectName;
+        TargetEffectIndex = targetEffectIndex;
+        TargetEffectName = targetEffectName;
+        CurrentTransitionIndex = currentTransitionIndex;
+        CurrentTransitionName = currentTransitionName;
+        StageName = stageName;
+    }
+}
+
+/// <summary>
 /// Mechanical stage switcher for Penrose performers.
 /// The Switcher owns only the in-flight effect/transition state and renders it;
 /// the Director decides what to start and when to complete it.
@@ -9,6 +66,7 @@ using UnityEngine;
 [Serializable]
 public sealed class Switcher
 {
+    private readonly Controller controller;
     private readonly EffectBase[] effects;
     private readonly TransitionBase[] transitions;
 
@@ -34,9 +92,12 @@ public sealed class Switcher
     /// <summary>Repertoire advertised by the active effect, or None while a transition owns the frame.</summary>
     public Repertoire CurrentEffectRepertoire => CurrentEffectIndex >= 0 ? effects[CurrentEffectIndex].Repertoire : Repertoire.None;
 
+    /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
+    public SwitcherStatus Status => BuildStatus();
+
     public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
     {
-        _ = controller ?? throw new ArgumentNullException(nameof(controller));
+        this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
         this.effects = effects ?? throw new ArgumentNullException(nameof(effects));
         this.transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
     }
@@ -52,6 +113,7 @@ public sealed class Switcher
         currentEffectIndex = effectIndex;
         currentTransitionIndex = transitionIndex;
         isTransitioning = false;
+        Trace($"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
     /// <summary>Immediately puts an effect on stage, cancelling any in-flight transition.</summary>
@@ -63,6 +125,7 @@ public sealed class Switcher
         isTransitioning = false;
         currentEffectIndex = effectIndex;
         StartEffect(effectIndex);
+        Trace($"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
     }
 
     /// <summary>
@@ -75,10 +138,11 @@ public sealed class Switcher
         ValidateEffectIndex(targetEffectIndex);
         ValidateTransitionIndex(transitionIndex);
 
+        var sourceEffectIndex = currentEffectIndex;
         var transition = transitions[transitionIndex];
         transition.RandomizeTime();
         transition.V = 0f;
-        transition.A = currentEffectIndex;
+        transition.A = sourceEffectIndex;
         transition.B = targetEffectIndex;
         transition.OnStart();
 
@@ -88,6 +152,7 @@ public sealed class Switcher
         currentTransitionIndex = transitionIndex;
         currentEffectIndex = -1;
         isTransitioning = true;
+        Trace($"SWITCHER_START transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B}");
     }
 
     /// <summary>Promotes the transition destination to the active effect.</summary>
@@ -98,8 +163,13 @@ public sealed class Switcher
             throw new InvalidOperationException("Cannot complete a transition when the Switcher is not transitioning.");
         }
 
-        currentEffectIndex = transitions[currentTransitionIndex].B;
+        var transition = transitions[currentTransitionIndex];
+        var completedTransitionIndex = currentTransitionIndex;
+        var sourceEffectIndex = transition.A;
+        var targetEffectIndex = transition.B;
+        currentEffectIndex = targetEffectIndex;
         isTransitioning = false;
+        Trace($"SWITCHER_COMPLETE transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}");
     }
 
     /// <summary>
@@ -134,6 +204,72 @@ public sealed class Switcher
         effect.Draw();
         debugText = effect.DebugText();
         return (Color[])effect.buffer.Clone();
+    }
+
+    private SwitcherStatus BuildStatus()
+    {
+        if (effects == null || transitions == null)
+        {
+            return SwitcherStatus.NotReady;
+        }
+
+        if (isTransitioning)
+        {
+            var transition = transitions[currentTransitionIndex];
+            var sourceName = EffectName(transition.A);
+            var targetName = EffectName(transition.B);
+            return new SwitcherStatus(
+                true,
+                true,
+                -1,
+                string.Empty,
+                transition.A,
+                sourceName,
+                transition.B,
+                targetName,
+                currentTransitionIndex,
+                transition.Name,
+                transition.Name);
+        }
+
+        var currentName = EffectName(currentEffectIndex);
+        return new SwitcherStatus(
+            currentEffectIndex >= 0,
+            false,
+            currentEffectIndex,
+            currentName,
+            currentEffectIndex,
+            currentName,
+            currentEffectIndex,
+            currentName,
+            currentTransitionIndex,
+            TransitionName(currentTransitionIndex),
+            currentName);
+    }
+
+    private string EffectName(int effectIndex)
+    {
+        return effectIndex >= 0 && effectIndex < effects.Length ? effects[effectIndex].Name : string.Empty;
+    }
+
+    private string TransitionName(int transitionIndex)
+    {
+        return transitionIndex >= 0 && transitionIndex < transitions.Length ? transitions[transitionIndex].Name : string.Empty;
+    }
+
+    private string FormatEffect(int effectIndex)
+    {
+        return effectIndex >= 0 && effectIndex < effects.Length ? $"{effectIndex}:{effects[effectIndex].Name}" : $"{effectIndex}:<none>";
+    }
+
+    private string FormatTransition(int transitionIndex)
+    {
+        return transitionIndex >= 0 && transitionIndex < transitions.Length ? $"{transitionIndex}:{transitions[transitionIndex].Name}" : $"{transitionIndex}:<none>";
+    }
+
+    private void Trace(string message)
+    {
+        controller.LogDirectorSwitching(message);
     }
 
     private void StartEffect(int effectIndex)

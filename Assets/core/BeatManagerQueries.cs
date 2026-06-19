@@ -327,6 +327,20 @@ public partial class BeatManager
         }
     }
 
+    /// <summary>Fraction elapsed through the current beat in [0..1], or null when no usable beat clock is present.</summary>
+    public float? BeatFraction
+    {
+        get
+        {
+            if (!IsActive)
+            {
+                return null;
+            }
+
+            return IntraBeatFraction();
+        }
+    }
+
     /// <summary>Musical 1-based beat label inside the current bar, or null when the label is unknown.</summary>
     public int? BeatInBar
     {

@@ -5,6 +5,15 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class DirectionalWipe : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.None,
+            runwayBeats: 4,
+            tailBeats: 0,
+            TransitionShape.DirectionalWipe,
+            TransitionIntensity.Medium);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
 
     float angle;
     float diagonalsize;

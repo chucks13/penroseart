@@ -7,6 +7,16 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class FizzleTransition : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.HandlesDrop,
+            runwayBeats: 4,
+            tailBeats: 4,
+            TransitionShape.Dissolve,
+            TransitionIntensity.High);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
+
     short[] order = null;
     public override void OnStart()
     {

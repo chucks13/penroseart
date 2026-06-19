@@ -5,6 +5,15 @@
 /// </summary>
 public class RGBFade : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.RespondsToEnergy,
+            runwayBeats: 4,
+            tailBeats: 4,
+            TransitionShape.ChannelBlend,
+            TransitionIntensity.Medium);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
 
     /// <summary>
     /// Initializes per-run transition state before effect-to-effect blending begins.

@@ -27,10 +27,10 @@ public abstract class TransitionBase
     public string Name => GetType().ToString();
 
     /// <summary>
-    /// Musical-structure behavior this transition advertises to the Director.
-    /// Transition subclasses override this when their motion can intentionally land on musical events.
+    /// Musical-structure timing and event behavior this transition advertises to the Director.
+    /// Transition subclasses override this when their A-to-B motion has a specific impact point or musical role.
     /// </summary>
-    public virtual Repertoire Repertoire => Repertoire.None;
+    public virtual TransitionRepertoire Repertoire => TransitionRepertoire.Default;
 
     private int a;
     private int b;

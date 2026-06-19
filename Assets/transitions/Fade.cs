@@ -4,6 +4,15 @@
 /// </summary>
 public class Fade : TransitionBase
 {
+    private static readonly TransitionRepertoire DefaultRepertoire =
+        TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.None,
+            runwayBeats: 4,
+            tailBeats: 0,
+            TransitionShape.Blend,
+            TransitionIntensity.Subtle);
+
+    public override TransitionRepertoire Repertoire => DefaultRepertoire;
 
     /// <summary>
     /// Initializes per-run transition state before effect-to-effect blending begins.

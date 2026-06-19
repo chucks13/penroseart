@@ -145,8 +145,8 @@ The decision layer that owns *what* plays on the wall and *when* it changes — 
 _Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; folding buffer or transition execution into the Director.
 
 **Phase Anchor**:
-The Director's current understanding of the 16-beat grid inside the current musical phrase. It comes from Track Phase when that data is present; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
-_Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure.
+The Director's current musical target for the next structural transition. Track Phase defines a phrase window: the current phrase starts at a phrase boundary, contains 16-beat phase slots, and ends at the next phrase boundary. The Director plans the phrase as a list: choose a random number of eligible interior 16-beat slots, always include the ending phrase boundary as the mandatory final slot, then advance through that list one impact at a time. When only beat/grid evidence is available, the anchor is the best known 16-beat grid point; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
+_Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure. Live Track Phase windows define the phrase slots; inferred grid points are only for weaker evidence.
 
 **Phase Lock**:
 The Director's ongoing effort to keep Performer changes aligned to the Phase Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
@@ -164,6 +164,10 @@ _Avoid_: calling this a fallback; it is the deliberate Synced Mode behavior for 
 Replacing the current Phase Anchor with a new one when fresh Track Phase data appears or contradicts the grid being coasted. Re-anchoring is how the wall gets back in phase after startup, data gaps, song position changes, or loop-like movement the current data can reveal.
 _Avoid_: layering multiple anchors; the Director has one current phase anchor.
 
+**Beat Rewind**:
+A substantial backward jump in the live beat count, usually a new loop pass or new track position. The Director treats a rewind of at least 16 beats as a new pass: it clears stale cue state and stops comparing future phrase targets against old absolute beat numbers. Small one- or two-beat backsteps are ignored as transport jitter. Rewind handling is not a separate scheduler — current Track Phase still supplies the phrase target.
+_Avoid_: modeling loop windows, transport state machines, or speculative loop plans; the Director only needs current phrase data, a 16-beat minimum, and transition impact/tail timing.
+
 **Performer**:
 The umbrella for anything the Director can put on the wall — an Effect, Transition, or Mixer — seen as something called on stage rather than as a class. The Director casts Performers; the Switcher moves them on and off.
 _Avoid_: "dancer" (the early metaphor); using "Performer" when you specifically mean an Effect vs a Transition vs a Mixer.
@@ -171,6 +175,42 @@ _Avoid_: "dancer" (the early metaphor); using "Performer" when you specifically 
 **Repertoire**:
 What a Performer advertises it can do, so the Director can cast it knowingly — e.g. handles Fills, is Drop-capable, responds to Energy. The Director reads a Performer's Repertoire to decide whether to have the Performer express a musical event itself or to supply the move another way; the Director always decides, and the Repertoire only tells it which options exist.
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
+
+**A-to-B Transition**:
+A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Different Transitions can make different musical promises about where the important beat should land along that A-to-B movement.
+_Avoid_: treating every Transition as if its only musical goal is to complete on the key beat; some Transitions want the hit in the middle and resolve afterward.
+
+**Transition Repertoire**:
+The part of a Transition's Repertoire that tells the Director what kind of A-to-B move it offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast a Transition that fits the available phrase timing instead of assuming all Transitions are interchangeable. These are class-level artistic defaults owned by each Transition, not live operator settings.
+_Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; timing shape is part of what the Transition advertises; moving these defaults into scene data before there is a real need for live authoring.
+
+**Transition Shape**:
+The broad visual family of an A-to-B Transition — e.g. Blend, Channel Blend, Directional Wipe, Index Wipe, Dissolve, Iris, or Noise. Shape helps the Director avoid treating two same-duration Transitions as equivalent when they read very differently on the wall.
+_Avoid_: using Shape to describe musical timing; timing is Runway/Tail/Impact Point.
+
+**Transition Intensity**:
+How forcefully a Transition reads as a musical move: Subtle, Medium, or High. Intensity is a casting hint for ordinary phrase motion versus bigger events such as Drops or high-energy changes.
+_Avoid_: treating Intensity as brightness or audio level; it describes the visual force of the Transition itself.
+
+**Impact Point**:
+The musically-important point inside an A-to-B Transition — the progress value where the key phase beat should hit. An Impact Point of 1 means the beat lands when B is fully established; an Impact Point of 0.5 means the beat lands at the dramatic middle of the Transition and the movement may continue afterward. The Director times the Impact Point, not necessarily the Completion.
+_Avoid_: calling this "completion" or "landing" when the Transition still has Tail after the beat; assuming the key beat always wants progress 1.
+
+**Transition Duration**:
+The full musical length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail.
+_Avoid_: using Duration when only the pre-impact lead time is meant; that lead time is the Runway.
+
+**Runway**:
+The lead-in before a Transition's Impact Point — how many beats before the key phase beat the Director must start the Transition so it reaches the Impact Point on time. Runway is derived from the Transition's Duration and Impact Point.
+_Avoid_: using Runway to mean the whole Transition; a Transition can continue after impact.
+
+**Tail**:
+The part of a Transition after the Impact Point. Tail lets the wall hit the key beat at the Transition's dramatic center and then finish resolving to B afterward.
+_Avoid_: treating post-impact motion as late or wrong; for some Transitions the Tail is intentional.
+
+**Transition Completion**:
+The moment an A-to-B Transition has fully reached B. Completion may happen on the same beat as the Impact Point or after it, depending on the Transition Repertoire.
+_Avoid_: assuming Completion is always the Director's timed musical target; the timed target is the Impact Point.
 
 **Cue**:
 The Director's directive for a change. A Cue is not the change itself — it *triggers* one: a Cue aimed at the stage triggers the Switcher to swap dancers (via a Cut, Transition, or Mixer), and a Cue aimed at the on-screen effect triggers it to respond ("respond to this fill", "play at this energy"). An effect-directed Cue follows the same nullable, preference-driven contract as the rhythm queries — the effect reads the parts it understands, uses its own defaults for anything unset (an ordinary state, never degraded), and pulls the live event data itself from the Beat Manager. A Cue carries intent, never pixel-level commands.
@@ -185,8 +225,8 @@ An inspection freeze that suspends the Director so a developer can sit on one ef
 _Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; re-asserting the held effect every frame (nothing fights it once the one decider is suspended).
 
 **Track Phase**:
-The named phrase position within the current track as analyzed by RaveSystem — "Intro", "Break", "Drop", "Chorus 2" — with current/next labels, an active/known flag, beats left to the next phase boundary, total phase length in beats, and phases remaining including the current phase. An **open vocabulary**: labels are track-dependent names, never a closed set to parse against.
-_Avoid_: confusing with **Bar Phase** (position within one measure); treating the labels as an enum; treating the remaining count as only future phases after the current one.
+The named phrase position within the current track as analyzed by RaveSystem — "Intro", "Break", "Drop", "Chorus 2" — with current/next labels, an active/known flag, beats left to the next phase boundary, total phase length in beats, and phases remaining including the current phase. An **open vocabulary**: labels are track-dependent names, never a closed set to parse against. Track Phase boundaries are phase starts: if the 16-beat grid says the one is somewhere else but a Track Phase boundary is coming up, the grid is out of phase and the boundary wins.
+_Avoid_: confusing with **Bar Phase** (position within one measure); treating the labels as an enum; treating the remaining count as only future phases after the current one; keeping an inferred 16-beat grid when Track Phase contradicts it.
 
 **Phase Count**:
 The Director's 1-based count within the current 16-beat subdivision of a Track Phase: `elapsed_in_phrase = length_beats - count_beats`, then `count_16 = (elapsed_in_phrase % 16) + 1`. A 4-beat transition starts at count 13 so the change lands on the next X: `13, 14, 15, 16, X`.
