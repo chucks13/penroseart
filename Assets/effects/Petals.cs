@@ -40,7 +40,9 @@ public class Petals : ScreenEffect
     public override void Draw()
     {
         // Beat pulse scales the layered shape colors for this frame.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.85f, beatEnable);
+        float hueShift = beatManager.GetBeatBrightness(beatVariant, 0.001f, 0.0f);
+        int bitMask=Random.Range(0, 256);       // randomly select shape layers with bit masks
         background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
@@ -64,10 +66,13 @@ public class Petals : ScreenEffect
             }
             for (int i = 0; i < shape[0]; i++)
             {
+                int thisBit=1<<1;
                 int list = shape[i + 1];
                 int start = list + 1;
                 int end = start + shape[list];
                 Color.RGBToHSV(colors[shapeIdx], out float hue, out float sat, out float bri);
+                if((thisBit&bitMask)==0)
+                    hue+=hueShift;
                 for (int j = start; j < end; j++)
                 {
                     int idx = shape[j];
