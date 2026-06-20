@@ -50,6 +50,22 @@ public sealed class SyncedCueDecisionTests
     }
 
     [Test]
+    public void EvaluateCuesZeroRunwayAtImpactBeat()
+    {
+        var decision = SyncedCueDecision.Evaluate(
+            currentBeat: 609,
+            selectedPhaseBoundary: 609,
+            transitionRepertoire: HardCut(),
+            lastCueBeat: null,
+            previousSelectedPhaseBoundary: null,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(decision.Kind, Is.EqualTo(SyncedCueDecisionKind.Cue));
+        Assert.That(decision.ShouldCue, Is.True);
+        Assert.That(decision.BeatsUntilImpact, Is.EqualTo(0));
+    }
+
+    [Test]
     public void EvaluateBlocksCadenceInsideRunway()
     {
         var decision = SyncedCueDecision.Evaluate(
@@ -89,5 +105,16 @@ public sealed class SyncedCueDecisionTests
             TransitionShape.Dissolve,
             TransitionIntensity.High,
             defaultDurationSeconds: 4f);
+    }
+
+    private static TransitionRepertoire HardCut()
+    {
+        return TransitionRepertoire.FromRunwayAndTail(
+            Repertoire.None,
+            runwayBeats: 0,
+            tailBeats: 0,
+            TransitionShape.Blend,
+            TransitionIntensity.High,
+            defaultDurationSeconds: 0f);
     }
 }

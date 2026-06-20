@@ -15,7 +15,8 @@ public sealed class ControllerEditor : Editor
     /// <summary>Draws live Director/Switcher state before the normal serialized Controller fields.</summary>
     public override void OnInspectorGUI()
     {
-        DrawRuntimeStatus((Controller)target);
+        var controller = (Controller)target;
+        DrawRuntimeStatus(controller);
         EditorGUILayout.Space(8f);
         DrawDefaultInspector();
     }
@@ -66,7 +67,7 @@ public sealed class ControllerEditor : Editor
         DrawRow("Landing", FormatBeat(directorStatus.TransitionLandingBeat));
         DrawRow("Landing In", FormatBeats(directorStatus.BeatsUntilLanding));
         DrawRow("Cadence Ready In", FormatBeats(directorStatus.BeatsUntilCadenceReady));
-        DrawProgress("Transition Progress", directorStatus.TransitionProgress);
+        DrawProgress("Transition Progress", switcherStatus.TransitionProgress);
     }
 
     private static void DrawPhaseLock(DirectorStatus status)

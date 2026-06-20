@@ -205,7 +205,7 @@ What a Performer advertises it can do, so the Director can cast it knowingly —
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **A-to-B Transition**:
-A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; a Transition's total Runway plus Tail should never exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Phrase Window or Phase Boundary decisions.
+A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Phrase Window or Phase Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
 _Avoid_: treating every Transition as if its only goal is to complete on a Phase Boundary; treating transition progress, completion, or busy state as music-structure evidence.
 
 **Transition Repertoire**:
@@ -213,8 +213,8 @@ The Director-facing declaration of the A-to-B move a Transition offers: its Runw
 _Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; timing shape is part of what the Transition advertises; treating Repertoire as per-cue instructions or as state the Director sets.
 
 **Transition Settings**:
-Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Director reads that declaration to decide when to start the A-to-B move. Settings and the Settings Editor enforce valid Transition Duration, including the 12-beat maximum, so the Director does not need compensating scheduling logic.
-_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings.
+Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Director reads that declaration to decide when to start the A-to-B move. When settings are intentionally edited, the Settings Editor enforces non-negative Runway/Tail values whose sum is at most 12 beats, so the Director does not need compensating scheduling logic.
+_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings; silently mutating saved Settings just because an asset was loaded.
 
 **Code Defaults**:
 The transition-authored baseline values used to create or restore Transition Settings. Code Defaults live with the Transition's source so changing a Transition and changing its intended defaults stay together.
@@ -233,12 +233,12 @@ A Transition-local progress point where that Transition's main visual hit happen
 _Avoid_: treating Impact Point as a phrase boundary, Phase Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
 
 **Transition Duration**:
-The full length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail, and should never exceed 12 beats.
+The full length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail; both parts are non-negative, the total must not exceed 12 beats, and zero duration is a hard cut.
 _Avoid_: using Duration when only the pre-impact lead time is meant; that lead time is the Runway.
 
 **Runway**:
-The lead-in before a Transition's Impact Point — how many beats before the chosen Phase Boundary the Director must start the Transition so the Impact Point reaches that boundary on time. Runway is derived from the Transition's Duration and Impact Point.
-_Avoid_: using Runway to mean the whole Transition; a Transition can continue after impact.
+The lead-in before a Transition's Impact Point — how many beats before the chosen Phase Boundary the Director must start the Transition so the Impact Point reaches that boundary on time. Runway is authored directly as part of the Transition Repertoire and may be zero, in which case the Director cues on the chosen Phase Boundary.
+_Avoid_: using Runway to mean the whole Transition; a Transition can continue after impact; requiring a fake one-beat Runway for hard cuts.
 
 **Tail**:
 The part of a Transition after the Impact Point. Tail is visual resolution to B after the Transition has hit its mark; it has no effect on Phrase Window, Phase Boundary, or Phase Anchor decisions.
@@ -253,8 +253,8 @@ The Director's directive for a change. A Cue is not the change itself — it *tr
 _Avoid_: "call" (collides with calling a Performer on stage); treating a Cue as the change itself rather than the directive that triggers it; a Cue that micromanages a Performer's internal parameters.
 
 **Mechanical Switcher** (a.k.a. **Switcher**):
-The mechanism that executes the Director's stage-directed Cues. It owns the in-flight transition (which Performer is leaving, which is arriving, how far along) and realizes a swap one of three ways: a **Cut** (instant), a **Transition** (blended — looser at a phrase boundary, tightly timed to land on a Drop), or a **Mixer** (bringing in another effect, including the temporary self-reverting mix that expresses a Fill the on-screen effect can't). It moves Performers on and off the wall and never decides what or when. Kept separate from the Director so decision and mechanism stay independent.
-_Avoid_: putting timing or musical decisions in the Switcher; the Director drawing buffers or running transitions itself; calling it "dumb" instead of describing it as execution-only.
+The fire-and-forget mechanism that executes the Director's stage-directed Cues. It owns the in-flight transition (which Performer is leaving, which is arriving, how far along) and realizes a swap one of three ways: a **Cut** (instant), a **Transition** (blended — looser at a phrase boundary, tightly timed to land on a Drop), or a **Mixer** (bringing in another effect, including the temporary self-reverting mix that expresses a Fill the on-screen effect can't). It moves Performers on and off the wall and never decides what or when. If a new Transition command arrives while another is still rendering, the latest command replaces the mechanical move and uses the previous destination as its new source; the Director still does not branch on Switcher busy/progress state. Kept separate from the Director so decision and mechanism stay independent.
+_Avoid_: putting timing or musical decisions in the Switcher; the Director drawing buffers or running transitions itself; using Switcher progress, completion, or busy state as a scheduling input; calling it "dumb" instead of describing it as execution-only.
 
 **Hold**:
 An inspection freeze that suspends the Director so a developer can sit on one effect, watch it, and tweak its settings live — a development affordance, not normal show operation. It is not a selection input and not a second decider: while held, the Director stops advancing entirely (no rotation, no Cues, no transitions) and simply keeps the chosen Performer on screen; releasing it resumes directing. Conceptually general — the ability to halt any running thing to inspect it — though the first concrete use is holding an effect.

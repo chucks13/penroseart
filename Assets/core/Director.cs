@@ -15,7 +15,6 @@ public enum DirectorDecision
 {
     NotReady,
     StandaloneTimer,
-    StandaloneTransition,
     WaitingForPhase,
     WaitingForRunway,
     WaitingForCadence,
@@ -41,7 +40,6 @@ public readonly struct DirectorStatus
         -1,
         -1,
         -1,
-        0f,
         -1,
         string.Empty,
         -1,
@@ -60,7 +58,6 @@ public readonly struct DirectorStatus
     public readonly int TransitionLandingBeat;
     public readonly int BeatsUntilLanding;
     public readonly int BeatsUntilCadenceReady;
-    public readonly float TransitionProgress;
     public readonly int NextEffectIndex;
     public readonly string NextEffectName;
     public readonly int NextTransitionIndex;
@@ -81,7 +78,6 @@ public readonly struct DirectorStatus
         int currentBeat,
         int beatsUntilLanding,
         int beatsUntilCadenceReady,
-        float transitionProgress,
         int nextEffectIndex,
         string nextEffectName,
         int nextTransitionIndex,
@@ -101,7 +97,6 @@ public readonly struct DirectorStatus
         CurrentBeat = currentBeat;
         BeatsUntilLanding = beatsUntilLanding;
         BeatsUntilCadenceReady = beatsUntilCadenceReady;
-        TransitionProgress = transitionProgress;
         NextEffectIndex = nextEffectIndex;
         NextEffectName = nextEffectName ?? string.Empty;
         NextTransitionIndex = nextTransitionIndex;
@@ -139,27 +134,18 @@ public sealed class Director
     private int lastCueBeat = -1;
     private int transitionStartBeat = -1;
     private int transitionLandingBeat = -1;
-    private SyncedTransitionPlan transitionPlan;
-    private bool standaloneTransitionActive;
     private bool hasPhaseAnchor;
     private PhaseConfidence phaseAnchorConfidence = PhaseConfidence.Unlocked;
     private int phaseAnchorLandingBeat = -1;
     private PhaseReading phaseReading = PhaseReading.Unavailable;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
-    private int lastLoggedTransitionBeat = -1;
     private PhaseInput phaseInput = new PhaseInput(-1, -1, -1, -1, -1, -1);
     private int selectedBoundaryPhraseStartBeat = -1;
     private int selectedBoundaryPhraseEndBeat = -1;
     private int selectedBoundaryPhraseLengthBeats = -1;
     private int[] selectedPhaseBoundaries = Array.Empty<int>();
     private int selectedPhaseBoundaryIndex;
-
-    /// <summary>
-    /// Progress for the current mechanical transition. Standalone Mode uses the legacy timer;
-    /// Synced Mode derives it from the live beat count so the Switcher never interprets timing.
-    /// </summary>
-    public float TransitionProgress { get; private set; }
 
     /// <summary>Whether the Director currently has a phase grid to aim at.</summary>
     public bool HasPhaseAnchor => hasPhaseAnchor;
@@ -253,10 +239,6 @@ public sealed class Director
             {
                 TickSyncedMode(beat);
             }
-            else
-            {
-                TransitionProgress = 0f;
-            }
 
             return;
         }
@@ -270,11 +252,8 @@ public sealed class Director
         Trace($"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
         switcher.ShowNow(effectIndex);
         currentEffectIndexForSelection = effectIndex;
-        transitionPlan = default;
-        standaloneTransitionActive = false;
         ResetSelectedPhaseBoundaryPlan();
         MarkChangedOnCurrentBeat();
-        TransitionProgress = 0f;
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
         StageNextChoices(Repertoire.None);
@@ -309,7 +288,7 @@ public sealed class Director
             return;
         }
 
-        Trace($"TIMER_FINISHED_STANDALONE progress={TransitionProgress:0.###}");
+        Trace("TIMER_FINISHED_STANDALONE");
         RunStandaloneTimerDecision();
     }
 
@@ -349,7 +328,6 @@ public sealed class Director
             currentBeat,
             beatsUntilLanding,
             beatsUntilCadenceReady,
-            TransitionProgress,
             nextEffectIndex,
             EffectName(nextEffectIndex),
             nextTransitionIndex,
@@ -372,7 +350,7 @@ public sealed class Director
 
         if (!isSynced)
         {
-            return standaloneTransitionActive ? DirectorDecision.StandaloneTransition : DirectorDecision.StandaloneTimer;
+            return DirectorDecision.StandaloneTimer;
         }
 
         if (!hasPhaseAnchor)
@@ -385,9 +363,10 @@ public sealed class Director
             return DirectorDecision.WaitingForCadence;
         }
 
-        return beatsUntilLanding is >= 1 && beatsUntilLanding <= runwayBeats
-            ? DirectorDecision.CueingTransition
-            : DirectorDecision.WaitingForRunway;
+        var inCueWindow = runwayBeats == 0
+            ? beatsUntilLanding == 0
+            : beatsUntilLanding is >= 1 && beatsUntilLanding <= runwayBeats;
+        return inCueWindow ? DirectorDecision.CueingTransition : DirectorDecision.WaitingForRunway;
     }
 
     private void TickStandaloneMode(float deltaTime)
@@ -396,11 +375,8 @@ public sealed class Director
         hasPhaseAnchor = false;
         phaseAnchorConfidence = PhaseConfidence.Unlocked;
         phaseAnchorLandingBeat = -1;
-        transitionPlan = default;
         ResetSelectedPhaseBoundaryPlan();
-        TransitionProgress = standaloneTimer.Value;
         standaloneTimer.Update(deltaTime);
-        TransitionProgress = standaloneTimer.Value;
     }
 
     private void TickSyncedMode(int beat)
@@ -417,23 +393,12 @@ public sealed class Director
 
         if (controller.TryGetHeldEffectIndex(out _))
         {
-            TransitionProgress = 0f;
             return;
         }
 
         RefreshPhaseAnchor(beat, beatRewoundToNewPass);
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, beatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
-
-        if (transitionPlan.Active)
-        {
-            UpdateSyncedTransition(beat, previousSyncedBeat, beatRewoundToNewPass);
-        }
-        else
-        {
-            TransitionProgress = 0f;
-        }
-
         TryStartSyncedCue(beat);
     }
 
@@ -652,63 +617,23 @@ public sealed class Director
         TransitionRepertoire repertoire,
         Repertoire preferredRepertoire)
     {
-        switcher.StartTransition(targetEffectIndex, transitionIndex);
-        controller.currentTransition = transitionIndex;
-
         var secondsPerBeat = CurrentSecondsPerBeat();
         var beatFraction = controller.beatManager.BeatFraction ?? 0f;
         var elapsedBeats = Mathf.Max(0f, lastSyncedBeat - beatPlan.StartBeat + beatFraction);
         var startTime = Time.time - (elapsedBeats * secondsPerBeat);
-        transitionPlan = new SyncedTransitionPlan(transitionIndex, targetEffectIndex, beatPlan, repertoire, startTime, secondsPerBeat);
+        switcher.StartTransition(
+            targetEffectIndex,
+            transitionIndex,
+            TransitionStartTiming.FromBeatClock(startTime, secondsPerBeat));
+        controller.currentTransition = transitionIndex;
 
-        transitionStartBeat = transitionPlan.StartBeat;
-        transitionLandingBeat = transitionPlan.ImpactBeat;
+        transitionStartBeat = beatPlan.StartBeat;
+        transitionLandingBeat = beatPlan.ImpactBeat;
         MarkChangedOnBeat(transitionLandingBeat);
         lastCueBeat = lastSyncedBeat;
-        lastLoggedTransitionBeat = -1;
-        TransitionProgress = transitionPlan.Progress(Time.time);
         currentEffectIndexForSelection = targetEffectIndex;
         StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
-        Trace($"SYNC_TRANSITION_START beat={lastSyncedBeat} beatFraction={beatFraction:0.###} elapsedBeats={elapsedBeats:0.###} start={transitionStartBeat} impact={transitionLandingBeat} complete={transitionPlan.CompleteBeat} durationSeconds={transitionPlan.DurationSeconds:0.###} progress={TransitionProgress:0.###} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} preferred={preferredRepertoire}");
-    }
-
-    private void UpdateSyncedTransition(int beat, int previousBeat, bool beatRewoundToNewPass)
-    {
-        if (!transitionPlan.Active)
-        {
-            Trace($"SYNC_TRANSITION_MISSING_PLAN beat={beat}");
-            TransitionProgress = 0f;
-            return;
-        }
-
-        var update = transitionPlan.EvaluateUpdate(
-            beat,
-            beatRewoundToNewPass,
-            transitionLandingBeat,
-            Time.time);
-        TransitionProgress = update.Progress;
-        if (update.RecordImpactOnRewind)
-        {
-            transitionLandingBeat = update.ImpactBeat;
-            MarkChangedOnBeat(update.ImpactBeat);
-            Trace($"SYNC_TRANSITION_IMPACT_ON_REWIND beat={beat} previousBeat={FormatBeat(previousBeat)} plannedImpact={transitionPlan.ImpactBeat} complete={transitionPlan.CompleteBeat} progress={TransitionProgress:0.###} target={FormatEffect(transitionPlan.TargetEffectIndex)} transition={FormatTransition(transitionPlan.TransitionIndex)}");
-        }
-
-        if (update.ShouldComplete)
-        {
-            Trace($"SYNC_TRANSITION_COMPLETE_REQUEST beat={beat} previousBeat={FormatBeat(previousBeat)} rewound={beatRewoundToNewPass} impact={update.ImpactBeat} plannedImpact={transitionPlan.ImpactBeat} complete={transitionPlan.CompleteBeat} progress={TransitionProgress:0.###} target={FormatEffect(transitionPlan.TargetEffectIndex)} transition={FormatTransition(transitionPlan.TransitionIndex)}");
-            switcher.CompleteTransition();
-            transitionPlan = default;
-            TransitionProgress = 0f;
-            Trace($"SYNC_TRANSITION_COMPLETE_DONE beat={beat} rewound={beatRewoundToNewPass} lastChange={FormatBeat(lastChangeBeat)} nextEffect={FormatEffect(nextEffectIndex)} nextTransition={FormatTransition(nextTransitionIndex)}");
-            return;
-        }
-
-        if (beat != lastLoggedTransitionBeat)
-        {
-            Trace($"SYNC_TRANSITION_PROGRESS beat={beat} rewound={beatRewoundToNewPass} start={transitionPlan.StartBeat} impact={transitionLandingBeat} plannedImpact={transitionPlan.ImpactBeat} complete={transitionPlan.CompleteBeat} progress={TransitionProgress:0.###} target={FormatEffect(transitionPlan.TargetEffectIndex)} transition={FormatTransition(transitionPlan.TransitionIndex)}");
-            lastLoggedTransitionBeat = beat;
-        }
+        Trace($"SYNC_TRANSITION_START beat={lastSyncedBeat} beatFraction={beatFraction:0.###} elapsedBeats={elapsedBeats:0.###} start={transitionStartBeat} impact={transitionLandingBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} runway={repertoire.RunwayBeats} preferred={preferredRepertoire}");
     }
 
     private void LogModeIfChanged()
@@ -735,7 +660,7 @@ public sealed class Director
             return;
         }
 
-        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatPhaseInput()} phase={FormatPhase()} anchor={FormatBeat(phaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} progress={TransitionProgress:0.###} lastChange={FormatBeat(lastChangeBeat)}");
+        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatPhaseInput()} phase={FormatPhase()} anchor={FormatBeat(phaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
     }
 
     private static bool BeatRewoundToNewPass(int previousBeat, int beat)
@@ -755,7 +680,7 @@ public sealed class Director
 
         var beatsUntilLanding = hasPhaseAnchor ? phaseAnchorLandingBeat - beat : -1;
         var canChangeAtLanding = hasPhaseAnchor && CanChangeAtBeat(phaseAnchorLandingBeat);
-        Trace($"SYNC_BEAT beat={beat} input={FormatPhaseInput()} phase={FormatPhase()} anchor={FormatBeat(phaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} progress={TransitionProgress:0.###} lastChange={FormatBeat(lastChangeBeat)}");
+        Trace($"SYNC_BEAT beat={beat} input={FormatPhaseInput()} phase={FormatPhase()} anchor={FormatBeat(phaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
         lastLoggedSyncedBeat = beat;
     }
 
@@ -838,18 +763,6 @@ public sealed class Director
             return;
         }
 
-        if (standaloneTransitionActive)
-        {
-            Trace($"STANDALONE_TRANSITION_COMPLETE_REQUEST progress={TransitionProgress:0.###}");
-            switcher.CompleteTransition();
-            standaloneTransitionActive = false;
-            standaloneTimer.Set(controller.effectTime);
-            standaloneTimer.Reset();
-            TransitionProgress = 0f;
-            Trace($"STANDALONE_TRANSITION_COMPLETE_DONE current={FormatEffect(currentEffectIndexForSelection)} nextEffect={FormatEffect(nextEffectIndex)} nextTransition={FormatTransition(nextTransitionIndex)}");
-            return;
-        }
-
         var transitionIndex = nextTransitionIndex;
         var targetEffectIndex = nextEffectIndex;
         ValidateTransitionIndex(transitionIndex);
@@ -857,14 +770,15 @@ public sealed class Director
         var transitionRepertoire = controller.transitions[transitionIndex].Repertoire;
         var transitionDurationSeconds = transitionRepertoire.DefaultDurationSeconds;
         Trace($"STANDALONE_TRANSITION_START transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} durationSeconds={transitionDurationSeconds:0.###}");
-        switcher.StartTransition(targetEffectIndex, transitionIndex);
+        switcher.StartTransition(
+            targetEffectIndex,
+            transitionIndex,
+            TransitionStartTiming.FromDefaultDuration(Time.time));
         controller.currentTransition = transitionIndex;
-        standaloneTransitionActive = true;
         currentEffectIndexForSelection = targetEffectIndex;
         StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
-        standaloneTimer.Set(transitionDurationSeconds);
+        standaloneTimer.Set(transitionDurationSeconds + controller.effectTime);
         standaloneTimer.Reset();
-        TransitionProgress = 0f;
     }
 
     private void StageNextChoices(Repertoire preferredRepertoire)

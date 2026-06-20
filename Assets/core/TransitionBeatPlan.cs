@@ -30,9 +30,11 @@ public readonly struct TransitionBeatPlan
             selectedPhaseBoundary + repertoire.TailBeats);
     }
 
-    /// <summary>Whether the beat is inside the Runway window before the Impact Point.</summary>
+    /// <summary>Whether the beat should start this plan; zero-Runway cuts cue on the Impact Beat.</summary>
     public bool IsCueBeat(int beat)
     {
-        return beat >= StartBeat && beat < ImpactBeat;
+        return StartBeat == ImpactBeat
+            ? beat == ImpactBeat
+            : beat >= StartBeat && beat < ImpactBeat;
     }
 }

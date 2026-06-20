@@ -27,8 +27,8 @@ public enum TransitionIntensity
 /// A transition moves from A to B over <see cref="DurationBeats"/> in Synced Mode.
 /// The Director schedules the transition so the <see cref="RunwayBeats"/> lead-in reaches
 /// the <see cref="ImpactPoint"/> on the key musical beat; completion can happen on that same
-/// beat or after it depending on <see cref="TailBeats"/>. Standalone Mode uses
-/// <see cref="DefaultDurationSeconds"/> for the same A-to-B motion.
+/// beat or after it depending on <see cref="TailBeats"/>. A zero Runway and zero Tail is a hard cut.
+/// Standalone Mode uses <see cref="DefaultDurationSeconds"/> for the same A-to-B motion.
 /// </remarks>
 public readonly struct TransitionRepertoire
 {
@@ -66,7 +66,7 @@ public readonly struct TransitionRepertoire
     public int DurationBeats => RunwayBeats + TailBeats;
 
     /// <summary>Normalized A-to-B progress where the key musical beat should land.</summary>
-    public float ImpactPoint => RunwayBeats / (float)DurationBeats;
+    public float ImpactPoint => DurationBeats == 0 ? 1f : RunwayBeats / (float)DurationBeats;
 
     /// <summary>Whether this transition intentionally continues after its Impact Point.</summary>
     public bool HasTail => TailBeats > 0;
@@ -79,9 +79,9 @@ public readonly struct TransitionRepertoire
         TransitionIntensity intensity,
         float defaultDurationSeconds)
     {
-        if (runwayBeats <= 0)
+        if (runwayBeats < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(runwayBeats), runwayBeats, "Runway must be at least one beat.");
+            throw new ArgumentOutOfRangeException(nameof(runwayBeats), runwayBeats, "Runway cannot be negative.");
         }
 
         if (tailBeats < 0)

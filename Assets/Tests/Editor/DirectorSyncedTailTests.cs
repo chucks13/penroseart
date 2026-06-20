@@ -62,7 +62,7 @@ public sealed class DirectorSyncedTailTests
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
 
-        ForceTransitionCompleteAtImpact(impactBeat: 609);
+        RenderTransitionPastCompletion();
         SetTrackPhaseBeat(613, phaseActive: 0, beatsToPhraseBoundary: 10, phraseLengthBeats: 32);
         director.Tick(0f);
 
@@ -86,7 +86,7 @@ public sealed class DirectorSyncedTailTests
     {
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
-        ForceTransitionCompleteAtImpact(impactBeat: 609);
+        RenderTransitionPastCompletion();
 
         SetTrackPhaseBeat(621, phaseActive: 0, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
@@ -125,22 +125,28 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void SameWindowBeatRewindKeepsSelectedPhaseBoundaryPlanAndMovesCursorBack()
     {
-        SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
-        director.Tick(0f);
-        SetSelectedPhaseBoundaryPlan(
-            phraseStartBeat: 577,
-            phraseEndBeat: 641,
-            phraseLengthBeats: 64,
-            selectedBoundaries: new[] { 593, 641 },
-            selectedIndex: 1);
-        SetDirectorField("lastChangeBeat", 578);
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
+            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            director.Tick(0f);
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
 
-        SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
-        director.Tick(0f);
+            SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+            director.Tick(0f);
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(641));
 
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
-        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(int.MinValue));
-        Assert.That(GetDirectorField<int[]>("selectedPhaseBoundaries"), Is.EqualTo(new[] { 593, 641 }));
+            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(int.MinValue));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
     }
 
     private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
@@ -159,48 +165,9 @@ public sealed class DirectorSyncedTailTests
         };
     }
 
-    private void ForceTransitionCompleteAtImpact(int impactBeat)
+    private void RenderTransitionPastCompletion()
     {
-        var repertoire = controller.transitions[0].Repertoire;
-        var beatPlan = TransitionBeatPlan.FromSelectedPhaseBoundary(impactBeat, repertoire);
-        var completePlan = new SyncedTransitionPlan(
-            transitionIndex: 0,
-            targetEffectIndex: switcher.TransitionTargetEffectIndex,
-            beatPlan,
-            repertoire,
-            startTime: Time.time - repertoire.DurationBeats,
-            secondsPerBeat: 1f);
-        typeof(Director)
-            .GetField("transitionPlan", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(director, completePlan);
-    }
-
-    private void SetSelectedPhaseBoundaryPlan(
-        int phraseStartBeat,
-        int phraseEndBeat,
-        int phraseLengthBeats,
-        int[] selectedBoundaries,
-        int selectedIndex)
-    {
-        SetDirectorField("selectedBoundaryPhraseStartBeat", phraseStartBeat);
-        SetDirectorField("selectedBoundaryPhraseEndBeat", phraseEndBeat);
-        SetDirectorField("selectedBoundaryPhraseLengthBeats", phraseLengthBeats);
-        SetDirectorField("selectedPhaseBoundaries", selectedBoundaries);
-        SetDirectorField("selectedPhaseBoundaryIndex", selectedIndex);
-    }
-
-    private void SetDirectorField(string fieldName, object value)
-    {
-        typeof(Director)
-            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(director, value);
-    }
-
-    private T GetDirectorField<T>(string fieldName)
-    {
-        return (T)typeof(Director)
-            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(director);
+        switcher.RenderAtTime(Time.time + 10f, out _);
     }
 
     private static void SetControllerSingleton(Controller instance)
@@ -212,6 +179,11 @@ public sealed class DirectorSyncedTailTests
 
     private sealed class TestEffect : EffectBase
     {
+        public TestEffect()
+        {
+            buffer = new Color[Penrose.Total];
+        }
+
         public override string DebugText() => string.Empty;
 
         public override void OnStart()

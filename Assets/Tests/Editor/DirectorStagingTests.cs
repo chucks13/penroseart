@@ -91,7 +91,7 @@ public sealed class DirectorStagingTests
         director.SetNextTransition(2);
 
         director.OnTimerFinished();
-        director.OnTimerFinished();
+        RenderTransitionPastCompletion();
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(switcher.CurrentEffectIndex, Is.EqualTo(2));
@@ -106,7 +106,7 @@ public sealed class DirectorStagingTests
         director.SetHoldSelectedTransition(true);
 
         director.OnTimerFinished();
-        director.OnTimerFinished();
+        RenderTransitionPastCompletion();
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(director.Status.HoldSelectedTransition, Is.True);
@@ -120,15 +120,25 @@ public sealed class DirectorStagingTests
         director.SetHoldSelectedEffect(true);
 
         director.OnTimerFinished();
-        director.OnTimerFinished();
+        RenderTransitionPastCompletion();
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(director.Status.HoldSelectedEffect, Is.True);
         Assert.That(director.Status.NextEffectIndex, Is.EqualTo(2));
     }
 
+    private void RenderTransitionPastCompletion()
+    {
+        switcher.RenderAtTime(Time.time + 10f, out _);
+    }
+
     private sealed class TestEffect : EffectBase
     {
+        public TestEffect()
+        {
+            buffer = new Color[Penrose.Total];
+        }
+
         public override string DebugText() => string.Empty;
 
         public override void OnStart()

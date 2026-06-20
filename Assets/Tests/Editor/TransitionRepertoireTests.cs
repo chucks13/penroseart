@@ -41,6 +41,24 @@ public sealed class TransitionRepertoireTests
     }
 
     [Test]
+    public void FromRunwayAndTailAcceptsHardCut()
+    {
+        var repertoire = TransitionRepertoire.FromRunwayAndTail(
+            Repertoire.None,
+            runwayBeats: 0,
+            tailBeats: 0,
+            TransitionShape.Blend,
+            TransitionIntensity.High,
+            defaultDurationSeconds: 0f);
+
+        Assert.That(repertoire.RunwayBeats, Is.EqualTo(0));
+        Assert.That(repertoire.TailBeats, Is.EqualTo(0));
+        Assert.That(repertoire.DurationBeats, Is.EqualTo(0));
+        Assert.That(repertoire.ImpactPoint, Is.EqualTo(1f));
+        Assert.That(repertoire.HasTail, Is.False);
+    }
+
+    [Test]
     public void FromRunwayAndTailRejectsDurationAboveTwelveBeats()
     {
         Assert.That(
@@ -54,6 +72,29 @@ public sealed class TransitionRepertoireTests
             Throws.TypeOf<System.ArgumentOutOfRangeException>());
     }
 
+
+    [Test]
+    public void FromRunwayAndTailRejectsNegativeRunwayOrTail()
+    {
+        Assert.That(
+            () => TransitionRepertoire.FromRunwayAndTail(
+                Repertoire.None,
+                runwayBeats: -1,
+                tailBeats: 0,
+                TransitionShape.Blend,
+                TransitionIntensity.Subtle,
+                defaultDurationSeconds: 4f),
+            Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        Assert.That(
+            () => TransitionRepertoire.FromRunwayAndTail(
+                Repertoire.None,
+                runwayBeats: 0,
+                tailBeats: -1,
+                TransitionShape.Blend,
+                TransitionIntensity.Subtle,
+                defaultDurationSeconds: 4f),
+            Throws.TypeOf<System.ArgumentOutOfRangeException>());
+    }
 
     [Test]
     public void ConcreteTransitionsAdvertiseTweakableDefaultRepertoires()

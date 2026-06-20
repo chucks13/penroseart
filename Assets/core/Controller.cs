@@ -1149,7 +1149,7 @@ public class Controller : Singleton<Controller>
         var directorStatus = DirectorStatus;
         var switcherStatus = SwitcherStatus;
         lastRuntimeHudLine = BuildRuntimeHudLine(directorStatus, switcherStatus);
-        lastRuntimeDetailLine = BuildRuntimeDetailLine(directorStatus, transientMessage);
+        lastRuntimeDetailLine = BuildRuntimeDetailLine(directorStatus, switcherStatus, transientMessage);
 
         if (effectText != null)
         {
@@ -1168,7 +1168,7 @@ public class Controller : Singleton<Controller>
 
     private string BuildRuntimeHudLine(DirectorStatus directorStatus, SwitcherStatus switcherStatus)
     {
-        var stage = FormatStageName(switcherStatus, directorStatus.TransitionProgress);
+        var stage = FormatStageName(switcherStatus);
         if (directorStatus.Mode == DirectorMode.Hold)
         {
             return $"{stage} · HOLD";
@@ -1187,7 +1187,7 @@ public class Controller : Singleton<Controller>
         return "Starting Director…";
     }
 
-    private string BuildRuntimeDetailLine(DirectorStatus directorStatus, string transientMessage)
+    private string BuildRuntimeDetailLine(DirectorStatus directorStatus, SwitcherStatus switcherStatus, string transientMessage)
     {
         if (!string.IsNullOrWhiteSpace(transientMessage))
         {
@@ -1210,11 +1210,15 @@ public class Controller : Singleton<Controller>
         else if (directorStatus.Mode == DirectorMode.Standalone)
         {
             AppendIfNotEmpty(builder, FormatDecision(directorStatus.Decision));
-            AppendIfNotEmpty(builder, $"timer {Mathf.RoundToInt(Mathf.Clamp01(directorStatus.TransitionProgress) * 100f)}%");
         }
         else if (directorStatus.Mode == DirectorMode.Hold)
         {
             AppendIfNotEmpty(builder, "Director suspended");
+        }
+
+        if (switcherStatus.Ready && switcherStatus.CurrentEffectIndex < 0)
+        {
+            AppendIfNotEmpty(builder, $"transition {Mathf.RoundToInt(Mathf.Clamp01(switcherStatus.TransitionProgress) * 100f)}%");
         }
 
         AppendIfNotEmpty(builder, $"FPS {fps:0}");
@@ -1229,7 +1233,7 @@ public class Controller : Singleton<Controller>
         return builder.ToString();
     }
 
-    private string FormatStageName(SwitcherStatus status, float progress)
+    private string FormatStageName(SwitcherStatus status)
     {
         if (!status.Ready)
         {
@@ -1238,7 +1242,7 @@ public class Controller : Singleton<Controller>
 
         if (status.CurrentEffectIndex < 0)
         {
-            return $"{status.SourceEffectName} → {status.TargetEffectName} {Mathf.RoundToInt(Mathf.Clamp01(progress) * 100f)}%";
+            return $"{status.SourceEffectName} → {status.TargetEffectName} {Mathf.RoundToInt(Mathf.Clamp01(status.TransitionProgress) * 100f)}%";
         }
 
         return status.StageName;
@@ -1272,8 +1276,6 @@ public class Controller : Singleton<Controller>
         {
             case DirectorDecision.StandaloneTimer:
                 return "timer";
-            case DirectorDecision.StandaloneTransition:
-                return "transition";
             case DirectorDecision.WaitingForPhase:
                 return "waiting phase";
             case DirectorDecision.WaitingForRunway:
@@ -1576,7 +1578,7 @@ public class Controller : Singleton<Controller>
         }
         else
         {
-            penrose.buffer = switcher.Render(director.TransitionProgress, out renderDebugText);
+            penrose.buffer = switcher.RenderAtTime(Time.time, out renderDebugText);
             if (FilterMode)
                 applyFilter(penrose.buffer);
             drum.Draw(penrose.buffer);

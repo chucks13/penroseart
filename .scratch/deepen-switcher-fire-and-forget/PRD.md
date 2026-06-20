@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: ready-for-human
 
 ## Problem Statement
 
@@ -27,7 +27,7 @@ The decision matrix, Phase Anchor, Phrase Window plan, Selected Phase Boundary c
 5. As a PenroseArt wall author, I want the Director to start a Transition at the correct Runway point, so that its Impact Point lands on the Selected Phase Boundary.
 6. As a PenroseArt wall author, I want the Director to ignore whether the Switcher is currently rendering a Transition, so that decision timing remains tied to music.
 7. As a PenroseArt wall author, I want the 16-beat cadence rule to be the overlap-prevention mechanism, so that no extra busy-state scheduling checks are needed.
-8. As a PenroseArt wall author, I want the 12-beat maximum Transition Duration to remain enforced at authoring/settings seams, so that every Transition has room to finish inside the 16-beat cadence.
+8. As a PenroseArt wall author, I want non-negative Runway/Tail values with `Runway + Tail <= 12` enforced at authoring/settings seams, so that every Transition has room to finish inside the 16-beat cadence and zero/zero hard cuts remain valid.
 9. As a PenroseArt wall author, I want the Director to stage the next Effect and Transition immediately after starting the current move, so that following choices are not delayed until Tail completion.
 10. As a PenroseArt wall author, I want Next Effect and Next Transition to represent the next musical move, so that tuning tools show what is coming rather than what is mechanically finishing.
 11. As a PenroseArt wall author, I want a Transition Tail to keep rendering while the decision matrix says WaitingForRunway or CueingTransition for the next selected boundary, so that the display matches musical truth.
@@ -82,11 +82,11 @@ The decision matrix, Phase Anchor, Phrase Window plan, Selected Phase Boundary c
 - The Director may read Runway from the selected Transition's Repertoire to decide when to start. After start, the Director should not own Tail, duration, progress, or completion.
 - The Director should stage the next Effect and next Transition when a move starts, using the destination Effect as the current selection context, not waiting until mechanical completion.
 - The Director should continue to refresh Phase Anchor, Phrase Window, Selected Phase Boundary cursor, cadence status, and decision status every synced tick regardless of whether the Switcher is mechanically rendering a Tail.
-- The 16-beat minimum cadence and 12-beat maximum Transition Duration are the overlap-prevention mechanism. Do not add Switcher busy-state checks, overlap guards, queues, preemption, snapshots, restart machinery, or a defensive scheduler.
+- The 16-beat minimum cadence plus the `Runway >= 0`, `Tail >= 0`, `Runway + Tail <= 12` settings contract are the overlap-prevention mechanism. Do not add Switcher busy-state checks, overlap guards, queues, preemption, snapshots, restart machinery, or a defensive scheduler.
 - Standalone Mode should also avoid using Switcher busy state as a decision input. Its self-running cadence can decide when to start a move while the Switcher owns completion internally.
 - Hold and Show Now are explicit override commands. They may cancel or replace mechanical execution because they are user/developer override actions, not ordinary musical scheduling.
 - Preserve the existing reflection-based Effect/Transition catalog. Do not introduce registries, ScriptableObject routing layers, or service-style orchestration.
-- Keep Transition Settings validation at the authoring/settings seam. The runtime should assume Repertoire timing is valid.
+- Keep Transition Settings validation at the authoring/settings seam, and apply it when values are intentionally modified rather than when an existing asset is merely loaded. The runtime should assume Repertoire timing is valid.
 - Prefer replacing the shallow Director/Switcher interaction over layering new wrappers or flags around the old shape.
 
 ## Testing Decisions
@@ -99,7 +99,7 @@ The decision matrix, Phase Anchor, Phrase Window plan, Selected Phase Boundary c
 - Existing Transition Settings and Transition Repertoire tests remain the right seam for Runway/Tail validity. Do not move those validation responsibilities into Director tests.
 - Avoid tests that merely assert the absence or presence of a particular field/property. The behavior to prove is that no Director decision or staging output changes based on active mechanical rendering.
 - Tests should use project glossary terms: Director, Mechanical Switcher, A-to-B Transition, Runway, Tail, Impact Point, Selected Phase Boundary, Phrase Window, Phase Boundary, cadence, Next Effect, and Next Transition.
-- Run focused Director synced-tail tests and Director staging tests first, then Unity compile, then the broader Unity test suite.
+- Run focused Director synced-tail tests, Director staging tests, Switcher tests, and Transition timing/settings tests first, then Unity compile, then the broader Unity test suite.
 
 ## Out of Scope
 
@@ -110,13 +110,14 @@ The decision matrix, Phase Anchor, Phrase Window plan, Selected Phase Boundary c
 - Replacing reflection discovery for Effects, Transitions, Mixers, or Blenders.
 - Adding prefab-heavy Unity composition, dependency-injection frameworks, event buses, or service layers.
 - Retuning visual transition algorithms except where a test fixture needs a Transition with a known Repertoire.
-- Weakening the 16-beat cadence or 12-beat maximum Transition Duration contract.
+- Weakening the 16-beat cadence or `Runway >= 0`, `Tail >= 0`, `Runway + Tail <= 12` Transition Duration contract.
 - Making the Director compensate for invalid Transition Settings.
 - Heavy Editor UI testing. Editor/tooling changes should be covered through extracted logic or runtime status where practical.
 
 ## Further Notes
 
-- The design intent is simpler than the current code: tell the Switcher to start a Transition at the right time and let it handle the rest.
-- The current dirty prototype removed some public switching-state usage but still left the Director owning transition plans/progress/completion. Treat that as an intermediate finding, not the final design.
-- The Switcher can keep private state internally. The problem is exposing that state as a scheduling concept or requiring the Director to manage it.
-- The previous tailed-transition work remains useful, especially the Phrase Window / Selected Phase Boundary model and authoring-side Transition Duration validation. This deepening round should build on that model, not reopen phase/phrase vocabulary.
+- Implemented on `fix/transition-tail-phase-anchor`: the Director fires `StartTransition` and immediately returns to musical planning; the Switcher owns rendering, progress, Tail completion, B promotion, and last-command-wins replacement.
+- Switcher status remains available for inspector/HUD observability, but Director/runtime decision modules do not use it as a busy/progress scheduling input.
+- Transition timing validation is limited to the real authoring contract: `Runway >= 0`, `Tail >= 0`, and `Runway + Tail <= 12`. Zero/zero is a supported hard cut.
+- Existing Transition Settings assets are not silently constrained on load; constraint/repair happens when values are intentionally modified through editor utility paths.
+- The previous tailed-transition work remains useful, especially the Phrase Window / Selected Phase Boundary model and authoring-side Transition Duration validation. This deepening round built on that model rather than reopening phase/phrase vocabulary.

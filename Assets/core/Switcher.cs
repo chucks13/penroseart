@@ -16,7 +16,8 @@ public readonly struct SwitcherStatus
         string.Empty,
         -1,
         string.Empty,
-        string.Empty);
+        string.Empty,
+        0f);
 
     public readonly bool Ready;
     public readonly int CurrentEffectIndex;
@@ -28,6 +29,7 @@ public readonly struct SwitcherStatus
     public readonly int CurrentTransitionIndex;
     public readonly string CurrentTransitionName;
     public readonly string StageName;
+    public readonly float TransitionProgress;
 
     public SwitcherStatus(
         bool ready,
@@ -39,7 +41,8 @@ public readonly struct SwitcherStatus
         string targetEffectName,
         int currentTransitionIndex,
         string currentTransitionName,
-        string stageName)
+        string stageName,
+        float transitionProgress)
     {
         Ready = ready;
         CurrentEffectIndex = currentEffectIndex;
@@ -51,13 +54,64 @@ public readonly struct SwitcherStatus
         CurrentTransitionIndex = currentTransitionIndex;
         CurrentTransitionName = currentTransitionName;
         StageName = stageName;
+        TransitionProgress = Mathf.Clamp01(transitionProgress);
+    }
+}
+
+/// <summary>
+/// Timing context for a started A-to-B Transition.
+/// </summary>
+public readonly struct TransitionStartTiming
+{
+    private readonly bool useBeatDuration;
+    private readonly float secondsPerBeat;
+
+    private TransitionStartTiming(float startTime, bool useBeatDuration, float secondsPerBeat)
+    {
+        if (useBeatDuration && secondsPerBeat <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(secondsPerBeat), secondsPerBeat, "Seconds per beat must be positive.");
+        }
+
+        StartTime = startTime;
+        this.useBeatDuration = useBeatDuration;
+        this.secondsPerBeat = secondsPerBeat;
+    }
+
+    /// <summary>Unity time when the transition should be considered started.</summary>
+    public float StartTime { get; }
+
+    /// <summary>Creates timing for beat-denominated Synced Mode execution.</summary>
+    public static TransitionStartTiming FromBeatClock(float startTime, float secondsPerBeat)
+    {
+        return new TransitionStartTiming(startTime, true, secondsPerBeat);
+    }
+
+    /// <summary>Creates timing for Standalone Mode execution using the transition's default duration.</summary>
+    public static TransitionStartTiming FromDefaultDuration(float startTime)
+    {
+        return new TransitionStartTiming(startTime, false, 0f);
+    }
+
+    /// <summary>Resolves the active execution duration from the selected transition's repertoire.</summary>
+    public float DurationSeconds(TransitionRepertoire repertoire)
+    {
+        var durationSeconds = useBeatDuration
+            ? repertoire.DurationBeats * secondsPerBeat
+            : repertoire.DefaultDurationSeconds;
+        if (durationSeconds < 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(repertoire), durationSeconds, "Transition duration cannot be negative.");
+        }
+
+        return durationSeconds;
     }
 }
 
 /// <summary>
 /// Mechanical stage switcher for Penrose performers.
-/// The Switcher owns only the in-flight effect/transition state and renders it;
-/// the Director decides what to start and when to complete it.
+/// The Switcher owns in-flight effect/transition execution, renders progress, and promotes B on completion;
+/// the Director decides only what to start and when to start it.
 /// </summary>
 [Serializable]
 public sealed class Switcher
@@ -69,12 +123,15 @@ public sealed class Switcher
     private int currentEffectIndex = -1;
     private int currentTransitionIndex = -1;
     private bool isTransitioning;
+    private float transitionStartTime;
+    private float transitionDurationSeconds = 1f;
+    private float transitionProgress;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
 
-    /// <summary>Active transition index while transitioning; otherwise the next/last transition index.</summary>
-    public int CurrentTransitionIndex => currentTransitionIndex;
+    /// <summary>Active transition index while a transition owns the frame; otherwise -1.</summary>
+    public int CurrentTransitionIndex => isTransitioning ? currentTransitionIndex : -1;
 
     /// <summary>The destination effect while transitioning, otherwise the currently active effect.</summary>
     public int TransitionTargetEffectIndex => isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
@@ -87,7 +144,12 @@ public sealed class Switcher
 
     public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
     {
-        this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
+        if (controller == null)
+        {
+            throw new ArgumentNullException(nameof(controller));
+        }
+
+        this.controller = controller;
         this.effects = effects ?? throw new ArgumentNullException(nameof(effects));
         this.transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
     }
@@ -103,6 +165,7 @@ public sealed class Switcher
         currentEffectIndex = effectIndex;
         currentTransitionIndex = transitionIndex;
         isTransitioning = false;
+        transitionProgress = 0f;
         Trace($"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
@@ -113,23 +176,26 @@ public sealed class Switcher
 
         EffectBase.APalette.Change();
         isTransitioning = false;
+        transitionProgress = 0f;
         currentEffectIndex = effectIndex;
         StartEffect(effectIndex);
         Trace($"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
     }
 
     /// <summary>
-    /// Starts a transition from the current effect to the target effect.
-    /// Progress and completion remain owned by the Director.
+    /// Starts or replaces a transition from the current stage destination to the target effect.
+    /// The Switcher owns progress and completion after this call; if another transition is still
+    /// rendering, the previous destination becomes the source for this new last-command-wins move.
     /// </summary>
-    public void StartTransition(int targetEffectIndex, int transitionIndex)
+    public void StartTransition(int targetEffectIndex, int transitionIndex, TransitionStartTiming timing)
     {
-        ValidateEffectIndex(currentEffectIndex);
+        var sourceEffectIndex = isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
+        ValidateEffectIndex(sourceEffectIndex);
         ValidateEffectIndex(targetEffectIndex);
         ValidateTransitionIndex(transitionIndex);
 
-        var sourceEffectIndex = currentEffectIndex;
         var transition = transitions[transitionIndex];
+        var repertoire = transition.Repertoire;
         transition.RandomizeTime();
         transition.V = 0f;
         transition.A = sourceEffectIndex;
@@ -141,33 +207,32 @@ public sealed class Switcher
 
         currentTransitionIndex = transitionIndex;
         currentEffectIndex = -1;
+        transitionStartTime = timing.StartTime;
+        transitionDurationSeconds = timing.DurationSeconds(repertoire);
+        transitionProgress = ProgressAt(Time.time);
         isTransitioning = true;
-        Trace($"SWITCHER_START transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B}");
-    }
-
-    /// <summary>Promotes the transition destination to the active effect.</summary>
-    public void CompleteTransition()
-    {
-        if (!isTransitioning)
+        var message = $"transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B} durationSeconds={transitionDurationSeconds:0.###} progress={transitionProgress:0.###}";
+        Trace($"SWITCHER_START {message}");
+        if (transitionDurationSeconds == 0f)
         {
-            throw new InvalidOperationException("Cannot complete a transition when the Switcher is not transitioning.");
+            CompleteTransition();
         }
-
-        var transition = transitions[currentTransitionIndex];
-        var completedTransitionIndex = currentTransitionIndex;
-        var sourceEffectIndex = transition.A;
-        var targetEffectIndex = transition.B;
-        currentEffectIndex = targetEffectIndex;
-        isTransitioning = false;
-        Trace($"SWITCHER_COMPLETE transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}");
     }
 
     /// <summary>
-    /// Renders the active effect or transition into a cloned 900-tile buffer.
-    /// The Director supplies transition progress because it owns timing.
+    /// Renders the active effect or transition at the supplied Unity time into a cloned 900-tile buffer.
     /// </summary>
-    public Color[] Render(float transitionProgress, out string debugText)
+    public Color[] RenderAtTime(float nowSeconds, out string debugText)
     {
+        if (isTransitioning)
+        {
+            transitionProgress = ProgressAt(nowSeconds);
+            if (transitionProgress >= 1f)
+            {
+                CompleteTransition();
+            }
+        }
+
         if (isTransitioning)
         {
             var transition = transitions[currentTransitionIndex];
@@ -196,6 +261,26 @@ public sealed class Switcher
         return (Color[])effect.buffer.Clone();
     }
 
+    private void CompleteTransition()
+    {
+        var transition = transitions[currentTransitionIndex];
+        var completedTransitionIndex = currentTransitionIndex;
+        var sourceEffectIndex = transition.A;
+        var targetEffectIndex = transition.B;
+        currentEffectIndex = targetEffectIndex;
+        isTransitioning = false;
+        transitionProgress = 0f;
+        var message = $"transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}";
+        Trace($"SWITCHER_COMPLETE {message}");
+    }
+
+    private float ProgressAt(float now)
+    {
+        return transitionDurationSeconds == 0f
+            ? 1f
+            : Mathf.Clamp01((now - transitionStartTime) / transitionDurationSeconds);
+    }
+
     private SwitcherStatus BuildStatus()
     {
         if (effects == null || transitions == null)
@@ -218,7 +303,8 @@ public sealed class Switcher
                 targetName,
                 currentTransitionIndex,
                 transition.Name,
-                transition.Name);
+                transition.Name,
+                transitionProgress);
         }
 
         var currentName = EffectName(currentEffectIndex);
@@ -230,9 +316,10 @@ public sealed class Switcher
             currentName,
             currentEffectIndex,
             currentName,
-            currentTransitionIndex,
-            TransitionName(currentTransitionIndex),
-            currentName);
+            -1,
+            string.Empty,
+            currentName,
+            0f);
     }
 
     private string EffectName(int effectIndex)

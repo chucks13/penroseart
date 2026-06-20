@@ -58,6 +58,23 @@ public sealed class TransitionSettingsTests
     }
 
     [Test]
+    public void EnsureAssetReturnsExistingAssetWithoutConstrainingDuration()
+    {
+        var defaults = new TestSettingsTransition().CodeDefaults;
+        var asset = TransitionSettingsAssetUtility.EnsureAsset(typeof(TestSettingsTransition), defaults, TempAssetFolder);
+        asset.Settings.RunwayBeats = 15;
+        asset.Settings.TailBeats = 3;
+        EditorUtility.SetDirty(asset);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+
+        var existing = TransitionSettingsAssetUtility.EnsureAsset(typeof(TestSettingsTransition), defaults, TempAssetFolder);
+
+        Assert.That(existing.Settings.RunwayBeats, Is.EqualTo(15));
+        Assert.That(existing.Settings.TailBeats, Is.EqualTo(3));
+    }
+
+    [Test]
     public void RestoreDefaultsCopiesCompleteCodeDefaultsBackIntoSettingsAsset()
     {
         var defaults = new DirectionalWipe().CodeDefaults;
@@ -95,19 +112,37 @@ public sealed class TransitionSettingsTests
     }
 
     [Test]
-    public void ToRepertoireAcceptsRunwayAndTailAtOrBelowTwelveBeats()
+    public void ToRepertoireAcceptsRunwayAndTailAtTwelveBeats()
     {
         var settings = new TransitionSettings
         {
-            RunwayBeats = 5,
-            TailBeats = 1,
+            RunwayBeats = 10,
+            TailBeats = 2,
         };
 
         var repertoire = settings.ToRepertoire();
 
-        Assert.That(repertoire.RunwayBeats, Is.EqualTo(5));
-        Assert.That(repertoire.TailBeats, Is.EqualTo(1));
-        Assert.That(repertoire.DurationBeats, Is.EqualTo(6));
+        Assert.That(repertoire.RunwayBeats, Is.EqualTo(10));
+        Assert.That(repertoire.TailBeats, Is.EqualTo(2));
+        Assert.That(repertoire.DurationBeats, Is.EqualTo(12));
+    }
+
+    [Test]
+    public void ToRepertoireAcceptsZeroRunwayAndZeroTailHardCut()
+    {
+        var settings = new TransitionSettings
+        {
+            RunwayBeats = 0,
+            TailBeats = 0,
+            DefaultDurationSeconds = 0f,
+        };
+
+        var repertoire = settings.ToRepertoire();
+
+        Assert.That(repertoire.RunwayBeats, Is.EqualTo(0));
+        Assert.That(repertoire.TailBeats, Is.EqualTo(0));
+        Assert.That(repertoire.DurationBeats, Is.EqualTo(0));
+        Assert.That(repertoire.DefaultDurationSeconds, Is.EqualTo(0f));
     }
 
     [Test]
@@ -120,6 +155,41 @@ public sealed class TransitionSettingsTests
         };
 
         Assert.That(() => settings.ToRepertoire(), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void ToRepertoireRejectsNegativeRunwayOrTail()
+    {
+        var negativeRunway = new TransitionSettings
+        {
+            RunwayBeats = -1,
+            TailBeats = 0,
+        };
+        var negativeTail = new TransitionSettings
+        {
+            RunwayBeats = 0,
+            TailBeats = -1,
+        };
+
+        Assert.That(() => negativeRunway.ToRepertoire(), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        Assert.That(() => negativeTail.ToRepertoire(), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void EditorConstrainDurationClampsNegativeRunwayAndTailToZero()
+    {
+        var settings = new TransitionSettings
+        {
+            RunwayBeats = -1,
+            TailBeats = -2,
+        };
+
+        var changed = TransitionSettingsAssetUtility.ConstrainDuration(settings);
+
+        Assert.That(changed, Is.True);
+        Assert.That(settings.RunwayBeats, Is.EqualTo(0));
+        Assert.That(settings.TailBeats, Is.EqualTo(0));
+        Assert.That(settings.DurationBeats, Is.EqualTo(0));
     }
 
     [Test]

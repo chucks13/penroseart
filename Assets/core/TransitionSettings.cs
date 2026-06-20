@@ -10,7 +10,7 @@ public sealed class TransitionSettings
 {
     [Header("Transition Repertoire")]
     public Repertoire Tags = Repertoire.None;
-    [Min(1)] public int RunwayBeats = 4;
+    [Min(0)] public int RunwayBeats = 4;
     [Min(0)] public int TailBeats;
     public TransitionShape Shape = TransitionShape.Blend;
     public TransitionIntensity Intensity = TransitionIntensity.Subtle;
@@ -44,7 +44,7 @@ public sealed class TransitionSettings
     /// <summary>Returns whether the supplied Runway and Tail satisfy the duration contract.</summary>
     public static bool IsValidDuration(int runwayBeats, int tailBeats)
     {
-        return runwayBeats >= 1
+        return runwayBeats >= 0
             && tailBeats >= 0
             && runwayBeats + tailBeats <= TransitionRepertoire.MaxDurationBeats;
     }
@@ -53,7 +53,7 @@ public sealed class TransitionSettings
     public static string DurationValidationMessage(int runwayBeats, int tailBeats)
     {
         var durationBeats = runwayBeats + tailBeats;
-        return $"Transition Duration is Runway + Tail and must be at most {TransitionRepertoire.MaxDurationBeats} beats; current duration is {durationBeats} beats.";
+        return $"Runway and Tail must be non-negative and their sum must be at most {TransitionRepertoire.MaxDurationBeats} beats; current duration is {durationBeats} beats.";
     }
 
     /// <summary>Throws when the saved Runway and Tail cannot become a Director-facing repertoire.</summary>
