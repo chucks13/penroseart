@@ -8,7 +8,6 @@ public readonly struct SwitcherStatus
 {
     public static SwitcherStatus NotReady { get; } = new SwitcherStatus(
         false,
-        false,
         -1,
         string.Empty,
         -1,
@@ -20,7 +19,6 @@ public readonly struct SwitcherStatus
         string.Empty);
 
     public readonly bool Ready;
-    public readonly bool IsTransitioning;
     public readonly int CurrentEffectIndex;
     public readonly string CurrentEffectName;
     public readonly int SourceEffectIndex;
@@ -33,7 +31,6 @@ public readonly struct SwitcherStatus
 
     public SwitcherStatus(
         bool ready,
-        bool isTransitioning,
         int currentEffectIndex,
         string currentEffectName,
         int sourceEffectIndex,
@@ -45,7 +42,6 @@ public readonly struct SwitcherStatus
         string stageName)
     {
         Ready = ready;
-        IsTransitioning = isTransitioning;
         CurrentEffectIndex = currentEffectIndex;
         CurrentEffectName = currentEffectName;
         SourceEffectIndex = sourceEffectIndex;
@@ -73,9 +69,6 @@ public sealed class Switcher
     private int currentEffectIndex = -1;
     private int currentTransitionIndex = -1;
     private bool isTransitioning;
-
-    /// <summary>Whether a transition is currently being rendered instead of a single effect.</summary>
-    public bool IsTransitioning => isTransitioning;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
@@ -217,7 +210,6 @@ public sealed class Switcher
             var targetName = EffectName(transition.B);
             return new SwitcherStatus(
                 true,
-                true,
                 -1,
                 string.Empty,
                 transition.A,
@@ -232,7 +224,6 @@ public sealed class Switcher
         var currentName = EffectName(currentEffectIndex);
         return new SwitcherStatus(
             currentEffectIndex >= 0,
-            false,
             currentEffectIndex,
             currentName,
             currentEffectIndex,

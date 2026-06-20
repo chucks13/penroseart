@@ -77,11 +77,11 @@ public sealed class DirectorStagingTests
 
         director.OnTimerFinished();
 
-        Assert.That(switcher.IsTransitioning, Is.True);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(2));
-        Assert.That(director.Status.NextEffectIndex, Is.EqualTo(2));
-        Assert.That(director.Status.NextTransitionIndex, Is.EqualTo(2));
+        Assert.That(director.Status.NextEffectIndex, Is.Not.EqualTo(2));
+        Assert.That(director.Status.NextTransitionIndex, Is.EqualTo(1));
     }
 
     [Test]
@@ -93,7 +93,7 @@ public sealed class DirectorStagingTests
         director.OnTimerFinished();
         director.OnTimerFinished();
 
-        Assert.That(switcher.IsTransitioning, Is.False);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(switcher.CurrentEffectIndex, Is.EqualTo(2));
         Assert.That(director.Status.NextEffectIndex, Is.Not.EqualTo(2));
         Assert.That(director.Status.NextTransitionIndex, Is.EqualTo(1));
@@ -108,7 +108,7 @@ public sealed class DirectorStagingTests
         director.OnTimerFinished();
         director.OnTimerFinished();
 
-        Assert.That(switcher.IsTransitioning, Is.False);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(director.Status.HoldSelectedTransition, Is.True);
         Assert.That(director.Status.NextTransitionIndex, Is.EqualTo(2));
     }
@@ -122,7 +122,7 @@ public sealed class DirectorStagingTests
         director.OnTimerFinished();
         director.OnTimerFinished();
 
-        Assert.That(switcher.IsTransitioning, Is.False);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(director.Status.HoldSelectedEffect, Is.True);
         Assert.That(director.Status.NextEffectIndex, Is.EqualTo(2));
     }

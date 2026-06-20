@@ -22,7 +22,7 @@ public sealed class DirectorSyncedTailTests
         controller.beatManager = new BeatManager();
         controller.beatManager.SetLiveBeatSource(true);
         controller.effects = new EffectBase[] { new TestEffect(), new TestEffect(), new TestEffect() };
-        controller.transitions = new TransitionBase[] { new TailedTransition() };
+        controller.transitions = new TransitionBase[] { new TailedTransition(), new TailedTransition() };
         foreach (var transition in controller.transitions)
         {
             transition.Init();
@@ -60,13 +60,13 @@ public sealed class DirectorSyncedTailTests
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
-        Assert.That(switcher.IsTransitioning, Is.True, "The setup should cue a tailed transition toward beat 609.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
 
         ForceTransitionCompleteAtImpact(impactBeat: 609);
         SetTrackPhaseBeat(613, phaseActive: 0, beatsToPhraseBoundary: 10, phraseLengthBeats: 32);
         director.Tick(0f);
 
-        Assert.That(switcher.IsTransitioning, Is.False, "The tailed transition should have completed.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0), "The tailed transition should have completed.");
         Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(623));
     }
 
@@ -76,7 +76,7 @@ public sealed class DirectorSyncedTailTests
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
-        Assert.That(switcher.IsTransitioning, Is.True, "The setup should cue a tailed transition toward beat 609.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
         Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
     }
@@ -90,12 +90,36 @@ public sealed class DirectorSyncedTailTests
 
         SetTrackPhaseBeat(621, phaseActive: 0, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
-        Assert.That(switcher.IsTransitioning, Is.False, "The first tailed transition should complete before the next cue is considered.");
 
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The Director should cue the next transition as soon as cadence allows after Tail completion.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(625));
+    }
+
+    [Test]
+    public void DecisionMatrixFollowsSelectedBoundaryWhileTailedTransitionIsStillRendering()
+    {
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
-        Assert.That(switcher.IsTransitioning, Is.True, "The Director should cue the next transition once cadence allows after Tail completion.");
-        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(625));
+        SetTrackPhaseBeat(610, phaseActive: 0, beatsToPhraseBoundary: 15, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The previous transition Tail is still mechanically rendering in this test.");
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(625));
+        Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
+    }
+
+    [Test]
+    public void StartingTailedTransitionImmediatelyStagesFollowingMove()
+    {
+        director.SetNextEffect(1);
+
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(director.Status.NextEffectIndex, Is.Not.EqualTo(1), "The consumed target should not remain staged until Tail completion.");
     }
 
     [Test]

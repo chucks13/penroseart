@@ -1236,7 +1236,7 @@ public class Controller : Singleton<Controller>
             return "Starting";
         }
 
-        if (status.IsTransitioning)
+        if (status.CurrentEffectIndex < 0)
         {
             return $"{status.SourceEffectName} → {status.TargetEffectName} {Mathf.RoundToInt(Mathf.Clamp01(progress) * 100f)}%";
         }
@@ -1282,8 +1282,6 @@ public class Controller : Singleton<Controller>
                 return "waiting cadence";
             case DirectorDecision.CueingTransition:
                 return "cueing";
-            case DirectorDecision.Transitioning:
-                return "transitioning";
             case DirectorDecision.Hold:
                 return "hold";
             default:
@@ -1528,7 +1526,7 @@ public class Controller : Singleton<Controller>
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            int target = switcher.IsTransitioning ? switcher.TransitionTargetEffectIndex : switcher.CurrentEffectIndex;
+            int target = switcher.Status.TargetEffectIndex;
             JumpToEffect(target, effectTime);
             Debug.Log($"[Controller] Restarted effect: {SwitcherStatus.StageName}");
         }

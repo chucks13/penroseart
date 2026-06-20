@@ -226,15 +226,16 @@ public sealed class PenroseTuningWindow : EditorWindow
             EditorGUILayout.LabelField("Director Next Transition", FormatCatalogChoice(directorStatus.NextTransitionIndex, directorStatus.NextTransitionName));
             EditorGUILayout.LabelField("Director Next Effect", FormatCatalogChoice(directorStatus.NextEffectIndex, directorStatus.NextEffectName));
 
+            var switcherShowingTransition = switcherStatus.Ready && switcherStatus.CurrentEffectIndex < 0;
             var activeTransition = !switcherStatus.Ready
                 ? "Not Ready"
-                : switcherStatus.IsTransitioning
+                : switcherShowingTransition
                     ? FormatCatalogChoice(switcherStatus.CurrentTransitionIndex, switcherStatus.CurrentTransitionName)
                     : "None — Mechanical Switcher is showing an Effect";
             EditorGUILayout.LabelField("Mechanical Switcher Active Transition", activeTransition);
             EditorGUILayout.LabelField("Mechanical Switcher Stage", string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
             EditorGUILayout.LabelField("Current Effect", FormatCatalogChoice(switcherStatus.CurrentEffectIndex, switcherStatus.CurrentEffectName));
-            if (switcherStatus.IsTransitioning)
+            if (switcherShowingTransition)
             {
                 EditorGUILayout.LabelField("Transition Target Effect", FormatCatalogChoice(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
             }
