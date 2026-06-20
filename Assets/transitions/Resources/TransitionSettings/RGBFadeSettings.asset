@@ -15,8 +15,8 @@ MonoBehaviour:
   transitionTypeName: RGBFade
   settings:
     Tags: 4
-    RunwayBeats: 4
-    TailBeats: 4
+    RunwayBeats: 5
+    TailBeats: 1
     Shape: 1
     Intensity: 1
     DefaultDurationSeconds: 4

@@ -60,7 +60,7 @@ public sealed class TransitionRepertoireTests
     {
         AssertRepertoire(new Fade().Repertoire, Repertoire.None, 4, 0, TransitionShape.Blend, TransitionIntensity.Subtle,
             defaultDurationSeconds: 4f);
-        AssertRepertoire(new RGBFade().Repertoire, Repertoire.RespondsToEnergy, 4, 4, TransitionShape.ChannelBlend, TransitionIntensity.Medium,
+        AssertRepertoire(new RGBFade().Repertoire, Repertoire.RespondsToEnergy, 5, 1, TransitionShape.ChannelBlend, TransitionIntensity.Medium,
             defaultDurationSeconds: 4f);
         AssertRepertoire(new DirectionalWipe().Repertoire, Repertoire.RespondsToEnergy, 4, 4, TransitionShape.DirectionalWipe, TransitionIntensity.Medium,
             defaultDurationSeconds: 4f);
