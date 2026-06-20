@@ -23,5 +23,10 @@
 .vs/
 *.dotsettings
 
-# Transient agent/coordination scratch (issues, PRDs, runbooks)
-/.scratch/
+# Agent scratch: ignore transient files, but keep curated local issue tracker markdown.
+/.scratch/**
+!/.scratch/
+!/.scratch/*/
+!/.scratch/*/PRD.md
+!/.scratch/*/issues/
+!/.scratch/*/issues/*.md
