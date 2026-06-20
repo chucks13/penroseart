@@ -60,6 +60,19 @@ public sealed class DirectorStagingTests
     }
 
     [Test]
+    public void ControllerDirectorStatusReportsNotReadyForSerializedStaleDirector()
+    {
+        DirectorStatus status = default;
+        typeof(Director)
+            .GetField("controller", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(director, null);
+
+        Assert.That(() => status = controller.DirectorStatus, Throws.Nothing);
+        Assert.That(status.Mode, Is.EqualTo(DirectorMode.NotReady));
+        Assert.That(status.Decision, Is.EqualTo(DirectorDecision.NotReady));
+    }
+
+    [Test]
     public void ConstructorStagesNextEffectAndNextTransition()
     {
         var status = director.Status;

@@ -157,10 +157,20 @@ public sealed class Director
     public int PhaseAnchorLandingBeat => phaseAnchorLandingBeat;
 
     /// <summary>Whether live OSC data is currently driving sequencing.</summary>
-    public bool IsSyncedMode => controller.beatManager.IsLiveSource;
+    public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsLiveSource;
 
     /// <summary>Current read-only sequencing snapshot for runtime HUDs and inspector diagnostics.</summary>
-    public DirectorStatus Status => BuildStatus();
+    public DirectorStatus Status => IsReady ? BuildStatus() : DirectorStatus.NotReady;
+
+    private bool IsReady =>
+        controller != null
+        && controller.beatManager != null
+        && controller.effects != null
+        && controller.transitions != null
+        && switcher != null
+        && standaloneTimer != null
+        && effectDeck != null
+        && transitionDeck != null;
 
     /// <summary>Index of the Effect staged for the next A-to-B move.</summary>
     public int NextEffectIndex => nextEffectIndex;
