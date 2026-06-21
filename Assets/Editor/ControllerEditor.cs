@@ -12,10 +12,14 @@ using UnityEngine;
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
 {
-    /// <summary>Draws live Director/Switcher state before the normal serialized Controller fields.</summary>
+    private static bool showRuntimeObservability = false;
+
+    /// <summary>Draws live HUD/debug state first, then optional Director/Switcher observability before serialized fields.</summary>
     public override void OnInspectorGUI()
     {
         var controller = (Controller)target;
+        DrawRuntimeDebug(controller);
+        EditorGUILayout.Space(6f);
         DrawRuntimeStatus(controller);
         EditorGUILayout.Space(8f);
         DrawDefaultInspector();
@@ -27,14 +31,27 @@ public sealed class ControllerEditor : Editor
         return Application.isPlaying;
     }
 
+    private static void DrawRuntimeDebug(Controller controller)
+    {
+        EditorGUILayout.LabelField("Runtime Debug", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        DrawHudLines(controller);
+        EditorGUILayout.EndVertical();
+    }
+
     private static void DrawRuntimeStatus(Controller controller)
     {
-        EditorGUILayout.LabelField("Runtime Observability", EditorStyles.boldLabel);
+        showRuntimeObservability = EditorGUILayout.Foldout(showRuntimeObservability, "Runtime Observability", true);
+        if (!showRuntimeObservability)
+        {
+            return;
+        }
+
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         if (!Application.isPlaying)
         {
-            EditorGUILayout.HelpBox("Enter Play Mode to see live Director, Phase Lock, Switcher, and HUD state.", MessageType.Info);
+            EditorGUILayout.HelpBox("Enter Play Mode to see live Director, Phase Lock, and Switcher state.", MessageType.Info);
             EditorGUILayout.EndVertical();
             return;
         }
@@ -42,8 +59,6 @@ public sealed class ControllerEditor : Editor
         DrawDirectorStage(controller.DirectorStatus, controller.SwitcherStatus);
         EditorGUILayout.Space(6f);
         DrawPhaseLock(controller.DirectorStatus);
-        EditorGUILayout.Space(6f);
-        DrawHudLines(controller);
 
         EditorGUILayout.EndVertical();
     }
@@ -96,7 +111,7 @@ public sealed class ControllerEditor : Editor
         {
             EditorGUILayout.TextArea(string.IsNullOrWhiteSpace(controller.LastRenderDebugText)
                 ? "—"
-                : controller.LastRenderDebugText, GUILayout.MinHeight(42f));
+                : controller.LastRenderDebugText, GUILayout.MinHeight(72f));
         }
     }
 
