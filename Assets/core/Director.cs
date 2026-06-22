@@ -396,11 +396,6 @@ public sealed class Director
         }
 
         RefreshTimingFrame();
-        if (timingFrame.BeatRewoundToNewPass)
-        {
-            lastCueBeat = -1;
-            lastChangeBeat = int.MinValue;
-        }
 
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
@@ -409,13 +404,16 @@ public sealed class Director
 
     private void RefreshTimingFrame()
     {
-        var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        var passLocalState = new PassLocalTimingState(
+            lastCueBeat >= 0 ? lastCueBeat : (int?)null,
+            lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat);
         var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
         var previousConfidence = timingFrame.PhaseAnchorConfidence;
         timingFrame = onAirTiming.ReadFrame(
             OnAirTimingInput.From(controller.beatManager),
-            previousSelectedPhaseBoundary,
+            passLocalState,
             MinimumChangeCadenceBeats);
+        ApplyPassLocalTimingState(timingFrame.PassLocalState);
 
         if (!timingFrame.HasPhaseAnchor)
         {
@@ -438,6 +436,12 @@ public sealed class Director
         }
     }
 
+    private void ApplyPassLocalTimingState(PassLocalTimingState passLocalState)
+    {
+        lastCueBeat = passLocalState.LastCueBeat ?? -1;
+        lastChangeBeat = passLocalState.PreviousSelectedPhaseBoundary ?? int.MinValue;
+    }
+
     private void TryStartSyncedCue(TimingFrame frame)
     {
         if (!frame.HasPhaseAnchor)
@@ -451,14 +455,12 @@ public sealed class Director
         ValidateTransitionIndex(transitionIndex);
         ValidateEffectIndex(targetEffectIndex);
         var repertoire = controller.transitions[transitionIndex].Repertoire;
-        var lastCue = lastCueBeat >= 0 ? (int?)lastCueBeat : null;
-        var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
         var cueDecision = SyncedCueDecision.Evaluate(
             beat,
             frame.SelectedPhaseBoundary,
             repertoire,
-            lastCue,
-            previousSelectedPhaseBoundary,
+            frame.PassLocalState.LastCueBeat,
+            frame.PassLocalState.PreviousSelectedPhaseBoundary,
             MinimumChangeCadenceBeats);
 
         if (cueDecision.Kind == SyncedCueDecisionKind.Wait)

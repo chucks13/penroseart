@@ -150,6 +150,42 @@ public sealed class DirectorSyncedTailTests
         }
     }
 
+    [Test]
+    public void SameWindowBeatRewindLetsDirectorCueSameSelectedBoundaryAgain()
+    {
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
+            director.SetNextEffect(1);
+            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
+            director.Tick(0f);
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The setup should cue the selected boundary on the first pass.");
+            Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
+
+            SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+            director.Tick(0f);
+            director.SetNextEffect(2);
+
+            SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SelectedPhaseBoundary));
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The rewound loop pass should be allowed to cue the same selected boundary again.");
+            Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
+    }
+
     private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
     {
         controller.beatManager.beatData.bpm = 120f;

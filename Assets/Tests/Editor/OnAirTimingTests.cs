@@ -10,7 +10,7 @@ public sealed class OnAirTimingTests
 
         var frame = timing.ReadFrame(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 21, phraseLengthBeats: 32),
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.HasPhaseAnchor, Is.True);
@@ -24,7 +24,7 @@ public sealed class OnAirTimingTests
 
         frame = timing.ReadFrame(
             TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(609));
@@ -38,25 +38,116 @@ public sealed class OnAirTimingTests
 
         var frame = timing.ReadFrame(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
         Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(593));
 
         frame = timing.ReadFrame(
             TrackPhaseInput(beat: 620, beatsToPhraseBoundary: 21, phraseLengthBeats: 64),
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
         Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(641));
         Assert.That(frame.BeatRewoundToNewPass, Is.False);
 
         frame = timing.ReadFrame(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.BeatRewoundToNewPass, Is.True);
         Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(593));
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SelectedPhaseBoundary));
+    }
+
+    [Test]
+    public void SamePhraseWindowBeatRewindClearsPassLocalStateThatWouldBlockLoopPass()
+    {
+        var timing = new OnAirTiming(SelectFirstInteriorBoundary());
+
+        timing.ReadFrame(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+        timing.ReadFrame(
+            TrackPhaseInput(beat: 620, beatsToPhraseBoundary: 21, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+
+        var frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 589, beatsToPhraseBoundary: 52, phraseLengthBeats: 64),
+            new PassLocalTimingState(lastCueBeat: 589, previousSelectedPhaseBoundary: 593),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.BeatRewoundToNewPass, Is.True);
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(593));
+        Assert.That(frame.ClearedPassLocalCueState, Is.True);
+        Assert.That(frame.ClearedPassLocalCadenceState, Is.True);
+        Assert.That(frame.PassLocalState.LastCueBeat, Is.Null);
+        Assert.That(frame.PassLocalState.PreviousSelectedPhaseBoundary, Is.Null);
+
+        var cueDecision = SyncedCueDecision.Evaluate(
+            frame.CurrentBeat,
+            frame.SelectedPhaseBoundary,
+            FourBeatRunway(),
+            frame.PassLocalState.LastCueBeat,
+            frame.PassLocalState.PreviousSelectedPhaseBoundary,
+            minimumChangeCadenceBeats: 16);
+        Assert.That(cueDecision.Kind, Is.EqualTo(SyncedCueDecisionKind.Cue));
+    }
+
+    [Test]
+    public void SamePhraseWindowBeatRewindKeepsPassLocalStateThatCannotBlockCurrentPass()
+    {
+        var timing = new OnAirTiming(SelectFirstInteriorBoundary());
+
+        timing.ReadFrame(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+        timing.ReadFrame(
+            TrackPhaseInput(beat: 620, beatsToPhraseBoundary: 21, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+
+        var frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 589, beatsToPhraseBoundary: 52, phraseLengthBeats: 64),
+            new PassLocalTimingState(lastCueBeat: 580, previousSelectedPhaseBoundary: 577),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.BeatRewoundToNewPass, Is.True);
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(593));
+        Assert.That(frame.ClearedPassLocalState, Is.False);
+        Assert.That(frame.PassLocalState.LastCueBeat, Is.EqualTo(580));
+        Assert.That(frame.PassLocalState.PreviousSelectedPhaseBoundary, Is.EqualTo(577));
+    }
+
+    [Test]
+    public void SmallBeatBackstepIsJitterAndDoesNotResetSelectedBoundaryCursorOrPassLocalState()
+    {
+        var timing = new OnAirTiming(SelectFirstInteriorBoundary());
+
+        var frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(593));
+
+        frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 47, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(641));
+
+        frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 592, beatsToPhraseBoundary: 49, phraseLengthBeats: 64),
+            new PassLocalTimingState(lastCueBeat: 580, previousSelectedPhaseBoundary: 593),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.BeatRewoundToNewPass, Is.False);
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(641));
+        Assert.That(frame.ClearedPassLocalState, Is.False);
+        Assert.That(frame.PassLocalState.LastCueBeat, Is.EqualTo(580));
+        Assert.That(frame.PassLocalState.PreviousSelectedPhaseBoundary, Is.EqualTo(593));
     }
 
     [Test]
@@ -66,7 +157,7 @@ public sealed class OnAirTimingTests
 
         var frame = timing.ReadFrame(
             BeatOnlyInput(beat: 589),
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.HasPhaseAnchor, Is.True);
@@ -82,7 +173,7 @@ public sealed class OnAirTimingTests
 
         var frame = timing.ReadFrame(
             OnAirTimingInput.Unavailable,
-            previousSelectedPhaseBoundary: null,
+            PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.HasPhaseAnchor, Is.False);
@@ -111,6 +202,17 @@ public sealed class OnAirTimingTests
             trackPhaseActive: -1,
             beatsUntilPhraseBoundary: -1,
             phraseLengthBeats: -1);
+    }
+
+    private static TransitionRepertoire FourBeatRunway()
+    {
+        return TransitionRepertoire.FromRunwayAndTail(
+            global::Repertoire.None,
+            runwayBeats: 4,
+            tailBeats: 0,
+            TransitionShape.Dissolve,
+            TransitionIntensity.Medium,
+            defaultDurationSeconds: 4f);
     }
 
     private static Func<int, int, int> SelectFirstInteriorBoundary()

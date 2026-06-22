@@ -89,6 +89,26 @@ public readonly struct OnAirTimingInput
     }
 }
 
+/// <summary>Director cue/cadence memory that is valid only within one forward pass through on-air timing.</summary>
+public readonly struct PassLocalTimingState
+{
+    /// <summary>No prior cue or cadence memory is active for the current pass.</summary>
+    public static PassLocalTimingState Empty { get; } = new PassLocalTimingState(null, null);
+
+    /// <summary>The last absolute beat that issued a synced cue, or null when no cue from this pass should block.</summary>
+    public readonly int? LastCueBeat;
+
+    /// <summary>The last selected Phase Boundary used for cadence, or null when this pass has no prior boundary.</summary>
+    public readonly int? PreviousSelectedPhaseBoundary;
+
+    /// <summary>Creates pass-local cue/cadence memory from the Director's current synced state.</summary>
+    public PassLocalTimingState(int? lastCueBeat, int? previousSelectedPhaseBoundary)
+    {
+        LastCueBeat = lastCueBeat;
+        PreviousSelectedPhaseBoundary = previousSelectedPhaseBoundary;
+    }
+}
+
 /// <summary>Director-facing interpretation of one synced on-air frame.</summary>
 public readonly struct TimingFrame
 {
@@ -101,6 +121,9 @@ public readonly struct TimingFrame
         false,
         default,
         TimingFrameSource.Unlocked,
+        false,
+        PassLocalTimingState.Empty,
+        false,
         false,
         false);
 
@@ -140,6 +163,18 @@ public readonly struct TimingFrame
     /// <summary>True when the current beat substantially rewound into a new pass.</summary>
     public readonly bool BeatRewoundToNewPass;
 
+    /// <summary>Cue/cadence memory after On-Air Timing removes stale state from earlier loop passes.</summary>
+    public readonly PassLocalTimingState PassLocalState;
+
+    /// <summary>True when a rewind made the previous cue beat stale for this pass.</summary>
+    public readonly bool ClearedPassLocalCueState;
+
+    /// <summary>True when a rewind made the previous cadence boundary stale for this pass.</summary>
+    public readonly bool ClearedPassLocalCadenceState;
+
+    /// <summary>True when any pass-local cue/cadence state was cleared for this timing frame.</summary>
+    public bool ClearedPassLocalState => ClearedPassLocalCueState || ClearedPassLocalCadenceState;
+
     /// <summary>True when this frame is continuing from the last known Phase Anchor.</summary>
     public bool IsCoasting => Source == TimingFrameSource.Coast;
 
@@ -156,6 +191,9 @@ public readonly struct TimingFrame
         PhraseWindow phraseWindow,
         TimingFrameSource source,
         bool beatRewoundToNewPass,
+        PassLocalTimingState passLocalState,
+        bool clearedPassLocalCueState,
+        bool clearedPassLocalCadenceState,
         bool reanchored)
     {
         Input = input;
@@ -169,6 +207,9 @@ public readonly struct TimingFrame
         PhraseWindow = phraseWindow;
         Source = source;
         BeatRewoundToNewPass = beatRewoundToNewPass;
+        PassLocalState = passLocalState;
+        ClearedPassLocalCueState = clearedPassLocalCueState;
+        ClearedPassLocalCadenceState = clearedPassLocalCadenceState;
         Reanchored = reanchored;
     }
 }
@@ -219,7 +260,7 @@ public sealed class OnAirTiming
     /// <summary>Builds the current Timing Frame from one live rhythm snapshot.</summary>
     public TimingFrame ReadFrame(
         OnAirTimingInput input,
-        int? previousSelectedPhaseBoundary,
+        PassLocalTimingState passLocalState,
         int minimumChangeCadenceBeats)
     {
         if (minimumChangeCadenceBeats <= 0)
@@ -230,6 +271,9 @@ public sealed class OnAirTiming
         var phaseInput = input.ToPhaseInput();
         var phase = PhaseClock.Resolve(phaseInput);
         var beatRewoundToNewPass = BeatRewoundToNewPass(lastBeat, input.Beat, minimumChangeCadenceBeats);
+        var correctedPassLocalState = CorrectPassLocalStateForBeatRewind(passLocalState, input.Beat, beatRewoundToNewPass);
+        var clearedCueState = correctedPassLocalState.LastCueBeat != passLocalState.LastCueBeat;
+        var clearedCadenceState = correctedPassLocalState.PreviousSelectedPhaseBoundary != passLocalState.PreviousSelectedPhaseBoundary;
         if (input.Beat >= 1)
         {
             lastBeat = input.Beat;
@@ -243,7 +287,7 @@ public sealed class OnAirTiming
                 phaseInput,
                 phase,
                 beatRewoundToNewPass,
-                previousSelectedPhaseBoundary,
+                correctedPassLocalState.PreviousSelectedPhaseBoundary,
                 minimumChangeCadenceBeats,
                 out var selectedPhaseBoundary,
                 out var hasPhraseWindow,
@@ -268,6 +312,9 @@ public sealed class OnAirTiming
                 phraseWindow,
                 source,
                 beatRewoundToNewPass,
+                correctedPassLocalState,
+                clearedCueState,
+                clearedCadenceState,
                 reanchored);
         }
 
@@ -285,6 +332,9 @@ public sealed class OnAirTiming
                 default,
                 TimingFrameSource.Coast,
                 beatRewoundToNewPass,
+                correctedPassLocalState,
+                clearedCueState,
+                clearedCadenceState,
                 false);
         }
 
@@ -302,6 +352,9 @@ public sealed class OnAirTiming
             default,
             TimingFrameSource.Unlocked,
             beatRewoundToNewPass,
+            correctedPassLocalState,
+            clearedCueState,
+            clearedCadenceState,
             false);
     }
 
@@ -354,7 +407,7 @@ public sealed class OnAirTiming
         int minimumChangeCadenceBeats,
         out int selectedPhaseBoundary)
     {
-        if (NeedsSelectedPhaseBoundaryPlan(beat, phraseWindow))
+        if (NeedsSelectedPhaseBoundaryPlan(phraseWindow))
         {
             BuildSelectedPhaseBoundaryPlan(beat, phraseWindow, previousSelectedPhaseBoundary, minimumChangeCadenceBeats);
         }
@@ -378,18 +431,13 @@ public sealed class OnAirTiming
             : TimingFrameSource.SelectedPhaseBoundary;
     }
 
-    private bool NeedsSelectedPhaseBoundaryPlan(int beat, PhraseWindow phraseWindow)
+    private bool NeedsSelectedPhaseBoundaryPlan(PhraseWindow phraseWindow)
     {
         var selectedPhaseBoundaries = selectedPhaseBoundaryPlan.SelectedPhaseBoundaries;
-        if (!hasSelectedPhaseBoundaryPlan
+        return !hasSelectedPhaseBoundaryPlan
             || selectedPhaseBoundaries == null
             || selectedPhaseBoundaries.Length == 0
-            || selectedPhaseBoundaries[selectedPhaseBoundaries.Length - 1] <= beat)
-        {
-            return true;
-        }
-
-        return !selectedPhaseBoundaryPlan.Matches(phraseWindow);
+            || !selectedPhaseBoundaryPlan.Matches(phraseWindow);
     }
 
     private void BuildSelectedPhaseBoundaryPlan(
@@ -426,6 +474,25 @@ public sealed class OnAirTiming
             && beat >= 1
             && beat < previousBeat
             && previousBeat - beat + 1 >= minimumChangeCadenceBeats;
+    }
+
+    private static PassLocalTimingState CorrectPassLocalStateForBeatRewind(
+        PassLocalTimingState passLocalState,
+        int beat,
+        bool beatRewoundToNewPass)
+    {
+        if (!beatRewoundToNewPass || beat < 1)
+        {
+            return passLocalState;
+        }
+
+        var lastCueBeat = passLocalState.LastCueBeat is { } cueBeat && cueBeat >= beat
+            ? (int?)null
+            : passLocalState.LastCueBeat;
+        var previousSelectedPhaseBoundary = passLocalState.PreviousSelectedPhaseBoundary is { } phaseBoundary && phaseBoundary >= beat
+            ? (int?)null
+            : passLocalState.PreviousSelectedPhaseBoundary;
+        return new PassLocalTimingState(lastCueBeat, previousSelectedPhaseBoundary);
     }
 
     private static int ClampIndex(int index, int length)
