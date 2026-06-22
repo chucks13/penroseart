@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review — PenroseArt property drawers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      body { background: #f8f5ef; }
+      .seam { stroke-dasharray: 5 5; }
+      .leak { stroke: #dc2626; stroke-width: 2px; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .paper { background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.76)); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      .metric { background: radial-gradient(circle at top left, rgba(14,165,233,.16), transparent 55%), white; }
+      .thin-band { height: 38px; }
+      .thick-band { height: 116px; }
+      .arrow-line::after { content: "→"; padding-left: .45rem; color: #64748b; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-6xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.22em] text-cyan-700 font-semibold">PenroseArt · Architecture review</p>
+            <h1 class="mt-2 text-4xl md:text-5xl font-semibold tracking-tight text-slate-950">Property drawers</h1>
+            <p class="mt-3 text-slate-600 max-w-3xl">Run timestamp: 2026-06-22 11:58:48 PDT. Scope: custom Unity <span class="mono">PropertyDrawer</span> implementations, adjacent editor modules that drive repaint cost, and the seams those drawers cross.</p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm text-slate-600 shadow-sm">
+            <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
+              <span class="h-3 w-8 rounded border border-slate-500 bg-white mt-1"></span><span>solid box = module</span>
+              <span class="h-0 border-t-2 border-dashed border-slate-500 mt-3"></span><span>dashed line = seam</span>
+              <span class="h-0 border-t-2 border-red-600 mt-3"></span><span>red arrow = leakage</span>
+              <span class="h-3 w-8 rounded bg-slate-900 mt-1"></span><span>dark box = deep module</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <div class="flex items-start justify-between gap-6 mb-6">
+          <div>
+            <h2 class="text-2xl font-semibold text-slate-950">Inventory</h2>
+            <p class="text-slate-600 mt-1">There are exactly two custom property drawers in authored repo code.</p>
+          </div>
+          <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">2 drawers</span>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <article class="rounded-2xl border border-slate-200 bg-white p-5">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="font-semibold text-slate-950">EffectSelectorDrawer</h3>
+              <span class="text-xs rounded-full bg-slate-100 px-2 py-1 text-slate-600">85 lines</span>
+            </div>
+            <p class="mt-3 text-sm text-slate-600">Drawer for <span class="mono">EffectSelectorAttribute</span>, used by <span class="mono">Controller.heldEffect</span>. Row 0 maps to <span class="mono">-1</span> / Random; row <span class="mono">k+1</span> maps to effect index <span class="mono">k</span>.</p>
+            <ul class="mt-4 space-y-2 text-sm text-slate-700">
+              <li>• External interface is tiny: one attribute on one int.</li>
+              <li>• Implementation already caches the effect options once per domain reload.</li>
+              <li>• Optimization finding: keep as-is unless the Held Effect control moves into a broader Play Mode steering module.</li>
+            </ul>
+            <p class="mt-4 mono text-xs text-slate-500">Assets/Editor/EffectSelectorDrawer.cs<br/>Assets/core/helpers/EffectSelectorAttribute.cs</p>
+          </article>
+
+          <article class="rounded-2xl border border-slate-200 bg-white p-5">
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="font-semibold text-slate-950">BeatManagerDrawer</h3>
+              <span class="text-xs rounded-full bg-rose-100 px-2 py-1 text-rose-700">1192 lines</span>
+            </div>
+            <p class="mt-3 text-sm text-slate-600">Drawer for the serialized <span class="mono">BeatManager</span> field on <span class="mono">Controller</span>. It renders the live rhythm dashboard, Waveform selector/strip, rhythm query rows, Color Bank swatches, then default child fields.</p>
+            <ul class="mt-4 space-y-2 text-sm text-slate-700">
+              <li>• External interface is deep: Unity sees one property drawer.</li>
+              <li>• Implementation combines live wall control, Pool caching, dashboard layout, row formatting, widgets, and raw child rendering.</li>
+              <li>• Optimization finding: this is the only drawer with material repaint cost and seam pressure.</li>
+            </ul>
+            <p class="mt-4 mono text-xs text-slate-500">Assets/Editor/BeatManagerDrawer.cs<br/>Assets/Tests/Editor/BeatManagerDrawerVisualModelTests.cs</p>
+          </article>
+        </div>
+
+        <div class="mt-6 grid md:grid-cols-4 gap-3 text-sm">
+          <div class="metric rounded-xl border border-slate-200 p-4"><div class="text-2xl font-semibold">172</div><div class="text-slate-500">ControllerEditor lines</div></div>
+          <div class="metric rounded-xl border border-slate-200 p-4"><div class="text-2xl font-semibold">417</div><div class="text-slate-500">Tuning Window lines</div></div>
+          <div class="metric rounded-xl border border-slate-200 p-4"><div class="text-2xl font-semibold">363</div><div class="text-slate-500">Pool Editor lines</div></div>
+          <div class="metric rounded-xl border border-slate-200 p-4"><div class="text-2xl font-semibold">94</div><div class="text-slate-500">WaveformPlot lines</div></div>
+        </div>
+      </section>
+
+      <section class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <h2 class="text-2xl font-semibold text-slate-950 mb-2">Current module map</h2>
+        <p class="text-sm text-slate-600 mb-5">The property drawers are few. The pressure sits where the BeatManager dashboard crosses into live Play Mode state and redraws continuously.</p>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <pre class="mermaid">
+flowchart LR
+  CE["ControllerEditor\nRequiresConstantRepaint"]:::editor
+  BMD["BeatManagerDrawer\n1192 lines\nPropertyDrawer"]:::big
+  ESD["EffectSelectorDrawer\n85 lines\nPropertyDrawer"]:::small
+  PTW["PenroseTuningWindow\nTryGetLiveController"]:::editor
+  WPE["WaveformPoolEditor\nPool authoring"]:::editor
+  WFP["WaveformPlot\nshared plot"]:::deep
+  BM[("BeatManager\nqueries + wall variant")]:::runtime
+  CTRL[("Controller.Instance\nCurrentBeatVariant\ndirector") ]:::runtime
+  WP[("WaveformPool\nparse / serialize / file path")]:::runtime
+  FAC[("Factory&lt;EffectBase&gt;\neffect catalog")]:::runtime
+
+  CE -. continuous repaint .-> BMD
+  BMD --> BM
+  BMD -. no-spawn guard .-> CTRL
+  BMD --> WP
+  BMD --> WFP
+  ESD --> FAC
+  PTW -. no-spawn guard .-> CTRL
+  WPE --> WP
+  WPE --> WFP
+
+  classDef big fill:#ffe4e6,stroke:#fb7185,color:#111827;
+  classDef small fill:#eef2ff,stroke:#818cf8,color:#111827;
+  classDef editor fill:#ecfeff,stroke:#06b6d4,color:#111827;
+  classDef runtime fill:#f1f5f9,stroke:#64748b,color:#111827;
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc;
+          </pre>
+        </div>
+      </section>
+
+      <section id="candidates" class="space-y-10">
+        <div>
+          <h2 class="text-2xl font-semibold text-slate-950">Candidates</h2>
+          <p class="text-slate-600 mt-1">These are optimization and deepening candidates. They do not propose public runtime behavior changes.</p>
+        </div>
+
+        <article id="candidate-repaint" class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-700 font-semibold">Candidate 1</p>
+              <h3 class="mt-1 text-2xl font-semibold text-slate-950">Make the Play Mode repaint path allocation-light</h3>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Strong</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">in-process</span>
+              <span class="rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold text-cyan-700">polish</span>
+            </div>
+          </div>
+
+          <div class="mt-5 grid lg:grid-cols-[1fr_1.1fr] gap-6">
+            <div class="space-y-4 text-sm text-slate-700">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Files</p>
+                <p class="mt-1 mono text-slate-800">Assets/Editor/BeatManagerDrawer.cs<br/>Assets/Editor/WaveformPlot.cs<br/>Assets/Editor/ControllerEditor.cs</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Problem</p>
+                <p class="mt-1">Play Mode makes <span class="mono">ControllerEditor</span> repaint constantly, and the expanded BeatManager drawer allocates avoidable objects during those repaints.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Solution</p>
+                <p class="mt-1">Cache the Waveform selector option array, cache query-label <span class="mono">GUIContent</span> instances, and reuse the <span class="mono">WaveformPlot</span> point buffer.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Wins</p>
+                <ul class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <li class="rounded-lg bg-white px-3 py-2">locality: repaint caches concentrate</li>
+                  <li class="rounded-lg bg-white px-3 py-2">leverage: plot fix helps two callers</li>
+                  <li class="rounded-lg bg-white px-3 py-2">interface unchanged</li>
+                  <li class="rounded-lg bg-white px-3 py-2">safe polish scope</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                <p class="text-xs uppercase tracking-wide text-rose-700 font-semibold mb-3">Before</p>
+                <div class="space-y-2 mono text-xs text-slate-700">
+                  <div class="rounded-lg border border-rose-200 bg-white p-3">DrawWaveformSelector<br/><span class="text-rose-600">new string[] every repaint</span></div>
+                  <div class="rounded-lg border border-rose-200 bg-white p-3">DrawQueryRowLabel ×7<br/><span class="text-rose-600">new GUIContent each row</span></div>
+                  <div class="rounded-lg border border-rose-200 bg-white p-3">WaveformPlot.Draw<br/><span class="text-rose-600">new Vector3[129]</span></div>
+                </div>
+              </div>
+              <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <p class="text-xs uppercase tracking-wide text-emerald-700 font-semibold mb-3">After</p>
+                <div class="space-y-2 mono text-xs text-slate-700">
+                  <div class="rounded-lg border border-emerald-200 bg-white p-3">Waveform options cache<br/><span class="text-emerald-700">rebuild on Pool stamp / label change</span></div>
+                  <div class="rounded-lg border border-emerald-200 bg-white p-3">Static query labels<br/><span class="text-emerald-700">tooltip text allocated once</span></div>
+                  <div class="rounded-lg border border-emerald-200 bg-white p-3">Static plot buffer<br/><span class="text-emerald-700">same points, refilled on repaint</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="candidate-dashboard" class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-700 font-semibold">Candidate 2</p>
+              <h3 class="mt-1 text-2xl font-semibold text-slate-950">Give BeatManagerDrawer internal seams</h3>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">in-process</span>
+              <span class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">deepening</span>
+            </div>
+          </div>
+
+          <div class="mt-5 grid lg:grid-cols-[1fr_1.1fr] gap-6">
+            <div class="space-y-4 text-sm text-slate-700">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Files</p>
+                <p class="mt-1 mono text-slate-800">Assets/Editor/BeatManagerDrawer.cs<br/>Assets/Tests/Editor/BeatManagerDrawerVisualModelTests.cs<br/>Assets/core/BeatManager.cs</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Problem</p>
+                <p class="mt-1">The drawer has a deep external interface, but its implementation is one large class: live query reads, wall selection, layout, widget drawing, formatting, Pool cache, and child fields all sit behind <span class="mono">OnGUI</span>.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Solution</p>
+                <p class="mt-1">Keep the Unity <span class="mono">PropertyDrawer</span> as the host, then move pure display decisions into a dashboard visual model and keep IMGUI drawing in a renderer module.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Wins</p>
+                <ul class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <li class="rounded-lg bg-white px-3 py-2">interface stays one drawer</li>
+                  <li class="rounded-lg bg-white px-3 py-2">tests hit visual model seam</li>
+                  <li class="rounded-lg bg-white px-3 py-2">locality: row rules concentrate</li>
+                  <li class="rounded-lg bg-white px-3 py-2">implementation absorbs helpers</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-3">Before · wide implementation</p>
+                <div class="space-y-1 mono text-xs">
+                  <div class="thin-band rounded bg-rose-100 border border-rose-200 flex items-center px-3">OnGUI</div>
+                  <div class="thin-band rounded bg-rose-100 border border-rose-200 flex items-center px-3">GetPropertyHeight</div>
+                  <div class="thin-band rounded bg-rose-100 border border-rose-200 flex items-center px-3">ResolveBeatManager</div>
+                  <div class="thin-band rounded bg-rose-100 border border-rose-200 flex items-center px-3">DrawDashboard</div>
+                  <div class="thin-band rounded bg-rose-100 border border-rose-200 flex items-center px-3">30+ Draw helpers</div>
+                  <div class="thin-band rounded bg-rose-100 border border-rose-200 flex items-center px-3">Pool cache + wall writes</div>
+                </div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-3">After · deep host</p>
+                <div class="space-y-2 mono text-xs">
+                  <div class="thin-band rounded bg-slate-900 text-white flex items-center px-3">BeatManagerDrawer host</div>
+                  <div class="thick-band rounded bg-indigo-50 border border-indigo-200 p-3">
+                    <div class="font-semibold text-indigo-900">BeatManagerDashboardModel</div>
+                    <div class="mt-2 text-slate-600">beats · pulses · query rows · color row · selected Waveform</div>
+                  </div>
+                  <div class="thick-band rounded bg-cyan-50 border border-cyan-200 p-3">
+                    <div class="font-semibold text-cyan-900">BeatManagerDashboardRenderer</div>
+                    <div class="mt-2 text-slate-600">rect math · widgets · styles · child fields</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article id="candidate-live-controller" class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-700 font-semibold">Candidate 3</p>
+              <h3 class="mt-1 text-2xl font-semibold text-slate-950">Concentrate no-spawn Play Mode access</h3>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Worth exploring</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">in-process</span>
+              <span class="rounded-full bg-fuchsia-100 px-3 py-1 text-xs font-semibold text-fuchsia-700">seam</span>
+            </div>
+          </div>
+
+          <div class="mt-5 grid lg:grid-cols-[1fr_1.1fr] gap-6">
+            <div class="space-y-4 text-sm text-slate-700">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Files</p>
+                <p class="mt-1 mono text-slate-800">Assets/Editor/BeatManagerDrawer.cs<br/>Assets/Editor/PenroseTuningWindow.cs<br/>Assets/core/Controller.cs</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Problem</p>
+                <p class="mt-1">Two editor modules already carry the same important guard: check <span class="mono">Application.isPlaying</span> and <span class="mono">Controller.HasInstance</span> before touching <span class="mono">Controller.Instance</span>, because touching it too early can spawn a Controller GameObject.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Solution</p>
+                <p class="mt-1">Add a tiny editor-only live Controller access module, then put wall variant selection behind an owner-aware method that reuses that access rule.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Wins</p>
+                <ul class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <li class="rounded-lg bg-white px-3 py-2">two adapters justify seam</li>
+                  <li class="rounded-lg bg-white px-3 py-2">locality: anti-spawn rule</li>
+                  <li class="rounded-lg bg-white px-3 py-2">leverage: future steering</li>
+                  <li class="rounded-lg bg-white px-3 py-2">tests avoid IMGUI</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+              <pre class="mermaid">
+flowchart TB
+  subgraph Before
+    B1[BeatManagerDrawer] -. HasInstance guard .-> C1[(Controller.Instance)]
+    T1[PenroseTuningWindow] -. HasInstance guard .-> C1
+  end
+  subgraph After
+    B2[BeatManagerDrawer] --> L[LiveControllerAccess]
+    T2[PenroseTuningWindow] --> L
+    L -. one no-spawn seam .-> C2[(Controller.Instance)]
+    L --> W[WallVariantControl]
+  end
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc;
+  class L,W deep;
+              </pre>
+            </div>
+          </div>
+        </article>
+
+        <article id="candidate-widgets" class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+          <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-700 font-semibold">Candidate 4</p>
+              <h3 class="mt-1 text-2xl font-semibold text-slate-950">Delay a shared inspector widget module</h3>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">Speculative</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">in-process</span>
+              <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">YAGNI</span>
+            </div>
+          </div>
+
+          <div class="mt-5 grid lg:grid-cols-[1fr_1.1fr] gap-6">
+            <div class="space-y-4 text-sm text-slate-700">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Files</p>
+                <p class="mt-1 mono text-slate-800">Assets/Editor/BeatManagerDrawer.cs<br/>Assets/Editor/WaveformPlot.cs<br/>Assets/Editor/WaveformPoolEditor.cs</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Problem</p>
+                <p class="mt-1">The BeatManager drawer owns many private visual primitives, but other editor modules mostly use default Unity fields. Extracting a broad widget module now risks making a shallow module.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Solution</p>
+                <p class="mt-1">Keep <span class="mono">WaveformPlot</span> shared, because it already has two callers. Do not extract chips/meters/swatches until a second custom dashboard needs them.</p>
+              </div>
+              <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Wins</p>
+                <ul class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <li class="rounded-lg bg-white px-3 py-2">one adapter stays hypothetical</li>
+                  <li class="rounded-lg bg-white px-3 py-2">deep module only when earned</li>
+                  <li class="rounded-lg bg-white px-3 py-2">locality remains clear</li>
+                  <li class="rounded-lg bg-white px-3 py-2">no broad module churn</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-3">Now</p>
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4 mono text-xs">WaveformPlot<br/><span class="text-slate-600">deep enough: grid + AA polyline + playhead behind one Draw call</span></div>
+                <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 mono text-xs">BeatManager widgets<br/><span class="text-slate-600">private to one dense dashboard</span></div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white p-4 opacity-80">
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-3">Later, if earned</p>
+                <div class="rounded-xl border border-slate-300 bg-slate-900 p-4 mono text-xs text-white">InspectorWidgets<br/><span class="text-slate-300">Meter · Chip · Swatch · Panel · styles</span></div>
+                <p class="mt-3 text-xs text-slate-500">Require a second dense dashboard before making this seam real.</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="paper rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <h2 class="text-2xl font-semibold text-slate-950">Non-candidate findings</h2>
+        <div class="mt-4 grid md:grid-cols-3 gap-4 text-sm text-slate-700">
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <h3 class="font-semibold text-slate-950">EffectSelectorDrawer is already small</h3>
+            <p class="mt-2">The deletion test says it earns its keep: delete it and the Held Effect int leaks Random/index mapping into the Inspector user. No refactor recommended.</p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <h3 class="font-semibold text-slate-950">WaveformPoolEditor already avoids log spam</h3>
+            <p class="mt-2">Draft rows store raw strings, delayed text commits trigger parse, and sliders update cached previews. Keep this shape.</p>
+          </div>
+          <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <h3 class="font-semibold text-amber-950">Documentation drift</h3>
+            <p class="mt-2">ADR-0001 and <span class="mono">CONTEXT.md</span> still say the Pool is edited by a property drawer. Current code uses <span class="mono">WaveformPoolEditor</span> plus the BeatManager dashboard selector.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="top-recommendation" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+        <p class="text-xs uppercase tracking-[0.22em] text-emerald-700 font-semibold">Top recommendation</p>
+        <h2 class="mt-2 text-2xl font-semibold text-emerald-950">Start with allocation-light repaint polish</h2>
+        <p class="mt-3 text-emerald-900 max-w-3xl">Tackle <a href="#candidate-repaint" class="underline decoration-emerald-700 underline-offset-4">Candidate 1</a> first: it is behavior-preserving, bounded to two editor files, helps the continuously repainting dashboard immediately, and does not force a new seam before the deeper BeatManager dashboard split is justified.</p>
+      </section>
+    </main>
+  </body>
+</html>
