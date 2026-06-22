@@ -46,6 +46,25 @@ public sealed class SelectedPhaseBoundaryPlanTests
     }
 
     [Test]
+    public void BuildCanIncludeFuturePhraseStartForUpcomingPlan()
+    {
+        Assert.That(PhraseWindow.TryFromUpcomingTrackPhase(
+            beat: 613,
+            beatsToPhraseStart: 12,
+            phraseLengthBeats: 32,
+            out var window), Is.True);
+
+        var plan = SelectedPhaseBoundaryPlan.Build(
+            window,
+            currentBeat: 613,
+            canChangeAtBeat: _ => true,
+            randomRange: (minInclusive, _) => minInclusive,
+            includePhraseStart: true);
+
+        Assert.That(plan.SelectedPhaseBoundaries, Is.EqualTo(new[] { 625, 657 }));
+    }
+
+    [Test]
     public void MatchesOnlyExactPhraseWindowTimingIdentity()
     {
         Assert.That(PhraseWindow.TryFromTrackPhase(

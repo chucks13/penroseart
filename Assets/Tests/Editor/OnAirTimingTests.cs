@@ -32,6 +32,49 @@ public sealed class OnAirTimingTests
     }
 
     [Test]
+    public void NewPhraseFrameAtMandatoryBoundaryKeepsPreviousPhraseBoundaryCueable()
+    {
+        var timing = new OnAirTiming(SelectFirstInteriorBoundary());
+
+        timing.ReadFrame(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+
+        var frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 609, beatsToPhraseBoundary: 64, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(609));
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+    }
+
+    [Test]
+    public void FiredMandatoryBoundaryImmediatelyPromotesPreplannedNextPhraseTarget()
+    {
+        var timing = new OnAirTiming(SelectFirstInteriorBoundary());
+
+        timing.ReadFrame(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+        var currentFrame = timing.ReadFrame(
+            UpcomingTrackPhaseInput(beat: 600, beatsToPhraseStart: 9, phraseLengthBeats: 64),
+            PassLocalTimingState.Empty,
+            minimumChangeCadenceBeats: 16);
+        Assert.That(currentFrame.SelectedPhaseBoundary, Is.EqualTo(609), "Preplanning the next Phrase must not unset the loaded current boundary.");
+
+        var frame = timing.ReadFrame(
+            TrackPhaseInput(beat: 605, beatsToPhraseBoundary: 4, phraseLengthBeats: 32),
+            new PassLocalTimingState(lastCueBeat: 605, previousSelectedPhaseBoundary: 609),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.SelectedPhaseBoundary, Is.EqualTo(625));
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SelectedPhaseBoundary));
+    }
+
+    [Test]
     public void TrackPhaseDisappearanceAfterStructuralAnchorCoastsOnNextValidPhaseAnchor()
     {
         var timing = new OnAirTiming(SelectFirstInteriorBoundary());
@@ -188,14 +231,17 @@ public sealed class OnAirTimingTests
         Assert.That(frame.PassLocalState.LastCueBeat, Is.Null);
         Assert.That(frame.PassLocalState.PreviousSelectedPhaseBoundary, Is.Null);
 
-        var cueDecision = SyncedCueDecision.Evaluate(
-            frame.CurrentBeat,
-            frame.SelectedPhaseBoundary,
+        var cueIntent = SyncedCueIntent.Evaluate(
+            frame,
             FourBeatRunway(),
-            frame.PassLocalState.LastCueBeat,
-            frame.PassLocalState.PreviousSelectedPhaseBoundary,
+            drop: null,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: true,
+            currentEffectIndex: 0,
+            deck: new[] { 1, 2, 0 },
+            repertoireForEffect: _ => Repertoire.None,
             minimumChangeCadenceBeats: 16);
-        Assert.That(cueDecision.Kind, Is.EqualTo(SyncedCueDecisionKind.Cue));
+        Assert.That(cueIntent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
     }
 
     [Test]
@@ -293,6 +339,17 @@ public sealed class OnAirTimingTests
             beatInBar: ((beat - 1) % 4) + 1,
             trackPhaseActive: 1,
             beatsUntilPhraseBoundary: beatsToPhraseBoundary,
+            phraseLengthBeats: phraseLengthBeats);
+    }
+
+    private static OnAirTimingInput UpcomingTrackPhaseInput(int beat, int beatsToPhraseStart, int phraseLengthBeats)
+    {
+        return new OnAirTimingInput(
+            beat,
+            totalBeats: -1,
+            beatInBar: ((beat - 1) % 4) + 1,
+            trackPhaseActive: 0,
+            beatsUntilPhraseBoundary: beatsToPhraseStart,
             phraseLengthBeats: phraseLengthBeats);
     }
 

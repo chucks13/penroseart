@@ -38,6 +38,40 @@ public sealed class EffectDeckSelectionTests
     }
 
     [Test]
+    public void TryPullPreferredPullsMatchingPerformerAndRotatesDeck()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var found = EffectDeckSelection.TryPullPreferred(
+            deck,
+            currentEffectIndex: 0,
+            preferredRepertoire: Repertoire.HandlesDrop,
+            repertoireForEffect: effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
+            out var selected);
+
+        Assert.That(found, Is.True);
+        Assert.That(selected, Is.EqualTo(2));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 0, 2 }));
+    }
+
+    [Test]
+    public void TryPullPreferredLeavesDeckWhenNoMatchingPerformerExists()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var found = EffectDeckSelection.TryPullPreferred(
+            deck,
+            currentEffectIndex: 0,
+            preferredRepertoire: Repertoire.HandlesDrop,
+            repertoireForEffect: _ => Repertoire.None,
+            out var selected);
+
+        Assert.That(found, Is.False);
+        Assert.That(selected, Is.EqualTo(-1));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
+    }
+
+    [Test]
     public void PullNextFailsPlainlyWhenOnlyTheCurrentEffectIsAvailable()
     {
         var deck = new[] { 2 };

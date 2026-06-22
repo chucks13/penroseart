@@ -21,7 +21,7 @@ public sealed class DirectorSyncedTailTests
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
         controller.beatManager.SetLiveBeatSource(true);
-        controller.effects = new EffectBase[] { new TestEffect(), new TestEffect(), new TestEffect() };
+        controller.effects = new EffectBase[] { new TestEffect(), new TestEffect(), new TestEffect(Repertoire.HandlesDrop) };
         controller.transitions = new TransitionBase[] { new TailedTransition(), new TailedTransition() };
         foreach (var transition in controller.transitions)
         {
@@ -63,11 +63,11 @@ public sealed class DirectorSyncedTailTests
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
 
         RenderTransitionPastCompletion();
-        SetTrackPhaseBeat(613, phaseActive: 0, beatsToPhraseBoundary: 10, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(613, phaseActive: 0, beatsToPhraseBoundary: 12, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0), "The tailed transition should have completed.");
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(623));
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(625));
     }
 
     [Test]
@@ -120,6 +120,74 @@ public sealed class DirectorSyncedTailTests
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
         Assert.That(director.Status.NextEffectIndex, Is.Not.EqualTo(1), "The consumed target should not remain staged until Tail completion.");
+    }
+
+    [Test]
+    public void SyncedCueDoesNotRestartSameMandatoryBoundaryInsideRunway()
+    {
+        director.SetNextEffect(1);
+
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+        SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 3, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.SourceEffectIndex, Is.EqualTo(0), "Restarting the same cue would replace the source with the previous target.");
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void FiredCueImmediatelyLoadsNextPreplannedPhraseBoundary()
+    {
+        director.SetNextEffect(1);
+
+        SetTrackPhaseBeat(594, phaseActive: 1, beatsToPhraseBoundary: 15, phraseLengthBeats: 32);
+        director.Tick(0f);
+        SetTrackPhaseBeat(600, phaseActive: 0, beatsToPhraseBoundary: 9, phraseLengthBeats: 64);
+        director.Tick(0f);
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609), "The current phrase boundary should stay loaded while the next Phrase is preplanned.");
+
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+        SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 3, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.GreaterThan(609));
+        Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
+    }
+
+    [Test]
+    public void MandatoryPhraseBoundaryRemainsCueableWhenNextPhraseFrameArrivesOnTheBoundary()
+    {
+        controller.transitions[0] = new HardCutTransition();
+        controller.transitions[0].Init();
+        director.SetNextTransition(0);
+
+        SetTrackPhaseBeat(594, phaseActive: 1, beatsToPhraseBoundary: 15, phraseLengthBeats: 32);
+        director.Tick(0f);
+        SetTrackPhaseBeat(609, phaseActive: 1, beatsToPhraseBoundary: 64, phraseLengthBeats: 64);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1), "The mandatory phrase boundary should still cue even after Track Phase advances to the next Phrase Window.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void DropAlignedCueCastsDropCapablePerformerWhenAvailable()
+    {
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The Director should start a synced transition on the Drop runway.");
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The Drop-aligned cue should cast the available Drop-capable Performer.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
     }
 
     [Test]
@@ -305,6 +373,17 @@ public sealed class DirectorSyncedTailTests
         };
     }
 
+    private void SetUpcomingDrop(int beatsUntilStart)
+    {
+        controller.beatManager.beatData.dropState = new CountdownState
+        {
+            active = 0,
+            countBeats = beatsUntilStart,
+            lengthBeats = 16,
+            remaining = 1,
+        };
+    }
+
     private void RenderTransitionPastCompletion()
     {
         switcher.RenderAtTime(Time.time + 10f, out _);
@@ -319,12 +398,43 @@ public sealed class DirectorSyncedTailTests
 
     private sealed class TestEffect : EffectBase
     {
-        public TestEffect()
+        private readonly Repertoire repertoire;
+
+        public TestEffect(Repertoire repertoire = Repertoire.None)
         {
+            this.repertoire = repertoire;
             buffer = new Color[Penrose.Total];
         }
 
+        public override Repertoire Repertoire => repertoire;
+
         public override string DebugText() => string.Empty;
+
+        public override void OnStart()
+        {
+        }
+
+        public override void OnEnd()
+        {
+        }
+
+        public override void Draw()
+        {
+        }
+    }
+
+    private sealed class HardCutTransition : TransitionBase
+    {
+        protected override TransitionSettings BuildCodeDefaults()
+        {
+            return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
+                global::Repertoire.None,
+                runwayBeats: 0,
+                tailBeats: 0,
+                TransitionShape.Blend,
+                TransitionIntensity.High,
+                defaultDurationSeconds: 0f));
+        }
 
         public override void OnStart()
         {

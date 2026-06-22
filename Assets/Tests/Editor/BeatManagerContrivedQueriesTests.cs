@@ -275,6 +275,24 @@ public sealed class BeatManagerContrivedQueriesTests
     }
 
     [Test]
+    public void PhasePreservesUpcomingTriStateForNextPhrasePlanning()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.phaseState = new PhaseState { current = "Break", next = "Drop", active = 0, countBeats = 9, lengthBeats = 64, remaining = 7 };
+
+        var phase = beatManager.Phase;
+
+        Assert.That(phase, Is.Not.Null);
+        Assert.That(phase!.Value.label, Is.EqualTo("Break"));
+        Assert.That(phase.Value.next, Is.EqualTo("Drop"));
+        Assert.That(phase.Value.inPhase, Is.False);
+        Assert.That(phase.Value.beatsUntilNext, Is.EqualTo(9));
+        Assert.That(phase.Value.lengthBeats, Is.EqualTo(64));
+        Assert.That(phase.Value.remaining, Is.EqualTo(7));
+        Assert.That(phase.Value.progress, Is.Null);
+    }
+
+    [Test]
     public void PhaseIsNullWithoutALabelOrWhenUnavailable()
     {
         var beatManager = CreateLiveBeatManager();

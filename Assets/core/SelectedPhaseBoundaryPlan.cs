@@ -37,8 +37,15 @@ public readonly struct SelectedPhaseBoundaryPlan
         PhraseWindow window,
         int currentBeat,
         Func<int, bool> canChangeAtBeat,
-        Func<int, int, int> randomRange)
+        Func<int, int, int> randomRange,
+        bool includePhraseStart = false)
     {
+        var selectedPhaseBoundaries = new List<int>();
+        if (includePhraseStart && window.StartBeat > currentBeat && canChangeAtBeat(window.StartBeat))
+        {
+            selectedPhaseBoundaries.Add(window.StartBeat);
+        }
+
         var eligibleInteriorPhaseBoundaries = new List<int>();
         foreach (var phaseBoundary in window.PhaseBoundariesAfter(currentBeat))
         {
@@ -48,7 +55,6 @@ public readonly struct SelectedPhaseBoundaryPlan
             }
         }
 
-        var selectedPhaseBoundaries = new List<int>();
         var interiorBoundaryCount = eligibleInteriorPhaseBoundaries.Count > 0
             ? randomRange(0, eligibleInteriorPhaseBoundaries.Count + 1)
             : 0;

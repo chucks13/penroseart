@@ -140,6 +140,7 @@ public sealed class Director
     private int nextTransitionIndex;
     private bool holdSelectedEffect;
     private bool holdSelectedTransition;
+    private bool nextEffectIsManualSelection;
     private int lastSyncedBeat = -1;
     private int lastChangeBeat = int.MinValue;
     private int lastCueBeat = -1;
@@ -191,6 +192,7 @@ public sealed class Director
     {
         ValidateEffectIndex(effectIndex);
         nextEffectIndex = effectIndex;
+        nextEffectIsManualSelection = true;
         Trace($"NEXT_EFFECT_SET nextEffect={FormatEffect(nextEffectIndex)} hold={holdSelectedEffect}");
     }
 
@@ -457,40 +459,36 @@ public sealed class Director
 
         var beat = frame.CurrentBeat;
         var transitionIndex = nextTransitionIndex;
-        var targetEffectIndex = nextEffectIndex;
+        var stagedEffectIndex = nextEffectIndex;
         ValidateTransitionIndex(transitionIndex);
-        ValidateEffectIndex(targetEffectIndex);
+        ValidateEffectIndex(stagedEffectIndex);
         var repertoire = controller.transitions[transitionIndex].Repertoire;
-        var cueDecision = SyncedCueDecision.Evaluate(
-            beat,
-            frame.SelectedPhaseBoundary,
+        var cueIntent = SyncedCueIntent.Evaluate(
+            frame,
             repertoire,
-            frame.PassLocalState.LastCueBeat,
-            frame.PassLocalState.PreviousSelectedPhaseBoundary,
-            MinimumChangeCadenceBeats);
+            controller.beatManager.Drop,
+            stagedEffectIndex,
+            preserveStagedEffect: holdSelectedEffect || nextEffectIsManualSelection,
+            currentEffectIndex: currentEffectIndexForSelection,
+            deck: effectDeck,
+            repertoireForEffect: effectIndex => controller.effects[effectIndex].Repertoire,
+            minimumChangeCadenceBeats: MinimumChangeCadenceBeats);
 
-        if (cueDecision.Kind == SyncedCueDecisionKind.Wait)
+        if (cueIntent.Kind == SyncedCueIntentKind.Wait)
         {
             return;
         }
 
-        if (cueDecision.BlockedByCadence)
+        if (cueIntent.BlockedByCadence)
         {
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} selectedBoundary={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} selectedBoundary={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
             lastCueBeat = beat;
             return;
         }
 
-        var preferredRepertoire = PreferredRepertoireForLanding(cueDecision.BeatsUntilImpact);
-        Trace($"SYNC_CUE beat={beat} start={cueDecision.BeatPlan.StartBeat} selectedBoundary={cueDecision.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueDecision.BeatPlan.StartBeat)} preferred={preferredRepertoire} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)}");
-        StartSyncedTransition(transitionIndex, targetEffectIndex, cueDecision.BeatPlan, repertoire, preferredRepertoire);
-    }
-
-    private Repertoire PreferredRepertoireForLanding(int beatsUntilLanding)
-    {
-        return controller.beatManager.Drop is { inProgress: false, beatsUntilStart: { } dropBeatsUntilStart } && dropBeatsUntilStart == beatsUntilLanding
-            ? Repertoire.HandlesDrop
-            : Repertoire.None;
+        ValidateEffectIndex(cueIntent.TargetEffectIndex);
+        Trace($"SYNC_CUE beat={beat} start={cueIntent.BeatPlan.StartBeat} selectedBoundary={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueIntent.BeatPlan.StartBeat)} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+        StartSyncedTransition(transitionIndex, cueIntent.TargetEffectIndex, cueIntent.BeatPlan, repertoire, cueIntent);
     }
 
     private void StartSyncedTransition(
@@ -498,7 +496,7 @@ public sealed class Director
         int targetEffectIndex,
         TransitionBeatPlan beatPlan,
         TransitionRepertoire repertoire,
-        Repertoire preferredRepertoire)
+        SyncedCueIntent cueIntent)
     {
         var secondsPerBeat = CurrentSecondsPerBeat();
         var beatFraction = controller.beatManager.BeatFraction ?? 0f;
@@ -516,7 +514,7 @@ public sealed class Director
         lastCueBeat = lastSyncedBeat;
         currentEffectIndexForSelection = targetEffectIndex;
         StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
-        Trace($"SYNC_TRANSITION_START beat={lastSyncedBeat} beatFraction={beatFraction:0.###} elapsedBeats={elapsedBeats:0.###} start={transitionStartBeat} impact={transitionLandingBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} runway={repertoire.RunwayBeats} preferred={preferredRepertoire}");
+        Trace($"SYNC_TRANSITION_START beat={lastSyncedBeat} beatFraction={beatFraction:0.###} elapsedBeats={elapsedBeats:0.###} start={transitionStartBeat} impact={transitionLandingBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} runway={repertoire.RunwayBeats} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer}");
     }
 
     private void LogModeIfChanged()
@@ -689,6 +687,7 @@ public sealed class Director
         }
 
         nextEffectIndex = PullEffect(preferredRepertoire, currentEffectIndex);
+        nextEffectIsManualSelection = false;
         Trace($"NEXT_EFFECT_STAGED nextEffect={FormatEffect(nextEffectIndex)} preferred={preferredRepertoire}");
     }
 

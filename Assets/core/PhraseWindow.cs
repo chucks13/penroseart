@@ -51,6 +51,40 @@ public readonly struct PhraseWindow
     }
 
     /// <summary>
+    /// Builds an upcoming Phrase Window from a Track Phase countdown to its start and announced length.
+    /// </summary>
+    public static bool TryFromUpcomingTrackPhase(
+        int beat,
+        int beatsToPhraseStart,
+        int phraseLengthBeats,
+        out PhraseWindow window)
+    {
+        window = default;
+        if (beat < 1 || beatsToPhraseStart < 0 || phraseLengthBeats <= 0)
+        {
+            return false;
+        }
+
+        var startBeat = beat + beatsToPhraseStart;
+        return TryFromStartAndLength(startBeat, phraseLengthBeats, out window);
+    }
+
+    /// <summary>
+    /// Builds a Phrase Window from its start beat and length.
+    /// </summary>
+    public static bool TryFromStartAndLength(int startBeat, int phraseLengthBeats, out PhraseWindow window)
+    {
+        window = default;
+        if (startBeat < 1 || phraseLengthBeats <= 0)
+        {
+            return false;
+        }
+
+        window = new PhraseWindow(startBeat, startBeat + phraseLengthBeats, phraseLengthBeats);
+        return true;
+    }
+
+    /// <summary>
     /// Returns whether two Phrase Windows have the same scheduling identity.
     /// </summary>
     public bool HasSameTimingIdentity(PhraseWindow other)

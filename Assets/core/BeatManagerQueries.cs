@@ -142,10 +142,10 @@ public readonly struct PhaseInfo
     /// <summary>True while the phase state is active now (RaveSystem tri-state 1).</summary>
     public readonly bool inPhase;
 
-    /// <summary>Whole beats until the next phase boundary. Null when the wire did not say.</summary>
+    /// <summary>Whole beats until the active phase boundary or upcoming phase start. Null when the wire did not say.</summary>
     public readonly int? beatsUntilNext;
 
-    /// <summary>Total length of the current phase in beats. Null when the wire did not say.</summary>
+    /// <summary>Total length of the active or upcoming phase in beats. Null when the wire did not say.</summary>
     public readonly int? lengthBeats;
 
     /// <summary>Remaining phase changes in this track. 0 means none left; null when the wire did not say.</summary>
