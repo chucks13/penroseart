@@ -89,6 +89,7 @@ public sealed class ControllerEditor : Editor
     {
         EditorGUILayout.LabelField("PHASE LOCK DETAILS", EditorStyles.boldLabel);
         DrawRow("Anchor", status.HasPhaseAnchor ? "locked" : "none");
+        DrawRow("Timing Source", FormatTimingSource(status));
         DrawRow("Confidence", status.PhaseAnchorConfidence.ToString());
         DrawRow("Phase", status.Phase.PhasePosition > 0 ? $"{status.Phase.PhasePosition} / 16" : "—");
         DrawRow("Bar In Phrase", FormatBeat(status.Phase.BarInPhrase));
@@ -158,6 +159,12 @@ public sealed class ControllerEditor : Editor
     private static string FormatIndexedName(int index, string name)
     {
         return index >= 0 ? $"{index}: {name}" : "—";
+    }
+
+    private static string FormatTimingSource(DirectorStatus status)
+    {
+        var source = status.TimingSource.ToString();
+        return status.TimingReanchored ? $"Re-anchor {source}" : source;
     }
 
     private static string FormatBeat(int beat)

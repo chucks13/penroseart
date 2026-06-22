@@ -123,6 +123,93 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
+    public void TrackPhaseDisappearanceAfterAnchorCoastsAndStillCuesOnCoastedBoundary()
+    {
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
+            director.SetNextEffect(1);
+
+            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            SetTrackPhaseUnavailableBeat(594);
+            director.Tick(0f);
+            Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
+            Assert.That(director.Status.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+            Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
+
+            SetTrackPhaseUnavailableBeat(605);
+            director.Tick(0f);
+
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The coasted anchor should still be a valid synced cue target.");
+            Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
+    }
+
+    [Test]
+    public void FreshTrackPhaseAfterCoastReportsReanchorInDirectorStatus()
+    {
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
+
+            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            director.Tick(0f);
+            SetTrackPhaseUnavailableBeat(594);
+            director.Tick(0f);
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
+
+            SetTrackPhaseBeat(600, phaseActive: 1, beatsToPhraseBoundary: 41, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            Assert.That(director.Status.TimingReanchored, Is.True);
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+            Assert.That(director.Status.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(641));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
+    }
+
+    [Test]
+    public void TrackPhaseDisappearanceWithoutPriorAnchorWaitsInSyncedMode()
+    {
+        director.SetNextEffect(1);
+
+        SetTrackPhaseUnavailableBeat(605);
+        director.Tick(0f);
+
+        Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
+        Assert.That(director.Status.IsSyncedMode, Is.True);
+        Assert.That(director.Status.HasPhaseAnchor, Is.False);
+        Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Unlocked));
+        Assert.That(director.Status.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Unlocked));
+        Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForPhase));
+        Assert.That(switcher.Status.TargetEffectIndex, Is.Not.EqualTo(1), "Unlocked timing should not cue the staged target.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(-1));
+
+        SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Fresh structural timing should let the Director resume cueing from a valid boundary.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
+    }
+
+    [Test]
     public void SameWindowBeatRewindKeepsSelectedPhaseBoundaryPlanAndMovesCursorBack()
     {
         var randomState = Random.state;
@@ -199,6 +286,22 @@ public sealed class DirectorSyncedTailTests
             countBeats = beatsToPhraseBoundary,
             lengthBeats = phraseLengthBeats,
             remaining = 1,
+        };
+    }
+
+    private void SetTrackPhaseUnavailableBeat(int beat)
+    {
+        controller.beatManager.beatData.bpm = 120f;
+        controller.beatManager.beatData.beat = new BeatPosition { current = beat, total = -1 };
+        controller.beatManager.beatData.beatInBar = ((beat - 1) % 4) + 1;
+        controller.beatManager.beatData.phaseState = new PhaseState
+        {
+            current = string.Empty,
+            next = string.Empty,
+            active = -1,
+            countBeats = -1,
+            lengthBeats = -1,
+            remaining = -1,
         };
     }
 

@@ -1199,6 +1199,7 @@ public class Controller : Singleton<Controller>
         if (directorStatus.IsSyncedMode)
         {
             AppendIfNotEmpty(builder, directorStatus.PhaseAnchorConfidence.ToString());
+            AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
             AppendIfNotEmpty(builder, FormatPhasePosition(directorStatus));
             AppendIfNotEmpty(builder, FormatLanding(directorStatus));
             AppendIfNotEmpty(builder, FormatDropCue());
@@ -1258,6 +1259,31 @@ public class Controller : Singleton<Controller>
         var nextEffect = status.NextEffectIndex >= 0 ? status.NextEffectName : "—";
         var nextTransition = status.NextTransitionIndex >= 0 ? status.NextTransitionName : "—";
         return $"next {nextEffect} via {nextTransition}";
+    }
+
+    private static string FormatTimingSource(DirectorStatus status)
+    {
+        string source;
+        switch (status.TimingSource)
+        {
+            case TimingFrameSource.PhaseClockGrid:
+                source = "phase-clock-grid";
+                break;
+            case TimingFrameSource.SelectedPhaseBoundary:
+                source = "selected-phase-boundary";
+                break;
+            case TimingFrameSource.TrackPhaseBoundary:
+                source = "track-phase-boundary";
+                break;
+            case TimingFrameSource.Coast:
+                source = "coast";
+                break;
+            default:
+                source = "unlocked";
+                break;
+        }
+
+        return status.TimingReanchored ? $"re-anchor {source}" : source;
     }
 
     private static string FormatPhasePosition(DirectorStatus status)

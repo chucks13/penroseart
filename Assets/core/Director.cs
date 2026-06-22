@@ -35,6 +35,7 @@ public readonly struct DirectorStatus
         PhaseConfidence.Unlocked,
         PhaseReading.Unavailable,
         TimingFrameSource.Unlocked,
+        false,
         -1,
         -1,
         -1,
@@ -56,6 +57,8 @@ public readonly struct DirectorStatus
     public readonly PhaseReading Phase;
     /// <summary>Source of the current On-Air Timing target.</summary>
     public readonly TimingFrameSource TimingSource;
+    /// <summary>Whether fresh Track Phase replaced a coasted or weaker On-Air Timing target.</summary>
+    public readonly bool TimingReanchored;
     public readonly int PhaseAnchorLandingBeat;
     public readonly int LastChangeBeat;
     public readonly int TransitionLandingBeat;
@@ -76,6 +79,7 @@ public readonly struct DirectorStatus
         PhaseConfidence phaseAnchorConfidence,
         PhaseReading phase,
         TimingFrameSource timingSource,
+        bool timingReanchored,
         int phaseAnchorLandingBeat,
         int lastChangeBeat,
         int transitionLandingBeat,
@@ -96,6 +100,7 @@ public readonly struct DirectorStatus
         PhaseAnchorConfidence = phaseAnchorConfidence;
         Phase = phase;
         TimingSource = timingSource;
+        TimingReanchored = timingReanchored;
         PhaseAnchorLandingBeat = phaseAnchorLandingBeat;
         LastChangeBeat = lastChangeBeat;
         TransitionLandingBeat = transitionLandingBeat;
@@ -331,6 +336,7 @@ public sealed class Director
             timingFrame.PhaseAnchorConfidence,
             timingFrame.Phase,
             timingFrame.Source,
+            timingFrame.Reanchored,
             timingFrame.PhaseAnchorLandingBeat,
             lastChangeBeat,
             transitionLandingBeat,

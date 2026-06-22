@@ -279,6 +279,49 @@ public sealed class OnAirTiming
             lastBeat = input.Beat;
         }
 
+        if (TrackPhaseUnavailable(input) && input.Beat >= 1)
+        {
+            if (HasCoastablePhaseAnchor())
+            {
+                CoastPhaseAnchor(input.Beat, minimumChangeCadenceBeats);
+                lastSource = TimingFrameSource.Coast;
+                return new TimingFrame(
+                    input,
+                    phase,
+                    true,
+                    phaseAnchorConfidence,
+                    phaseAnchorLandingBeat,
+                    false,
+                    default,
+                    TimingFrameSource.Coast,
+                    beatRewoundToNewPass,
+                    correctedPassLocalState,
+                    clearedCueState,
+                    clearedCadenceState,
+                    false);
+            }
+
+            ResetSelectedPhaseBoundaryPlan();
+            hasPhaseAnchor = false;
+            phaseAnchorConfidence = PhaseConfidence.Unlocked;
+            phaseAnchorLandingBeat = -1;
+            lastSource = TimingFrameSource.Unlocked;
+            return new TimingFrame(
+                input,
+                phase,
+                false,
+                PhaseConfidence.Unlocked,
+                -1,
+                false,
+                default,
+                TimingFrameSource.Unlocked,
+                beatRewoundToNewPass,
+                correctedPassLocalState,
+                clearedCueState,
+                clearedCadenceState,
+                false);
+        }
+
         if (phase.Confidence != PhaseConfidence.Unlocked && input.Beat >= 1)
         {
             var previousSource = lastSource;
@@ -356,6 +399,19 @@ public sealed class OnAirTiming
             clearedCueState,
             clearedCadenceState,
             false);
+    }
+
+    private bool HasCoastablePhaseAnchor()
+    {
+        return hasPhaseAnchor
+            && (lastSource == TimingFrameSource.SelectedPhaseBoundary
+                || lastSource == TimingFrameSource.TrackPhaseBoundary
+                || lastSource == TimingFrameSource.Coast);
+    }
+
+    private static bool TrackPhaseUnavailable(OnAirTimingInput input)
+    {
+        return input.TrackPhaseActive < 0;
     }
 
     private void CoastPhaseAnchor(int beat, int minimumChangeCadenceBeats)
