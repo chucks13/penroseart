@@ -34,6 +34,7 @@ public readonly struct DirectorStatus
         false,
         PhaseConfidence.Unlocked,
         PhaseReading.Unavailable,
+        TimingFrameSource.Unlocked,
         -1,
         -1,
         -1,
@@ -53,6 +54,8 @@ public readonly struct DirectorStatus
     public readonly bool HasPhaseAnchor;
     public readonly PhaseConfidence PhaseAnchorConfidence;
     public readonly PhaseReading Phase;
+    /// <summary>Source of the current On-Air Timing target.</summary>
+    public readonly TimingFrameSource TimingSource;
     public readonly int PhaseAnchorLandingBeat;
     public readonly int LastChangeBeat;
     public readonly int TransitionLandingBeat;
@@ -72,6 +75,7 @@ public readonly struct DirectorStatus
         bool hasPhaseAnchor,
         PhaseConfidence phaseAnchorConfidence,
         PhaseReading phase,
+        TimingFrameSource timingSource,
         int phaseAnchorLandingBeat,
         int lastChangeBeat,
         int transitionLandingBeat,
@@ -91,6 +95,7 @@ public readonly struct DirectorStatus
         HasPhaseAnchor = hasPhaseAnchor;
         PhaseAnchorConfidence = phaseAnchorConfidence;
         Phase = phase;
+        TimingSource = timingSource;
         PhaseAnchorLandingBeat = phaseAnchorLandingBeat;
         LastChangeBeat = lastChangeBeat;
         TransitionLandingBeat = transitionLandingBeat;
@@ -123,6 +128,7 @@ public sealed class Director
     private readonly Timer standaloneTimer;
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
+    private readonly OnAirTiming onAirTiming = new OnAirTiming();
 
     private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
@@ -134,27 +140,18 @@ public sealed class Director
     private int lastCueBeat = -1;
     private int transitionStartBeat = -1;
     private int transitionLandingBeat = -1;
-    private bool hasPhaseAnchor;
-    private PhaseConfidence phaseAnchorConfidence = PhaseConfidence.Unlocked;
-    private int phaseAnchorLandingBeat = -1;
-    private PhaseReading phaseReading = PhaseReading.Unavailable;
+    private TimingFrame timingFrame = TimingFrame.Unavailable;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
-    private PhaseInput phaseInput = new PhaseInput(-1, -1, -1, -1, -1, -1);
-    private int selectedBoundaryPhraseStartBeat = -1;
-    private int selectedBoundaryPhraseEndBeat = -1;
-    private int selectedBoundaryPhraseLengthBeats = -1;
-    private int[] selectedPhaseBoundaries = Array.Empty<int>();
-    private int selectedPhaseBoundaryIndex;
 
     /// <summary>Whether the Director currently has a phase grid to aim at.</summary>
-    public bool HasPhaseAnchor => hasPhaseAnchor;
+    public bool HasPhaseAnchor => timingFrame.HasPhaseAnchor;
 
     /// <summary>Confidence for the current phase anchor.</summary>
-    public PhaseConfidence PhaseAnchorConfidence => phaseAnchorConfidence;
+    public PhaseConfidence PhaseAnchorConfidence => timingFrame.PhaseAnchorConfidence;
 
     /// <summary>Absolute beat where the current phase anchor next lands, or -1 when unlocked.</summary>
-    public int PhaseAnchorLandingBeat => phaseAnchorLandingBeat;
+    public int PhaseAnchorLandingBeat => timingFrame.PhaseAnchorLandingBeat;
 
     /// <summary>Whether live OSC data is currently driving sequencing.</summary>
     public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsLiveSource;
@@ -262,7 +259,8 @@ public sealed class Director
         Trace($"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
         switcher.ShowNow(effectIndex);
         currentEffectIndexForSelection = effectIndex;
-        ResetSelectedPhaseBoundaryPlan();
+        onAirTiming.Reset();
+        timingFrame = TimingFrame.Unavailable;
         MarkChangedOnCurrentBeat();
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
@@ -307,7 +305,7 @@ public sealed class Director
         var isSynced = IsSyncedMode;
         var isHeld = controller.TryGetHeldEffectIndex(out _);
         var currentBeat = isSynced && controller.beatManager.Beat is { } beat ? beat : -1;
-        var beatsUntilLanding = hasPhaseAnchor && currentBeat >= 0 ? phaseAnchorLandingBeat - currentBeat : -1;
+        var beatsUntilLanding = timingFrame.HasPhaseAnchor && currentBeat >= 0 ? timingFrame.PhaseAnchorLandingBeat - currentBeat : -1;
         var runwayBeats = NextTransitionRepertoire.RunwayBeats;
         // Match the cue path: cadence belongs to the selected landing boundary, not to the
         // current beat. A tailed transition can complete while the next boundary is already valid.
@@ -315,7 +313,7 @@ public sealed class Director
         if (currentBeat >= 0 && lastChangeBeat != int.MinValue)
         {
             var cadenceReadyBeat = lastChangeBeat + MinimumChangeCadenceBeats;
-            var selectedBoundarySatisfiesCadence = hasPhaseAnchor && phaseAnchorLandingBeat >= cadenceReadyBeat;
+            var selectedBoundarySatisfiesCadence = timingFrame.HasPhaseAnchor && timingFrame.PhaseAnchorLandingBeat >= cadenceReadyBeat;
             if (!selectedBoundarySatisfiesCadence)
             {
                 beatsUntilCadenceReady = Math.Max(0, cadenceReadyBeat - currentBeat);
@@ -329,10 +327,11 @@ public sealed class Director
             mode,
             decision,
             isSynced,
-            hasPhaseAnchor,
-            phaseAnchorConfidence,
-            phaseReading,
-            phaseAnchorLandingBeat,
+            timingFrame.HasPhaseAnchor,
+            timingFrame.PhaseAnchorConfidence,
+            timingFrame.Phase,
+            timingFrame.Source,
+            timingFrame.PhaseAnchorLandingBeat,
             lastChangeBeat,
             transitionLandingBeat,
             currentBeat,
@@ -363,7 +362,7 @@ public sealed class Director
             return DirectorDecision.StandaloneTimer;
         }
 
-        if (!hasPhaseAnchor)
+        if (!timingFrame.HasPhaseAnchor)
         {
             return DirectorDecision.WaitingForPhase;
         }
@@ -381,206 +380,72 @@ public sealed class Director
 
     private void TickStandaloneMode(float deltaTime)
     {
-        phaseReading = PhaseReading.Unavailable;
-        hasPhaseAnchor = false;
-        phaseAnchorConfidence = PhaseConfidence.Unlocked;
-        phaseAnchorLandingBeat = -1;
-        ResetSelectedPhaseBoundaryPlan();
+        timingFrame = TimingFrame.Unavailable;
+        onAirTiming.Reset();
         standaloneTimer.Update(deltaTime);
     }
 
     private void TickSyncedMode(int beat)
     {
         var previousSyncedBeat = lastSyncedBeat;
-        var beatRewoundToNewPass = BeatRewoundToNewPass(previousSyncedBeat, beat);
         lastSyncedBeat = beat;
-
-        if (beatRewoundToNewPass)
-        {
-            lastCueBeat = -1;
-            lastChangeBeat = int.MinValue;
-        }
 
         if (controller.TryGetHeldEffectIndex(out _))
         {
             return;
         }
 
-        RefreshPhaseAnchor(beat, beatRewoundToNewPass);
-        LogBeatRewindIfNeeded(previousSyncedBeat, beat, beatRewoundToNewPass);
+        RefreshTimingFrame();
+        if (timingFrame.BeatRewoundToNewPass)
+        {
+            lastCueBeat = -1;
+            lastChangeBeat = int.MinValue;
+        }
+
+        LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
-        TryStartSyncedCue(beat);
+        TryStartSyncedCue(timingFrame);
     }
 
-    private void RefreshPhaseAnchor(int beat, bool beatRewoundToNewPass)
+    private void RefreshTimingFrame()
     {
-        var previousLandingBeat = phaseAnchorLandingBeat;
-        var previousConfidence = phaseAnchorConfidence;
-        phaseInput = BuildPhaseInput();
-        phaseReading = PhaseClock.Resolve(phaseInput);
-        if (phaseReading.Confidence != PhaseConfidence.Unlocked)
+        var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
+        var previousConfidence = timingFrame.PhaseAnchorConfidence;
+        timingFrame = onAirTiming.ReadFrame(
+            OnAirTimingInput.From(controller.beatManager),
+            previousSelectedPhaseBoundary,
+            MinimumChangeCadenceBeats);
+
+        if (!timingFrame.HasPhaseAnchor)
         {
-            phaseAnchorLandingBeat = ResolveSelectedPhaseBoundary(beat, beatRewoundToNewPass, out var targetSource);
-            hasPhaseAnchor = true;
-            phaseAnchorConfidence = phaseReading.Confidence;
-            if (phaseAnchorLandingBeat != previousLandingBeat || phaseAnchorConfidence != previousConfidence)
+            return;
+        }
+
+        if (timingFrame.IsCoasting)
+        {
+            if (timingFrame.PhaseAnchorLandingBeat != previousLandingBeat)
             {
-                Trace($"ANCHOR_SET beat={beat} input={FormatPhaseInput()} phase={FormatPhase()} target={targetSource} landing={phaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
+                Trace($"ANCHOR_COAST beat={timingFrame.CurrentBeat} input={FormatTimingInput()} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
             }
 
             return;
         }
 
-        if (hasPhaseAnchor)
+        if (timingFrame.PhaseAnchorLandingBeat != previousLandingBeat || timingFrame.PhaseAnchorConfidence != previousConfidence)
         {
-            CoastPhaseAnchor(beat);
-            if (phaseAnchorLandingBeat != previousLandingBeat)
-            {
-                Trace($"ANCHOR_COAST beat={beat} input={FormatPhaseInput()} landing={phaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
-            }
-
-            return;
-        }
-
-        hasPhaseAnchor = false;
-        phaseAnchorConfidence = PhaseConfidence.Unlocked;
-        phaseAnchorLandingBeat = -1;
-    }
-
-    private PhaseInput BuildPhaseInput()
-    {
-        var beatManager = controller.beatManager;
-        var phase = beatManager.Phase;
-        return new PhaseInput(
-            beatManager.Beat ?? -1,
-            beatManager.TotalBeats ?? -1,
-            beatManager.BeatInBar ?? -1,
-            phase is { inPhase: true } ? 1 : phase is { } ? 0 : -1,
-            phase?.beatsUntilNext ?? -1,
-            phase?.lengthBeats ?? -1);
-    }
-
-    private void CoastPhaseAnchor(int beat)
-    {
-        while (beat >= phaseAnchorLandingBeat)
-        {
-            phaseAnchorLandingBeat += MinimumChangeCadenceBeats;
+            Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} phase={FormatPhase()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
         }
     }
 
-    private int ResolveSelectedPhaseBoundary(int beat, bool beatRewoundToNewPass, out string targetSource)
+    private void TryStartSyncedCue(TimingFrame frame)
     {
-        if (TryResolveTrackPhaseBoundary(beat, beatRewoundToNewPass, out var selectedPhaseBoundary, out targetSource))
-        {
-            return selectedPhaseBoundary;
-        }
-
-        ResetSelectedPhaseBoundaryPlan();
-        targetSource = "phase-clock-grid";
-        return GetLandingBeatFromPhasePosition(beat, phaseReading.PhasePosition);
-    }
-
-    private bool TryResolveTrackPhaseBoundary(
-        int beat,
-        bool beatRewoundToNewPass,
-        out int selectedPhaseBoundary,
-        out string targetSource)
-    {
-        selectedPhaseBoundary = -1;
-        targetSource = "none";
-        if (!PhraseWindow.TryFromTrackPhase(
-            beat,
-            phaseInput.PhaseCountBeats,
-            phaseInput.PhaseLengthBeats,
-            out var phraseWindow))
-        {
-            return false;
-        }
-
-        selectedPhaseBoundary = ResolveSelectedPhaseBoundaryFromPlan(beat, phraseWindow, beatRewoundToNewPass, out targetSource);
-        return true;
-    }
-
-    private int ResolveSelectedPhaseBoundaryFromPlan(
-        int beat,
-        PhraseWindow phraseWindow,
-        bool beatRewoundToNewPass,
-        out string targetSource)
-    {
-        if (NeedsSelectedPhaseBoundaryPlan(beat, phraseWindow))
-        {
-            BuildSelectedPhaseBoundaryPlan(beat, phraseWindow);
-        }
-        else if (beatRewoundToNewPass)
-        {
-            selectedPhaseBoundaryIndex = 0;
-        }
-
-        while (selectedPhaseBoundaryIndex < selectedPhaseBoundaries.Length - 1
-            && selectedPhaseBoundaries[selectedPhaseBoundaryIndex] <= beat)
-        {
-            selectedPhaseBoundaryIndex++;
-        }
-
-        var target = selectedPhaseBoundaries.Length > 0
-            ? selectedPhaseBoundaries[Mathf.Clamp(selectedPhaseBoundaryIndex, 0, selectedPhaseBoundaries.Length - 1)]
-            : phraseWindow.EndBeat;
-        targetSource = target == selectedBoundaryPhraseEndBeat ? "track-phase-boundary" : "selected-phase-boundary";
-        return target;
-    }
-
-    private bool NeedsSelectedPhaseBoundaryPlan(int beat, PhraseWindow phraseWindow)
-    {
-        if (selectedPhaseBoundaries.Length == 0 || selectedPhaseBoundaries[selectedPhaseBoundaries.Length - 1] <= beat)
-        {
-            return true;
-        }
-
-        return selectedBoundaryPhraseStartBeat != phraseWindow.StartBeat
-            || selectedBoundaryPhraseEndBeat != phraseWindow.EndBeat
-            || selectedBoundaryPhraseLengthBeats != phraseWindow.LengthBeats;
-    }
-
-    private void BuildSelectedPhaseBoundaryPlan(int beat, PhraseWindow phraseWindow)
-    {
-        var plan = SelectedPhaseBoundaryPlan.Build(
-            phraseWindow,
-            beat,
-            CanChangeAtBeat,
-            (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
-
-        selectedBoundaryPhraseStartBeat = plan.PhraseStartBeat;
-        selectedBoundaryPhraseEndBeat = plan.PhraseEndBeat;
-        selectedBoundaryPhraseLengthBeats = phraseWindow.LengthBeats;
-        selectedPhaseBoundaries = plan.SelectedPhaseBoundaries;
-        selectedPhaseBoundaryIndex = 0;
-
-        var interiorTransitionCount = Math.Max(0, selectedPhaseBoundaries.Length - 1);
-        Trace($"SELECTED_PHASE_BOUNDARY_PLAN beat={beat} phraseStart={selectedBoundaryPhraseStartBeat} phraseEnd={selectedBoundaryPhraseEndBeat} phraseLength={selectedBoundaryPhraseLengthBeats} targets={FormatBeatList(selectedPhaseBoundaries)} interiorSelected={interiorTransitionCount} lastChange={FormatBeat(lastChangeBeat)}");
-    }
-
-    private void ResetSelectedPhaseBoundaryPlan()
-    {
-        selectedBoundaryPhraseStartBeat = -1;
-        selectedBoundaryPhraseEndBeat = -1;
-        selectedBoundaryPhraseLengthBeats = -1;
-        selectedPhaseBoundaries = Array.Empty<int>();
-        selectedPhaseBoundaryIndex = 0;
-    }
-
-    private static int GetLandingBeatFromPhasePosition(int beat, int phasePosition)
-    {
-        var beatsUntilLanding = PhaseClock.PhraseBeats - phasePosition + 1;
-        return beat + beatsUntilLanding;
-    }
-
-    private void TryStartSyncedCue(int beat)
-    {
-        if (!hasPhaseAnchor)
+        if (!frame.HasPhaseAnchor)
         {
             return;
         }
 
+        var beat = frame.CurrentBeat;
         var transitionIndex = nextTransitionIndex;
         var targetEffectIndex = nextEffectIndex;
         ValidateTransitionIndex(transitionIndex);
@@ -590,7 +455,7 @@ public sealed class Director
         var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
         var cueDecision = SyncedCueDecision.Evaluate(
             beat,
-            phaseAnchorLandingBeat,
+            frame.SelectedPhaseBoundary,
             repertoire,
             lastCue,
             previousSelectedPhaseBoundary,
@@ -670,15 +535,7 @@ public sealed class Director
             return;
         }
 
-        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatPhaseInput()} phase={FormatPhase()} anchor={FormatBeat(phaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
-    }
-
-    private static bool BeatRewoundToNewPass(int previousBeat, int beat)
-    {
-        return previousBeat >= 1
-            && beat >= 1
-            && beat < previousBeat
-            && previousBeat - beat + 1 >= MinimumChangeCadenceBeats;
+        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} phase={FormatPhase()} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
     }
 
     private void LogSyncedBeatIfNeeded(int beat)
@@ -688,9 +545,9 @@ public sealed class Director
             return;
         }
 
-        var beatsUntilLanding = hasPhaseAnchor ? phaseAnchorLandingBeat - beat : -1;
-        var canChangeAtLanding = hasPhaseAnchor && CanChangeAtBeat(phaseAnchorLandingBeat);
-        Trace($"SYNC_BEAT beat={beat} input={FormatPhaseInput()} phase={FormatPhase()} anchor={FormatBeat(phaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
+        var beatsUntilLanding = timingFrame.HasPhaseAnchor ? timingFrame.PhaseAnchorLandingBeat - beat : -1;
+        var canChangeAtLanding = timingFrame.HasPhaseAnchor && CanChangeAtBeat(timingFrame.PhaseAnchorLandingBeat);
+        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} phase={FormatPhase()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
         lastLoggedSyncedBeat = beat;
     }
 
@@ -731,14 +588,32 @@ public sealed class Director
 
     private string FormatPhase()
     {
-        return phaseReading.PhasePosition > 0
-            ? $"{phaseReading.PhasePosition}/16:{phaseReading.Confidence}"
-            : $"none:{phaseReading.Confidence}";
+        return timingFrame.Phase.PhasePosition > 0
+            ? $"{timingFrame.Phase.PhasePosition}/16:{timingFrame.Phase.Confidence}"
+            : $"none:{timingFrame.Phase.Confidence}";
     }
 
-    private string FormatPhaseInput()
+    private string FormatTimingInput()
     {
-        return $"beat={phaseInput.Beat},total={FormatBeat(phaseInput.TotalBeats)},barBeat={FormatBeat(phaseInput.BeatInBar)},phaseActive={phaseInput.PhaseActive},phaseCount={FormatBeat(phaseInput.PhaseCountBeats)},phaseLength={FormatBeat(phaseInput.PhaseLengthBeats)}";
+        var input = timingFrame.Input;
+        return $"beat={input.Beat},total={FormatBeat(input.TotalBeats)},barBeat={FormatBeat(input.BeatInBar)},phaseActive={input.TrackPhaseActive},phaseCount={FormatBeat(input.BeatsUntilPhraseBoundary)},phaseLength={FormatBeat(input.PhraseLengthBeats)}";
+    }
+
+    private static string FormatTimingSource(TimingFrameSource source)
+    {
+        switch (source)
+        {
+            case TimingFrameSource.PhaseClockGrid:
+                return "phase-clock-grid";
+            case TimingFrameSource.SelectedPhaseBoundary:
+                return "selected-phase-boundary";
+            case TimingFrameSource.TrackPhaseBoundary:
+                return "track-phase-boundary";
+            case TimingFrameSource.Coast:
+                return "coast";
+            default:
+                return "unlocked";
+        }
     }
 
     private static string FormatBeat(int beat)
@@ -749,11 +624,6 @@ public sealed class Director
     private static string FormatNullableBeat(int? beat)
     {
         return beat is { } value ? value.ToString() : "none";
-    }
-
-    private static string FormatBeatList(int[] beats)
-    {
-        return beats == null || beats.Length == 0 ? "none" : string.Join(",", beats);
     }
 
     private void RunStandaloneTimerDecision()

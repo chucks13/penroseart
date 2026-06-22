@@ -132,6 +132,7 @@ public sealed class DirectorSyncedTailTests
             SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
             director.Tick(0f);
             Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SelectedPhaseBoundary));
 
             SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
             director.Tick(0f);
