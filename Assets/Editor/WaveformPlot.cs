@@ -30,6 +30,8 @@ internal static class WaveformPlot
     private const float VPad = 3f;   // keep the peak (1) and trough (0) just off the track edges
     private const int Samples = 128; // polyline resolution across the bar
 
+    private static readonly Vector3[] CurvePoints = new Vector3[Samples + 1];
+
     /// <summary>
     /// Draws the envelope plot into <paramref name="rect"/>: dark track,
     /// <see cref="Waveform.BeatsPerBar"/> gridlines, and the anti-aliased curve of
@@ -65,16 +67,15 @@ internal static class WaveformPlot
         var top = rect.y + VPad;
         var bottom = rect.yMax - VPad;
 
-        var points = new Vector3[Samples + 1];
         for (var i = 0; i <= Samples; i++)
         {
             var p = i / (float)Samples;
             var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Evaluate(p)));
-            points[i] = new Vector3(rect.x + (rect.width * p), y, 0f);
+            CurvePoints[i] = new Vector3(rect.x + (rect.width * p), y, 0f);
         }
 
         Handles.color = curveColor;
-        Handles.DrawAAPolyLine(2.5f, points);
+        Handles.DrawAAPolyLine(2.5f, CurvePoints);
 
         if (!playheadPhase.HasValue)
         {

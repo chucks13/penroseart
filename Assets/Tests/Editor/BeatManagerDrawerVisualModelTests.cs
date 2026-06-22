@@ -13,7 +13,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void BuildBeatDotGlyphsUsesRaveSystemFilledDotsForMusicalBeatPosition()
     {
-        var glyphs = BeatManagerDrawer.BuildBeatDotGlyphs(active: true, beatInBar: 3);
+        var glyphs = BeatManagerDashboardModel.BuildBeatDotGlyphs(active: true, beatInBar: 3);
 
         Assert.That(glyphs, Is.EqualTo("●●●○"));
     }
@@ -21,7 +21,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void BuildBeatDotGlyphsUsesPlaceholderWhenBeatClockIsUnavailable()
     {
-        var glyphs = BeatManagerDrawer.BuildBeatDotGlyphs(active: false, beatInBar: -1);
+        var glyphs = BeatManagerDashboardModel.BuildBeatDotGlyphs(active: false, beatInBar: -1);
 
         Assert.That(glyphs, Is.EqualTo("○○○○"));
     }
@@ -29,7 +29,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void BuildBeatDotGlyphsUsesPlaceholderWhenBeatLabelIsOutOfRange()
     {
-        var glyphs = BeatManagerDrawer.BuildBeatDotGlyphs(active: true, beatInBar: 7);
+        var glyphs = BeatManagerDashboardModel.BuildBeatDotGlyphs(active: true, beatInBar: 7);
 
         Assert.That(glyphs, Is.EqualTo("○○○○"));
     }
@@ -37,8 +37,19 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void GetClampedEighthPulseValueUsesStrongerOnBeatOrOffBeatPulse()
     {
-        var pulse = BeatManagerDrawer.GetClampedEighthPulseValue(0.25f, 1.25f);
+        var pulse = BeatManagerDashboardModel.GetClampedEighthPulseValue(0.25f, 1.25f);
 
         Assert.That(pulse, Is.EqualTo(1f));
+    }
+
+    [Test]
+    public void FromUsesOfflineHeaderWhenBeatManagerIsUnavailable()
+    {
+        var model = BeatManagerDashboardModel.From(null, onScreenVariant: -1);
+
+        Assert.That(model.Active, Is.False);
+        Assert.That(model.BadgeText, Is.EqualTo("OFFLINE"));
+        Assert.That(model.TrackText, Is.EqualTo("—"));
+        Assert.That(model.HeaderRightText, Is.EqualTo("-- BPM"));
     }
 }

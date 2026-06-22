@@ -45,10 +45,7 @@ public sealed class PenroseTuningWindow : EditorWindow
 
     private void OnInspectorUpdate()
     {
-        if (Application.isPlaying)
-        {
-            Repaint();
-        }
+        LiveControllerAccess.RepaintDuringPlayMode(this);
     }
 
     private void OnGUI()
@@ -90,7 +87,7 @@ public sealed class PenroseTuningWindow : EditorWindow
 
     private void DrawTransitionsTab()
     {
-        TryGetLiveController(out var liveController);
+        LiveControllerAccess.TryGet(out var liveController);
         if (liveController != null)
         {
             SyncSelectedTransitionFromDirector(liveController);
@@ -316,18 +313,6 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
 
         SetSelectedTransitionIndex(nextTransitionIndex);
-    }
-
-    private static bool TryGetLiveController(out Controller liveController)
-    {
-        liveController = null;
-        if (!Application.isPlaying || !Controller.HasInstance)
-        {
-            return false;
-        }
-
-        liveController = Controller.Instance;
-        return liveController != null;
     }
 
     private bool IsValidTransitionIndex(int index)

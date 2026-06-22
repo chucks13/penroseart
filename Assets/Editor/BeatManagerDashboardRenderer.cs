@@ -1,0 +1,710 @@
+using UnityEditor;
+using UnityEngine;
+
+/// <summary>
+/// IMGUI renderer for the BeatManager Inspector dashboard.
+/// </summary>
+/// <remarks>
+/// This module owns layout, colors, styles, and widgets. It consumes <see cref="BeatManagerDashboardModel"/>
+/// instead of reading runtime state directly, keeping Unity drawing separate from the dashboard's display
+/// decisions. User actions are returned to the drawer adapter so writes to live wall state stay outside the
+/// renderer.
+/// </remarks>
+internal static class BeatManagerDashboardRenderer
+{
+    private const float PanelPadding = 12f;
+    private const float HeaderHeight = 22f;
+    private const float HeaderGap = 12f;
+    private const float BodyHeight = 78f;
+    private const float BodyGap = 12f;
+    private const float ChipHeight = 24f;
+    private const float SectionGap = 12f;
+    private const float QueriesHeaderHeight = 18f;
+    private const float QueriesHeaderGap = 10f;
+    private const float QueryRowHeight = 22f;
+    private const float QueryRowGap = 6f;
+    private const float SwatchRowHeight = 26f;
+    private const int QueryRowCount = 6; // envelope, fill, drop, energy, phase, levels
+
+    public const float DashboardHeight =
+        PanelPadding + HeaderHeight + HeaderGap + BodyHeight + BodyGap + ChipHeight
+        + WaveformStripGap + WaveformSelectorHeight + WaveformSelectorGap + WaveformStripHeight
+        + SectionGap + QueriesHeaderHeight + QueriesHeaderGap
+        + (QueryRowCount * (QueryRowHeight + QueryRowGap))
+        + SwatchRowHeight + PanelPadding;
+
+    private const float BarHeight = 8f;
+
+    private const float LeftZoneWidth = 232f;
+    private const float LeftZoneMaxFraction = 0.55f;
+    private const float ZoneDividerGap = 16f;
+    private const float RowLabelWidth = 64f;
+    private const float MarkerStartX = 72f;
+    private const float MarkerSpacing = 40f;
+    private const float MarkerWidth = 28f;
+    private const float DotRowHeight = 26f;
+    private const float DotRowGap = 4f;
+    private const float ColumnLabelHeight = 12f;
+
+    private const float MeterRowHeight = 22f;
+    private const float MeterRowGap = 6f;
+    private const float MeterLabelWidth = 40f;
+    private const float MeterValueWidth = 46f;
+
+    private const float ChipGap = 8f;
+
+    private const float WaveformStripGap = 12f;
+    private const float WaveformSelectorHeight = 20f;
+    private const float WaveformSelectorGap = 6f;
+    private const float WaveformStripHeight = 46f;
+    private const float WaveformValueWidth = 46f;
+
+    private const float QueryRowLabelWidth = 70f;
+    private const float RightTextWidth = 150f;
+    private const float StatusChipWidth = 46f;
+    private const float PhaseLabelWidth = 90f;
+    private const float SegmentGap = 6f;
+
+    private const string NullValueText = "—  null → Standalone";
+    private const string OffBeatActive = "◆";
+    private const string OffBeatInactive = "◇";
+
+    private const string EnvelopeTooltip =
+        "Envelope(variant): the Waveform Pool envelope evaluated at the current Bar Phase — the primitive under " +
+        "BeatBrightness/BeatTime. Shows the wall's effective variant (the lock, or the on-screen effect's). " +
+        "Null: no beat clock is running.";
+    private const string FillTooltip =
+        "Fill: a short build-up flourish. IN n = counting down (the bar fills as it approaches over the last " +
+        "32 beats); NOW = riding it (the bar sweeps its progress). next — · ×0 = the track's Fills are all " +
+        "behind the playhead. Null: no Fill data on the wire right now.";
+    private const string DropTooltip =
+        "Drop: the payoff section, same anatomy as Fill — the bar fills toward the start (land transitions " +
+        "on it), then sweeps its progress while it plays. next — · ×0 = no Drops left ahead. Null: no Drop " +
+        "data on the wire right now.";
+    private const string EnergyTooltip =
+        "Energy: the track's intensity tier in the closed Low/Mid/High vocabulary, with where it is heading " +
+        "and the changes still ahead. The bar sweeps the current same-energy run. Null: unavailable, or the " +
+        "wire label was unrecognized.";
+    private const string PhaseTooltip =
+        "Phase: the track's current section label (open vocabulary — display it, don't keyword-parse it), with " +
+        "contrived progress and the upcoming section. Null: no phase data on the wire right now.";
+    private const string LevelsTooltip =
+        "Levels: low/mid/high band energy with BeatManager's attack/release smoothing already applied " +
+        "(fast up, slow down — anti-flicker). Null: no live Levels; the local simulator never supplies them.";
+    private const string ColorTooltip =
+        "Color Bank, the three contrived Levels colors — RGB: bands mapped straight onto red/green/blue channels; " +
+        "HUE: spectral-centroid hue, dominance saturation, strongest-band value; PAL: the live AnimPalette read " +
+        "at the bands' centroid, scaled by the strongest band.";
+
+    private static readonly GUIContent EnvelopeLabel = new GUIContent("ENVELOPE", EnvelopeTooltip);
+    private static readonly GUIContent FillLabel = new GUIContent("FILL", FillTooltip);
+    private static readonly GUIContent DropLabel = new GUIContent("DROP", DropTooltip);
+    private static readonly GUIContent EnergyLabel = new GUIContent("ENERGY", EnergyTooltip);
+    private static readonly GUIContent PhaseLabel = new GUIContent("PHASE", PhaseTooltip);
+    private static readonly GUIContent LevelsLabel = new GUIContent("LEVELS", LevelsTooltip);
+    private static readonly GUIContent ColorLabel = new GUIContent("COLOR", ColorTooltip);
+
+    private static readonly Color PanelBackgroundColor = new Color(0.035f, 0.04f, 0.055f);
+    private static readonly Color PanelLiveAccentColor = new Color(0.10f, 0.85f, 0.95f);
+    private static readonly Color PanelSimAccentColor = new Color(0.95f, 0.72f, 0.18f);
+    private static readonly Color PanelOfflineAccentColor = new Color(0.45f, 0.12f, 0.16f);
+    private static readonly Color LiveBadgeColor = new Color(0.02f, 0.38f, 0.30f);
+    private static readonly Color SimBadgeColor = new Color(0.46f, 0.34f, 0.06f);
+    private static readonly Color OfflineBadgeColor = new Color(0.28f, 0.08f, 0.08f);
+    private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.08f);
+    private static readonly Color MeterTrackColor = new Color(0.07f, 0.08f, 0.10f);
+    private static readonly Color BeatMeterColor = new Color(0.12f, 0.92f, 1f);
+    private static readonly Color OffBeatMeterColor = new Color(1f, 0.42f, 0.92f);
+    private static readonly Color EighthMeterColor = new Color(0.62f, 1f, 0.25f);
+    private static readonly Color BeatChipColor = new Color(0.08f, 0.28f, 0.34f);
+    private static readonly Color OnBeatChipColor = new Color(0.10f, 0.32f, 0.18f);
+    private static readonly Color OffBeatChipColor = new Color(0.26f, 0.10f, 0.32f);
+    private static readonly Color OffBeatGateChipColor = new Color(0.24f, 0.10f, 0.25f);
+    private static readonly Color DisabledDotColor = new Color(0.32f, 0.34f, 0.38f);
+    private static readonly Color PastBeatDotColor = new Color(0.16f, 0.42f, 0.45f);
+    private static readonly Color FutureBeatDotColor = new Color(0.30f, 0.33f, 0.38f);
+    private static readonly Color CurrentBeatSteadyColor = new Color(0.10f, 0.70f, 0.78f);
+    private static readonly Color CurrentBeatFlashColor = new Color(0.28f, 1f, 0.98f);
+    private static readonly Color OffBeatSteadyColor = new Color(0.45f, 0.08f, 0.42f);
+    private static readonly Color OffBeatFlashColor = new Color(1f, 0.42f, 0.92f);
+    private static readonly Color OffBeatInactiveColor = new Color(0.34f, 0.24f, 0.38f, 1f);
+    private static readonly Color OffBeatDisabledColor = new Color(0.34f, 0.24f, 0.38f, 0.55f);
+    private static readonly Color WaveformCurveIdleColor = new Color(0.34f, 0.42f, 0.47f);
+    private static readonly Color EnvelopeMeterColor = new Color(0.12f, 0.92f, 1f);
+    private static readonly Color FillNowChipColor = new Color(0.10f, 0.42f, 0.22f);
+    private static readonly Color FillSoonChipColor = new Color(0.08f, 0.28f, 0.20f);
+    private static readonly Color FillMeterColor = new Color(0.35f, 0.95f, 0.55f);
+    private static readonly Color DropNowChipColor = new Color(0.44f, 0.12f, 0.30f);
+    private static readonly Color DropSoonChipColor = new Color(0.24f, 0.10f, 0.22f);
+    private static readonly Color DropMeterColor = new Color(1f, 0.42f, 0.62f);
+    private static readonly Color PhraseEventIdleChipColor = new Color(0.20f, 0.21f, 0.24f);
+    private static readonly Color EnergyLowChipColor = new Color(0.10f, 0.30f, 0.45f);
+    private static readonly Color EnergyMidChipColor = new Color(0.46f, 0.34f, 0.06f);
+    private static readonly Color EnergyHighChipColor = new Color(0.50f, 0.12f, 0.16f);
+    private static readonly Color EnergyMeterColor = new Color(1f, 0.72f, 0.25f);
+    private static readonly Color PhaseMeterColor = new Color(0.62f, 0.55f, 1f);
+    private static readonly Color LowBandColor = new Color(0.95f, 0.40f, 0.30f);
+    private static readonly Color MidBandColor = new Color(0.40f, 0.90f, 0.45f);
+    private static readonly Color HighBandColor = new Color(0.40f, 0.60f, 1f);
+    private static readonly Color SwatchBorderColor = new Color(1f, 1f, 1f, 0.18f);
+
+    private static GUIStyle titleStyle;
+    private static GUIStyle rowLabelStyle;
+    private static GUIStyle valueStyle;
+    private static GUIStyle badgeStyle;
+    private static GUIStyle dotStyle;
+    private static GUIStyle markerLabelStyle;
+    private static GUIStyle chipLabelStyle;
+    private static GUIStyle chipValueStyle;
+    private static GUIStyle chipValueRightStyle;
+    private static GUIStyle queriesHeaderStyle;
+    private static GUIStyle hintStyle;
+    private static GUIStyle nullStyle;
+    private static GUIStyle nullCenterStyle;
+    private static GUIStyle statusChipStyle;
+    private static GUIStyle phaseTextStyle;
+    private static GUIStyle bandLabelStyle;
+
+    /// <summary>Draws the full dashboard and returns user actions for the drawer adapter to apply.</summary>
+    public static BeatManagerDashboardActions Draw(Rect rect, BeatManagerDashboardModel model,
+        WaveformSelectorView selector, Waveform waveform)
+    {
+        EnsureStyles();
+
+        var accent = !model.Active ? PanelOfflineAccentColor : model.Live ? PanelLiveAccentColor : PanelSimAccentColor;
+        DrawPanelBackground(rect, accent);
+
+        var content = new Rect(
+            rect.x + PanelPadding,
+            rect.y + PanelPadding,
+            Mathf.Max(0f, rect.width - (PanelPadding * 2f)),
+            rect.height - (PanelPadding * 2f));
+
+        DrawHeader(new Rect(content.x, content.y, content.width, HeaderHeight), model);
+
+        var body = new Rect(content.x, content.y + HeaderHeight + HeaderGap, content.width, BodyHeight);
+        var leftWidth = Mathf.Min(LeftZoneWidth, body.width * LeftZoneMaxFraction);
+        var leftZone = new Rect(body.x, body.y, leftWidth, body.height);
+        DrawPositionZone(leftZone, model);
+
+        var dividerX = leftZone.xMax + (ZoneDividerGap * 0.5f);
+        EditorGUI.DrawRect(new Rect(dividerX, body.y + 2f, 1f, body.height - 4f), DividerColor);
+
+        var rightX = leftZone.xMax + ZoneDividerGap;
+        DrawPulseZone(new Rect(rightX, body.y, Mathf.Max(0f, body.xMax - rightX), body.height), model);
+
+        var chipsRect = new Rect(content.x, body.yMax + BodyGap, content.width, ChipHeight);
+        DrawCountdownChips(chipsRect, model);
+
+        var selectorRect = new Rect(content.x, chipsRect.yMax + WaveformStripGap, content.width, WaveformSelectorHeight);
+        var actions = DrawWaveformSelector(selectorRect, selector);
+
+        var stripRect = new Rect(content.x, selectorRect.yMax + WaveformSelectorGap, content.width, WaveformStripHeight);
+        DrawWaveformStrip(stripRect, model, waveform);
+
+        var queriesY = stripRect.yMax + SectionGap;
+        GUI.Label(new Rect(content.x, queriesY, content.width * 0.5f, QueriesHeaderHeight), "RHYTHM QUERIES", queriesHeaderStyle);
+        GUI.Label(new Rect(content.x + (content.width * 0.5f), queriesY, content.width * 0.5f, QueriesHeaderHeight),
+            "— = null → Standalone", hintStyle);
+
+        var y = queriesY + QueriesHeaderHeight + QueriesHeaderGap;
+        DrawEnvelopeRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Envelope);
+        y += QueryRowHeight + QueryRowGap;
+
+        DrawPhraseEventRow(new Rect(content.x, y, content.width, QueryRowHeight), FillLabel, model.Fill,
+            FillNowChipColor, FillSoonChipColor, FillMeterColor);
+        y += QueryRowHeight + QueryRowGap;
+
+        DrawPhraseEventRow(new Rect(content.x, y, content.width, QueryRowHeight), DropLabel, model.Drop,
+            DropNowChipColor, DropSoonChipColor, DropMeterColor);
+        y += QueryRowHeight + QueryRowGap;
+
+        DrawEnergyRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Energy);
+        y += QueryRowHeight + QueryRowGap;
+
+        DrawPhaseRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Phase);
+        y += QueryRowHeight + QueryRowGap;
+
+        DrawLevelsRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Levels);
+        y += QueryRowHeight + QueryRowGap;
+
+        DrawColorRow(new Rect(content.x, y, content.width, SwatchRowHeight), model.ColorBank);
+        return actions;
+    }
+
+    private static void DrawHeader(Rect rect, BeatManagerDashboardModel model)
+    {
+        var badgeColor = !model.Active ? OfflineBadgeColor : model.Live ? LiveBadgeColor : SimBadgeColor;
+        var badgeRect = new Rect(rect.x, rect.y, 74f, rect.height);
+        EditorGUI.DrawRect(badgeRect, badgeColor);
+        GUI.Label(badgeRect, model.BadgeText, badgeStyle);
+
+        const float rightWidth = 132f;
+        var titleWidth = Mathf.Max(0f, rect.width - badgeRect.width - rightWidth - 16f);
+        var titleRect = new Rect(badgeRect.xMax + 8f, rect.y, titleWidth, rect.height);
+        GUI.Label(titleRect, model.TrackText, titleStyle);
+
+        var rightRect = new Rect(rect.xMax - rightWidth, rect.y, rightWidth, rect.height);
+        GUI.Label(rightRect, model.HeaderRightText, valueStyle);
+    }
+
+    private static void DrawPositionZone(Rect zone, BeatManagerDashboardModel model)
+    {
+        var beatRow = new Rect(zone.x, zone.y + 2f, zone.width, DotRowHeight);
+        DrawBeatDotsRow(beatRow, model);
+
+        var offRow = new Rect(zone.x, beatRow.yMax + DotRowGap, zone.width, DotRowHeight);
+        DrawOffBeatRow(offRow, model);
+
+        DrawColumnLabels(new Rect(zone.x, offRow.yMax, zone.width, ColumnLabelHeight));
+    }
+
+    private static void DrawBeatDotsRow(Rect rect, BeatManagerDashboardModel model)
+    {
+        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), "BEAT", rowLabelStyle);
+
+        var spacing = ComputeMarkerSpacing(rect);
+        var markerWidth = Mathf.Min(MarkerWidth, spacing);
+        for (var i = 0; i < BeatManagerDashboardModel.BeatSlotCount; i++)
+        {
+            var beatLabel = i + 1;
+            var markerRect = new Rect(rect.x + MarkerStartX + (i * spacing), rect.y, markerWidth, rect.height);
+            DrawMarker(markerRect, model.GetBeatGlyph(beatLabel), GetBeatDotColor(model, beatLabel));
+        }
+    }
+
+    private static void DrawOffBeatRow(Rect rect, BeatManagerDashboardModel model)
+    {
+        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), "OFFBEAT", rowLabelStyle);
+
+        var spacing = ComputeMarkerSpacing(rect);
+        var markerWidth = Mathf.Min(MarkerWidth, spacing);
+        for (var i = 0; i < BeatManagerDashboardModel.BeatSlotCount; i++)
+        {
+            var enabled = model.IsOffBeatEnabled(i);
+            var markerRect = new Rect(rect.x + MarkerStartX + (i * spacing), rect.y, markerWidth, rect.height);
+            var color = enabled
+                ? Color.Lerp(OffBeatSteadyColor, OffBeatFlashColor, model.OffBeatPulse)
+                : model.Active ? OffBeatInactiveColor : OffBeatDisabledColor;
+            DrawMarker(markerRect, enabled ? OffBeatActive : OffBeatInactive, color);
+        }
+    }
+
+    private static void DrawColumnLabels(Rect rect)
+    {
+        var spacing = ComputeMarkerSpacing(rect);
+        var markerWidth = Mathf.Min(MarkerWidth, spacing);
+        for (var i = 0; i < BeatManagerDashboardModel.BeatSlotCount; i++)
+        {
+            var markerRect = new Rect(rect.x + MarkerStartX + (i * spacing), rect.y, markerWidth, rect.height);
+            GUI.Label(markerRect, (i + 1).ToString(), markerLabelStyle);
+        }
+    }
+
+    private static float ComputeMarkerSpacing(Rect zone)
+    {
+        var available = Mathf.Max(0f, zone.width - MarkerStartX - MarkerWidth);
+        return Mathf.Min(MarkerSpacing, available / (BeatManagerDashboardModel.BeatSlotCount - 1));
+    }
+
+    private static void DrawPulseZone(Rect rect, BeatManagerDashboardModel model)
+    {
+        var step = MeterRowHeight + MeterRowGap;
+        DrawPulseMeterRow(new Rect(rect.x, rect.y, rect.width, MeterRowHeight), "BEAT", model.BeatPulse, BeatMeterColor, model.Active);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y + step, rect.width, MeterRowHeight), "OFF", model.OffBeatPulse, OffBeatMeterColor, model.Active);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y + (step * 2f), rect.width, MeterRowHeight), "8TH", model.EighthPulse, EighthMeterColor, model.Active);
+    }
+
+    private static void DrawPulseMeterRow(Rect rect, string label, float pulse, Color color, bool active)
+    {
+        GUI.Label(new Rect(rect.x, rect.y, MeterLabelWidth, rect.height), label, rowLabelStyle);
+
+        var barX = rect.x + MeterLabelWidth + 4f;
+        var barRight = rect.xMax - MeterValueWidth - 6f;
+        var barRect = new Rect(barX, rect.y + ((rect.height - BarHeight) * 0.5f), Mathf.Max(0f, barRight - barX), BarHeight);
+        EditorGUI.DrawRect(barRect, MeterTrackColor);
+
+        var fill = new Rect(barRect.x, barRect.y, barRect.width * Mathf.Clamp01(pulse), barRect.height);
+        var fillColor = active ? color : new Color(color.r * 0.25f, color.g * 0.25f, color.b * 0.25f, 0.8f);
+        EditorGUI.DrawRect(fill, fillColor);
+
+        var shine = new Rect(fill.x, fill.y, fill.width, Mathf.Max(1f, fill.height * 0.35f));
+        EditorGUI.DrawRect(shine, new Color(1f, 1f, 1f, active ? 0.22f : 0.08f));
+
+        GUI.Label(new Rect(rect.xMax - MeterValueWidth, rect.y, MeterValueWidth, rect.height), $"{pulse:0.00}", valueStyle);
+    }
+
+    private static void DrawCountdownChips(Rect rect, BeatManagerDashboardModel model)
+    {
+        var chipWidth = Mathf.Max(0f, (rect.width - (ChipGap * 3f)) / 4f);
+        var step = chipWidth + ChipGap;
+
+        DrawCountdownChip(new Rect(rect.x, rect.y, chipWidth, rect.height), model.NextBeat, BeatChipColor);
+        DrawCountdownChip(new Rect(rect.x + step, rect.y, chipWidth, rect.height), model.OnBeatGate, OnBeatChipColor);
+        DrawCountdownChip(new Rect(rect.x + (step * 2f), rect.y, chipWidth, rect.height), model.NextOffBeat, OffBeatChipColor);
+        DrawCountdownChip(new Rect(rect.x + (step * 3f), rect.y, chipWidth, rect.height), model.OffBeatGate, OffBeatGateChipColor);
+    }
+
+    private static BeatManagerDashboardActions DrawWaveformSelector(Rect rect, WaveformSelectorView selector)
+    {
+        const float editButtonWidth = 90f;
+        const float gap = 6f;
+
+        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), selector.Live ? "WALL" : "PREVIEW", rowLabelStyle);
+
+        var popupX = rect.x + RowLabelWidth;
+        var popupRight = rect.xMax - editButtonWidth - gap;
+        var popupRect = new Rect(popupX, rect.y, Mathf.Max(0f, popupRight - popupX), rect.height);
+
+        var chosen = EditorGUI.Popup(popupRect, selector.ShownIndex, selector.Options);
+        var selectedIndex = chosen != selector.ShownIndex ? chosen : -1;
+
+        var buttonRect = new Rect(rect.xMax - editButtonWidth, rect.y, editButtonWidth, rect.height);
+        var openPoolEditor = GUI.Button(buttonRect, "Edit Pool…");
+        return selectedIndex >= 0 || openPoolEditor
+            ? new BeatManagerDashboardActions(selectedIndex, openPoolEditor)
+            : BeatManagerDashboardActions.None;
+    }
+
+    private static void DrawWaveformStrip(Rect rect, BeatManagerDashboardModel model, Waveform waveform)
+    {
+        var plotRight = rect.xMax - WaveformValueWidth - 6f;
+        var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
+
+        WaveformPlot.Draw(plot, waveform, model.Active ? WaveformPlot.Curve : WaveformCurveIdleColor,
+            model.Active ? model.BarPhase : (float?)null);
+
+        var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
+        if (model.Active)
+        {
+            var emitted = Mathf.Clamp01(waveform.Evaluate(model.BarPhase));
+            GUI.Label(readout, $"{emitted:0.00}", valueStyle);
+        }
+        else
+        {
+            GUI.Label(readout, "--", valueStyle);
+        }
+    }
+
+    private static void DrawEnvelopeRow(Rect row, EnvelopeRowView envelope)
+    {
+        var content = DrawQueryRowLabel(row, EnvelopeLabel);
+        if (!envelope.HasValue)
+        {
+            DrawNullValue(content);
+            return;
+        }
+
+        var right = TakeRight(ref content, RightTextWidth);
+        DrawMeter(content, envelope.Meter, EnvelopeMeterColor);
+        GUI.Label(right, envelope.Readout, valueStyle);
+    }
+
+    private static void DrawPhraseEventRow(Rect row, GUIContent label, PhraseEventRowView rowView, Color nowColor,
+        Color soonColor, Color meterColor)
+    {
+        var content = DrawQueryRowLabel(row, label);
+        if (!rowView.HasValue)
+        {
+            DrawNullValue(content);
+            return;
+        }
+
+        var view = rowView.View;
+        var chip = TakeLeft(ref content, StatusChipWidth);
+        var chipColor = view.State switch
+        {
+            PhraseEventState.Now => nowColor,
+            PhraseEventState.Soon => soonColor,
+            _ => PhraseEventIdleChipColor,
+        };
+        DrawStatusChip(chip, view.Chip, chipColor);
+
+        var right = TakeRight(ref content, RightTextWidth);
+        DrawMeter(content, view.Meter, meterColor);
+        GUI.Label(right, view.Readout, valueStyle);
+    }
+
+    private static void DrawEnergyRow(Rect row, EnergyRowView energy)
+    {
+        var content = DrawQueryRowLabel(row, EnergyLabel);
+        if (!energy.HasValue)
+        {
+            DrawNullValue(content);
+            return;
+        }
+
+        var chip = TakeLeft(ref content, StatusChipWidth);
+        DrawStatusChip(chip, energy.Chip, GetEnergyChipColor(energy.Level));
+
+        var right = TakeRight(ref content, RightTextWidth);
+        DrawMeter(content, energy.Meter, EnergyMeterColor);
+        GUI.Label(right, energy.Readout, valueStyle);
+    }
+
+    private static void DrawPhaseRow(Rect row, PhaseRowView phase)
+    {
+        var content = DrawQueryRowLabel(row, PhaseLabel);
+        if (!phase.HasValue)
+        {
+            DrawNullValue(content);
+            return;
+        }
+
+        var labelRect = TakeLeft(ref content, PhaseLabelWidth);
+        GUI.Label(labelRect, phase.Label, phaseTextStyle);
+
+        var right = TakeRight(ref content, RightTextWidth);
+        DrawMeter(content, phase.Meter, PhaseMeterColor);
+        GUI.Label(right, phase.Readout, valueStyle);
+    }
+
+    private static void DrawLevelsRow(Rect row, LevelsRowView levels)
+    {
+        var content = DrawQueryRowLabel(row, LevelsLabel);
+        if (!levels.HasValue)
+        {
+            DrawNullValue(content);
+            return;
+        }
+
+        var segmentWidth = Mathf.Max(0f, (content.width - (SegmentGap * 2f)) / 3f);
+        DrawBandSegment(new Rect(content.x, content.y, segmentWidth, content.height), "L", levels.Low, LowBandColor);
+        DrawBandSegment(new Rect(content.x + segmentWidth + SegmentGap, content.y, segmentWidth, content.height), "M", levels.Mid, MidBandColor);
+        DrawBandSegment(new Rect(content.x + ((segmentWidth + SegmentGap) * 2f), content.y, segmentWidth, content.height), "H", levels.High, HighBandColor);
+    }
+
+    private static void DrawBandSegment(Rect rect, string label, float value, Color color)
+    {
+        GUI.Label(new Rect(rect.x, rect.y, 14f, rect.height), label, bandLabelStyle);
+        var valueRect = new Rect(rect.xMax - 36f, rect.y, 36f, rect.height);
+        var meter = new Rect(rect.x + 16f, rect.y, Mathf.Max(0f, rect.width - 16f - 38f), rect.height);
+        DrawMeter(meter, value, color);
+        GUI.Label(valueRect, $"{value:0.00}", valueStyle);
+    }
+
+    private static void DrawColorRow(Rect row, ColorBankRowView colorBank)
+    {
+        var content = DrawQueryRowLabel(row, ColorLabel);
+        var segmentWidth = Mathf.Max(0f, (content.width - (SegmentGap * 2f)) / 3f);
+        DrawSwatch(new Rect(content.x, content.y, segmentWidth, content.height), "RGB", colorBank.Rgb);
+        DrawSwatch(new Rect(content.x + segmentWidth + SegmentGap, content.y, segmentWidth, content.height), "HUE", colorBank.Hue);
+        DrawSwatch(new Rect(content.x + ((segmentWidth + SegmentGap) * 2f), content.y, segmentWidth, content.height), "PAL", colorBank.Palette);
+    }
+
+    private static void DrawSwatch(Rect rect, string label, Color? color)
+    {
+        GUI.Label(new Rect(rect.x, rect.y, 30f, rect.height), label, bandLabelStyle);
+
+        var box = new Rect(rect.x + 32f, rect.y + 3f, Mathf.Max(0f, rect.width - 32f), rect.height - 6f);
+        EditorGUI.DrawRect(box, SwatchBorderColor);
+
+        var inner = new Rect(box.x + 1f, box.y + 1f, Mathf.Max(0f, box.width - 2f), Mathf.Max(0f, box.height - 2f));
+        if (color is { } value)
+        {
+            EditorGUI.DrawRect(inner, new Color(value.r, value.g, value.b, 1f));
+        }
+        else
+        {
+            EditorGUI.DrawRect(inner, MeterTrackColor);
+            GUI.Label(inner, "—", nullCenterStyle);
+        }
+    }
+
+    private static Rect DrawQueryRowLabel(Rect row, GUIContent label)
+    {
+        GUI.Label(new Rect(row.x, row.y, QueryRowLabelWidth, row.height), label, rowLabelStyle);
+        return new Rect(row.x + QueryRowLabelWidth + 4f, row.y, Mathf.Max(0f, row.width - QueryRowLabelWidth - 4f), row.height);
+    }
+
+    private static void DrawNullValue(Rect content)
+    {
+        GUI.Label(content, NullValueText, nullStyle);
+    }
+
+    private static void DrawMeter(Rect rect, float value, Color color)
+    {
+        var bar = new Rect(rect.x, rect.y + ((rect.height - BarHeight) * 0.5f), rect.width, BarHeight);
+        EditorGUI.DrawRect(bar, MeterTrackColor);
+
+        var fill = new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(value), bar.height);
+        EditorGUI.DrawRect(fill, color);
+        EditorGUI.DrawRect(new Rect(fill.x, fill.y, fill.width, Mathf.Max(1f, fill.height * 0.35f)), new Color(1f, 1f, 1f, 0.22f));
+    }
+
+    private static void DrawStatusChip(Rect rect, string text, Color color)
+    {
+        EditorGUI.DrawRect(rect, color);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(1f, 1f, 1f, 0.14f));
+        GUI.Label(rect, text, statusChipStyle);
+    }
+
+    private static void DrawCountdownChip(Rect rect, CountdownChipView chip, Color color)
+    {
+        EditorGUI.DrawRect(rect, color);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(1f, 1f, 1f, 0.14f));
+
+        var textWidth = Mathf.Max(0f, rect.width - 16f);
+        GUI.Label(new Rect(rect.x + 8f, rect.y + 2f, textWidth, 10f), chip.Label, chipLabelStyle);
+        GUI.Label(new Rect(rect.x + 8f, rect.y + 11f, textWidth, rect.height - 12f), chip.Value,
+            chip.AlignValueRight ? chipValueRightStyle : chipValueStyle);
+    }
+
+    private static Color GetEnergyChipColor(EnergyLevel level)
+    {
+        switch (level)
+        {
+            case EnergyLevel.Low:
+                return EnergyLowChipColor;
+            case EnergyLevel.Mid:
+                return EnergyMidChipColor;
+            default:
+                return EnergyHighChipColor;
+        }
+    }
+
+    private static Rect TakeLeft(ref Rect rect, float width)
+    {
+        var left = new Rect(rect.x, rect.y, width, rect.height);
+        rect = new Rect(rect.x + width + SegmentGap, rect.y, Mathf.Max(0f, rect.width - width - SegmentGap), rect.height);
+        return left;
+    }
+
+    private static Rect TakeRight(ref Rect rect, float width)
+    {
+        var right = new Rect(rect.xMax - width, rect.y, width, rect.height);
+        rect = new Rect(rect.x, rect.y, Mathf.Max(0f, rect.width - width - SegmentGap), rect.height);
+        return right;
+    }
+
+    private static void DrawPanelBackground(Rect rect, Color accent)
+    {
+        EditorGUI.DrawRect(rect, PanelBackgroundColor);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 2f), accent);
+
+        var inner = new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f);
+        EditorGUI.DrawRect(new Rect(inner.x, inner.y, inner.width, 1f), new Color(1f, 1f, 1f, 0.08f));
+        EditorGUI.DrawRect(new Rect(inner.x, inner.yMax - 1f, inner.width, 1f), new Color(0f, 0f, 0f, 0.5f));
+    }
+
+    private static void DrawMarker(Rect rect, string glyph, Color color)
+    {
+        var glow = new Rect(rect.x + 4f, rect.y + 2f, Mathf.Max(0f, rect.width - 8f), Mathf.Min(20f, rect.height));
+        EditorGUI.DrawRect(glow, new Color(color.r, color.g, color.b, 0.10f));
+
+        var previous = GUI.color;
+        GUI.color = color;
+        GUI.Label(rect, glyph, dotStyle);
+        GUI.color = previous;
+    }
+
+    private static Color GetBeatDotColor(BeatManagerDashboardModel model, int beatLabel)
+    {
+        switch (model.GetBeatMarkerState(beatLabel))
+        {
+            case BeatMarkerState.Past:
+                return PastBeatDotColor;
+            case BeatMarkerState.Current:
+                return Color.Lerp(CurrentBeatSteadyColor, CurrentBeatFlashColor,
+                    model.OnBeat ? Mathf.Max(0.45f, model.BeatPulse) : model.BeatPulse * 0.35f);
+            case BeatMarkerState.Future:
+                return FutureBeatDotColor;
+            default:
+                return DisabledDotColor;
+        }
+    }
+
+    private static void EnsureStyles()
+    {
+        if (titleStyle != null)
+        {
+            return;
+        }
+
+        titleStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            normal = { textColor = new Color(0.86f, 0.96f, 1f) },
+            clipping = TextClipping.Clip,
+        };
+        rowLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = new Color(0.58f, 0.72f, 0.78f) },
+            alignment = TextAnchor.MiddleLeft,
+        };
+        valueStyle = new GUIStyle(EditorStyles.miniLabel)
+        {
+            normal = { textColor = new Color(0.82f, 0.90f, 0.92f) },
+            alignment = TextAnchor.MiddleRight,
+            clipping = TextClipping.Clip,
+        };
+        badgeStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.MiddleCenter,
+        };
+        dotStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            fontSize = 21,
+            alignment = TextAnchor.MiddleCenter,
+        };
+        markerLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = new Color(0.76f, 0.82f, 0.84f) },
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+        };
+        chipLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = new Color(0.74f, 0.85f, 0.88f) },
+            alignment = TextAnchor.MiddleLeft,
+            clipping = TextClipping.Clip,
+        };
+        chipValueStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            normal = { textColor = new Color(0.93f, 0.98f, 1f) },
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = 12,
+            clipping = TextClipping.Clip,
+        };
+        chipValueRightStyle = new GUIStyle(chipValueStyle)
+        {
+            alignment = TextAnchor.MiddleRight,
+        };
+        queriesHeaderStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = new Color(0.70f, 0.95f, 0.72f) },
+            alignment = TextAnchor.MiddleLeft,
+        };
+        hintStyle = new GUIStyle(EditorStyles.miniLabel)
+        {
+            normal = { textColor = new Color(0.45f, 0.50f, 0.55f) },
+            alignment = TextAnchor.MiddleRight,
+        };
+        nullStyle = new GUIStyle(EditorStyles.miniLabel)
+        {
+            normal = { textColor = new Color(0.45f, 0.50f, 0.55f) },
+            alignment = TextAnchor.MiddleLeft,
+        };
+        nullCenterStyle = new GUIStyle(nullStyle)
+        {
+            alignment = TextAnchor.MiddleCenter,
+        };
+        statusChipStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = Color.white },
+            alignment = TextAnchor.MiddleCenter,
+        };
+        phaseTextStyle = new GUIStyle(EditorStyles.boldLabel)
+        {
+            normal = { textColor = new Color(0.86f, 0.96f, 1f) },
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = 11,
+            clipping = TextClipping.Clip,
+        };
+        bandLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            normal = { textColor = new Color(0.76f, 0.82f, 0.84f) },
+            alignment = TextAnchor.MiddleLeft,
+        };
+    }
+}
