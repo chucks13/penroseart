@@ -15,8 +15,8 @@ MonoBehaviour:
   transitionTypeName: DirectionalWipe
   settings:
     Tags: 4
-    RunwayBeats: 4
-    TailBeats: 4
+    RunwayBeats: 5
+    TailBeats: 0
     Shape: 2
     Intensity: 1
     DefaultDurationSeconds: 4

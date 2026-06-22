@@ -16,7 +16,7 @@ MonoBehaviour:
   settings:
     Tags: 2
     RunwayBeats: 4
-    TailBeats: 4
+    TailBeats: 0
     Shape: 5
     Intensity: 2
     DefaultDurationSeconds: 4
