@@ -14,7 +14,7 @@ Hosts the Unity frame loop, catalogs, overlays, input, preview, and hardware out
 
 - **Deck System**: Effects/transitions are drawn from rotating decks for variety. The Director owns when those staged choices are consumed.
 - **Sequencing**: In Standalone Mode, the Director uses the timer as its self-running cadence. In Synced Mode, the Director consumes On-Air Timing Frames derived from live Rave OSC / BeatManager state. The Mechanical Switcher executes the chosen move.
-- **Transition Timing**: Transition Settings declare Runway and Tail. The Director starts a Transition so its local Impact Point lands on the selected Phase Boundary; Tail completion is visual execution, not a musical scheduling input.
+- **Transition Timing**: Transition Settings declare Runway and Tail. The Director chooses the Cue Mark, Effect, and Transition; the Mechanical Switcher uses that Transition's timing shape to start and progress the move so its Impact Point lands on the Cue Mark. Tail completion is visual execution, not a musical scheduling input.
 - **Held Effect**: A single selection that either lets the wall rotate or pins it to one effect. The **Random** state lets the Deck System rotate normally; choosing a specific effect *holds* it, suppressing both rotation and transitions until Random is chosen again. Selected from the Inspector's effect dropdown (Random is the default first entry); the `Escape` key always returns to Random. The blank effect template is never offered, since it is excluded from the runtime effect catalog.
 
 ### 2. Beat Manager (Synchronization)
@@ -66,7 +66,7 @@ Android, iOS, and WebGL serial support are not covered by the desktop `System.IO
 ## Operational Logic
 
 1. **Initialization**: `Controller` initializes `Penrose`, discovers effects/transitions/blenders through `Factory<T>`, configures UI fields, starts OSC/control helpers, creates the Director and Mechanical Switcher, and initializes serial output when enabled.
-2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior and commands the Switcher when a move should happen.
+2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior, maintains Cue Sheets/Loaded Cues in Synced Mode, and arms the Switcher when a stage-directed Cue is committed.
 3. **Rendering**: The Switcher renders the active Effect or A-to-B Transition into a 900-color buffer; overlays/blenders can modify it.
 4. **Output**: The active serial path maps the Penrose buffer to physical LED order and sends frames through `SerialOut`; the legacy UDP path maps the same data into ACN/E1.31 universes.
 5. **Scene update**: `Penrose.UpdateModelColors()` applies the current buffer to the Unity mesh for visualization.
@@ -159,23 +159,43 @@ The two intentional personalities for rhythm-aware behavior. **Synced Mode** is 
 _Avoid_: effects that freeze, glitch, or go dark when OSC is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase as Standalone Mode while other OSC timing is present.
 
 **Director**:
-The decision layer that owns *what* plays on the wall and *when* it changes — it directs, making every choice about what happens on the wall. A Performer's Repertoire and the live song structure (Track Phase, Fill, Drop, Energy, Levels) are inputs to that choice, never overrides of it. In Synced Mode, active whenever OSC data is present, it changes from musical timing — Track Phase Phrase Windows when available, otherwise the usable timing the OSC signal provides. In Standalone Mode, when no OSC data is available, it changes on the self-running timer. It decides only — it never draws a buffer or runs a transition itself; the Switcher executes its calls.
-_Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; folding buffer or transition execution into the Director.
+The decision layer that owns *what* plays on the wall and which Phrase Cue Mark a stage-directed move should land on. It chooses Cue Sheets, Loaded Cues, Performers, and Transitions from Repertoire and live song structure, while the Switcher owns mechanical transition execution once a Cue is armed.
+_Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
 
 **On-Air Timing**:
-The Synced Mode timing interpretation seam. It reads the current on-air rhythm facts, especially live beat and Track Phase, and turns them into one Timing Frame for the Director. It owns Phase/Phrase interpretation, selected Phase Boundary planning, Beat Rewind correction, Coast, and Re-anchor behavior.
+The Synced Mode timing interpretation seam. It reads the current on-air rhythm facts, especially live beat and Track Phase, and turns them into one Timing Frame for the Director. It owns Phase/Phrase interpretation, Cue Sheet planning, Beat Rewind correction, Coast, and Re-anchor behavior.
 _Avoid_: making the Director read raw Track Phase fields; treating On-Air Timing as another clock source or as Switcher execution state.
 
 **Timing Frame**:
-The Director-facing snapshot of one Synced Mode timing moment: current beat, Phase reading, Phase Anchor availability/confidence, selected Phase Boundary, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether and when to cue a move.
+The Director-facing snapshot of one Synced Mode timing moment: current beat, Phase reading, Phase Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether the next Loaded Cue should wait, change, or be armed.
 _Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
 
+**Cue Sheet**:
+A simple per-Phrase plan of Cue Marks generated from the Phrase's total beat length: divide the Phrase into Phases, choose some interior marks, and always include the final phrase boundary. Its identity is the total Phrase length, not phrase name or absolute start/end beat, so an upcoming Cue Sheet can be reused when the announced length is unchanged.
+_Avoid_: putting Effect or Transition choices in the Cue Sheet; treating it as a queue of loaded Cues; rerolling just because same-length phrase timing shifted.
+
+**Cue Mark**:
+A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; today marks usually sit on 16-beat Phase Boundaries, but the domain term is Phrase-level so it does not confuse the plan with the Phase implementation detail.
+_Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Phase Boundary when speaking about the Phrase plan.
+
+**Loaded Cue**:
+The Director's prepared stage-directed Cue for the next Cue Mark: which destination Performer, which Transition, and which musical mark the move should hit. It is mutable while the Director is still deciding; after it is armed it must fire through the Switcher.
+_Avoid_: loading multiple future Cues; treating a Loaded Cue as Switcher transition progress; putting pixel-level Effect commands in it.
+
+**Armed Cue**:
+A Loaded Cue that has crossed its Lock Point and is committed to Switcher execution. Phrase changes may still be observed, but they no longer change the armed Transition, destination Performer, or target Cue Mark.
+_Avoid_: treating an Armed Cue as a Cue Sheet entry, a Director decision still in flux, or a multi-item queue.
+
+**Lock Point**:
+The beat after which a Loaded Cue can no longer change. The Lock Point depends on the chosen Transition's Runway so the Switcher has one committed beat before it must trigger the Transition.
+_Avoid_: one global lock beat for every Transition; locking at the Impact Point; putting transition start math into the Cue Sheet.
+
 **Cue Intent**:
-The Director-facing result of combining a Timing Frame, Transition Repertoire, live phrase events such as Drop, staged choices, current Performer, deck state, and Performer Repertoire. It says whether to wait, cue, or block on cadence, and which Performer should be targeted when a cue fires.
+The Director-facing result of combining a Timing Frame, Transition Repertoire, live phrase events such as Drop, staged choices, current Performer, deck state, and Performer Repertoire. It says whether the next Loaded Cue should wait, change target Performer, be armed, or block on cadence.
 _Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split.
 
 **Next Transition**:
-The Transition already chosen for the Director's next A-to-B move. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Director still owns the timing and phase alignment.
+The Transition already chosen for the Director's next Loaded Cue. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Switcher still honors that Transition's Runway, Tail, and Impact Point when the Cue is armed.
 _Avoid_: choosing the Transition at the last moment; treating the selected next Transition as permission to bypass Runway, Tail, or Impact Point timing.
 
 **Next Effect**:
@@ -183,8 +203,8 @@ The Effect already chosen as the destination for the Director's next A-to-B move
 _Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to preview or tune the next destination.
 
 **Phase Anchor**:
-The Director's current musical target for the next structural transition: a selected Phase Boundary or phrase boundary. Track Phase defines a Phrase Window; the Director may choose interior Phase Boundaries inside that window and must include the ending phrase boundary, then advances one selected impact at a time. When only beat/grid evidence is available, the anchor is the best known Phase Boundary; when Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
-_Avoid_: treating the anchor as a new clock source; it is an interpretation of the incoming musical structure. Live Track Phase windows define the phrase boundaries and interior Phase Boundaries; inferred grid points are only for weaker evidence.
+The current musical grid target the wall is locked to: a Cue Mark from a Phrase Cue Sheet when phrase structure is known, or the best known Phase Boundary when only weaker beat/grid evidence is available. When Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
+_Avoid_: treating the anchor as a new clock source; it is an interpretation of incoming musical structure, not transition progress or Switcher state.
 
 **Phase Lock**:
 The Director's ongoing effort to keep Performer changes aligned to the Phase Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
@@ -203,12 +223,12 @@ Replacing the current Phase Anchor with a new one when fresh Track Phase data ap
 _Avoid_: layering multiple anchors; the Director has one current phase anchor.
 
 **Loop**:
-A live repeated section of the current music. Loops are powers of four and usually preserve Phase, but they can rewind or repeat beat numbers in ways that make absolute beat progress stale. A Loop inside the same Phrase Window is a new pass through the same structure: it should keep the Phrase Window's selected Phase Boundaries and move the Director's cursor back to the next selected boundary after the current beat, not create a new Phrase Window or reroll the selection.
+A live repeated section of the current music. Loops are powers of four and usually preserve Phase, but they can rewind or repeat beat numbers in ways that make absolute beat progress stale. A Loop inside the same Phrase Window is a new pass through the same Cue Sheet: it should keep the Phrase Window's Cue Marks and move the Director's cursor back to the next Cue Mark after the current beat, not create a new Phrase Window or reroll the sheet.
 _Avoid_: assuming a Loop means the wall is out of phase; assuming old absolute progress remains valid after a loop rewind; treating a same-window Loop as a new Phrase Window.
 
 **Beat Rewind**:
-A substantial backward jump in the live beat count, usually a new loop pass or new track position. The Director treats a rewind of at least 16 beats as a new pass: it clears stale cue state and stops comparing future phrase targets against old absolute beat numbers. Small one- or two-beat backsteps are ignored as transport jitter. Rewind handling is not a separate scheduler — current Track Phase still supplies the phrase target.
-_Avoid_: modeling loop windows, transport state machines, or speculative loop plans; the Director only needs current phrase data, a 16-beat minimum, and transition impact/tail timing.
+A substantial backward jump in the live beat count, usually a new loop pass or new track position. The Director treats a rewind of at least 16 beats as a new pass: it clears stale cue state and stops comparing future Cue Marks against old absolute beat numbers. Small one- or two-beat backsteps are ignored as transport jitter. Rewind handling is not a separate scheduler — current Track Phase still supplies the Phrase Window.
+_Avoid_: modeling loop windows, transport state machines, or speculative loop plans; the Director only needs current phrase data, a Cue Sheet, and the 16-beat minimum.
 
 **Performer**:
 The umbrella for anything the Director can put on the wall — an Effect, Transition, or Mixer — seen as something called on stage rather than as a class. The Director casts Performers; the Switcher moves them on and off.
@@ -220,14 +240,14 @@ _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuratio
 
 **A-to-B Transition**:
 A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Phrase Window or Phase Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
-_Avoid_: treating every Transition as if its only goal is to complete on a Phase Boundary; treating transition progress, completion, or busy state as music-structure evidence.
+_Avoid_: treating every Transition as if its only goal is to complete on a Cue Mark; treating transition progress, completion, or busy state as music-structure evidence.
 
 **Transition Repertoire**:
-The Director-facing declaration of the A-to-B move a Transition offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast and schedule a Transition that fits the selected Phase Boundary instead of assuming all Transitions are interchangeable.
-_Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; timing shape is part of what the Transition advertises; treating Repertoire as per-cue instructions or as state the Director sets.
+The declaration of the A-to-B move a Transition offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast a fitting Transition while the Switcher uses the Transition's own timing shape to execute an Armed Cue.
+_Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; treating Repertoire as per-cue instructions or as state the Director sets; making the Director micromanage transition progress.
 
 **Transition Settings**:
-Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Director reads that declaration to decide when to start the A-to-B move. When settings are intentionally edited, the Settings Editor enforces non-negative Runway/Tail values whose sum is at most 12 beats, so the Director does not need compensating scheduling logic.
+Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Switcher uses that declaration to execute an Armed Cue without compensating scheduling logic.
 _Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings; silently mutating saved Settings just because an asset was loaded.
 
 **Code Defaults**:
@@ -243,19 +263,19 @@ How forcefully a Transition reads as a musical move: Subtle, Medium, or High. In
 _Avoid_: treating Intensity as brightness or audio level; it describes the visual force of the Transition itself.
 
 **Impact Point**:
-A Transition-local progress point where that Transition's main visual hit happens. The Director aligns the Impact Point to a chosen Phase Boundary, but the Impact Point is not itself Phase or Phrase structure; it only describes where the Transition should be in its own A-to-B motion when it hits its mark.
-_Avoid_: treating Impact Point as a phrase boundary, Phase Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
+A Transition-local progress point where that Transition's main visual hit happens. The Switcher aligns the Impact Point to the Armed Cue's Cue Mark, but the Impact Point is not itself Phase or Phrase structure; it only describes where the Transition should be in its own A-to-B motion when it hits its mark.
+_Avoid_: treating Impact Point as a phrase boundary, Cue Mark, Phase Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
 
 **Transition Duration**:
 The full length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail; both parts are non-negative, the total must not exceed 12 beats, and zero duration is a hard cut.
 _Avoid_: using Duration when only the pre-impact lead time is meant; that lead time is the Runway.
 
 **Runway**:
-The lead-in before a Transition's Impact Point — how many beats before the chosen Phase Boundary the Director must start the Transition so the Impact Point reaches that boundary on time. Runway is authored directly as part of the Transition Repertoire and may be zero, in which case the Director cues on the chosen Phase Boundary.
+The lead-in before a Transition's Impact Point — how many beats before the Armed Cue's Cue Mark the Switcher must start the Transition so the Impact Point reaches that mark on time. Runway is authored directly as part of the Transition Repertoire and may be zero, in which case the Transition hits immediately on the Cue Mark.
 _Avoid_: using Runway to mean the whole Transition; a Transition can continue after impact; requiring a fake one-beat Runway for hard cuts.
 
 **Tail**:
-The part of a Transition after the Impact Point. Tail is visual resolution to B after the Transition has hit its mark; it has no effect on Phrase Window, Phase Boundary, or Phase Anchor decisions.
+The part of a Transition after the Impact Point. Tail is visual resolution to B after the Transition has hit its mark; it has no effect on Phrase Window, Cue Sheet, Cue Mark, or Phase Anchor decisions.
 _Avoid_: treating post-impact motion as late or wrong; treating Tail completion as a musical scheduling event.
 
 **Transition Completion**:
@@ -263,12 +283,12 @@ The moment an A-to-B Transition has fully reached B. Completion may happen on th
 _Avoid_: assuming Completion is always the Director's timed musical target; the timed target is the Impact Point.
 
 **Cue**:
-The Director's directive for a change. A Cue is not the change itself — it *triggers* one: a Cue aimed at the stage triggers the Switcher to swap dancers (via a Cut, Transition, or Mixer), and a Cue aimed at the on-screen effect triggers it to respond ("respond to this fill", "play at this energy"). An effect-directed Cue follows the same nullable, preference-driven contract as the rhythm queries — the effect reads the parts it understands, uses its own defaults for anything unset (an ordinary state, never degraded), and pulls the live event data itself from the Beat Manager. A Cue carries intent, never pixel-level commands.
+The Director's directive for a musical change. A Cue is not the change itself — it *triggers* one: a stage-directed Cue arms the Switcher to swap Performers at a Cue Mark, and an effect-directed Cue tells the on-screen effect to respond ("respond to this fill", "play at this energy"). A Cue carries intent, never pixel-level commands.
 _Avoid_: "call" (collides with calling a Performer on stage); treating a Cue as the change itself rather than the directive that triggers it; a Cue that micromanages a Performer's internal parameters.
 
 **Mechanical Switcher** (a.k.a. **Switcher**):
-The fire-and-forget mechanism that executes the Director's stage-directed Cues. It owns the in-flight transition (which Performer is leaving, which is arriving, how far along) and realizes a swap one of three ways: a **Cut** (instant), a **Transition** (blended — looser at a phrase boundary, tightly timed to land on a Drop), or a **Mixer** (bringing in another effect, including the temporary self-reverting mix that expresses a Fill the on-screen effect can't). It moves Performers on and off the wall and never decides what or when. If a new Transition command arrives while another is still rendering, the latest command replaces the mechanical move and uses the previous destination as its new source; the Director still does not branch on Switcher busy/progress state. Kept separate from the Director so decision and mechanism stay independent.
-_Avoid_: putting timing or musical decisions in the Switcher; the Director drawing buffers or running transitions itself; using Switcher progress, completion, or busy state as a scheduling input; calling it "dumb" instead of describing it as execution-only.
+The fire-and-forget mechanism that executes the Director's armed stage-directed Cues. It owns the Armed Cue, transition start/progress/completion, and the in-flight move between leaving and arriving Performers; it uses Runway and Tail to make the Transition's Impact Point land on the Cue Mark, but never chooses the Cue Sheet, Cue Mark, Performer, or Transition.
+_Avoid_: putting musical or casting decisions in the Switcher; making it read Track Phase/Phrase data; the Director drawing buffers or running transitions itself; using Switcher progress, completion, or busy state as a scheduling input; calling it "dumb" instead of describing it as execution-only.
 
 **Hold**:
 An inspection freeze that suspends the Director so a developer can sit on one effect, watch it, and tweak its settings live — a development affordance, not normal show operation. It is not a selection input and not a second decider: while held, the Director stops advancing entirely (no rotation, no Cues, no transitions) and simply keeps the chosen Performer on screen; releasing it resumes directing. Conceptually general — the ability to halt any running thing to inspect it — though the first concrete use is holding an effect.
@@ -279,23 +299,23 @@ RaveSystem's name for the analyzed phrase signal: current/next phrase labels, ac
 _Avoid_: confusing Track Phase with **Bar Phase** or **Phase**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Phrase Window**:
-The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Phases, and is usually at least 8 bars / 32 beats while often doubling or extending from there. When a new Phrase Window begins, that is the moment to derive its Phase Boundaries and choose which interior ones may receive transitions.
-_Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; choosing transition targets without reference to the current Phrase Window.
+The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Phases, and is usually at least 8 bars / 32 beats while often doubling or extending from there. Its total beat length is the source for a Phrase Cue Sheet.
+_Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase Window.
 
 **Phase** (a.k.a. **16-Beat Phase**):
 A fixed 4-bar / 16-beat timing unit inside a Phrase Window. The wall uses Phase Boundaries as its minimum switching cadence; a Phrase Window can contain several Phases, and the Director may choose some interior Phase Boundaries rather than switching at every one.
 _Avoid_: using "phase" when the whole Phrase Window is meant; assuming every Phase Boundary must trigger a transition.
 
 **Phase Boundary**:
-The beat where a Phase starts or ends. A phrase boundary is always also a Phase Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final transition impact.
+The beat where a Phase starts or ends. A phrase boundary is always also a Phase Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final Cue Mark.
 _Avoid_: calling every bar downbeat a Phase Boundary; a Phase Boundary is the 16-beat one, not every 4-beat bar one.
 
 **Selected Phase Boundary**:
-A Phase Boundary chosen by the Director as a transition target. The Director may choose interior Phase Boundaries and always includes the final phrase boundary; a Transition may then use its local Impact Point to hit that selected boundary at the right moment.
-_Avoid_: calling this an Impact Point or treating it as Transition Completion; Impact Point is local to a Transition, while Selected Phase Boundary belongs to the music grid.
+A Phase Boundary chosen as a transition target by the current implementation. In domain language, prefer **Cue Mark** for the Phrase-level plan; the important concept is that the mark belongs to the Phrase grid and a Transition's local Impact Point hits it.
+_Avoid_: using Selected Phase Boundary as the canonical name for Cue Sheet items; calling it an Impact Point or treating it as Transition Completion.
 
 **Phase Count**:
-The Director's 1-based count within the current Phase. A 4-beat Runway starts at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
+The wall's 1-based count within the current Phase. A 4-beat Runway begins at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
 **Fill**:

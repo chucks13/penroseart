@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Director cue-sheet investigation — PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+    </script>
+    <style>
+      :root { color-scheme: dark; }
+      body { background: #020617; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .seam { border-style: dashed; }
+      .leak { color: #fca5a5; }
+      .ok { color: #6ee7b7; }
+      .warn { color: #fcd34d; }
+      .card { background: rgba(15, 23, 42, 0.86); border: 1px solid rgba(100, 116, 139, 0.45); }
+      .mini-label { font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; }
+      .badge { border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(15, 23, 42, 0.72); }
+      .code { color: #bae6fd; }
+      .gridline { background-image: linear-gradient(rgba(148, 163, 184, .12) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, .12) 1px, transparent 1px); background-size: 28px 28px; }
+      .arrow { position: relative; }
+      .arrow::after { content: "→"; position: absolute; right: -1.1rem; top: 50%; transform: translateY(-50%); color: #818cf8; }
+      pre.mermaid { background: transparent; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 font-sans">
+    <main class="max-w-6xl mx-auto px-6 py-10 space-y-10">
+      <header class="space-y-5">
+        <div class="flex flex-wrap items-end justify-between gap-4 border-b border-slate-700 pb-6">
+          <div>
+            <p class="mini-label">PenroseArt · branch <span class="text-slate-300">refactor/deepen-director-on-air-timing</span> · HEAD <span class="text-slate-300">8193d996</span></p>
+            <h1 class="text-4xl md:text-5xl font-semibold tracking-tight text-white mt-2">Director cue-sheet investigation</h1>
+            <p class="text-slate-400 mt-3 max-w-3xl">How the current Director works, where it differs from Hunter's cue-sheet model, and the smallest sound implementation path.</p>
+          </div>
+          <div class="text-right text-sm text-slate-400">
+            <div>2026-06-22 19:05 PDT</div>
+            <div>Report-only investigation</div>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-4 gap-3 text-sm">
+          <div class="card rounded-xl p-4"><span class="inline-block w-3 h-3 rounded-sm bg-slate-700 border border-slate-500 mr-2"></span>solid box = module</div>
+          <div class="card rounded-xl p-4"><span class="inline-block w-8 border-t border-dashed border-indigo-300 mr-2 align-middle"></span>dashed line = seam</div>
+          <div class="card rounded-xl p-4"><span class="text-red-300 mr-2">→</span>red arrow = leakage / mismatch</div>
+          <div class="card rounded-xl p-4"><span class="inline-block w-3 h-3 rounded-sm bg-slate-900 border-2 border-slate-100 mr-2"></span>thick dark box = deep module</div>
+        </div>
+      </header>
+
+      <section class="card rounded-2xl p-6 space-y-4 border-emerald-500/40">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">Verdict</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-200 border border-amber-400/30">Partial match</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-200 border border-indigo-400/30">In-process modules</span>
+        </div>
+        <p class="text-xl leading-relaxed text-slate-100">The current code has a hidden cue-sheet-like module for <strong>where</strong> cues may land, but it does not yet have Hunter's explicit <strong>loaded cue</strong> model for <strong>what</strong> will fire and when it becomes immutable. The resolved target flow is now captured in <span class="code">docs/adr/0005-phrase-cue-sheets-and-armed-cues.md</span>.</p>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+          <div class="rounded-xl bg-emerald-950/30 border border-emerald-500/30 p-4">
+            <div class="font-semibold text-emerald-200">Matches</div>
+            <p class="text-slate-300 mt-1">Upcoming phrase data can pre-plan selected Phase Boundaries; the phrase end is mandatory; the next target can load while a Tail still renders.</p>
+          </div>
+          <div class="rounded-xl bg-red-950/30 border border-red-500/30 p-4">
+            <div class="font-semibold text-red-200">Differs</div>
+            <p class="text-slate-300 mt-1">Cue sheet identity is exact start/end/length, not length-only; effects/transitions are chosen just-in-time; no one-beat lock exists.</p>
+          </div>
+          <div class="rounded-xl bg-indigo-950/30 border border-indigo-500/30 p-4">
+            <div class="font-semibold text-indigo-200">Resolved decision</div>
+            <p class="text-slate-300 mt-1">A Cue Mark is the Transition Impact target. The Lock Point depends on the selected Transition's Runway; the Switcher needs one Armed Cue state, not a preload queue.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="target-model" class="space-y-5">
+        <h2 class="text-2xl font-semibold text-white">Hunter's target model, normalized into code terms</h2>
+        <div class="grid lg:grid-cols-2 gap-5">
+          <article class="card rounded-2xl p-5 space-y-4">
+            <h3 class="font-semibold text-lg text-white">Phrase-level cue sheet</h3>
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+              <pre class="mermaid">
+flowchart TD
+  U[Upcoming Phrase changes] --> L[Read length in beats]
+  L --> P[Divide into 16-beat Phases]
+  P --> R[Randomly choose some Phase marks]
+  R --> E[Always add phrase end]
+  E --> S[Store CueSheet for upcoming]
+  S --> T[Upcoming becomes current]
+  T --> C[Use stored CueSheet]
+              </pre>
+            </div>
+            <p class="text-sm text-slate-300">The Cue Sheet is simple: relative Cue Marks for where transitions should land. It should survive sudden metadata changes when the total length is unchanged.</p>
+          </article>
+          <article class="card rounded-2xl p-5 space-y-4">
+            <h3 class="font-semibold text-lg text-white">Cue-level loaded state</h3>
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+              <pre class="mermaid">
+flowchart TD
+  C[Current CueSheet] --> N[Pick next mark only]
+  N --> D[Choose effect + transition]
+  D --> M[Mutable LoadedCue]
+  M -->|phrase data changes before lock| D
+  M -->|Transition-specific Lock Point| K[ArmedCue]
+  K --> F[Fire no matter what]
+  F --> X[Choose next cue]
+              </pre>
+            </div>
+            <p class="text-sm text-slate-300">One cue is prepared at a time. After the Lock Point, phrase changes must not alter the Armed Cue. After fire, the next cue may be loaded even if the previous Transition Tail is still rendering.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="current-flow" class="space-y-5">
+        <h2 class="text-2xl font-semibold text-white">How the current code actually works</h2>
+        <article class="card rounded-2xl p-5 space-y-4">
+          <div class="flex flex-wrap gap-2">
+            <span class="badge rounded-full px-3 py-1 text-xs text-emerald-200">Strong evidence</span>
+            <span class="badge rounded-full px-3 py-1 text-xs text-slate-300">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-300">Files: <span class="code">Controller.cs</span>, <span class="code">Director.cs</span>, <span class="code">OnAirTiming.cs</span>, <span class="code">SyncedCueIntent.cs</span>, <span class="code">Switcher.cs</span></div>
+          <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+            <pre class="mermaid">
+flowchart LR
+  OSC[Rave OSC] --> BM[BeatManager]
+  BM --> D[Director.Tick]
+  D --> OAT[On-Air Timing]
+  OAT --> TF[TimingFrame]
+  TF --> SCI[SyncedCueIntent]
+  SCI -->|Cue now| SW[Switcher.StartTransition]
+  SW --> R[Switcher.RenderAtTime]
+  R --> OUT[Penrose buffer + output]
+  classDef deep fill:#0f172a,stroke:#e2e8f0,stroke-width:3px,color:#e2e8f0;
+  class OAT,SCI,SW deep;
+            </pre>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4">
+              <div class="font-semibold text-slate-100">Frame order</div>
+              <p class="text-slate-300 mt-1"><span class="code">Controller.Update</span> applies <span class="code">RaveOscReceiver</span>, updates <span class="code">BeatManager</span>, then calls <span class="code">director.Tick</span> before rendering through <span class="code">switcher.RenderAtTime</span>. Evidence: <span class="code">Assets/core/Controller.cs:1518-1681</span>.</p>
+            </div>
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4">
+              <div class="font-semibold text-slate-100">Synced Mode path</div>
+              <p class="text-slate-300 mt-1"><span class="code">Director.TickSyncedMode</span> refreshes a Timing Frame, logs beat state, then tries to start a synced cue. Evidence: <span class="code">Director.cs:395-410</span>.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="comparison" class="space-y-8">
+        <h2 class="text-2xl font-semibold text-white">Differences from the desired cue-sheet model</h2>
+
+        <article class="card rounded-2xl p-5 space-y-5">
+          <div class="flex flex-wrap gap-2 items-center">
+            <h3 class="text-xl font-semibold text-white mr-auto">1. The cue sheet exists, but under a different name and identity rule</h3>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">Closest match</span>
+            <span class="badge rounded-full px-3 py-1 text-xs text-slate-300">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-300">Files: <span class="code">SelectedPhaseBoundaryPlan.cs:6-85</span>, <span class="code">OnAirTiming.cs:277-411</span>, <span class="code">PhraseWindow.cs:5-125</span></div>
+          <div class="grid lg:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4 space-y-3">
+              <div class="mini-label">Desired</div>
+              <div class="gridline rounded-lg p-4 h-72 flex flex-col justify-center gap-4">
+                <div class="deep rounded-lg border-2 border-slate-200 p-4 text-center">
+                  <div class="mini-label">CueSheet</div>
+                  <div class="text-lg font-semibold">Length = 64 beats</div>
+                  <div class="mt-3 flex justify-between text-xs text-slate-300">
+                    <span>+16</span><span>+32</span><span>+64 mandatory</span>
+                  </div>
+                </div>
+                <div class="text-center text-sm text-slate-400">same length ⇒ same sheet</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4 space-y-3">
+              <div class="mini-label">Current</div>
+              <div class="gridline rounded-lg p-4 h-72 flex flex-col justify-center gap-4">
+                <div class="deep rounded-lg border-2 border-slate-200 p-4 text-center">
+                  <div class="mini-label">SelectedPhaseBoundaryPlan</div>
+                  <div class="text-lg font-semibold">Start + End + Length</div>
+                  <div class="mt-3 text-xs text-slate-300">absolute boundaries sorted</div>
+                </div>
+                <div class="text-center text-sm leak">same length but shifted start/end ⇒ plan does not match</div>
+              </div>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <div class="font-semibold text-slate-100">What current code does</div>
+              <ul class="mt-2 space-y-2 text-slate-300 list-disc pl-5">
+                <li><span class="code">SelectedPhaseBoundaryPlan.Build</span> randomly selects eligible interior Phase Boundaries and always adds <span class="code">window.EndBeat</span>.</li>
+                <li><span class="code">OnAirTiming.SelectedPhaseBoundaryPlans</span> stores one current cursor plus one upcoming plan.</li>
+                <li>Upcoming plans are created from <span class="code">TrackPhaseActive == 0</span>; current plans come from <span class="code">TrackPhaseActive >= 1</span>.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="font-semibold text-slate-100">Mismatch</div>
+              <ul class="mt-2 space-y-2 text-slate-300 list-disc pl-5">
+                <li>Hunter's model says total length is the only invalidation rule.</li>
+                <li>Current <span class="code">Matches</span> requires <span class="code">PhraseStartBeat</span>, <span class="code">PhraseEndBeat</span>, and <span class="code">PhraseLengthBeats</span>.</li>
+                <li>A sudden same-length timing shift can reroll the plan.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="rounded-xl bg-amber-950/30 border border-amber-400/30 p-4 text-sm text-amber-100"><strong>Implementation move:</strong> replace the absolute identity with a relative <span class="code">CueSheet</span> module: <span class="code">LengthBeats</span> + relative mark offsets. Instantiate it against the current phrase start when needed.</div>
+        </article>
+
+        <article class="card rounded-2xl p-5 space-y-5">
+          <div class="flex flex-wrap gap-2 items-center">
+            <h3 class="text-xl font-semibold text-white mr-auto">2. Upcoming pre-planning is real, but current planning can still be just-in-time</h3>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-200 border border-amber-400/30">Mostly aligned</span>
+            <span class="badge rounded-full px-3 py-1 text-xs text-slate-300">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-300">Files: <span class="code">OnAirTiming.cs:727-806</span>, <span class="code">OnAirTimingTests.cs:52-74</span></div>
+          <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+            <pre class="mermaid">
+flowchart TD
+  A[ReadFrame] --> B{upcoming Track Phase?}
+  B -->|active == 0| C[PlanUpcoming]
+  C --> D[Keep current mandatory boundary loaded]
+  D --> E{current boundary fired?}
+  E -->|yes| F[PromoteUpcoming]
+  B -->|active >= 1| G{current plan matches?}
+  G -->|no| H[BuildCurrent]
+  G -->|yes| I[Advance cursor]
+            </pre>
+          </div>
+          <div class="grid md:grid-cols-3 gap-4 text-sm">
+            <div class="rounded-xl bg-emerald-950/30 border border-emerald-500/30 p-4">
+              <div class="font-semibold text-emerald-200">Matches</div>
+              <p class="text-slate-300 mt-1">Upcoming phrase data can be stored before it becomes current.</p>
+            </div>
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4">
+              <div class="font-semibold text-slate-100">Current safeguard</div>
+              <p class="text-slate-300 mt-1">If no upcoming plan exists, current Track Phase builds a plan on demand.</p>
+            </div>
+            <div class="rounded-xl bg-amber-950/30 border border-amber-500/30 p-4">
+              <div class="font-semibold text-amber-200">Clarify</div>
+              <p class="text-slate-300 mt-1">Upcoming plans can include the phrase start. Confirm whether that should be a cue-sheet mark.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="card rounded-2xl p-5 space-y-5">
+          <div class="flex flex-wrap gap-2 items-center">
+            <h3 class="text-xl font-semibold text-white mr-auto">3. Cue content is not loaded and locked one beat early</h3>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-500/15 text-red-200 border border-red-400/30">Major mismatch</span>
+            <span class="badge rounded-full px-3 py-1 text-xs text-slate-300">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-300">Files: <span class="code">Director.cs:452-517</span>, <span class="code">SyncedCueIntent.cs:60-128</span>, <span class="code">TransitionBeatPlan.cs:3-39</span></div>
+          <div class="grid lg:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+              <div class="mini-label mb-3">Desired loaded cue lifecycle</div>
+              <pre class="mermaid">
+flowchart TD
+  A[Pick first cue mark] --> B[Choose Effect + Transition]
+  B --> C[Mutable LoadedCue]
+  C -->|changes allowed| B
+  C -->|one beat before trigger| D[Locked LoadedCue]
+  D --> E[Fire no matter what]
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+              <div class="mini-label mb-3">Current just-in-time cue</div>
+              <pre class="mermaid">
+flowchart TD
+  A[Every synced beat] --> B[Read TimingFrame]
+  B --> C[Evaluate staged Effect + Transition]
+  C --> D{inside runway?}
+  D -->|no| W[Wait]
+  D -->|yes| S[StartTransition immediately]
+  S --> N[Stage next random choices]
+              </pre>
+            </div>
+          </div>
+          <p class="text-sm text-slate-300"><span class="code">SyncedCueIntent.Evaluate</span> builds a beat plan from the selected Phase Boundary and the currently staged transition, waits until the current beat is inside that transition's runway, then returns a cue. The Director immediately calls <span class="code">StartSyncedTransition</span>.</p>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="rounded-xl bg-red-950/30 border border-red-500/30 p-4">
+              <div class="font-semibold text-red-200">Missing interface</div>
+              <p class="text-slate-300 mt-1">No <span class="code">LoadedCue</span> module records mark, effect, transition, lock beat, and fired state.</p>
+            </div>
+            <div class="rounded-xl bg-red-950/30 border border-red-500/30 p-4">
+              <div class="font-semibold text-red-200">Missing invariant</div>
+              <p class="text-slate-300 mt-1">There is no code path that says "at the Transition-specific Lock Point, this cue cannot be changed anymore."</p>
+            </div>
+          </div>
+          <div class="rounded-xl bg-amber-950/30 border border-amber-400/30 p-4 text-sm text-amber-100"><strong>Implementation move:</strong> add a Director-facing <span class="code">LoadedCue</span> state machine. Tests should hit the Director seam: mutable cue can be replaced before lock; locked cue fires despite phrase changes.</div>
+        </article>
+
+        <article class="card rounded-2xl p-5 space-y-5">
+          <div class="flex flex-wrap gap-2 items-center">
+            <h3 class="text-xl font-semibold text-white mr-auto">4. The Switcher needs Armed Cue state, not a preload queue</h3>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-200 border border-amber-400/30">Design gap</span>
+            <span class="badge rounded-full px-3 py-1 text-xs text-slate-300">in-process</span>
+          </div>
+          <div class="font-mono text-sm text-slate-300">Files: <span class="code">Switcher.cs:189-281</span>, <span class="code">DirectorSyncedTailTests.cs:97-122</span></div>
+          <div class="grid lg:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4 space-y-3">
+              <div class="mini-label">Current Switcher interface</div>
+              <div class="deep rounded-xl border-2 border-slate-200 p-5 h-64 flex flex-col justify-center text-center">
+                <div class="text-lg font-semibold">StartTransition(target, transition, timing)</div>
+                <div class="text-sm text-slate-300 mt-3">mutates transition A/B · calls OnStart · sets duration · starts rendering now</div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950 p-4 space-y-3">
+              <div class="mini-label">Desired Switcher role</div>
+              <div class="deep rounded-xl border-2 border-slate-200 p-5 h-64 flex flex-col justify-center text-center">
+                <div class="text-lg font-semibold">Own one Armed Cue</div>
+                <div class="text-sm text-slate-300 mt-3">use Runway/Tail to start and progress · no multi-cue queue</div>
+              </div>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <div class="font-semibold text-slate-100">What current code does well</div>
+              <ul class="mt-2 space-y-2 text-slate-300 list-disc pl-5">
+                <li>It can start a new transition while one is rendering by using the previous transition's B as the next source.</li>
+                <li>After <span class="code">StartTransition</span>, <span class="code">RenderAtTime</span> only progresses by stored start time and duration.</li>
+              </ul>
+            </div>
+            <div>
+              <div class="font-semibold text-slate-100">What is missing</div>
+              <ul class="mt-2 space-y-2 text-slate-300 list-disc pl-5">
+                <li>No Armed Cue state.</li>
+                <li>No arm vs start distinction.</li>
+                <li>No Lock Point invariant in mechanical execution.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="rounded-xl bg-amber-950/30 border border-amber-400/30 p-4 text-sm text-amber-100"><strong>Implementation move:</strong> keep the queue out. Add a single Armed Cue execution state so the Switcher can own Runway/Tail start/progress after the Director locks and arms one Loaded Cue.</div>
+        </article>
+      </section>
+
+      <section id="evidence" class="space-y-5">
+        <h2 class="text-2xl font-semibold text-white">Evidence map</h2>
+        <div class="overflow-hidden rounded-2xl border border-slate-700">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300">
+              <tr>
+                <th class="text-left p-3 font-semibold">Behavior</th>
+                <th class="text-left p-3 font-semibold">Evidence</th>
+                <th class="text-left p-3 font-semibold">Read</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 bg-slate-950/70">
+              <tr><td class="p-3">Frame order applies OSC before Director</td><td class="p-3 code">Assets/core/Controller.cs:1518-1681</td><td class="p-3 text-slate-300">Rave OSC → BeatManager.Update → Director.Tick → Switcher.RenderAtTime.</td></tr>
+              <tr><td class="p-3">Synced mode tick loop</td><td class="p-3 code">Assets/core/Director.cs:395-410</td><td class="p-3 text-slate-300">Refresh Timing Frame, then TryStartSyncedCue.</td></tr>
+              <tr><td class="p-3">Timing Frame generation</td><td class="p-3 code">Assets/core/OnAirTiming.cs:539-595</td><td class="p-3 text-slate-300">Interprets Track Phase, coast/unlock, and selected Phase Boundary target.</td></tr>
+              <tr><td class="p-3">Upcoming/current plan store</td><td class="p-3 code">Assets/core/OnAirTiming.cs:277-411</td><td class="p-3 text-slate-300">Current cursor plus one upcoming selected-boundary plan.</td></tr>
+              <tr><td class="p-3">Cue-sheet equivalent build</td><td class="p-3 code">Assets/core/SelectedPhaseBoundaryPlan.cs:35-74</td><td class="p-3 text-slate-300">Random interior Phase Boundaries plus mandatory phrase end.</td></tr>
+              <tr><td class="p-3">Cue-sheet identity mismatch</td><td class="p-3 code">Assets/core/SelectedPhaseBoundaryPlan.cs:79-84</td><td class="p-3 text-slate-300">Matches start, end, and length, not length only.</td></tr>
+              <tr><td class="p-3">Cue content evaluation</td><td class="p-3 code">Assets/core/SyncedCueIntent.cs:60-128</td><td class="p-3 text-slate-300">Chooses cue now from current frame, transition, Drop, staged effect, deck.</td></tr>
+              <tr><td class="p-3">Runway/impact/tail math</td><td class="p-3 code">Assets/core/TransitionBeatPlan.cs:3-39</td><td class="p-3 text-slate-300">Current selected boundary is the Impact Beat; future Cue Mark should keep that meaning.</td></tr>
+              <tr><td class="p-3">Immediate transition start</td><td class="p-3 code">Assets/core/Director.cs:493-517</td><td class="p-3 text-slate-300">Computes start time and calls Switcher.StartTransition immediately.</td></tr>
+              <tr><td class="p-3">Switcher has no Armed Cue state</td><td class="p-3 code">Assets/core/Switcher.cs:189-219</td><td class="p-3 text-slate-300">StartTransition mutates and starts execution now.</td></tr>
+              <tr><td class="p-3">Switcher timing fixed after start</td><td class="p-3 code">Assets/core/Switcher.cs:224-281</td><td class="p-3 text-slate-300">RenderAtTime progresses by stored start time and duration.</td></tr>
+              <tr><td class="p-3">Next target can move while Tail renders</td><td class="p-3 code">Assets/Tests/Editor/DirectorSyncedTailTests.cs:97-122</td><td class="p-3 text-slate-300">Tests cover planning next target while previous Tail is still mechanical execution.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="recommendation" class="space-y-5">
+        <h2 class="text-2xl font-semibold text-white">Implementation path</h2>
+        <article class="card rounded-2xl p-6 border-emerald-500/40 space-y-5">
+          <div class="flex flex-wrap gap-2 items-center">
+            <h3 class="text-xl font-semibold text-white mr-auto">Top recommendation: make CueSheet and LoadedCue explicit, then arm the Switcher</h3>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">Strong</span>
+            <span class="badge rounded-full px-3 py-1 text-xs text-slate-300">in-process</span>
+          </div>
+          <div class="rounded-lg border border-slate-700 bg-slate-950 p-4">
+            <pre class="mermaid">
+flowchart LR
+  subgraph OAT[Deep module: On-Air Timing]
+    CS[CueSheet length + relative marks]
+    CUR[Current cursor]
+    UPC[Upcoming sheet]
+  end
+  subgraph D[Deep module: Director]
+    LC[LoadedCue mutable/locked/fired]
+    CAST[Effect + Transition casting]
+  end
+  subgraph S[Deep module: Switcher]
+    AC[ArmedCue one slot]
+    EXEC[mechanical execution]
+  end
+  CS --> LC
+  LC -->|Lock Point| AC
+  AC --> EXEC
+  classDef deep fill:#0f172a,stroke:#e2e8f0,stroke-width:3px,color:#e2e8f0;
+  class OAT,D,S deep;
+            </pre>
+          </div>
+          <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-3 text-sm">
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4"><div class="font-semibold text-white">1. CueSheet</div><p class="text-slate-300 mt-1">Length + relative marks; always include length.</p></div>
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4"><div class="font-semibold text-white">2. Promotion</div><p class="text-slate-300 mt-1">Upcoming sheet promotes by length, not exact identity.</p></div>
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4"><div class="font-semibold text-white">3. LoadedCue</div><p class="text-slate-300 mt-1">One cue owns mark, transition, effect, lock beat.</p></div>
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4"><div class="font-semibold text-white">4. Lock</div><p class="text-slate-300 mt-1">Before lock: replaceable. After lock: fires.</p></div>
+            <div class="rounded-xl bg-slate-900/70 border border-slate-700 p-4"><div class="font-semibold text-white">5. Switcher</div><p class="text-slate-300 mt-1">One Armed Cue slot; no preload queue.</p></div>
+          </div>
+          <div class="rounded-xl bg-emerald-950/30 border border-emerald-500/30 p-4 text-sm text-emerald-100">
+            <strong>Resolved before implementation:</strong> Cue Marks are Transition <em>Impact targets</em>, not transition start beats. The Switcher derives <span class="code">StartBeat = ImpactBeat - RunwayBeats</span>; the Lock Point is Transition-specific, one committed beat before that start. ADR 0005 records this flow.
+          </div>
+        </article>
+
+        <article class="card rounded-2xl p-5 space-y-4">
+          <h3 class="text-xl font-semibold text-white">Tests to write first</h3>
+          <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <ul class="space-y-2 text-slate-300 list-disc pl-5">
+              <li><span class="code">CueSheet.Build</span> returns relative marks and always includes phrase length.</li>
+              <li>Same phrase length reuses the existing upcoming sheet even when start/end shift.</li>
+              <li>Different phrase length regenerates the upcoming sheet.</li>
+              <li>Upcoming sheet promotes to current without rerolling.</li>
+            </ul>
+            <ul class="space-y-2 text-slate-300 list-disc pl-5">
+              <li>Loaded cue can change before lock.</li>
+              <li>Loaded cue cannot change at/after Lock Point.</li>
+              <li>Armed cue fires even if Track Phase suddenly changes.</li>
+              <li>Next cue loads while previous Tail is still rendering.</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <section id="bottom-line" class="card rounded-2xl p-6 space-y-3">
+        <h2 class="text-2xl font-semibold text-white">Bottom line</h2>
+        <p class="text-slate-300 leading-relaxed">Do not throw away the current On-Air Timing work. It already has the right deep module shape for phrase planning. The fix is to make the hidden selected-boundary plan truthful as a <span class="code">CueSheet</span>, add a small <span class="code">LoadedCue</span> interface in the Director, then hand one <span class="code">ArmedCue</span> to the Switcher at the Transition-specific Lock Point. No multi-cue preload queue is needed.</p>
+      </section>
+    </main>
+  </body>
+</html>
