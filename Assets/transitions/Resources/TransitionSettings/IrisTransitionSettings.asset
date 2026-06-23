@@ -15,7 +15,7 @@ MonoBehaviour:
   transitionTypeName: IrisTransition
   settings:
     Tags: 2
-    RunwayBeats: 0
+    RunwayBeats: 1
     TailBeats: 4
     Shape: 5
     Intensity: 2
