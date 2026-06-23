@@ -1,4 +1,4 @@
-Status: accepted
+Status: ready-for-human
 
 ## Problem Statement
 
@@ -18,7 +18,7 @@ Use the on-air timing module whose interface returns a single timing frame for t
 
 This is not a compatibility extraction. The old Director-owned timing fields and methods should be removed from the Director as the timing module takes ownership. The Director should consume the timing frame and proceed to cue decisions, staging, status projection, and Switcher commands.
 
-With the timing seam landed, the same model should support the next Director deepening pass: cue intent and casting. Cue planning should consume timing frames, transition timing declarations, live phrase events such as Drop and Fill, and Performer Repertoire to produce a small cue direction that the Director inserts or updates in the Switcher. The Switcher then owns Loaded Cue mutability, Lock Point, arming, and transition execution. That follow-on work should not require redesigning on-air timing again.
+With the timing seam landed, the same model should support the next Director deepening pass: cue intent and casting. Cue planning consumes timing frames, transition timing declarations, live phrase events such as Drop and Fill, and Performer Repertoire to produce a small cue direction that the Director sends to the Switcher fire-and-forget at the cue window. The Switcher then owns Loaded Cue mutability, Lock Point, arming, and transition execution. That follow-on work should not require redesigning on-air timing again.
 
 Documentation should be refreshed after the code shape lands so runtime architecture, ADR vocabulary, tests, and code all describe the same model: Director decides, On-Air Timing interprets live musical structure, Cue Planning/Casting chooses the move, and the Mechanical Switcher executes.
 
@@ -109,7 +109,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - The Director should not read raw Track Phase fields after the timing seam is in place.
 - The Director should not own Cue Sheet arrays, phrase identity fields, or Cue Mark cursor indexes after the timing seam is in place.
 - The Director should not own beat rewind detection except as part of feeding the timing module the current synced beat sequence, if the final interface requires that.
-- The Director should consume the timing frame to build status, configure the next cue direction, and insert/update that cue in the Switcher while the Switcher still reports it is mutable.
+- The Director should consume the timing frame to build status, configure the next cue direction, and send that cue command to the Switcher fire-and-forget at the cue window.
 - Timing source/reason strings or enums should be domain-facing and stable enough for tests and status. Prefer a small closed vocabulary over ad hoc log text.
 - The timing frame should be designed so future cue planning can consume it directly. Do not make the first slice return only the fields needed by today's exact Director implementation if cue/casting will immediately need richer timing context.
 - Keep the Mechanical Switcher execution-only. The timing module must not inspect Switcher progress, completion, or busy state.
@@ -119,7 +119,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - Keep Hold as a Director suspension/inspection concept. Holding should not cause the timing module to fake new anchors or stage choices.
 - Keep Show Now as an explicit override. It may reset timing-related planning because it is a manual/developer action, not ordinary musical scheduling.
 - Defer cue/casting implementation until the timing frame is established, but shape the timing frame so cue/casting does not require another timing redesign.
-- The follow-on cue/casting module should consume timing frame, live phrase-event data, current staged choices, transition timing declarations, and Performer Repertoire to produce a cue direction for the Switcher-held lifecycle.
+- The follow-on cue/casting module should consume timing frame, live phrase-event data, current staged choices, transition timing declarations, and Performer Repertoire to produce a cue direction for the fire-and-forget Switcher handoff.
 - Cue intent should express what the Director wants to do, not pixel-level instructions or effect internals.
 - Drop preference currently being computed and discarded should become a cue/casting concern in the follow-on pass, not a one-off patch inside transition start.
 - Effect expression remains with Effects. The Director may cast or send a cue, but Effects decide how to express Fill, Drop, Energy, or Levels when their Repertoire says they can.
@@ -181,5 +181,6 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - The first implementation should start with timing because that is the root seam for Phase/Phrase correctness, loop handling, coasting, re-anchor, and future cue planning.
 - The timing slice should be designed as the first step of the final Director architecture, not as a temporary extraction that will be replaced during cue/casting work.
 - The prior Director/Switcher work and tailed-transition fixes remain valuable. This work deepens the next layer rather than reopening the Mechanical Switcher execution contract.
-- Runtime architecture documentation was refreshed after the code shape landed so it describes Director, On-Air Timing, Cue Intent, and Mechanical Switcher responsibilities together.
-- Issue 07 clarification: the Director configures one cue direction from the existing `TimingFrame`/cue-planning path and inserts/updates it in the Switcher; the Switcher holds the Loaded Cue, derives Lock Point from Runway, refuses updates after lock, and owns Armed Cue execution. Do not implement a Director-held LoadedCue plus Director-called ArmCue seam. Do not make the Switcher read `BeatManager`, raw OSC/Rave payloads, Track Phase, Phrase Window, or Cue Sheet state; those belong to the existing `BeatManagerQueries` / `OnAirTimingInput` / `OnAirTiming` / `TimingFrame` path. Do not duplicate cadence, Runway/Tail, deck-selection, or Cue Sheet cursor rules; evolve the existing seams where their current caller contract is too narrow.
+- Runtime architecture documentation was refreshed after the Cue Sheet flow landed so it describes Director, On-Air Timing, Cue Intent, fire-and-forget cue handoff, and Mechanical Switcher responsibilities together.
+- Issue 07 clarification: the Director configures one cue direction from the existing `TimingFrame`/cue-planning path and sends it to the Switcher fire-and-forget at the cue window; the Switcher holds/schedules the Loaded Cue, derives Lock Point from Runway, refuses conflicting updates after lock, and owns Armed Cue execution. Do not implement a Director-held LoadedCue plus Director-called ArmCue seam. Do not make the Switcher read `BeatManager`, raw OSC/Rave payloads, Track Phase, Phrase Window, or Cue Sheet state; those belong to the existing `BeatManagerQueries` / `OnAirTimingInput` / `OnAirTiming` / `TimingFrame` path. Do not duplicate cadence, Runway/Tail, deck-selection, or Cue Sheet cursor rules; evolve the existing seams where their current caller contract is too narrow.
+- Status lines use the repo's triage labels; completed issue slices are `ready-for-human` for maintainer review, with implementation completion captured by checked acceptance criteria and validation evidence.

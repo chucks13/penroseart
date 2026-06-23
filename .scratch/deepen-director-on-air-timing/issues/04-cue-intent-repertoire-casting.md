@@ -1,6 +1,6 @@
 # Connect TimingFrame to cue intent and Repertoire-aware casting
 
-Status: accepted
+Status: ready-for-human
 
 ## What to build
 

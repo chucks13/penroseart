@@ -1,6 +1,6 @@
 # Preserve live-change behavior around Cue Sheets and fire-and-forget cues
 
-Status: approved
+Status: ready-for-human
 
 ## Parent
 

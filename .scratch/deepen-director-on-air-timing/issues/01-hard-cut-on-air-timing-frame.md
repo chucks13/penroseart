@@ -1,6 +1,6 @@
 # Hard-cut On-Air TimingFrame into synced sequencing
 
-Status: accepted
+Status: ready-for-human
 
 ## What to build
 

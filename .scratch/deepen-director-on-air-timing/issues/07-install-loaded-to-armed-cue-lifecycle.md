@@ -1,6 +1,6 @@
 # Install the Switcher-held Loaded Cue to Armed Cue lifecycle
 
-Status: approved
+Status: ready-for-human
 
 ## Parent
 

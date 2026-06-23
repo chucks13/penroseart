@@ -1,6 +1,6 @@
 # Move Loop and Beat Rewind self-correction into On-Air Timing
 
-Status: accepted
+Status: ready-for-human
 
 ## What to build
 

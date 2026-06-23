@@ -1,6 +1,6 @@
 # Make Cue Sheet the On-Air Timing plan
 
-Status: approved
+Status: ready-for-human
 
 ## Parent
 

@@ -1,6 +1,6 @@
 # Move Coast and Re-anchor recovery into On-Air Timing
 
-Status: accepted
+Status: ready-for-human
 
 ## What to build
 

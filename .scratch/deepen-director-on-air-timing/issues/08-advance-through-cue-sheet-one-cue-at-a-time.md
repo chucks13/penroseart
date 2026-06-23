@@ -1,6 +1,6 @@
 # Advance through the Cue Sheet one Cue at a time
 
-Status: approved
+Status: ready-for-human
 
 ## Parent
 

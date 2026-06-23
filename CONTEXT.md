@@ -66,7 +66,7 @@ Android, iOS, and WebGL serial support are not covered by the desktop `System.IO
 ## Operational Logic
 
 1. **Initialization**: `Controller` initializes `Penrose`, discovers effects/transitions/blenders through `Factory<T>`, configures UI fields, starts OSC/control helpers, creates the Director and Mechanical Switcher, and initializes serial output when enabled.
-2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior, maintains Cue Sheets/Loaded Cues in Synced Mode, and arms the Switcher when a stage-directed Cue is committed.
+2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior, reads On-Air Timing/Cue Intent, and sends fire-and-forget cue directions to the Switcher when a stage-directed Cue should commit.
 3. **Rendering**: The Switcher renders the active Effect or A-to-B Transition into a 900-color buffer; overlays/blenders can modify it.
 4. **Output**: The active serial path maps the Penrose buffer to physical LED order and sends frames through `SerialOut`; the legacy UDP path maps the same data into ACN/E1.31 universes.
 5. **Scene update**: `Penrose.UpdateModelColors()` applies the current buffer to the Unity mesh for visualization.
@@ -159,7 +159,7 @@ The two intentional personalities for rhythm-aware behavior. **Synced Mode** is 
 _Avoid_: effects that freeze, glitch, or go dark when OSC is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase as Standalone Mode while other OSC timing is present.
 
 **Director**:
-The decision layer that owns *what* plays on the wall and which Phrase Cue Mark a stage-directed move should land on. It chooses Cue Sheets, Loaded Cues, Performers, and Transitions from Repertoire and live song structure, while the Switcher owns mechanical transition execution once a Cue is armed.
+The decision layer that owns *what* plays on the wall and which Phrase Cue Mark a stage-directed move should land on. It chooses the Cue Mark, destination Performer, and Transition from On-Air Timing, Repertoire, staged choices, and live song structure, then sends that cue direction to the Switcher fire-and-forget.
 _Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
 
 **On-Air Timing**:
@@ -167,7 +167,7 @@ The Synced Mode timing interpretation seam. It reads the current on-air rhythm f
 _Avoid_: making the Director read raw Track Phase fields; treating On-Air Timing as another clock source or as Switcher execution state.
 
 **Timing Frame**:
-The Director-facing snapshot of one Synced Mode timing moment: current beat, Phase reading, Phase Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether the next Loaded Cue should wait, change, or be armed.
+The Director-facing snapshot of one Synced Mode timing moment: current beat, Phase reading, Phase Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether the next fire-and-forget cue command should wait, cue, or block on cadence.
 _Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
 
 **Cue Sheet**:
@@ -179,7 +179,7 @@ A beat position on a Cue Sheet where a stage-directed Cue should musically land.
 _Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Phase Boundary when speaking about the Phrase plan.
 
 **Loaded Cue**:
-The Director's prepared stage-directed Cue for the next Cue Mark: which destination Performer, which Transition, and which musical mark the move should hit. It is mutable while the Director is still deciding; after it is armed it must fire through the Switcher.
+The Switcher-held stage-directed Cue for the next Cue Mark: which destination Performer, which Transition, and which musical mark the move should hit. It is mutable only inside the Switcher before its Lock Point; the Director sends cue directions fire-and-forget and does not inspect Loaded Cue state.
 _Avoid_: loading multiple future Cues; treating a Loaded Cue as Switcher transition progress; putting pixel-level Effect commands in it.
 
 **Armed Cue**:
@@ -191,11 +191,11 @@ The beat after which a Loaded Cue can no longer change. The Lock Point depends o
 _Avoid_: one global lock beat for every Transition; locking at the Impact Point; putting transition start math into the Cue Sheet.
 
 **Cue Intent**:
-The Director-facing result of combining a Timing Frame, Transition Repertoire, live phrase events such as Drop, staged choices, current Performer, deck state, and Performer Repertoire. It says whether the next Loaded Cue should wait, change target Performer, be armed, or block on cadence.
+The Director-facing result of combining a Timing Frame, Transition Repertoire, live phrase events such as Drop, staged choices, current Performer, deck state, and Performer Repertoire. It says whether the Director should wait, send a cue command with a target Performer, or block on cadence.
 _Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split.
 
 **Next Transition**:
-The Transition already chosen for the Director's next Loaded Cue. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Switcher still honors that Transition's Runway, Tail, and Impact Point when the Cue is armed.
+The Transition already chosen for the Director's next cue command. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Switcher still honors that Transition's Runway, Tail, and Impact Point when the Cue is loaded and armed.
 _Avoid_: choosing the Transition at the last moment; treating the selected next Transition as permission to bypass Runway, Tail, or Impact Point timing.
 
 **Next Effect**:

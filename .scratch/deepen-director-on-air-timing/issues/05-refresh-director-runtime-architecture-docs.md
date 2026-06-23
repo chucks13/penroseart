@@ -1,6 +1,6 @@
 # Refresh Director runtime architecture docs after the hard cut
 
-Status: accepted
+Status: ready-for-human
 
 ## What to build
 
