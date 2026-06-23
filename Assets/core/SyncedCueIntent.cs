@@ -54,7 +54,9 @@ public readonly struct SyncedCueIntent
 
     /// <summary>
     /// Builds a Synced Mode cue intent from the Timing Frame, selected Transition timing,
-    /// live Drop data, staged Effect choice, and advertised Effect Repertoire.
+    /// live Drop data, staged Effect choice, and advertised Effect Repertoire. When a Drop-aligned
+    /// cue casts a preferred Performer from the deck, evaluating the intent reserves that card by
+    /// rotating it through <see cref="EffectDeckSelection.TryPullPreferred"/>.
     /// </summary>
     public static SyncedCueIntent Evaluate(
         TimingFrame frame,

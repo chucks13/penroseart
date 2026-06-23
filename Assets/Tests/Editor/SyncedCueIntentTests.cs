@@ -113,6 +113,100 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
+    public void MisalignedDropCueDoesNotCastPreferredPerformer()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Evaluate(
+            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            FourBeatRunway(),
+            UpcomingDrop(beatsUntilStart: 3),
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.DropAligned, Is.False);
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
+    }
+
+    [Test]
+    public void InProgressDropCueDoesNotCastPreferredPerformer()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Evaluate(
+            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            FourBeatRunway(),
+            InProgressDrop(),
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.DropAligned, Is.False);
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
+    }
+
+    [Test]
+    public void DropAlignedCueBlockedByCadenceDoesNotRotatePreferredDeckCard()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Evaluate(
+            Frame(
+                currentBeat: 605,
+                selectedPhaseBoundary: 609,
+                previousSelectedPhaseBoundary: 600),
+            FourBeatRunway(),
+            UpcomingDrop(beatsUntilStart: 4),
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.BlockedByCadence));
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
+        Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
+    }
+
+    [Test]
+    public void DropAlignedCuePreservesMatchingHeldOrManualStagedPerformer()
+    {
+        var deck = new[] { 2, 0, 1 };
+
+        var intent = SyncedCueIntent.Evaluate(
+            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            FourBeatRunway(),
+            UpcomingDrop(beatsUntilStart: 4),
+            stagedEffectIndex: 1,
+            preserveStagedEffect: true,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex is 1 or 2 ? Repertoire.HandlesDrop : Repertoire.None,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(deck, Is.EqualTo(new[] { 2, 0, 1 }));
+    }
+
+    [Test]
     public void EvaluateWaitsAtImpactBeat()
     {
         var intent = Evaluate(Frame(currentBeat: 609, selectedPhaseBoundary: 609));
@@ -211,6 +305,19 @@ public sealed class SyncedCueIntentTests
             msUntilStart: null,
             beatsUntilEnd: null,
             progress: null,
+            anticipation: null,
+            lengthBeats: 16,
+            remaining: 1);
+    }
+
+    private static PhraseEventInfo InProgressDrop()
+    {
+        return new PhraseEventInfo(
+            inProgress: true,
+            beatsUntilStart: null,
+            msUntilStart: null,
+            beatsUntilEnd: 4,
+            progress: 0.5f,
             anticipation: null,
             lengthBeats: 16,
             remaining: 1);

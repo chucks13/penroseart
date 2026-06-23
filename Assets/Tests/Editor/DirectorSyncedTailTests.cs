@@ -191,6 +191,21 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
+    public void DropAlignedCuePreservesManualStagedPerformerWhenDropCapablePerformerIsAvailable()
+    {
+        director.SetNextEffect(1);
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The Director should start a synced transition on the Drop runway.");
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Manual staging should preserve the chosen Performer instead of recasting from the deck.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
+    }
+
+    [Test]
     public void TrackPhaseDisappearanceAfterAnchorCoastsAndStillCuesOnCoastedBoundary()
     {
         var randomState = Random.state;

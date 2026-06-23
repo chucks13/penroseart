@@ -488,16 +488,16 @@ public sealed class Director
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
         Trace($"SYNC_CUE beat={beat} start={cueIntent.BeatPlan.StartBeat} selectedBoundary={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueIntent.BeatPlan.StartBeat)} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
-        StartSyncedTransition(transitionIndex, cueIntent.TargetEffectIndex, cueIntent.BeatPlan, repertoire, cueIntent);
+        StartSyncedTransition(transitionIndex, repertoire, cueIntent);
     }
 
     private void StartSyncedTransition(
         int transitionIndex,
-        int targetEffectIndex,
-        TransitionBeatPlan beatPlan,
         TransitionRepertoire repertoire,
         SyncedCueIntent cueIntent)
     {
+        var beatPlan = cueIntent.BeatPlan;
+        var targetEffectIndex = cueIntent.TargetEffectIndex;
         var secondsPerBeat = CurrentSecondsPerBeat();
         var beatFraction = controller.beatManager.BeatFraction ?? 0f;
         var elapsedBeats = Mathf.Max(0f, lastSyncedBeat - beatPlan.StartBeat + beatFraction);

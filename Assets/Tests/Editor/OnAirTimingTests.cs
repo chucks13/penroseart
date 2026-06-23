@@ -230,18 +230,6 @@ public sealed class OnAirTimingTests
         Assert.That(frame.ClearedPassLocalCadenceState, Is.True);
         Assert.That(frame.PassLocalState.LastCueBeat, Is.Null);
         Assert.That(frame.PassLocalState.PreviousSelectedPhaseBoundary, Is.Null);
-
-        var cueIntent = SyncedCueIntent.Evaluate(
-            frame,
-            FourBeatRunway(),
-            drop: null,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: true,
-            currentEffectIndex: 0,
-            deck: new[] { 1, 2, 0 },
-            repertoireForEffect: _ => Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-        Assert.That(cueIntent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
     }
 
     [Test]
@@ -373,17 +361,6 @@ public sealed class OnAirTimingTests
             trackPhaseActive: -1,
             beatsUntilPhraseBoundary: -1,
             phraseLengthBeats: -1);
-    }
-
-    private static TransitionRepertoire FourBeatRunway()
-    {
-        return TransitionRepertoire.FromRunwayAndTail(
-            global::Repertoire.None,
-            runwayBeats: 4,
-            tailBeats: 0,
-            TransitionShape.Dissolve,
-            TransitionIntensity.Medium,
-            defaultDurationSeconds: 4f);
     }
 
     private static Func<int, int, int> SelectFirstInteriorBoundary()
