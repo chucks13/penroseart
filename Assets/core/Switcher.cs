@@ -160,7 +160,7 @@ public readonly struct SwitcherClockSnapshot
 /// </summary>
 public readonly struct SwitcherCueStatus
 {
-    public static SwitcherCueStatus Empty { get; } = new SwitcherCueStatus(false, false, -1, -1, -1, -1);
+    public static SwitcherCueStatus Empty { get; } = new SwitcherCueStatus(false, false, -1, -1, -1, -1, -1, -1, 0, 0);
 
     public readonly bool HasCue;
     public readonly bool IsLocked;
@@ -168,6 +168,10 @@ public readonly struct SwitcherCueStatus
     public readonly int TargetEffectIndex;
     public readonly int TransitionIndex;
     public readonly int LockPointBeat;
+    public readonly int StartBeat;
+    public readonly int CompleteBeat;
+    public readonly int RunwayBeats;
+    public readonly int TailBeats;
 
     public SwitcherCueStatus(
         bool hasCue,
@@ -175,7 +179,11 @@ public readonly struct SwitcherCueStatus
         int cueMarkBeat,
         int targetEffectIndex,
         int transitionIndex,
-        int lockPointBeat)
+        int lockPointBeat,
+        int startBeat,
+        int completeBeat,
+        int runwayBeats,
+        int tailBeats)
     {
         HasCue = hasCue;
         IsLocked = isLocked;
@@ -183,6 +191,10 @@ public readonly struct SwitcherCueStatus
         TargetEffectIndex = targetEffectIndex;
         TransitionIndex = transitionIndex;
         LockPointBeat = lockPointBeat;
+        StartBeat = startBeat;
+        CompleteBeat = completeBeat;
+        RunwayBeats = runwayBeats;
+        TailBeats = tailBeats;
     }
 
     public bool CanUpdate => HasCue && !IsLocked;
@@ -476,7 +488,11 @@ public sealed class Switcher
                 loadedCue.CueMarkBeat,
                 loadedCue.TargetEffectIndex,
                 loadedCue.TransitionIndex,
-                loadedCueLockPointBeat)
+                loadedCueLockPointBeat,
+                loadedCueBeatPlan.StartBeat,
+                loadedCueBeatPlan.CompleteBeat,
+                loadedCue.TransitionRepertoire.RunwayBeats,
+                loadedCue.TransitionRepertoire.TailBeats)
             : SwitcherCueStatus.Empty;
     }
 

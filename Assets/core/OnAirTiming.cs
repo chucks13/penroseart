@@ -109,6 +109,52 @@ public readonly struct PassLocalTimingState
     }
 }
 
+/// <summary>Read-only snapshot of the active Cue Sheet used by On-Air Timing.</summary>
+public readonly struct CueSheetStatus
+{
+    /// <summary>No Cue Sheet is currently active.</summary>
+    public static CueSheetStatus Empty { get; } = new CueSheetStatus(false, -1, -1, -1, -1, -1, Array.Empty<int>());
+
+    /// <summary>Whether a current Cue Sheet exists.</summary>
+    public readonly bool HasSheet;
+
+    /// <summary>Absolute beat where the current Phrase starts.</summary>
+    public readonly int PhraseStartBeat;
+
+    /// <summary>Absolute beat where the current Phrase ends.</summary>
+    public readonly int PhraseEndBeat;
+
+    /// <summary>Total current Phrase length in beats.</summary>
+    public readonly int PhraseLengthBeats;
+
+    /// <summary>Index into <see cref="CueMarkOffsets"/> for the selected current Cue Mark.</summary>
+    public readonly int CurrentCueMarkIndex;
+
+    /// <summary>Absolute beat of the selected current Cue Mark.</summary>
+    public readonly int CurrentCueMarkBeat;
+
+    /// <summary>Phrase-relative Cue Mark offsets for display.</summary>
+    public readonly int[] CueMarkOffsets;
+
+    public CueSheetStatus(
+        bool hasSheet,
+        int phraseStartBeat,
+        int phraseEndBeat,
+        int phraseLengthBeats,
+        int currentCueMarkIndex,
+        int currentCueMarkBeat,
+        int[] cueMarkOffsets)
+    {
+        HasSheet = hasSheet;
+        PhraseStartBeat = phraseStartBeat;
+        PhraseEndBeat = phraseEndBeat;
+        PhraseLengthBeats = phraseLengthBeats;
+        CurrentCueMarkIndex = currentCueMarkIndex;
+        CurrentCueMarkBeat = currentCueMarkBeat;
+        CueMarkOffsets = cueMarkOffsets ?? Array.Empty<int>();
+    }
+}
+
 /// <summary>Director-facing interpretation of one synced on-air frame.</summary>
 public readonly struct TimingFrame
 {
@@ -125,7 +171,8 @@ public readonly struct TimingFrame
         PassLocalTimingState.Empty,
         false,
         false,
-        false);
+        false,
+        CueSheetStatus.Empty);
 
     /// <summary>The live rhythm snapshot that produced this frame.</summary>
     public readonly OnAirTimingInput Input;
@@ -156,6 +203,9 @@ public readonly struct TimingFrame
 
     /// <summary>Track Phase-derived Phrase Window, valid only when <see cref="HasPhraseWindow"/> is true.</summary>
     public readonly PhraseWindow PhraseWindow;
+
+    /// <summary>Active Cue Sheet snapshot for inspector/status displays.</summary>
+    public readonly CueSheetStatus CueSheet;
 
     /// <summary>Stable domain-facing source for the selected timing target.</summary>
     public readonly TimingFrameSource Source;
@@ -194,7 +244,8 @@ public readonly struct TimingFrame
         PassLocalTimingState passLocalState,
         bool clearedPassLocalCueState,
         bool clearedPassLocalCadenceState,
-        bool reanchored)
+        bool reanchored,
+        CueSheetStatus cueSheet = default)
     {
         Input = input;
         CurrentBeat = input.Beat;
@@ -205,6 +256,7 @@ public readonly struct TimingFrame
         BeatsUntilCueMark = hasPhaseAnchor && input.Beat >= 1 ? cueMarkBeat - input.Beat : -1;
         HasPhraseWindow = hasPhraseWindow;
         PhraseWindow = phraseWindow;
+        CueSheet = cueSheet;
         Source = source;
         BeatRewoundToNewPass = beatRewoundToNewPass;
         PassLocalState = passLocalState;
@@ -281,6 +333,11 @@ public sealed class OnAirTiming
         private bool hasUpcoming;
         private CueSheet upcoming;
         private int upcomingPhraseStartBeat;
+
+        public CueSheetStatus Status(int currentCueMarkBeat)
+        {
+            return current.Status(currentCueMarkBeat);
+        }
 
         public void ResetAll()
         {
@@ -547,6 +604,25 @@ public sealed class OnAirTiming
             return consumedCueMarkBeat is { } firedCueMark && firedCueMark >= PhraseEndBeat;
         }
 
+        public CueSheetStatus Status(int currentCueMarkBeat)
+        {
+            if (!HasSheet)
+            {
+                return CueSheetStatus.Empty;
+            }
+
+            var cueMarkOffsets = CueMarkOffsets;
+            var currentCueMarkIndex = cueMarkOffsets.Length > 0 ? ClampIndex(index, cueMarkOffsets.Length) : -1;
+            return new CueSheetStatus(
+                true,
+                phraseStartBeat,
+                PhraseEndBeat,
+                sheet.PhraseLengthBeats,
+                currentCueMarkIndex,
+                currentCueMarkBeat,
+                (int[])cueMarkOffsets.Clone());
+        }
+
         private int CueMarkAt(int cueMarkIndex)
         {
             var cueMarkOffsets = CueMarkOffsets;
@@ -658,7 +734,8 @@ public sealed class OnAirTiming
             TimingFrameSource.Coast,
             beatRewoundToNewPass,
             passState,
-            false);
+            false,
+            CueSheetStatus.Empty);
     }
 
     private TimingFrame BuildAnchoredFrame(
@@ -684,7 +761,8 @@ public sealed class OnAirTiming
             target.Source,
             beatRewoundToNewPass,
             passState,
-            reanchored);
+            reanchored,
+            cueSheetPlans.Status(phaseAnchorLandingBeat));
     }
 
     private TimingFrame BuildUnlockedFrame(
@@ -708,7 +786,8 @@ public sealed class OnAirTiming
             TimingFrameSource.Unlocked,
             beatRewoundToNewPass,
             passState,
-            false);
+            false,
+            CueSheetStatus.Empty);
     }
 
     private static TimingFrame CreateFrame(
@@ -722,7 +801,8 @@ public sealed class OnAirTiming
         TimingFrameSource source,
         bool beatRewoundToNewPass,
         FramePassLocalState passState,
-        bool reanchored)
+        bool reanchored,
+        CueSheetStatus cueSheet)
     {
         return new TimingFrame(
             input,
@@ -737,7 +817,8 @@ public sealed class OnAirTiming
             passState.State,
             passState.ClearedCueState,
             passState.ClearedCadenceState,
-            reanchored);
+            reanchored,
+            cueSheet);
     }
 
     private static bool ReanchoredFrom(TimingFrameSource previousSource, TimingFrameSource source, bool hadPhaseAnchor)

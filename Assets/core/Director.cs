@@ -47,7 +47,8 @@ public readonly struct DirectorStatus
         -1,
         string.Empty,
         false,
-        false);
+        false,
+        CueSheetStatus.Empty);
 
     public readonly DirectorMode Mode;
     public readonly DirectorDecision Decision;
@@ -70,6 +71,8 @@ public readonly struct DirectorStatus
     public readonly string NextTransitionName;
     public readonly bool HoldSelectedEffect;
     public readonly bool HoldSelectedTransition;
+    /// <summary>Current Cue Sheet snapshot from On-Air Timing.</summary>
+    public readonly CueSheetStatus CueSheet;
 
     public DirectorStatus(
         DirectorMode mode,
@@ -91,7 +94,8 @@ public readonly struct DirectorStatus
         int nextTransitionIndex,
         string nextTransitionName,
         bool holdSelectedEffect,
-        bool holdSelectedTransition)
+        bool holdSelectedTransition,
+        CueSheetStatus cueSheet)
     {
         Mode = mode;
         Decision = decision;
@@ -113,6 +117,7 @@ public readonly struct DirectorStatus
         NextTransitionName = nextTransitionName ?? string.Empty;
         HoldSelectedEffect = holdSelectedEffect;
         HoldSelectedTransition = holdSelectedTransition;
+        CueSheet = cueSheet;
     }
 
     /// <summary>Current live beat observed by the Director, or -1 outside Synced Mode.</summary>
@@ -350,7 +355,8 @@ public sealed class Director
             nextTransitionIndex,
             TransitionName(nextTransitionIndex),
             holdSelectedEffect,
-            holdSelectedTransition);
+            holdSelectedTransition,
+            timingFrame.CueSheet);
     }
 
     private DirectorDecision ResolveDecision(
@@ -499,7 +505,8 @@ public sealed class Director
             currentFrame.PassLocalState,
             currentFrame.ClearedPassLocalCueState,
             currentFrame.ClearedPassLocalCadenceState,
-            currentFrame.Reanchored);
+            currentFrame.Reanchored,
+            targetFrame.CueSheet);
     }
 
     private SwitcherClockSnapshot CurrentSwitcherClockSnapshot(int beat)
