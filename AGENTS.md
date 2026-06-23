@@ -44,11 +44,7 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 ## Development Philosophy
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
-- Preserve the current creative-coding / installation-controller style unless the user explicitly asks for a larger architecture change.
-- Prefer small, direct changes to the existing systems over new frameworks, service layers, ScriptableObject registries, prefab hierarchies, or generic abstractions.
-- Small and direct does not mean smallest possible diff. If the touched system's shape is the problem, fix that shape within the requested scope instead of layering a workaround onto it.
 - When the user asks to replace a source of truth or data model, make the existing core system reflect the new model and update its real consumers. Do not import new runtime data into a side snapshot while leaving the application on the old model unless the user asks for a staged migration.
-- This project is not primarily TDD-driven. Add pragmatic tests when changing testable core logic, protocol handling, mapping, palette/beat behavior, or new abstractions; do not create heavy test infrastructure for purely visual tuning unless requested.
 
 ## Core Files and Systems
 
@@ -83,7 +79,6 @@ Start with these before adding new structures:
 ## Unity and Asset Rules
 
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
-- Preserve `Assets/**/*.meta` files and GUIDs when moving, renaming, or adding Unity assets.
 - Most project-authored core/effect runtime code lives in Unity's generated `Assembly-CSharp` assembly and mostly global namespace. `Assets/OSC/` is the current exception with dedicated `.asmdef` files. Do not add new assembly boundaries or namespaces as cleanup unless requested.
 - Important runtime data is serialized in `Assets/Scenes/SampleScene.unity`, including `Controller.jsonSource` and `Controller.paletteSource`. Treat scene data changes as behavior changes.
 - `Assets/TextMesh Pro/` resources and generated Unity settings may be Unity/import-owned. Do not revert, delete, or reorganize them without confirming ownership.
@@ -125,7 +120,6 @@ Start with these before adding new structures:
 ## Running and Validation
 
 - Opening Play Mode can have side effects: it may scan/open serial ports, start UDP listeners, interact with attached hardware, and rewrite `StreamingAssets/images/*/files.txt` through `kscope`.
-- Ask before running Play Mode when hardware state, local ports, or working-tree cleanliness matter.
 - For script-level checks, use Unity-regenerated project files before trusting `dotnet build`; stale generated projects can report the wrong target framework after API compatibility changes.
 - Use `scripts/unity-compile.sh` for Unity compile/import checks instead of hand-assembling raw Unity CLI invocations.
 - Use `scripts/unity-tests.sh` for Unity Test Framework runs. Use `UNITY_TEST_FILTER` for focused tests and increase `UNITY_EDITOR_TEST_TIMEOUT` only after checking whether the Editor is busy, in Play Mode, compiling, or importing.
