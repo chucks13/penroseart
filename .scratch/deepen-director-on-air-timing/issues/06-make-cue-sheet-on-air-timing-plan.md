@@ -22,7 +22,7 @@ This was a hard-cut vocabulary/model cleanup, not a compatibility layer. The exi
 
 ## Implementation notes
 
-- Renamed `Assets/core/SelectedPhaseBoundaryPlan.cs` to `Assets/core/CueSheet.cs` with Unity `.meta` GUID preservation.
+- Renamed `Assets/core/SelectedPhaseBoundaryPlan.cs` to `Assets/core/Switching/CueSheet.cs` with Unity `.meta` GUID preservation.
 - Renamed `Assets/Tests/Editor/SelectedPhaseBoundaryPlanTests.cs` to `Assets/Tests/Editor/CueSheetTests.cs` with Unity `.meta` GUID preservation.
 - `CueSheet` now owns `PhraseLengthBeats` plus relative `CueMarkOffsets`; `CueSheet.Matches(...)` compares Phrase length only.
 - On-Air Timing's current/upcoming state now stores Cue Sheets plus their current Phrase start, then translates relative Cue Marks to absolute `CueMarkBeat` values for `TimingFrame` and cue/cadence consumers.

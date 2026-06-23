@@ -25,7 +25,7 @@ Unity scene
 ## Scene startup
 
 - `Assets/Scenes/SampleScene.unity` is the only enabled build scene.
-- `Controller` is the main runtime hub and has script execution order `-2000` via `Assets/core/Controller.cs.meta`.
+- `Controller` is the main runtime hub and has script execution order `-2000` via `Assets/core/Runtime/Controller.cs.meta`.
 - `Controller : Singleton<Controller>` depends on `Singleton<T>.Awake()` setting `Controller.Instance` before other systems use it.
 - `Penrose.Awake()` reads `JsonRawData` from `Controller.Instance.jsonSource`; this makes Controller startup order important.
 - `Controller.Start()` finds `Penrose` with `GameObject.FindObjectOfType<Penrose>()`, calls `penrose.Init()`, wires UI, builds effect catalogs, starts OSC/drums/pixel receiver, creates the timer, and initializes serial output when `ENABLE_SERIAL` is active.
@@ -45,7 +45,7 @@ Unity scene
 
 ## Penrose model
 
-`Assets/core/Penrose.cs` owns the wall representation:
+`Assets/core/Runtime/Penrose.cs` owns the wall representation:
 
 - `Penrose.Total == 900` logical tiles.
 - Mesh arrays are sized `Total * 2 * 3` so each tile is represented by two triangles / six vertices.
@@ -85,7 +85,7 @@ Unity scene
 ## Rendering pipeline
 
 - Project uses the Built-in Render Pipeline: no custom render pipeline asset is configured in `ProjectSettings/GraphicsSettings.asset`.
-- The Penrose mesh uses the custom shader `Assets/core/PenroseShader.shader` named `Unlit/Penrose`.
+- The Penrose mesh uses the custom shader `Assets/core/Runtime/PenroseShader.shader` named `Unlit/Penrose`.
 - ProjectSettings report Gamma color space (`m_ActiveColorSpace: 0`).
 - `Penrose.UpdateModelColors()` drives preview visuals through mesh vertex colors; hardware output uses the same `penrose.buffer` data after overlays/blending.
 

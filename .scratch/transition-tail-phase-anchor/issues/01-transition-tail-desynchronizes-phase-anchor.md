@@ -24,13 +24,13 @@ This is currently treated as a pre-existing/runtime sequencing bug, not assumed 
 
 ## Initial investigation targets
 
-- `Assets/core/Director.cs`
+- `Assets/core/Switching/Director.cs`
   - synced transition start/completion
   - `transitionLandingBeat`
   - `phaseAnchorLandingBeat`
   - `StageNextChoices(...)`
   - phase anchor refresh/coasting after transition completion
-- `Assets/core/TransitionBeatPlan.cs`
+- `Assets/core/Transitions/TransitionBeatPlan.cs`
 - `Assets/core/SyncedTransitionPlan.cs`
 - transition repertoires with `TailBeats > 0`
 - existing synced transition / phase tests under `Assets/Tests/Editor/`

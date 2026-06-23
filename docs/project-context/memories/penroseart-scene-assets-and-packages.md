@@ -14,8 +14,8 @@ Custom MonoBehaviour bindings found in the scene:
 
 | Scene object     | Script                                | Notes                                                                                             |
 | ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `Controller`     | `Assets/core/Controller.cs`           | Main runtime hub. Script meta GUID `5f47cb3b2738dba41858c13614a36b80`; execution order `-2000`.   |
-| `PenroseDisplay` | `Assets/core/Penrose.cs`              | Mesh display and Penrose wall data/model. Script meta GUID `f95c9fce4577c274998e22a24e80df9a`.    |
+| `Controller`     | `Assets/core/Runtime/Controller.cs`           | Main runtime hub. Script meta GUID `5f47cb3b2738dba41858c13614a36b80`; execution order `-2000`.   |
+| `PenroseDisplay` | `Assets/core/Runtime/Penrose.cs`              | Mesh display and Penrose wall data/model. Script meta GUID `f95c9fce4577c274998e22a24e80df9a`.    |
 | `Slider`         | `Assets/core/helpers/SliderScript.cs` | UI brightness slider. Script meta GUID `05b21a700386d4945873bb439c1c8669`; slider range is 0-255. |
 
 Other scene objects are Unity/TMP/UI primitives such as `Main Camera`, `GUI Canvas`, `EventSystem`, `DebugText`, `EffectText`, `destIP`, `ontime`, `offtime`, display toggle, slider children, and labels.

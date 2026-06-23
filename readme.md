@@ -10,7 +10,7 @@ Unity is the host and simulator. The effect system itself is mostly plain C# so 
 - [`docs/effect-authoring.md`](docs/effect-authoring.md) — how to create effects, use the lifecycle, and work with buffers.
 - [`docs/code-map.md`](docs/code-map.md) — file-by-file map of the project-authored runtime code.
 - [`CONTEXT.md`](CONTEXT.md) — operational project context and platform/output notes.
-- [`Assets/core/S2_MINI_PROTOCOL.md`](Assets/core/S2_MINI_PROTOCOL.md) — USB serial protocol used by the S2 Mini / ESP32 boards.
+- [`Assets/core/Hardware/S2_MINI_PROTOCOL.md`](Assets/core/Hardware/S2_MINI_PROTOCOL.md) — USB serial protocol used by the S2 Mini / ESP32 boards.
 - [`docs/investigation/`](docs/investigation/) — historical research/audit notes; useful context, but not canonical current docs.
 
 ## Runtime loop

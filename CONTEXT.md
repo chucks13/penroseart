@@ -4,7 +4,7 @@
 
 This project is a real-time controller for the Penrose Wall light installation. It generates generative visuals for a 900-tile Penrose model in Unity and currently outputs to LED hardware through high-speed USB serial (`SerialOut`) for S2 Mini / ESP32 boards.
 
-The older ACN/E1.31 UDP output path still exists in `Controller.sendUDPFrame()` / `sendACN()`, but the active build path is serial because `Assets/core/Controller.cs` file-defines `ENABLE_SERIAL`.
+The older ACN/E1.31 UDP output path still exists in `Controller.sendUDPFrame()` / `sendACN()`, but the active build path is serial because `Assets/core/Runtime/Controller.cs` file-defines `ENABLE_SERIAL`.
 
 ## Core Components
 

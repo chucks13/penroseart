@@ -32,7 +32,7 @@ PenroseArt is a Unity/C# real-time simulator and controller for the **Penrose Wa
 
 ## Output and control
 
-- Current source has file-local `#define ENABLE_SERIAL` in `Assets/core/Controller.cs`, so the compiled frame output path is USB serial via `SerialOut` rather than E1.31/ACN UDP.
+- Current source has file-local `#define ENABLE_SERIAL` in `Assets/core/Runtime/Controller.cs`, so the compiled frame output path is USB serial via `SerialOut` rather than E1.31/ACN UDP.
 - The legacy/alternate UDP path still exists in `Controller.sendUDPFrame()` and sends E1.31-style ACN universes to the serialized IP (`192.168.1.253` in the scene).
 - `OSCReader` provides OSC control defaults of local port `6969` and outbound `192.168.1.255:6161`.
 - Optional systems include pixel-source blending (`PixelReceiver` on UDP port `7778`), a camera overlay (`CameraReader`, disabled in the scene), drum/ring overlays (`drums`), and a conditional telnet command server behind `ENABLE_TELNET`.
@@ -40,6 +40,6 @@ PenroseArt is a Unity/C# real-time simulator and controller for the **Penrose Wa
 ## Current status notes
 
 - Root docs now describe serial as the active compiled output path; confirm intent before changing output logic because the legacy ACN/E1.31 UDP path still exists.
-- `Assets/core/Controller - nova.cs` is a disabled reference/alternate controller wrapped in `#if false`.
+- `Assets/core/Reference/Controller - nova.cs` is a disabled reference/alternate controller wrapped in `#if false`.
 - There are no project-specific tests currently found under `Assets`; Unity Test Framework packages are installed but unused.
 - Project philosophy has not been explicitly provided by the user yet.

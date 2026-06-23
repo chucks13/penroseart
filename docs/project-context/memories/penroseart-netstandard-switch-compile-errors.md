@@ -9,8 +9,8 @@ Memory Vault remains canonical.
 When Unity `6000.4.7f1` Standalone API Compatibility Level was switched from `.NET Framework 4.8 + Unity additions` to `.NET Standard 2.1`, `dotnet build Assembly-CSharp.csproj --no-restore -v:minimal` failed with:
 
 ```text
-Assets/core/SerialOut.cs(5,17): error CS0234: The type or namespace name 'Ports' does not exist in the namespace 'System.IO'
-Assets/core/SerialOut.cs(14,16): error CS0246: The type or namespace name 'SerialPort' could not be found
+Assets/core/Hardware/SerialOut.cs(5,17): error CS0234: The type or namespace name 'Ports' does not exist in the namespace 'System.IO'
+Assets/core/Hardware/SerialOut.cs(14,16): error CS0246: The type or namespace name 'SerialPort' could not be found
 Assets/effects/fluid.cs(17,9): warning CS0108: 'fluid.beatVariant' hides inherited member 'EffectBase.beatVariant'. Use the new keyword if hiding was intended.
 ```
 
@@ -22,7 +22,7 @@ Confirmed generated project state at the time of the failure:
 
 Interpretation:
 
-- The real blocking error is `System.IO.Ports.SerialPort` usage in `Assets/core/SerialOut.cs`.
+- The real blocking error is `System.IO.Ports.SerialPort` usage in `Assets/core/Hardware/SerialOut.cs`.
 - `SerialOut` uses `SerialPort.GetPortNames()`, opens candidate USB serial ports at 2,000,000 baud, toggles DTR/RTS for ESP32-S2 CDC, sends a `?` handshake, reads the board pixel range, then writes packed RGB frame data plus latch/sync commands on a background I/O thread.
 - `System.IO.Ports` is available under Unity's `.NET Framework 4.8 + Unity additions` profile but is not built into Unity's `.NET Standard 2.1` API compatibility profile; `.NET Standard` now works in this repo only because platform-specific runtime plugin assets were added.
 - Microsoft documents `SerialPort` as a class for controlling serial port resources, including port enumeration, baud rate, DTR/RTS, timeouts, and byte reads/writes. Unity's .NET Standard profile does not ship that API surface as a built-in reference.

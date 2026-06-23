@@ -10,7 +10,7 @@ These are confirmed from local code/assets unless marked as a question. Do not s
 
 ## Output path state
 
-- Current active code has file-local `#define ENABLE_SERIAL` in `Assets/core/Controller.cs:2`, so runtime uses USB serial output through `SerialOut`.
+- Current active code has file-local `#define ENABLE_SERIAL` in `Assets/core/Runtime/Controller.cs:2`, so runtime uses USB serial output through `SerialOut`.
 - Root `CONTEXT.md` and `Assets/core/helpers/CONTEXT.md` have been realigned to describe serial as the active path while noting that the ACN/E1.31 UDP fallback code still exists.
 - Ask which path is production before changing output code.
 
@@ -30,7 +30,7 @@ See `[[penroseart-netstandard-switch-compile-errors]]` for the prior failure mod
 
 ## Serial protocol drift
 
-`Assets/core/S2_MINI_PROTOCOL.md` and `Assets/core/SerialOut.cs` disagree in details:
+`Assets/core/Hardware/S2_MINI_PROTOCOL.md` and `Assets/core/Hardware/SerialOut.cs` disagree in details:
 
 - Protocol doc connection settings say baud `2000000`, but Arduino strategy section says `Serial.begin(230400)`.
 - `SerialOut.Init(230400)` is called, but `SerialOut.Init()` ignores its argument and sets `targetBaudRate = 2000000`.

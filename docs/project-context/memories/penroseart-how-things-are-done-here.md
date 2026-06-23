@@ -85,10 +85,10 @@ Important patterns:
 
 ## Conditional compilation conventions
 
-- `Assets/core/Controller.cs` currently has file-local `#define ENABLE_SERIAL`, so serial output is active in that file regardless of ProjectSettings scripting symbols.
+- `Assets/core/Runtime/Controller.cs` currently has file-local `#define ENABLE_SERIAL`, so serial output is active in that file regardless of ProjectSettings scripting symbols.
 - `ENABLE_TELNET` and `PREP_CAPTURE` code paths exist but are inactive unless defines are added.
 - ProjectSettings currently has empty `scriptingDefineSymbols: {}`.
-- `Assets/core/Controller - nova.cs` is wrapped in `#if false` and is a disabled alternate/reference implementation.
+- `Assets/core/Reference/Controller - nova.cs` is wrapped in `#if false` and is a disabled alternate/reference implementation.
 
 ## Reusable infrastructure reminder
 

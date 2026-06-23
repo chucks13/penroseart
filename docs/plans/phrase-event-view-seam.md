@@ -10,7 +10,7 @@ can reach them** — `BuildPhraseEventChipLabel`, `GetPhraseEventMeterValue`, `B
 That is the textbook "pure functions extracted for testability, but the bug lives in how they're
 called" smell: `BeatManagerDrawerVisualModelTests` crosses *past* the drawer's real interface into its
 private rendering helpers. The logic is presentation of a `PhraseEventInfo` (Fill/Drop), yet it sits
-~830 lines away from the data it formats (`PhraseEventInfo` in `Assets/core/BeatManagerQueries.cs`).
+~830 lines away from the data it formats (`PhraseEventInfo` in `Assets/core/Rhythm/BeatManagerQueries.cs`).
 
 Two facts the review card didn't surface, found by grounding it against the code:
 
@@ -45,7 +45,7 @@ formatters alongside.
 
 ## Shape
 
-### `Assets/core/PhraseEventView.cs` (new — runtime)
+### `Assets/core/Rhythm/PhraseEventView.cs` (new — runtime)
 
 ```csharp
 public enum PhraseEventState { Now, Soon, Idle }
@@ -60,7 +60,7 @@ public readonly struct PhraseEventView
 }
 ```
 
-### `Assets/core/RhythmText.cs` (new — runtime)
+### `Assets/core/Rhythm/RhythmText.cs` (new — runtime)
 
 ```csharp
 public static class RhythmText

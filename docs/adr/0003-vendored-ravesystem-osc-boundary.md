@@ -1,6 +1,6 @@
 # Vendored RaveSystem.Osc boundary
 
-PenroseArt carries a Unity-compatible copy of the generic `RaveSystem.Osc` library under `Assets/OSC/*.cs`. That code is a compatibility port of a reusable OSC implementation, not the place for Penrose-specific runtime policy. Penrose/Rave application behavior lives beside it in `Assets/OSC/Rave/` and in core consumers such as `Assets/core/RaveOscReceiver.cs` and `Assets/core/BeatManager.cs`. The boundary is easy to blur during urgent live-installation debugging — the generic dispatcher, bundle reader, and timetag code sit close to the symptom — but changing them for Penrose policy mutates an imported library and makes future upstream comparisons harder.
+PenroseArt carries a Unity-compatible copy of the generic `RaveSystem.Osc` library under `Assets/OSC/*.cs`. That code is a compatibility port of a reusable OSC implementation, not the place for Penrose-specific runtime policy. Penrose/Rave application behavior lives beside it in `Assets/OSC/Rave/` and in core consumers such as `Assets/core/IO/RaveOscReceiver.cs` and `Assets/core/Rhythm/BeatManager.cs`. The boundary is easy to blur during urgent live-installation debugging — the generic dispatcher, bundle reader, and timetag code sit close to the symptom — but changing them for Penrose policy mutates an imported library and makes future upstream comparisons harder.
 
 ## `Assets/OSC/*.cs` is a vendored generic library
 The top-level C# files directly under `Assets/OSC/` are treated as imported `RaveSystem.Osc` code adapted only for Unity's C#/.NET profile. They keep copyright/origin headers:
@@ -21,7 +21,7 @@ Penrose-specific behavior must not be solved by special-casing `Assets/OSC/*.cs`
 - Treating Rave live telemetry bundle timetags as metadata instead of delivery scheduling.
 - Clock-skew tolerance for the installation's live DJ telemetry stream.
 
-For example, OSC bundle timetag scheduling is valid generic OSC dispatcher behavior. If Penrose needs live `/rave/onair/*` packets to apply on local receive time regardless of sender clock skew, that rule belongs in `Assets/OSC/Rave/RaveOscPacketParser.cs` or `Assets/core/RaveOscReceiver.cs`, not in `Assets/OSC/OscDispatcher.cs`.
+For example, OSC bundle timetag scheduling is valid generic OSC dispatcher behavior. If Penrose needs live `/rave/onair/*` packets to apply on local receive time regardless of sender clock skew, that rule belongs in `Assets/OSC/Rave/RaveOscPacketParser.cs` or `Assets/core/IO/RaveOscReceiver.cs`, not in `Assets/OSC/OscDispatcher.cs`.
 
 ## Adapter code carries Penrose ownership, not imported-origin headers
 Files under `Assets/OSC/Rave/` are PenroseArt's Rave OSC adapter. They should carry Penrose copyright headers but not the `Origin: RaveSystem.Osc` header, because they are application integration code rather than copied generic library code.

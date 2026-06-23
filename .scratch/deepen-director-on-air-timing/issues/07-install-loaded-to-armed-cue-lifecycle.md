@@ -90,7 +90,7 @@ Add tests at the real seams, not against private fields:
 
 ## Implementation notes
 
-- Added `SwitcherCueDirection`, `SwitcherClockSnapshot`, and `SwitcherCueStatus` in `Assets/core/Switcher.cs` for the one-cue Switcher-held lifecycle.
+- Added `SwitcherCueDirection`, `SwitcherClockSnapshot`, and `SwitcherCueStatus` in `Assets/core/Switching/Switcher.cs` for the one-cue Switcher-held lifecycle.
 - `Switcher.UpsertLoadedCue(...)` is fire-and-forget: it accepts a beat-domain cue command, schedules the Runway start from `TransitionBeatPlan.FromCueMark(...)` and the supplied clock snapshot, ignores conflicting updates after its internal lock point, and starts due cues from `RenderAtTime(...)` without a Director-computed `TransitionStartTiming` crossing the cue seam.
 - `Director.TryStartSyncedCue(...)` now uses `SyncedCueIntent.Evaluate(...)` as the cue-window gate, sends the cue command, records its own chosen Cue Mark for pass-local timing/cadence, and stages the following move without reading Switcher lifecycle state; the old `Director.StartSyncedTransition(...)` path was removed.
 - Removed the stale pre-lock cue planner/result surface (`SwitcherCueUpdateResult`, public `AdvanceLoadedCue(...)`, `SyncedCueIntent.EvaluateLoadedCue(...)`, and `EffectDeckSelection.TryPeekPreferred(...)`).

@@ -26,8 +26,8 @@ Current source-of-truth setting: Standalone is set to `.NET Standard 2.1` (`apiC
 If `dotnet build` still reports missing `System.IO.Ports`, Unity-generated project files may be stale or the platform-specific plugin importer settings may need rechecking. The old failure shape before runtime assets were added was:
 
 ```text
-Assets/core/SerialOut.cs(5,17): error CS0234: The type or namespace name 'Ports' does not exist in the namespace 'System.IO'
-Assets/core/SerialOut.cs(14,16): error CS0246: The type or namespace name 'SerialPort' could not be found
+Assets/core/Hardware/SerialOut.cs(5,17): error CS0234: The type or namespace name 'Ports' does not exist in the namespace 'System.IO'
+Assets/core/Hardware/SerialOut.cs(14,16): error CS0246: The type or namespace name 'SerialPort' could not be found
 ```
 
 Notes:

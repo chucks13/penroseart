@@ -14,7 +14,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Base contract for direct generative effects that output a 900-tile `Color[]` buffer.
 
-**Location:** `Assets/core/EffectBase.cs`
+**Location:** `Assets/core/Effects/EffectBase.cs`
 
 **How to use:** Subclass it, call `base.Init()` and `base.OnStart()`, implement `DebugText()`, `OnEnd()`, and `Draw()`, and write colors into `buffer`.
 
@@ -24,7 +24,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Converts rectangular 2D visual algorithms into the irregular Penrose tile buffer.
 
-**Location:** `Assets/core/ScreenEffect.cs`
+**Location:** `Assets/core/Effects/ScreenEffect.cs`
 
 **How to use:** Subclass it, draw into `screenBuffer`, then call `ConvertScreenBuffer(ref screenBuffer, in buffer)`.
 
@@ -34,7 +34,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Base for wrapper/mixer effects that own child effects.
 
-**Location:** `Assets/core/MixerBase.cs`
+**Location:** `Assets/core/Effects/MixerBase.cs`
 
 **How to use:** Subclass it when an effect needs child effects; use `GetRandomEffect()` so child selection avoids recursive mixers.
 
@@ -44,7 +44,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Shared contracts for effect-to-effect transitions and native/external-source pixel blending.
 
-**Locations:** `Assets/core/TransitionBase.cs`, `Assets/core/helpers/BlenderBase.cs`
+**Locations:** `Assets/core/Transitions/TransitionBase.cs`, `Assets/core/Blending/BlenderBase.cs`
 
 **How to use:** Subclass `TransitionBase` for transition drawing between `controller.effects[A]` and `controller.effects[B]`; subclass `BlenderBase` for external pixel-source blending.
 
@@ -66,7 +66,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Avoids immediate repeats by choosing a random item from the top half of a deck and moving it to the bottom.
 
-**Location:** `Controller.initDeck()` and `Controller.pullCard()` in `Assets/core/Controller.cs`
+**Location:** `Controller.initDeck()` and `Controller.pullCard()` in `Assets/core/Runtime/Controller.cs`
 
 **How to use:** Reuse the existing deck mechanism for random-but-varied selection.
 
@@ -88,7 +88,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Simulated rhythmic clock with beat variants, brightness pulses, and time warping.
 
-**Location:** `Assets/core/BeatManager.cs`; instance `Controller.beatManager` and `EffectBase.beatManager`.
+**Location:** `Assets/core/Rhythm/BeatManager.cs`; instance `Controller.beatManager` and `EffectBase.beatManager`.
 
 **How to use:** Call `GetBeatBrightness(...)`, `GetBeatTime(...)`, and assign/use `beatVariant` from `EffectBase.OnStart()`.
 
@@ -108,7 +108,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Perlin noise utility used by multiple effects.
 
-**Location:** `Assets/core/Perlin.cs`
+**Location:** `Assets/core/Effects/Perlin.cs`
 
 **How to use:** Call `Perlin.Noise(...)` for procedural effects.
 
@@ -120,7 +120,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Holds the 900-tile layout, mesh, bounds, shape lists, physical wire mapping, and lookup helpers.
 
-**Location:** `Assets/core/Penrose.cs`
+**Location:** `Assets/core/Runtime/Penrose.cs`
 
 **How to use:** Access `controller.penrose`, `penrose.Tiles`, `penrose.JsonRawData.shapes`, `penrose.JsonRawData.wires`, and `Penrose.Total`.
 
@@ -132,7 +132,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Discovers ESP32-S2/S2 Mini serial LED boards, handshakes their pixel ranges, and sends frame data from background I/O threads.
 
-**Location:** `Assets/core/SerialOut.cs`; protocol notes in `Assets/core/S2_MINI_PROTOCOL.md`.
+**Location:** `Assets/core/Hardware/SerialOut.cs`; protocol notes in `Assets/core/Hardware/S2_MINI_PROTOCOL.md`.
 
 **How to use:** Current `Controller` calls `serial.send(serialOutputBuffer, brightness)` through `sendSerialFrame()` when `ENABLE_SERIAL` is active.
 
@@ -142,7 +142,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** Sends physical LED data in DMX/E1.31-style UDP universes.
 
-**Location:** `Controller.setupUDP()`, `sendUDPFrame()`, and `sendACN()` in `Assets/core/Controller.cs`
+**Location:** `Controller.setupUDP()`, `sendUDPFrame()`, and `sendACN()` in `Assets/core/Runtime/Controller.cs`
 
 **How to use:** This path is currently inactive because `ENABLE_SERIAL` is file-defined. If re-enabling it, verify channel order and await/error behavior.
 
@@ -152,7 +152,7 @@ Use these existing systems instead of recreating new equivalents.
 
 **Purpose:** OSC control and simple UDP receive infrastructure.
 
-**Locations:** `Assets/OSCReader.cs`, `Assets/OSC.cs`, `Assets/core/UDPControllers.cs`, `Assets/core/PixelReceiver.cs`, `Assets/core/drums.cs`
+**Locations:** `Assets/OSCReader.cs`, `Assets/OSC.cs`, `Assets/core/IO/UDPControllers.cs`, `Assets/core/IO/PixelReceiver.cs`, `Assets/core/ReactiveInputs/drums.cs`
 
 **How to use:** `Controller.Start()` adds `OSCReader`; `PixelReceiver` handles UDP pixel data on port `7778`; `drums` handles drum/ring overlays.
 

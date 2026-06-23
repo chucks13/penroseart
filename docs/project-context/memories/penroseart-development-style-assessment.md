@@ -10,13 +10,13 @@ PenroseArt is organized more like a bespoke installation controller / creative-c
 
 ## Observed style
 
-- The runtime is centered on one scene (`Assets/Scenes/SampleScene.unity`) and one orchestration hub (`Assets/core/Controller.cs`).
+- The runtime is centered on one scene (`Assets/Scenes/SampleScene.unity`) and one orchestration hub (`Assets/core/Runtime/Controller.cs`).
 - Most visual behavior lives in plain C# effect classes under `Assets/effects/`, not scene-authored MonoBehaviours or prefab-driven components.
 - `Factory<T>` reflection discovers concrete `EffectBase`, `TransitionBase`, and `BlenderBase` subclasses automatically, so adding a class changes the live runtime catalog.
 - There are no custom `.asmdef` files; project-authored runtime code compiles into Unity's generated `Assembly-CSharp` assembly and mostly uses the global namespace.
 - Scene-serialized fields carry important runtime data, including large `Controller.jsonSource` and `Controller.paletteSource` blobs.
 - Hardware/control logic is embedded in the runtime loop: serial output, E1.31/ACN UDP fallback, OSC, `PixelReceiver`, drum overlays, and optional camera/telnet systems.
-- Conditional paths are controlled partly by file-local preprocessor defines such as `#define ENABLE_SERIAL` and disabled reference files like `Assets/core/Controller - nova.cs` (`#if false`).
+- Conditional paths are controlled partly by file-local preprocessor defines such as `#define ENABLE_SERIAL` and disabled reference files like `Assets/core/Reference/Controller - nova.cs` (`#if false`).
 - Naming and style are mixed: PascalCase classes coexist with lowercase effect classes such as `fluid`, `kscope`, `lightning`, `yinyangmixer`, and `drums`.
 - Git history shows iterative creative/hardware work such as beat experiments and serial-output improvements rather than a formal package/test/CI workflow.
 

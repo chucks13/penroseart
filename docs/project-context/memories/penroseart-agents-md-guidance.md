@@ -12,7 +12,7 @@ The repo has a root `AGENTS.md` that captures project-specific agent instruction
 
 - Treat PenroseArt as a Unity-hosted C# creative/hardware runtime, not a conventional prefab-heavy Unity app.
 - Core C# files are the product; Unity scene objects, UI, and assets wrap around them.
-- `Assets/core/Controller.cs` is intentionally central and should not be refactored casually.
+- `Assets/core/Runtime/Controller.cs` is intentionally central and should not be refactored casually.
 - New visuals usually belong as C# effect/mixer/transition/blender classes using the existing `EffectBase`, `ScreenEffect`, `MixerBase`, `TransitionBase`, `BlenderBase`, and `Factory<T>` patterns.
 - Standalone API compatibility should stay on `.NET Standard 2.1`; `System.IO.Ports` support is supplied by platform-specific Unity plugin assets under `Assets/Plugins/System.IO.Ports/`.
 - Hardware/control paths (`ENABLE_SERIAL`, `SerialOut`, S2 Mini protocol, UDP/E1.31, OSC, `PixelReceiver`, drums/camera/telnet) require confirmation before behavioral changes.

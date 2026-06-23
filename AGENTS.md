@@ -31,7 +31,7 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 - `README.md` — current orientation and runtime loop.
 - `CONTEXT.md` — canonical project vocabulary, platform/output notes, and architecture guide.
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
-- `Assets/core/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
+- `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
 - `docs/investigation/` — historical research/audit notes; useful context, but not canonical current docs.
 
 ## Default Memory Reads
@@ -50,15 +50,15 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 
 Start with these before adding new structures:
 
-- `Assets/core/Controller.cs` — main runtime hub: initialization, timing, effect/transition selection, input, output, overlays, and mesh updates.
-- `Assets/core/Penrose.cs` — 900-tile Penrose model, JSON data, mesh generation, tile metadata, and buffer-to-mesh color mapping.
-- `Assets/core/EffectBase.cs` — base contract for direct generative effects.
-- `Assets/core/ScreenEffect.cs` — helper for effects that render into a rectangular buffer before mapping onto Penrose tiles.
-- `Assets/core/MixerBase.cs` — base for effects that own child effects and combine or transform their buffers.
-- `Assets/core/TransitionBase.cs` — base for transitions between effects and some external-source blend behavior.
+- `Assets/core/Runtime/Controller.cs` — main runtime hub: initialization, timing, effect/transition selection, input, output, overlays, and mesh updates.
+- `Assets/core/Runtime/Penrose.cs` — 900-tile Penrose model, JSON data, mesh generation, tile metadata, and buffer-to-mesh color mapping.
+- `Assets/core/Effects/EffectBase.cs` — base contract for direct generative effects.
+- `Assets/core/Effects/ScreenEffect.cs` — helper for effects that render into a rectangular buffer before mapping onto Penrose tiles.
+- `Assets/core/Effects/MixerBase.cs` — base for effects that own child effects and combine or transform their buffers.
+- `Assets/core/Transitions/TransitionBase.cs` — base for transitions between effects and some external-source blend behavior.
 - `Assets/core/helpers/Factory.cs` — reflection-based discovery and instantiation of effect, transition, and blender classes.
-- `Assets/core/helpers/GPalette.cs` and `Assets/core/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope.
-- `Assets/core/SerialOut.cs`, `Assets/OSCReader.cs`, `Assets/core/PixelReceiver.cs`, and `Assets/core/drums.cs` — hardware/control/input paths.
+- `Assets/core/helpers/GPalette.cs` and `Assets/core/Rhythm/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope.
+- `Assets/core/Hardware/SerialOut.cs`, `Assets/OSCReader.cs`, `Assets/core/IO/PixelReceiver.cs`, and `Assets/core/ReactiveInputs/drums.cs` — hardware/control/input paths.
 
 `Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it. Small wiring changes needed to connect an approved runtime model change are allowed; broad Controller restructuring still requires explicit approval.
 
@@ -105,7 +105,7 @@ Start with these before adding new structures:
 ## OSC Boundary
 
 - `Assets/OSC/*.cs` is a Unity-compatible vendored copy of the generic `RaveSystem.Osc` library. Keep generic OSC behavior, wire format, dispatch, transport, and Unity compatibility concerns there.
-- Penrose/Rave application policy belongs in `Assets/OSC/Rave/`, `Assets/core/RaveOscReceiver.cs`, `Assets/core/BeatManager.cs`, or other core consumers — not as special cases in the generic OSC files.
+- Penrose/Rave application policy belongs in `Assets/OSC/Rave/`, `Assets/core/IO/RaveOscReceiver.cs`, `Assets/core/Rhythm/BeatManager.cs`, or other core consumers — not as special cases in the generic OSC files.
 - Before changing `Assets/OSC/*.cs`, state whether the change is a generic OSC/library change, a Unity compatibility port change, or Penrose/Rave application policy. If unclear, stop and ask.
 - Root-level `Assets/OSC.cs` and `Assets/OSCReader.cs` are project-specific/legacy integration files, not the vendored `Assets/OSC/` library boundary.
 - For OSC work, read `docs/adr/0003-vendored-ravesystem-osc-boundary.md` before editing the vendored library or adapter layer.

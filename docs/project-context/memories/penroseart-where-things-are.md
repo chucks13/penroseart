@@ -30,18 +30,18 @@ Memory Vault remains canonical.
 
 | Path                                   | Role                                                                                                                 |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `Assets/core/Controller.cs`            | Main singleton hub: initialization, effect/transition decks, per-frame loop, UI, OSC, overlays, and hardware output. |
-| `Assets/core/Penrose.cs`               | Penrose model/mesh: parses JSON data, creates mesh/tile metadata, maps the 900-color buffer to mesh vertex colors.   |
-| `Assets/core/EffectBase.cs`            | Base contract for all visual effects.                                                                                |
-| `Assets/core/ScreenEffect.cs`          | 2D-to-Penrose mapping helper for effects that draw into a rectangular buffer first.                                  |
-| `Assets/core/MixerBase.cs`             | Base for effects that own child effects and combine/transform their buffers.                                         |
-| `Assets/core/TransitionBase.cs`        | Base contract for transitions and external-source blend behavior.                                                    |
+| `Assets/core/Runtime/Controller.cs`            | Main singleton hub: initialization, effect/transition decks, per-frame loop, UI, OSC, overlays, and hardware output. |
+| `Assets/core/Runtime/Penrose.cs`               | Penrose model/mesh: parses JSON data, creates mesh/tile metadata, maps the 900-color buffer to mesh vertex colors.   |
+| `Assets/core/Effects/EffectBase.cs`            | Base contract for all visual effects.                                                                                |
+| `Assets/core/Effects/ScreenEffect.cs`          | 2D-to-Penrose mapping helper for effects that draw into a rectangular buffer first.                                  |
+| `Assets/core/Effects/MixerBase.cs`             | Base for effects that own child effects and combine/transform their buffers.                                         |
+| `Assets/core/Transitions/TransitionBase.cs`        | Base contract for transitions and external-source blend behavior.                                                    |
 | `Assets/core/helpers/Factory.cs`       | Reflection factory used by `Controller` and `EffectBase` to discover concrete subclasses.                            |
 | `Assets/core/helpers/GPalette.cs`      | `GPalette` and `AnimPalette` palette parsing, sampling, and animation.                                               |
-| `Assets/core/BeatManager.cs`           | Simulated BPM clock, beat variants, beat brightness, and beat-time helpers.                                          |
-| `Assets/core/SerialOut.cs`             | USB serial discovery/handshake/threaded output for ESP32-S2/S2 Mini LED boards.                                      |
-| `Assets/core/S2_MINI_PROTOCOL.md`      | Firmware protocol notes for S2 Mini boards. Some details need reconciling with current `SerialOut.cs`.               |
-| `Assets/core/PenroseShader.shader`     | Custom shader name `Unlit/Penrose` used by `Penrose` material.                                                       |
+| `Assets/core/Rhythm/BeatManager.cs`           | Simulated BPM clock, beat variants, beat brightness, and beat-time helpers.                                          |
+| `Assets/core/Hardware/SerialOut.cs`             | USB serial discovery/handshake/threaded output for ESP32-S2/S2 Mini LED boards.                                      |
+| `Assets/core/Hardware/S2_MINI_PROTOCOL.md`      | Firmware protocol notes for S2 Mini boards. Some details need reconciling with current `SerialOut.cs`.               |
+| `Assets/core/Runtime/PenroseShader.shader`     | Custom shader name `Unlit/Penrose` used by `Penrose` material.                                                       |
 | `Assets/OSCReader.cs`, `Assets/OSC.cs` | OSC/UDP messaging implementations.                                                                                   |
 
 ## Effects, transitions, and blenders

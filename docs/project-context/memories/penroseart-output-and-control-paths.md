@@ -8,7 +8,7 @@ Memory Vault remains canonical.
 
 ## Current active output path: USB serial
 
-`Assets/core/Controller.cs` has a file-local `#define ENABLE_SERIAL`, so the compiled `Controller.Update()` output path is:
+`Assets/core/Runtime/Controller.cs` has a file-local `#define ENABLE_SERIAL`, so the compiled `Controller.Update()` output path is:
 
 ```text
 penrose.buffer (900 tiles)
@@ -28,7 +28,7 @@ Then `SerialOut.send(serialOutputBuffer, brightness)` snapshots the frame and si
 
 ### `SerialOut` protocol behavior
 
-`Assets/core/SerialOut.cs` currently:
+`Assets/core/Hardware/SerialOut.cs` currently:
 
 - Ignores the `Init(int baudRate)` argument and hard-codes `targetBaudRate = 2000000`.
 - Scans `SerialPort.GetPortNames()` periodically.
@@ -40,7 +40,7 @@ Then `SerialOut.send(serialOutputBuffer, brightness)` snapshots the frame and si
 - Sends `CMD_DATA` (`D`, `0x44`) + start/count + RGB bytes, then appends `CMD_LATCH` (`L`, `0x4C`).
 - Exposes debug info listing OS ports, active boards, connecting ports, and ignored ports.
 
-Protocol docs live at `Assets/core/S2_MINI_PROTOCOL.md`, but they drift from code in details: the doc mentions both 2,000,000 baud and Arduino `Serial.begin(230400)`, a 200ms boot delay, and immediate `FastLED.show()`, while current code uses 2,000,000 baud, a 2-second wait, and latch byte. Confirm firmware behavior before changing protocol.
+Protocol docs live at `Assets/core/Hardware/S2_MINI_PROTOCOL.md`, but they drift from code in details: the doc mentions both 2,000,000 baud and Arduino `Serial.begin(230400)`, a 200ms boot delay, and immediate `FastLED.show()`, while current code uses 2,000,000 baud, a 2-second wait, and latch byte. Confirm firmware behavior before changing protocol.
 
 ## Alternate/legacy output path: E1.31/ACN UDP
 

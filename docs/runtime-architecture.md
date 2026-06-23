@@ -167,23 +167,23 @@ Switcher-rendered Effect or Transition buffer
 
 | Area | Main files | Responsibility |
 | --- | --- | --- |
-| Runtime hub | `Assets/core/Controller.cs` | Unity host for catalogs, lifecycle, input routing, output routing, overlays, preview update, and the per-frame call order. |
-| Geometry/model | `Assets/core/Penrose.cs` | JSON data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
-| Sequencing decision | `Assets/core/Director.cs` | Standalone/Synced/Hold decision layer, staged choices, cue issuing, and read-only sequencing status. |
-| Timing interpretation | `Assets/core/OnAirTiming.cs`, `PhaseClock.cs`, `PhraseWindow.cs`, `CueSheet.cs`, `ChangeCadence.cs` | Convert live beat/Track Phase facts into a Director-facing Timing Frame and current Cue Mark. |
-| Cue/casting | `Assets/core/SyncedCueIntent.cs`, `TransitionBeatPlan.cs`, `EffectDeckSelection.cs`, `Repertoire.cs` | Decide whether a Synced cue command should fire and which Performer should be cast. |
-| Mechanical execution | `Assets/core/Switcher.cs` | ShowNow/StartTransition/RenderAtTime execution, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
-| Effects | `Assets/core/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames and express their own Repertoire from BeatManager data. |
-| Screen effects | `Assets/core/ScreenEffect.cs` | Map rectangular screen buffers onto the Penrose tile layout. |
-| Mixers/wrappers | `Assets/core/MixerBase.cs`, mixer effects | Own child effects and combine/transform their buffers. |
-| Transitions/settings | `Assets/core/TransitionBase.cs`, `Assets/core/TransitionSettings*.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B and declare Runway/Tail/Shape/Intensity defaults and saved tuning. |
-| External blenders | `Assets/core/helpers/BlenderBase.cs`, `Assets/blenders/*.cs` | Mix incoming pixel-source data with the native Penrose buffer. |
+| Runtime hub | `Assets/core/Runtime/Controller.cs` | Unity host for catalogs, lifecycle, input routing, output routing, overlays, preview update, and the per-frame call order. |
+| Geometry/model | `Assets/core/Runtime/Penrose.cs` | JSON data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
+| Sequencing decision | `Assets/core/Switching/Director.cs` | Standalone/Synced/Hold decision layer, staged choices, cue issuing, and read-only sequencing status. |
+| Timing interpretation | `Assets/core/Switching/OnAirTiming.cs`, `Assets/core/Switching/PhaseClock.cs`, `Assets/core/Switching/PhraseWindow.cs`, `Assets/core/Switching/CueSheet.cs`, `Assets/core/Switching/ChangeCadence.cs` | Convert live beat/Track Phase facts into a Director-facing Timing Frame and current Cue Mark. |
+| Cue/casting | `Assets/core/Switching/SyncedCueIntent.cs`, `Assets/core/Transitions/TransitionBeatPlan.cs`, `Assets/core/Switching/EffectDeckSelection.cs`, `Assets/core/Effects/Repertoire.cs` | Decide whether a Synced cue command should fire and which Performer should be cast. |
+| Mechanical execution | `Assets/core/Switching/Switcher.cs` | ShowNow/StartTransition/RenderAtTime execution, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
+| Effects | `Assets/core/Effects/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames and express their own Repertoire from BeatManager data. |
+| Screen effects | `Assets/core/Effects/ScreenEffect.cs` | Map rectangular screen buffers onto the Penrose tile layout. |
+| Mixers/wrappers | `Assets/core/Effects/MixerBase.cs`, mixer effects | Own child effects and combine/transform their buffers. |
+| Transitions/settings | `Assets/core/Transitions/TransitionBase.cs`, `Assets/core/Transitions/TransitionSettings*.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B and declare Runway/Tail/Shape/Intensity defaults and saved tuning. |
+| External blenders | `Assets/core/Blending/BlenderBase.cs`, `Assets/blenders/*.cs` | Mix incoming pixel-source data with the native Penrose buffer. |
 | Palette | `Assets/core/helpers/GPalette.cs` | Global palette sampling and animated palette transitions. |
-| Rhythm queries | `Assets/core/BeatManager.cs`, `Assets/core/BeatManagerQueries.cs`, `Assets/core/PhraseEventView.cs`, `Assets/core/RhythmText.cs` | Live/simulated beat state, nullable rhythm-query values, and shared rhythm presentation text. |
-| Rave OSC | `Assets/core/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
-| Drum overlay | `Assets/core/drums.cs` | Drum/ring overlay triggers and drawing. |
-| Serial output | `Assets/core/SerialOut.cs` | USB serial discovery and frame output for S2 Mini / ESP32 boards. |
-| Legacy UDP output | `Assets/core/Controller.cs` (`sendUDPFrame`, `sendACN`) | E1.31/ACN output path retained for non-serial builds. |
+| Rhythm queries | `Assets/core/Rhythm/BeatManager.cs`, `Assets/core/Rhythm/BeatManagerQueries.cs`, `Assets/core/Rhythm/PhraseEventView.cs`, `Assets/core/Rhythm/RhythmText.cs` | Live/simulated beat state, nullable rhythm-query values, and shared rhythm presentation text. |
+| Rave OSC | `Assets/core/IO/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
+| Drum overlay | `Assets/core/ReactiveInputs/drums.cs` | Drum/ring overlay triggers and drawing. |
+| Serial output | `Assets/core/Hardware/SerialOut.cs` | USB serial discovery and frame output for S2 Mini / ESP32 boards. |
+| Legacy UDP output | `Assets/core/Runtime/Controller.cs` (`sendUDPFrame`, `sendACN`) | E1.31/ACN output path retained for non-serial builds. |
 
 ## Known architectural pressure points
 
