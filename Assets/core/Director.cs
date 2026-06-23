@@ -462,6 +462,11 @@ public sealed class Director
     private bool AdvanceSwitcherLoadedCue(int beat)
     {
         var result = switcher.AdvanceLoadedCue(CurrentSwitcherClockSnapshot(beat));
+        return ApplySwitcherCueLifecycleResult(beat, result);
+    }
+
+    private bool ApplySwitcherCueLifecycleResult(int beat, SwitcherCueUpdateResult result)
+    {
         if (!result.Locked && !result.Started)
         {
             return false;
@@ -606,21 +611,8 @@ public sealed class Director
             Trace($"SYNC_CUE_LOADED beat={beat} start={result.BeatPlan.StartBeat} cueMark={result.BeatPlan.ImpactBeat} lock={result.BeatPlan.StartBeat - 1} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
         }
 
-        if (result.Locked)
-        {
-            transitionStartBeat = result.BeatPlan.StartBeat;
-            transitionLandingBeat = result.BeatPlan.ImpactBeat;
-            MarkChangedOnBeat(result.BeatPlan.ImpactBeat);
-            lastCueBeat = beat;
-            Trace($"SYNC_CUE_LOCKED beat={beat} start={result.BeatPlan.StartBeat} cueMark={result.BeatPlan.ImpactBeat} transition={FormatTransition(result.Cue.TransitionIndex)} target={FormatEffect(result.Cue.TargetEffectIndex)}");
-        }
-
-        if (result.Started)
-        {
-            CompleteSwitcherCueStart(beat, result);
-        }
-
-        return result.Accepted || result.RejectedBecauseLocked || result.Locked || result.Started;
+        var advancedCue = ApplySwitcherCueLifecycleResult(beat, result);
+        return result.Accepted || result.RejectedBecauseLocked || advancedCue;
     }
 
     private void LogModeIfChanged()

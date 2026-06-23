@@ -324,25 +324,28 @@ public sealed class Switcher
 
             if (hasLoadedCue && loadedCueLocked)
             {
+                var lockedCue = loadedCue;
+                var lockedBeatPlan = loadedCueBeatPlan;
                 return new SwitcherCueUpdateResult(
                     false,
-                    !SameCue(cue, loadedCue),
+                    !SameCue(cue, lockedCue),
                     lifecycleResult.Locked,
                     false,
-                    loadedCue,
-                    loadedCueBeatPlan);
+                    lockedCue,
+                    lockedBeatPlan);
             }
         }
 
         LoadCue(cue);
+        var beatPlan = loadedCueBeatPlan;
         var acceptedLifecycleResult = AdvanceLoadedCue(clock);
         return new SwitcherCueUpdateResult(
             true,
             false,
             acceptedLifecycleResult.Locked,
             acceptedLifecycleResult.Started,
-            acceptedLifecycleResult.Started ? acceptedLifecycleResult.Cue : loadedCue,
-            acceptedLifecycleResult.Started ? acceptedLifecycleResult.BeatPlan : loadedCueBeatPlan);
+            cue,
+            beatPlan);
     }
 
     /// <summary>
@@ -466,7 +469,7 @@ public sealed class Switcher
             Trace($"SWITCHER_LOCK_CUE beat={clock.CurrentBeat} cueMark={loadedCue.CueMarkBeat} lock={loadedCueLockPointBeat} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
         }
 
-        if (clock.CurrentBeat >= loadedCueBeatPlan.StartBeat)
+        if (clock.CurrentBeat >= beatPlan.StartBeat)
         {
             StartLoadedCue(clock);
             return new SwitcherCueUpdateResult(false, false, lockedThisTick, true, cue, beatPlan);
