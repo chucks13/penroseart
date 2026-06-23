@@ -16,6 +16,8 @@ This is a documentation/status slice only. It should remove stale implementation
 
 - `CONTEXT.md` defines Cue Sheet, Cue Mark, Loaded Cue, Armed Cue, Lock Point, On-Air Timing, Timing Frame, Director, Mechanical Switcher, Runway, Tail, and Impact Point, but some wording may still imply Director-held Loaded Cue or Director-owned arming. Refresh it only after the final implementation proves the exact code shape.
 - `docs/adr/0005-phrase-cue-sheets-and-armed-cues.md` records the durable decision and rejected alternatives: no canonical Selected Phase Boundary wording, no multi-cue Switcher preload queue, no Director-held Loaded Cue/Director-called ArmCue lifecycle, and no Effect/Transition choices inside Cue Sheets.
+- Issue 07 should also be checked for implementation drift that puts `BeatManager`, raw OSC/Rave payloads, Track Phase, Phrase Window, or Cue Sheet state behind the Switcher seam. Those belong to existing `BeatManagerQueries`, `OnAirTimingInput`, `OnAirTiming`, `TimingFrame`, and Director/cue-planning code.
+- Issue 07 should also be checked for duplicated rules: no second Cue Sheet cursor, pass-local consumed-cue ledger, cadence arithmetic, Runway/Tail beat math, or Effect deck/preferred-casting implementation should appear outside the current seams unless a deliberate refactor replaces the old seam.
 - `docs/architecture-reviews/director-cue-sheet-investigation-2026-06-22.html` is a historical investigation/report. Keep it consistent enough to avoid obvious contradictions, but do not copy it wholesale into canonical docs.
 - `docs/runtime-architecture.md` and `docs/code-map.md` were refreshed for the prior Timing Frame / Cue Intent shape and will need another pass after the implemented Cue Sheet lifecycle changes.
 - Local issue tracker status should use the repo labels from `docs/agents/triage-labels.md`; implementation issues become `accepted` only when their checkboxes and validation evidence are present.
@@ -24,7 +26,7 @@ This is a documentation/status slice only. It should remove stale implementation
 
 Refresh the durable documentation and local issue tracker after the implemented Cue Sheet flow lands.
 
-The final docs should agree with the code, tests, glossary, ADR 0005, and investigation report: On-Air Timing derives Cue Sheets; Cue Marks are Phrase-level impact targets; the Director configures one cue direction at a time and inserts/updates it in the Switcher; the Switcher holds the mutable Loaded Cue, derives the Transition-specific Lock Point, refuses updates after lock, and owns Armed Cue execution.
+The final docs should agree with the code, tests, glossary, ADR 0005, and investigation report: On-Air Timing derives Cue Sheets; Cue Marks are Phrase-level impact targets; the Director configures one cue direction at a time from the existing timing/casting seams and inserts/updates it in the Switcher; the Switcher holds the mutable Loaded Cue, derives the Transition-specific Lock Point, refuses updates after lock, and owns Armed Cue execution.
 
 ## Documentation targets
 
@@ -39,6 +41,8 @@ Update these if the implementation changed the relevant behavior:
 ## Acceptance criteria
 
 - [ ] Runtime architecture docs describe Cue Sheet, Cue Mark, Director-authored cue direction, Switcher-held Loaded Cue, Switcher-derived Lock Point, Armed Cue, and Switcher execution responsibilities as implemented.
+- [ ] Runtime architecture docs make clear that `BeatManagerQueries`/`OnAirTimingInput`/`OnAirTiming`/`TimingFrame` remain the timing/phrase seams; the Switcher does not read raw OSC/Rave, Track Phase, Phrase Window, or Cue Sheet state.
+- [ ] Runtime architecture docs point to the existing owners for shared rules: `CueSheet`/`OnAirTiming` for Cue Mark planning and advancement, `PassLocalTimingState` for consumed cue/cadence state, `SyncedCueIntent`/`EffectDeckSelection` for cue casting, and `TransitionBeatPlan` for Runway/Tail beat math.
 - [ ] Code map / orientation docs point maintainers to the final Cue Sheet / cue direction / Switcher lifecycle seams and the focused tests that protect them.
 - [ ] `CONTEXT.md` remains aligned with implemented behavior and does not keep stale Selected Phase Boundary language as the canonical domain term or stale Director-owned Loaded Cue/arming wording.
 - [ ] ADR 0005 remains accurate, or a deliberate ADR update/new ADR records any changed decision.
@@ -56,6 +60,8 @@ Search active docs (`CONTEXT.md`, `docs/runtime-architecture.md`, `docs/code-map
 - `preload queue`, `queue`, or `Switcher chooses` wording that implies multiple future cues or Switcher-owned musical decisions.
 - `Director starts/progresses transitions`, `Controller timer transition loop`, or similar old execution ownership language.
 - Director-owned `Loaded Cue`, `Lock Point`, `ArmCue`, or arming wording that says the Director decides when a cue locks.
+- Switcher-owned `BeatManager`, raw OSC/Rave, Track Phase, Phrase Window, or Cue Sheet reads.
+- Duplicate implementations of Cue Sheet cursoring, consumed cue state, cadence arithmetic, Runway/Tail beat math, or preferred Performer deck rotation.
 - `Impact Point` confused with Cue Mark, Transition start, or Transition completion.
 - `Lock Point` described as global rather than Transition-specific.
 
@@ -66,7 +72,7 @@ Do not blanket-delete legitimate historical mentions in the HTML investigation r
 - `git diff --check`
 - `./scripts/unity-compile.sh` only if docs comments/XML docs or code comments changed in compiled files.
 - Focused docs/status check, for example:
-  - `rg -n "Controller\.OnTimerFinished|SyncedCueDecision|preload queue|Selected Phase Boundary|Director.*Lock Point|Director.*Arm|ArmCue|TransitionStartTiming|Loaded Cue|Armed Cue" CONTEXT.md docs/runtime-architecture.md docs/code-map.md AGENTS.md .scratch/deepen-director-on-air-timing/PRD.md .scratch/deepen-director-on-air-timing/issues`
+  - `rg -n "Controller\.OnTimerFinished|SyncedCueDecision|preload queue|Selected Phase Boundary|Director.*Lock Point|Director.*Arm|ArmCue|TransitionStartTiming|Switcher.*BeatManager|Switcher.*OSC|Switcher.*Track Phase|Switcher.*Phrase Window|Switcher.*Cue Sheet|duplicate.*Cue Sheet|duplicate.*cadence|duplicate.*Runway|Loaded Cue|Armed Cue" CONTEXT.md docs/runtime-architecture.md docs/code-map.md AGENTS.md .scratch/deepen-director-on-air-timing/PRD.md .scratch/deepen-director-on-air-timing/issues`
 - No Play Mode run is required.
 
 ## Blocked by

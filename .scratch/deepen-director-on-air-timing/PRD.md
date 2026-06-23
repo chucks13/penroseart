@@ -4,7 +4,7 @@ Status: accepted
 
 PenroseArt's Director is supposed to be the one decision layer that chooses what plays on the wall and when it changes. The Mechanical Switcher should only execute those choices. The current Director/Switcher architecture is pointed in the right direction, but the Director still carries too much low-level musical interpretation and too much future cue/casting work in one place.
 
-From the wall author's perspective, this makes Synced Mode harder to trust and harder to evolve. The Director needs to stay aligned to live RaveSystem timing, keep Phase distinct from Phrase, preserve a selected Phase Boundary plan through loops and data gaps, and eventually cast Effects and Transitions based on Repertoire. Today those ideas are scattered across Director fields, raw rhythm-query reads, helper calls, status projection, cue decisions, logging, and staging. A future cleanup of cue intent or Repertoire would have to revisit the same knot unless the timing model is cut into the right shape now.
+From the wall author's perspective, this makes Synced Mode harder to trust and harder to evolve. The Director needs to stay aligned to live RaveSystem timing, keep Phase distinct from Phrase, preserve a Cue Sheet / Cue Mark plan through loops and data gaps, and eventually cast Effects and Transitions based on Repertoire. Today those ideas are scattered across Director fields, raw rhythm-query reads, helper calls, status projection, cue decisions, logging, and staging. A future cleanup of cue intent or Repertoire would have to revisit the same knot unless the timing model is cut into the right shape now.
 
 The team does not need compatibility shims, staged migration machinery, or a low-risk minimal patch. The desired outcome is a hard-cut refactor to the right internal patterns for this small creative runtime: one clear Director-facing timing seam first, then cue/casting and status cleanup on top of that seam, without preserving old internal pathways just because they existed.
 
@@ -12,13 +12,13 @@ The team does not need compatibility shims, staged migration machinery, or a low
 
 Reshape the Director around a deeper in-process on-air timing module and use that as the first durable piece of the final Director architecture.
 
-The Director remains the small public directing module. It owns the high-level loop: Standalone Mode, Synced Mode, Hold, staged Next Effect, staged Next Transition, and issuing stage-directed commands to the Mechanical Switcher. It should not interpret raw Track Phase fields, own selected Phase Boundary cursor mechanics, or carry loop/coast/re-anchor policy directly.
+The Director remains the small public directing module. It owns the high-level loop: Standalone Mode, Synced Mode, Hold, staged Next Effect, staged Next Transition, and issuing stage-directed commands to the Mechanical Switcher. It should not interpret raw Track Phase fields, own Cue Sheet cursor mechanics, or carry loop/coast/re-anchor policy directly.
 
-Introduce an on-air timing module whose interface returns a single timing frame for the current synced tick. That timing frame should tell the Director the current beat, whether a Phase Anchor is available, the selected Phase Boundary being targeted, confidence, source/reason, Phase reading, Phrase Window identity when available, and whether the frame represents normal Track Phase, coasting, a substantial rewind, or a re-anchor. The implementation can reuse the existing PhaseClock, PhraseWindow, SelectedPhaseBoundaryPlan, ChangeCadence, and related pure modules, but those details should sit behind the timing seam rather than being reassembled by the Director.
+Use the on-air timing module whose interface returns a single timing frame for the current synced tick. That timing frame should tell the Director the current beat, whether a Phase Anchor is available, the Cue Mark being targeted, confidence, source/reason, Phase reading, Phrase Window identity when available, and whether the frame represents normal Track Phase, coasting, a substantial rewind, or a re-anchor. The implementation should continue reusing existing `PhaseClock`, `PhraseWindow`, `CueSheet`, `ChangeCadence`, and related pure modules behind the timing seam rather than reassembling those rules in the Director or Switcher.
 
 This is not a compatibility extraction. The old Director-owned timing fields and methods should be removed from the Director as the timing module takes ownership. The Director should consume the timing frame and proceed to cue decisions, staging, status projection, and Switcher commands.
 
-After the timing seam lands, the same model should support the next Director deepening pass: cue intent and casting. Cue planning should consume timing frames, transition timing declarations, live phrase events such as Drop and Fill, and Performer Repertoire to produce a small cue direction that the Director inserts or updates in the Switcher. The Switcher then owns Loaded Cue mutability, Lock Point, arming, and transition execution. That follow-on work should not require redesigning on-air timing again.
+With the timing seam landed, the same model should support the next Director deepening pass: cue intent and casting. Cue planning should consume timing frames, transition timing declarations, live phrase events such as Drop and Fill, and Performer Repertoire to produce a small cue direction that the Director inserts or updates in the Switcher. The Switcher then owns Loaded Cue mutability, Lock Point, arming, and transition execution. That follow-on work should not require redesigning on-air timing again.
 
 Documentation should be refreshed after the code shape lands so runtime architecture, ADR vocabulary, tests, and code all describe the same model: Director decides, On-Air Timing interprets live musical structure, Cue Planning/Casting chooses the move, and the Mechanical Switcher executes.
 
@@ -30,19 +30,19 @@ Documentation should be refreshed after the code shape lands so runtime architec
 4. As a PenroseArt wall author, I want Phrase to consistently mean a song-structure window, so that Track Phase data is interpreted as musical structure rather than a clock name.
 5. As a PenroseArt wall author, I want Track Phase fields to be interpreted by the timing module, so that the Director does not know raw OSC query details.
 6. As a PenroseArt wall author, I want the current Phrase Window to be derived from on-air timing, so that the wall follows the actual current song section.
-7. As a PenroseArt wall author, I want a Phase Window's selected Phase Boundaries to be planned once per Phrase Window, so that the wall does not reroll musical targets every frame.
-8. As a PenroseArt wall author, I want the final phrase boundary to remain mandatory, so that major song-structure changes remain visible opportunities for movement.
-9. As a PenroseArt wall author, I want interior Phase Boundaries to remain optional, so that the wall can breathe instead of changing every 16 beats.
-10. As a PenroseArt wall author, I want the Director to receive the currently selected Phase Boundary, so that it can schedule transitions without owning the cursor details.
-11. As a PenroseArt wall author, I want the selected Phase Boundary cursor to live with the timing interpretation, so that loop and rewind behavior is local to the musical grid.
-12. As a PenroseArt wall author, I want a same-window Loop rewind to keep the selected Phase Boundary plan, so that repeated music can repeat the same visual opportunities.
-13. As a PenroseArt wall author, I want a same-window Loop rewind to move the cursor back to the next selected Phase Boundary after the current beat, so that the current pass self-corrects.
+7. As a PenroseArt wall author, I want a Phrase Window's Cue Marks to be planned once per Phrase length, so that the wall does not reroll musical targets every frame.
+8. As a PenroseArt wall author, I want the final phrase Cue Mark to remain mandatory, so that major song-structure changes remain visible opportunities for movement.
+9. As a PenroseArt wall author, I want interior Cue Marks to remain optional, so that the wall can breathe instead of changing every 16 beats.
+10. As a PenroseArt wall author, I want the Director to receive the current Cue Mark, so that it can schedule transitions without owning the cursor details.
+11. As a PenroseArt wall author, I want the Cue Sheet cursor to live with the timing interpretation, so that loop and rewind behavior is local to the musical grid.
+12. As a PenroseArt wall author, I want a same-window Loop rewind to keep the Cue Sheet plan, so that repeated music can repeat the same visual opportunities.
+13. As a PenroseArt wall author, I want a same-window Loop rewind to move the cursor back to the next Cue Mark after the current beat, so that the current pass self-corrects.
 14. As a PenroseArt wall author, I want substantial beat rewinds to clear stale pass-local cue state where appropriate, so that old absolute beat positions do not block the new pass.
 15. As a PenroseArt wall author, I want small one- or two-beat backsteps to remain treated as jitter, so that ordinary OSC wobble does not reset the show plan.
 16. As a PenroseArt wall author, I want Track Phase disappearance to coast on the last known Phase Anchor, so that temporary data gaps do not make the wall snap to arbitrary timing.
 17. As a PenroseArt wall author, I want coasting to remain Synced Mode behavior, so that missing Track Phase is not mistaken for Standalone Mode when other live timing is present.
 18. As a PenroseArt wall author, I want the wall to re-anchor when fresh Track Phase returns, so that it can recover from gaps, startup ambiguity, or changed song position.
-19. As a PenroseArt wall author, I want the timing frame to say why a target was chosen, so that debugging can distinguish Track Phase, selected Phase Boundary, grid, coast, re-anchor, and unlocked states.
+19. As a PenroseArt wall author, I want the timing frame to say why a target was chosen, so that debugging can distinguish Track Phase, Cue Mark, grid, coast, re-anchor, and unlocked states.
 20. As a PenroseArt wall author, I want Phase Confidence to remain visible, so that stronger structural evidence is distinguishable from weaker beat-grid evidence.
 21. As a PenroseArt wall author, I want the Director status to report musical timing facts from the timing frame, so that HUD and inspector readouts match the actual decision model.
 22. As a PenroseArt wall author, I want Standalone Mode to remain intentional and simple, so that the wall still self-runs when no live OSC source is present.
@@ -75,7 +75,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 49. As a PenroseArt wall author, I want Controller-level tests to remain wiring tests, so that they do not become the only way to verify timing policy.
 50. As a maintainer, I want PhaseClock to remain a focused pure module, so that Phase reading behavior stays independently understandable.
 51. As a maintainer, I want PhraseWindow to remain a focused pure module, so that Phrase Window derivation and boundaries stay independently understandable.
-52. As a maintainer, I want SelectedPhaseBoundaryPlan to remain a focused pure module or be absorbed only if the new timing module gives more leverage, so that useful tested behavior is not flattened.
+52. As a maintainer, I want `CueSheet` to remain a focused pure module unless absorbing it would give the timing module more leverage, so that useful tested behavior is not flattened.
 53. As a maintainer, I want SyncedCueIntent to remain focused on cue timing and casting, so that cue decisions do not drift back into the Director body.
 54. As a maintainer, I want ChangeCadence to remain a clear rule, so that minimum-change cadence is not scattered across timing, cue, and status code.
 55. As a maintainer, I want EffectDeckSelection to keep owning deck preference behavior, so that casting work does not duplicate deck selection rules.
@@ -99,15 +99,15 @@ Documentation should be refreshed after the code shape lands so runtime architec
 
 - Make this a hard-cut internal refactor. Do not preserve old Director-owned timing pathways behind compatibility wrappers, duplicate fields, or migration-style shims.
 - Keep the Director as the single external directing module. Its interface should remain small: tick the Director, issue explicit overrides, stage next choices, expose read-only status, and command the Mechanical Switcher.
-- Introduce one new primary seam for on-air timing interpretation. The ideal number of new seams for the first slice is one.
+- Preserve the existing primary seam for on-air timing interpretation instead of introducing a parallel timing reader.
 - The on-air timing module should accept a small snapshot of live timing inputs and the minimal decision state it legitimately needs, rather than taking the whole Controller as its interface.
 - The on-air timing module should return a timing frame. The timing frame is the Director-facing contract for Synced Mode timing.
-- The timing frame should include current beat, Phase reading, Phase Anchor availability, Phase Confidence, selected Phase Boundary, beats until selected boundary, target source/reason, Phrase Window identity when available, and state markers for coasting, rewind, re-anchor, and unlocked cases.
-- The timing module owns raw Track Phase interpretation, PhaseInput construction, PhaseClock resolution, PhraseWindow derivation, selected Phase Boundary plan identity, selected boundary cursor advancement, same-window rewind handling, coasting, and re-anchor policy.
+- The timing frame should include current beat, Phase reading, Phase Anchor availability, Phase Confidence, Cue Mark, beats until Cue Mark, target source/reason, Phrase Window identity when available, and state markers for coasting, rewind, re-anchor, and unlocked cases.
+- The timing module owns raw Track Phase interpretation, PhaseInput construction, PhaseClock resolution, PhraseWindow derivation, Cue Sheet identity, Cue Mark cursor advancement, same-window rewind handling, coasting, and re-anchor policy.
 - Existing pure modules should be reused behind the timing seam where they still earn their keep. The refactor should not flatten useful modules just to reduce file count.
-- If an existing pure module becomes a shallow pass-through after the new timing module is built, it may be absorbed as part of the same hard-cut cleanup. Preserve behavior, not arbitrary file boundaries.
+- If an existing pure module becomes a shallow pass-through as the On-Air Timing seam evolves, it may be absorbed as part of the same hard-cut cleanup. Preserve behavior, not arbitrary file boundaries.
 - The Director should not read raw Track Phase fields after the timing seam is in place.
-- The Director should not own selected boundary arrays, phrase identity fields, or boundary cursor indexes after the timing seam is in place.
+- The Director should not own Cue Sheet arrays, phrase identity fields, or Cue Mark cursor indexes after the timing seam is in place.
 - The Director should not own beat rewind detection except as part of feeding the timing module the current synced beat sequence, if the final interface requires that.
 - The Director should consume the timing frame to build status, configure the next cue direction, and insert/update that cue in the Switcher while the Switcher still reports it is mutable.
 - Timing source/reason strings or enums should be domain-facing and stable enough for tests and status. Prefer a small closed vocabulary over ad hoc log text.
@@ -125,26 +125,26 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - Effect expression remains with Effects. The Director may cast or send a cue, but Effects decide how to express Fill, Drop, Energy, or Levels when their Repertoire says they can.
 - Do not introduce adapters for hypothetical alternate timing sources. There is one in-process runtime and one current interpretation path.
 - Do not introduce service-layer, event-bus, dependency-injection, or framework machinery.
-- Keep code and tests using the project glossary: Director, Mechanical Switcher, On-Air Timing, Timing Frame, Phase, Phrase Window, Phase Boundary, Selected Phase Boundary, Phase Anchor, Phase Lock, Phase Confidence, Coast, Re-anchor, Loop, Beat Rewind, Runway, Tail, Impact Point, Cue, Repertoire, and Performer.
+- Keep code and tests using the project glossary: Director, Mechanical Switcher, On-Air Timing, Timing Frame, Phase, Phrase Window, Phase Boundary, Cue Sheet, Cue Mark, Phase Anchor, Phase Lock, Phase Confidence, Coast, Re-anchor, Loop, Beat Rewind, Runway, Tail, Impact Point, Cue, Repertoire, and Performer.
 - Refresh runtime architecture documentation after the implementation lands so the docs do not keep reviving the old timer-transition model.
 
 ## Testing Decisions
 
 - Good tests verify caller-visible behavior through the highest useful seam. They should not assert private fields, exact log text, or internal collection indexes unless those are part of the module's interface.
-- The primary new testing seam is the on-air timing module. It should be testable without Unity GameObjects, Controller singleton reflection, Switcher rendering, or Unity time.
+- The primary timing test seam is the existing on-air timing module. It should be testable without Unity GameObjects, Controller singleton reflection, Switcher rendering, or Unity time.
 - On-air timing tests should feed timing snapshots and observe timing frames. They should prove musical interpretation behavior directly.
-- Add tests proving Track Phase data produces a structural timing frame with the expected Phrase Window identity and selected Phase Boundary.
-- Add tests proving a same-window substantial rewind keeps the selected Phase Boundary plan and rewinds the cursor to the next selected boundary after the current beat.
-- Add tests proving the same selected Phase Boundary can become eligible again on a later loop pass when cadence allows.
-- Add tests proving small beat backsteps are treated as jitter and do not reset the selected boundary plan.
+- Add tests proving Track Phase data produces a structural timing frame with the expected Phrase Window identity and Cue Mark.
+- Add tests proving a same-window substantial rewind keeps the Cue Sheet plan and rewinds the cursor to the next Cue Mark after the current beat.
+- Add tests proving the same Cue Mark can become eligible again on a later loop pass when cadence allows.
+- Add tests proving small beat backsteps are treated as jitter and do not reset the Cue Sheet plan.
 - Add tests proving Track Phase disappearance coasts on the last known anchor when a prior anchor exists.
 - Add tests proving no prior anchor plus unavailable Track Phase produces an unlocked timing frame rather than a fake target.
 - Add tests proving fresh Track Phase after coasting re-anchors the timing frame to structural phrase data.
 - Add tests proving a contradictory fresh Phrase Window replaces the coasted anchor instead of layering anchors.
-- Add tests proving source/reason values distinguish structural Track Phase, selected Phase Boundary, phase-clock grid, coasting, re-anchor, rewind, and unlocked cases where relevant.
-- Preserve existing PhaseClock tests for low-level Phase reading behavior unless the new timing module absorbs that interface entirely.
-- Preserve existing PhraseWindow tests for Phrase Window derivation and Phase Boundary enumeration unless the new timing module absorbs that interface entirely.
-- Preserve or update SelectedPhaseBoundaryPlan tests where they still express the reusable behavior of selecting interior boundaries and always including the phrase boundary.
+- Add tests proving source/reason values distinguish structural Track Phase, Cue Mark, phase-clock grid, coasting, re-anchor, rewind, and unlocked cases where relevant.
+- Preserve existing PhaseClock tests for low-level Phase reading behavior unless the On-Air Timing seam deliberately absorbs that interface entirely.
+- Preserve existing PhraseWindow tests for Phrase Window derivation and Phase Boundary enumeration unless the On-Air Timing seam deliberately absorbs that interface entirely.
+- Preserve `CueSheetTests` where they express the reusable behavior of selecting interior Cue Marks and always including the mandatory phrase-end Cue Mark.
 - Keep Director synced tests, but move loop/coast/re-anchor policy coverage down to the timing seam where possible.
 - Director tests should prove the Director consumes timing frames correctly: status reflects timing, cue decisions use the selected Cue Mark, and the Director inserts/updates the expected cue direction without computing Switcher lock/start/progress timing.
 - Existing Director staging tests remain prior art for Next Effect / Next Transition behavior and should be updated only where the refactor changes how timing/cue inputs reach staging.
@@ -152,7 +152,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - Existing TransitionBeatPlan and SyncedCueIntent tests remain useful for cue timing and casting unless they are deliberately evolved into a higher cue-planning seam.
 - When cue/casting work starts, add tests at the cue-planning seam rather than testing Drop preference by reading private Director methods.
 - Test names should use project domain vocabulary and avoid generic words that hide Phase/Phrase distinctions.
-- Random selected-boundary behavior should be tested with deterministic random delegates or controlled seeds through a public test seam, not by depending on incidental global random state where avoidable.
+- Random Cue Mark selection should be tested with deterministic random delegates or controlled seeds through a public test seam, not by depending on incidental global random state where avoidable.
 - Run the focused timing, Director, Switcher, transition timing, transition settings, and BeatManager integration test slice after implementation.
 - Run the documented Unity compile/test wrapper after the focused tests.
 - Validation should include a polish pass over the scoped diff after behavior is green.
@@ -182,4 +182,4 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - The timing slice should be designed as the first step of the final Director architecture, not as a temporary extraction that will be replaced during cue/casting work.
 - The prior Director/Switcher work and tailed-transition fixes remain valuable. This work deepens the next layer rather than reopening the Mechanical Switcher execution contract.
 - Runtime architecture documentation was refreshed after the code shape landed so it describes Director, On-Air Timing, Cue Intent, and Mechanical Switcher responsibilities together.
-- Issue 07 clarification: the Director configures one cue direction and inserts/updates it in the Switcher; the Switcher holds the Loaded Cue, derives Lock Point from Runway, refuses updates after lock, and owns Armed Cue execution. Do not implement a Director-held LoadedCue plus Director-called ArmCue seam.
+- Issue 07 clarification: the Director configures one cue direction from the existing `TimingFrame`/cue-planning path and inserts/updates it in the Switcher; the Switcher holds the Loaded Cue, derives Lock Point from Runway, refuses updates after lock, and owns Armed Cue execution. Do not implement a Director-held LoadedCue plus Director-called ArmCue seam. Do not make the Switcher read `BeatManager`, raw OSC/Rave payloads, Track Phase, Phrase Window, or Cue Sheet state; those belong to the existing `BeatManagerQueries` / `OnAirTimingInput` / `OnAirTiming` / `TimingFrame` path. Do not duplicate cadence, Runway/Tail, deck-selection, or Cue Sheet cursor rules; evolve the existing seams where their current caller contract is too narrow.
