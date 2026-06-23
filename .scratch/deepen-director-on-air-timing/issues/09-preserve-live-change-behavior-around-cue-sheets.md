@@ -67,13 +67,13 @@ Port existing tests to the new vocabulary and add missing lock-specific tests:
 ## Implementation notes
 
 - Added Director-level regression coverage for a different-length Phrase update before the cue window, proving the eventual fire-and-forget cue command uses the current Cue Mark rather than the earlier Cue Sheet target.
-- Added Director/Switcher regression coverage proving a Phrase change after the Director sends a cue command does not mutate the already-sent command's destination or landing beat.
+- Added Director/Switcher regression coverage proving Phrase and staged-choice changes after the Director sends a cue command do not mutate the already-sent command's destination, Transition, or landing beat.
 - Added Hold regression coverage proving held Effect mode suppresses synced cue commands instead of inserting or replacing Switcher cues.
 - Existing `OnAirTimingTests`, `DirectorSyncedTailTests`, `SyncedCueIntentTests`, `EffectDeckSelectionTests`, and `DirectorStagingTests` cover the same-length Cue Sheet, Beat Rewind, jitter, Coast/Re-anchor, Drop-aware casting, cadence, and manual staging behaviors under the fire-and-forget seam.
 
 ## Validation evidence
 
-- `UNITY_TEST_FILTER='DirectorSyncedTailTests.DifferentLengthPhraseUpdateBeforeCueWindowUsesCurrentCueMark|DirectorSyncedTailTests.PhraseChangeAfterSentCueDoesNotMutateSwitcherCommand|DirectorSyncedTailTests.HeldEffectSuppressesSyncedCueCommand' ./scripts/unity-tests.sh` passed 3/3.
+- `UNITY_TEST_FILTER='DirectorSyncedTailTests.DifferentLengthPhraseUpdateBeforeCueWindowUsesCurrentCueMark|DirectorSyncedTailTests.PhraseAndStagedChangesAfterSentCueDoNotMutateSwitcherCommand|DirectorSyncedTailTests.HeldEffectSuppressesSyncedCueCommand' ./scripts/unity-tests.sh` passed 3/3.
 - `UNITY_TEST_FILTER='OnAirTimingTests|DirectorSyncedTailTests|SyncedCueIntentTests|EffectDeckSelectionTests|DirectorStagingTests|SwitcherExecutionTests|ChangeCadenceTests|BeatManagerRaveOscIntegrationTests|BeatManagerContrivedQueriesTests' ./scripts/unity-tests.sh` passed 124/124.
 - `./scripts/unity-compile.sh` passed with C# warning count 0.
 - Full `./scripts/unity-tests.sh` passed 220/220.

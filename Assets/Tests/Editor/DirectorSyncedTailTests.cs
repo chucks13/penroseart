@@ -432,6 +432,8 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void DifferentLengthPhraseUpdateBeforeCueWindowUsesCurrentCueMark()
     {
+        const int staleCueMarkBeat = 593;
+        const int currentCueMarkBeat = 609;
         var randomState = Random.state;
         try
         {
@@ -440,19 +442,19 @@ public sealed class DirectorSyncedTailTests
 
             SetTrackPhaseBeat(584, phaseActive: 1, beatsToPhraseBoundary: 57, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(staleCueMarkBeat));
             Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
             SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
             director.Tick(0f);
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(currentCueMarkBeat));
             Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
 
             SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
             director.Tick(0f);
 
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
-            Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+            Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(currentCueMarkBeat));
         }
         finally
         {
@@ -461,13 +463,14 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void PhraseChangeAfterSentCueDoesNotMutateSwitcherCommand()
+    public void PhraseAndStagedChangesAfterSentCueDoNotMutateSwitcherCommand()
     {
+        const int sentCueMarkBeat = 609;
         director.SetNextEffect(1);
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The setup should send the cue-window command.");
-        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(sentCueMarkBeat));
 
         controller.transitions[1] = new ZeroRunwayTailedTransition();
         controller.transitions[1].Init();
@@ -478,21 +481,23 @@ public sealed class DirectorSyncedTailTests
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Later Phrase evidence should only affect future cue commands.");
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0), "A newly staged Transition cannot rewrite the already-sent cue.");
-        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(sentCueMarkBeat));
     }
 
     [Test]
     public void HeldEffectSuppressesSyncedCueCommand()
     {
-        controller.heldEffect = 1;
-        director.SetNextEffect(2);
+        const int heldEffectIndex = 1;
+        const int stagedEffectIndex = 2;
+        controller.heldEffect = heldEffectIndex;
+        director.SetNextEffect(stagedEffectIndex);
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
         Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Hold));
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
-        Assert.That(switcher.Status.TargetEffectIndex, Is.Not.EqualTo(2));
+        Assert.That(switcher.Status.TargetEffectIndex, Is.Not.EqualTo(stagedEffectIndex));
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(-1));
     }
 
