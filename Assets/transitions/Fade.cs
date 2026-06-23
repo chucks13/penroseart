@@ -1,10 +1,11 @@
 ﻿using UnityEngine;
+using RepertoireFlags = Repertoire;
 /// <summary>
 /// Straight linear crossfade between source and destination effects.
 /// </summary>
 public class Fade : TransitionBase
 {
-    private const global::Repertoire DefaultTags = global::Repertoire.None;
+    private const RepertoireFlags DefaultTags = RepertoireFlags.None;
     private const int RunwayBeats = 4;
     private const int TailBeats = 0;
     private const TransitionShape Shape = TransitionShape.Blend;

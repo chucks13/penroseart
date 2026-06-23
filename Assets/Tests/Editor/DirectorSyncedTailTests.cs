@@ -2,6 +2,7 @@ using System.Reflection;
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
 using UnityEngine;
+using RepertoireFlags = Repertoire;
 
 public sealed class DirectorSyncedTailTests
 {
@@ -71,12 +72,32 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void StartingTailedTransitionMarksCadenceAtSelectedPhaseBoundary()
+    public void StartingTailedTransitionMarksCadenceAtCueMark()
     {
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void ZeroRunwayTailedTransitionCanCueWhenExactImpactBeatIsMissed()
+    {
+        controller.transitions[0] = new ZeroRunwayTailedTransition();
+        controller.transitions[0].Init();
+        director.SetNextTransition(0);
+
+        SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
+
+        SetTrackPhaseBeat(610, phaseActive: 1, beatsToPhraseBoundary: 31, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
         Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
     }
@@ -96,7 +117,7 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void DecisionMatrixFollowsSelectedBoundaryWhileTailedTransitionIsStillRendering()
+    public void DecisionMatrixFollowsCueMarkWhileTailedTransitionIsStillRendering()
     {
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
@@ -293,7 +314,7 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void SameWindowBeatRewindKeepsSelectedPhaseBoundaryPlanAndMovesCursorBack()
+    public void SameWindowBeatRewindKeepsCueSheetAndMovesCursorBack()
     {
         var randomState = Random.state;
         try
@@ -302,7 +323,7 @@ public sealed class DirectorSyncedTailTests
             SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
             director.Tick(0f);
             Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SelectedPhaseBoundary));
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
 
             SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
             director.Tick(0f);
@@ -321,7 +342,7 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void SameWindowBeatRewindLetsDirectorCueSameSelectedBoundaryAgain()
+    public void SameWindowBeatRewindLetsDirectorCueSameCueMarkAgain()
     {
         var randomState = Random.state;
         try
@@ -333,7 +354,7 @@ public sealed class DirectorSyncedTailTests
 
             SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The setup should cue the selected boundary on the first pass.");
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The setup should cue the Cue Mark on the first pass.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
 
@@ -345,8 +366,8 @@ public sealed class DirectorSyncedTailTests
             director.Tick(0f);
 
             Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SelectedPhaseBoundary));
-            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The rewound loop pass should be allowed to cue the same selected boundary again.");
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The rewound loop pass should be allowed to cue the same Cue Mark again.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
         }
@@ -443,7 +464,7 @@ public sealed class DirectorSyncedTailTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                global::Repertoire.None,
+                RepertoireFlags.None,
                 runwayBeats: 0,
                 tailBeats: 0,
                 TransitionShape.Blend,
@@ -469,12 +490,38 @@ public sealed class DirectorSyncedTailTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                global::Repertoire.None,
+                RepertoireFlags.None,
                 runwayBeats: 4,
                 tailBeats: 4,
                 TransitionShape.Dissolve,
                 TransitionIntensity.High,
                 defaultDurationSeconds: 4f));
+        }
+
+        public override void OnStart()
+        {
+        }
+
+        public override void OnEnd()
+        {
+        }
+
+        public override void Draw()
+        {
+        }
+    }
+
+    private sealed class ZeroRunwayTailedTransition : TransitionBase
+    {
+        protected override TransitionSettings BuildCodeDefaults()
+        {
+            return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
+                RepertoireFlags.None,
+                runwayBeats: 0,
+                tailBeats: 12,
+                TransitionShape.Dissolve,
+                TransitionIntensity.High,
+                defaultDurationSeconds: 12f));
         }
 
         public override void OnStart()

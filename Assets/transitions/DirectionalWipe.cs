@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using RepertoireFlags = Repertoire;
 using Random = UnityEngine.Random;
 /// <summary>
 /// Wipes from source to destination by projecting tile positions along a randomized direction.
@@ -7,7 +8,7 @@ public class DirectionalWipe : TransitionBase
 {
     // Hand-tuned DirectionalWipe Code Defaults. Keep these together so the transition
     // can be adjusted by hand without hunting through the implementation.
-    private const global::Repertoire DefaultTags = global::Repertoire.RespondsToEnergy;
+    private const RepertoireFlags DefaultTags = RepertoireFlags.RespondsToEnergy;
     private const int RunwayBeats = 4;
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.DirectionalWipe;

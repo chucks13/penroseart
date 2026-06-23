@@ -320,8 +320,8 @@ public sealed class Director
         if (currentBeat >= 0 && lastChangeBeat != int.MinValue)
         {
             var cadenceReadyBeat = lastChangeBeat + MinimumChangeCadenceBeats;
-            var selectedBoundarySatisfiesCadence = timingFrame.HasPhaseAnchor && timingFrame.PhaseAnchorLandingBeat >= cadenceReadyBeat;
-            if (!selectedBoundarySatisfiesCadence)
+            var cueMarkSatisfiesCadence = timingFrame.HasPhaseAnchor && timingFrame.PhaseAnchorLandingBeat >= cadenceReadyBeat;
+            if (!cueMarkSatisfiesCadence)
             {
                 beatsUntilCadenceReady = Math.Max(0, cadenceReadyBeat - currentBeat);
             }
@@ -396,6 +396,7 @@ public sealed class Director
     private void TickSyncedMode(int beat)
     {
         var previousSyncedBeat = lastSyncedBeat;
+        var previousTimingFrame = timingFrame;
         lastSyncedBeat = beat;
 
         if (controller.TryGetHeldEffectIndex(out _))
@@ -407,7 +408,10 @@ public sealed class Director
 
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
-        TryStartSyncedCue(timingFrame);
+        if (!TryStartMissedZeroRunwayTailedCue(previousTimingFrame, timingFrame))
+        {
+            TryStartSyncedCue(timingFrame);
+        }
     }
 
     private void RefreshTimingFrame()
@@ -447,14 +451,61 @@ public sealed class Director
     private void ApplyPassLocalTimingState(PassLocalTimingState passLocalState)
     {
         lastCueBeat = passLocalState.LastCueBeat ?? -1;
-        lastChangeBeat = passLocalState.PreviousSelectedPhaseBoundary ?? int.MinValue;
+        lastChangeBeat = passLocalState.PreviousCueMarkBeat ?? int.MinValue;
     }
 
-    private void TryStartSyncedCue(TimingFrame frame)
+    private bool TryStartMissedZeroRunwayTailedCue(TimingFrame previousFrame, TimingFrame currentFrame)
+    {
+        if (!previousFrame.HasPhaseAnchor || currentFrame.CurrentBeat <= previousFrame.CueMarkBeat)
+        {
+            return false;
+        }
+
+        var transitionIndex = nextTransitionIndex;
+        ValidateTransitionIndex(transitionIndex);
+        var repertoire = controller.transitions[transitionIndex].Repertoire;
+        var beatPlan = TransitionBeatPlan.FromCueMark(previousFrame.CueMarkBeat, repertoire);
+        if (beatPlan.StartBeat != beatPlan.ImpactBeat
+            || beatPlan.CompleteBeat == beatPlan.ImpactBeat
+            || !beatPlan.IsCueBeat(currentFrame.CurrentBeat)
+            || lastChangeBeat == beatPlan.ImpactBeat)
+        {
+            return false;
+        }
+
+        return TryStartSyncedCue(RetargetTimingFrame(previousFrame, currentFrame));
+    }
+
+    private static TimingFrame RetargetTimingFrame(TimingFrame targetFrame, TimingFrame currentFrame)
+    {
+        var input = new OnAirTimingInput(
+            currentFrame.CurrentBeat,
+            currentFrame.Input.TotalBeats,
+            currentFrame.Input.BeatInBar,
+            currentFrame.Input.TrackPhaseActive,
+            targetFrame.CueMarkBeat - currentFrame.CurrentBeat,
+            targetFrame.Input.PhraseLengthBeats);
+        return new TimingFrame(
+            input,
+            targetFrame.Phase,
+            targetFrame.HasPhaseAnchor,
+            targetFrame.PhaseAnchorConfidence,
+            targetFrame.CueMarkBeat,
+            targetFrame.HasPhraseWindow,
+            targetFrame.PhraseWindow,
+            targetFrame.Source,
+            currentFrame.BeatRewoundToNewPass,
+            currentFrame.PassLocalState,
+            currentFrame.ClearedPassLocalCueState,
+            currentFrame.ClearedPassLocalCadenceState,
+            currentFrame.Reanchored);
+    }
+
+    private bool TryStartSyncedCue(TimingFrame frame)
     {
         if (!frame.HasPhaseAnchor)
         {
-            return;
+            return false;
         }
 
         var beat = frame.CurrentBeat;
@@ -476,19 +527,20 @@ public sealed class Director
 
         if (cueIntent.Kind == SyncedCueIntentKind.Wait)
         {
-            return;
+            return false;
         }
 
         if (cueIntent.BlockedByCadence)
         {
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} selectedBoundary={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
             lastCueBeat = beat;
-            return;
+            return true;
         }
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
-        Trace($"SYNC_CUE beat={beat} start={cueIntent.BeatPlan.StartBeat} selectedBoundary={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueIntent.BeatPlan.StartBeat)} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+        Trace($"SYNC_CUE beat={beat} start={cueIntent.BeatPlan.StartBeat} cueMark={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueIntent.BeatPlan.StartBeat)} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
         StartSyncedTransition(transitionIndex, repertoire, cueIntent);
+        return true;
     }
 
     private void StartSyncedTransition(
@@ -569,8 +621,8 @@ public sealed class Director
 
     private bool CanChangeAtBeat(int beat)
     {
-        var previousSelectedPhaseBoundary = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
-        return ChangeCadence.CanChangeAt(beat, previousSelectedPhaseBoundary, MinimumChangeCadenceBeats);
+        var previousCueMarkBeat = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        return ChangeCadence.CanChangeAt(beat, previousCueMarkBeat, MinimumChangeCadenceBeats);
     }
 
     private void Trace(string message)
@@ -611,8 +663,8 @@ public sealed class Director
         {
             case TimingFrameSource.PhaseClockGrid:
                 return "phase-clock-grid";
-            case TimingFrameSource.SelectedPhaseBoundary:
-                return "selected-phase-boundary";
+            case TimingFrameSource.CueMark:
+                return "cue-mark";
             case TimingFrameSource.TrackPhaseBoundary:
                 return "track-phase-boundary";
             case TimingFrameSource.Coast:

@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using RepertoireFlags = Repertoire;
 
 public sealed class SwitcherExecutionTests
 {
@@ -142,7 +143,7 @@ public sealed class SwitcherExecutionTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                global::Repertoire.None,
+                RepertoireFlags.None,
                 runwayBeats: 0,
                 tailBeats: 0,
                 TransitionShape.Blend,
@@ -173,7 +174,7 @@ public sealed class SwitcherExecutionTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                global::Repertoire.None,
+                RepertoireFlags.None,
                 runwayBeats: 1,
                 tailBeats: 0,
                 TransitionShape.Blend,

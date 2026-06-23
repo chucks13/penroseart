@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using RepertoireFlags = Repertoire;
 
 
 /// <summary>
@@ -8,7 +9,7 @@ using UnityEngine;
 /// </summary>
 public class NoiseTransition : TransitionBase
 {
-    private const global::Repertoire DefaultTags = global::Repertoire.HandlesDrop | global::Repertoire.RespondsToEnergy;
+    private const RepertoireFlags DefaultTags = RepertoireFlags.HandlesDrop | RepertoireFlags.RespondsToEnergy;
     private const int RunwayBeats = 4;
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.Noise;

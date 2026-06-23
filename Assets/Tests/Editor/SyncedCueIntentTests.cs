@@ -5,7 +5,7 @@ public sealed class SyncedCueIntentTests
     [Test]
     public void EvaluateWaitsBeforeRunway()
     {
-        var intent = Evaluate(Frame(currentBeat: 604, selectedPhaseBoundary: 609));
+        var intent = Evaluate(Frame(currentBeat: 604, cueMarkBeat: 609));
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
         Assert.That(intent.BeatPlan.StartBeat, Is.EqualTo(605));
@@ -15,7 +15,7 @@ public sealed class SyncedCueIntentTests
     [Test]
     public void EvaluateCuesInsideRunway()
     {
-        var intent = Evaluate(Frame(currentBeat: 605, selectedPhaseBoundary: 609));
+        var intent = Evaluate(Frame(currentBeat: 605, cueMarkBeat: 609));
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
         Assert.That(intent.ShouldCue, Is.True);
@@ -29,7 +29,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 1, 2, 0 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 4),
             stagedEffectIndex: 1,
@@ -53,7 +53,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 2, 0, 1 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 4),
             stagedEffectIndex: 1,
@@ -74,7 +74,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 1, 2, 0 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 4),
             stagedEffectIndex: 1,
@@ -97,7 +97,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 1, 2, 0 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 4),
             stagedEffectIndex: 1,
@@ -118,7 +118,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 1, 2, 0 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 3),
             stagedEffectIndex: 1,
@@ -142,7 +142,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 1, 2, 0 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             InProgressDrop(),
             stagedEffectIndex: 1,
@@ -168,8 +168,8 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(
                 currentBeat: 605,
-                selectedPhaseBoundary: 609,
-                previousSelectedPhaseBoundary: 600),
+                cueMarkBeat: 609,
+                previousCueMarkBeat: 600),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 4),
             stagedEffectIndex: 1,
@@ -191,7 +191,7 @@ public sealed class SyncedCueIntentTests
         var deck = new[] { 2, 0, 1 };
 
         var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
             UpcomingDrop(beatsUntilStart: 4),
             stagedEffectIndex: 1,
@@ -209,7 +209,7 @@ public sealed class SyncedCueIntentTests
     [Test]
     public void EvaluateWaitsAtImpactBeat()
     {
-        var intent = Evaluate(Frame(currentBeat: 609, selectedPhaseBoundary: 609));
+        var intent = Evaluate(Frame(currentBeat: 609, cueMarkBeat: 609));
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
         Assert.That(intent.ShouldCue, Is.False);
@@ -219,7 +219,7 @@ public sealed class SyncedCueIntentTests
     public void EvaluateCuesZeroRunwayAtImpactBeat()
     {
         var intent = Evaluate(
-            Frame(currentBeat: 609, selectedPhaseBoundary: 609),
+            Frame(currentBeat: 609, cueMarkBeat: 609),
             transitionRepertoire: HardCut());
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
@@ -228,12 +228,24 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
+    public void EvaluateCuesZeroRunwayTailAfterImpactBeat()
+    {
+        var intent = Evaluate(
+            Frame(currentBeat: 610, cueMarkBeat: 609),
+            transitionRepertoire: ZeroRunwayTail());
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.ShouldCue, Is.True);
+        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(-1));
+    }
+
+    [Test]
     public void EvaluateBlocksCadenceInsideRunway()
     {
         var intent = Evaluate(Frame(
             currentBeat: 605,
-            selectedPhaseBoundary: 609,
-            previousSelectedPhaseBoundary: 600));
+            cueMarkBeat: 609,
+            previousCueMarkBeat: 600));
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.BlockedByCadence));
         Assert.That(intent.BlockedByCadence, Is.True);
@@ -245,7 +257,7 @@ public sealed class SyncedCueIntentTests
     {
         var intent = Evaluate(Frame(
             currentBeat: 605,
-            selectedPhaseBoundary: 609,
+            cueMarkBeat: 609,
             lastCueBeat: 605));
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
@@ -271,9 +283,9 @@ public sealed class SyncedCueIntentTests
 
     private static TimingFrame Frame(
         int currentBeat,
-        int selectedPhaseBoundary,
+        int cueMarkBeat,
         int? lastCueBeat = null,
-        int? previousSelectedPhaseBoundary = null)
+        int? previousCueMarkBeat = null)
     {
         return new TimingFrame(
             new OnAirTimingInput(
@@ -281,17 +293,17 @@ public sealed class SyncedCueIntentTests
                 totalBeats: -1,
                 beatInBar: ((currentBeat - 1) % 4) + 1,
                 trackPhaseActive: 1,
-                beatsUntilPhraseBoundary: selectedPhaseBoundary - currentBeat,
+                beatsUntilPhraseBoundary: cueMarkBeat - currentBeat,
                 phraseLengthBeats: 32),
             PhaseReading.Unavailable,
             hasPhaseAnchor: true,
             PhaseConfidence.Structural,
-            selectedPhaseBoundary,
+            cueMarkBeat,
             hasPhraseWindow: false,
             default,
             TimingFrameSource.TrackPhaseBoundary,
             beatRewoundToNewPass: false,
-            new PassLocalTimingState(lastCueBeat, previousSelectedPhaseBoundary),
+            new PassLocalTimingState(lastCueBeat, previousCueMarkBeat),
             clearedPassLocalCueState: false,
             clearedPassLocalCadenceState: false,
             reanchored: false);
@@ -343,5 +355,16 @@ public sealed class SyncedCueIntentTests
             TransitionShape.Blend,
             TransitionIntensity.High,
             defaultDurationSeconds: 0f);
+    }
+
+    private static TransitionRepertoire ZeroRunwayTail()
+    {
+        return TransitionRepertoire.FromRunwayAndTail(
+            Repertoire.None,
+            runwayBeats: 0,
+            tailBeats: 12,
+            TransitionShape.Blend,
+            TransitionIntensity.High,
+            defaultDurationSeconds: 12f);
     }
 }

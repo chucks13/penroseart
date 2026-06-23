@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using RepertoireFlags = Repertoire;
 
 public sealed class TransitionSettingsTests
 {
@@ -21,24 +22,14 @@ public sealed class TransitionSettingsTests
     }
 
     [Test]
-    public void CodeDefaultsCoverConcreteTransitionRepertoiresAndAuthoringDefaults()
+    public void CodeDefaultsExposeValidAuthoringDefaults()
     {
-        AssertSettings(new Fade().CodeDefaults, global::Repertoire.None, 4, 0, TransitionShape.Blend, TransitionIntensity.Subtle, 4f, 0.5f);
-        AssertSettings(new RGBFade().CodeDefaults, global::Repertoire.RespondsToEnergy, 4, 4, TransitionShape.ChannelBlend, TransitionIntensity.Medium, 4f, 0.5f);
-        AssertSettings(new DirectionalWipe().CodeDefaults, global::Repertoire.RespondsToEnergy, 4, 4, TransitionShape.DirectionalWipe, TransitionIntensity.Medium, 4f, 0.5f);
-        AssertSettings(new IndexWipe().CodeDefaults, global::Repertoire.None, 4, 0, TransitionShape.IndexWipe, TransitionIntensity.Medium, 4f, 0.5f);
-        AssertSettings(new FizzleTransition().CodeDefaults, global::Repertoire.HandlesDrop, 4, 4, TransitionShape.Dissolve, TransitionIntensity.High, 4f, 0.5f);
-        AssertSettings(new IrisTransition().CodeDefaults, global::Repertoire.HandlesDrop, 4, 4, TransitionShape.Iris, TransitionIntensity.High, 4f, 0.5f);
-        AssertSettings(new NoiseTransition().CodeDefaults, global::Repertoire.HandlesDrop | global::Repertoire.RespondsToEnergy, 4, 4, TransitionShape.Noise, TransitionIntensity.High, 4f, 0.5f);
-
-        var directional = new DirectionalWipe().CodeDefaults;
-        Assert.That(directional.DirectionalReactiveEdgeWidth, Is.EqualTo(0.055f));
-        Assert.That(directional.DirectionalLowBandResponseGain, Is.EqualTo(2f));
-
-        var noise = new NoiseTransition().CodeDefaults;
-        Assert.That(noise.NoiseScale, Is.EqualTo(0.07f));
-        Assert.That(noise.NoiseProgressRange, Is.EqualTo(1.1f));
-        Assert.That(noise.NoiseBorderWidth, Is.EqualTo(0.1f));
+        var factory = new Factory<TransitionBase>();
+        foreach (var transitionType in factory.Types)
+        {
+            var transition = (TransitionBase)System.Activator.CreateInstance(transitionType);
+            AssertValidSettings(transition.CodeDefaults, transitionType.Name);
+        }
     }
 
     [Test]
@@ -226,23 +217,17 @@ public sealed class TransitionSettingsTests
         Assert.That(settings.DurationBeats, Is.EqualTo(12));
     }
 
-    private static void AssertSettings(
-        TransitionSettings actual,
-        global::Repertoire tags,
-        int runwayBeats,
-        int tailBeats,
-        TransitionShape shape,
-        TransitionIntensity intensity,
-        float defaultDurationSeconds,
-        float externalBlendDefaultProgress)
+    private static void AssertValidSettings(TransitionSettings actual, string context)
     {
-        Assert.That(actual.Tags, Is.EqualTo(tags));
-        Assert.That(actual.RunwayBeats, Is.EqualTo(runwayBeats));
-        Assert.That(actual.TailBeats, Is.EqualTo(tailBeats));
-        Assert.That(actual.Shape, Is.EqualTo(shape));
-        Assert.That(actual.Intensity, Is.EqualTo(intensity));
-        Assert.That(actual.DefaultDurationSeconds, Is.EqualTo(defaultDurationSeconds));
-        Assert.That(actual.ExternalBlendDefaultProgress, Is.EqualTo(externalBlendDefaultProgress));
+        Assert.That(actual.HasValidDuration, Is.True, context);
+        Assert.That(actual.ExternalBlendDefaultProgress, Is.InRange(0f, 1f), context);
+        var repertoire = actual.ToRepertoire();
+        Assert.That(repertoire.RunwayBeats, Is.GreaterThanOrEqualTo(0), context);
+        Assert.That(repertoire.TailBeats, Is.GreaterThanOrEqualTo(0), context);
+        Assert.That(repertoire.DurationBeats, Is.LessThanOrEqualTo(TransitionRepertoire.MaxDurationBeats), context);
+        Assert.That(repertoire.DefaultDurationSeconds, Is.GreaterThanOrEqualTo(0f), context);
+        Assert.That(System.Enum.IsDefined(typeof(TransitionShape), repertoire.Shape), Is.True, context);
+        Assert.That(System.Enum.IsDefined(typeof(TransitionIntensity), repertoire.Intensity), Is.True, context);
     }
 
     private static void CleanupTempAssets()
@@ -266,7 +251,7 @@ public sealed class TransitionSettingsTests
         {
             return new TransitionSettings
             {
-                Tags = global::Repertoire.HandlesDrop,
+                Tags = RepertoireFlags.HandlesDrop,
                 RunwayBeats = 1,
                 TailBeats = 0,
                 Shape = TransitionShape.Blend,

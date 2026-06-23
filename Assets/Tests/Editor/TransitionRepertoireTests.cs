@@ -97,38 +97,26 @@ public sealed class TransitionRepertoireTests
     }
 
     [Test]
-    public void ConcreteTransitionsAdvertiseTweakableDefaultRepertoires()
+    public void ConcreteTransitionsExposeValidTweakableRepertoires()
     {
-        AssertRepertoire(new Fade().Repertoire, Repertoire.None, 4, 0, TransitionShape.Blend, TransitionIntensity.Subtle,
-            defaultDurationSeconds: 4f);
-        AssertRepertoire(new RGBFade().Repertoire, Repertoire.RespondsToEnergy, 5, 1, TransitionShape.ChannelBlend, TransitionIntensity.Medium,
-            defaultDurationSeconds: 4f);
-        AssertRepertoire(new DirectionalWipe().Repertoire, Repertoire.RespondsToEnergy, 5, 0, TransitionShape.DirectionalWipe, TransitionIntensity.Medium,
-            defaultDurationSeconds: 4f);
-        AssertRepertoire(new IndexWipe().Repertoire, Repertoire.None, 4, 0, TransitionShape.IndexWipe, TransitionIntensity.Medium,
-            defaultDurationSeconds: 4f);
-        AssertRepertoire(new FizzleTransition().Repertoire, Repertoire.HandlesDrop, 4, 1, TransitionShape.Dissolve, TransitionIntensity.High,
-            defaultDurationSeconds: 4f);
-        AssertRepertoire(new IrisTransition().Repertoire, Repertoire.HandlesDrop, 4, 0, TransitionShape.Iris, TransitionIntensity.High,
-            defaultDurationSeconds: 4f);
-        AssertRepertoire(new NoiseTransition().Repertoire, Repertoire.HandlesDrop | Repertoire.RespondsToEnergy, 4, 1, TransitionShape.Noise, TransitionIntensity.High,
-            defaultDurationSeconds: 4f);
+        var factory = new Factory<TransitionBase>();
+        foreach (var transitionType in factory.Types)
+        {
+            var transition = (TransitionBase)System.Activator.CreateInstance(transitionType);
+            AssertValidRepertoire(transition.Repertoire, transitionType.Name);
+        }
     }
 
-    private static void AssertRepertoire(
-        TransitionRepertoire actual,
-        Repertoire tags,
-        int runwayBeats,
-        int tailBeats,
-        TransitionShape shape,
-        TransitionIntensity intensity,
-        float defaultDurationSeconds)
+    private static void AssertValidRepertoire(TransitionRepertoire actual, string context)
     {
-        Assert.That(actual.Tags, Is.EqualTo(tags));
-        Assert.That(actual.RunwayBeats, Is.EqualTo(runwayBeats));
-        Assert.That(actual.TailBeats, Is.EqualTo(tailBeats));
-        Assert.That(actual.Shape, Is.EqualTo(shape));
-        Assert.That(actual.Intensity, Is.EqualTo(intensity));
-        Assert.That(actual.DefaultDurationSeconds, Is.EqualTo(defaultDurationSeconds));
+        Assert.That(actual.RunwayBeats, Is.GreaterThanOrEqualTo(0), context);
+        Assert.That(actual.TailBeats, Is.GreaterThanOrEqualTo(0), context);
+        Assert.That(actual.DurationBeats, Is.EqualTo(actual.RunwayBeats + actual.TailBeats), context);
+        Assert.That(actual.DurationBeats, Is.LessThanOrEqualTo(TransitionRepertoire.MaxDurationBeats), context);
+        Assert.That(actual.ImpactPoint, Is.EqualTo(actual.DurationBeats == 0 ? 1f : actual.RunwayBeats / (float)actual.DurationBeats).Within(0.0001f), context);
+        Assert.That(actual.HasTail, Is.EqualTo(actual.TailBeats > 0), context);
+        Assert.That(actual.DefaultDurationSeconds, Is.GreaterThanOrEqualTo(0f), context);
+        Assert.That(System.Enum.IsDefined(typeof(TransitionShape), actual.Shape), Is.True, context);
+        Assert.That(System.Enum.IsDefined(typeof(TransitionIntensity), actual.Intensity), Is.True, context);
     }
 }

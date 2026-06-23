@@ -74,7 +74,7 @@ public readonly struct SyncedCueIntent
             throw new InvalidOperationException("Cannot evaluate a synced cue intent without a Phase Anchor.");
         }
 
-        var beatPlan = TransitionBeatPlan.FromSelectedPhaseBoundary(frame.SelectedPhaseBoundary, transitionRepertoire);
+        var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, transitionRepertoire);
         if (frame.PassLocalState.LastCueBeat == frame.CurrentBeat)
         {
             return new SyncedCueIntent(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
@@ -86,8 +86,8 @@ public readonly struct SyncedCueIntent
         }
 
         if (!ChangeCadence.CanChangeAt(
-            frame.SelectedPhaseBoundary,
-            frame.PassLocalState.PreviousSelectedPhaseBoundary,
+            frame.CueMarkBeat,
+            frame.PassLocalState.PreviousCueMarkBeat,
             minimumChangeCadenceBeats))
         {
             return new SyncedCueIntent(SyncedCueIntentKind.BlockedByCadence, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);

@@ -1269,8 +1269,8 @@ public class Controller : Singleton<Controller>
             case TimingFrameSource.PhaseClockGrid:
                 source = "phase-clock-grid";
                 break;
-            case TimingFrameSource.SelectedPhaseBoundary:
-                source = "selected-phase-boundary";
+            case TimingFrameSource.CueMark:
+                source = "cue-mark";
                 break;
             case TimingFrameSource.TrackPhaseBoundary:
                 source = "track-phase-boundary";

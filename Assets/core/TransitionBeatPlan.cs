@@ -1,12 +1,12 @@
 /// <summary>
-/// Beat-domain timing for an A-to-B Transition around a Selected Phase Boundary.
+/// Beat-domain timing for an A-to-B Transition around a Cue Mark.
 /// </summary>
 public readonly struct TransitionBeatPlan
 {
     /// <summary>Absolute beat where the transition should start.</summary>
     public readonly int StartBeat;
 
-    /// <summary>Selected Phase Boundary where the transition's Impact Point should land.</summary>
+    /// <summary>Cue Mark where the transition's Impact Point should land.</summary>
     public readonly int ImpactBeat;
 
     /// <summary>Absolute beat where the transition should fully complete.</summary>
@@ -20,21 +20,29 @@ public readonly struct TransitionBeatPlan
     }
 
     /// <summary>
-    /// Creates the beat plan for a transition whose Impact Point lands on the Selected Phase Boundary.
+    /// Creates the beat plan for a transition whose Impact Point lands on the Cue Mark.
     /// </summary>
-    public static TransitionBeatPlan FromSelectedPhaseBoundary(int selectedPhaseBoundary, TransitionRepertoire repertoire)
+    public static TransitionBeatPlan FromCueMark(int cueMarkBeat, TransitionRepertoire repertoire)
     {
         return new TransitionBeatPlan(
-            selectedPhaseBoundary - repertoire.RunwayBeats,
-            selectedPhaseBoundary,
-            selectedPhaseBoundary + repertoire.TailBeats);
+            cueMarkBeat - repertoire.RunwayBeats,
+            cueMarkBeat,
+            cueMarkBeat + repertoire.TailBeats);
     }
 
-    /// <summary>Whether the beat should start this plan; zero-Runway cuts cue on the Impact Beat.</summary>
+    /// <summary>
+    /// Whether this beat should start the plan.
+    /// Normal Runways cue before impact; zero-Runway tailed transitions can cue during their Tail and backdate progress from the Cue Mark.
+    /// </summary>
     public bool IsCueBeat(int beat)
     {
-        return StartBeat == ImpactBeat
+        if (StartBeat != ImpactBeat)
+        {
+            return beat >= StartBeat && beat < ImpactBeat;
+        }
+
+        return CompleteBeat == ImpactBeat
             ? beat == ImpactBeat
-            : beat >= StartBeat && beat < ImpactBeat;
+            : beat >= ImpactBeat && beat < CompleteBeat;
     }
 }

@@ -3,10 +3,10 @@
 /// </summary>
 public static class ChangeCadence
 {
-    /// <summary>Whether a selected Phase Boundary is far enough from the previous selected boundary.</summary>
-    public static bool CanChangeAt(int selectedPhaseBoundary, int? previousSelectedPhaseBoundary, int minimumBeats)
+    /// <summary>Whether a Cue Mark is far enough from the previous Cue Mark.</summary>
+    public static bool CanChangeAt(int cueMarkBeat, int? previousCueMarkBeat, int minimumBeats)
     {
-        return previousSelectedPhaseBoundary is not { } previous
-            || selectedPhaseBoundary - previous >= minimumBeats;
+        return previousCueMarkBeat is not { } previous
+            || cueMarkBeat - previous >= minimumBeats;
     }
 }

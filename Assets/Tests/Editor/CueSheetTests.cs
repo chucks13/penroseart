@@ -1,9 +1,9 @@
 using NUnit.Framework;
 
-public sealed class SelectedPhaseBoundaryPlanTests
+public sealed class CueSheetTests
 {
     [Test]
-    public void BuildSelectsRandomInteriorPhaseBoundariesAndMandatoryPhraseBoundary()
+    public void BuildSelectsRandomInteriorCueMarksAndMandatoryFinalCueMark()
     {
         Assert.That(PhraseWindow.TryFromTrackPhase(
             beat: 588,
@@ -12,7 +12,7 @@ public sealed class SelectedPhaseBoundaryPlanTests
             out var window), Is.True);
         var randomCalls = 0;
 
-        var plan = SelectedPhaseBoundaryPlan.Build(
+        var sheet = CueSheet.Build(
             window,
             currentBeat: 588,
             canChangeAtBeat: _ => true,
@@ -22,12 +22,14 @@ public sealed class SelectedPhaseBoundaryPlanTests
                 return randomCalls == 1 ? maxExclusive - 1 : minInclusive;
             });
 
-        Assert.That(plan.SelectedPhaseBoundaries, Is.EqualTo(new[] { 593, 609 }));
-        Assert.That(plan.Matches(window), Is.True);
+        Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 16, 32 }));
+        Assert.That(sheet.Matches(window), Is.True);
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(593));
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[1]), Is.EqualTo(609));
     }
 
     [Test]
-    public void BuildKeepsMandatoryPhraseBoundaryWhenNoInteriorPhaseBoundaryIsSelected()
+    public void BuildKeepsMandatoryFinalCueMarkWhenNoInteriorCueMarkIsSelected()
     {
         Assert.That(PhraseWindow.TryFromTrackPhase(
             beat: 588,
@@ -35,18 +37,19 @@ public sealed class SelectedPhaseBoundaryPlanTests
             phraseLengthBeats: 32,
             out var window), Is.True);
 
-        var plan = SelectedPhaseBoundaryPlan.Build(
+        var sheet = CueSheet.Build(
             window,
             currentBeat: 588,
             canChangeAtBeat: _ => true,
             randomRange: (minInclusive, _) => minInclusive);
 
-        Assert.That(plan.SelectedPhaseBoundaries, Is.EqualTo(new[] { 609 }));
-        Assert.That(plan.Matches(window), Is.True);
+        Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 32 }));
+        Assert.That(sheet.Matches(window), Is.True);
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(609));
     }
 
     [Test]
-    public void BuildCanIncludeFuturePhraseStartForUpcomingPlan()
+    public void BuildCanIncludeFuturePhraseStartForTurnoverPlan()
     {
         Assert.That(PhraseWindow.TryFromUpcomingTrackPhase(
             beat: 613,
@@ -54,14 +57,16 @@ public sealed class SelectedPhaseBoundaryPlanTests
             phraseLengthBeats: 32,
             out var window), Is.True);
 
-        var plan = SelectedPhaseBoundaryPlan.Build(
+        var sheet = CueSheet.Build(
             window,
             currentBeat: 613,
             canChangeAtBeat: _ => true,
             randomRange: (minInclusive, _) => minInclusive,
             includePhraseStart: true);
 
-        Assert.That(plan.SelectedPhaseBoundaries, Is.EqualTo(new[] { 625, 657 }));
+        Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 0, 32 }));
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(625));
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[1]), Is.EqualTo(657));
     }
 
     [Test]
@@ -73,18 +78,18 @@ public sealed class SelectedPhaseBoundaryPlanTests
             phraseLengthBeats: 32,
             out var window), Is.True);
 
-        var plan = SelectedPhaseBoundaryPlan.Build(
+        var sheet = CueSheet.Build(
             window,
             currentBeat: 613,
-            canChangeAtBeat: phaseBoundary => phaseBoundary != window.StartBeat,
+            canChangeAtBeat: cueMarkBeat => cueMarkBeat != window.StartBeat,
             randomRange: (minInclusive, _) => minInclusive,
             includePhraseStart: true);
 
-        Assert.That(plan.SelectedPhaseBoundaries, Is.EqualTo(new[] { 657 }));
+        Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 32 }));
     }
 
     [Test]
-    public void MatchesOnlyExactPhraseWindowTimingIdentity()
+    public void MatchesSamePhraseLengthInsteadOfExactAbsoluteTiming()
     {
         Assert.That(PhraseWindow.TryFromTrackPhase(
             beat: 588,
@@ -107,14 +112,14 @@ public sealed class SelectedPhaseBoundaryPlanTests
             phraseLengthBeats: 48,
             out var differentLength), Is.True);
 
-        var plan = SelectedPhaseBoundaryPlan.Build(
+        var sheet = CueSheet.Build(
             window,
             currentBeat: 588,
             canChangeAtBeat: _ => true,
             randomRange: (minInclusive, _) => minInclusive);
 
-        Assert.That(plan.Matches(sameTiming), Is.True);
-        Assert.That(plan.Matches(shiftedTiming), Is.False);
-        Assert.That(plan.Matches(differentLength), Is.False);
+        Assert.That(sheet.Matches(sameTiming), Is.True);
+        Assert.That(sheet.Matches(shiftedTiming), Is.True);
+        Assert.That(sheet.Matches(differentLength), Is.False);
     }
 }
