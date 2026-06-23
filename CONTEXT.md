@@ -248,7 +248,7 @@ _Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; treating Rep
 
 **Transition Settings**:
 Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Switcher uses that declaration to execute an Armed Cue without compensating scheduling logic.
-_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings; silently mutating saved Settings just because an asset was loaded.
+_Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings;
 
 **Code Defaults**:
 The transition-authored baseline values used to create or restore Transition Settings. Code Defaults live with the Transition's source so changing a Transition and changing its intended defaults stay together.

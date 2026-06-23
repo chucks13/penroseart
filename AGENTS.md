@@ -118,21 +118,6 @@ Start with these before adding new structures:
 - ADR style follows `memory:penroseart-adr-conventions`.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.
 
-## Running and Validation
-
-- Opening Play Mode can have side effects: it may scan/open serial ports, start UDP listeners, interact with attached hardware, and rewrite `StreamingAssets/images/*/files.txt` through `kscope`.
-- Ask before running Play Mode when hardware state, local ports, or working-tree cleanliness matter.
-- For script-level checks, use Unity-regenerated project files before trusting `dotnet build`; stale generated projects can report the wrong target framework after API compatibility changes.
-- Use `scripts/unity-compile.sh` for Unity compile/import checks instead of hand-assembling raw Unity CLI invocations.
-- Use `scripts/unity-tests.sh` for Unity Test Framework runs. Use `UNITY_TEST_FILTER` for focused tests and increase `UNITY_EDITOR_TEST_TIMEOUT` only after checking whether the Editor is busy, in Play Mode, compiling, or importing.
-- Use `scripts/osc-compile.sh` for a fast `Assets/OSC` compile check and `scripts/osc-tests.sh` for OSC-focused EditMode tests.
-- For changed scripts, run `bash -n scripts/<script>.sh` plus the narrowest wrapper that exercises the changed behavior.
-- Prefer validation that matches the change:
-  - visual tweaks: inspect in Unity/playback when safe;
-  - core logic: add/run focused unit tests when practical;
-  - serial/protocol changes: validate against the actual board/firmware contract;
-  - scene/settings changes: verify serialized values and Unity-generated artifacts.
-
 ## Project-wide Boundaries
 
 - Do not replace the buffer/effect architecture with prefab-heavy Unity composition unless explicitly requested.
