@@ -9,10 +9,12 @@ Unity scene
   └─ Controller MonoBehaviour
        ├─ Penrose model and preview mesh
        ├─ effect catalog: EffectBase[]
-       ├─ transition catalog: TransitionBase[]
+       ├─ transition catalog: TransitionBase[] + TransitionSettings
        ├─ blender catalog: BlenderBase[]
-       ├─ shared systems: palette, beat manager, drums, timer
-       ├─ inputs: keyboard, OSC, optional PixelReceiver/camera/telnet
+       ├─ rhythm inputs: RaveOscReceiver, OSCReader, BeatManager
+       ├─ sequencing: Director -> On-Air Timing -> Timing Frame -> Cue Intent
+       ├─ execution: Mechanical Switcher
+       ├─ overlays/blending: drums, optional camera, optional PixelReceiver
        └─ outputs: serial hardware path or legacy UDP/ACN path
 ```
 
@@ -24,13 +26,68 @@ The project intentionally does **not** model every effect as a scene object. Eff
 
 1. Find and initialize the scene's `Penrose` component.
 2. Discover and instantiate every non-ignored `EffectBase` subclass through `Factory<EffectBase>`.
-3. Discover and instantiate every non-ignored `TransitionBase` subclass.
+3. Discover and instantiate every non-ignored `TransitionBase` subclass; transitions read their code defaults and saved `TransitionSettings`.
 4. Discover and instantiate every non-ignored `BlenderBase` subclass.
 5. Create plain C# helpers such as `drums`, `PixelReceiver`, `BeatManager`, `Timer`, and optionally `CameraReader` / `SerialOut`.
-6. Register OSC handlers and timer callbacks.
-7. Enter the frame loop in `Controller.Update()`.
+6. Add Unity-hosted input receivers such as `OSCReader` and `RaveOscReceiver`.
+7. Create the `Switcher` and `Director`; the timer callback goes to `Director.OnTimerFinished` for Standalone Mode cadence.
+8. Enter the frame loop in `Controller.Update()`.
 
 Unity calls lifecycle methods only on `MonoBehaviour` components. Most PenroseArt runtime objects are plain C# objects, so `Controller` calls their lifecycle methods manually.
+
+## Frame loop
+
+The active runtime frame flow is:
+
+1. `Controller.Update()` advances local frame time and optional command systems.
+2. `RaveOscReceiver.ApplyTo(beatManager)` applies the newest live Rave OSC state before any sequencing decision.
+3. `BeatManager.Update()` advances live or simulated rhythm state and exposes nullable rhythm queries.
+4. `Director.Tick(deltaTime)` chooses Standalone, Synced, or Hold behavior.
+5. In Synced Mode, `OnAirTiming.ReadFrame(...)` interprets the live beat and Track Phase state into one Director-facing `TimingFrame`.
+6. `SyncedCueIntent` combines the `TimingFrame`, selected Transition Repertoire, Drop data, staged choices, and Effect Repertoire to decide Wait / Cue / BlockedByCadence and any preferred Performer casting.
+7. The Director issues stage commands only: `Switcher.ShowNow(...)` or `Switcher.StartTransition(...)`.
+8. `Switcher.RenderAtTime(...)` renders the current Effect or active A-to-B Transition into `penrose.buffer`.
+9. Filters, drums, camera, and external pixel blending may modify `penrose.buffer`.
+10. The active serial path or legacy UDP/ACN path sends the frame to hardware.
+11. `Penrose.UpdateModelColors()` applies the buffer to the Unity preview mesh and HUD/OSC status is updated.
+
+## Sequencing model
+
+ADR-0004 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
+
+The Director owns the decision layer: which Performer should be on stage, which Transition should move between A and B, and when that move should be cued. The Switcher owns only the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion.
+
+### Standalone Mode
+
+Standalone Mode is the intentional self-running behavior when no live OSC source is present. The Director uses the existing `Timer` as its cadence clock, consumes staged Next Effect / Next Transition choices, and commands the Switcher. Timer expiry is not an independent sequencer; `Director.OnTimerFinished()` ignores timer completion while Synced Mode is active.
+
+### Synced Mode
+
+Synced Mode is active when live OSC data is present. The Director does not read raw Track Phase fields directly. Instead, it asks On-Air Timing for a `TimingFrame`.
+
+On-Air Timing owns the musical interpretation seam:
+
+- converts `BeatManager` rhythm queries into `OnAirTimingInput`;
+- resolves the 16-beat Phase reading through `PhaseClock`;
+- derives active and upcoming `PhraseWindow` values from Track Phase;
+- owns the selected Phase Boundary plan and cursor for the current/upcoming Phrase Window;
+- corrects pass-local cue/cadence state after substantial Beat Rewinds;
+- coasts when Track Phase disappears after a structural anchor;
+- reports re-anchor when fresh structural Track Phase replaces a coasted or weaker target.
+
+The returned `TimingFrame` is the Director-facing interface: current beat, Phase reading, Phase Anchor availability/confidence, selected Phase Boundary, Phrase Window identity when known, source/reason, Beat Rewind, pass-local state correction, Coast, and Re-anchor.
+
+Cue/casting then happens from domain facts, not raw OSC fields. `SyncedCueIntent` reads the `TimingFrame`, Transition Repertoire Runway/Tail, Drop data, staged choice, current Performer, deck, and Effect Repertoire. A Drop-aligned cue may reserve a preferred Drop-capable Performer through `EffectDeckSelection`, unless manual or held staging says to preserve the current staged choice.
+
+### Transition timing
+
+A Transition's `TransitionRepertoire` declares its beat timing:
+
+- **Runway**: beats before the chosen Phase Boundary when the Transition must start.
+- **Impact Point**: the Transition-local visual hit that lands on the selected Phase Boundary.
+- **Tail**: visual resolution after the Impact Point.
+
+The Director aligns the Impact Point to the selected Phase Boundary. Tail completion and Switcher progress are execution facts only; they are not musical scheduling inputs and do not redefine the next Phrase Window or Phase Anchor.
 
 ## Catalog discovery and indexing
 
@@ -52,18 +109,18 @@ Indexes are still not permanent IDs. Adding, removing, or renaming an effect can
 Each top-level effect has one catalog instance.
 
 ```text
-Init()       once after creation
-OnStart()   every time the effect becomes active
+Init()        once after creation
+OnStart()    every time the effect becomes active
 UpdateTime() every active frame before Draw()
-Draw()      every active frame
-OnEnd()     reserved, but Controller does not currently call it
+Draw()       every active frame
+OnEnd()      reserved, but Controller does not currently call it
 ```
 
 `EffectBase.Init()` connects the effect to `Controller.Instance`, the active `Penrose` model, tile metadata, and a `Color[] buffer` sized to `Penrose.Total`.
 
-`EffectBase.Draw()` implementations write one frame into that local `buffer`. The controller then copies the active effect buffer into `penrose.buffer`.
+`EffectBase.Draw()` implementations write one frame into that local `buffer`. The Switcher returns the active Effect or Transition buffer to the Controller, which makes it the current `penrose.buffer` for overlays, output, and preview.
 
-## Transition lifecycle
+## Transition execution lifecycle
 
 Transitions blend two effect indexes:
 
@@ -72,13 +129,9 @@ Transitions blend two effect indexes:
 - `V`: progress from `0` to `1`;
 - `D`: remaining progress, `1 - V`.
 
-When the effect timer finishes while not transitioning, `Controller.OnTimerFinished()` selects the next effect and transition, sets `A` / `B`, calls the transition's `OnStart()`, starts the destination effect, and switches to transition mode.
+The Director chooses when to call `Switcher.StartTransition(...)`. The Switcher starts the destination Effect, calls the Transition's `OnStart()`, renders both Effects plus the active Transition while the move is in flight, and promotes the destination Effect after the Transition completes. If the Director issues another transition while one is still rendering, the Switcher replaces the mechanical move using the previous destination as the new source.
 
-During transition frames, the controller updates both effects, calls the active transition's `Draw()`, and copies the transition buffer into `penrose.buffer`.
-
-When the transition timer finishes, the destination effect becomes `currentEffect`, transition mode ends, and the next transition is drawn from the transition deck.
-
-## Deck selection
+## Deck selection and staging
 
 Effects and transitions use rotating integer decks.
 
@@ -87,18 +140,20 @@ Effects and transitions use rotating integer decks.
 3. Remove that entry.
 4. Move it to the bottom.
 
-This gives variety without immediate repeats while still eventually cycling through the catalog.
+This gives variety without immediate repeats while still eventually cycling through the catalog. Repertoire-aware casting uses the same deck rules through `EffectDeckSelection`, so a preferred Drop-capable Performer is still reserved by rotating its card rather than by bypassing the deck.
 
-## Force-effect override
+The Director keeps staged **Next Effect** and **Next Transition** choices so the Tuning Window can show what is coming. Manual staging is one-shot by default. Hold Selected keeps the staged choice after each move while still allowing the Director/Switcher path to run.
 
-`forceEffect` and `forceEffectName` are the primary live debugging controls for selecting an effect by name. When enabled, the controller searches `effects[i].Name` with a case-insensitive substring match.
+## Held Effect override
 
-When a match exists, the controller cancels any active transition, jumps immediately to the matching effect, and prevents timer expiry from transitioning away while the override remains active.
+`heldEffect` is the active inspection freeze. The `-1` Random sentinel lets the Director rotate normally. Any non-negative catalog index holds that Effect on the wall and suspends Director rotation until Random is chosen again or Escape resets it.
+
+Hold is not a second sequencer and does not command around the Director. It exists so a developer can inspect and tune one Effect live.
 
 ## Buffer flow
 
 ```text
-Effect or transition buffer
+Switcher-rendered Effect or Transition buffer
   -> penrose.buffer
   -> optional filter/drum/camera/pixel-source blending
   -> serial or UDP hardware output
@@ -111,17 +166,23 @@ Effect or transition buffer
 
 | Area | Main files | Responsibility |
 | --- | --- | --- |
-| Runtime hub | `Assets/core/Controller.cs` | Catalogs, lifecycle, timing, input routing, output routing, preview update. |
+| Runtime hub | `Assets/core/Controller.cs` | Unity host for catalogs, lifecycle, input routing, output routing, overlays, preview update, and the per-frame call order. |
 | Geometry/model | `Assets/core/Penrose.cs` | JSON data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
-| Effects | `Assets/core/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames. |
+| Sequencing decision | `Assets/core/Director.cs` | Standalone/Synced/Hold decision layer, staged choices, cue issuing, and read-only sequencing status. |
+| Timing interpretation | `Assets/core/OnAirTiming.cs`, `PhaseClock.cs`, `PhraseWindow.cs`, `SelectedPhaseBoundaryPlan.cs`, `ChangeCadence.cs` | Convert live beat/Track Phase facts into a Director-facing Timing Frame. |
+| Cue/casting | `Assets/core/SyncedCueIntent.cs`, `TransitionBeatPlan.cs`, `EffectDeckSelection.cs`, `Repertoire.cs` | Decide whether a Synced cue should fire and which Performer should be cast. |
+| Mechanical execution | `Assets/core/Switcher.cs` | ShowNow/StartTransition/RenderAtTime execution and active A-to-B progress. |
+| Effects | `Assets/core/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames and express their own Repertoire from BeatManager data. |
 | Screen effects | `Assets/core/ScreenEffect.cs` | Map rectangular screen buffers onto the Penrose tile layout. |
 | Mixers/wrappers | `Assets/core/MixerBase.cs`, mixer effects | Own child effects and combine/transform their buffers. |
-| Transitions | `Assets/core/TransitionBase.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B, and sometimes act as external-source blenders. |
+| Transitions/settings | `Assets/core/TransitionBase.cs`, `Assets/core/TransitionSettings*.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B and declare Runway/Tail/Shape/Intensity defaults and saved tuning. |
 | External blenders | `Assets/core/helpers/BlenderBase.cs`, `Assets/blenders/*.cs` | Mix incoming pixel-source data with the native Penrose buffer. |
 | Palette | `Assets/core/helpers/GPalette.cs` | Global palette sampling and animated palette transitions. |
-| Beat/drums | `Assets/core/BeatManager.cs`, `Assets/core/drums.cs` | Simulated beat clock and drum/ring overlays. |
+| Rhythm queries | `Assets/core/BeatManager.cs`, `Assets/core/BeatManagerQueries.cs`, `Assets/core/PhraseEventView.cs`, `Assets/core/RhythmText.cs` | Live/simulated beat state, nullable rhythm-query values, and shared rhythm presentation text. |
+| Rave OSC | `Assets/core/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
+| Drum overlay | `Assets/core/drums.cs` | Drum/ring overlay triggers and drawing. |
 | Serial output | `Assets/core/SerialOut.cs` | USB serial discovery and frame output for S2 Mini / ESP32 boards. |
-| OSC | `Assets/OSC.cs`, `Assets/OSCReader.cs` | OSC parsing/serialization and active OSC reader component. |
+| Legacy UDP output | `Assets/core/Controller.cs` (`sendUDPFrame`, `sendACN`) | E1.31/ACN output path retained for non-serial builds. |
 
 ## Known architectural pressure points
 

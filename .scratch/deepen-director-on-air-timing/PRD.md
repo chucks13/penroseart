@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: accepted
 
 ## Problem Statement
 
@@ -76,7 +76,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 50. As a maintainer, I want PhaseClock to remain a focused pure module, so that Phase reading behavior stays independently understandable.
 51. As a maintainer, I want PhraseWindow to remain a focused pure module, so that Phrase Window derivation and boundaries stay independently understandable.
 52. As a maintainer, I want SelectedPhaseBoundaryPlan to remain a focused pure module or be absorbed only if the new timing module gives more leverage, so that useful tested behavior is not flattened.
-53. As a maintainer, I want SyncedCueDecision to remain focused on cue timing or be evolved into cue planning deliberately, so that cue decisions do not drift back into the Director body.
+53. As a maintainer, I want SyncedCueIntent to remain focused on cue timing and casting, so that cue decisions do not drift back into the Director body.
 54. As a maintainer, I want ChangeCadence to remain a clear rule, so that minimum-change cadence is not scattered across timing, cue, and status code.
 55. As a maintainer, I want EffectDeckSelection to keep owning deck preference behavior, so that casting work does not duplicate deck selection rules.
 56. As a maintainer, I want the deletion test to pass for the timing module, so that deleting it would force the same complexity back into multiple Director methods.
@@ -149,7 +149,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - Director tests should prove the Director consumes timing frames correctly: status reflects timing, cue decisions use the selected Phase Boundary, and transition starts still land on the intended Impact Point.
 - Existing Director staging tests remain prior art for Next Effect / Next Transition behavior and should be updated only where the refactor changes how timing/cue inputs reach staging.
 - Existing Switcher tests remain the right seam for mechanical execution. Do not test active transition progress through the timing module.
-- Existing TransitionBeatPlan and SyncedCueDecision tests remain useful for cue timing unless they are deliberately evolved into a higher cue-planning seam.
+- Existing TransitionBeatPlan and SyncedCueIntent tests remain useful for cue timing and casting unless they are deliberately evolved into a higher cue-planning seam.
 - When cue/casting work starts, add tests at the cue-planning seam rather than testing Drop preference by reading private Director methods.
 - Test names should use project domain vocabulary and avoid generic words that hide Phase/Phrase distinctions.
 - Random selected-boundary behavior should be tested with deterministic random delegates or controlled seeds through a public test seam, not by depending on incidental global random state where avoidable.
@@ -181,4 +181,4 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - The first implementation should start with timing because that is the root seam for Phase/Phrase correctness, loop handling, coasting, re-anchor, and future cue planning.
 - The timing slice should be designed as the first step of the final Director architecture, not as a temporary extraction that will be replaced during cue/casting work.
 - The prior Director/Switcher work and tailed-transition fixes remain valuable. This work deepens the next layer rather than reopening the Mechanical Switcher execution contract.
-- Runtime architecture documentation is known to be stale for this area and should be refreshed after the code shape is updated.
+- Runtime architecture documentation was refreshed after the code shape landed so it describes Director, On-Air Timing, Cue Intent, and Mechanical Switcher responsibilities together.

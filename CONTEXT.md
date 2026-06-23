@@ -10,18 +10,19 @@ The older ACN/E1.31 UDP output path still exists in `Controller.sendUDPFrame()` 
 
 ### 1. Controller.cs (The Singleton Hub)
 
-Manages the main loop, effect switching, overlays, input, and hardware output.
+Hosts the Unity frame loop, catalogs, overlays, input, preview, and hardware output. It creates the Director and Mechanical Switcher, then calls them in the correct order; it is no longer the sequencing state machine itself.
 
-- **Deck System**: Ensures variety by drawing effects/transitions from the top half of a rotating deck and moving selected entries to the bottom.
-- **State Machine**: Alternates between a playing state (generative effects) and a transition state (blending between effects).
-- **Timing**: Defaults to 10 seconds per effect with a 2 second transition.
+- **Deck System**: Effects/transitions are drawn from rotating decks for variety. The Director owns when those staged choices are consumed.
+- **Sequencing**: In Standalone Mode, the Director uses the timer as its self-running cadence. In Synced Mode, the Director consumes On-Air Timing Frames derived from live Rave OSC / BeatManager state. The Mechanical Switcher executes the chosen move.
+- **Transition Timing**: Transition Settings declare Runway and Tail. The Director starts a Transition so its local Impact Point lands on the selected Phase Boundary; Tail completion is visual execution, not a musical scheduling input.
 - **Held Effect**: A single selection that either lets the wall rotate or pins it to one effect. The **Random** state lets the Deck System rotate normally; choosing a specific effect *holds* it, suppressing both rotation and transitions until Random is chosen again. Selected from the Inspector's effect dropdown (Random is the default first entry); the `Escape` key always returns to Random. The blank effect template is never offered, since it is excluded from the runtime effect catalog.
 
 ### 2. Beat Manager (Synchronization)
 
-Provides a global heartbeat for the installation. The current implementation is a simulated/debug beat source; future versions may poll OSC or another live synchronization source.
+Provides the shared rhythm state for effects and the Director. It can run from the local simulator when no live source is present, and it receives live Rave OSC on-air state through `RaveOscReceiver` before the Director ticks.
 
-- **BeatData**: Shared BPM/current-beat/timing state.
+- **BeatData**: Shared BPM/current-beat/timing state plus raw Rave on-air values for Fill, Drop, Energy, Track Phase, Levels, and Pulse.
+- **Nullable queries**: `BeatManagerQueries` exposes ready-to-use rhythm values where `null` means not available right now.
 - **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, subdivisions, and syncopation. The current code and docs disagree on the numbering of variants 4/5/6; confirm intended behavior before changing it.
 - **Rhythmic Logic**: Uses an x^4 decay curve to create sharp visual kicks without making off-beat visuals too dark.
 - **Propagation**: Mixers can pass rhythm to children, let children choose independently, or suppress child pulsing.
@@ -64,10 +65,11 @@ Android, iOS, and WebGL serial support are not covered by the desktop `System.IO
 
 ## Operational Logic
 
-1. **Initialization**: `Controller` initializes `Penrose`, discovers effects/transitions/blenders through `Factory<T>`, configures UI fields, starts OSC/control helpers, and initializes serial output when enabled.
-2. **Loop**: The active effect or transition draws into a 900-color buffer; overlays/blenders can modify it.
-3. **Output**: The active serial path maps the Penrose buffer to physical LED order and sends frames through `SerialOut`; the legacy UDP path maps the same data into ACN/E1.31 universes.
-4. **Scene update**: `Penrose.UpdateModelColors()` applies the current buffer to the Unity mesh for visualization.
+1. **Initialization**: `Controller` initializes `Penrose`, discovers effects/transitions/blenders through `Factory<T>`, configures UI fields, starts OSC/control helpers, creates the Director and Mechanical Switcher, and initializes serial output when enabled.
+2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior and commands the Switcher when a move should happen.
+3. **Rendering**: The Switcher renders the active Effect or A-to-B Transition into a 900-color buffer; overlays/blenders can modify it.
+4. **Output**: The active serial path maps the Penrose buffer to physical LED order and sends frames through `SerialOut`; the legacy UDP path maps the same data into ACN/E1.31 universes.
+5. **Scene update**: `Penrose.UpdateModelColors()` applies the current buffer to the Unity mesh for visualization.
 
 ## Language
 
@@ -159,6 +161,18 @@ _Avoid_: effects that freeze, glitch, or go dark when OSC is absent; calling Sta
 **Director**:
 The decision layer that owns *what* plays on the wall and *when* it changes — it directs, making every choice about what happens on the wall. A Performer's Repertoire and the live song structure (Track Phase, Fill, Drop, Energy, Levels) are inputs to that choice, never overrides of it. In Synced Mode, active whenever OSC data is present, it changes from musical timing — Track Phase Phrase Windows when available, otherwise the usable timing the OSC signal provides. In Standalone Mode, when no OSC data is available, it changes on the self-running timer. It decides only — it never draws a buffer or runs a transition itself; the Switcher executes its calls.
 _Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; folding buffer or transition execution into the Director.
+
+**On-Air Timing**:
+The Synced Mode timing interpretation seam. It reads the current on-air rhythm facts, especially live beat and Track Phase, and turns them into one Timing Frame for the Director. It owns Phase/Phrase interpretation, selected Phase Boundary planning, Beat Rewind correction, Coast, and Re-anchor behavior.
+_Avoid_: making the Director read raw Track Phase fields; treating On-Air Timing as another clock source or as Switcher execution state.
+
+**Timing Frame**:
+The Director-facing snapshot of one Synced Mode timing moment: current beat, Phase reading, Phase Anchor availability/confidence, selected Phase Boundary, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether and when to cue a move.
+_Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
+
+**Cue Intent**:
+The Director-facing result of combining a Timing Frame, Transition Repertoire, live phrase events such as Drop, staged choices, current Performer, deck state, and Performer Repertoire. It says whether to wait, cue, or block on cadence, and which Performer should be targeted when a cue fires.
+_Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split.
 
 **Next Transition**:
 The Transition already chosen for the Director's next A-to-B move. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Director still owns the timing and phase alignment.
@@ -261,7 +275,7 @@ An inspection freeze that suspends the Director so a developer can sit on one ef
 _Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; re-asserting the held effect every frame (nothing fights it once the one decider is suspended).
 
 **Track Phase**:
-RaveSystem's name for the analyzed phrase signal: current/next phrase labels, active state, beats remaining to the phrase boundary, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window** in song structure; it is not the wall's **Phase**. In the current OSC stream, available Track Phase frames report active while unavailable frames report unavailable.
+RaveSystem's name for the analyzed phrase signal: current/next phrase labels, active state, beats remaining to the phrase boundary or upcoming phrase start, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window** in song structure; it is not the wall's **Phase**. In the current OSC stream, `active=1` describes the current Phrase Window, `active=0` can describe an upcoming Phrase Window, and `active=-1` means unavailable.
 _Avoid_: confusing Track Phase with **Bar Phase** or **Phase**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Phrase Window**:

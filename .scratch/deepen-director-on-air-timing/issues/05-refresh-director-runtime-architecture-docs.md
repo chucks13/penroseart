@@ -1,6 +1,6 @@
 # Refresh Director runtime architecture docs after the hard cut
 
-Status: ready-for-agent
+Status: accepted
 
 ## What to build
 
@@ -12,20 +12,27 @@ Use Matt/codebase-design as the documentation lens: explain modules, interfaces,
 
 ## Acceptance criteria
 
-- [ ] Runtime architecture docs no longer describe the old Controller timer transition loop as the active sequencing model.
-- [ ] Docs describe the current sequencing flow: live OSC application, BeatManager update, Director tick, On-Air Timing Timing Frame, cue/casting, Mechanical Switcher rendering, and hardware/preview output.
-- [ ] Docs clearly distinguish Phase, Phrase Window, Phase Boundary, Selected Phase Boundary, Phase Anchor, Coast, Re-anchor, Loop, Beat Rewind, Runway, Tail, Impact Point, Cue, Repertoire, Performer, Director, and Mechanical Switcher.
-- [ ] Docs state that On-Air Timing interprets live musical structure and that the Director consumes Timing Frames rather than raw Track Phase fields.
-- [ ] Docs state that cue/casting uses Timing Frame and Repertoire without making Effects' expression internals a Director responsibility.
-- [ ] Docs state that the Mechanical Switcher remains execution-only and that active transition progress/Tail completion are not musical scheduling inputs.
-- [ ] Docs align with the Director/Switcher ADR; if implementation changes the durable decision beyond the ADR, create or update an ADR separately using the repo ADR conventions.
-- [ ] Historical architecture review content is referenced only where helpful; it is not duplicated wholesale into canonical docs.
-- [ ] Documentation wording is polished: stale contradictions are removed, not patched around, and the code/test vocabulary matches the docs.
-- [ ] A lightweight validation pass confirms the referenced commands/docs paths are accurate; no Play Mode validation is required for this docs-only slice.
+- [x] Runtime architecture docs no longer describe the old Controller timer transition loop as the active sequencing model.
+- [x] Docs describe the current sequencing flow: live OSC application, BeatManager update, Director tick, On-Air Timing Timing Frame, cue/casting, Mechanical Switcher rendering, and hardware/preview output.
+- [x] Docs clearly distinguish Phase, Phrase Window, Phase Boundary, Selected Phase Boundary, Phase Anchor, Coast, Re-anchor, Loop, Beat Rewind, Runway, Tail, Impact Point, Cue, Repertoire, Performer, Director, and Mechanical Switcher.
+- [x] Docs state that On-Air Timing interprets live musical structure and that the Director consumes Timing Frames rather than raw Track Phase fields.
+- [x] Docs state that cue/casting uses Timing Frame and Repertoire without making Effects' expression internals a Director responsibility.
+- [x] Docs state that the Mechanical Switcher remains execution-only and that active transition progress/Tail completion are not musical scheduling inputs.
+- [x] Docs align with the Director/Switcher ADR; if implementation changes the durable decision beyond the ADR, create or update an ADR separately using the repo ADR conventions.
+- [x] Historical architecture review content is referenced only where helpful; it is not duplicated wholesale into canonical docs.
+- [x] Documentation wording is polished: stale contradictions are removed, not patched around, and the code/test vocabulary matches the docs.
+- [x] A lightweight validation pass confirms the referenced commands/docs paths are accurate; no Play Mode validation is required for this docs-only slice.
 
 ## Blocked by
 
-- `.scratch/deepen-director-on-air-timing/issues/01-hard-cut-on-air-timing-frame.md`
-- `.scratch/deepen-director-on-air-timing/issues/02-loop-beat-rewind-self-correction.md`
-- `.scratch/deepen-director-on-air-timing/issues/03-coast-and-reanchor-recovery.md`
-- `.scratch/deepen-director-on-air-timing/issues/04-cue-intent-repertoire-casting.md`
+- `.scratch/deepen-director-on-air-timing/issues/01-hard-cut-on-air-timing-frame.md` (accepted)
+- `.scratch/deepen-director-on-air-timing/issues/02-loop-beat-rewind-self-correction.md` (accepted)
+- `.scratch/deepen-director-on-air-timing/issues/03-coast-and-reanchor-recovery.md` (accepted)
+- `.scratch/deepen-director-on-air-timing/issues/04-cue-intent-repertoire-casting.md` (accepted)
+
+## Comments
+
+- Refreshed `docs/runtime-architecture.md` around the current frame flow: Rave OSC -> BeatManager -> Director -> On-Air Timing Timing Frame -> Cue Intent -> Mechanical Switcher -> output/preview.
+- Updated `CONTEXT.md` architecture guide and glossary with On-Air Timing, Timing Frame, Cue Intent, and the current Track Phase active/upcoming/unavailable semantics.
+- Updated `docs/code-map.md` so the Director/On-Air Timing/Switcher/cue/timing files and Timer's Standalone cadence role are discoverable.
+- Validation passed: canonical-doc stale-search for the old Controller timer loop, old simulated-only BeatManager wording, and `SyncedCueDecision` returned no hits in `docs/runtime-architecture.md`, `CONTEXT.md`, `docs/code-map.md`, or `AGENTS.md`; no Play Mode validation was needed.

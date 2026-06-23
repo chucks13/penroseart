@@ -79,6 +79,7 @@ Start with these before adding new structures:
 ## Unity and Asset Rules
 
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
+- Preserve `Assets/**/*.meta` files and GUIDs when moving, renaming, or adding Unity assets.
 - Most project-authored core/effect runtime code lives in Unity's generated `Assembly-CSharp` assembly and mostly global namespace. `Assets/OSC/` is the current exception with dedicated `.asmdef` files. Do not add new assembly boundaries or namespaces as cleanup unless requested.
 - Important runtime data is serialized in `Assets/Scenes/SampleScene.unity`, including `Controller.jsonSource` and `Controller.paletteSource`. Treat scene data changes as behavior changes.
 - `Assets/TextMesh Pro/` resources and generated Unity settings may be Unity/import-owned. Do not revert, delete, or reorganize them without confirming ownership.
@@ -120,6 +121,7 @@ Start with these before adding new structures:
 ## Running and Validation
 
 - Opening Play Mode can have side effects: it may scan/open serial ports, start UDP listeners, interact with attached hardware, and rewrite `StreamingAssets/images/*/files.txt` through `kscope`.
+- Ask before running Play Mode when hardware state, local ports, or working-tree cleanliness matter.
 - For script-level checks, use Unity-regenerated project files before trusting `dotnet build`; stale generated projects can report the wrong target framework after API compatibility changes.
 - Use `scripts/unity-compile.sh` for Unity compile/import checks instead of hand-assembling raw Unity CLI invocations.
 - Use `scripts/unity-tests.sh` for Unity Test Framework runs. Use `UNITY_TEST_FILTER` for focused tests and increase `UNITY_EDITOR_TEST_TIMEOUT` only after checking whether the Editor is busy, in Play Mode, compiling, or importing.

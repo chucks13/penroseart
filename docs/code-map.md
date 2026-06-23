@@ -20,8 +20,20 @@ This map summarizes the project-authored runtime code. It is meant as an orienta
 | `Assets/core/MixerBase.cs` | Base for effects that own child effects. |
 | `Assets/core/TransitionBase.cs` | Base for effect-to-effect transitions and transition-as-blender behavior. |
 | `Assets/core/Transition.cs` | Legacy/orphaned transition shape inheriting `EffectBase`; not used by the current controller. |
-| `Assets/core/BeatManager.cs` | Simulated/debug beat clock and beat-reactive helper functions. |
+| `Assets/core/BeatManager.cs` | Shared live/simulated rhythm state and beat-reactive helper functions. |
 | `Assets/core/BeatManagerQueries.cs` | Contrived rhythm-query layer (ADR-0002): the nullable `PhraseEventInfo`/`EnergyInfo`/`PhaseInfo`/`LevelsInfo` shapes and the `BeatManager` queries that build them. |
+| `Assets/core/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
+| `Assets/core/Director.cs` | Decision layer for Standalone/Synced/Hold sequencing, staged choices, cues, and status. |
+| `Assets/core/OnAirTiming.cs` | Synced Mode timing seam that turns live beat/Track Phase state into a Director-facing Timing Frame. |
+| `Assets/core/PhaseClock.cs` | Resolves the fixed 16-beat Phase reading from beat, bar, and Track Phase evidence. |
+| `Assets/core/PhraseWindow.cs` | Derives phrase spans and phase boundaries from Track Phase countdown/length data. |
+| `Assets/core/SelectedPhaseBoundaryPlan.cs` | Selects eligible Phase Boundaries inside a Phrase Window while keeping the phrase boundary mandatory. |
+| `Assets/core/ChangeCadence.cs` | Minimum-change cadence rule shared by timing, cue, and status decisions. |
+| `Assets/core/SyncedCueIntent.cs` | Synced cue/casting seam combining Timing Frame, Transition Repertoire, Drop data, staged choices, and Effect Repertoire. |
+| `Assets/core/EffectDeckSelection.cs` | Effect deck draw/preference rules, including Repertoire-aware preferred Performer pulls. |
+| `Assets/core/TransitionBeatPlan.cs` | Converts selected Phase Boundary plus Transition Runway/Tail into start/impact/completion beats. |
+| `Assets/core/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime and active A-to-B progress. |
+| `Assets/core/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
 | `Assets/core/PhraseEventView.cs` | Display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Shared by the Beat Manager inspector and any future telnet/OSC readout. |
 | `Assets/core/RhythmText.cs` | Shared text formatting for the rhythm queries' nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/core/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
@@ -39,7 +51,7 @@ This map summarizes the project-authored runtime code. It is meant as an orienta
 | `Assets/core/helpers/Factory.cs` | Reflection catalog builder and `[RuntimeCatalogIgnore]` attribute. |
 | `Assets/core/helpers/BlenderBase.cs` | Base contract for external-source blenders. |
 | `Assets/core/helpers/GPalette.cs` | Palette loading, sampling, and animated palette transitions. |
-| `Assets/core/helpers/Timer.cs` | Plain C# timer used by the controller's effect/transition state machine. |
+| `Assets/core/helpers/Timer.cs` | Plain C# timer used by the Director's Standalone Mode cadence path. |
 | `Assets/core/helpers/Singleton.cs` | Generic Unity singleton used by `Controller`. |
 | `Assets/core/helpers/ExtensionMethods.cs` | Shared numeric, vector, color, and buffer helper methods. |
 | `Assets/core/helpers/SliderScript.cs` | Scene UI slider binding for controller brightness. |
