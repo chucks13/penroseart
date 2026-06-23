@@ -9,7 +9,7 @@ public enum TimingFrameSource
     /// <summary>The next target is inferred from the 16-beat Phase grid.</summary>
     PhaseClockGrid,
 
-    /// <summary>The next target is an interior Phase Boundary selected inside the current Phrase Window.</summary>
+    /// <summary>The next target is an interior Cue Mark selected inside the current Phrase Window.</summary>
     CueMark,
 
     /// <summary>The next target is a mandatory structural Track Phase boundary.</summary>
@@ -894,7 +894,7 @@ public sealed class OnAirTiming
         var lastCueBeat = passLocalState.LastCueBeat is { } cueBeat && cueBeat >= beat
             ? (int?)null
             : passLocalState.LastCueBeat;
-        var previousCueMarkBeat = passLocalState.PreviousCueMarkBeat is { } phaseBoundary && phaseBoundary >= beat
+        var previousCueMarkBeat = passLocalState.PreviousCueMarkBeat is { } cueMarkBeat && cueMarkBeat >= beat
             ? (int?)null
             : passLocalState.PreviousCueMarkBeat;
         var correctedState = new PassLocalTimingState(lastCueBeat, previousCueMarkBeat);

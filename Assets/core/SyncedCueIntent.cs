@@ -69,29 +69,6 @@ public readonly struct SyncedCueIntent
         Func<int, Repertoire> repertoireForEffect,
         int minimumChangeCadenceBeats)
     {
-        return EvaluateCore(
-            frame,
-            transitionRepertoire,
-            drop,
-            stagedEffectIndex,
-            preserveStagedEffect,
-            currentEffectIndex,
-            deck,
-            repertoireForEffect,
-            minimumChangeCadenceBeats);
-    }
-
-    private static SyncedCueIntent EvaluateCore(
-        TimingFrame frame,
-        TransitionRepertoire transitionRepertoire,
-        PhraseEventInfo? drop,
-        int stagedEffectIndex,
-        bool preserveStagedEffect,
-        int currentEffectIndex,
-        int[] deck,
-        Func<int, Repertoire> repertoireForEffect,
-        int minimumChangeCadenceBeats)
-    {
         if (!frame.HasPhaseAnchor)
         {
             throw new InvalidOperationException("Cannot evaluate a synced cue intent without a Phase Anchor.");

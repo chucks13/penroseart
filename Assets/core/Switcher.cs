@@ -480,7 +480,7 @@ public sealed class Switcher
             : SwitcherCueStatus.Empty;
     }
 
-    private bool SameCue(SwitcherCueDirection left, SwitcherCueDirection right)
+    private static bool SameCue(SwitcherCueDirection left, SwitcherCueDirection right)
     {
         return left.CueMarkBeat == right.CueMarkBeat
             && left.TargetEffectIndex == right.TargetEffectIndex
@@ -488,7 +488,7 @@ public sealed class Switcher
             && SameRepertoire(left.TransitionRepertoire, right.TransitionRepertoire);
     }
 
-    private bool SameRepertoire(TransitionRepertoire left, TransitionRepertoire right)
+    private static bool SameRepertoire(TransitionRepertoire left, TransitionRepertoire right)
     {
         return left.Tags == right.Tags
             && left.RunwayBeats == right.RunwayBeats
