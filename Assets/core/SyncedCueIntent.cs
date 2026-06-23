@@ -75,14 +75,9 @@ public readonly struct SyncedCueIntent
         }
 
         var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, transitionRepertoire);
-        if (frame.PassLocalState.LastCueBeat == frame.CurrentBeat)
+        if (frame.PassLocalState.LastCueBeat == frame.CurrentBeat || !beatPlan.IsCueBeat(frame.CurrentBeat))
         {
-            return new SyncedCueIntent(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
-        }
-
-        if (!beatPlan.IsCueBeat(frame.CurrentBeat))
-        {
-            return new SyncedCueIntent(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
+            return NoCue(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex);
         }
 
         if (!ChangeCadence.CanChangeAt(
@@ -90,7 +85,7 @@ public readonly struct SyncedCueIntent
             frame.PassLocalState.PreviousCueMarkBeat,
             minimumChangeCadenceBeats))
         {
-            return new SyncedCueIntent(SyncedCueIntentKind.BlockedByCadence, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
+            return NoCue(SyncedCueIntentKind.BlockedByCadence, beatPlan, frame.CurrentBeat, stagedEffectIndex);
         }
 
         var preferredRepertoire = PreferredRepertoireForLanding(drop, beatPlan.ImpactBeat - frame.CurrentBeat);
@@ -126,6 +121,15 @@ public readonly struct SyncedCueIntent
             targetEffectIndex,
             preferredRepertoire,
             castPreferredPerformer);
+    }
+
+    private static SyncedCueIntent NoCue(
+        SyncedCueIntentKind kind,
+        TransitionBeatPlan beatPlan,
+        int currentBeat,
+        int stagedEffectIndex)
+    {
+        return new SyncedCueIntent(kind, beatPlan, currentBeat, stagedEffectIndex, Repertoire.None, false);
     }
 
     private static bool StagedEffectMatchesPreferredRepertoire(

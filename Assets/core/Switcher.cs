@@ -202,8 +202,8 @@ public readonly struct SwitcherCueStatus
 
 /// <summary>
 /// Mechanical stage switcher for Penrose performers.
-/// The Switcher owns in-flight effect/transition execution, renders progress, and promotes B on completion;
-/// the Director decides only what to start and when to start it.
+/// The Switcher owns Loaded Cue scheduling plus in-flight effect/transition execution,
+/// renders progress, and promotes B on completion.
 /// </summary>
 [Serializable]
 public sealed class Switcher
@@ -295,23 +295,19 @@ public sealed class Switcher
         ValidateEffectIndex(cue.TargetEffectIndex);
         ValidateTransitionIndex(cue.TransitionIndex);
 
-        StartDueLoadedCue(clock.NowSeconds);
-        if (hasLoadedCue)
+        StartLoadedCueIfDue(clock.NowSeconds);
+        if (hasLoadedCue && loadedCueLocked)
         {
-            UpdateLoadedCueLock(clock.NowSeconds);
-            if (loadedCueLocked && !SameCue(cue, loadedCue))
+            if (!SameCue(cue, loadedCue))
             {
                 Trace($"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
-                return;
             }
+
+            return;
         }
 
-        if (!hasLoadedCue || !loadedCueLocked)
-        {
-            LoadCue(cue, clock);
-        }
-
-        StartDueLoadedCue(clock.NowSeconds);
+        LoadCue(cue, clock);
+        StartLoadedCueIfDue(clock.NowSeconds);
     }
 
     /// <summary>
@@ -367,7 +363,7 @@ public sealed class Switcher
     /// </summary>
     public Color[] RenderAtTime(float nowSeconds, out string debugText)
     {
-        StartDueLoadedCue(nowSeconds);
+        StartLoadedCueIfDue(nowSeconds);
 
         if (isTransitioning)
         {
@@ -425,21 +421,21 @@ public sealed class Switcher
         return clock.NowSeconds + (beatsUntil * clock.SecondsPerBeat);
     }
 
-    private void StartDueLoadedCue(float nowSeconds)
+    private void StartLoadedCueIfDue(float nowSeconds)
     {
         if (!hasLoadedCue)
         {
             return;
         }
 
-        UpdateLoadedCueLock(nowSeconds);
+        LockLoadedCueIfDue(nowSeconds);
         if (nowSeconds >= loadedCueStartTime)
         {
             StartLoadedCue(nowSeconds);
         }
     }
 
-    private void UpdateLoadedCueLock(float nowSeconds)
+    private void LockLoadedCueIfDue(float nowSeconds)
     {
         if (!hasLoadedCue || loadedCueLocked || nowSeconds < loadedCueLockTime)
         {
@@ -578,11 +574,6 @@ public sealed class Switcher
     private string EffectName(int effectIndex)
     {
         return effectIndex >= 0 && effectIndex < effects.Length ? effects[effectIndex].Name : string.Empty;
-    }
-
-    private string TransitionName(int transitionIndex)
-    {
-        return transitionIndex >= 0 && transitionIndex < transitions.Length ? transitions[transitionIndex].Name : string.Empty;
     }
 
     private string FormatEffect(int effectIndex)

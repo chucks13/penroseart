@@ -319,18 +319,7 @@ public sealed class Director
         var currentBeat = isSynced && controller.beatManager.Beat is { } beat ? beat : -1;
         var beatsUntilLanding = timingFrame.HasPhaseAnchor && currentBeat >= 0 ? timingFrame.PhaseAnchorLandingBeat - currentBeat : -1;
         var runwayBeats = NextTransitionRepertoire.RunwayBeats;
-        // Match the cue path: cadence belongs to the selected landing boundary, not to the
-        // current beat. A tailed transition can complete while the next boundary is already valid.
-        var beatsUntilCadenceReady = 0;
-        if (currentBeat >= 0 && lastChangeBeat != int.MinValue)
-        {
-            var cadenceReadyBeat = lastChangeBeat + MinimumChangeCadenceBeats;
-            var cueMarkSatisfiesCadence = timingFrame.HasPhaseAnchor && timingFrame.PhaseAnchorLandingBeat >= cadenceReadyBeat;
-            if (!cueMarkSatisfiesCadence)
-            {
-                beatsUntilCadenceReady = Math.Max(0, cadenceReadyBeat - currentBeat);
-            }
-        }
+        var beatsUntilCadenceReady = GetBeatsUntilCadenceReady(currentBeat);
 
         var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
         var decision = ResolveDecision(isHeld, isSynced, beatsUntilLanding, beatsUntilCadenceReady, runwayBeats);
@@ -390,6 +379,21 @@ public sealed class Director
             ? beatsUntilLanding == 0
             : beatsUntilLanding is >= 1 && beatsUntilLanding <= runwayBeats;
         return inCueWindow ? DirectorDecision.CueingTransition : DirectorDecision.WaitingForRunway;
+    }
+
+    private int GetBeatsUntilCadenceReady(int currentBeat)
+    {
+        if (currentBeat < 0 || lastChangeBeat == int.MinValue)
+        {
+            return 0;
+        }
+
+        var cadenceReadyBeat = lastChangeBeat + MinimumChangeCadenceBeats;
+        // Match the cue path: cadence belongs to the selected Cue Mark, not the
+        // current beat. A tailed transition can complete while the next Cue Mark
+        // is already valid.
+        var cueMarkSatisfiesCadence = timingFrame.HasPhaseAnchor && timingFrame.CueMarkBeat >= cadenceReadyBeat;
+        return cueMarkSatisfiesCadence ? 0 : Math.Max(0, cadenceReadyBeat - currentBeat);
     }
 
     private void TickStandaloneMode(float deltaTime)
@@ -472,10 +476,13 @@ public sealed class Director
         ValidateTransitionIndex(transitionIndex);
         var repertoire = controller.transitions[transitionIndex].Repertoire;
         var beatPlan = TransitionBeatPlan.FromCueMark(previousFrame.CueMarkBeat, repertoire);
-        if (beatPlan.StartBeat != beatPlan.ImpactBeat
-            || beatPlan.CompleteBeat == beatPlan.ImpactBeat
+        var isZeroRunway = beatPlan.StartBeat == beatPlan.ImpactBeat;
+        var hasTail = beatPlan.CompleteBeat > beatPlan.ImpactBeat;
+        var alreadyCommittedImpact = lastChangeBeat == beatPlan.ImpactBeat;
+        if (!isZeroRunway
+            || !hasTail
             || !beatPlan.IsCueBeat(currentFrame.CurrentBeat)
-            || lastChangeBeat == beatPlan.ImpactBeat)
+            || alreadyCommittedImpact)
         {
             return false;
         }
@@ -483,30 +490,30 @@ public sealed class Director
         return TryStartSyncedCue(RetargetTimingFrame(previousFrame, currentFrame));
     }
 
-    private static TimingFrame RetargetTimingFrame(TimingFrame targetFrame, TimingFrame currentFrame)
+    private static TimingFrame RetargetTimingFrame(TimingFrame cueFrame, TimingFrame currentFrame)
     {
         var input = new OnAirTimingInput(
             currentFrame.CurrentBeat,
             currentFrame.Input.TotalBeats,
             currentFrame.Input.BeatInBar,
             currentFrame.Input.TrackPhaseActive,
-            targetFrame.CueMarkBeat - currentFrame.CurrentBeat,
-            targetFrame.Input.PhraseLengthBeats);
+            cueFrame.CueMarkBeat - currentFrame.CurrentBeat,
+            cueFrame.Input.PhraseLengthBeats);
         return new TimingFrame(
             input,
-            targetFrame.Phase,
-            targetFrame.HasPhaseAnchor,
-            targetFrame.PhaseAnchorConfidence,
-            targetFrame.CueMarkBeat,
-            targetFrame.HasPhraseWindow,
-            targetFrame.PhraseWindow,
-            targetFrame.Source,
+            cueFrame.Phase,
+            cueFrame.HasPhaseAnchor,
+            cueFrame.PhaseAnchorConfidence,
+            cueFrame.CueMarkBeat,
+            cueFrame.HasPhraseWindow,
+            cueFrame.PhraseWindow,
+            cueFrame.Source,
             currentFrame.BeatRewoundToNewPass,
             currentFrame.PassLocalState,
             currentFrame.ClearedPassLocalCueState,
             currentFrame.ClearedPassLocalCadenceState,
             currentFrame.Reanchored,
-            targetFrame.CueSheet);
+            cueFrame.CueSheet);
     }
 
     private SwitcherClockSnapshot CurrentSwitcherClockSnapshot(int beat)
