@@ -18,7 +18,7 @@ Introduce an on-air timing module whose interface returns a single timing frame 
 
 This is not a compatibility extraction. The old Director-owned timing fields and methods should be removed from the Director as the timing module takes ownership. The Director should consume the timing frame and proceed to cue decisions, staging, status projection, and Switcher commands.
 
-After the timing seam lands, the same model should support the next Director deepening pass: cue intent and casting. Cue planning should consume timing frames, transition timing declarations, live phrase events such as Drop and Fill, and Performer Repertoire to produce a small cue intent that the Director can either send to the Switcher or use to stage the next Performer. That follow-on work should not require redesigning on-air timing again.
+After the timing seam lands, the same model should support the next Director deepening pass: cue intent and casting. Cue planning should consume timing frames, transition timing declarations, live phrase events such as Drop and Fill, and Performer Repertoire to produce a small cue direction that the Director inserts or updates in the Switcher. The Switcher then owns Loaded Cue mutability, Lock Point, arming, and transition execution. That follow-on work should not require redesigning on-air timing again.
 
 Documentation should be refreshed after the code shape lands so runtime architecture, ADR vocabulary, tests, and code all describe the same model: Director decides, On-Air Timing interprets live musical structure, Cue Planning/Casting chooses the move, and the Mechanical Switcher executes.
 
@@ -51,7 +51,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 25. As a PenroseArt wall author, I want Show Now to remain an explicit override, so that manual inspection can still replace whatever is mechanically rendering.
 26. As a PenroseArt wall author, I want the Mechanical Switcher to remain execution-only, so that timing interpretation does not leak into transition rendering.
 27. As a PenroseArt wall author, I want active transition progress and Tail completion to stay out of timing interpretation, so that visual execution does not become musical evidence.
-28. As a PenroseArt wall author, I want the Director to use a Transition's Runway to decide when to start, so that the Transition-local Impact Point lands on the selected Phase Boundary.
+28. As a PenroseArt wall author, I want the Switcher to use the inserted cue's Transition Runway to decide when to lock and start, so that the Transition-local Impact Point lands on the selected Cue Mark without the Director owning execution timing.
 29. As a PenroseArt wall author, I want Tail to remain visual resolution only, so that post-impact motion does not change the next musical target.
 30. As a PenroseArt wall author, I want transition timing declarations to stay reusable by cue planning, so that timing and casting can be improved without duplicating rules.
 31. As a PenroseArt wall author, I want Drop preference to eventually affect casting, so that the Director can choose Performers that can express a Drop.
@@ -109,17 +109,17 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - The Director should not read raw Track Phase fields after the timing seam is in place.
 - The Director should not own selected boundary arrays, phrase identity fields, or boundary cursor indexes after the timing seam is in place.
 - The Director should not own beat rewind detection except as part of feeding the timing module the current synced beat sequence, if the final interface requires that.
-- The Director should consume the timing frame to build status, evaluate cue timing, and decide whether to start a transition.
+- The Director should consume the timing frame to build status, configure the next cue direction, and insert/update that cue in the Switcher while the Switcher still reports it is mutable.
 - Timing source/reason strings or enums should be domain-facing and stable enough for tests and status. Prefer a small closed vocabulary over ad hoc log text.
 - The timing frame should be designed so future cue planning can consume it directly. Do not make the first slice return only the fields needed by today's exact Director implementation if cue/casting will immediately need richer timing context.
 - Keep the Mechanical Switcher execution-only. The timing module must not inspect Switcher progress, completion, or busy state.
-- Keep Transition Repertoire as the source of Runway and Tail for transition timing. The timing module chooses the selected Phase Boundary; cue planning combines that target with Transition Repertoire to determine start, impact, and completion beats.
+- Keep Transition Repertoire as the source of Runway and Tail for transition timing. The timing module chooses the Cue Mark; the Director combines that target with Performer/Transition casting to form cue direction, while the Switcher derives Lock Point, start, impact, and completion from the selected Transition Repertoire.
 - Keep the 16-beat minimum cadence rule explicit and shared through the existing cadence module or a small timing/cue input. Do not duplicate cadence arithmetic in multiple Director methods.
 - Keep Standalone Mode separate from on-air timing. Standalone Mode can continue to use the self-running timer and staged choices without routing through the Synced Mode timing frame.
 - Keep Hold as a Director suspension/inspection concept. Holding should not cause the timing module to fake new anchors or stage choices.
 - Keep Show Now as an explicit override. It may reset timing-related planning because it is a manual/developer action, not ordinary musical scheduling.
 - Defer cue/casting implementation until the timing frame is established, but shape the timing frame so cue/casting does not require another timing redesign.
-- The follow-on cue/casting module should consume timing frame, live phrase-event data, current staged choices, transition timing declarations, and Performer Repertoire to produce a cue intent.
+- The follow-on cue/casting module should consume timing frame, live phrase-event data, current staged choices, transition timing declarations, and Performer Repertoire to produce a cue direction for the Switcher-held lifecycle.
 - Cue intent should express what the Director wants to do, not pixel-level instructions or effect internals.
 - Drop preference currently being computed and discarded should become a cue/casting concern in the follow-on pass, not a one-off patch inside transition start.
 - Effect expression remains with Effects. The Director may cast or send a cue, but Effects decide how to express Fill, Drop, Energy, or Levels when their Repertoire says they can.
@@ -146,7 +146,7 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - Preserve existing PhraseWindow tests for Phrase Window derivation and Phase Boundary enumeration unless the new timing module absorbs that interface entirely.
 - Preserve or update SelectedPhaseBoundaryPlan tests where they still express the reusable behavior of selecting interior boundaries and always including the phrase boundary.
 - Keep Director synced tests, but move loop/coast/re-anchor policy coverage down to the timing seam where possible.
-- Director tests should prove the Director consumes timing frames correctly: status reflects timing, cue decisions use the selected Phase Boundary, and transition starts still land on the intended Impact Point.
+- Director tests should prove the Director consumes timing frames correctly: status reflects timing, cue decisions use the selected Cue Mark, and the Director inserts/updates the expected cue direction without computing Switcher lock/start/progress timing.
 - Existing Director staging tests remain prior art for Next Effect / Next Transition behavior and should be updated only where the refactor changes how timing/cue inputs reach staging.
 - Existing Switcher tests remain the right seam for mechanical execution. Do not test active transition progress through the timing module.
 - Existing TransitionBeatPlan and SyncedCueIntent tests remain useful for cue timing and casting unless they are deliberately evolved into a higher cue-planning seam.
@@ -182,3 +182,4 @@ Documentation should be refreshed after the code shape lands so runtime architec
 - The timing slice should be designed as the first step of the final Director architecture, not as a temporary extraction that will be replaced during cue/casting work.
 - The prior Director/Switcher work and tailed-transition fixes remain valuable. This work deepens the next layer rather than reopening the Mechanical Switcher execution contract.
 - Runtime architecture documentation was refreshed after the code shape landed so it describes Director, On-Air Timing, Cue Intent, and Mechanical Switcher responsibilities together.
+- Issue 07 clarification: the Director configures one cue direction and inserts/updates it in the Switcher; the Switcher holds the Loaded Cue, derives Lock Point from Runway, refuses updates after lock, and owns Armed Cue execution. Do not implement a Director-held LoadedCue plus Director-called ArmCue seam.

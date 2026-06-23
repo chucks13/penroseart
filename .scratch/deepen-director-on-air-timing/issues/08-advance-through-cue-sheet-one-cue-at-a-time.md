@@ -10,7 +10,7 @@ Status: ready-for-agent
 
 Cue Sheets are timing plans, not queues of fully chosen future moves. ADR 0005 deliberately keeps Effect and Transition choice in the Director because those choices depend on the current wall state, Repertoire, staged/manual choices, and live musical events.
 
-After Issue 07 installs Loaded Cue / Armed Cue state, the next risk is accidentally precomputing every future cue on a sheet or restarting the same Cue Mark. This issue proves the lifecycle repeats correctly: one Cue Mark is loaded, armed/fired, consumed, and then the next Cue Mark becomes the next Loaded Cue target.
+After Issue 07 installs the Switcher-held Loaded Cue / Locked Armed Cue lifecycle, the next risk is accidentally precomputing every future cue on a sheet or restarting the same Cue Mark. This issue proves the lifecycle repeats correctly: one Cue Mark is selected, one cue direction is inserted/updated in the Switcher, the Switcher locks/executes it, the Cue Mark is consumed for the current pass, and then the next Cue Mark becomes the next cue direction target.
 
 ## Current code findings
 
@@ -21,42 +21,41 @@ After Issue 07 installs Loaded Cue / Armed Cue state, the next risk is accidenta
 
 ## What to build
 
-Make the Director progress through the current Cue Sheet one Cue Mark at a time.
+Make the Director progress through the current Cue Sheet one Cue Mark at a time while the Switcher owns the current cue lifecycle.
 
-After the current Loaded Cue is accepted into the Armed Cue lifecycle, that Cue Mark must be consumed for the current pass and the Director should prepare a new Loaded Cue for the next eligible Cue Mark. The Director should not choose Effects and Transitions for every future Cue Mark upfront. It should only choose the next Loaded Cue from the current wall state and current musical context.
-
-The next Loaded Cue may be prepared while the previous Transition Tail is still mechanically rendering, because Tail is Switcher execution and not musical scheduling evidence.
+The Director should not choose Effects and Transitions for every future Cue Mark upfront. It should configure only the next cue direction from the current wall state and current musical context, insert/update it in the Switcher, and advance after the Switcher has committed the current cue. The Switcher may still be rendering the previous Transition Tail when the Director prepares the next cue direction, because Tail is execution state and not musical scheduling evidence.
 
 ## Implementation guidance
 
 - Keep the Cue Sheet as a list of timing marks only. Do not attach Effect indexes, Transition indexes, Drop preferences, or Repertoire decisions to every mark on the sheet.
-- The Director should have at most one Loaded Cue active and the Switcher should have at most one Armed Cue active.
-- Consume a Cue Mark exactly once per pass when the Loaded Cue has been committed to Switcher execution. Use one consistent event name in code/tests: either "armed" or "fired", but make it early enough to prevent restarting the same mark inside its runway.
+- The Director should configure only the next cue direction, not every remaining Cue Mark on the sheet.
+- The Switcher should own at most one mutable pending Loaded Cue direction at a time. If it also has a locked/executing cue, that is current execution state, not permission to build a multi-cue queue.
+- Consume a Cue Mark exactly once per pass when the Switcher commits that cue by locking/arming it. The Director should learn enough from the Switcher result/status to avoid restarting the same mark inside its runway.
 - After consumption, ask On-Air Timing for the next Cue Mark from the same current Cue Sheet or from the promoted upcoming Cue Sheet.
 - The mandatory final Cue Mark should consume just like an interior mark, while still allowing the preplanned upcoming sheet to promote without rerolling.
 - Reuse/rename pass-local cadence state in Cue Mark language. Do not keep `PreviousSelectedPhaseBoundary` as the mental model if Issue 06 has retired that term at the seam.
-- Do not block loading the next Cue just because the Switcher is rendering the previous Tail; Switcher progress and completion are not timing inputs.
+- Do not block configuring/inserting the next cue direction merely because the Switcher is rendering the previous Tail; Switcher progress and completion are not timing inputs.
 
 ## Acceptance criteria
 
-- [ ] Firing/arming an Armed Cue consumes exactly that Cue Mark for the current pass.
-- [ ] The Director does not restart the same Cue Mark inside its runway, while it is armed, or after it has been consumed.
-- [ ] After a Cue is consumed, the Director prepares the next Loaded Cue from the next eligible Cue Mark.
-- [ ] The Director chooses Effect/Performer and Transition for the next Cue only, not for every remaining Cue Mark on the sheet.
-- [ ] The next Loaded Cue can be prepared while the previous Transition Tail is still rendering.
-- [ ] The mandatory final Cue Mark at phrase end fires, consumes, and promotes/advances to the next sheet correctly.
+- [ ] Switcher lock/arming of a cue consumes exactly that Cue Mark for the current pass.
+- [ ] The Director does not restart the same Cue Mark inside its runway, while it is locked/armed/executing, or after it has been consumed.
+- [ ] After a Cue is consumed, the Director configures/inserts the next cue direction from the next eligible Cue Mark.
+- [ ] The Director chooses Effect/Performer and Transition for the next cue only, not for every remaining Cue Mark on the sheet.
+- [ ] The next cue direction can be prepared while the previous Transition Tail is still rendering, without creating a multi-cue preload queue.
+- [ ] The mandatory final Cue Mark at phrase end locks/fires, consumes, and promotes/advances to the next sheet correctly.
 - [ ] Same-pass cadence still prevents Cue Marks closer than the 16-beat minimum unless the existing rules explicitly allow the move.
-- [ ] Focused tests cover at least two Cue Marks in one Phrase and prove only one Loaded Cue is active at a time.
+- [ ] Focused tests cover at least two Cue Marks in one Phrase and prove only one pending cue direction is active at a time.
 
 ## Test guidance
 
 Add tests that exercise observable behavior:
 
-- One Phrase with at least two Cue Marks: first cue arms/fires, then the next Loaded Cue targets the second mark.
-- The same Cue Mark cannot be restarted on the next beat inside its runway.
+- One Phrase with at least two Cue Marks: first cue direction is inserted, Switcher locks/fires it, then the next cue direction targets the second mark.
+- The same Cue Mark cannot be restarted on the next beat inside its runway or after Switcher lock.
 - A final phrase-end Cue Mark consumes and promotes the preplanned upcoming Cue Sheet without rerolling.
-- The Director stages/loads only the next Cue; future sheet marks have no preselected Effect/Transition choices.
-- The next Loaded Cue appears while `Switcher.Status.CurrentEffectIndex` still indicates an in-flight tailed transition.
+- The Director stages/configures only the next cue; future sheet marks have no preselected Effect/Transition choices.
+- The next cue direction appears while `Switcher.Status.CurrentEffectIndex` or equivalent status still indicates an in-flight tailed transition.
 - Existing same-window Beat Rewind tests continue to prove that a new loop pass can reuse a consumed Cue Mark after pass-local state is corrected.
 
 ## Suggested validation
