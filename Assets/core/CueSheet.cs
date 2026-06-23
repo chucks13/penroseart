@@ -6,6 +6,8 @@ using System.Collections.Generic;
 /// </summary>
 public readonly struct CueSheet
 {
+    private const int MaximumCueMarkGapBeats = 64;
+
     /// <summary>Total length of the Phrase this sheet can be reused for, in beats.</summary>
     public readonly int PhraseLengthBeats;
 
@@ -19,7 +21,8 @@ public readonly struct CueSheet
     }
 
     /// <summary>
-    /// Randomly selects eligible interior Cue Marks and always includes the mandatory final Cue Mark.
+    /// Randomly selects eligible interior Cue Marks, fills generated gaps longer than 64 beats,
+    /// and always includes the mandatory final Cue Mark.
     /// </summary>
     public static CueSheet Build(
         PhraseWindow window,
@@ -45,11 +48,12 @@ public readonly struct CueSheet
         }
 
         var eligibleInteriorCueMarkOffsets = new List<int>();
-        foreach (var phaseBoundary in window.PhaseBoundariesAfter(currentBeat))
+        foreach (var candidateCueMarkBeat in window.PhaseBoundariesAfter(currentBeat))
         {
-            if (phaseBoundary < window.EndBeat && canChangeAtBeat(phaseBoundary))
+            var candidateCueMarkOffset = candidateCueMarkBeat - window.StartBeat;
+            if (candidateCueMarkBeat < window.EndBeat && canChangeAtBeat(candidateCueMarkBeat))
             {
-                eligibleInteriorCueMarkOffsets.Add(phaseBoundary - window.StartBeat);
+                eligibleInteriorCueMarkOffsets.Add(candidateCueMarkOffset);
             }
         }
 
@@ -64,8 +68,41 @@ public readonly struct CueSheet
         }
 
         cueMarkOffsets.Add(window.LengthBeats);
+        FillLongCueMarkGaps(cueMarkOffsets, window.StartBeat, currentBeat, canChangeAtBeat);
         cueMarkOffsets.Sort();
         return new CueSheet(window.LengthBeats, cueMarkOffsets.ToArray());
+    }
+
+    private static void FillLongCueMarkGaps(
+        List<int> cueMarkOffsets,
+        int phraseStartBeat,
+        int currentBeat,
+        Func<int, bool> canChangeAtBeat)
+    {
+        cueMarkOffsets.Sort();
+        var filledCueMarkOffsets = new List<int>();
+        var previousCueMarkOffset = 0;
+
+        foreach (var cueMarkOffset in cueMarkOffsets)
+        {
+            while (cueMarkOffset - previousCueMarkOffset > MaximumCueMarkGapBeats)
+            {
+                var requiredCueMarkOffset = previousCueMarkOffset + MaximumCueMarkGapBeats;
+                var requiredCueMarkBeat = phraseStartBeat + requiredCueMarkOffset;
+                if (requiredCueMarkBeat > currentBeat && canChangeAtBeat(requiredCueMarkBeat))
+                {
+                    filledCueMarkOffsets.Add(requiredCueMarkOffset);
+                }
+
+                previousCueMarkOffset = requiredCueMarkOffset;
+            }
+
+            filledCueMarkOffsets.Add(cueMarkOffset);
+            previousCueMarkOffset = cueMarkOffset;
+        }
+
+        cueMarkOffsets.Clear();
+        cueMarkOffsets.AddRange(filledCueMarkOffsets);
     }
 
     /// <summary>

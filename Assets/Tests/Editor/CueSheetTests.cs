@@ -89,6 +89,46 @@ public sealed class CueSheetTests
     }
 
     [Test]
+    public void BuildFillsGeneratedCueSheetGapsLongerThanSixtyFourBeats()
+    {
+        Assert.That(PhraseWindow.TryFromTrackPhase(
+            beat: 588,
+            beatsToPhraseBoundary: 181,
+            phraseLengthBeats: 192,
+            out var window), Is.True);
+
+        var sheet = CueSheet.Build(
+            window,
+            currentBeat: 588,
+            canChangeAtBeat: _ => true,
+            randomRange: (minInclusive, _) => minInclusive);
+
+        Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 64, 128, 192 }));
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(641));
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[1]), Is.EqualTo(705));
+        Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[2]), Is.EqualTo(769));
+    }
+
+    [Test]
+    public void BuildRespectsCadenceWhenFillingGeneratedCueSheetGaps()
+    {
+        Assert.That(PhraseWindow.TryFromTrackPhase(
+            beat: 588,
+            beatsToPhraseBoundary: 181,
+            phraseLengthBeats: 192,
+            out var window), Is.True);
+
+        var blockedCueMarkBeat = window.StartBeat + 64;
+        var sheet = CueSheet.Build(
+            window,
+            currentBeat: 588,
+            canChangeAtBeat: cueMarkBeat => cueMarkBeat != blockedCueMarkBeat,
+            randomRange: (minInclusive, _) => minInclusive);
+
+        Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 128, 192 }));
+    }
+
+    [Test]
     public void MatchesSamePhraseLengthInsteadOfExactAbsoluteTiming()
     {
         Assert.That(PhraseWindow.TryFromTrackPhase(
