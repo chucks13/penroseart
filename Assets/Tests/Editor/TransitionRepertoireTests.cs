@@ -103,15 +103,15 @@ public sealed class TransitionRepertoireTests
             defaultDurationSeconds: 4f);
         AssertRepertoire(new RGBFade().Repertoire, Repertoire.RespondsToEnergy, 5, 1, TransitionShape.ChannelBlend, TransitionIntensity.Medium,
             defaultDurationSeconds: 4f);
-        AssertRepertoire(new DirectionalWipe().Repertoire, Repertoire.RespondsToEnergy, 4, 4, TransitionShape.DirectionalWipe, TransitionIntensity.Medium,
+        AssertRepertoire(new DirectionalWipe().Repertoire, Repertoire.RespondsToEnergy, 5, 0, TransitionShape.DirectionalWipe, TransitionIntensity.Medium,
             defaultDurationSeconds: 4f);
         AssertRepertoire(new IndexWipe().Repertoire, Repertoire.None, 4, 0, TransitionShape.IndexWipe, TransitionIntensity.Medium,
             defaultDurationSeconds: 4f);
-        AssertRepertoire(new FizzleTransition().Repertoire, Repertoire.HandlesDrop, 4, 4, TransitionShape.Dissolve, TransitionIntensity.High,
+        AssertRepertoire(new FizzleTransition().Repertoire, Repertoire.HandlesDrop, 4, 1, TransitionShape.Dissolve, TransitionIntensity.High,
             defaultDurationSeconds: 4f);
-        AssertRepertoire(new IrisTransition().Repertoire, Repertoire.HandlesDrop, 4, 4, TransitionShape.Iris, TransitionIntensity.High,
+        AssertRepertoire(new IrisTransition().Repertoire, Repertoire.HandlesDrop, 4, 0, TransitionShape.Iris, TransitionIntensity.High,
             defaultDurationSeconds: 4f);
-        AssertRepertoire(new NoiseTransition().Repertoire, Repertoire.HandlesDrop | Repertoire.RespondsToEnergy, 4, 4, TransitionShape.Noise, TransitionIntensity.High,
+        AssertRepertoire(new NoiseTransition().Repertoire, Repertoire.HandlesDrop | Repertoire.RespondsToEnergy, 4, 1, TransitionShape.Noise, TransitionIntensity.High,
             defaultDurationSeconds: 4f);
     }
 

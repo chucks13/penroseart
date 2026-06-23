@@ -227,12 +227,128 @@ public sealed class OnAirTiming
     private bool hasPhaseAnchor;
     private PhaseConfidence phaseAnchorConfidence = PhaseConfidence.Unlocked;
     private int phaseAnchorLandingBeat = -1;
-    private bool hasSelectedPhaseBoundaryPlan;
-    private SelectedPhaseBoundaryPlan selectedPhaseBoundaryPlan;
-    private int selectedPhaseBoundaryIndex;
+    private readonly SelectedPhaseBoundaryCursor selectedPhaseBoundaryCursor = new SelectedPhaseBoundaryCursor();
     private bool hasUpcomingSelectedPhaseBoundaryPlan;
     private SelectedPhaseBoundaryPlan upcomingSelectedPhaseBoundaryPlan;
     private TimingFrameSource lastSource = TimingFrameSource.Unlocked;
+
+    private readonly struct FramePassLocalState
+    {
+        public readonly PassLocalTimingState State;
+        public readonly bool ClearedCueState;
+        public readonly bool ClearedCadenceState;
+
+        public FramePassLocalState(PassLocalTimingState state, PassLocalTimingState originalState)
+        {
+            State = state;
+            ClearedCueState = state.LastCueBeat != originalState.LastCueBeat;
+            ClearedCadenceState = state.PreviousSelectedPhaseBoundary != originalState.PreviousSelectedPhaseBoundary;
+        }
+
+        public int? ConsumedSelectedPhaseBoundary => State.PreviousSelectedPhaseBoundary;
+    }
+
+    private sealed class SelectedPhaseBoundaryCursor
+    {
+        private SelectedPhaseBoundaryPlan plan;
+        private int index;
+
+        public bool HasPlan { get; private set; }
+
+        public int PhraseEndBeat => plan.PhraseEndBeat;
+
+        public void Reset()
+        {
+            HasPlan = false;
+            plan = default;
+            index = 0;
+        }
+
+        public void Replace(SelectedPhaseBoundaryPlan selectedPlan)
+        {
+            HasPlan = true;
+            plan = selectedPlan;
+            index = 0;
+        }
+
+        public void RewindCursor()
+        {
+            index = 0;
+        }
+
+        public bool NeedsPlan(PhraseWindow phraseWindow)
+        {
+            var boundaries = Boundaries;
+            return !HasPlan
+                || boundaries.Length == 0
+                || !plan.Matches(phraseWindow);
+        }
+
+        public bool TryGetActivePhraseWindow(int beat, out PhraseWindow phraseWindow)
+        {
+            phraseWindow = default;
+            return HasPlan
+                && plan.PhraseEndBeat >= beat
+                && PhraseWindow.TryFromStartAndLength(plan.PhraseStartBeat, plan.PhraseLengthBeats, out phraseWindow);
+        }
+
+        public bool TryKeepUnconsumedMandatoryBoundaryAt(
+            int beat,
+            int? consumedSelectedPhaseBoundary,
+            out int selectedPhaseBoundary,
+            out PhraseWindow phraseWindow)
+        {
+            selectedPhaseBoundary = -1;
+            phraseWindow = default;
+            if (!HasPlan
+                || IsConsumedThroughPhraseEnd(consumedSelectedPhaseBoundary)
+                || !PhraseWindow.TryFromStartAndLength(plan.PhraseStartBeat, plan.PhraseLengthBeats, out phraseWindow))
+            {
+                return false;
+            }
+
+            AdvanceTo(beat, consumedSelectedPhaseBoundary);
+            var currentBoundary = CurrentBoundaryOr(-1);
+            if (currentBoundary != beat || currentBoundary != plan.PhraseEndBeat)
+            {
+                return false;
+            }
+
+            selectedPhaseBoundary = currentBoundary;
+            return true;
+        }
+
+        public void AdvanceTo(int beat, int? consumedSelectedPhaseBoundary)
+        {
+            var boundaries = Boundaries;
+            while (index < boundaries.Length - 1 && boundaries[index] < beat)
+            {
+                index++;
+            }
+
+            while (index < boundaries.Length - 1
+                && consumedSelectedPhaseBoundary is { } firedBoundary
+                && boundaries[index] <= firedBoundary)
+            {
+                index++;
+            }
+        }
+
+        public int CurrentBoundaryOr(int fallbackBoundary)
+        {
+            var boundaries = Boundaries;
+            return boundaries.Length > 0
+                ? boundaries[ClampIndex(index, boundaries.Length)]
+                : fallbackBoundary;
+        }
+
+        public bool IsConsumedThroughPhraseEnd(int? consumedSelectedPhaseBoundary)
+        {
+            return consumedSelectedPhaseBoundary is { } firedBoundary && firedBoundary >= plan.PhraseEndBeat;
+        }
+
+        private int[] Boundaries => plan.SelectedPhaseBoundaries ?? Array.Empty<int>();
+    }
 
     /// <summary>Creates On-Air Timing using Unity's runtime random source for boundary selection.</summary>
     public OnAirTiming()
@@ -253,9 +369,7 @@ public sealed class OnAirTiming
         hasPhaseAnchor = false;
         phaseAnchorConfidence = PhaseConfidence.Unlocked;
         phaseAnchorLandingBeat = -1;
-        hasSelectedPhaseBoundaryPlan = false;
-        selectedPhaseBoundaryPlan = default;
-        selectedPhaseBoundaryIndex = 0;
+        selectedPhaseBoundaryCursor.Reset();
         hasUpcomingSelectedPhaseBoundaryPlan = false;
         upcomingSelectedPhaseBoundaryPlan = default;
         lastSource = TimingFrameSource.Unlocked;
@@ -275,9 +389,7 @@ public sealed class OnAirTiming
         var phaseInput = input.ToPhaseInput();
         var phase = PhaseClock.Resolve(phaseInput);
         var beatRewoundToNewPass = BeatRewoundToNewPass(lastBeat, input.Beat, minimumChangeCadenceBeats);
-        var correctedPassLocalState = CorrectPassLocalStateForBeatRewind(passLocalState, input.Beat, beatRewoundToNewPass);
-        var clearedCueState = correctedPassLocalState.LastCueBeat != passLocalState.LastCueBeat;
-        var clearedCadenceState = correctedPassLocalState.PreviousSelectedPhaseBoundary != passLocalState.PreviousSelectedPhaseBoundary;
+        var passState = BuildFramePassLocalState(passLocalState, input.Beat, beatRewoundToNewPass);
         if (input.Beat >= 1)
         {
             lastBeat = input.Beat;
@@ -287,43 +399,11 @@ public sealed class OnAirTiming
         {
             if (HasCoastablePhaseAnchor())
             {
-                CoastPhaseAnchor(input.Beat, minimumChangeCadenceBeats);
-                lastSource = TimingFrameSource.Coast;
-                return new TimingFrame(
-                    input,
-                    phase,
-                    true,
-                    phaseAnchorConfidence,
-                    phaseAnchorLandingBeat,
-                    false,
-                    default,
-                    TimingFrameSource.Coast,
-                    beatRewoundToNewPass,
-                    correctedPassLocalState,
-                    clearedCueState,
-                    clearedCadenceState,
-                    false);
+                return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
             }
 
             ResetSelectedPhaseBoundaryPlan();
-            hasPhaseAnchor = false;
-            phaseAnchorConfidence = PhaseConfidence.Unlocked;
-            phaseAnchorLandingBeat = -1;
-            lastSource = TimingFrameSource.Unlocked;
-            return new TimingFrame(
-                input,
-                phase,
-                false,
-                PhaseConfidence.Unlocked,
-                -1,
-                false,
-                default,
-                TimingFrameSource.Unlocked,
-                beatRewoundToNewPass,
-                correctedPassLocalState,
-                clearedCueState,
-                clearedCadenceState,
-                false);
+            return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
         }
 
         if (phase.Confidence != PhaseConfidence.Unlocked && input.Beat >= 1)
@@ -334,62 +414,95 @@ public sealed class OnAirTiming
                 phaseInput,
                 phase,
                 beatRewoundToNewPass,
-                correctedPassLocalState.PreviousSelectedPhaseBoundary,
+                passState.ConsumedSelectedPhaseBoundary,
                 minimumChangeCadenceBeats,
                 out var selectedPhaseBoundary,
                 out var hasPhraseWindow,
                 out var phraseWindow);
-
-            var reanchored = hasPhaseAnchor
-                && (source == TimingFrameSource.TrackPhaseBoundary || source == TimingFrameSource.SelectedPhaseBoundary)
-                && (previousSource == TimingFrameSource.Coast || previousSource == TimingFrameSource.PhaseClockGrid);
-
-            hasPhaseAnchor = true;
-            phaseAnchorConfidence = phase.Confidence;
-            phaseAnchorLandingBeat = selectedPhaseBoundary;
-            lastSource = source;
-
-            return new TimingFrame(
+            var reanchored = ReanchoredFrom(previousSource, source, hasPhaseAnchor);
+            return BuildAnchoredFrame(
                 input,
                 phase,
-                true,
-                phaseAnchorConfidence,
-                phaseAnchorLandingBeat,
+                source,
+                selectedPhaseBoundary,
                 hasPhraseWindow,
                 phraseWindow,
-                source,
                 beatRewoundToNewPass,
-                correctedPassLocalState,
-                clearedCueState,
-                clearedCadenceState,
+                passState,
                 reanchored);
         }
 
         if (hasPhaseAnchor && input.Beat >= 1)
         {
-            CoastPhaseAnchor(input.Beat, minimumChangeCadenceBeats);
-            lastSource = TimingFrameSource.Coast;
-            return new TimingFrame(
-                input,
-                phase,
-                true,
-                phaseAnchorConfidence,
-                phaseAnchorLandingBeat,
-                false,
-                default,
-                TimingFrameSource.Coast,
-                beatRewoundToNewPass,
-                correctedPassLocalState,
-                clearedCueState,
-                clearedCadenceState,
-                false);
+            return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
         }
 
+        return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+    }
+
+    private TimingFrame BuildCoastingFrame(
+        OnAirTimingInput input,
+        PhaseReading phase,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState,
+        int minimumChangeCadenceBeats)
+    {
+        CoastPhaseAnchor(input.Beat, minimumChangeCadenceBeats);
+        lastSource = TimingFrameSource.Coast;
+        return CreateFrame(
+            input,
+            phase,
+            true,
+            phaseAnchorConfidence,
+            phaseAnchorLandingBeat,
+            false,
+            default,
+            TimingFrameSource.Coast,
+            beatRewoundToNewPass,
+            passState,
+            false);
+    }
+
+    private TimingFrame BuildAnchoredFrame(
+        OnAirTimingInput input,
+        PhaseReading phase,
+        TimingFrameSource source,
+        int selectedPhaseBoundary,
+        bool hasPhraseWindow,
+        PhraseWindow phraseWindow,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState,
+        bool reanchored)
+    {
+        hasPhaseAnchor = true;
+        phaseAnchorConfidence = phase.Confidence;
+        phaseAnchorLandingBeat = selectedPhaseBoundary;
+        lastSource = source;
+        return CreateFrame(
+            input,
+            phase,
+            true,
+            phaseAnchorConfidence,
+            phaseAnchorLandingBeat,
+            hasPhraseWindow,
+            phraseWindow,
+            source,
+            beatRewoundToNewPass,
+            passState,
+            reanchored);
+    }
+
+    private TimingFrame BuildUnlockedFrame(
+        OnAirTimingInput input,
+        PhaseReading phase,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState)
+    {
         hasPhaseAnchor = false;
         phaseAnchorConfidence = PhaseConfidence.Unlocked;
         phaseAnchorLandingBeat = -1;
         lastSource = TimingFrameSource.Unlocked;
-        return new TimingFrame(
+        return CreateFrame(
             input,
             phase,
             false,
@@ -399,10 +512,44 @@ public sealed class OnAirTiming
             default,
             TimingFrameSource.Unlocked,
             beatRewoundToNewPass,
-            correctedPassLocalState,
-            clearedCueState,
-            clearedCadenceState,
+            passState,
             false);
+    }
+
+    private static TimingFrame CreateFrame(
+        OnAirTimingInput input,
+        PhaseReading phase,
+        bool hasPhaseAnchor,
+        PhaseConfidence phaseAnchorConfidence,
+        int selectedPhaseBoundary,
+        bool hasPhraseWindow,
+        PhraseWindow phraseWindow,
+        TimingFrameSource source,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState,
+        bool reanchored)
+    {
+        return new TimingFrame(
+            input,
+            phase,
+            hasPhaseAnchor,
+            phaseAnchorConfidence,
+            selectedPhaseBoundary,
+            hasPhraseWindow,
+            phraseWindow,
+            source,
+            beatRewoundToNewPass,
+            passState.State,
+            passState.ClearedCueState,
+            passState.ClearedCadenceState,
+            reanchored);
+    }
+
+    private static bool ReanchoredFrom(TimingFrameSource previousSource, TimingFrameSource source, bool hadPhaseAnchor)
+    {
+        return hadPhaseAnchor
+            && (source == TimingFrameSource.TrackPhaseBoundary || source == TimingFrameSource.SelectedPhaseBoundary)
+            && (previousSource == TimingFrameSource.Coast || previousSource == TimingFrameSource.PhaseClockGrid);
     }
 
     private bool HasCoastablePhaseAnchor()
@@ -431,7 +578,7 @@ public sealed class OnAirTiming
         PhaseInput phaseInput,
         PhaseReading phase,
         bool beatRewoundToNewPass,
-        int? previousSelectedPhaseBoundary,
+        int? consumedSelectedPhaseBoundary,
         int minimumChangeCadenceBeats,
         out int selectedPhaseBoundary,
         out bool hasPhraseWindow,
@@ -447,11 +594,15 @@ public sealed class OnAirTiming
             BuildUpcomingSelectedPhaseBoundaryPlan(
                 beat,
                 upcomingPhraseWindow,
-                previousSelectedPhaseBoundary,
+                consumedSelectedPhaseBoundary,
                 minimumChangeCadenceBeats);
         }
 
-        if (TryKeepFireableCurrentPhraseBoundary(beat, previousSelectedPhaseBoundary, out selectedPhaseBoundary, out phraseWindow))
+        if (selectedPhaseBoundaryCursor.TryKeepUnconsumedMandatoryBoundaryAt(
+            beat,
+            consumedSelectedPhaseBoundary,
+            out selectedPhaseBoundary,
+            out phraseWindow))
         {
             hasPhraseWindow = true;
             return TimingFrameSource.TrackPhaseBoundary;
@@ -474,24 +625,19 @@ public sealed class OnAirTiming
                 beat,
                 phraseWindow,
                 beatRewoundToNewPass,
-                previousSelectedPhaseBoundary,
+                consumedSelectedPhaseBoundary,
                 minimumChangeCadenceBeats,
                 out selectedPhaseBoundary);
         }
 
-        if (hasSelectedPhaseBoundaryPlan
-            && selectedPhaseBoundaryPlan.PhraseEndBeat >= beat
-            && PhraseWindow.TryFromStartAndLength(
-                selectedPhaseBoundaryPlan.PhraseStartBeat,
-                selectedPhaseBoundaryPlan.PhraseLengthBeats,
-                out phraseWindow))
+        if (selectedPhaseBoundaryCursor.TryGetActivePhraseWindow(beat, out phraseWindow))
         {
             hasPhraseWindow = true;
             return ResolveSelectedPhaseBoundaryFromPlan(
                 beat,
                 phraseWindow,
                 beatRewoundToNewPass,
-                previousSelectedPhaseBoundary,
+                consumedSelectedPhaseBoundary,
                 minimumChangeCadenceBeats,
                 out selectedPhaseBoundary);
         }
@@ -508,7 +654,7 @@ public sealed class OnAirTiming
                 beat,
                 phraseWindow,
                 beatRewoundToNewPass,
-                previousSelectedPhaseBoundary,
+                consumedSelectedPhaseBoundary,
                 minimumChangeCadenceBeats,
                 out selectedPhaseBoundary);
         }
@@ -523,93 +669,37 @@ public sealed class OnAirTiming
         int beat,
         PhraseWindow phraseWindow,
         bool beatRewoundToNewPass,
-        int? previousSelectedPhaseBoundary,
+        int? consumedSelectedPhaseBoundary,
         int minimumChangeCadenceBeats,
         out int selectedPhaseBoundary)
     {
-        if (NeedsSelectedPhaseBoundaryPlan(phraseWindow))
+        if (selectedPhaseBoundaryCursor.NeedsPlan(phraseWindow))
         {
-            BuildSelectedPhaseBoundaryPlan(beat, phraseWindow, previousSelectedPhaseBoundary, minimumChangeCadenceBeats);
+            BuildSelectedPhaseBoundaryPlan(beat, phraseWindow, consumedSelectedPhaseBoundary, minimumChangeCadenceBeats);
         }
         else if (beatRewoundToNewPass)
         {
-            selectedPhaseBoundaryIndex = 0;
+            selectedPhaseBoundaryCursor.RewindCursor();
         }
 
-        AdvanceSelectedPhaseBoundaryIndex(beat, previousSelectedPhaseBoundary);
-        if (previousSelectedPhaseBoundary is { } firedBoundary
-            && firedBoundary >= selectedPhaseBoundaryPlan.PhraseEndBeat
+        selectedPhaseBoundaryCursor.AdvanceTo(beat, consumedSelectedPhaseBoundary);
+        if (selectedPhaseBoundaryCursor.IsConsumedThroughPhraseEnd(consumedSelectedPhaseBoundary)
             && hasUpcomingSelectedPhaseBoundaryPlan)
         {
             PromoteUpcomingSelectedPhaseBoundaryPlan();
-            AdvanceSelectedPhaseBoundaryIndex(beat, previousSelectedPhaseBoundary);
+            selectedPhaseBoundaryCursor.AdvanceTo(beat, consumedSelectedPhaseBoundary);
         }
 
-        var selectedPhaseBoundaries = selectedPhaseBoundaryPlan.SelectedPhaseBoundaries ?? Array.Empty<int>();
-        selectedPhaseBoundary = selectedPhaseBoundaries.Length > 0
-            ? selectedPhaseBoundaries[ClampIndex(selectedPhaseBoundaryIndex, selectedPhaseBoundaries.Length)]
-            : phraseWindow.EndBeat;
-        return selectedPhaseBoundary == selectedPhaseBoundaryPlan.PhraseEndBeat
+        selectedPhaseBoundary = selectedPhaseBoundaryCursor.CurrentBoundaryOr(phraseWindow.EndBeat);
+        return selectedPhaseBoundary == selectedPhaseBoundaryCursor.PhraseEndBeat
             ? TimingFrameSource.TrackPhaseBoundary
             : TimingFrameSource.SelectedPhaseBoundary;
-    }
-
-    private bool TryKeepFireableCurrentPhraseBoundary(
-        int beat,
-        int? previousSelectedPhaseBoundary,
-        out int selectedPhaseBoundary,
-        out PhraseWindow phraseWindow)
-    {
-        selectedPhaseBoundary = -1;
-        phraseWindow = default;
-        if (!hasSelectedPhaseBoundaryPlan
-            || previousSelectedPhaseBoundary is { } firedBoundary && firedBoundary >= selectedPhaseBoundaryPlan.PhraseEndBeat
-            || !PhraseWindow.TryFromStartAndLength(
-                selectedPhaseBoundaryPlan.PhraseStartBeat,
-                selectedPhaseBoundaryPlan.PhraseLengthBeats,
-                out phraseWindow))
-        {
-            return false;
-        }
-
-        var selectedPhaseBoundaries = selectedPhaseBoundaryPlan.SelectedPhaseBoundaries ?? Array.Empty<int>();
-        if (selectedPhaseBoundaries.Length == 0)
-        {
-            return false;
-        }
-
-        AdvanceSelectedPhaseBoundaryIndex(beat, previousSelectedPhaseBoundary);
-        var currentSelectedPhaseBoundary = selectedPhaseBoundaries[ClampIndex(selectedPhaseBoundaryIndex, selectedPhaseBoundaries.Length)];
-        if (currentSelectedPhaseBoundary != beat || currentSelectedPhaseBoundary != selectedPhaseBoundaryPlan.PhraseEndBeat)
-        {
-            return false;
-        }
-
-        selectedPhaseBoundary = currentSelectedPhaseBoundary;
-        return true;
-    }
-
-    private void AdvanceSelectedPhaseBoundaryIndex(int beat, int? previousSelectedPhaseBoundary)
-    {
-        var selectedPhaseBoundaries = selectedPhaseBoundaryPlan.SelectedPhaseBoundaries ?? Array.Empty<int>();
-        while (selectedPhaseBoundaryIndex < selectedPhaseBoundaries.Length - 1
-            && selectedPhaseBoundaries[selectedPhaseBoundaryIndex] < beat)
-        {
-            selectedPhaseBoundaryIndex++;
-        }
-
-        while (selectedPhaseBoundaryIndex < selectedPhaseBoundaries.Length - 1
-            && previousSelectedPhaseBoundary is { } firedBoundary
-            && selectedPhaseBoundaries[selectedPhaseBoundaryIndex] <= firedBoundary)
-        {
-            selectedPhaseBoundaryIndex++;
-        }
     }
 
     private void BuildUpcomingSelectedPhaseBoundaryPlan(
         int beat,
         PhraseWindow phraseWindow,
-        int? previousSelectedPhaseBoundary,
+        int? consumedSelectedPhaseBoundary,
         int minimumChangeCadenceBeats)
     {
         if (hasUpcomingSelectedPhaseBoundaryPlan && upcomingSelectedPhaseBoundaryPlan.Matches(phraseWindow))
@@ -620,7 +710,7 @@ public sealed class OnAirTiming
         upcomingSelectedPhaseBoundaryPlan = SelectedPhaseBoundaryPlan.Build(
             phraseWindow,
             beat,
-            phaseBoundary => ChangeCadence.CanChangeAt(phaseBoundary, previousSelectedPhaseBoundary, minimumChangeCadenceBeats),
+            phaseBoundary => ChangeCadence.CanChangeAt(phaseBoundary, consumedSelectedPhaseBoundary, minimumChangeCadenceBeats),
             randomRange,
             includePhraseStart: true);
         hasUpcomingSelectedPhaseBoundaryPlan = true;
@@ -628,42 +718,36 @@ public sealed class OnAirTiming
 
     private void PromoteUpcomingSelectedPhaseBoundaryPlan()
     {
-        selectedPhaseBoundaryPlan = upcomingSelectedPhaseBoundaryPlan;
-        hasSelectedPhaseBoundaryPlan = hasUpcomingSelectedPhaseBoundaryPlan;
-        selectedPhaseBoundaryIndex = 0;
+        if (hasUpcomingSelectedPhaseBoundaryPlan)
+        {
+            selectedPhaseBoundaryCursor.Replace(upcomingSelectedPhaseBoundaryPlan);
+        }
+        else
+        {
+            selectedPhaseBoundaryCursor.Reset();
+        }
+
         hasUpcomingSelectedPhaseBoundaryPlan = false;
         upcomingSelectedPhaseBoundaryPlan = default;
-    }
-
-    private bool NeedsSelectedPhaseBoundaryPlan(PhraseWindow phraseWindow)
-    {
-        var selectedPhaseBoundaries = selectedPhaseBoundaryPlan.SelectedPhaseBoundaries;
-        return !hasSelectedPhaseBoundaryPlan
-            || selectedPhaseBoundaries == null
-            || selectedPhaseBoundaries.Length == 0
-            || !selectedPhaseBoundaryPlan.Matches(phraseWindow);
     }
 
     private void BuildSelectedPhaseBoundaryPlan(
         int beat,
         PhraseWindow phraseWindow,
-        int? previousSelectedPhaseBoundary,
+        int? consumedSelectedPhaseBoundary,
         int minimumChangeCadenceBeats)
     {
-        selectedPhaseBoundaryPlan = SelectedPhaseBoundaryPlan.Build(
+        var plan = SelectedPhaseBoundaryPlan.Build(
             phraseWindow,
             beat,
-            phaseBoundary => ChangeCadence.CanChangeAt(phaseBoundary, previousSelectedPhaseBoundary, minimumChangeCadenceBeats),
+            phaseBoundary => ChangeCadence.CanChangeAt(phaseBoundary, consumedSelectedPhaseBoundary, minimumChangeCadenceBeats),
             randomRange);
-        hasSelectedPhaseBoundaryPlan = true;
-        selectedPhaseBoundaryIndex = 0;
+        selectedPhaseBoundaryCursor.Replace(plan);
     }
 
     private void ResetSelectedPhaseBoundaryPlan()
     {
-        hasSelectedPhaseBoundaryPlan = false;
-        selectedPhaseBoundaryPlan = default;
-        selectedPhaseBoundaryIndex = 0;
+        selectedPhaseBoundaryCursor.Reset();
     }
 
     private static int GetLandingBeatFromPhasePosition(int beat, int phasePosition)
@@ -680,14 +764,14 @@ public sealed class OnAirTiming
             && previousBeat - beat + 1 >= minimumChangeCadenceBeats;
     }
 
-    private static PassLocalTimingState CorrectPassLocalStateForBeatRewind(
+    private static FramePassLocalState BuildFramePassLocalState(
         PassLocalTimingState passLocalState,
         int beat,
         bool beatRewoundToNewPass)
     {
         if (!beatRewoundToNewPass || beat < 1)
         {
-            return passLocalState;
+            return new FramePassLocalState(passLocalState, passLocalState);
         }
 
         var lastCueBeat = passLocalState.LastCueBeat is { } cueBeat && cueBeat >= beat
@@ -696,7 +780,8 @@ public sealed class OnAirTiming
         var previousSelectedPhaseBoundary = passLocalState.PreviousSelectedPhaseBoundary is { } phaseBoundary && phaseBoundary >= beat
             ? (int?)null
             : passLocalState.PreviousSelectedPhaseBoundary;
-        return new PassLocalTimingState(lastCueBeat, previousSelectedPhaseBoundary);
+        var correctedState = new PassLocalTimingState(lastCueBeat, previousSelectedPhaseBoundary);
+        return new FramePassLocalState(correctedState, passLocalState);
     }
 
     private static int ClampIndex(int index, int length)
