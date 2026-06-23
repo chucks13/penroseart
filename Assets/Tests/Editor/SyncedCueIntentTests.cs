@@ -13,30 +13,6 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
-    public void EvaluateLoadedCuePlansBeforeRunwayWithoutRotatingDeck()
-    {
-        var deck = new[] { 1, 2, 0 };
-
-        var intent = SyncedCueIntent.EvaluateLoadedCue(
-            Frame(currentBeat: 604, cueMarkBeat: 609),
-            FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 5),
-            stagedEffectIndex: 1,
-            preserveStagedEffect: false,
-            currentEffectIndex: 0,
-            deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.BeatPlan.StartBeat, Is.EqualTo(605));
-        Assert.That(intent.DropAligned, Is.True);
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
-        Assert.That(intent.CastPreferredPerformer, Is.True);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
-    }
-
-    [Test]
     public void EvaluateCuesInsideRunway()
     {
         var intent = Evaluate(Frame(currentBeat: 605, cueMarkBeat: 609));

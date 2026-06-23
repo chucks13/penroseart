@@ -99,43 +99,6 @@ public static class EffectDeckSelection
         return true;
     }
 
-    /// <summary>
-    /// Finds the preferred effect card without rotating or otherwise mutating the deck.
-    /// </summary>
-    public static bool TryPeekPreferred(
-        int[] deck,
-        int currentEffectIndex,
-        Repertoire preferredRepertoire,
-        Func<int, Repertoire> repertoireForEffect,
-        out int effectIndex)
-    {
-        if (deck == null)
-        {
-            throw new ArgumentNullException(nameof(deck));
-        }
-
-        if (preferredRepertoire == Repertoire.None)
-        {
-            effectIndex = -1;
-            return false;
-        }
-
-        if (repertoireForEffect == null)
-        {
-            throw new ArgumentNullException(nameof(repertoireForEffect));
-        }
-
-        var preferredCardIndex = FindPreferredCardIndex(deck, currentEffectIndex, preferredRepertoire, repertoireForEffect);
-        if (preferredCardIndex < 0)
-        {
-            effectIndex = -1;
-            return false;
-        }
-
-        effectIndex = deck[preferredCardIndex];
-        return true;
-    }
-
     private static int FindPreferredCardIndex(
         int[] deck,
         int currentEffectIndex,

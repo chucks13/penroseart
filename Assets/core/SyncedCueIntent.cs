@@ -78,37 +78,7 @@ public readonly struct SyncedCueIntent
             currentEffectIndex,
             deck,
             repertoireForEffect,
-            minimumChangeCadenceBeats,
-            requireCueWindow: true,
-            reservePreferredDeckCard: true);
-    }
-
-    /// <summary>
-    /// Builds a pre-lock cue direction from the same timing and casting inputs without mutating the Effect deck.
-    /// </summary>
-    public static SyncedCueIntent EvaluateLoadedCue(
-        TimingFrame frame,
-        TransitionRepertoire transitionRepertoire,
-        PhraseEventInfo? drop,
-        int stagedEffectIndex,
-        bool preserveStagedEffect,
-        int currentEffectIndex,
-        int[] deck,
-        Func<int, Repertoire> repertoireForEffect,
-        int minimumChangeCadenceBeats)
-    {
-        return EvaluateCore(
-            frame,
-            transitionRepertoire,
-            drop,
-            stagedEffectIndex,
-            preserveStagedEffect,
-            currentEffectIndex,
-            deck,
-            repertoireForEffect,
-            minimumChangeCadenceBeats,
-            requireCueWindow: false,
-            reservePreferredDeckCard: false);
+            minimumChangeCadenceBeats);
     }
 
     private static SyncedCueIntent EvaluateCore(
@@ -120,9 +90,7 @@ public readonly struct SyncedCueIntent
         int currentEffectIndex,
         int[] deck,
         Func<int, Repertoire> repertoireForEffect,
-        int minimumChangeCadenceBeats,
-        bool requireCueWindow,
-        bool reservePreferredDeckCard)
+        int minimumChangeCadenceBeats)
     {
         if (!frame.HasPhaseAnchor)
         {
@@ -135,14 +103,7 @@ public readonly struct SyncedCueIntent
             return new SyncedCueIntent(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
         }
 
-        if (requireCueWindow)
-        {
-            if (!beatPlan.IsCueBeat(frame.CurrentBeat))
-            {
-                return new SyncedCueIntent(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
-            }
-        }
-        else if (frame.CurrentBeat > beatPlan.CompleteBeat)
+        if (!beatPlan.IsCueBeat(frame.CurrentBeat))
         {
             return new SyncedCueIntent(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, Repertoire.None, false);
         }
@@ -170,12 +131,11 @@ public readonly struct SyncedCueIntent
         if (!castPreferredPerformer
             && preferredRepertoire != Repertoire.None
             && !preserveStagedEffect
-            && TrySelectPreferredPerformer(
+            && EffectDeckSelection.TryPullPreferred(
                 deck,
                 currentEffectIndex,
                 preferredRepertoire,
                 repertoireForEffect,
-                reservePreferredDeckCard,
                 out var preferredEffectIndex))
         {
             targetEffectIndex = preferredEffectIndex;
@@ -189,19 +149,6 @@ public readonly struct SyncedCueIntent
             targetEffectIndex,
             preferredRepertoire,
             castPreferredPerformer);
-    }
-
-    private static bool TrySelectPreferredPerformer(
-        int[] deck,
-        int currentEffectIndex,
-        Repertoire preferredRepertoire,
-        Func<int, Repertoire> repertoireForEffect,
-        bool reservePreferredDeckCard,
-        out int preferredEffectIndex)
-    {
-        return reservePreferredDeckCard
-            ? EffectDeckSelection.TryPullPreferred(deck, currentEffectIndex, preferredRepertoire, repertoireForEffect, out preferredEffectIndex)
-            : EffectDeckSelection.TryPeekPreferred(deck, currentEffectIndex, preferredRepertoire, repertoireForEffect, out preferredEffectIndex);
     }
 
     private static bool StagedEffectMatchesPreferredRepertoire(

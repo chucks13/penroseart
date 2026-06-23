@@ -45,7 +45,7 @@ public sealed class SwitcherExecutionTests
     }
 
     [Test]
-    public void LoadedCueStartsFromBeatDomainClock()
+    public void LoadedCueStartsFromScheduledBeatDomainClock()
     {
         var cue = new SwitcherCueDirection(
             cueMarkBeat: 10,
@@ -58,14 +58,8 @@ public sealed class SwitcherExecutionTests
             secondsPerBeat: 0.5f,
             nowSeconds: 10f));
 
-        var result = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(
-            currentBeat: 9,
-            beatFraction: 0.5f,
-            secondsPerBeat: 0.5f,
-            nowSeconds: 12f));
-        var buffer = switcher.RenderAtTime(12f, out _);
+        var buffer = switcher.RenderAtTime(11.25f, out _);
 
-        Assert.That(result.Started, Is.True);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
         Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0.5f).Within(0.001f));
         Assert.That(transition.V, Is.EqualTo(0.5f).Within(0.001f));
@@ -87,17 +81,15 @@ public sealed class SwitcherExecutionTests
             transitionRepertoire: transition.Repertoire);
 
         switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
-        var result = switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(7, 0.5f, 0.5f, 10.25f));
+        switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(7, 0.5f, 0.5f, 10.25f));
 
-        Assert.That(result.Accepted, Is.True);
-        Assert.That(result.RejectedBecauseLocked, Is.False);
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
         Assert.That(switcher.LoadedCueStatus.CanUpdate, Is.True);
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(0));
     }
 
     [Test]
-    public void LoadedCueRejectsReplacementAtLockPoint()
+    public void LoadedCueIgnoresReplacementAtLockPoint()
     {
         var originalCue = new SwitcherCueDirection(
             cueMarkBeat: 10,
@@ -111,11 +103,8 @@ public sealed class SwitcherExecutionTests
             transitionRepertoire: transition.Repertoire);
 
         switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
-        var result = switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10.5f));
+        switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10.5f));
 
-        Assert.That(result.Accepted, Is.False);
-        Assert.That(result.RejectedBecauseLocked, Is.True);
-        Assert.That(result.Locked, Is.True);
         Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True);
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1));
     }
@@ -129,12 +118,9 @@ public sealed class SwitcherExecutionTests
             transitionIndex: 1,
             transitionRepertoire: hardCutTransition.Repertoire);
 
-        var lockResult = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(9, 0f, 0.5f, 10f));
-        var startResult = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(10, 0f, 0.5f, 10.5f));
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(9, 0f, 0.5f, 10f));
         var buffer = switcher.RenderAtTime(10.5f, out _);
 
-        Assert.That(lockResult.Locked, Is.True);
-        Assert.That(startResult.Started, Is.True);
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
@@ -156,12 +142,10 @@ public sealed class SwitcherExecutionTests
             targetEffectIndex: 1,
             transitionIndex: 0,
             transitionRepertoire: tailedRepertoire);
-        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
 
-        var result = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(10, 0f, 0.5f, 12f));
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(10, 0f, 0.5f, 12f));
         switcher.RenderAtTime(12f, out _);
 
-        Assert.That(result.Started, Is.True);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
         Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0.25f).Within(0.001f));
     }
