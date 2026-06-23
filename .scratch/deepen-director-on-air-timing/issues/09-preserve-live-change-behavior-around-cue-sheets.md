@@ -1,6 +1,6 @@
 # Preserve live-change behavior around Cue Sheets and fire-and-forget cues
 
-Status: ready-for-agent
+Status: approved
 
 ## Parent
 
@@ -44,15 +44,15 @@ This is a behavior-preservation slice, not a new feature surface.
 
 ## Acceptance criteria
 
-- [ ] Same-length Phrase updates preserve the Cue Sheet and do not reroll Cue Marks.
-- [ ] Different-length Phrase updates before the cue window replace the Cue Sheet so the eventual cue command uses current timing.
-- [ ] After the Director sends a cue command, Phrase changes do not alter that command's Cue Mark, destination Performer, Transition, Runway, or Tail.
-- [ ] Same-window Loop / Beat Rewind keeps the Cue Sheet and moves the cursor back to the next valid Cue Mark for the new pass.
-- [ ] Small beat backsteps remain jitter and do not reset the Cue Sheet, pending cue direction, locked/armed cue, deck, or cadence lifecycle.
-- [ ] Coast and Re-anchor still preserve or replace timing targets according to the on-air Phrase evidence.
-- [ ] Drop-aware casting, cadence blocking, manual staged choices, and Hold behavior survive the Switcher-held Loaded Cue model without duplicate casting/cadence implementations.
-- [ ] Focused tests cover each accepted live-change behavior without relying on Play Mode.
-- [ ] No OSC protocol, serial/hardware output, PixelReceiver, drum/camera overlay, or telnet behavior changes are made.
+- [x] Same-length Phrase updates preserve the Cue Sheet and do not reroll Cue Marks.
+- [x] Different-length Phrase updates before the cue window replace the Cue Sheet so the eventual cue command uses current timing.
+- [x] After the Director sends a cue command, Phrase changes do not alter that command's Cue Mark, destination Performer, Transition, Runway, or Tail.
+- [x] Same-window Loop / Beat Rewind keeps the Cue Sheet and moves the cursor back to the next valid Cue Mark for the new pass.
+- [x] Small beat backsteps remain jitter and do not reset the Cue Sheet, pending cue direction, locked/armed cue, deck, or cadence lifecycle.
+- [x] Coast and Re-anchor still preserve or replace timing targets according to the on-air Phrase evidence.
+- [x] Drop-aware casting, cadence blocking, manual staged choices, and Hold behavior survive the Switcher-held Loaded Cue model without duplicate casting/cadence implementations.
+- [x] Focused tests cover each accepted live-change behavior without relying on Play Mode.
+- [x] No OSC protocol, serial/hardware output, PixelReceiver, drum/camera overlay, or telnet behavior changes are made.
 
 ## Test guidance
 
@@ -63,6 +63,21 @@ Port existing tests to the new vocabulary and add missing lock-specific tests:
 - Cue/casting seam: Drop-aligned preferred casting, no preferred Performer, manual staged preservation, cadence-blocked no deck mutation, and waiting ticks without accidental deck rotation.
 - Switcher seam: use only cue direction plus minimal clock facts; do not set up BeatManager/OSC/Track Phase fixtures in Switcher tests.
 - Hold: held Effect suspends Director progression and does not insert/replace cues while held.
+
+## Implementation notes
+
+- Added Director-level regression coverage for a different-length Phrase update before the cue window, proving the eventual fire-and-forget cue command uses the current Cue Mark rather than the earlier Cue Sheet target.
+- Added Director/Switcher regression coverage proving a Phrase change after the Director sends a cue command does not mutate the already-sent command's destination or landing beat.
+- Added Hold regression coverage proving held Effect mode suppresses synced cue commands instead of inserting or replacing Switcher cues.
+- Existing `OnAirTimingTests`, `DirectorSyncedTailTests`, `SyncedCueIntentTests`, `EffectDeckSelectionTests`, and `DirectorStagingTests` cover the same-length Cue Sheet, Beat Rewind, jitter, Coast/Re-anchor, Drop-aware casting, cadence, and manual staging behaviors under the fire-and-forget seam.
+
+## Validation evidence
+
+- `UNITY_TEST_FILTER='DirectorSyncedTailTests.DifferentLengthPhraseUpdateBeforeCueWindowUsesCurrentCueMark|DirectorSyncedTailTests.PhraseChangeAfterSentCueDoesNotMutateSwitcherCommand|DirectorSyncedTailTests.HeldEffectSuppressesSyncedCueCommand' ./scripts/unity-tests.sh` passed 3/3.
+- `UNITY_TEST_FILTER='OnAirTimingTests|DirectorSyncedTailTests|SyncedCueIntentTests|EffectDeckSelectionTests|DirectorStagingTests|SwitcherExecutionTests|ChangeCadenceTests|BeatManagerRaveOscIntegrationTests|BeatManagerContrivedQueriesTests' ./scripts/unity-tests.sh` passed 124/124.
+- `./scripts/unity-compile.sh` passed with C# warning count 0.
+- Full `./scripts/unity-tests.sh` passed 220/220.
+- `git diff --check` passed.
 
 ## Suggested validation
 
