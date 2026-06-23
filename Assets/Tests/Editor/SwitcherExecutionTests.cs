@@ -45,6 +45,128 @@ public sealed class SwitcherExecutionTests
     }
 
     [Test]
+    public void LoadedCueStartsFromBeatDomainClock()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(
+            currentBeat: 7,
+            beatFraction: 0f,
+            secondsPerBeat: 0.5f,
+            nowSeconds: 10f));
+
+        var result = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(
+            currentBeat: 9,
+            beatFraction: 0.5f,
+            secondsPerBeat: 0.5f,
+            nowSeconds: 12f));
+        var buffer = switcher.RenderAtTime(12f, out _);
+
+        Assert.That(result.Started, Is.True);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
+        Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0.5f).Within(0.001f));
+        Assert.That(transition.V, Is.EqualTo(0.5f).Within(0.001f));
+        Assert.That(buffer[0], Is.EqualTo(Color.Lerp(Color.red, Color.blue, 0.5f)));
+    }
+
+    [Test]
+    public void LoadedCueCanBeReplacedBeforeLock()
+    {
+        var originalCue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+        var replacementCue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 0,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+
+        switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+        var result = switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(7, 0.5f, 0.5f, 10.25f));
+
+        Assert.That(result.Accepted, Is.True);
+        Assert.That(result.RejectedBecauseLocked, Is.False);
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.CanUpdate, Is.True);
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void LoadedCueRejectsReplacementAtLockPoint()
+    {
+        var originalCue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+        var replacementCue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 0,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+
+        switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+        var result = switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10.5f));
+
+        Assert.That(result.Accepted, Is.False);
+        Assert.That(result.RejectedBecauseLocked, Is.True);
+        Assert.That(result.Locked, Is.True);
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True);
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ZeroRunwayHardCutLoadedCuePromotesDestinationOnCueMark()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 1,
+            transitionRepertoire: hardCutTransition.Repertoire);
+
+        var lockResult = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(9, 0f, 0.5f, 10f));
+        var startResult = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(10, 0f, 0.5f, 10.5f));
+        var buffer = switcher.RenderAtTime(10.5f, out _);
+
+        Assert.That(lockResult.Locked, Is.True);
+        Assert.That(startResult.Started, Is.True);
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1));
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
+        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+    }
+
+    [Test]
+    public void LoadedCueStartsAndBackdatesWhenExactStartBeatWasMissed()
+    {
+        var tailedRepertoire = TransitionRepertoire.FromRunwayAndTail(
+            RepertoireFlags.None,
+            runwayBeats: 1,
+            tailBeats: 3,
+            TransitionShape.Blend,
+            TransitionIntensity.Medium,
+            defaultDurationSeconds: 4f);
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: tailedRepertoire);
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+
+        var result = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(10, 0f, 0.5f, 12f));
+        switcher.RenderAtTime(12f, out _);
+
+        Assert.That(result.Started, Is.True);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
+        Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0.25f).Within(0.001f));
+    }
+
+    [Test]
     public void RenderAtTimeAdvancesTransitionProgressFromStartTiming()
     {
         switcher.StartTransition(1, 0, TransitionStartTiming.FromBeatClock(startTime: 10f, secondsPerBeat: 0.5f));

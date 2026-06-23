@@ -56,6 +56,61 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
+    public void DirectorInsertsLoadedCueBeforeTransitionRunway()
+    {
+        director.SetNextEffect(1);
+
+        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.CanUpdate, Is.True);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void DirectorUpdatesLoadedCueBeforeSwitcherLock()
+    {
+        director.SetNextEffect(1);
+        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        director.SetNextEffect(2);
+        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.CanUpdate, Is.True);
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void LockedLoadedCueStartsAtRunwayStartBeforeCueMark()
+    {
+        director.SetNextEffect(1);
+
+        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False);
+
+        SetTrackPhaseBeat(604, phaseActive: 1, beatsToPhraseBoundary: 5, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
+
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0));
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(switcher.Status.TransitionProgress, Is.LessThan(1f));
+    }
+
+    [Test]
     public void TailedTransitionCompletionKeepsNextAnchorOnUpcomingTrackPhaseBoundary()
     {
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
@@ -250,7 +305,7 @@ public sealed class DirectorSyncedTailTests
             director.Tick(0f);
 
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
-            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The coasted anchor should still be a valid synced cue target.");
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The coasted anchor should still be a valid synced cue target after the locked cue stages the next move.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
         }
@@ -333,7 +388,7 @@ public sealed class DirectorSyncedTailTests
             director.Tick(0f);
 
             Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
-            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(int.MinValue));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
         }
         finally
         {

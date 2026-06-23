@@ -408,6 +408,11 @@ public sealed class Director
 
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
+        if (AdvanceSwitcherLoadedCue(beat))
+        {
+            return;
+        }
+
         if (!TryStartMissedZeroRunwayTailedCue(previousTimingFrame, timingFrame))
         {
             TryStartSyncedCue(timingFrame);
@@ -452,6 +457,31 @@ public sealed class Director
     {
         lastCueBeat = passLocalState.LastCueBeat ?? -1;
         lastChangeBeat = passLocalState.PreviousCueMarkBeat ?? int.MinValue;
+    }
+
+    private bool AdvanceSwitcherLoadedCue(int beat)
+    {
+        var result = switcher.AdvanceLoadedCue(CurrentSwitcherClockSnapshot(beat));
+        if (!result.Locked && !result.Started)
+        {
+            return false;
+        }
+
+        if (result.Locked)
+        {
+            transitionStartBeat = result.BeatPlan.StartBeat;
+            transitionLandingBeat = result.BeatPlan.ImpactBeat;
+            MarkChangedOnBeat(result.BeatPlan.ImpactBeat);
+            lastCueBeat = beat;
+            Trace($"SYNC_CUE_LOCKED beat={beat} start={result.BeatPlan.StartBeat} cueMark={result.BeatPlan.ImpactBeat} transition={FormatTransition(result.Cue.TransitionIndex)} target={FormatEffect(result.Cue.TargetEffectIndex)}");
+        }
+
+        if (result.Started)
+        {
+            CompleteSwitcherCueStart(beat, result);
+        }
+
+        return true;
     }
 
     private bool TryStartMissedZeroRunwayTailedCue(TimingFrame previousFrame, TimingFrame currentFrame)
@@ -501,6 +531,23 @@ public sealed class Director
             currentFrame.Reanchored);
     }
 
+    private SwitcherClockSnapshot CurrentSwitcherClockSnapshot(int beat)
+    {
+        return new SwitcherClockSnapshot(
+            beat,
+            controller.beatManager.BeatFraction ?? 0f,
+            CurrentSecondsPerBeat(),
+            Time.time);
+    }
+
+    private void CompleteSwitcherCueStart(int beat, SwitcherCueUpdateResult result)
+    {
+        controller.currentTransition = result.Cue.TransitionIndex;
+        currentEffectIndexForSelection = result.Cue.TargetEffectIndex;
+        StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
+        Trace($"SYNC_TRANSITION_START beat={beat} start={result.BeatPlan.StartBeat} impact={result.BeatPlan.ImpactBeat} transition={FormatTransition(result.Cue.TransitionIndex)} target={FormatEffect(result.Cue.TargetEffectIndex)} runway={result.Cue.TransitionRepertoire.RunwayBeats}");
+    }
+
     private bool TryStartSyncedCue(TimingFrame frame)
     {
         if (!frame.HasPhaseAnchor)
@@ -514,7 +561,7 @@ public sealed class Director
         ValidateTransitionIndex(transitionIndex);
         ValidateEffectIndex(stagedEffectIndex);
         var repertoire = controller.transitions[transitionIndex].Repertoire;
-        var cueIntent = SyncedCueIntent.Evaluate(
+        var cueIntent = SyncedCueIntent.EvaluateLoadedCue(
             frame,
             repertoire,
             controller.beatManager.Drop,
@@ -538,35 +585,42 @@ public sealed class Director
         }
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
-        Trace($"SYNC_CUE beat={beat} start={cueIntent.BeatPlan.StartBeat} cueMark={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} lateBy={Math.Max(0, beat - cueIntent.BeatPlan.StartBeat)} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
-        StartSyncedTransition(transitionIndex, repertoire, cueIntent);
-        return true;
-    }
-
-    private void StartSyncedTransition(
-        int transitionIndex,
-        TransitionRepertoire repertoire,
-        SyncedCueIntent cueIntent)
-    {
-        var beatPlan = cueIntent.BeatPlan;
-        var targetEffectIndex = cueIntent.TargetEffectIndex;
-        var secondsPerBeat = CurrentSecondsPerBeat();
-        var beatFraction = controller.beatManager.BeatFraction ?? 0f;
-        var elapsedBeats = Mathf.Max(0f, lastSyncedBeat - beatPlan.StartBeat + beatFraction);
-        var startTime = Time.time - (elapsedBeats * secondsPerBeat);
-        switcher.StartTransition(
-            targetEffectIndex,
+        var cue = new SwitcherCueDirection(
+            cueIntent.BeatPlan.ImpactBeat,
+            cueIntent.TargetEffectIndex,
             transitionIndex,
-            TransitionStartTiming.FromBeatClock(startTime, secondsPerBeat));
-        controller.currentTransition = transitionIndex;
+            repertoire);
+        var clock = CurrentSwitcherClockSnapshot(beat);
+        var result = switcher.UpsertLoadedCue(cue, clock);
 
-        transitionStartBeat = beatPlan.StartBeat;
-        transitionLandingBeat = beatPlan.ImpactBeat;
-        MarkChangedOnBeat(transitionLandingBeat);
-        lastCueBeat = lastSyncedBeat;
-        currentEffectIndexForSelection = targetEffectIndex;
-        StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
-        Trace($"SYNC_TRANSITION_START beat={lastSyncedBeat} beatFraction={beatFraction:0.###} elapsedBeats={elapsedBeats:0.###} start={transitionStartBeat} impact={transitionLandingBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} runway={repertoire.RunwayBeats} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer}");
+        if (result.RejectedBecauseLocked)
+        {
+            Trace($"SYNC_CUE_REJECTED_LOCKED beat={beat} cueMark={cueIntent.BeatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+            return true;
+        }
+
+        if (result.Accepted)
+        {
+            transitionStartBeat = result.BeatPlan.StartBeat;
+            transitionLandingBeat = result.BeatPlan.ImpactBeat;
+            Trace($"SYNC_CUE_LOADED beat={beat} start={result.BeatPlan.StartBeat} cueMark={result.BeatPlan.ImpactBeat} lock={result.BeatPlan.StartBeat - 1} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} preferred={cueIntent.PreferredRepertoire} castPreferred={cueIntent.CastPreferredPerformer} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+        }
+
+        if (result.Locked)
+        {
+            transitionStartBeat = result.BeatPlan.StartBeat;
+            transitionLandingBeat = result.BeatPlan.ImpactBeat;
+            MarkChangedOnBeat(result.BeatPlan.ImpactBeat);
+            lastCueBeat = beat;
+            Trace($"SYNC_CUE_LOCKED beat={beat} start={result.BeatPlan.StartBeat} cueMark={result.BeatPlan.ImpactBeat} transition={FormatTransition(result.Cue.TransitionIndex)} target={FormatEffect(result.Cue.TargetEffectIndex)}");
+        }
+
+        if (result.Started)
+        {
+            CompleteSwitcherCueStart(beat, result);
+        }
+
+        return result.Accepted || result.RejectedBecauseLocked || result.Locked || result.Started;
     }
 
     private void LogModeIfChanged()

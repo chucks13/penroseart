@@ -1,6 +1,6 @@
 # Install the Switcher-held Loaded Cue to Armed Cue lifecycle
 
-Status: ready-for-agent
+Status: approved
 
 ## Parent
 
@@ -62,20 +62,20 @@ Do not keep a Director-owned `LoadedCue` that computes Lock Point or calls `ArmC
 
 ## Acceptance criteria
 
-- [ ] The Director configures one cue direction for the next Cue Mark from the existing `TimingFrame`/`SyncedCueIntent` path and inserts/updates it in the Switcher.
-- [ ] The Switcher holds the mutable Loaded Cue and exposes whether the current cue can still be updated.
-- [ ] Before Switcher lock, Director updates can replace the Loaded Cue when timing or casting inputs change.
-- [ ] The Lock Point is derived inside the Switcher from the selected Transition's Runway, not from a Director-owned/global rule.
-- [ ] At or after Lock Point, the Switcher locks the cue and refuses mutations to Cue Mark, destination Performer, Transition, Runway, or Tail.
-- [ ] The Switcher owns exactly one current cue lifecycle and uses Runway/Tail so the Transition Impact Point lands on the Cue Mark.
-- [ ] The Synced Mode cue path does not pass `TransitionStartTiming`, precomputed Unity start times, duration seconds, or transition progress from the Director to the Switcher as the cue interface.
-- [ ] The Switcher does not depend on `BeatManager`, raw OSC/Rave payloads, Track Phase, Phrase Window, or Cue Sheet state.
-- [ ] The Switcher does not choose Cue Sheets, Cue Marks, Performers, or Transitions.
-- [ ] Hard cuts with zero Runway/Tail still lock and execute correctly.
-- [ ] Existing Drop-aware casting, manual staged choices, Hold behavior, cadence blocking, and staged Next Effect/Next Transition behavior still determine the mutable cue direction before Switcher lock.
-- [ ] Pre-lock cue-direction evaluation is idempotent, or any deck mutation happens only when the Switcher accepts/commits the offered cue, so repeated synced ticks cannot rotate the deck accidentally.
-- [ ] No duplicate implementations of Cue Sheet cursoring, `ChangeCadence`, `TransitionBeatPlan` Runway/Tail math, or `EffectDeckSelection` preferred casting are introduced.
-- [ ] Focused tests cover mutable-before-lock, rejected-after-lock update, zero-Runway hard cut, missed-exact-lock/start tick, and one complete Switcher-owned execution path.
+- [x] The Director configures one cue direction for the next Cue Mark from the existing `TimingFrame`/`SyncedCueIntent` path and inserts/updates it in the Switcher.
+- [x] The Switcher holds the mutable Loaded Cue and exposes whether the current cue can still be updated.
+- [x] Before Switcher lock, Director updates can replace the Loaded Cue when timing or casting inputs change.
+- [x] The Lock Point is derived inside the Switcher from the selected Transition's Runway, not from a Director-owned/global rule.
+- [x] At or after Lock Point, the Switcher locks the cue and refuses mutations to Cue Mark, destination Performer, Transition, Runway, or Tail.
+- [x] The Switcher owns exactly one current cue lifecycle and uses Runway/Tail so the Transition Impact Point lands on the Cue Mark.
+- [x] The Synced Mode cue path does not pass `TransitionStartTiming`, precomputed Unity start times, duration seconds, or transition progress from the Director to the Switcher as the cue interface.
+- [x] The Switcher does not depend on `BeatManager`, raw OSC/Rave payloads, Track Phase, Phrase Window, or Cue Sheet state.
+- [x] The Switcher does not choose Cue Sheets, Cue Marks, Performers, or Transitions.
+- [x] Hard cuts with zero Runway/Tail still lock and execute correctly.
+- [x] Existing Drop-aware casting, manual staged choices, Hold behavior, cadence blocking, and staged Next Effect/Next Transition behavior still determine the mutable cue direction before Switcher lock.
+- [x] Pre-lock cue-direction evaluation is idempotent, or any deck mutation happens only when the Switcher accepts/commits the offered cue, so repeated synced ticks cannot rotate the deck accidentally.
+- [x] No duplicate implementations of Cue Sheet cursoring, `ChangeCadence`, `TransitionBeatPlan` Runway/Tail math, or `EffectDeckSelection` preferred casting are introduced.
+- [x] Focused tests cover mutable-before-lock, rejected-after-lock update, zero-Runway hard cut, missed-exact-lock/start tick, and one complete Switcher-owned execution path.
 
 ## Test guidance
 
@@ -88,6 +88,21 @@ Add tests at the real seams, not against private fields:
 - Switcher seam: one beat-domain Loaded Cue locks, starts, progresses, and completes using the selected Transition's Runway/Tail and a tiny plain clock snapshot; the test should fail if the cue interface requires a Director-computed Unity start time or a `BeatManager`/OSC/Track Phase dependency in the Switcher.
 - Hard-cut path: zero Runway/Tail locks and promotes the destination immediately on its Cue Mark.
 - Regression path: existing `SyncedCueDoesNotRestartSameMandatoryBoundaryInsideRunway` behavior remains true under the new lifecycle.
+
+## Implementation notes
+
+- Added `SwitcherCueDirection`, `SwitcherClockSnapshot`, `SwitcherCueStatus`, and `SwitcherCueUpdateResult` in `Assets/core/Switcher.cs` for the one-cue Switcher-held lifecycle.
+- `Switcher.UpsertLoadedCue(...)` now accepts/replaces the mutable Loaded Cue before lock, derives Lock Point from `TransitionBeatPlan.FromCueMark(...)`, refuses replacements after lock, and starts transitions from the beat-domain clock snapshot without a Director-computed `TransitionStartTiming` crossing the cue seam.
+- `Switcher.AdvanceLoadedCue(...)` lets the Director advance a locked Loaded Cue every synced tick from the same tiny clock snapshot, so a consumed/locked cue still starts at its Runway start instead of waiting until the Cue Mark and cutting at progress 1.
+- `SyncedCueIntent.EvaluateLoadedCue(...)` exposes the pre-lock cue-direction path from the existing `TimingFrame`/Drop/casting inputs and uses `EffectDeckSelection.TryPeekPreferred(...)` so repeated pre-lock polling does not rotate the Effect deck.
+- `Director.TryStartSyncedCue(...)` now inserts/updates the Switcher-held cue direction and reacts to Switcher lock/start outcomes; the old `Director.StartSyncedTransition(...)` path was removed.
+
+## Validation evidence
+
+- `./scripts/unity-compile.sh` passed with C# warning count 0.
+- `UNITY_TEST_FILTER='DirectorSyncedTailTests|SyncedCueIntentTests|SwitcherExecutionTests|DirectorStagingTests|TransitionBeatPlanTests|EffectDeckSelectionTests' ./scripts/unity-tests.sh` passed 68/68.
+- Full `./scripts/unity-tests.sh` passed 218/218.
+- `git diff --check` passed.
 
 ## Suggested validation
 

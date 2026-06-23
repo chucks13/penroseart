@@ -109,6 +109,120 @@ public readonly struct TransitionStartTiming
 }
 
 /// <summary>
+/// Beat-domain cue direction inserted into the Mechanical Switcher by the Director.
+/// </summary>
+public readonly struct SwitcherCueDirection
+{
+    public readonly int CueMarkBeat;
+    public readonly int TargetEffectIndex;
+    public readonly int TransitionIndex;
+    public readonly TransitionRepertoire TransitionRepertoire;
+
+    public SwitcherCueDirection(
+        int cueMarkBeat,
+        int targetEffectIndex,
+        int transitionIndex,
+        TransitionRepertoire transitionRepertoire)
+    {
+        CueMarkBeat = cueMarkBeat;
+        TargetEffectIndex = targetEffectIndex;
+        TransitionIndex = transitionIndex;
+        TransitionRepertoire = transitionRepertoire;
+    }
+}
+
+/// <summary>
+/// Plain beat-clock facts the Switcher needs to lock and execute an inserted cue.
+/// </summary>
+public readonly struct SwitcherClockSnapshot
+{
+    public readonly int CurrentBeat;
+    public readonly float BeatFraction;
+    public readonly float SecondsPerBeat;
+    public readonly float NowSeconds;
+
+    public SwitcherClockSnapshot(int currentBeat, float beatFraction, float secondsPerBeat, float nowSeconds)
+    {
+        if (secondsPerBeat <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(secondsPerBeat), secondsPerBeat, "Seconds per beat must be positive.");
+        }
+
+        CurrentBeat = currentBeat;
+        BeatFraction = Mathf.Clamp01(beatFraction);
+        SecondsPerBeat = secondsPerBeat;
+        NowSeconds = nowSeconds;
+    }
+}
+
+/// <summary>
+/// Result of offering a cue direction to the Switcher-held Loaded Cue slot.
+/// </summary>
+public readonly struct SwitcherCueUpdateResult
+{
+    public readonly bool Accepted;
+    public readonly bool RejectedBecauseLocked;
+    public readonly bool Locked;
+    public readonly bool Started;
+    public readonly SwitcherCueDirection Cue;
+    public readonly TransitionBeatPlan BeatPlan;
+
+    public SwitcherCueUpdateResult(bool accepted, bool rejectedBecauseLocked, bool locked, bool started)
+        : this(accepted, rejectedBecauseLocked, locked, started, default, default)
+    {
+    }
+
+    public SwitcherCueUpdateResult(
+        bool accepted,
+        bool rejectedBecauseLocked,
+        bool locked,
+        bool started,
+        SwitcherCueDirection cue,
+        TransitionBeatPlan beatPlan)
+    {
+        Accepted = accepted;
+        RejectedBecauseLocked = rejectedBecauseLocked;
+        Locked = locked;
+        Started = started;
+        Cue = cue;
+        BeatPlan = beatPlan;
+    }
+}
+
+/// <summary>
+/// Read-only snapshot of the Switcher-held cue lifecycle.
+/// </summary>
+public readonly struct SwitcherCueStatus
+{
+    public static SwitcherCueStatus Empty { get; } = new SwitcherCueStatus(false, false, -1, -1, -1, -1);
+
+    public readonly bool HasCue;
+    public readonly bool IsLocked;
+    public readonly int CueMarkBeat;
+    public readonly int TargetEffectIndex;
+    public readonly int TransitionIndex;
+    public readonly int LockPointBeat;
+
+    public SwitcherCueStatus(
+        bool hasCue,
+        bool isLocked,
+        int cueMarkBeat,
+        int targetEffectIndex,
+        int transitionIndex,
+        int lockPointBeat)
+    {
+        HasCue = hasCue;
+        IsLocked = isLocked;
+        CueMarkBeat = cueMarkBeat;
+        TargetEffectIndex = targetEffectIndex;
+        TransitionIndex = transitionIndex;
+        LockPointBeat = lockPointBeat;
+    }
+
+    public bool CanUpdate => HasCue && !IsLocked;
+}
+
+/// <summary>
 /// Mechanical stage switcher for Penrose performers.
 /// The Switcher owns in-flight effect/transition execution, renders progress, and promotes B on completion;
 /// the Director decides only what to start and when to start it.
@@ -126,6 +240,11 @@ public sealed class Switcher
     private float transitionStartTime;
     private float transitionDurationSeconds = 1f;
     private float transitionProgress;
+    private bool hasLoadedCue;
+    private bool loadedCueLocked;
+    private SwitcherCueDirection loadedCue;
+    private TransitionBeatPlan loadedCueBeatPlan;
+    private int loadedCueLockPointBeat;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
@@ -141,6 +260,9 @@ public sealed class Switcher
 
     /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
     public SwitcherStatus Status => BuildStatus();
+
+    /// <summary>Current read-only Loaded Cue lifecycle snapshot.</summary>
+    public SwitcherCueStatus LoadedCueStatus => BuildLoadedCueStatus();
 
     public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
     {
@@ -166,6 +288,7 @@ public sealed class Switcher
         currentTransitionIndex = transitionIndex;
         isTransitioning = false;
         transitionProgress = 0f;
+        ClearLoadedCue();
         Trace($"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
@@ -177,9 +300,49 @@ public sealed class Switcher
         EffectBase.APalette.Change();
         isTransitioning = false;
         transitionProgress = 0f;
+        ClearLoadedCue();
         currentEffectIndex = effectIndex;
         StartEffect(effectIndex);
         Trace($"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
+    }
+
+    /// <summary>
+    /// Inserts or updates one beat-domain cue direction and advances the Switcher-owned cue lifecycle.
+    /// </summary>
+    public SwitcherCueUpdateResult UpsertLoadedCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
+    {
+        ValidateEffectIndex(cue.TargetEffectIndex);
+        ValidateTransitionIndex(cue.TransitionIndex);
+
+        if (hasLoadedCue)
+        {
+            var lifecycleResult = AdvanceLoadedCue(clock);
+            if (lifecycleResult.Started)
+            {
+                return lifecycleResult;
+            }
+
+            if (hasLoadedCue && loadedCueLocked)
+            {
+                return new SwitcherCueUpdateResult(
+                    false,
+                    !SameCue(cue, loadedCue),
+                    lifecycleResult.Locked,
+                    false,
+                    loadedCue,
+                    loadedCueBeatPlan);
+            }
+        }
+
+        LoadCue(cue);
+        var acceptedLifecycleResult = AdvanceLoadedCue(clock);
+        return new SwitcherCueUpdateResult(
+            true,
+            false,
+            acceptedLifecycleResult.Locked,
+            acceptedLifecycleResult.Started,
+            acceptedLifecycleResult.Started ? acceptedLifecycleResult.Cue : loadedCue,
+            acceptedLifecycleResult.Started ? acceptedLifecycleResult.BeatPlan : loadedCueBeatPlan);
     }
 
     /// <summary>
@@ -189,13 +352,24 @@ public sealed class Switcher
     /// </summary>
     public void StartTransition(int targetEffectIndex, int transitionIndex, TransitionStartTiming timing)
     {
+        ValidateTransitionIndex(transitionIndex);
+        ClearLoadedCue();
+        StartTransition(targetEffectIndex, transitionIndex, timing, Time.time, transitions[transitionIndex].Repertoire);
+    }
+
+    private void StartTransition(
+        int targetEffectIndex,
+        int transitionIndex,
+        TransitionStartTiming timing,
+        float progressNowSeconds,
+        TransitionRepertoire repertoire)
+    {
         var sourceEffectIndex = isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
         ValidateEffectIndex(sourceEffectIndex);
         ValidateEffectIndex(targetEffectIndex);
         ValidateTransitionIndex(transitionIndex);
 
         var transition = transitions[transitionIndex];
-        var repertoire = transition.Repertoire;
         transition.RandomizeTime();
         transition.V = 0f;
         transition.A = sourceEffectIndex;
@@ -209,7 +383,7 @@ public sealed class Switcher
         currentEffectIndex = -1;
         transitionStartTime = timing.StartTime;
         transitionDurationSeconds = timing.DurationSeconds(repertoire);
-        transitionProgress = ProgressAt(Time.time);
+        transitionProgress = ProgressAt(progressNowSeconds);
         isTransitioning = true;
         var message = $"transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B} durationSeconds={transitionDurationSeconds:0.###} progress={transitionProgress:0.###}";
         Trace($"SWITCHER_START {message}");
@@ -259,6 +433,102 @@ public sealed class Switcher
         effect.Draw();
         debugText = effect.DebugText();
         return (Color[])effect.buffer.Clone();
+    }
+
+    private void LoadCue(SwitcherCueDirection cue)
+    {
+        loadedCue = cue;
+        loadedCueBeatPlan = TransitionBeatPlan.FromCueMark(cue.CueMarkBeat, cue.TransitionRepertoire);
+        loadedCueLockPointBeat = loadedCueBeatPlan.StartBeat - 1;
+        loadedCueLocked = false;
+        hasLoadedCue = true;
+        Trace($"SWITCHER_LOAD_CUE cueMark={cue.CueMarkBeat} lock={loadedCueLockPointBeat} start={loadedCueBeatPlan.StartBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+    }
+
+    /// <summary>
+    /// Advances the currently loaded cue's lock/start lifecycle without changing its direction.
+    /// </summary>
+    public SwitcherCueUpdateResult AdvanceLoadedCue(SwitcherClockSnapshot clock)
+    {
+        if (!hasLoadedCue)
+        {
+            return new SwitcherCueUpdateResult(false, false, false, false);
+        }
+
+        var cue = loadedCue;
+        var beatPlan = loadedCueBeatPlan;
+
+        var lockedThisTick = false;
+        if (!loadedCueLocked && clock.CurrentBeat >= loadedCueLockPointBeat)
+        {
+            loadedCueLocked = true;
+            lockedThisTick = true;
+            Trace($"SWITCHER_LOCK_CUE beat={clock.CurrentBeat} cueMark={loadedCue.CueMarkBeat} lock={loadedCueLockPointBeat} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
+        }
+
+        if (clock.CurrentBeat >= loadedCueBeatPlan.StartBeat)
+        {
+            StartLoadedCue(clock);
+            return new SwitcherCueUpdateResult(false, false, lockedThisTick, true, cue, beatPlan);
+        }
+
+        return new SwitcherCueUpdateResult(false, false, lockedThisTick, false, cue, beatPlan);
+    }
+
+    private void StartLoadedCue(SwitcherClockSnapshot clock)
+    {
+        var cue = loadedCue;
+        var beatPlan = loadedCueBeatPlan;
+        var elapsedBeats = Mathf.Max(0f, clock.CurrentBeat - beatPlan.StartBeat + clock.BeatFraction);
+        var startTime = clock.NowSeconds - (elapsedBeats * clock.SecondsPerBeat);
+        ClearLoadedCue();
+        StartTransition(
+            cue.TargetEffectIndex,
+            cue.TransitionIndex,
+            TransitionStartTiming.FromBeatClock(startTime, clock.SecondsPerBeat),
+            clock.NowSeconds,
+            cue.TransitionRepertoire);
+        Trace($"SWITCHER_START_CUE beat={clock.CurrentBeat} beatFraction={clock.BeatFraction:0.###} elapsedBeats={elapsedBeats:0.###} start={beatPlan.StartBeat} cueMark={beatPlan.ImpactBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+    }
+
+    private void ClearLoadedCue()
+    {
+        hasLoadedCue = false;
+        loadedCueLocked = false;
+        loadedCue = default;
+        loadedCueBeatPlan = default;
+        loadedCueLockPointBeat = -1;
+    }
+
+    private SwitcherCueStatus BuildLoadedCueStatus()
+    {
+        return hasLoadedCue
+            ? new SwitcherCueStatus(
+                true,
+                loadedCueLocked,
+                loadedCue.CueMarkBeat,
+                loadedCue.TargetEffectIndex,
+                loadedCue.TransitionIndex,
+                loadedCueLockPointBeat)
+            : SwitcherCueStatus.Empty;
+    }
+
+    private bool SameCue(SwitcherCueDirection left, SwitcherCueDirection right)
+    {
+        return left.CueMarkBeat == right.CueMarkBeat
+            && left.TargetEffectIndex == right.TargetEffectIndex
+            && left.TransitionIndex == right.TransitionIndex
+            && SameRepertoire(left.TransitionRepertoire, right.TransitionRepertoire);
+    }
+
+    private bool SameRepertoire(TransitionRepertoire left, TransitionRepertoire right)
+    {
+        return left.Tags == right.Tags
+            && left.RunwayBeats == right.RunwayBeats
+            && left.TailBeats == right.TailBeats
+            && left.Shape == right.Shape
+            && left.Intensity == right.Intensity
+            && Mathf.Approximately(left.DefaultDurationSeconds, right.DefaultDurationSeconds);
     }
 
     private void CompleteTransition()
