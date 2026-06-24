@@ -62,7 +62,7 @@ internal static class BeatManagerDashboardRenderer
     private const float QueryRowLabelWidth = 70f;
     private const float RightTextWidth = 150f;
     private const float StatusChipWidth = 46f;
-    private const float PhaseLabelWidth = 90f;
+    private const float PhraseLabelWidth = 90f;
     private const float SegmentGap = 6f;
 
     private const string NullValueText = "—  null → Standalone";
@@ -85,9 +85,9 @@ internal static class BeatManagerDashboardRenderer
         "Energy: the track's intensity tier in the closed Low/Mid/High vocabulary, with where it is heading " +
         "and the changes still ahead. The bar sweeps the current same-energy run. Null: unavailable, or the " +
         "wire label was unrecognized.";
-    private const string PhaseTooltip =
-        "Phase: the track's current section label (open vocabulary — display it, don't keyword-parse it), with " +
-        "contrived progress and the upcoming section. Null: no phase data on the wire right now.";
+    private const string PhraseTooltip =
+        "Phrase: the track's current section label (open vocabulary — display it, don't keyword-parse it), with " +
+        "contrived progress and the upcoming section. Null: no phrase data on the wire right now.";
     private const string LevelsTooltip =
         "Levels: low/mid/high band energy with BeatManager's attack/release smoothing already applied " +
         "(fast up, slow down — anti-flicker). Null: no live Levels; the local simulator never supplies them.";
@@ -100,7 +100,7 @@ internal static class BeatManagerDashboardRenderer
     private static readonly GUIContent FillLabel = new GUIContent("FILL", FillTooltip);
     private static readonly GUIContent DropLabel = new GUIContent("DROP", DropTooltip);
     private static readonly GUIContent EnergyLabel = new GUIContent("ENERGY", EnergyTooltip);
-    private static readonly GUIContent PhaseLabel = new GUIContent("PHASE", PhaseTooltip);
+    private static readonly GUIContent PhraseLabel = new GUIContent("PHRASE", PhraseTooltip);
     private static readonly GUIContent LevelsLabel = new GUIContent("LEVELS", LevelsTooltip);
     private static readonly GUIContent ColorLabel = new GUIContent("COLOR", ColorTooltip);
 
@@ -142,7 +142,7 @@ internal static class BeatManagerDashboardRenderer
     private static readonly Color EnergyMidChipColor = new Color(0.46f, 0.34f, 0.06f);
     private static readonly Color EnergyHighChipColor = new Color(0.50f, 0.12f, 0.16f);
     private static readonly Color EnergyMeterColor = new Color(1f, 0.72f, 0.25f);
-    private static readonly Color PhaseMeterColor = new Color(0.62f, 0.55f, 1f);
+    private static readonly Color PhraseMeterColor = new Color(0.62f, 0.55f, 1f);
     private static readonly Color LowBandColor = new Color(0.95f, 0.40f, 0.30f);
     private static readonly Color MidBandColor = new Color(0.40f, 0.90f, 0.45f);
     private static readonly Color HighBandColor = new Color(0.40f, 0.60f, 1f);
@@ -162,7 +162,7 @@ internal static class BeatManagerDashboardRenderer
     private static GUIStyle nullStyle;
     private static GUIStyle nullCenterStyle;
     private static GUIStyle statusChipStyle;
-    private static GUIStyle phaseTextStyle;
+    private static GUIStyle phraseTextStyle;
     private static GUIStyle bandLabelStyle;
 
     /// <summary>Draws the full dashboard and returns user actions for the drawer adapter to apply.</summary>
@@ -222,7 +222,7 @@ internal static class BeatManagerDashboardRenderer
         DrawEnergyRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Energy);
         y += QueryRowHeight + QueryRowGap;
 
-        DrawPhaseRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Phase);
+        DrawPhraseRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Phrase);
         y += QueryRowHeight + QueryRowGap;
 
         DrawLevelsRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Levels);
@@ -442,21 +442,21 @@ internal static class BeatManagerDashboardRenderer
         GUI.Label(right, energy.Readout, valueStyle);
     }
 
-    private static void DrawPhaseRow(Rect row, PhaseRowView phase)
+    private static void DrawPhraseRow(Rect row, PhraseRowView phrase)
     {
-        var content = DrawQueryRowLabel(row, PhaseLabel);
-        if (!phase.HasValue)
+        var content = DrawQueryRowLabel(row, PhraseLabel);
+        if (!phrase.HasValue)
         {
             DrawNullValue(content);
             return;
         }
 
-        var labelRect = TakeLeft(ref content, PhaseLabelWidth);
-        GUI.Label(labelRect, phase.Label, phaseTextStyle);
+        var labelRect = TakeLeft(ref content, PhraseLabelWidth);
+        GUI.Label(labelRect, phrase.Label, phraseTextStyle);
 
         var right = TakeRight(ref content, RightTextWidth);
-        DrawMeter(content, phase.Meter, PhaseMeterColor);
-        GUI.Label(right, phase.Readout, valueStyle);
+        DrawMeter(content, phrase.Meter, PhraseMeterColor);
+        GUI.Label(right, phrase.Readout, valueStyle);
     }
 
     private static void DrawLevelsRow(Rect row, LevelsRowView levels)
@@ -694,7 +694,7 @@ internal static class BeatManagerDashboardRenderer
             normal = { textColor = Color.white },
             alignment = TextAnchor.MiddleCenter,
         };
-        phaseTextStyle = new GUIStyle(EditorStyles.boldLabel)
+        phraseTextStyle = new GUIStyle(EditorStyles.boldLabel)
         {
             normal = { textColor = new Color(0.86f, 0.96f, 1f) },
             alignment = TextAnchor.MiddleLeft,

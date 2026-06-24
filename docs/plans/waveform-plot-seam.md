@@ -33,7 +33,7 @@ actually appears.
 
 ## Shape
 
-### `WaveformPlot` (new — `Assets/Editor/WaveformPlot.cs`, editor-only static class)
+### `WaveformPlot` (`Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs`, editor-only static class)
 
 One method, one public color; the value -> Y alignment invariant lives here once and never leaks:
 

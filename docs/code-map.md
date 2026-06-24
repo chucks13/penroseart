@@ -1,6 +1,6 @@
 # Code Map
 
-This map summarizes the project-authored runtime code. It is meant as an orientation aid before editing, not as a replacement for reading the source.
+This map summarizes the project-authored runtime and editor code. It is meant as an orientation aid before editing, not as a replacement for reading the source.
 
 ## Root assets
 
@@ -34,8 +34,10 @@ This map summarizes the project-authored runtime code. It is meant as an orienta
 | `Assets/core/Transitions/TransitionBeatPlan.cs` | Converts Cue Mark plus Transition Runway/Tail into start/impact/completion beats. |
 | `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
-| `Assets/core/Rhythm/PhraseEventView.cs` | Display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Shared by the Beat Manager inspector and any future telnet/OSC readout. |
-| `Assets/core/Rhythm/RhythmText.cs` | Shared text formatting for the rhythm queries' nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
+| `Assets/core/Rhythm/PhraseEventView.cs` | Current display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Placement is under review because it mixes display vocabulary with core rhythm values. |
+| `Assets/core/Rhythm/RhythmText.cs` | Current text formatting for rhythm-query nullable beat/count values (`"16b"`, plain counts, `"—"` for null). Placement is under review because it is display text. |
+| `Assets/core/Rhythm/Waveform.cs` | Runtime waveform kernel for beat-synced brightness envelopes. |
+| `Assets/core/Rhythm/WaveformPool.cs` | Shared waveform pool codec and runtime load path for `StreamingAssets/penrose_waveforms.txt`. |
 | `Assets/core/ReactiveInputs/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
 | `Assets/core/Hardware/SerialOut.cs` | USB serial hardware discovery and frame sending for S2 Mini / ESP32 boards. |
 | `Assets/core/IO/PixelReceiver.cs` | UDP pixel-source receiver for external frame blending. |
@@ -56,6 +58,22 @@ This map summarizes the project-authored runtime code. It is meant as an orienta
 | `Assets/core/helpers/ExtensionMethods.cs` | Shared numeric, vector, color, and buffer helper methods. |
 | `Assets/core/helpers/SliderScript.cs` | Scene UI slider binding for controller brightness. |
 | `Assets/core/helpers/TelnetServer.cs` | Optional telnet command server compiled only with `ENABLE_TELNET`. |
+
+## Editor tooling
+
+| File | Role |
+| --- | --- |
+| `Assets/Editor/Controller/ControllerEditor.cs` | Custom Controller inspector and Director timing observatory. |
+| `Assets/Editor/Rhythm/BeatManagerDrawer.cs` | BeatManager property drawer and dashboard adapter. |
+| `Assets/Editor/Rhythm/BeatManagerDashboardModel.cs` | Editor-only rhythm dashboard display model, including phrase-event and rhythm text formatting. |
+| `Assets/Editor/Rhythm/BeatManagerDashboardRenderer.cs` | IMGUI rendering for the BeatManager dashboard. |
+| `Assets/Editor/Rhythm/WallVariantControl.cs` | Editor-side wall variant selector state and writeback. |
+| `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
+| `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Evaluate` output. |
+| `Assets/Editor/Effects/EffectSelectorDrawer.cs` | Effect selector property drawer. |
+| `Assets/Editor/Transitions/TransitionSettingsAssetUtility.cs` | Transition settings asset creation/restoration utility. |
+| `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Tuning window for transitions and related authoring controls. |
+| `Assets/Editor/Shared/LiveControllerAccess.cs` | Shared editor helper for resolving live Controller state and play-mode repaint. |
 
 ## Effects
 

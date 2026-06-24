@@ -6,7 +6,7 @@ Source: architecture review `docs/architecture-reviews/architecture-review-penro
 ## Problem
 
 The policy for *reading and changing what the wall is playing* lives as private statics
-inside `Assets/Editor/BeatManagerDrawer.cs` (`TryGetLiveWall`, `ApplyWallSelection`,
+inside `Assets/Editor/Rhythm/BeatManagerDrawer.cs` (`TryGetLiveWall`, `ApplyWallSelection`,
 `ResolveDisplayVariant`). It reaches into `Controller.Instance` / `Controller.HasInstance`,
 `BeatManager.activeVariant`, and `Controller.CurrentBeatVariant`, and it carries real
 invariants — don't *spawn* a Controller GameObject from an open Inspector, retarget the

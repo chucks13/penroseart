@@ -37,7 +37,7 @@ internal readonly struct BeatManagerDashboardModel
     public readonly PhraseEventRowView Fill;
     public readonly PhraseEventRowView Drop;
     public readonly EnergyRowView Energy;
-    public readonly PhaseRowView Phase;
+    public readonly PhraseRowView Phrase;
     public readonly LevelsRowView Levels;
     public readonly ColorBankRowView ColorBank;
 
@@ -62,7 +62,7 @@ internal readonly struct BeatManagerDashboardModel
         PhraseEventRowView fill,
         PhraseEventRowView drop,
         EnergyRowView energy,
-        PhaseRowView phase,
+        PhraseRowView phrase,
         LevelsRowView levels,
         ColorBankRowView colorBank)
     {
@@ -86,7 +86,7 @@ internal readonly struct BeatManagerDashboardModel
         Fill = fill;
         Drop = drop;
         Energy = energy;
-        Phase = phase;
+        Phrase = phrase;
         Levels = levels;
         ColorBank = colorBank;
     }
@@ -126,7 +126,7 @@ internal readonly struct BeatManagerDashboardModel
             BuildPhraseEventRow(beatManager?.Fill),
             BuildPhraseEventRow(beatManager?.Drop),
             BuildEnergyRow(beatManager?.Energy),
-            BuildPhaseRow(beatManager?.Phase),
+            BuildPhraseRow(beatManager?.Phrase),
             BuildLevelsRow(beatManager?.Levels),
             new ColorBankRowView(beatManager?.LevelsRgb, beatManager?.LevelsHue, beatManager?.LevelsPalette));
     }
@@ -224,17 +224,17 @@ internal readonly struct BeatManagerDashboardModel
             $"{heading} · ×{RhythmText.Count(energy.changesRemaining)}");
     }
 
-    private static PhaseRowView BuildPhaseRow(PhaseInfo? info)
+    private static PhraseRowView BuildPhraseRow(PhraseInfo? info)
     {
-        if (!(info is { } phase))
+        if (!(info is { } phrase))
         {
-            return PhaseRowView.Null;
+            return PhraseRowView.Null;
         }
 
-        var heading = phase.next != null
-            ? $"→ {phase.next} in {RhythmText.Beats(phase.beatsUntilNext)}"
-            : $"len {RhythmText.Count(phase.lengthBeats)}";
-        return new PhaseRowView(true, phase.label, phase.progress ?? 0f, heading);
+        var heading = phrase.next != null
+            ? $"→ {phrase.next} in {RhythmText.Beats(phrase.beatsUntilNext)}"
+            : $"len {RhythmText.Count(phrase.lengthBeats)}";
+        return new PhraseRowView(true, phrase.label, phrase.progress ?? 0f, heading);
     }
 
     private static LevelsRowView BuildLevelsRow(LevelsInfo? info)
@@ -315,16 +315,16 @@ internal readonly struct EnergyRowView
     }
 }
 
-internal readonly struct PhaseRowView
+internal readonly struct PhraseRowView
 {
-    public static readonly PhaseRowView Null = new PhaseRowView(false, string.Empty, 0f, string.Empty);
+    public static readonly PhraseRowView Null = new PhraseRowView(false, string.Empty, 0f, string.Empty);
 
     public readonly bool HasValue;
     public readonly string Label;
     public readonly float Meter;
     public readonly string Readout;
 
-    public PhaseRowView(bool hasValue, string label, float meter, string readout)
+    public PhraseRowView(bool hasValue, string label, float meter, string readout)
     {
         HasValue = hasValue;
         Label = label;

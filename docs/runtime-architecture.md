@@ -179,7 +179,7 @@ Switcher-rendered Effect or Transition buffer
 | Transitions/settings | `Assets/core/Transitions/TransitionBase.cs`, `Assets/core/Transitions/TransitionSettings*.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B and declare Runway/Tail/Shape/Intensity defaults and saved tuning. |
 | External blenders | `Assets/core/Blending/BlenderBase.cs`, `Assets/blenders/*.cs` | Mix incoming pixel-source data with the native Penrose buffer. |
 | Palette | `Assets/core/helpers/GPalette.cs` | Global palette sampling and animated palette transitions. |
-| Rhythm queries | `Assets/core/Rhythm/BeatManager.cs`, `Assets/core/Rhythm/BeatManagerQueries.cs`, `Assets/core/Rhythm/PhraseEventView.cs`, `Assets/core/Rhythm/RhythmText.cs` | Live/simulated beat state, nullable rhythm-query values, and shared rhythm presentation text. |
+| Rhythm queries | `Assets/core/Rhythm/BeatManager.cs`, `Assets/core/Rhythm/BeatManagerQueries.cs`, `Assets/core/Rhythm/PhraseEventView.cs`, `Assets/core/Rhythm/RhythmText.cs`, `Assets/core/Rhythm/Waveform.cs`, `Assets/core/Rhythm/WaveformPool.cs` | Live/simulated beat state, nullable OSC-derived rhythm-query values, current phrase-event display helpers under review, waveform evaluation, and waveform pool loading. |
 | Rave OSC | `Assets/core/IO/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
 | Drum overlay | `Assets/core/ReactiveInputs/drums.cs` | Drum/ring overlay triggers and drawing. |
 | Serial output | `Assets/core/Hardware/SerialOut.cs` | USB serial discovery and frame output for S2 Mini / ESP32 boards. |
