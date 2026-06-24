@@ -160,7 +160,7 @@ public readonly struct TimingFrame
 {
     public static TimingFrame Unavailable { get; } = new TimingFrame(
         OnAirTimingInput.Unavailable,
-        PhaseReading.Unavailable,
+        PhaseClockReading.Unavailable,
         false,
         PhaseConfidence.Unlocked,
         -1,
@@ -181,7 +181,7 @@ public readonly struct TimingFrame
     public readonly int CurrentBeat;
 
     /// <summary>The 16-beat Phase reading for this frame.</summary>
-    public readonly PhaseReading Phase;
+    public readonly PhaseClockReading Phase;
 
     /// <summary>Whether this frame has a Phase Anchor the Director can target.</summary>
     public readonly bool HasPhaseAnchor;
@@ -233,7 +233,7 @@ public readonly struct TimingFrame
 
     public TimingFrame(
         OnAirTimingInput input,
-        PhaseReading phase,
+        PhaseClockReading phase,
         bool hasPhaseAnchor,
         PhaseConfidence phaseAnchorConfidence,
         int cueMarkBeat,
@@ -716,7 +716,7 @@ public sealed class OnAirTiming
 
     private TimingFrame BuildCoastingFrame(
         OnAirTimingInput input,
-        PhaseReading phase,
+        PhaseClockReading phase,
         bool beatRewoundToNewPass,
         FramePassLocalState passState,
         int minimumChangeCadenceBeats)
@@ -740,7 +740,7 @@ public sealed class OnAirTiming
 
     private TimingFrame BuildAnchoredFrame(
         OnAirTimingInput input,
-        PhaseReading phase,
+        PhaseClockReading phase,
         ResolvedTimingTarget target,
         bool beatRewoundToNewPass,
         FramePassLocalState passState,
@@ -767,7 +767,7 @@ public sealed class OnAirTiming
 
     private TimingFrame BuildUnlockedFrame(
         OnAirTimingInput input,
-        PhaseReading phase,
+        PhaseClockReading phase,
         bool beatRewoundToNewPass,
         FramePassLocalState passState)
     {
@@ -792,7 +792,7 @@ public sealed class OnAirTiming
 
     private static TimingFrame CreateFrame(
         OnAirTimingInput input,
-        PhaseReading phase,
+        PhaseClockReading phase,
         bool hasPhaseAnchor,
         PhaseConfidence phaseAnchorConfidence,
         int cueMarkBeat,
@@ -852,7 +852,7 @@ public sealed class OnAirTiming
     private ResolvedTimingTarget ResolveCueMark(
         int beat,
         PhaseInput phaseInput,
-        PhaseReading phase,
+        PhaseClockReading phase,
         bool beatRewoundToNewPass,
         int? consumedCueMarkBeat,
         int minimumChangeCadenceBeats)

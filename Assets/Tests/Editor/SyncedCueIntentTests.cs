@@ -389,7 +389,7 @@ public sealed class SyncedCueIntentTests
                 trackPhaseActive: 1,
                 beatsUntilPhraseBoundary: cueMarkBeat - currentBeat,
                 phraseLengthBeats: 32),
-            PhaseReading.Unavailable,
+            PhaseClockReading.Unavailable,
             hasPhaseAnchor: true,
             PhaseConfidence.Structural,
             cueMarkBeat,

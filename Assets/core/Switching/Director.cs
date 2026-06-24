@@ -33,7 +33,7 @@ public readonly struct DirectorStatus
         false,
         false,
         PhaseConfidence.Unlocked,
-        PhaseReading.Unavailable,
+        PhaseClockReading.Unavailable,
         TimingFrameSource.Unlocked,
         false,
         -1,
@@ -55,7 +55,7 @@ public readonly struct DirectorStatus
     public readonly bool IsSyncedMode;
     public readonly bool HasPhaseAnchor;
     public readonly PhaseConfidence PhaseAnchorConfidence;
-    public readonly PhaseReading Phase;
+    public readonly PhaseClockReading Phase;
     /// <summary>Source of the current On-Air Timing target.</summary>
     public readonly TimingFrameSource TimingSource;
     /// <summary>Whether fresh Track Phase replaced a coasted or weaker On-Air Timing target.</summary>
@@ -80,7 +80,7 @@ public readonly struct DirectorStatus
         bool isSyncedMode,
         bool hasPhaseAnchor,
         PhaseConfidence phaseAnchorConfidence,
-        PhaseReading phase,
+        PhaseClockReading phase,
         TimingFrameSource timingSource,
         bool timingReanchored,
         int phaseAnchorLandingBeat,

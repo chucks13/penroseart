@@ -39,10 +39,10 @@ public readonly struct PhaseInput
 }
 
 /// <summary>Where the current on-air frame sits on the 16-beat phrase grid.</summary>
-public readonly struct PhaseReading
+public readonly struct PhaseClockReading
 {
-    public static PhaseReading Unavailable { get; } =
-        new PhaseReading(PhaseConfidence.Unlocked, -1, -1, -1, -1, -1, false, true);
+    public static PhaseClockReading Unavailable { get; } =
+        new PhaseClockReading(PhaseConfidence.Unlocked, -1, -1, -1, -1, -1, false, true);
 
     public readonly PhaseConfidence Confidence;
     public readonly int PhasePosition;
@@ -53,7 +53,7 @@ public readonly struct PhaseReading
     public readonly bool CleanGrid;
     public readonly bool BeatInBarAgrees;
 
-    public PhaseReading(
+    public PhaseClockReading(
         PhaseConfidence confidence,
         int phasePosition,
         int barInPhrase,
@@ -83,7 +83,7 @@ public static class PhaseClock
     public const int PhraseBeats = 16;
     public const int BarBeats = 4;
 
-    public static PhaseReading Resolve(in PhaseInput osc)
+    public static PhaseClockReading Resolve(in PhaseInput osc)
     {
         var hasBeat = osc.Beat >= 1;
         var hasTotal = osc.TotalBeats >= 1;
@@ -97,7 +97,7 @@ public static class PhaseClock
             var elapsedInPhrase = osc.PhaseLengthBeats - osc.PhaseCountBeats;
             if (elapsedInPhrase < 0)
             {
-                return PhaseReading.Unavailable;
+                return PhaseClockReading.Unavailable;
             }
 
             var phraseStart = osc.Beat - elapsedInPhrase;
@@ -116,7 +116,7 @@ public static class PhaseClock
         }
         else if (osc.BeatInBar is >= 1 and <= BarBeats)
         {
-            return new PhaseReading(
+            return new PhaseClockReading(
                 PhaseConfidence.Provisional,
                 osc.BeatInBar,
                 1,
@@ -128,7 +128,7 @@ public static class PhaseClock
         }
         else
         {
-            return PhaseReading.Unavailable;
+            return PhaseClockReading.Unavailable;
         }
 
         var rel = Mod((osc.Beat - 1) - offset, PhraseBeats);
@@ -140,7 +140,7 @@ public static class PhaseClock
 
         var beatInBarAgrees = osc.BeatInBar < 1 || beatInBar == osc.BeatInBar;
 
-        return new PhaseReading(
+        return new PhaseClockReading(
             confidence,
             phasePosition,
             barInPhrase,
