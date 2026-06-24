@@ -433,11 +433,11 @@ public sealed class BeatManagerContrivedQueriesTests
     // --- Source transitions ---
 
     [Test]
-    public void SimulatorClearsPhraseAndLevelStateToUnavailable()
+    public void StandaloneClearsPhraseLevelAndEnvelopeStateToUnavailable()
     {
-        // Stale live values (or stale scene-serialized values) must not replay through the contrived
-        // queries once the simulator owns the beat: the simulator is a clock, not a musical analysis.
-        var beatManager = new BeatManager { simulatedBpm = 120f };
+        // Stale live values (or stale scene-serialized values) must not replay through the contrived queries
+        // once the live source drops out: Standalone is a no-beat state, not a musical analysis.
+        var beatManager = new BeatManager();
         beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
         beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
         beatManager.beatData.snapshot.phraseState = new NamedState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
@@ -446,25 +446,12 @@ public sealed class BeatManagerContrivedQueriesTests
 
         beatManager.Update(0f);
 
-        Assert.That(beatManager.IsActive, Is.True, "the simulated beat clock itself stays active");
-        Assert.That(beatManager.Envelope(0), Is.Not.Null);
+        Assert.That(beatManager.IsActive, Is.False);
+        Assert.That(beatManager.Envelope(0), Is.Null);
         Assert.That(beatManager.Fill, Is.Null);
         Assert.That(beatManager.Drop, Is.Null);
         Assert.That(beatManager.Phrase, Is.Null);
         Assert.That(beatManager.Energy, Is.Null);
         Assert.That(beatManager.Levels, Is.Null);
-    }
-
-    [Test]
-    public void NoBeatStateClearsEverythingIncludingTheEnvelope()
-    {
-        var beatManager = new BeatManager { simulatedBpm = 120f, simulatedBeatEnabled = false };
-        beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
-
-        beatManager.Update(0f);
-
-        Assert.That(beatManager.IsActive, Is.False);
-        Assert.That(beatManager.Envelope(0), Is.Null);
-        Assert.That(beatManager.Fill, Is.Null);
     }
 }

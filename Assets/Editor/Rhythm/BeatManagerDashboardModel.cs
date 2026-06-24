@@ -108,7 +108,7 @@ internal readonly struct BeatManagerDashboardModel
         return new BeatManagerDashboardModel(
             active,
             live,
-            !active ? "OFFLINE" : live ? "LIVE" : "SIM",
+            !active ? "OFFLINE" : "LIVE",
             beatManager?.Track ?? "—",
             rightText,
             beatManager?.BeatInBar ?? UnavailableBeat,

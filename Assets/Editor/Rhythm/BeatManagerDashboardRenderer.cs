@@ -90,7 +90,7 @@ internal static class BeatManagerDashboardRenderer
         "contrived progress and the upcoming section. Null: no phrase data on the wire right now.";
     private const string LevelsTooltip =
         "Levels: low/mid/high band energy with BeatManager's attack/release smoothing already applied " +
-        "(fast up, slow down — anti-flicker). Null: no live Levels; the local simulator never supplies them.";
+        "(fast up, slow down — anti-flicker). Null: no live Levels (Standalone never supplies them).";
     private const string ColorTooltip =
         "Color Bank, the three contrived Levels colors — RGB: bands mapped straight onto red/green/blue channels; " +
         "HUE: spectral-centroid hue, dominance saturation, strongest-band value; PAL: the live AnimPalette read " +

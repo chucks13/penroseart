@@ -303,7 +303,7 @@ public class Controller : Singleton<Controller>
     public TextMeshProUGUI debugText;
 
     [Header("Runtime HUD")]
-    /// <summary>Whether the simulator overlay should show compact runtime status text.</summary>
+    /// <summary>Whether the runtime HUD overlay should show compact runtime status text.</summary>
     public bool showRuntimeHud = true;
 
     /// <summary>When true, the bottom HUD includes effect/transition debug text and transport details.</summary>

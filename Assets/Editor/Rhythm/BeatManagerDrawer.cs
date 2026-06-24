@@ -124,7 +124,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         return WallVariantControl.ResolveOnScreenVariant(owner);
     }
 
-    /// <summary>Draws the serialized BeatManager fields (beatData, simulator and smoothing tunables) normally.</summary>
+    /// <summary>Draws the serialized BeatManager fields (beatData and smoothing tunables) normally.</summary>
     /// <remarks>Children are enumerated rather than listed by name so future fields appear without touching
     /// this drawer; beatData renders through Unity's plain default foldout — that is the raw-values debug view,
     /// intentionally plain.</remarks>

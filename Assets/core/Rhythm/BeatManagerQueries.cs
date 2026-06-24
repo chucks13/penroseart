@@ -172,7 +172,7 @@ public readonly struct PhraseInfo
 /// </summary>
 /// <remarks>
 /// Returned by <see cref="BeatManager.Levels"/>; null there means no live Levels are available
-/// (the local beat simulator never supplies them).
+/// (Standalone, with no live OSC source, never supplies them).
 /// </remarks>
 public readonly struct LevelsInfo
 {
@@ -624,7 +624,7 @@ public partial class BeatManager
 
     /// <summary>
     /// Advances the Levels attack/release smoothing for this frame. Called from <see cref="Update(float)"/>
-    /// after <see cref="beatData"/> has settled, in both the live and simulated paths.
+    /// after <see cref="beatData"/> has settled, for both live OSC and Standalone (no beat).
     /// </summary>
     private void UpdateLevelsSmoothing(float timeSeconds)
     {

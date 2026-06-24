@@ -15,9 +15,9 @@ using UnityEngine.TestTools;
 /// is what the property drawer plots, so the values asserted here are the contract the visualization must
 /// match — by construction it cannot drift from runtime.
 ///
-/// The Bar Phase assertions are anchored to the exact simulated-clock values already asserted by
-/// <c>BeatManagerRaveOscIntegrationTests</c> (120 BPM, <c>beatAverageMs = 500</c>), so a regression in the
-/// sim clock trips both suites together.
+/// The Bar Phase assertions are anchored to the same seeded-clock values (120 BPM, <c>beatAverageMs = 500</c>)
+/// asserted by <c>BeatManagerRaveOscIntegrationTests</c> via <see cref="BeatClockFixture"/>, so a regression
+/// in the Bar Phase derivation trips both suites together.
 /// </remarks>
 public sealed class WaveformTests
 {
@@ -135,18 +135,18 @@ public sealed class WaveformTests
     // --- BeatManager Bar Phase clock (the live forcing function behind Evaluate) ---
 
     [Test]
-    public void BarPhase_IsZeroOnTheSimulatedDownbeat()
+    public void BarPhase_IsZeroOnTheDownbeat()
     {
-        var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.Update(0f); // synthesizes beat 1 with a full 500 ms countdown to the next beat
+        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // beat 1, full 500 ms to next
+        beatManager.Update(0f);
         Assert.That(beatManager.BarPhase, Is.EqualTo(0f).Within(Tol));
     }
 
     [Test]
     public void BarPhase_AdvancesProportionallyWithinTheBar()
     {
-        var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.Update(0.25f); // 0.25 s = half of one 0.5 s beat = 1/8 of a 4-beat bar
+        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // half a 0.5 s beat = 1/8 bar
+        beatManager.Update(0.25f);
         Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(Tol));
     }
 
@@ -155,27 +155,27 @@ public sealed class WaveformTests
     [Test]
     public void GetBeatBrightness_MapsPeakToMaxAndTroughToMin()
     {
-        var onBeat = new BeatManager { simulatedBpm = 120f };
-        onBeat.Update(0f); // BarPhase 0 → Beat Pulse peak → maxBrightness
+        var onBeat = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // BarPhase 0 → peak → maxBrightness
+        onBeat.Update(0f);
         Assert.That(onBeat.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(1f).Within(Tol));
 
-        var offBeat = new BeatManager { simulatedBpm = 120f };
-        offBeat.Update(0.25f); // BarPhase 0.125 → Beat Pulse trough → minBrightness
+        var offBeat = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // BarPhase 0.125 → trough → min
+        offBeat.Update(0.25f);
         Assert.That(offBeat.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(0.85f).Within(Tol));
     }
 
     [Test]
     public void GetBeatBrightness_DisabledReturnsMaxBrightness()
     {
-        var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.Update(0.25f); // would be a trough if enabled
+        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // would be a trough if enabled
+        beatManager.Update(0.25f);
         Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.85f, enable: false), Is.EqualTo(1f).Within(Tol));
     }
 
     [Test]
     public void GetWaveform_OutOfRangeVariant_FallsBackToBeatPulse()
     {
-        var beatManager = new BeatManager { simulatedBpm = 120f };
+        var beatManager = new BeatManager();
         // Variant 0 is the Beat Pulse; an out-of-range index must resolve to the same peak-on-downbeat shape
         // rather than throwing — effect code degrades visibly to the canonical pulse.
         Assert.That(beatManager.GetWaveform(999).Evaluate(0f),

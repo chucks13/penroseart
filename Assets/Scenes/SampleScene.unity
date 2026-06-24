@@ -2068,8 +2068,6 @@ MonoBehaviour:
     buffer: []
     timeout: 0
   beatManager:
-    simulatedBpm: 120
-    simulatedBeatEnabled: 0
     beatData:
       playersLive: 
       track: 

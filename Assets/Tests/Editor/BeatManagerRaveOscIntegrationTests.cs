@@ -6,34 +6,10 @@ using PenroseArt.RaveOsc;
 public sealed class BeatManagerRaveOscIntegrationTests
 {
     [Test]
-    public void BeatManagerUpdateSynthesizesOnBeatWhenNoLiveBeatDataExists()
+    public void BeatManagerUpdateDerivesOffBeatHalfwayBetweenBeats()
     {
-        var beatManager = new BeatManager
-        {
-            simulatedBpm = 120f,
-        };
-
-        beatManager.Update(0f);
-
-        Assert.That(beatManager.IsActive, Is.True);
-        Assert.That(beatManager.beatData.snapshot.playersLive, Is.EqualTo("SIM"));
-        Assert.That(beatManager.beatData.snapshot.track, Is.EqualTo("Simulated Beat"));
-        Assert.That(beatManager.beatData.snapshot.bpm, Is.EqualTo(120f));
-        Assert.That(beatManager.beatData.snapshot.beatAverageMs, Is.EqualTo(500));
-        Assert.That(beatManager.beatData.snapshot.beatInBar, Is.EqualTo(1));
-        Assert.That(beatManager.beatData.snapshot.beatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
-        Assert.That(beatManager.beatData.snapshot.onBeats, Is.EqualTo(new[] { true, false, false, false }));
-        Assert.That(beatManager.beatData.snapshot.beatPulse, Is.EqualTo(1f).Within(0.0001f));
-        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { false, false, false, false }));
-    }
-
-    [Test]
-    public void BeatManagerUpdateDerivesOffBeatHalfwayBetweenSimulatedBeats()
-    {
-        var beatManager = new BeatManager
-        {
-            simulatedBpm = 120f,
-        };
+        // Seed beat 1 a half-beat in (0.25 s at 120 BPM): the nearest offbeat sits exactly on the gate.
+        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f);
 
         beatManager.Update(0.25f);
 
@@ -48,28 +24,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void BeatManagerUpdateDoesNotSimulateWhenSimulatedBpmIsUnavailable()
+    public void BeatManagerUpdateClearsToNoBeatInStandalone()
     {
-        var beatManager = new BeatManager
-        {
-            simulatedBpm = 0f,
-        };
-
-        beatManager.Update(0f);
-
-        Assert.That(beatManager.IsActive, Is.False);
-        Assert.That(beatManager.beatData.nextBeatMs, Is.EqualTo(-1));
-        Assert.That(beatManager.beatData.snapshot.beatPulse, Is.EqualTo(0f));
-    }
-
-    [Test]
-    public void BeatManagerUpdateDoesNotSimulateWhenSimulatorIsDisabled()
-    {
-        var beatManager = new BeatManager
-        {
-            simulatedBpm = 120f,
-            simulatedBeatEnabled = false,
-        };
+        // No live OSC source: Update must clear to the no-beat state regardless of any stale transport data.
+        var beatManager = new BeatManager();
         beatManager.beatData.snapshot.bpm = 128f;
         beatManager.beatData.snapshot.beatPulse = 1f;
 
@@ -86,10 +44,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
     [Test]
     public void BeatManagerUpdateDoesNotOverwriteLiveBeatData()
     {
-        var beatManager = new BeatManager
-        {
-            simulatedBpm = 120f,
-        };
+        var beatManager = new BeatManager();
         beatManager.beatData.snapshot.bpm = 128f;
         beatManager.beatData.snapshot.beatInBar = 3;
         beatManager.beatData.snapshot.beatPulse = 0.25f;
@@ -119,12 +74,9 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void BeatManagerLiveSourceDoesNotSimulateWhenOscSnapshotHasSentinelBpm()
+    public void BeatManagerLiveSourceStaysInactiveWhenOscSnapshotHasSentinelBpm()
     {
-        var beatManager = new BeatManager
-        {
-            simulatedBpm = 120f,
-        };
+        var beatManager = new BeatManager();
         var snapshot = new RaveOnAirSnapshot
         {
             bpm = -1f,

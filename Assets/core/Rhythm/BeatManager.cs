@@ -3,8 +3,8 @@ using PenroseArt.RaveOsc;
 using UnityEngine;
 
 /// <summary>
-/// Transport-only beat, phrase, and level state: exactly what the active source (live RaveSystem OSC or
-/// the local simulator) last said, with wire sentinels intact.
+/// Transport-only beat, phrase, and level state: exactly what live RaveSystem OSC last said, with wire
+/// sentinels intact.
 /// </summary>
 /// <remarks>
 /// This is the thin Unity-serializable transport wrapper around the OSC <see cref="RaveOnAirSnapshot"/>:
@@ -130,37 +130,24 @@ public partial class BeatManager
     /// <summary>Common-time beat slots used by the current Penrose/Rave beat model.</summary>
     private const int BeatSlotCount = 4;
 
-    /// <summary>Sentinel used when a simulated countdown is not available.</summary>
+    /// <summary>Sentinel used when a beat countdown is not available.</summary>
     private const int UnavailableMs = -1;
 
-    /// <summary>
-    /// Local fallback tempo used when no live Rave OSC source is active and
-    /// <see cref="simulatedBeatEnabled"/> allows the simulator to run.
-    /// </summary>
-    public float simulatedBpm = 120f;
-
-    /// <summary>
-    /// Whether the local fallback simulator may synthesize beat data when no live Rave OSC source is active.
-    /// Turn this off to make "no live source" a real no-beat state for effects: <see cref="IsActive"/>
-    /// becomes false.
-    /// </summary>
-    public bool simulatedBeatEnabled = true;
-
-    /// <summary>Current beat state. Defaults are inert until OSC or the local simulator supplies data.</summary>
+    /// <summary>Current beat state. Defaults are inert until live OSC supplies data.</summary>
     public BeatData beatData = new BeatData();
 
     /// <summary>
-    /// Which source currently owns <see cref="beatData"/>: <c>true</c> = live RaveSystem OSC (pushed in by
-    /// <see cref="RaveOscReceiver.ApplyTo"/> every frame), <c>false</c> = the local simulator.
+    /// Whether live RaveSystem OSC currently owns <see cref="beatData"/>: <c>true</c> = live OSC (pushed in by
+    /// <see cref="RaveOscReceiver.ApplyTo"/> every frame), <c>false</c> = Standalone (no beat).
     /// </summary>
     /// <remarks>
     /// The source is controlled by <see cref="RaveOscReceiver.ApplyTo"/> every frame from UDP 7000 transport
     /// liveness. Any recognized RaveSystem on-air OSC packet makes this live immediately; when packets stop,
-    /// the receiver switches this back to the simulator/no-beat fallback.
+    /// the receiver switches this back to Standalone and the next <see cref="Update"/> clears to no beat.
     /// </remarks>
     private bool liveBeatActive;
 
-    /// <summary>True while live RaveSystem OSC owns the beat; false while the local simulator drives it.</summary>
+    /// <summary>True while live RaveSystem OSC owns the beat; false in Standalone (no beat).</summary>
     public bool IsLiveSource => liveBeatActive;
 
     /// <summary>
@@ -194,8 +181,8 @@ public partial class BeatManager
     public int activeVariant = -1;
 
     // ---- Derived beat state -------------------------------------------------------------------
-    // Contrived locally from the transport fields once per frame, identically for the live and
-    // simulated sources (ADR-0002: BeatData is transport-only; locally derived state lives here).
+    // Contrived locally from the transport fields once per frame from the live OSC source
+    // (ADR-0002: BeatData is transport-only; locally derived state lives here).
 
     /// <summary>Milliseconds until offbeat labels 1 through 4, derived from the beat countdowns.</summary>
     private int[] offBeatsCountMs = CreateUnavailableCountdowns();
@@ -213,17 +200,16 @@ public partial class BeatManager
     public bool[] OffBeats => offBeats;
 
     /// <summary>
-    /// True while a usable beat clock is present: the transport carries a positive BPM (live RaveSystem
-    /// OSC or the running simulator). Derived, never stored — BeatData is transport-only.
+    /// True while a usable beat clock is present: the transport carries a positive BPM from live RaveSystem
+    /// OSC. Derived, never stored — BeatData is transport-only.
     /// </summary>
     public bool IsActive => beatData != null && beatData.snapshot.bpm > 0f;
 
     /// <summary>
-    /// Updates the fallback beat simulator from Unity time.
+    /// Advances the per-frame derived beat state from Unity time.
     /// </summary>
     /// <remarks>
-    /// Live OSC remains the source of truth. Simulation only runs when the live OSC source is inactive, the simulator is
-    /// enabled, and <see cref="simulatedBpm"/> is positive. Otherwise <see cref="beatData"/> is cleared to the
+    /// Live OSC is the only beat source. In Standalone (no live OSC) <see cref="beatData"/> is cleared to the
     /// standard no-beat state exposed through <see cref="IsActive"/>.
     /// </remarks>
     public void Update()
@@ -232,10 +218,11 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Updates the fallback beat simulator from a supplied clock value.
+    /// Advances the per-frame derived beat state from a supplied clock value.
     /// </summary>
     /// <remarks>
-    /// The explicit time overload keeps the simple BPM simulator testable without relying on Unity frame timing.
+    /// The explicit time overload keeps the Levels attack/release smoothing testable without relying on
+    /// Unity frame timing.
     /// </remarks>
     public void Update(float timeSeconds)
     {
@@ -249,13 +236,9 @@ public partial class BeatManager
             // Live RaveSystem OSC owns beatData; RaveOscReceiver.ApplyTo wrote it earlier this frame
             // (Controller calls ApplyTo immediately before this Update).
         }
-        else if (!simulatedBeatEnabled || simulatedBpm <= 0f)
-        {
-            ClearSimulatedBeatData();
-        }
         else
         {
-            ApplySimulatedBeat(timeSeconds);
+            ClearToNoBeat();
         }
 
         // Derivation and smoothing run after beatData has settled for this frame so the contrived
@@ -265,12 +248,11 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Chooses the beat source: <paramref name="live"/> = live RaveSystem OSC, otherwise the local simulator.
+    /// Chooses the beat source: <paramref name="live"/> = live RaveSystem OSC, otherwise Standalone (no beat).
     /// </summary>
     /// <remarks>
     /// Logged on every change of source (never silent). When this turns live off, the next <see cref="Update"/>
-    /// either resumes the simulator on <see cref="simulatedBpm"/> or clears <see cref="beatData"/> to the no-beat
-    /// state when <see cref="simulatedBeatEnabled"/> is false; when it turns live on, <see cref="Update"/> stands
+    /// clears <see cref="beatData"/> to the no-beat state; when it turns live on, <see cref="Update"/> stands
     /// aside and lets <see cref="RaveOscReceiver.ApplyTo"/> keep <see cref="beatData"/> current.
     /// </remarks>
     public void SetLiveBeatSource(bool live)
@@ -283,15 +265,12 @@ public partial class BeatManager
         liveBeatActive = live;
         Debug.Log(live
             ? "[BeatManager] Beat source -> LIVE RaveSystem OSC (UDP 7000 broadcasting)."
-            : simulatedBeatEnabled && simulatedBpm > 0f
-                ? $"[BeatManager] Beat source -> SIMULATED ({simulatedBpm:0.#} BPM); RaveSystem OSC is not broadcasting."
-                : "[BeatManager] Beat source -> NONE; RaveSystem OSC is not broadcasting and simulated beat is disabled.");
+            : "[BeatManager] Beat source -> NONE; RaveSystem OSC is not broadcasting (Standalone, no beat).");
     }
 
     /// <summary>
-    /// Contrives the locally derived beat state from the transport fields — identically for the live
-    /// and simulated sources. Runs once per frame from <see cref="Update"/> after the active source
-    /// has written <see cref="beatData"/>.
+    /// Contrives the locally derived beat state from the transport fields. Runs once per frame from
+    /// <see cref="Update"/> after the live source has written <see cref="beatData"/>.
     /// </summary>
     private void DeriveBeatState()
     {
@@ -462,13 +441,11 @@ public partial class BeatManager
     /// Normalized position within the current bar in [0..1): 0 on the downbeat, approaching 1 at the next.
     /// </summary>
     /// <remarks>
-    /// This is the always-running clock the Waveform Synthesizer evaluates against. It is derived uniformly
-    /// for both the local simulator and live OSC from <see cref="beatData"/>: the current 1-based beat label
-    /// plus the fraction elapsed into that beat. The intra-beat fraction is read from the *next* beat label's
-    /// countdown — not the nearest, which reads 0 during the on-beat gate window and would jump. In the
-    /// simulator this equals positionSeconds / measureDuration exactly; in live OSC it is as fresh as the
-    /// incoming snapshots (the same staleness profile as <see cref="BeatData.beatPulse"/>) and should be
-    /// validated against real Rave timing once OSC becomes the active beat source.
+    /// This is the always-running clock the Waveform Synthesizer evaluates against. It is derived from live
+    /// OSC <see cref="beatData"/>: the current 1-based beat label plus the fraction elapsed into that beat.
+    /// The intra-beat fraction is read from the *next* beat label's countdown — not the nearest, which reads 0
+    /// during the on-beat gate window and would jump. It is as fresh as the incoming snapshots (the same
+    /// staleness profile as <see cref="BeatData.beatPulse"/>).
     /// </remarks>
     public float BarPhase
     {
@@ -697,42 +674,14 @@ public partial class BeatManager
         }
     }
 
-    /// <summary>Writes a complete four-beat simulated snapshot into the transport-shaped BeatData fields.</summary>
-    /// <remarks>
-    /// The simulator writes only what the wire would carry; offbeats and other derived state are
-    /// contrived afterwards by <see cref="DeriveBeatState"/>, exactly as for live OSC data.
-    /// </remarks>
-    private void ApplySimulatedBeat(float timeSeconds)
-    {
-        var beatDurationSeconds = 60f / simulatedBpm;
-        var measureDurationSeconds = beatDurationSeconds * BeatSlotCount;
-        var gateDurationSeconds = beatDurationSeconds * 0.25f;
-        var positionSeconds = Mathf.Repeat(timeSeconds, measureDurationSeconds);
-        var beatIndex = Mathf.FloorToInt(positionSeconds / beatDurationSeconds);
-        var beatStartSeconds = beatIndex * beatDurationSeconds;
-        var elapsedSinceBeatSeconds = positionSeconds - beatStartSeconds;
-        var onBeat = elapsedSinceBeatSeconds < gateDurationSeconds;
-
-        beatData.snapshot.playersLive = "SIM";
-        beatData.snapshot.track = "Simulated Beat";
-        beatData.snapshot.bpm = simulatedBpm;
-        beatData.snapshot.beatInBar = beatIndex + 1;
-        beatData.snapshot.beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);
-        beatData.snapshot.beatPulse = GetPulse(elapsedSinceBeatSeconds, beatDurationSeconds);
-        beatData.snapshot.beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, onBeat, beatIndex);
-        beatData.snapshot.onBeats = BuildGates(onBeat, beatIndex);
-
-        ClearPhraseAndLevelState();
-    }
-
     /// <summary>
     /// Resets levels and the phrase states (phase/drop/fill/energy) to their unavailable sentinels.
     /// </summary>
     /// <remarks>
-    /// The simulator is a clock, not a musical analysis, so it must never present phrase data. Running
-    /// this every simulated frame also flushes stale live values left in <see cref="beatData"/> (including
-    /// scene-serialized ones) after a RaveSystem broadcast stops, so the contrived queries on this class
-    /// return null instead of replaying the last live Fill/Drop/Energy forever.
+    /// Standalone is a no-beat state, not a musical analysis, so it must never present phrase data. Running
+    /// this also flushes stale live values left in <see cref="beatData"/> (including scene-serialized ones)
+    /// after a RaveSystem broadcast stops, so the contrived queries on this class return null instead of
+    /// replaying the last live Fill/Drop/Energy forever.
     /// </remarks>
     private void ClearPhraseAndLevelState()
     {
@@ -744,11 +693,10 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Clears beatData to the standard no-beat state. Reached only in simulator mode when the simulator is off
-    /// or <see cref="simulatedBpm"/> is disabled (&lt;= 0), so there is no live OSC source to protect here — live mode
-    /// is handled before this in <see cref="Update"/>.
+    /// Clears beatData to the standard no-beat state. Reached only in Standalone (no live OSC source), so there
+    /// is no live OSC source to protect here — live mode is handled before this in <see cref="Update"/>.
     /// </summary>
-    private void ClearSimulatedBeatData()
+    private void ClearToNoBeat()
     {
         beatData.snapshot.playersLive = "";
         beatData.snapshot.track = "";
@@ -759,40 +707,6 @@ public partial class BeatManager
         beatData.snapshot.beatsCountMs = CreateUnavailableCountdowns();
         beatData.snapshot.onBeats = new bool[BeatSlotCount];
         ClearPhraseAndLevelState();
-    }
-
-    /// <summary>Builds label-ordered beat countdowns for the simulated clock.</summary>
-    private static int[] BuildCountdowns(float positionSeconds, float beatDurationSeconds, bool currentGate, int currentIndex)
-    {
-        var measureDurationSeconds = beatDurationSeconds * BeatSlotCount;
-        var countdowns = new int[BeatSlotCount];
-        for (var i = 0; i < countdowns.Length; i++)
-        {
-            var slotSeconds = i * beatDurationSeconds;
-            var deltaSeconds = slotSeconds - positionSeconds;
-            if (i == currentIndex && currentGate)
-            {
-                deltaSeconds = 0f;
-            }
-            else if (deltaSeconds <= 0f)
-            {
-                deltaSeconds += measureDurationSeconds;
-            }
-
-            countdowns[i] = Mathf.RoundToInt(deltaSeconds * 1000f);
-        }
-        return countdowns;
-    }
-
-    /// <summary>Builds a four-slot gate array with only the current slot active when its gate is open.</summary>
-    private static bool[] BuildGates(bool gateActive, int activeIndex)
-    {
-        var gates = new bool[BeatSlotCount];
-        if (gateActive && activeIndex >= 0 && activeIndex < gates.Length)
-        {
-            gates[activeIndex] = true;
-        }
-        return gates;
     }
 
     /// <summary>Creates a four-slot countdown array where every value is unavailable.</summary>
