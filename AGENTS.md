@@ -16,7 +16,7 @@ This repo no longer uses a DOX `AGENTS.md` hierarchy. Do not recreate child `AGE
 
 ### Issue tracker
 
-Issues and PRDs are tracked as local markdown under `.scratch/<feature-slug>/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues and PRDs are kept as local, git-ignored markdown under `.scratch/<feature-slug>/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

@@ -21,12 +21,8 @@
 
 # IDE specific files
 .vs/
+.vscode/
 *.dotsettings
 
-# Agent scratch: ignore transient files, but keep curated local issue tracker markdown.
-/.scratch/**
-!/.scratch/
-!/.scratch/*/
-!/.scratch/*/PRD.md
-!/.scratch/*/issues/
-!/.scratch/*/issues/*.md
+# Agent scratch: purely local, never tracked.
+/.scratch/

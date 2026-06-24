@@ -2,6 +2,8 @@
 
 Issues and PRDs for this repo live as markdown files in `.scratch/`.
 
+`.scratch/` is purely local and git-ignored — nothing under it is committed. Treat these files as transient working notes: once the work lands, delete the feature directory rather than leaving stale tickets behind.
+
 ## Conventions
 
 - One feature per directory: `.scratch/<feature-slug>/`
