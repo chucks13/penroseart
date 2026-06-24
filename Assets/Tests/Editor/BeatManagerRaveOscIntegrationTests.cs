@@ -424,10 +424,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
             beatAverageMs = 468,
             beatPulse = 0.625f,
             levels = new Levels { low = 0.25f, mid = 0.5f, high = 0.75f },
-            phraseState = new PhaseState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 },
+            phraseState = new NamedState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 },
             dropState = new CountdownState { active = 1, countBeats = 0, lengthBeats = 32, remaining = 2 },
             fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 },
-            energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 },
+            energyState = new NamedState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 },
         };
     }
 }

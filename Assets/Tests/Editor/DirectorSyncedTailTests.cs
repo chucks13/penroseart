@@ -506,7 +506,7 @@ public sealed class DirectorSyncedTailTests
         controller.beatManager.beatData.snapshot.bpm = 120f;
         controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = beat, total = -1 };
         controller.beatManager.beatData.snapshot.beatInBar = ((beat - 1) % 4) + 1;
-        controller.beatManager.beatData.snapshot.phraseState = new PhaseState
+        controller.beatManager.beatData.snapshot.phraseState = new NamedState
         {
             current = "Phrase",
             next = "Next",
@@ -522,7 +522,7 @@ public sealed class DirectorSyncedTailTests
         controller.beatManager.beatData.snapshot.bpm = 120f;
         controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = beat, total = -1 };
         controller.beatManager.beatData.snapshot.beatInBar = ((beat - 1) % 4) + 1;
-        controller.beatManager.beatData.snapshot.phraseState = new PhaseState
+        controller.beatManager.beatData.snapshot.phraseState = new NamedState
         {
             current = string.Empty,
             next = string.Empty,

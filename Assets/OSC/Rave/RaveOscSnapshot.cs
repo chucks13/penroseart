@@ -33,11 +33,11 @@ public struct Levels {
 }
 
 /// <summary>
-/// Current/next named beat state used by phase and energy projections.
+/// Current/next named beat state used by phrase and energy projections.
 /// Mirrors RaveSystem's track phase state shape: labels, tri-state active value, beat count, length, and remaining count.
 /// </summary>
 [Serializable]
-public struct PhaseState {
+public struct NamedState {
     public string? current;
     public string? next;
 
@@ -51,9 +51,9 @@ public struct PhaseState {
     public int lengthBeats;
     public int remaining;
 
-    /// <summary>Phase state whose fields are all unavailable (-1 sentinels, empty labels).</summary>
-    public static PhaseState Unavailable =>
-        new PhaseState { current = null, next = null, active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+    /// <summary>Named state whose fields are all unavailable (-1 sentinels, empty labels).</summary>
+    public static NamedState Unavailable =>
+        new NamedState { current = null, next = null, active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
 }
 
 /// <summary>
@@ -94,10 +94,10 @@ public sealed class RaveOnAirSnapshot {
     public int beatAverageMs = -1;
     public float beatPulse;
     public Levels levels = Levels.Unavailable;
-    public PhaseState phraseState = PhaseState.Unavailable;
+    public NamedState phraseState = NamedState.Unavailable;
     public CountdownState dropState = CountdownState.Unavailable;
     public CountdownState fillState = CountdownState.Unavailable;
-    public PhaseState energyState = PhaseState.Unavailable;
+    public NamedState energyState = NamedState.Unavailable;
 
     /// <summary>Creates a deep copy so background OSC updates cannot mutate a returned snapshot.</summary>
     /// <remarks>

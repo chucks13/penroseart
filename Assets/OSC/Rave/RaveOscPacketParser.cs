@@ -124,7 +124,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private delegate void SnapshotLevelsSetter(RaveOnAirSnapshot snapshot, Levels value);
 
-    private delegate void SnapshotNamedStateSetter(RaveOnAirSnapshot snapshot, PhaseState value);
+    private delegate void SnapshotNamedStateSetter(RaveOnAirSnapshot snapshot, NamedState value);
 
     private delegate void SnapshotCountdownStateSetter(RaveOnAirSnapshot snapshot, CountdownState value);
 
@@ -188,7 +188,7 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private void RegisterNamedState(string address, SnapshotNamedStateSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new PhaseState {
+            var value = new NamedState {
                 current = ReadNextString(address, ref reader),
                 next = ReadNextString(address, ref reader),
                 // Tri-state passthrough: -1 unavailable / 0 upcoming / 1 active. A != 0 collapse here

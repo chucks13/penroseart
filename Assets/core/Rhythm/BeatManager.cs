@@ -737,10 +737,10 @@ public partial class BeatManager
     private void ClearPhraseAndLevelState()
     {
         beatData.snapshot.levels = PenroseArt.RaveOsc.Levels.Unavailable;
-        beatData.snapshot.phraseState = PhaseState.Unavailable;
+        beatData.snapshot.phraseState = NamedState.Unavailable;
         beatData.snapshot.dropState = CountdownState.Unavailable;
         beatData.snapshot.fillState = CountdownState.Unavailable;
-        beatData.snapshot.energyState = PhaseState.Unavailable;
+        beatData.snapshot.energyState = NamedState.Unavailable;
     }
 
     /// <summary>
