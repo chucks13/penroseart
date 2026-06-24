@@ -66,14 +66,14 @@ public readonly struct OnAirTimingInput
             return Unavailable;
         }
 
-        var phase = beatManager.Phase;
+        var phrase = beatManager.Phrase;
         return new OnAirTimingInput(
             beatManager.Beat ?? -1,
             beatManager.TotalBeats ?? -1,
             beatManager.BeatInBar ?? -1,
-            phase is { inPhase: true } ? 1 : phase is { } ? 0 : -1,
-            phase?.beatsUntilNext ?? -1,
-            phase?.lengthBeats ?? -1);
+            phrase is { inPhrase: true } ? 1 : phrase is { } ? 0 : -1,
+            phrase?.beatsUntilNext ?? -1,
+            phrase?.lengthBeats ?? -1);
     }
 
     /// <summary>Converts the snapshot into the low-level PhaseClock input kept behind On-Air Timing.</summary>

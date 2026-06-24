@@ -7,10 +7,11 @@ using UnityEngine;
 /// the local simulator) last said, with wire sentinels intact.
 /// </summary>
 /// <remarks>
-/// The field names intentionally mirror the incoming OSC snapshot shape so Unity can serialize and display
-/// them directly. Locally derived state (offbeats, beat availability) is contrived by <see cref="BeatManager"/>;
-/// effects never read this class directly — raw values flow through the nullable queries on
-/// <see cref="BeatManager"/> instead (ADR-0002).
+/// This is the thin Unity-serializable transport wrapper around the OSC <see cref="RaveOnAirSnapshot"/>:
+/// it holds one snapshot (so adding a wire field never needs a mirrored field here) and adds only the
+/// few derived convenience members the runtime reads. Locally derived state (offbeats, beat availability)
+/// is contrived by <see cref="BeatManager"/>; effects never read this class directly — raw values flow
+/// through the nullable queries on <see cref="BeatManager"/> instead (ADR-0002).
 /// </remarks>
 [Serializable]
 public class BeatData
@@ -21,78 +22,25 @@ public class BeatData
     /// <summary>Sentinel used when OSC has not supplied a usable beat countdown.</summary>
     private const int UnavailableMs = -1;
 
-    /// <summary>CSV of live on-air player numbers ordered newest on-air first.</summary>
-    public string playersLive = "";
+    /// <summary>
+    /// The latest OSC-shaped on-air snapshot this beat model holds. Non-null so Unity can serialize and
+    /// display it directly and so readers never need a null check before reaching a transport field.
+    /// </summary>
+    public RaveOnAirSnapshot snapshot = new RaveOnAirSnapshot();
 
-    /// <summary>Focused on-air track display text.</summary>
-    public string track = "";
+    /// <summary>Milliseconds until the nearest upcoming beat label, read from the held snapshot.</summary>
+    public int nextBeatMs => ReadIntAt(snapshot.beatsCountMs, IndexOfNearestCountdown(snapshot.beatsCountMs));
 
-    /// <summary>Focused on-air effective tempo in beats per minute.</summary>
-    public float bpm;
-
-    /// <summary>Focused on-air beat position from /rave/onair/beat.</summary>
-    public BeatPosition beat;
-
-    /// <summary>Focused on-air bar position from /rave/onair/bar.</summary>
-    public BarPosition bar;
-
-    /// <summary>Focused on-air 1-based beat label inside the current bar.</summary>
-    public int beatInBar;
-
-    /// <summary>Milliseconds until beat labels 1 through 4.</summary>
-    public int[] beatsCountMs = CreateUnavailableCountdowns();
-
-    /// <summary>Beat-label gates for beat labels 1 through 4.</summary>
-    public bool[] onBeats = new bool[BeatSlotCount];
-
-    /// <summary>Average beat duration in milliseconds across live players with usable timing.</summary>
-    public int beatAverageMs;
-
-    /// <summary>Normalized OSC beat pulse: 1 on the beat, decaying toward 0.</summary>
-    public float beatPulse;
-
-    /// <summary>Average low/mid/high waveform energy across live players. -1 sentinels mean unavailable.</summary>
-    public Levels levels = Levels.Unavailable;
-
-    /// <summary>Grouped phase state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
-    public PhaseState phaseState = PhaseState.Unavailable;
-
-    /// <summary>Grouped drop countdown state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
-    public CountdownState dropState = CountdownState.Unavailable;
-
-    /// <summary>Grouped fill countdown state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
-    public CountdownState fillState = CountdownState.Unavailable;
-
-    /// <summary>Grouped energy-run state for the focused on-air track. Tri-state <c>active</c>: -1/0/1.</summary>
-    public PhaseState energyState = PhaseState.Unavailable;
-
-    /// <summary>Milliseconds until the nearest upcoming beat label, read from <see cref="beatsCountMs"/>.</summary>
-    public int nextBeatMs => ReadIntAt(beatsCountMs, IndexOfNearestCountdown(beatsCountMs));
-
-    /// <summary>True while the nearest upcoming beat label gate is active, read from <see cref="onBeats"/>.</summary>
-    public bool onBeat => ReadBoolAt(onBeats, IndexOfNearestCountdown(beatsCountMs));
+    /// <summary>True while the nearest upcoming beat label gate is active, read from the held snapshot.</summary>
+    public bool onBeat => ReadBoolAt(snapshot.onBeats, IndexOfNearestCountdown(snapshot.beatsCountMs));
 
     /// <summary>True while the current musical beat label gate is active.</summary>
-    public bool currentOnBeat => IsOnBeat(beatInBar);
+    public bool currentOnBeat => IsOnBeat(snapshot.beatInBar);
 
-    /// <summary>Copies the latest OSC-shaped on-air snapshot into this application beat model.</summary>
-    public void CopyFrom(RaveOnAirSnapshot snapshot)
+    /// <summary>Replaces the held snapshot with a deep copy of the latest OSC-shaped on-air snapshot.</summary>
+    public void CopyFrom(RaveOnAirSnapshot source)
     {
-        playersLive = snapshot.playersLive ?? "";
-        track = snapshot.track ?? "";
-        bpm = snapshot.bpm;
-        beat = snapshot.beat;
-        bar = snapshot.bar;
-        beatInBar = snapshot.beatInBar;
-        beatsCountMs = CopyFour(snapshot.beatsCountMs, UnavailableMs);
-        onBeats = CopyFour(snapshot.onBeats);
-        beatAverageMs = snapshot.beatAverageMs;
-        beatPulse = snapshot.beatPulse;
-        levels = snapshot.levels;
-        phaseState = snapshot.phaseState;
-        dropState = snapshot.dropState;
-        fillState = snapshot.fillState;
-        energyState = snapshot.energyState;
+        snapshot = source.Clone();
     }
 
     /// <summary>Returns the smallest non-negative beat countdown, or <paramref name="fallback"/> when unavailable.</summary>
@@ -105,7 +53,7 @@ public class BeatData
     /// <summary>Returns the on-beat gate for a 1-based beat-in-bar label.</summary>
     public bool IsOnBeat(int beatInBar)
     {
-        return ReadBoolAt(onBeats, BeatLabelToIndex(beatInBar));
+        return ReadBoolAt(snapshot.onBeats, BeatLabelToIndex(beatInBar));
     }
 
     /// <summary>Converts a musical 1-based beat label into the matching zero-based array slot.</summary>
@@ -146,45 +94,6 @@ public class BeatData
     internal static bool ReadBoolAt(bool[] source, int index)
     {
         return source != null && index >= 0 && index < source.Length && source[index];
-    }
-
-    /// <summary>Copies OSC countdown data into a fixed four-slot Unity-serialized array.</summary>
-    private static int[] CopyFour(int[] source, int missingValue)
-    {
-        var copy = CreateFilledIntArray(missingValue);
-        if (source != null)
-        {
-            Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
-        }
-        return copy;
-    }
-
-    /// <summary>Copies OSC gate data into a fixed four-slot Unity-serialized array.</summary>
-    private static bool[] CopyFour(bool[] source)
-    {
-        var copy = new bool[BeatSlotCount];
-        if (source != null)
-        {
-            Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
-        }
-        return copy;
-    }
-
-    /// <summary>Creates a four-slot countdown array where every value is unavailable.</summary>
-    private static int[] CreateUnavailableCountdowns()
-    {
-        return CreateFilledIntArray(UnavailableMs);
-    }
-
-    /// <summary>Creates a four-slot countdown array initialized to the same value in every slot.</summary>
-    private static int[] CreateFilledIntArray(int value)
-    {
-        var values = new int[BeatSlotCount];
-        for (var i = 0; i < values.Length; i++)
-        {
-            values[i] = value;
-        }
-        return values;
     }
 }
 
@@ -307,7 +216,7 @@ public partial class BeatManager
     /// True while a usable beat clock is present: the transport carries a positive BPM (live RaveSystem
     /// OSC or the running simulator). Derived, never stored — BeatData is transport-only.
     /// </summary>
-    public bool IsActive => beatData != null && beatData.bpm > 0f;
+    public bool IsActive => beatData != null && beatData.snapshot.bpm > 0f;
 
     /// <summary>
     /// Updates the fallback beat simulator from Unity time.
@@ -399,23 +308,23 @@ public partial class BeatManager
         var offBeatCounts = CreateUnavailableCountdowns();
         var offBeatGates = new bool[BeatSlotCount];
         offBeatPulse = 0f;
-        if (!IsActive || beatData.beatAverageMs <= 0 ||
-            beatData.beatsCountMs == null || beatData.beatsCountMs.Length < BeatSlotCount)
+        if (!IsActive || beatData.snapshot.beatAverageMs <= 0 ||
+            beatData.snapshot.beatsCountMs == null || beatData.snapshot.beatsCountMs.Length < BeatSlotCount)
         {
             offBeatsCountMs = offBeatCounts;
             offBeats = offBeatGates;
             return;
         }
 
-        var activeWindowMs = beatData.beatAverageMs * 0.25f;
-        var measureMs = beatData.beatAverageMs * (float)BeatSlotCount;
+        var activeWindowMs = beatData.snapshot.beatAverageMs * 0.25f;
+        var measureMs = beatData.snapshot.beatAverageMs * (float)BeatSlotCount;
         var nearestOffBeatMs = float.MaxValue;
 
         for (var i = 0; i < offBeatCounts.Length; i++)
         {
             var nextBeatIndex = (i + 1) % offBeatCounts.Length;
-            var startBeatMs = beatData.beatsCountMs[i];
-            var nextBeatMs = beatData.beatsCountMs[nextBeatIndex];
+            var startBeatMs = beatData.snapshot.beatsCountMs[i];
+            var nextBeatMs = beatData.snapshot.beatsCountMs[nextBeatIndex];
             if (startBeatMs < 0 || nextBeatMs < 0)
             {
                 continue;
@@ -454,9 +363,9 @@ public partial class BeatManager
 
         if (nearestOffBeatMs != float.MaxValue)
         {
-            var nextOffBeatInCycleMs = nearestOffBeatMs % beatData.beatAverageMs;
-            var elapsedSinceNearestOffBeatMs = nextOffBeatInCycleMs <= 0f ? 0f : beatData.beatAverageMs - nextOffBeatInCycleMs;
-            offBeatPulse = GetPulse(elapsedSinceNearestOffBeatMs, beatData.beatAverageMs);
+            var nextOffBeatInCycleMs = nearestOffBeatMs % beatData.snapshot.beatAverageMs;
+            var elapsedSinceNearestOffBeatMs = nextOffBeatInCycleMs <= 0f ? 0f : beatData.snapshot.beatAverageMs - nextOffBeatInCycleMs;
+            offBeatPulse = GetPulse(elapsedSinceNearestOffBeatMs, beatData.snapshot.beatAverageMs);
         }
 
         offBeatsCountMs = offBeatCounts;
@@ -570,7 +479,7 @@ public partial class BeatManager
                 return 0f;
             }
 
-            var label = beatData.beatInBar;
+            var label = beatData.snapshot.beatInBar;
             if (label < 1 || label > BeatSlotCount)
             {
                 return 0f; // beat label not yet known / inert
@@ -585,7 +494,7 @@ public partial class BeatManager
     /// </summary>
     /// <remarks>
     /// This is the sub-beat half of <see cref="BarPhase"/>, shared with the contrived phrase-progress
-    /// queries (Fill/Drop/Phase) so all beat-smoothed motion uses one clock. The fraction is read from
+    /// queries (Fill/Drop/Phrase) so all beat-smoothed motion uses one clock. The fraction is read from
     /// the *next* beat label's countdown — not the nearest, which reads 0 during the on-beat gate window
     /// and would jump.
     /// </remarks>
@@ -596,21 +505,21 @@ public partial class BeatManager
             return 0f;
         }
 
-        var label = beatData.beatInBar;
+        var label = beatData.snapshot.beatInBar;
         if (label < 1 || label > BeatSlotCount)
         {
             return 0f;
         }
 
         var nextSlot = label % BeatSlotCount; // 0-based slot of the next label (wraps last -> 0)
-        var countdowns = beatData.beatsCountMs;
+        var countdowns = beatData.snapshot.beatsCountMs;
         var msToNext = countdowns != null && nextSlot >= 0 && nextSlot < countdowns.Length
             ? countdowns[nextSlot]
             : UnavailableMs;
 
-        if (beatData.beatAverageMs > 0 && msToNext >= 0)
+        if (beatData.snapshot.beatAverageMs > 0 && msToNext >= 0)
         {
-            return Mathf.Clamp01(1f - ((float)msToNext / beatData.beatAverageMs));
+            return Mathf.Clamp01(1f - ((float)msToNext / beatData.snapshot.beatAverageMs));
         }
 
         return 0f;
@@ -804,14 +713,14 @@ public partial class BeatManager
         var elapsedSinceBeatSeconds = positionSeconds - beatStartSeconds;
         var onBeat = elapsedSinceBeatSeconds < gateDurationSeconds;
 
-        beatData.playersLive = "SIM";
-        beatData.track = "Simulated Beat";
-        beatData.bpm = simulatedBpm;
-        beatData.beatInBar = beatIndex + 1;
-        beatData.beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);
-        beatData.beatPulse = GetPulse(elapsedSinceBeatSeconds, beatDurationSeconds);
-        beatData.beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, onBeat, beatIndex);
-        beatData.onBeats = BuildGates(onBeat, beatIndex);
+        beatData.snapshot.playersLive = "SIM";
+        beatData.snapshot.track = "Simulated Beat";
+        beatData.snapshot.bpm = simulatedBpm;
+        beatData.snapshot.beatInBar = beatIndex + 1;
+        beatData.snapshot.beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);
+        beatData.snapshot.beatPulse = GetPulse(elapsedSinceBeatSeconds, beatDurationSeconds);
+        beatData.snapshot.beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, onBeat, beatIndex);
+        beatData.snapshot.onBeats = BuildGates(onBeat, beatIndex);
 
         ClearPhraseAndLevelState();
     }
@@ -827,11 +736,11 @@ public partial class BeatManager
     /// </remarks>
     private void ClearPhraseAndLevelState()
     {
-        beatData.levels = PenroseArt.RaveOsc.Levels.Unavailable;
-        beatData.phaseState = PhaseState.Unavailable;
-        beatData.dropState = CountdownState.Unavailable;
-        beatData.fillState = CountdownState.Unavailable;
-        beatData.energyState = PhaseState.Unavailable;
+        beatData.snapshot.levels = PenroseArt.RaveOsc.Levels.Unavailable;
+        beatData.snapshot.phraseState = PhaseState.Unavailable;
+        beatData.snapshot.dropState = CountdownState.Unavailable;
+        beatData.snapshot.fillState = CountdownState.Unavailable;
+        beatData.snapshot.energyState = PhaseState.Unavailable;
     }
 
     /// <summary>
@@ -841,14 +750,14 @@ public partial class BeatManager
     /// </summary>
     private void ClearSimulatedBeatData()
     {
-        beatData.playersLive = "";
-        beatData.track = "";
-        beatData.bpm = UnavailableMs; // wire sentinel: no usable tempo, so IsActive derives to false
-        beatData.beatInBar = 0;
-        beatData.beatAverageMs = 0;
-        beatData.beatPulse = 0f;
-        beatData.beatsCountMs = CreateUnavailableCountdowns();
-        beatData.onBeats = new bool[BeatSlotCount];
+        beatData.snapshot.playersLive = "";
+        beatData.snapshot.track = "";
+        beatData.snapshot.bpm = UnavailableMs; // wire sentinel: no usable tempo, so IsActive derives to false
+        beatData.snapshot.beatInBar = 0;
+        beatData.snapshot.beatAverageMs = 0;
+        beatData.snapshot.beatPulse = 0f;
+        beatData.snapshot.beatsCountMs = CreateUnavailableCountdowns();
+        beatData.snapshot.onBeats = new bool[BeatSlotCount];
         ClearPhraseAndLevelState();
     }
 
@@ -935,9 +844,9 @@ public partial class BeatManager
     /// </summary>
     private int GetCurrentBeatLabel()
     {
-        if (beatData.beatInBar >= 1 && beatData.beatInBar <= BeatSlotCount)
+        if (beatData.snapshot.beatInBar >= 1 && beatData.snapshot.beatInBar <= BeatSlotCount)
         {
-            return beatData.beatInBar;
+            return beatData.snapshot.beatInBar;
         }
 
         return 1;

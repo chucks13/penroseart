@@ -94,30 +94,22 @@ public sealed class RaveOnAirSnapshot {
     public int beatAverageMs = -1;
     public float beatPulse;
     public Levels levels = Levels.Unavailable;
-    public PhaseState phaseState = PhaseState.Unavailable;
+    public PhaseState phraseState = PhaseState.Unavailable;
     public CountdownState dropState = CountdownState.Unavailable;
     public CountdownState fillState = CountdownState.Unavailable;
     public PhaseState energyState = PhaseState.Unavailable;
 
     /// <summary>Creates a deep copy so background OSC updates cannot mutate a returned snapshot.</summary>
+    /// <remarks>
+    /// All scalar/struct fields copy via <see cref="object.MemberwiseClone"/>; only the two array fields are
+    /// then re-copied so the clone is independent for thread-safety. Keeping the per-field list out of here
+    /// is deliberate — it stops Clone from silently dropping a newly added scalar field.
+    /// </remarks>
     public RaveOnAirSnapshot Clone() {
-        return new RaveOnAirSnapshot {
-            playersLive = playersLive,
-            track = track,
-            bpm = bpm,
-            beat = beat,
-            bar = bar,
-            beatInBar = beatInBar,
-            beatsCountMs = CopyFour(beatsCountMs),
-            onBeats = CopyFour(onBeats),
-            beatAverageMs = beatAverageMs,
-            beatPulse = beatPulse,
-            levels = levels,
-            phaseState = phaseState,
-            dropState = dropState,
-            fillState = fillState,
-            energyState = energyState,
-        };
+        var copy = (RaveOnAirSnapshot)MemberwiseClone();
+        copy.beatsCountMs = CopyFour(beatsCountMs);
+        copy.onBeats = CopyFour(onBeats);
+        return copy;
     }
 
     /// <summary>Returns the smallest non-negative beat countdown, or <paramref name="fallback" /> when unavailable.</summary>
@@ -142,8 +134,8 @@ public sealed class RaveOnAirSnapshot {
         var bpmText = bpm > 0f ? bpm.ToString("0.##") : "?";
         var beatText = beat.current >= 0 ? beat.current.ToString() : "?";
         var barText = bar.current >= 0 ? bar.current.ToString() : "?";
-        var phaseText = string.IsNullOrEmpty(phaseState.current) ? "?" : phaseState.current;
-        return $"Rave OSC bpm={bpmText} beat={beatText} bar={barText} phase={phaseText}";
+        var phraseText = string.IsNullOrEmpty(phraseState.current) ? "?" : phraseState.current;
+        return $"Rave OSC bpm={bpmText} beat={beatText} bar={barText} phrase={phraseText}";
     }
 
     private static int[] CopyFour(int[] source) {

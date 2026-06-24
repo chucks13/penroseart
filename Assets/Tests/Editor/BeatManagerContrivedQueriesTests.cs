@@ -20,10 +20,10 @@ public sealed class BeatManagerContrivedQueriesTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.bpm = 128f; // positive BPM = usable beat clock (IsActive derives from this)
-        beatManager.beatData.beatInBar = 1;
-        beatManager.beatData.beatAverageMs = 500;
-        beatManager.beatData.beatsCountMs = new[] { 0, 250, 750, 1250 };
+        beatManager.beatData.snapshot.bpm = 128f; // positive BPM = usable beat clock (IsActive derives from this)
+        beatManager.beatData.snapshot.beatInBar = 1;
+        beatManager.beatData.snapshot.beatAverageMs = 500;
+        beatManager.beatData.snapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
         return beatManager;
     }
 
@@ -55,7 +55,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void FillIsNullWhenTriStateIsUnavailable()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.fillState = CountdownState.Unavailable;
+        beatManager.beatData.snapshot.fillState = CountdownState.Unavailable;
 
         Assert.That(beatManager.Fill, Is.Null);
     }
@@ -68,7 +68,7 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.Fill, Is.Null);
         Assert.That(beatManager.Drop, Is.Null);
         Assert.That(beatManager.Energy, Is.Null);
-        Assert.That(beatManager.Phase, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Null);
         Assert.That(beatManager.Levels, Is.Null);
     }
 
@@ -76,7 +76,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void FillCountsDownWhileUpcoming()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 };
+        beatManager.beatData.snapshot.fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 };
 
         var fill = beatManager.Fill;
 
@@ -96,7 +96,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void FillReportsBeatSmoothedProgressWhileInProgress()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 1 };
+        beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 1 };
 
         var fill = beatManager.Fill;
 
@@ -114,7 +114,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void FillMapsWireUnknownsToNullFieldsInsideAValidState()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        beatManager.beatData.snapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = -1 };
 
         var fill = beatManager.Fill;
 
@@ -132,7 +132,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         // The wire shape when the track HAS fills but they are all behind the playhead:
         // still available (active 0), no known next start, zero occurrences left.
-        beatManager.beatData.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = 0 };
+        beatManager.beatData.snapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = 0 };
 
         var fill = beatManager.Fill;
 
@@ -148,10 +148,10 @@ public sealed class BeatManagerContrivedQueriesTests
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = BeatManager.AnticipationWindowBeats + 1, lengthBeats = 16, remaining = 1 };
+        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = BeatManager.AnticipationWindowBeats + 1, lengthBeats = 16, remaining = 1 };
         Assert.That(beatManager.Drop!.Value.anticipation, Is.Null);
 
-        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = 0, lengthBeats = 16, remaining = 1 };
+        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 0, lengthBeats = 16, remaining = 1 };
         Assert.That(beatManager.Drop!.Value.anticipation, Is.EqualTo(1f).Within(0.0001f));
     }
 
@@ -159,8 +159,8 @@ public sealed class BeatManagerContrivedQueriesTests
     public void MsUntilStartIsNullWithoutAUsableBeatInterval()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.beatAverageMs = -1;
-        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 16, remaining = 1 };
+        beatManager.beatData.snapshot.beatAverageMs = -1;
+        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 16, remaining = 1 };
 
         var drop = beatManager.Drop;
 
@@ -173,7 +173,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void DropMirrorsFillCooking()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.dropState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 2 };
+        beatManager.beatData.snapshot.dropState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 2 };
 
         var drop = beatManager.Drop;
 
@@ -191,7 +191,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyParsesClosedVocabularyOnce()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
 
         var energy = beatManager.Energy;
 
@@ -211,7 +211,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyParsesLabelsCaseInsensitively()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.energyState = new PhaseState { current = "low", next = "HIGH", active = 1, countBeats = 8, lengthBeats = 16, remaining = 1 };
+        beatManager.beatData.snapshot.energyState = new PhaseState { current = "low", next = "HIGH", active = 1, countBeats = 8, lengthBeats = 16, remaining = 1 };
 
         var energy = beatManager.Energy;
 
@@ -226,7 +226,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyDegradesToNullOnUnrecognizedLabelNeverToAWrongTier()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.energyState = new PhaseState { current = "Banana", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.energyState = new PhaseState { current = "Banana", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
 
         Assert.That(beatManager.Energy, Is.Null);
     }
@@ -235,7 +235,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyIsNullWhenTriStateIsUnavailable()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.energyState = new PhaseState { current = "High", next = "Mid", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        beatManager.beatData.snapshot.energyState = new PhaseState { current = "High", next = "Mid", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
 
         Assert.That(beatManager.Energy, Is.Null);
     }
@@ -244,7 +244,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyTreatsUnknownNextLabelAsSteadyDirection()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.energyState = new PhaseState { current = "Mid", next = "", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.energyState = new PhaseState { current = "Mid", next = "", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
 
         var energy = beatManager.Energy;
 
@@ -253,55 +253,55 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(energy.Value.direction, Is.EqualTo(0));
     }
 
-    // --- Track Phase (open vocabulary) ---
+    // --- Track Phrase (open vocabulary) ---
 
     [Test]
-    public void PhasePassesOpenVocabularyLabelsThroughAndCooksStructure()
+    public void PhrasePassesOpenVocabularyLabelsThroughAndCooksStructure()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.phaseState = new PhaseState { current = "Chorus 2", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        beatManager.beatData.snapshot.phraseState = new PhaseState { current = "Chorus 2", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
 
-        var phase = beatManager.Phase;
+        var phrase = beatManager.Phrase;
 
-        Assert.That(phase, Is.Not.Null);
-        Assert.That(phase!.Value.label, Is.EqualTo("Chorus 2"));
-        Assert.That(phase.Value.next, Is.EqualTo("Break"));
-        Assert.That(phase.Value.inPhase, Is.True);
-        Assert.That(phase.Value.beatsUntilNext, Is.EqualTo(12));
-        Assert.That(phase.Value.lengthBeats, Is.EqualTo(32));
-        Assert.That(phase.Value.remaining, Is.EqualTo(8));
+        Assert.That(phrase, Is.Not.Null);
+        Assert.That(phrase!.Value.label, Is.EqualTo("Chorus 2"));
+        Assert.That(phrase.Value.next, Is.EqualTo("Break"));
+        Assert.That(phrase.Value.inPhrase, Is.True);
+        Assert.That(phrase.Value.beatsUntilNext, Is.EqualTo(12));
+        Assert.That(phrase.Value.lengthBeats, Is.EqualTo(32));
+        Assert.That(phrase.Value.remaining, Is.EqualTo(8));
         // (32 - 12) elapsed beats plus the 0.5 intra-beat fraction, over 32.
-        Assert.That(phase.Value.progress, Is.EqualTo(0.640625f).Within(0.0001f));
+        Assert.That(phrase.Value.progress, Is.EqualTo(0.640625f).Within(0.0001f));
     }
 
     [Test]
-    public void PhasePreservesUpcomingTriStateForNextPhrasePlanning()
+    public void PhrasePreservesUpcomingTriStateForNextPhrasePlanning()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.phaseState = new PhaseState { current = "Break", next = "Drop", active = 0, countBeats = 9, lengthBeats = 64, remaining = 7 };
+        beatManager.beatData.snapshot.phraseState = new PhaseState { current = "Break", next = "Drop", active = 0, countBeats = 9, lengthBeats = 64, remaining = 7 };
 
-        var phase = beatManager.Phase;
+        var phrase = beatManager.Phrase;
 
-        Assert.That(phase, Is.Not.Null);
-        Assert.That(phase!.Value.label, Is.EqualTo("Break"));
-        Assert.That(phase.Value.next, Is.EqualTo("Drop"));
-        Assert.That(phase.Value.inPhase, Is.False);
-        Assert.That(phase.Value.beatsUntilNext, Is.EqualTo(9));
-        Assert.That(phase.Value.lengthBeats, Is.EqualTo(64));
-        Assert.That(phase.Value.remaining, Is.EqualTo(7));
-        Assert.That(phase.Value.progress, Is.Null);
+        Assert.That(phrase, Is.Not.Null);
+        Assert.That(phrase!.Value.label, Is.EqualTo("Break"));
+        Assert.That(phrase.Value.next, Is.EqualTo("Drop"));
+        Assert.That(phrase.Value.inPhrase, Is.False);
+        Assert.That(phrase.Value.beatsUntilNext, Is.EqualTo(9));
+        Assert.That(phrase.Value.lengthBeats, Is.EqualTo(64));
+        Assert.That(phrase.Value.remaining, Is.EqualTo(7));
+        Assert.That(phrase.Value.progress, Is.Null);
     }
 
     [Test]
-    public void PhaseIsNullWithoutALabelOrWhenUnavailable()
+    public void PhraseIsNullWithoutALabelOrWhenUnavailable()
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.beatData.phaseState = new PhaseState { current = "", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
-        Assert.That(beatManager.Phase, Is.Null);
+        beatManager.beatData.snapshot.phraseState = new PhaseState { current = "", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        Assert.That(beatManager.Phrase, Is.Null);
 
-        beatManager.beatData.phaseState = new PhaseState { current = "Drop", next = "Break", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
-        Assert.That(beatManager.Phase, Is.Null);
+        beatManager.beatData.snapshot.phraseState = new PhaseState { current = "Drop", next = "Break", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        Assert.That(beatManager.Phrase, Is.Null);
     }
 
     // --- Levels smoothing and the Color Bank ---
@@ -322,7 +322,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void LevelsSnapToTheFirstLiveSample()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
 
         beatManager.Update(0f);
 
@@ -339,17 +339,17 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.levelsAttackSeconds = 0.1f;
         beatManager.levelsReleaseSeconds = 0.4f;
-        beatManager.beatData.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0f);
 
         // Rising low band uses the attack time-constant.
-        beatManager.beatData.levels = new Levels { low = 1f, mid = 0.4f, high = 0.8f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 1f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0.1f);
         var expectedAttack = 0.2f + ((1f - 0.2f) * (1f - Mathf.Exp(-0.1f / 0.1f)));
         Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedAttack).Within(0.0001f));
 
         // Falling low band uses the slower release time-constant.
-        beatManager.beatData.levels = new Levels { low = 0f, mid = 0.4f, high = 0.8f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0.2f);
         var expectedRelease = expectedAttack + ((0f - expectedAttack) * (1f - Mathf.Exp(-0.1f / 0.4f)));
         Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedRelease).Within(0.0001f));
@@ -360,15 +360,15 @@ public sealed class BeatManagerContrivedQueriesTests
     public void LevelsResetInsteadOfReleasingFromStaleValuesAfterAGap()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.levels = new Levels { low = 0.9f, mid = 0.9f, high = 0.9f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.9f, mid = 0.9f, high = 0.9f };
         beatManager.Update(0f);
 
-        beatManager.beatData.levels = Levels.Unavailable;
+        beatManager.beatData.snapshot.levels = Levels.Unavailable;
         beatManager.Update(0.1f);
         Assert.That(beatManager.Levels, Is.Null);
 
         // The next live sample snaps in fresh; nothing decays from the pre-gap 0.9.
-        beatManager.beatData.levels = new Levels { low = 0.1f, mid = 0.1f, high = 0.1f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.1f, mid = 0.1f, high = 0.1f };
         beatManager.Update(0.2f);
         Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(0.1f).Within(0.0001f));
     }
@@ -377,7 +377,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void LevelsRgbMapsBandsStraightOntoChannels()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0f);
 
         var color = beatManager.LevelsRgb;
@@ -393,7 +393,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void LevelsHueTracksTheSpectralCentroid()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.levels = new Levels { low = 0f, mid = 0f, high = 0.8f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0.8f };
         beatManager.Update(0f);
 
         var color = beatManager.LevelsHue;
@@ -409,7 +409,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void LevelsHueIsBlackAtSilence()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.levels = new Levels { low = 0f, mid = 0f, high = 0f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0f };
         beatManager.Update(0f);
 
         Assert.That(beatManager.LevelsHue, Is.EqualTo((Color?)Color.black));
@@ -423,7 +423,7 @@ public sealed class BeatManagerContrivedQueriesTests
         Assume.That(Controller.HasInstance, Is.False, "These tests assume no live Controller in the scene.");
 
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
         beatManager.Update(0f);
 
         Assert.That(beatManager.Levels, Is.Not.Null);
@@ -438,11 +438,11 @@ public sealed class BeatManagerContrivedQueriesTests
         // Stale live values (or stale scene-serialized values) must not replay through the contrived
         // queries once the simulator owns the beat: the simulator is a clock, not a musical analysis.
         var beatManager = new BeatManager { simulatedBpm = 120f };
-        beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
-        beatManager.beatData.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
-        beatManager.beatData.phaseState = new PhaseState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
-        beatManager.beatData.energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
-        beatManager.beatData.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
+        beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
+        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
+        beatManager.beatData.snapshot.phraseState = new PhaseState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        beatManager.beatData.snapshot.energyState = new PhaseState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
 
         beatManager.Update(0f);
 
@@ -450,7 +450,7 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.Envelope(0), Is.Not.Null);
         Assert.That(beatManager.Fill, Is.Null);
         Assert.That(beatManager.Drop, Is.Null);
-        Assert.That(beatManager.Phase, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Null);
         Assert.That(beatManager.Energy, Is.Null);
         Assert.That(beatManager.Levels, Is.Null);
     }
@@ -459,7 +459,7 @@ public sealed class BeatManagerContrivedQueriesTests
     public void NoBeatStateClearsEverythingIncludingTheEnvelope()
     {
         var beatManager = new BeatManager { simulatedBpm = 120f, simulatedBeatEnabled = false };
-        beatManager.beatData.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
+        beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
 
         beatManager.Update(0f);
 

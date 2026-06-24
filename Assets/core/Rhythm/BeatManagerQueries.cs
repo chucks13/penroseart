@@ -123,42 +123,42 @@ public readonly struct EnergyInfo
 }
 
 /// <summary>
-/// Contrived Track Phase: open-vocabulary section labels passed through untouched, with the countdown
+/// Contrived Track Phrase: open-vocabulary section labels passed through untouched, with the countdown
 /// structure contrived into usable numbers.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Phase"/>; null there means no phase data is available right now.
+/// Returned by <see cref="BeatManager.Phrase"/>; null there means no phrase data is available right now.
 /// Labels are an open vocabulary ("Drop", "Break", "Chorus 2") — do not keyword-parse them as if the
 /// set were closed; that is what <see cref="BeatManager.Energy"/> is for.
 /// </remarks>
-public readonly struct PhaseInfo
+public readonly struct PhraseInfo
 {
-    /// <summary>The current phase label as broadcast. Never null or empty for a non-null PhaseInfo.</summary>
+    /// <summary>The current phrase label as broadcast. Never null or empty for a non-null PhraseInfo.</summary>
     public readonly string label;
 
-    /// <summary>The upcoming phase label. Null when the wire did not say.</summary>
+    /// <summary>The upcoming phrase label. Null when the wire did not say.</summary>
     public readonly string? next;
 
-    /// <summary>True while the phase state is active now (RaveSystem tri-state 1).</summary>
-    public readonly bool inPhase;
+    /// <summary>True while the phrase state is active now (RaveSystem tri-state 1).</summary>
+    public readonly bool inPhrase;
 
-    /// <summary>Whole beats until the active phase boundary or upcoming phase start. Null when the wire did not say.</summary>
+    /// <summary>Whole beats until the active phrase boundary or upcoming phrase start. Null when the wire did not say.</summary>
     public readonly int? beatsUntilNext;
 
-    /// <summary>Total length of the active or upcoming phase in beats. Null when the wire did not say.</summary>
+    /// <summary>Total length of the active or upcoming phrase in beats. Null when the wire did not say.</summary>
     public readonly int? lengthBeats;
 
-    /// <summary>Remaining phase changes in this track. 0 means none left; null when the wire did not say.</summary>
+    /// <summary>Remaining phrase changes in this track. 0 means none left; null when the wire did not say.</summary>
     public readonly int? remaining;
 
-    /// <summary>Beat-smoothed progress through the current phase in [0..1]. Null when not in a phase or the shape is unknown.</summary>
+    /// <summary>Beat-smoothed progress through the current phrase in [0..1]. Null when not in a phrase or the shape is unknown.</summary>
     public readonly float? progress;
 
-    public PhaseInfo(string label, string? next, bool inPhase, int? beatsUntilNext, int? lengthBeats, int? remaining, float? progress)
+    public PhraseInfo(string label, string? next, bool inPhrase, int? beatsUntilNext, int? lengthBeats, int? remaining, float? progress)
     {
         this.label = label;
         this.next = next;
-        this.inPhase = inPhase;
+        this.inPhrase = inPhrase;
         this.beatsUntilNext = beatsUntilNext;
         this.lengthBeats = lengthBeats;
         this.remaining = remaining;
@@ -253,7 +253,7 @@ public partial class BeatManager
                 return null;
             }
 
-            return beatData.bpm;
+            return beatData.snapshot.bpm;
         }
     }
 
@@ -262,12 +262,12 @@ public partial class BeatManager
     {
         get
         {
-            if (!IsActive || beatData.beat.current < 1)
+            if (!IsActive || beatData.snapshot.beat.current < 1)
             {
                 return null;
             }
 
-            return beatData.beat.current;
+            return beatData.snapshot.beat.current;
         }
     }
 
@@ -276,12 +276,12 @@ public partial class BeatManager
     {
         get
         {
-            if (!IsActive || beatData.beat.total < 1)
+            if (!IsActive || beatData.snapshot.beat.total < 1)
             {
                 return null;
             }
 
-            return beatData.beat.total;
+            return beatData.snapshot.beat.total;
         }
     }
 
@@ -290,12 +290,12 @@ public partial class BeatManager
     {
         get
         {
-            if (!IsActive || beatData.bar.current < 1)
+            if (!IsActive || beatData.snapshot.bar.current < 1)
             {
                 return null;
             }
 
-            return beatData.bar.current;
+            return beatData.snapshot.bar.current;
         }
     }
 
@@ -309,7 +309,7 @@ public partial class BeatManager
                 return null;
             }
 
-            return beatData.beatPulse;
+            return beatData.snapshot.beatPulse;
         }
     }
 
@@ -346,12 +346,12 @@ public partial class BeatManager
     {
         get
         {
-            if (!IsActive || beatData.beatInBar < 1 || beatData.beatInBar > BeatSlotCount)
+            if (!IsActive || beatData.snapshot.beatInBar < 1 || beatData.snapshot.beatInBar > BeatSlotCount)
             {
                 return null;
             }
 
-            return beatData.beatInBar;
+            return beatData.snapshot.beatInBar;
         }
     }
 
@@ -416,12 +416,12 @@ public partial class BeatManager
     {
         get
         {
-            if (beatData == null || string.IsNullOrEmpty(beatData.track))
+            if (beatData == null || string.IsNullOrEmpty(beatData.snapshot.track))
             {
                 return null;
             }
 
-            return beatData.track;
+            return beatData.snapshot.track;
         }
     }
 
@@ -430,20 +430,20 @@ public partial class BeatManager
     {
         get
         {
-            if (beatData == null || string.IsNullOrEmpty(beatData.playersLive))
+            if (beatData == null || string.IsNullOrEmpty(beatData.snapshot.playersLive))
             {
                 return null;
             }
 
-            return beatData.playersLive;
+            return beatData.snapshot.playersLive;
         }
     }
 
     /// <summary>Contrived Fill event, or null when no Fill data is available right now.</summary>
-    public PhraseEventInfo? Fill => beatData != null ? ContrivePhraseEvent(beatData.fillState) : null;
+    public PhraseEventInfo? Fill => beatData != null ? ContrivePhraseEvent(beatData.snapshot.fillState) : null;
 
     /// <summary>Contrived Drop event, or null when no Drop data is available right now.</summary>
-    public PhraseEventInfo? Drop => beatData != null ? ContrivePhraseEvent(beatData.dropState) : null;
+    public PhraseEventInfo? Drop => beatData != null ? ContrivePhraseEvent(beatData.snapshot.dropState) : null;
 
     /// <summary>
     /// Contrived phrase Energy, or null when Energy is unavailable or the wire label is outside the
@@ -454,12 +454,12 @@ public partial class BeatManager
         get
         {
             var data = beatData;
-            if (data == null || data.energyState.active < 0)
+            if (data == null || data.snapshot.energyState.active < 0)
             {
                 return null;
             }
 
-            var state = data.energyState;
+            var state = data.snapshot.energyState;
             if (!TryParseEnergyLevel(state.current, out var level))
             {
                 return null;
@@ -480,27 +480,27 @@ public partial class BeatManager
         }
     }
 
-    /// <summary>Contrived Track Phase, or null when no phase data is available right now.</summary>
-    public PhaseInfo? Phase
+    /// <summary>Contrived Track Phrase, or null when no phrase data is available right now.</summary>
+    public PhraseInfo? Phrase
     {
         get
         {
             var data = beatData;
-            if (data == null || data.phaseState.active < 0 || string.IsNullOrEmpty(data.phaseState.current))
+            if (data == null || data.snapshot.phraseState.active < 0 || string.IsNullOrEmpty(data.snapshot.phraseState.current))
             {
                 return null;
             }
 
-            var state = data.phaseState;
-            var inPhase = state.active > 0;
-            return new PhaseInfo(
+            var state = data.snapshot.phraseState;
+            var inPhrase = state.active > 0;
+            return new PhraseInfo(
                 state.current!,
                 string.IsNullOrEmpty(state.next) ? null : state.next,
-                inPhase,
+                inPhrase,
                 NonNegativeOrNull(state.countBeats),
                 NonNegativeOrNull(state.lengthBeats),
                 NonNegativeOrNull(state.remaining),
-                inPhase ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null);
+                inPhrase ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null);
         }
     }
 
@@ -632,7 +632,7 @@ public partial class BeatManager
         lastSmoothingTime = timeSeconds;
         hasSmoothingClock = true;
 
-        var raw = beatData?.levels ?? PenroseArt.RaveOsc.Levels.Unavailable;
+        var raw = beatData?.snapshot.levels ?? PenroseArt.RaveOsc.Levels.Unavailable;
         if (raw.low < 0f || raw.mid < 0f || raw.high < 0f)
         {
             // Unavailable: drop the smoothing state entirely so the next live sample snaps in fresh
@@ -737,12 +737,12 @@ public partial class BeatManager
     /// </summary>
     private int? ContriveMsForBeats(int? beats)
     {
-        if (beats is not { } wholeBeats || beatData == null || beatData.beatAverageMs <= 0)
+        if (beats is not { } wholeBeats || beatData == null || beatData.snapshot.beatAverageMs <= 0)
         {
             return null;
         }
 
-        return wholeBeats * beatData.beatAverageMs;
+        return wholeBeats * beatData.snapshot.beatAverageMs;
     }
 
     /// <summary>Maps the transport's -1 "unknown" sentinel to null; passes real non-negative values through.</summary>

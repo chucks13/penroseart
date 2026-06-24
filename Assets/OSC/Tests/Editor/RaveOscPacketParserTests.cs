@@ -50,7 +50,7 @@ public sealed class RaveOscPacketParserTests {
         WriteString(ref discrete, "/rave/onair/players_live", "4,2");
         WriteString(ref discrete, "/rave/onair/track", "Artist - Track");
         WriteInt(ref discrete, "/rave/onair/total_beats", 384);
-        WriteNamedState(ref discrete, "/rave/onair/phase_state", "Drop", "Break", 1, 12, 32, 8);
+        WriteNamedState(ref discrete, "/rave/onair/phrase_state", "Drop", "Break", 1, 12, 32, 8);
         WriteCountdownState(ref discrete, "/rave/onair/drop_state", 1, 0, 32, 2);
         WriteCountdownState(ref discrete, "/rave/onair/fill_state", 0, 16, 8, 1);
         WriteNamedState(ref discrete, "/rave/onair/energy_state", "High", "Mid", 1, 4, 16, 2);
@@ -65,12 +65,12 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(snapshot.beat.total, Is.EqualTo(384));
         Assert.That(snapshot.bar.current, Is.EqualTo(16));
         Assert.That(snapshot.bar.nextMs, Is.EqualTo(777));
-        Assert.That(snapshot.phaseState.current, Is.EqualTo("Drop"));
-        Assert.That(snapshot.phaseState.next, Is.EqualTo("Break"));
-        Assert.That(snapshot.phaseState.active, Is.EqualTo(1));
-        Assert.That(snapshot.phaseState.countBeats, Is.EqualTo(12));
-        Assert.That(snapshot.phaseState.lengthBeats, Is.EqualTo(32));
-        Assert.That(snapshot.phaseState.remaining, Is.EqualTo(8));
+        Assert.That(snapshot.phraseState.current, Is.EqualTo("Drop"));
+        Assert.That(snapshot.phraseState.next, Is.EqualTo("Break"));
+        Assert.That(snapshot.phraseState.active, Is.EqualTo(1));
+        Assert.That(snapshot.phraseState.countBeats, Is.EqualTo(12));
+        Assert.That(snapshot.phraseState.lengthBeats, Is.EqualTo(32));
+        Assert.That(snapshot.phraseState.remaining, Is.EqualTo(8));
         Assert.That(snapshot.dropState.active, Is.EqualTo(1));
         Assert.That(snapshot.dropState.countBeats, Is.EqualTo(0));
         Assert.That(snapshot.dropState.lengthBeats, Is.EqualTo(32));
@@ -111,7 +111,7 @@ public sealed class RaveOscPacketParserTests {
         // occurrence, -1 = unavailable. A boolean collapse (!= 0) would read -1 as "active now".
         var packet = new byte[1024];
         var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
-        WriteNamedState(ref bundle, "/rave/onair/phase_state", "", "", -1, -1, -1, -1);
+        WriteNamedState(ref bundle, "/rave/onair/phrase_state", "", "", -1, -1, -1, -1);
         WriteCountdownState(ref bundle, "/rave/onair/drop_state", -1, -1, -1, -1);
         WriteCountdownState(ref bundle, "/rave/onair/fill_state", -1, -1, -1, -1);
         WriteNamedState(ref bundle, "/rave/onair/energy_state", "", "", -1, -1, -1, -1);
@@ -120,7 +120,7 @@ public sealed class RaveOscPacketParserTests {
         parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
 
         Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
-        Assert.That(snapshot.phaseState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.phraseState.active, Is.EqualTo(-1));
         Assert.That(snapshot.dropState.active, Is.EqualTo(-1));
         Assert.That(snapshot.fillState.active, Is.EqualTo(-1));
         Assert.That(snapshot.energyState.active, Is.EqualTo(-1));
@@ -130,7 +130,7 @@ public sealed class RaveOscPacketParserTests {
     public void SnapshotDefaultsToUnavailableStatesBeforeAnyStatePacketArrives() {
         var snapshot = new RaveOnAirSnapshot();
 
-        Assert.That(snapshot.phaseState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.phraseState.active, Is.EqualTo(-1));
         Assert.That(snapshot.dropState.active, Is.EqualTo(-1));
         Assert.That(snapshot.fillState.active, Is.EqualTo(-1));
         Assert.That(snapshot.energyState.active, Is.EqualTo(-1));

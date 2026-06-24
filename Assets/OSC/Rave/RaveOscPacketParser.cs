@@ -13,6 +13,12 @@ namespace PenroseArt.RaveOsc {
 /// Decodes the RaveSystem on-air OSC broadcast schema into a thread-safe snapshot.
 /// </summary>
 public sealed class RaveOscPacketParser : IDisposable {
+    // TRANSITIONAL: RaveSystem is renaming the wire address phase_state -> phrase_state (fixes a long-standing
+    // "phase"/"phrase" typo; the section labels it carries are a Penrose Phrase). Accept both until the new
+    // recording exists and pre-rename recordings are retired, then delete this const + its registration + the
+    // legacy half of the round-trip test.
+    private const string LegacyPhraseStateAddress = "/rave/onair/phase_state";
+
     private readonly OscDispatcher _dispatcher = new OscDispatcher();
     private readonly object _lock = new object();
     private RaveOnAirSnapshot _snapshot = new RaveOnAirSnapshot();
@@ -48,7 +54,9 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterInt("/rave/onair/beat_avg_ms", (snapshot, value) => snapshot.beatAverageMs = value);
         RegisterFloat("/rave/onair/beat_pulse", (snapshot, value) => snapshot.beatPulse = value);
         RegisterLevels("/rave/onair/levels", (snapshot, value) => snapshot.levels = value);
-        RegisterNamedState("/rave/onair/phase_state", (snapshot, value) => snapshot.phaseState = value);
+        RegisterNamedState("/rave/onair/phrase_state", (snapshot, value) => snapshot.phraseState = value);
+        // TRANSITIONAL: also accept the legacy misspelled address into the same setter (see LegacyPhraseStateAddress).
+        RegisterNamedState(LegacyPhraseStateAddress, (snapshot, value) => snapshot.phraseState = value);
         RegisterCountdownState("/rave/onair/drop_state", (snapshot, value) => snapshot.dropState = value);
         RegisterCountdownState("/rave/onair/fill_state", (snapshot, value) => snapshot.fillState = value);
         RegisterNamedState("/rave/onair/energy_state", (snapshot, value) => snapshot.energyState = value);

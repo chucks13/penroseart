@@ -503,10 +503,10 @@ public sealed class DirectorSyncedTailTests
 
     private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
     {
-        controller.beatManager.beatData.bpm = 120f;
-        controller.beatManager.beatData.beat = new BeatPosition { current = beat, total = -1 };
-        controller.beatManager.beatData.beatInBar = ((beat - 1) % 4) + 1;
-        controller.beatManager.beatData.phaseState = new PhaseState
+        controller.beatManager.beatData.snapshot.bpm = 120f;
+        controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = beat, total = -1 };
+        controller.beatManager.beatData.snapshot.beatInBar = ((beat - 1) % 4) + 1;
+        controller.beatManager.beatData.snapshot.phraseState = new PhaseState
         {
             current = "Phrase",
             next = "Next",
@@ -519,10 +519,10 @@ public sealed class DirectorSyncedTailTests
 
     private void SetTrackPhaseUnavailableBeat(int beat)
     {
-        controller.beatManager.beatData.bpm = 120f;
-        controller.beatManager.beatData.beat = new BeatPosition { current = beat, total = -1 };
-        controller.beatManager.beatData.beatInBar = ((beat - 1) % 4) + 1;
-        controller.beatManager.beatData.phaseState = new PhaseState
+        controller.beatManager.beatData.snapshot.bpm = 120f;
+        controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = beat, total = -1 };
+        controller.beatManager.beatData.snapshot.beatInBar = ((beat - 1) % 4) + 1;
+        controller.beatManager.beatData.snapshot.phraseState = new PhaseState
         {
             current = string.Empty,
             next = string.Empty,
@@ -535,7 +535,7 @@ public sealed class DirectorSyncedTailTests
 
     private void SetUpcomingDrop(int beatsUntilStart)
     {
-        controller.beatManager.beatData.dropState = new CountdownState
+        controller.beatManager.beatData.snapshot.dropState = new CountdownState
         {
             active = 0,
             countBeats = beatsUntilStart,
