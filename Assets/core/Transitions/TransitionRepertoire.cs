@@ -44,7 +44,7 @@ public readonly struct TransitionRepertoire
         TransitionIntensity.Subtle,
         defaultDurationSeconds: 4f);
 
-    /// <summary>Musical situations this transition is suited for, such as Drop or Energy changes.</summary>
+    /// <summary>Musical events this transition is suited for, such as Fill or Drop cues.</summary>
     public readonly Repertoire Tags;
 
     /// <summary>Beats from transition start to the Impact Point.</summary>

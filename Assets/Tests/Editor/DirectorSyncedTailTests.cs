@@ -93,10 +93,6 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
-        SetTrackPhaseBeat(604, phaseActive: 1, beatsToPhraseBoundary: 5, phraseLengthBeats: 32);
-        director.Tick(0f);
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
-
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
@@ -218,7 +214,7 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
         SetTrackPhaseBeat(600, phaseActive: 0, beatsToPhraseBoundary: 9, phraseLengthBeats: 64);
         director.Tick(0f);
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609), "The current phrase boundary should stay loaded while the next Phrase is preplanned.");
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609), "The current phrase boundary Cue Mark should stay loaded while the next Phrase is preplanned.");
 
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
@@ -275,6 +271,87 @@ public sealed class DirectorSyncedTailTests
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Manual staging should preserve the chosen Performer instead of recasting from the deck.");
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
         Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void DropAlignedCueCastsDropCapableTransitionWhenAvailable()
+    {
+        RebuildSwitcherAndDirectorWithTransitions(
+            new TransitionBase[] { new TailedTransition(), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 4, tailBeats: 0) },
+            new[] { 0, 1 });
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(1));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void FillAlignedCueCastsFillCapableTransitionWhenAvailable()
+    {
+        RebuildSwitcherAndDirectorWithTransitions(
+            new TransitionBase[] { new TailedTransition(), new EventTransition(RepertoireFlags.HandlesFill, runwayBeats: 4, tailBeats: 0) },
+            new[] { 0, 1 });
+        SetUpcomingFill(beatsUntilStart: 3);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(1));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void EventAlignedCuePreservesHeldTransition()
+    {
+        RebuildSwitcherAndDirectorWithTransitions(
+            new TransitionBase[] { new TailedTransition(), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 4, tailBeats: 0) },
+            new[] { 0, 1 });
+        director.SetNextTransition(0);
+        director.SetHoldSelectedTransition(true);
+        SetUpcomingDrop(beatsUntilStart: 1);
+        SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+    }
+
+    [Test]
+    public void EventAlignedCuePreservesManualTransitionWithoutHold()
+    {
+        RebuildSwitcherAndDirectorWithTransitions(
+            new TransitionBase[] { new TailedTransition(), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 2, tailBeats: 0) },
+            new[] { 0, 1 });
+        director.SetNextTransition(0);
+        SetUpcomingDrop(beatsUntilStart: 2);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0));
+        Assert.That(director.Status.NextTransitionIndex, Is.Not.EqualTo(1), "Manual staging should not be recast by event-aware transition selection.");
+    }
+
+    [Test]
+    public void EventAlignedCueKeepsStagedTransitionWhenPreferredTransitionCannotCueNow()
+    {
+        RebuildSwitcherAndDirectorWithTransitions(
+            new TransitionBase[] { new EventTransition(RepertoireFlags.None, runwayBeats: 4, tailBeats: 0), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 1, tailBeats: 0) },
+            new[] { 0, 1 });
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "Transition preference must not delay a valid scheduled cue.");
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0));
+        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.NextTransitionIndex, Is.EqualTo(0));
+        Assert.That(controller.currentTransition, Is.EqualTo(0));
     }
 
     [Test]
@@ -544,6 +621,40 @@ public sealed class DirectorSyncedTailTests
         };
     }
 
+    private void SetUpcomingFill(int beatsUntilStart)
+    {
+        controller.beatManager.beatData.snapshot.fillState = new CountdownState
+        {
+            active = 0,
+            countBeats = beatsUntilStart,
+            lengthBeats = 8,
+            remaining = 1,
+        };
+    }
+
+    private void RebuildSwitcherAndDirectorWithTransitions(TransitionBase[] transitions, int[] transitionDeck)
+    {
+        controller.transitions = transitions;
+        foreach (var transition in controller.transitions)
+        {
+            transition.Init();
+        }
+
+        controller.transitionDeck = transitionDeck;
+        controller.currentTransition = transitionDeck[0];
+        switcher = new Switcher(controller, controller.effects, controller.transitions);
+        switcher.SetInitialEffect(0, controller.currentTransition);
+        controller.switcher = switcher;
+        director = new Director(
+            controller,
+            switcher,
+            controller.timer,
+            controller.effectDeck,
+            controller.transitionDeck,
+            controller.currentTransition);
+        controller.director = director;
+    }
+
     private void RenderTransitionPastCompletion()
     {
         switcher.RenderAtTime(Time.time + 10f, out _);
@@ -617,6 +728,43 @@ public sealed class DirectorSyncedTailTests
                 RepertoireFlags.None,
                 runwayBeats: 4,
                 tailBeats: 4,
+                TransitionShape.Dissolve,
+                TransitionIntensity.High,
+                defaultDurationSeconds: 4f));
+        }
+
+        public override void OnStart()
+        {
+        }
+
+        public override void OnEnd()
+        {
+        }
+
+        public override void Draw()
+        {
+        }
+    }
+
+    private sealed class EventTransition : TransitionBase
+    {
+        private readonly RepertoireFlags tags;
+        private readonly int runwayBeats;
+        private readonly int tailBeats;
+
+        public EventTransition(RepertoireFlags tags, int runwayBeats, int tailBeats)
+        {
+            this.tags = tags;
+            this.runwayBeats = runwayBeats;
+            this.tailBeats = tailBeats;
+        }
+
+        protected override TransitionSettings BuildCodeDefaults()
+        {
+            return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
+                tags,
+                runwayBeats,
+                tailBeats,
                 TransitionShape.Dissolve,
                 TransitionIntensity.High,
                 defaultDurationSeconds: 4f));

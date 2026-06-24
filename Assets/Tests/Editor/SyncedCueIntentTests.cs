@@ -31,7 +31,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 4),
+            CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
@@ -40,6 +40,7 @@ public sealed class SyncedCueIntentTests
             minimumChangeCadenceBeats: 16);
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Drop));
         Assert.That(intent.DropAligned, Is.True);
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
@@ -55,7 +56,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 4),
+            CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
@@ -76,7 +77,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 4),
+            CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
@@ -99,7 +100,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 4),
+            CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: true,
             currentEffectIndex: 0,
@@ -120,7 +121,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 3),
+            CueEventIntent.Ordinary,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
@@ -129,6 +130,7 @@ public sealed class SyncedCueIntentTests
             minimumChangeCadenceBeats: 16);
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Ordinary));
         Assert.That(intent.DropAligned, Is.False);
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
@@ -144,7 +146,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            InProgressDrop(),
+            CueEventIntent.Ordinary,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
@@ -171,7 +173,7 @@ public sealed class SyncedCueIntentTests
                 cueMarkBeat: 609,
                 previousCueMarkBeat: 600),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 4),
+            CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
@@ -180,7 +182,8 @@ public sealed class SyncedCueIntentTests
             minimumChangeCadenceBeats: 16);
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.BlockedByCadence));
-        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
+        Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Drop));
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
         Assert.That(intent.CastPreferredPerformer, Is.False);
         Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
     }
@@ -193,7 +196,7 @@ public sealed class SyncedCueIntentTests
         var intent = SyncedCueIntent.Evaluate(
             Frame(currentBeat: 605, cueMarkBeat: 609),
             FourBeatRunway(),
-            UpcomingDrop(beatsUntilStart: 4),
+            CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: true,
             currentEffectIndex: 0,
@@ -204,6 +207,97 @@ public sealed class SyncedCueIntentTests
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
         Assert.That(intent.CastPreferredPerformer, Is.True);
         Assert.That(deck, Is.EqualTo(new[] { 2, 0, 1 }));
+    }
+
+    [Test]
+    public void FillAlignedCueCastsPreferredPerformerFromDeck()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Evaluate(
+            Frame(currentBeat: 605, cueMarkBeat: 609),
+            FourBeatRunway(),
+            CueEventIntent.Fill,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesFill : Repertoire.None,
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Fill));
+        Assert.That(intent.FillAligned, Is.True);
+        Assert.That(intent.DropAligned, Is.False);
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesFill));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
+        Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(deck, Is.EqualTo(new[] { 1, 0, 2 }));
+    }
+
+    [Test]
+    public void ResolveEventIntentPrefersDropWhenFillAndDropBothAlign()
+    {
+        var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
+
+        var eventIntent = SyncedCueIntent.ResolveEventIntent(
+            frame,
+            UpcomingFill(beatsUntilStart: 4),
+            UpcomingDrop(beatsUntilStart: 4));
+
+        Assert.That(eventIntent, Is.EqualTo(CueEventIntent.Drop));
+    }
+
+    [Test]
+    public void ResolveEventIntentUsesFillThatOverlapsNextPhase()
+    {
+        var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
+
+        var eventIntent = SyncedCueIntent.ResolveEventIntent(
+            frame,
+            UpcomingFill(beatsUntilStart: 3),
+            drop: null);
+
+        Assert.That(eventIntent, Is.EqualTo(CueEventIntent.Fill));
+    }
+
+    [Test]
+    public void ResolveEventIntentIgnoresFillThatEndsBeforeNextPhase()
+    {
+        var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
+
+        var eventIntent = SyncedCueIntent.ResolveEventIntent(
+            frame,
+            UpcomingFill(beatsUntilStart: 1, lengthBeats: 2),
+            drop: null);
+
+        Assert.That(eventIntent, Is.EqualTo(CueEventIntent.Ordinary));
+    }
+
+    [Test]
+    public void ResolveEventIntentIgnoresFillThatStartsAfterNextPhase()
+    {
+        var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
+
+        var eventIntent = SyncedCueIntent.ResolveEventIntent(
+            frame,
+            UpcomingFill(beatsUntilStart: 20),
+            drop: null);
+
+        Assert.That(eventIntent, Is.EqualTo(CueEventIntent.Ordinary));
+    }
+
+    [Test]
+    public void ResolveEventIntentUsesInProgressFillButIgnoresInProgressDrop()
+    {
+        var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
+
+        var eventIntent = SyncedCueIntent.ResolveEventIntent(
+            frame,
+            InProgressFill(),
+            InProgressDrop());
+
+        Assert.That(eventIntent, Is.EqualTo(CueEventIntent.Fill));
     }
 
     [Test]
@@ -272,7 +366,7 @@ public sealed class SyncedCueIntentTests
         return SyncedCueIntent.Evaluate(
             frame,
             transitionRepertoire ?? FourBeatRunway(),
-            drop: null,
+            CueEventIntent.Ordinary,
             stagedEffectIndex: 1,
             preserveStagedEffect: true,
             currentEffectIndex: 0,
@@ -322,6 +416,19 @@ public sealed class SyncedCueIntentTests
             remaining: 1);
     }
 
+    private static PhraseEventInfo UpcomingFill(int beatsUntilStart, int lengthBeats = 8)
+    {
+        return new PhraseEventInfo(
+            inProgress: false,
+            beatsUntilStart,
+            msUntilStart: null,
+            beatsUntilEnd: null,
+            progress: null,
+            anticipation: null,
+            lengthBeats,
+            remaining: 1);
+    }
+
     private static PhraseEventInfo InProgressDrop()
     {
         return new PhraseEventInfo(
@@ -332,6 +439,19 @@ public sealed class SyncedCueIntentTests
             progress: 0.5f,
             anticipation: null,
             lengthBeats: 16,
+            remaining: 1);
+    }
+
+    private static PhraseEventInfo InProgressFill()
+    {
+        return new PhraseEventInfo(
+            inProgress: true,
+            beatsUntilStart: null,
+            msUntilStart: null,
+            beatsUntilEnd: 4,
+            progress: 0.5f,
+            anticipation: null,
+            lengthBeats: 8,
             remaining: 1);
     }
 

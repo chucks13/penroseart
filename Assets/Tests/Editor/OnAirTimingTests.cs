@@ -120,7 +120,7 @@ public sealed class OnAirTimingTests
             UpcomingTrackPhaseInput(beat: 600, beatsToPhraseStart: 9, phraseLengthBeats: 64),
             PassLocalTimingState.Empty,
             minimumChangeCadenceBeats: 16);
-        Assert.That(currentFrame.CueMarkBeat, Is.EqualTo(609), "Preplanning the next Phrase must not unset the loaded current boundary.");
+        Assert.That(currentFrame.CueMarkBeat, Is.EqualTo(609), "Preplanning the next Phrase must not unset the loaded current Cue Mark.");
 
         var frame = timing.ReadFrame(
             TrackPhaseInput(beat: 605, beatsToPhraseBoundary: 4, phraseLengthBeats: 32),

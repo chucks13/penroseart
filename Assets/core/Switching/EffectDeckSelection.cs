@@ -183,3 +183,112 @@ public static class EffectDeckSelection
         return result;
     }
 }
+
+/// <summary>
+/// Selects event-capable Transitions from the rotating transition deck without moving execution
+/// timing into the Switcher.
+/// </summary>
+public static class TransitionDeckSelection
+{
+    /// <summary>
+    /// Finds a preferred transition card when one advertises the requested event Repertoire and
+    /// its Runway/Tail shape can still serve the current Cue Mark, leaving the deck untouched.
+    /// </summary>
+    public static bool TryFindPreferred(
+        int[] deck,
+        Repertoire preferredRepertoire,
+        Func<int, TransitionRepertoire> repertoireForTransition,
+        Func<TransitionRepertoire, bool> canServeCue,
+        out int deckIndex,
+        out int transitionIndex)
+    {
+        if (deck == null)
+        {
+            throw new ArgumentNullException(nameof(deck));
+        }
+
+        if (preferredRepertoire == Repertoire.None)
+        {
+            deckIndex = -1;
+            transitionIndex = -1;
+            return false;
+        }
+
+        if (repertoireForTransition == null)
+        {
+            throw new ArgumentNullException(nameof(repertoireForTransition));
+        }
+
+        if (canServeCue == null)
+        {
+            throw new ArgumentNullException(nameof(canServeCue));
+        }
+
+        for (var i = 0; i < deck.Length; i++)
+        {
+            var candidateIndex = deck[i];
+            var repertoire = repertoireForTransition(candidateIndex);
+            if ((repertoire.Tags & preferredRepertoire) == 0 || !canServeCue(repertoire))
+            {
+                continue;
+            }
+
+            deckIndex = i;
+            transitionIndex = candidateIndex;
+            return true;
+        }
+
+        deckIndex = -1;
+        transitionIndex = -1;
+        return false;
+    }
+
+    /// <summary>Pulls the card at the requested transition deck position and rotates it to the back.</summary>
+    public static int PullAt(int[] deck, int index)
+    {
+        if (deck == null)
+        {
+            throw new ArgumentNullException(nameof(deck));
+        }
+
+        if (index < 0 || index >= deck.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
+
+        var result = deck[index];
+        for (var i = index; i < deck.Length - 1; i++)
+        {
+            deck[i] = deck[i + 1];
+        }
+
+        deck[deck.Length - 1] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// Pulls a preferred transition card when one advertises the requested event Repertoire and
+    /// its Runway/Tail shape can still serve the current Cue Mark.
+    /// </summary>
+    public static bool TryPullPreferred(
+        int[] deck,
+        Repertoire preferredRepertoire,
+        Func<int, TransitionRepertoire> repertoireForTransition,
+        Func<TransitionRepertoire, bool> canServeCue,
+        out int transitionIndex)
+    {
+        if (!TryFindPreferred(
+            deck,
+            preferredRepertoire,
+            repertoireForTransition,
+            canServeCue,
+            out var deckIndex,
+            out transitionIndex))
+        {
+            return false;
+        }
+
+        transitionIndex = PullAt(deck, deckIndex);
+        return true;
+    }
+}

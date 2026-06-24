@@ -222,6 +222,7 @@ public sealed class TransitionSettingsTests
         Assert.That(actual.HasValidDuration, Is.True, context);
         Assert.That(actual.ExternalBlendDefaultProgress, Is.InRange(0f, 1f), context);
         var repertoire = actual.ToRepertoire();
+        Assert.That(repertoire.Tags & ~(RepertoireFlags.HandlesFill | RepertoireFlags.HandlesDrop), Is.EqualTo(RepertoireFlags.None), context);
         Assert.That(repertoire.RunwayBeats, Is.GreaterThanOrEqualTo(0), context);
         Assert.That(repertoire.TailBeats, Is.GreaterThanOrEqualTo(0), context);
         Assert.That(repertoire.DurationBeats, Is.LessThanOrEqualTo(TransitionRepertoire.MaxDurationBeats), context);

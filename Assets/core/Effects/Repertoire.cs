@@ -15,7 +15,4 @@ public enum Repertoire
 
     /// <summary>The Performer can express or land on a Drop.</summary>
     HandlesDrop = 1 << 1,
-
-    /// <summary>The Performer can respond intentionally to Low/Mid/High energy state.</summary>
-    RespondsToEnergy = 1 << 2,
 }

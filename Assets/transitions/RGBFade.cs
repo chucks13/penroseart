@@ -6,7 +6,7 @@ using RepertoireFlags = Repertoire;
 /// </summary>
 public class RGBFade : TransitionBase
 {
-    private const RepertoireFlags DefaultTags = RepertoireFlags.RespondsToEnergy;
+    private const RepertoireFlags DefaultTags = RepertoireFlags.None;
     private const int RunwayBeats = 4;
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.ChannelBlend;

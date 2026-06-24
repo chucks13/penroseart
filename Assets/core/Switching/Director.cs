@@ -146,6 +146,7 @@ public sealed class Director
     private bool holdSelectedEffect;
     private bool holdSelectedTransition;
     private bool nextEffectIsManualSelection;
+    private bool nextTransitionIsManualSelection;
     private int lastSyncedBeat = -1;
     private int lastChangeBeat = int.MinValue;
     private int lastCueBeat = -1;
@@ -154,6 +155,33 @@ public sealed class Director
     private TimingFrame timingFrame = TimingFrame.Unavailable;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
+
+    private readonly struct TransitionCueSelection
+    {
+        private TransitionCueSelection(
+            int transitionIndex,
+            TransitionRepertoire repertoire,
+            int deckIndex)
+        {
+            TransitionIndex = transitionIndex;
+            Repertoire = repertoire;
+            DeckIndex = deckIndex;
+        }
+
+        public readonly int TransitionIndex;
+        public readonly TransitionRepertoire Repertoire;
+        public readonly int DeckIndex;
+
+        public static TransitionCueSelection Staged(int transitionIndex, TransitionRepertoire repertoire)
+        {
+            return new TransitionCueSelection(transitionIndex, repertoire, deckIndex: -1);
+        }
+
+        public static TransitionCueSelection DeckCandidate(int transitionIndex, TransitionRepertoire repertoire, int deckIndex)
+        {
+            return new TransitionCueSelection(transitionIndex, repertoire, deckIndex);
+        }
+    }
 
     /// <summary>Whether the Director currently has a phase grid to aim at.</summary>
     public bool HasPhaseAnchor => timingFrame.HasPhaseAnchor;
@@ -206,6 +234,7 @@ public sealed class Director
     {
         ValidateTransitionIndex(transitionIndex);
         nextTransitionIndex = transitionIndex;
+        nextTransitionIsManualSelection = true;
         controller.currentTransition = nextTransitionIndex;
         Trace($"NEXT_TRANSITION_SET nextTransition={FormatTransition(nextTransitionIndex)} hold={holdSelectedTransition}");
     }
@@ -244,6 +273,7 @@ public sealed class Director
         this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
         currentEffectIndexForSelection = switcher.CurrentEffectIndex;
         SetNextTransition(initialTransitionIndex);
+        nextTransitionIsManualSelection = false;
         StageNextEffect(Repertoire.None, currentEffectIndexForSelection);
     }
 
@@ -545,15 +575,20 @@ public sealed class Director
         }
 
         var beat = frame.CurrentBeat;
-        var transitionIndex = nextTransitionIndex;
+        var eventIntent = SyncedCueIntent.ResolveEventIntent(
+            frame,
+            controller.beatManager.Fill,
+            controller.beatManager.Drop);
+        var transitionSelection = SelectTransitionForEventIntent(frame, eventIntent);
+        var transitionIndex = transitionSelection.TransitionIndex;
         var stagedEffectIndex = nextEffectIndex;
         ValidateTransitionIndex(transitionIndex);
         ValidateEffectIndex(stagedEffectIndex);
-        var repertoire = controller.transitions[transitionIndex].Repertoire;
+        var repertoire = transitionSelection.Repertoire;
         var cueIntent = SyncedCueIntent.Evaluate(
             frame,
             repertoire,
-            controller.beatManager.Drop,
+            eventIntent,
             stagedEffectIndex,
             preserveStagedEffect: holdSelectedEffect || nextEffectIsManualSelection,
             currentEffectIndex: currentEffectIndexForSelection,
@@ -574,6 +609,14 @@ public sealed class Director
         }
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
+        if (transitionSelection.DeckIndex >= 0)
+        {
+            nextTransitionIndex = TransitionDeckSelection.PullAt(transitionDeck, transitionSelection.DeckIndex);
+            controller.currentTransition = nextTransitionIndex;
+            transitionIndex = nextTransitionIndex;
+            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(nextTransitionIndex)} preferred={PreferredRepertoireFor(eventIntent)}");
+        }
+
         var cue = new SwitcherCueDirection(
             cueIntent.BeatPlan.ImpactBeat,
             cueIntent.TargetEffectIndex,
@@ -583,6 +626,37 @@ public sealed class Director
         switcher.UpsertLoadedCue(cue, clock);
         CommitSentCue(beat, cue, cueIntent.BeatPlan);
         return true;
+    }
+
+    private TransitionCueSelection SelectTransitionForEventIntent(TimingFrame frame, CueEventIntent eventIntent)
+    {
+        var preferredRepertoire = PreferredRepertoireFor(eventIntent);
+        var stagedTransitionIndex = nextTransitionIndex;
+        var stagedRepertoire = controller.transitions[stagedTransitionIndex].Repertoire;
+        if (holdSelectedTransition || nextTransitionIsManualSelection || preferredRepertoire == Repertoire.None)
+        {
+            return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
+        }
+
+        if ((stagedRepertoire.Tags & preferredRepertoire) != 0
+            && CanTransitionCueNow(frame, stagedRepertoire))
+        {
+            return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
+        }
+
+        if (TransitionDeckSelection.TryFindPreferred(
+            transitionDeck,
+            preferredRepertoire,
+            transitionIndex => controller.transitions[transitionIndex].Repertoire,
+            repertoire => CanTransitionCueNow(frame, repertoire),
+            out var deckIndex,
+            out var preferredTransitionIndex))
+        {
+            var preferredTransitionRepertoire = controller.transitions[preferredTransitionIndex].Repertoire;
+            return TransitionCueSelection.DeckCandidate(preferredTransitionIndex, preferredTransitionRepertoire, deckIndex);
+        }
+
+        return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
     }
 
     private void LogModeIfChanged()
@@ -700,6 +774,24 @@ public sealed class Director
         return beat is { } value ? value.ToString() : "none";
     }
 
+    private static bool CanTransitionCueNow(TimingFrame frame, TransitionRepertoire repertoire)
+    {
+        return TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire).IsCueBeat(frame.CurrentBeat);
+    }
+
+    private static Repertoire PreferredRepertoireFor(CueEventIntent eventIntent)
+    {
+        switch (eventIntent)
+        {
+            case CueEventIntent.Fill:
+                return Repertoire.HandlesFill;
+            case CueEventIntent.Drop:
+                return Repertoire.HandlesDrop;
+            default:
+                return Repertoire.None;
+        }
+    }
+
     private void RunStandaloneTimerDecision()
     {
         if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
@@ -769,6 +861,7 @@ public sealed class Director
         }
 
         nextTransitionIndex = PullCard(transitionDeck);
+        nextTransitionIsManualSelection = false;
         controller.currentTransition = nextTransitionIndex;
         Trace($"NEXT_TRANSITION_STAGED nextTransition={FormatTransition(nextTransitionIndex)}");
     }

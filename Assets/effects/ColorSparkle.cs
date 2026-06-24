@@ -10,6 +10,9 @@ public class ColorSparkle : EffectBase
     //    private Color color;
     private float hue;
 
+    /// <summary>ColorSparkle's fading sparkle bursts can accent short Fill moments without new behavior.</summary>
+    public override Repertoire Repertoire => Repertoire.HandlesFill;
+
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>

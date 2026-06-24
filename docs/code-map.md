@@ -29,8 +29,8 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Switching/PhraseWindow.cs` | Derives phrase spans and phase boundaries from Track Phase countdown/length data. |
 | `Assets/core/Switching/CueSheet.cs` | Selects relative Cue Marks inside a Phrase while keeping the final phrase boundary mandatory and reusing same-length plans. |
 | `Assets/core/Switching/ChangeCadence.cs` | Minimum-change cadence rule shared by timing, cue, and status decisions. |
-| `Assets/core/Switching/SyncedCueIntent.cs` | Synced cue/casting seam combining Timing Frame, Transition Repertoire, Drop data, staged choices, and Effect Repertoire. |
-| `Assets/core/Switching/EffectDeckSelection.cs` | Effect deck draw/preference rules, including Repertoire-aware preferred Performer pulls. |
+| `Assets/core/Switching/SyncedCueIntent.cs` | Synced cue/casting seam combining Timing Frame, Fill/Drop event timing, staged choices, and Effect Repertoire into ordinary/Fill/Drop Cue Intent. |
+| `Assets/core/Switching/EffectDeckSelection.cs` | Effect and transition deck draw/preference rules, including Repertoire-aware preferred Performer pulls. |
 | `Assets/core/Transitions/TransitionBeatPlan.cs` | Converts Cue Mark plus Transition Runway/Tail into start/impact/completion beats. |
 | `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |

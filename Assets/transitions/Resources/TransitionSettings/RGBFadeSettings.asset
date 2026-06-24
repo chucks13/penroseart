@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TransitionSettingsAsset
   transitionTypeName: RGBFade
   settings:
-    Tags: 4
+    Tags: 0
     RunwayBeats: 5
     TailBeats: 1
     Shape: 1

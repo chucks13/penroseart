@@ -171,11 +171,11 @@ The Director-facing snapshot of one Synced Mode timing moment: current beat, Pha
 _Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
 
 **Cue Sheet**:
-A simple per-Phrase plan of Cue Marks generated from the Phrase's total beat length: divide the Phrase into Phases, choose some interior marks, and always include the final phrase boundary. Its identity is the total Phrase length, not phrase name or absolute start/end beat, so an upcoming Cue Sheet can be reused when the announced length is unchanged.
+A simple per-Phrase list of scheduled Cues generated from the Phrase's total beat length: divide the Phrase into Phases, choose some interior phase starts, and always include the final phrase boundary. Its identity is the total Phrase length, not phrase name or absolute start/end beat, so an upcoming Cue Sheet can be reused when the announced length is unchanged.
 _Avoid_: putting Effect or Transition choices in the Cue Sheet; treating it as a queue of loaded Cues; rerolling just because same-length phrase timing shifted.
 
 **Cue Mark**:
-A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; today marks usually sit on 16-beat Phase Boundaries, but the domain term is Phrase-level so it does not confuse the plan with the Phase implementation detail.
+A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; marks include selected 16-beat Phase Boundaries and the mandatory final phrase boundary. Fill/Drop state does not create or move Cue Marks; it only informs which Effect and Transition the Director should cast for an existing Cue Mark.
 _Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Phase Boundary when speaking about the Phrase plan.
 
 **Loaded Cue**:
@@ -191,8 +191,8 @@ The beat after which a Loaded Cue can no longer change. The Lock Point depends o
 _Avoid_: one global lock beat for every Transition; locking at the Impact Point; putting transition start math into the Cue Sheet.
 
 **Cue Intent**:
-The Director-facing result of combining a Timing Frame, Transition Repertoire, live phrase events such as Drop, staged choices, current Performer, deck state, and Performer Repertoire. It says whether the Director should wait, send a cue command with a target Performer, or block on cadence.
-_Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split.
+The Director-facing result of combining a Timing Frame's current Cue Mark with BeatManager's Fill/Drop phrase-event timing, staged choices, current Performer, deck state, and Performer Repertoire. Cue Intent classifies a Cue as ordinary, Fill, or Drop only for casting. It says whether the Director should wait, send a cue command with a target Performer, or block on cadence; transition deck candidates are only rotated once a cue is actually sent.
+_Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split; using Fill/Drop to create alternate Cue Mark timing.
 
 **Next Transition**:
 The Transition already chosen for the Director's next cue command. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Switcher still honors that Transition's Runway, Tail, and Impact Point when the Cue is loaded and armed.
@@ -235,7 +235,7 @@ The umbrella for anything the Director can put on the wall — an Effect, Transi
 _Avoid_: "dancer" (the early metaphor); using "Performer" when you specifically mean an Effect vs a Transition vs a Mixer.
 
 **Repertoire**:
-What a Performer advertises it can do, so the Director can cast it knowingly — e.g. handles Fills, is Drop-capable, responds to Energy. The Director reads a Performer's Repertoire to decide whether to have the Performer express a musical event itself or to supply the move another way; the Director always decides, and the Repertoire only tells it which options exist.
+What a Performer advertises it can do, so the Director can cast it knowingly: handles Fills, handles Drops, or neither. Repertoire says what event moments a Performer can support; it does not say what BeatManager data the Performer reads while rendering. The Director always decides, and Repertoire only tells it which options exist.
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **A-to-B Transition**:
@@ -243,11 +243,11 @@ A Transition is a move from the current on-wall Effect (**A**) toward the destin
 _Avoid_: treating every Transition as if its only goal is to complete on a Cue Mark; treating transition progress, completion, or busy state as music-structure evidence.
 
 **Transition Repertoire**:
-The declaration of the A-to-B move a Transition offers: its Runway, Tail, Shape, Intensity, and what musical moments it suits. This lets the Director cast a fitting Transition while the Switcher uses the Transition's own timing shape to execute an Armed Cue.
-_Avoid_: using only a generic Drop/Fill/Energy tag for Transitions; treating Repertoire as per-cue instructions or as state the Director sets; making the Director micromanage transition progress.
+The declaration of the A-to-B move a Transition offers: its Runway, Tail, Shape, Intensity, and Fill/Drop event suitability. This lets the Director cast a fitting Transition while the Switcher uses the Transition's own timing shape to execute an Armed Cue. Matching Fill/Drop tags make a Transition artistically suitable; Runway/Tail make it schedulable.
+_Avoid_: treating timing length alone as Fill/Drop support; treating Repertoire as per-cue instructions or as state the Director sets; making the Director micromanage transition progress.
 
 **Transition Settings**:
-Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Runway and Tail, which imply its local Impact Point; the Switcher uses that declaration to execute an Armed Cue without compensating scheduling logic.
+Saved authoring values for a Transition's Repertoire and human-tweakable creative knobs. Settings determine the Transition's Fill/Drop tags, Runway, and Tail, which imply its local Impact Point; the Switcher uses that declaration to execute an Armed Cue without compensating scheduling logic. Saved `TransitionSettings` assets are part of the live Transition Repertoire, not just editor tuning notes.
 _Avoid_: putting pure algorithm invariants into Settings; treating every numeric literal as a setting; using the Director to compensate for invalid Transition Settings;
 
 **Code Defaults**:
@@ -319,7 +319,7 @@ The wall's 1-based count within the current Phase. A 4-beat Runway begins at cou
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
 **Fill**:
-A short transitional phrase burst — usually four to eight beats, a measure or slightly more — between sections. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). A Fill is expressed as a **highlight in place** — an overlay, accent, or one-shot interaction on whatever is already on screen — and never changes which effect is playing (that is a Drop's move). The Director decides how it is expressed: it has the on-screen effect highlight the Fill when that effect's Repertoire can, or it brings in a temporary mix to do so.
+A Fill is the musical event described by BeatManager's Fill state. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). The Director only uses Fill state to cast Effects and Transitions whose Repertoire says they support Fill for the relevant Cue. The selected Effect or Transition owns how it renders the Fill from BeatManager data.
 
 **Drop**:
 The climactic section boundary of a track. Same two-sided visibility as a Fill: a countdown to it, then progress through it. Unlike a Fill, a Drop **can change who is on stage**. The Director decides the move: it has the on-screen effect enter a drop-state in place when that effect's Repertoire can, or it swaps Performers. Either way the move must land *on* the drop — the anticipation side (scheduling the change beats ahead so it completes exactly on the boundary) is the valuable half, and the reason a Drop transition is timed more tightly than an ordinary phrase-boundary one.

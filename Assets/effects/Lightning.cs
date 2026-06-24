@@ -16,6 +16,10 @@ public class Lightning : EffectBase
     int beatMode;
 
     int mode = 0;
+
+    /// <summary>Lightning already reads as a sharp beat-scaled burst, suitable for Fill or Drop cues.</summary>
+    public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
+
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>

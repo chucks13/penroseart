@@ -43,7 +43,7 @@ public abstract class EffectBase
 
     /// <summary>
     /// Musical-structure behavior this effect advertises to the Director.
-    /// Subclasses override this when they can intentionally express Fill, Drop, or Energy cues.
+    /// Subclasses override this when they can intentionally express Fill or Drop cues.
     /// </summary>
     public virtual Repertoire Repertoire => Repertoire.None;
 

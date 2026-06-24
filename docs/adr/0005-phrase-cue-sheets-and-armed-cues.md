@@ -8,6 +8,10 @@ This keeps Cue Sheet planning tied to Phrase structure, keeps Effect/Transition 
 
 We refined the cue handoff to be fire-and-forget from the Director's perspective. The original ownership decision still stands, but the Director no longer polls Switcher mutability or lifecycle state; it sends cue-window directions and records pass-local consumption from its own command while the Switcher schedules, locks, starts, and completes the cue internally.
 
+## Amendment 2026-06-24
+
+We refined Synced Mode cue meaning without changing Cue Sheet ownership. A Cue Sheet remains a list of scheduled Cues derived from the Phrase's total beat length; each Cue has a phase-aligned Cue Mark where it lands. BeatManager Fill/Drop state does not create or move Cue Marks. `SyncedCueIntent` derives ordinary, Fill, or Drop Cue Intent by comparing the current Timing Frame's Cue Mark with BeatManager Fill/Drop phrase-event timing. The Director uses that intent to cast event-capable Effects and Transitions from Repertoire for the current scheduled Cue. If a preferred Transition cannot serve that Cue Mark now, the Director keeps the staged Transition instead of delaying the cue. The Switcher still receives only the chosen cue direction and executes it from Runway/Tail.
+
 ## Considered options
 
 - **Keep Selected Phase Boundary planning as the canonical model** — rejected because the name makes a Phrase-level cue plan sound like a Phase implementation detail, and it encourages transition timing mechanics to leak back into the Director.
@@ -17,7 +21,7 @@ We refined the cue handoff to be fire-and-forget from the Director's perspective
 
 ## Consequences
 
-- A Cue Sheet is identified by the Phrase's total beat length and relative Cue Marks, not phrase name or absolute start/end beat.
+- A Cue Sheet is identified by the Phrase's total beat length and the relative Cue Marks for its scheduled Cues, not phrase name or absolute start/end beat.
 - **Cue Mark** is the canonical Phrase-level term; **Selected Phase Boundary** remains current implementation vocabulary to retire or translate at the seam.
 - The Director chooses Cue Mark, destination Performer, and Transition, then sends that cue direction to the Switcher fire-and-forget at the cue window.
 - The Director records pass-local Cue Mark consumption from its own sent command and must not inspect Switcher Loaded/Locked/Started state as scheduling input.

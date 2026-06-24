@@ -107,8 +107,27 @@ public sealed class TransitionRepertoireTests
         }
     }
 
+    [Test]
+    public void ConcreteTransitionsExposeAtLeastOneEventCapableTransition()
+    {
+        var factory = new Factory<TransitionBase>();
+
+        var eventCapableCount = 0;
+        foreach (var transitionType in factory.Types)
+        {
+            var transition = (TransitionBase)System.Activator.CreateInstance(transitionType);
+            if ((transition.Repertoire.Tags & (Repertoire.HandlesFill | Repertoire.HandlesDrop)) != 0)
+            {
+                eventCapableCount++;
+            }
+        }
+
+        Assert.That(eventCapableCount, Is.GreaterThanOrEqualTo(1));
+    }
+
     private static void AssertValidRepertoire(TransitionRepertoire actual, string context)
     {
+        Assert.That(actual.Tags & ~(Repertoire.HandlesFill | Repertoire.HandlesDrop), Is.EqualTo(Repertoire.None), context);
         Assert.That(actual.RunwayBeats, Is.GreaterThanOrEqualTo(0), context);
         Assert.That(actual.TailBeats, Is.GreaterThanOrEqualTo(0), context);
         Assert.That(actual.DurationBeats, Is.EqualTo(actual.RunwayBeats + actual.TailBeats), context);
@@ -118,5 +137,40 @@ public sealed class TransitionRepertoireTests
         Assert.That(actual.DefaultDurationSeconds, Is.GreaterThanOrEqualTo(0f), context);
         Assert.That(System.Enum.IsDefined(typeof(TransitionShape), actual.Shape), Is.True, context);
         Assert.That(System.Enum.IsDefined(typeof(TransitionIntensity), actual.Intensity), Is.True, context);
+    }
+}
+
+public sealed class EffectRepertoireTests
+{
+    [Test]
+    public void ConcreteEffectsExposeOnlyFillAndDropRepertoire()
+    {
+        var factory = new Factory<EffectBase>();
+        foreach (var effectType in factory.Types)
+        {
+            var effect = (EffectBase)System.Activator.CreateInstance(effectType);
+            Assert.That(
+                effect.Repertoire & ~(Repertoire.HandlesFill | Repertoire.HandlesDrop),
+                Is.EqualTo(Repertoire.None),
+                effectType.Name);
+        }
+    }
+
+    [Test]
+    public void ConcreteEffectsExposeInitialFillAndDropCapablePerformers()
+    {
+        var factory = new Factory<EffectBase>();
+        var hasFillCapableEffect = false;
+        var hasDropCapableEffect = false;
+
+        foreach (var effectType in factory.Types)
+        {
+            var effect = (EffectBase)System.Activator.CreateInstance(effectType);
+            hasFillCapableEffect |= (effect.Repertoire & Repertoire.HandlesFill) != 0;
+            hasDropCapableEffect |= (effect.Repertoire & Repertoire.HandlesDrop) != 0;
+        }
+
+        Assert.That(hasFillCapableEffect, Is.True);
+        Assert.That(hasDropCapableEffect, Is.True);
     }
 }

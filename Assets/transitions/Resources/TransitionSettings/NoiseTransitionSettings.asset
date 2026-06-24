@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TransitionSettingsAsset
   transitionTypeName: NoiseTransition
   settings:
-    Tags: 6
+    Tags: 2
     RunwayBeats: 4
     TailBeats: 1
     Shape: 6
