@@ -254,7 +254,8 @@ public readonly struct SyncedCueIntent
         return beatsUntilStart < beatsUntilPhaseEnd && beatsUntilEnd >= beatsUntilPhaseStart;
     }
 
-    private static Repertoire PreferredRepertoireFor(CueEventIntent eventIntent)
+    /// <summary>Maps a resolved <see cref="CueEventIntent"/> to the Performer Repertoire it asks the Director to cast.</summary>
+    public static Repertoire PreferredRepertoireFor(CueEventIntent eventIntent)
     {
         switch (eventIntent)
         {

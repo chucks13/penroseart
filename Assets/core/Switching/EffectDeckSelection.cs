@@ -265,30 +265,4 @@ public static class TransitionDeckSelection
         deck[deck.Length - 1] = result;
         return result;
     }
-
-    /// <summary>
-    /// Pulls a preferred transition card when one advertises the requested event Repertoire and
-    /// its Runway/Tail shape can still serve the current Cue Mark.
-    /// </summary>
-    public static bool TryPullPreferred(
-        int[] deck,
-        Repertoire preferredRepertoire,
-        Func<int, TransitionRepertoire> repertoireForTransition,
-        Func<TransitionRepertoire, bool> canServeCue,
-        out int transitionIndex)
-    {
-        if (!TryFindPreferred(
-            deck,
-            preferredRepertoire,
-            repertoireForTransition,
-            canServeCue,
-            out var deckIndex,
-            out transitionIndex))
-        {
-            return false;
-        }
-
-        transitionIndex = PullAt(deck, deckIndex);
-        return true;
-    }
 }

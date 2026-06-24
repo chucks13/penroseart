@@ -611,10 +611,9 @@ public sealed class Director
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
         if (transitionSelection.DeckIndex >= 0)
         {
-            nextTransitionIndex = TransitionDeckSelection.PullAt(transitionDeck, transitionSelection.DeckIndex);
-            controller.currentTransition = nextTransitionIndex;
-            transitionIndex = nextTransitionIndex;
-            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(nextTransitionIndex)} preferred={PreferredRepertoireFor(eventIntent)}");
+            // Consume the preferred card so the fresh Next Transition staged in CommitSentCue won't redraw it.
+            transitionIndex = TransitionDeckSelection.PullAt(transitionDeck, transitionSelection.DeckIndex);
+            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(transitionIndex)} preferred={SyncedCueIntent.PreferredRepertoireFor(eventIntent)}");
         }
 
         var cue = new SwitcherCueDirection(
@@ -630,7 +629,7 @@ public sealed class Director
 
     private TransitionCueSelection SelectTransitionForEventIntent(TimingFrame frame, CueEventIntent eventIntent)
     {
-        var preferredRepertoire = PreferredRepertoireFor(eventIntent);
+        var preferredRepertoire = SyncedCueIntent.PreferredRepertoireFor(eventIntent);
         var stagedTransitionIndex = nextTransitionIndex;
         var stagedRepertoire = controller.transitions[stagedTransitionIndex].Repertoire;
         if (holdSelectedTransition || nextTransitionIsManualSelection || preferredRepertoire == Repertoire.None)
@@ -777,19 +776,6 @@ public sealed class Director
     private static bool CanTransitionCueNow(TimingFrame frame, TransitionRepertoire repertoire)
     {
         return TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire).IsCueBeat(frame.CurrentBeat);
-    }
-
-    private static Repertoire PreferredRepertoireFor(CueEventIntent eventIntent)
-    {
-        switch (eventIntent)
-        {
-            case CueEventIntent.Fill:
-                return Repertoire.HandlesFill;
-            case CueEventIntent.Drop:
-                return Repertoire.HandlesDrop;
-            default:
-                return Repertoire.None;
-        }
     }
 
     private void RunStandaloneTimerDecision()
