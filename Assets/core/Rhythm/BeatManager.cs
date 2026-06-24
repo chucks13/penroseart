@@ -806,12 +806,6 @@ public partial class BeatManager
         return countdowns;
     }
 
-    /// <summary>Returns the currently active offbeat slot for the supplied position inside the measure.</summary>
-    
-
-    /// <summary>Returns seconds elapsed since the most recent offbeat midpoint.</summary>
-    
-
     /// <summary>Returns a smooth normalized pulse that is 1 at the event and decays toward 0 before the next event.</summary>
     private static float GetPulse(float elapsedSeconds, float durationSeconds)
     {
@@ -823,9 +817,6 @@ public partial class BeatManager
         var progress = Mathf.Clamp01(elapsedSeconds / durationSeconds);
         return 1f - Mathf.SmoothStep(0f, 1f, progress);
     }
-
-    /// <summary>Positive modulo helper for wrapping negative offbeat indexes back into four beat slots.</summary>
-    
 
     /// <summary>Returns true when a musical beat label equals either accepted label.</summary>
     private static bool BeatLabelMatches(int beatLabel, int firstBeatLabel, int secondBeatLabel)
