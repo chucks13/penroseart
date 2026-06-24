@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Branch review — director-event-aware-cue-intent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+    </script>
+    <style>
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- HEADER -->
+      <header class="space-y-4">
+        <h1 class="text-3xl font-serif text-slate-50">
+          Branch review — <span class="mono text-indigo-300">director-event-aware-cue-intent</span>
+        </h1>
+        <div class="text-sm text-slate-400 mono">
+          vs master · 1 commit (e37cb23b) · +847 / −68 over 25 files · reviewed 2026-06-24 · static review (no Unity test run)
+        </div>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs uppercase tracking-wider text-slate-400">
+          <span><span class="inline-block w-3 h-3 rounded-sm bg-emerald-500 align-middle mr-1"></span> clean / safe</span>
+          <span><span class="inline-block w-3 h-3 rounded-sm bg-amber-500 align-middle mr-1"></span> minor smell</span>
+          <span><span class="inline-block w-3 h-3 rounded-sm bg-red-600 align-middle mr-1"></span> leakage / overwrite</span>
+          <span><span class="inline-block w-3 h-3 rounded-sm bg-indigo-400 align-middle mr-1"></span> note</span>
+        </div>
+      </header>
+
+      <!-- VERDICT -->
+      <section class="deep rounded-xl border border-emerald-700/50 p-6 flex items-center gap-5">
+        <span class="mono text-sm font-bold px-3 py-2 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-600/40 whitespace-nowrap">SAFE TO MERGE</span>
+        <p class="text-slate-200">
+          Focused, well-tested, well-documented change. No bugs, no broken references, no hardware/OSC/protocol changes.
+          Three minor smells, none blocking. master is an ancestor — clean fast-forward possible.
+        </p>
+      </section>
+
+      <!-- STATS -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 text-center">
+          <div class="mono text-2xl text-slate-100">25</div><div class="text-xs text-slate-400 mt-1">files changed</div></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 text-center">
+          <div class="mono text-2xl text-emerald-300">+847 / −68</div><div class="text-xs text-slate-400 mt-1">lines</div></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 text-center">
+          <div class="mono text-2xl text-slate-100">22</div><div class="text-xs text-slate-400 mt-1">new tests</div></div>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 text-center">
+          <div class="mono text-2xl text-emerald-300">0</div><div class="text-xs text-slate-400 mt-1">bugs found</div></div>
+      </section>
+
+      <!-- WHAT IT DOES + DIAGRAM -->
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif text-slate-100">What the branch does</h2>
+        <p class="text-slate-300">
+          Teaches the Director to cast <em>event-aware</em> cues. The casting seam now classifies each scheduled cue as
+          <span class="mono text-indigo-300">Ordinary / Fill / Drop</span> by comparing the current Cue Mark against
+          BeatManager's live Fill/Drop timing — <strong>without creating or moving Cue Marks</strong> — and prefers an
+          event-capable Transition from the deck only when its Runway/Tail can still serve that Cue Mark. The
+          <span class="mono">Repertoire</span> flags shrink from <span class="mono">{Fill, Drop, RespondsToEnergy}</span> to
+          <span class="mono">{Fill, Drop}</span>.
+        </p>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Cue resolution &amp; transition selection — one Synced tick</div>
+          <pre class="mermaid">
+flowchart TB
+  F[TimingFrame + BeatManager Fill/Drop] --> R["SyncedCueIntent.ResolveEventIntent()<br/>Ordinary | Fill | Drop"]
+  R --> S["Director.SelectTransitionForEventIntent()<br/>TryFindPreferred — no deck mutation"]
+  S --> E["SyncedCueIntent.Evaluate()<br/>Wait / Cue / BlockedByCadence"]
+  E -->|Wait or Blocked| X[return — deck untouched]
+  E -->|Cue| P["PullAt() rotates the chosen card<br/>(the one meaningful side effect)"]
+  P -.dead write.-> DW["nextTransitionIndex / currentTransition<br/>overwritten by CommitSentCue"]
+  P --> C["CommitSentCue → StageNextTransition<br/>draws the fresh next card"]
+  C --> O[UpsertLoadedCue → Switcher]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#fca5a5;
+  class DW leak
+          </pre>
+        </div>
+      </section>
+
+      <!-- FINDINGS -->
+      <section id="findings" class="space-y-8">
+        <h2 class="text-xl font-serif text-slate-100">Findings</h2>
+
+        <!-- F1 -->
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-amber-500 bg-slate-900 p-6 space-y-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h3 class="text-lg text-slate-100">1 · Dead production API: <span class="mono">TransitionDeckSelection.TryPullPreferred</span></h3>
+            <span class="mono text-xs px-2 py-1 rounded bg-amber-500/15 text-amber-300 border border-amber-600/40">MINOR · YAGNI</span>
+          </div>
+          <p class="mono text-sm text-slate-400">Assets/core/Switching/EffectDeckSelection.cs</p>
+          <p class="text-slate-300"><span class="text-slate-400 uppercase text-xs tracking-wider">Problem</span> &nbsp;
+            Five tests exercise <span class="mono">TryPullPreferred</span>, but nothing in production calls it.</p>
+          <p class="text-slate-300"><span class="text-slate-400 uppercase text-xs tracking-wider">Why</span> &nbsp;
+            The Director needs the rotation deferred until a cue actually fires, so it uses the two-phase
+            <span class="mono">TryFindPreferred</span> + <span class="mono">PullAt</span>. The combined call only mirrors the
+            effect-deck version for symmetry.</p>
+          <ul class="list-disc pl-5 text-sm text-slate-300 space-y-1">
+            <li>Remove it and its five tests — the leverage is the two-phase split, not the combined call.</li>
+            <li>Or keep it with a one-line comment stating it is retained for parity.</li>
+          </ul>
+        </article>
+
+        <!-- F2 -->
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-amber-500 bg-slate-900 p-6 space-y-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h3 class="text-lg text-slate-100">2 · Duplicated <span class="mono">PreferredRepertoireFor</span> mapping</h3>
+            <span class="mono text-xs px-2 py-1 rounded bg-amber-500/15 text-amber-300 border border-amber-600/40">MINOR · LOCALITY</span>
+          </div>
+          <p class="mono text-sm text-slate-400">SyncedCueIntent.cs:257 &nbsp;·&nbsp; Director.cs:780</p>
+          <p class="text-slate-300"><span class="text-slate-400 uppercase text-xs tracking-wider">Problem</span> &nbsp;
+            The identical <span class="mono">CueEventIntent → Repertoire</span> switch lives in two modules and must be kept in sync by hand.</p>
+          <pre class="rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm text-slate-300 overflow-x-auto mono">switch (eventIntent) {
+  case CueEventIntent.Fill: return Repertoire.HandlesFill;
+  case CueEventIntent.Drop: return Repertoire.HandlesDrop;
+  default:                  return Repertoire.None;
+}</pre>
+          <p class="text-slate-300"><span class="text-slate-400 uppercase text-xs tracking-wider">Fix</span> &nbsp;
+            One shared helper (public static on <span class="mono">SyncedCueIntent</span> or an extension on
+            <span class="mono">CueEventIntent</span>); both call sites use it. Locality: the mapping lives in one module.</p>
+        </article>
+
+        <!-- F3 -->
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-amber-500 bg-slate-900 p-6 space-y-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h3 class="text-lg text-slate-100">3 · Transient writes in <span class="mono">Director.TryStartSyncedCue</span></h3>
+            <span class="mono text-xs px-2 py-1 rounded bg-amber-500/15 text-amber-300 border border-amber-600/40">MINOR · CLARITY</span>
+          </div>
+          <p class="mono text-sm text-slate-400">Assets/core/Switching/Director.cs:612–618</p>
+          <p class="text-slate-300"><span class="text-slate-400 uppercase text-xs tracking-wider">Problem</span> &nbsp;
+            The deck-transition block writes state that is overwritten within the same method by
+            <span class="mono">CommitSentCue → StageNextTransition</span>. Only <span class="mono">PullAt</span>'s rotation survives.</p>
+          <pre class="rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm overflow-x-auto mono"><span class="text-slate-300">if (transitionSelection.DeckIndex &gt;= 0) {</span>
+    <span class="text-slate-300">nextTransitionIndex = TransitionDeckSelection.PullAt(transitionDeck, ...);</span> <span class="text-red-400">// overwritten below</span>
+    <span class="text-slate-300">controller.currentTransition = nextTransitionIndex;</span>                  <span class="text-red-400">// overwritten by CommitSentCue</span>
+    <span class="text-slate-300">transitionIndex = nextTransitionIndex;</span>                              <span class="text-red-400">// already equal — self-assign</span>
+<span class="text-slate-300">}</span></pre>
+          <p class="text-slate-300"><span class="text-slate-400 uppercase text-xs tracking-wider">Fix</span> &nbsp;
+            Reduce to the rotation side effect with a comment, e.g.
+            <span class="mono">// consume the preferred card so the fresh stage below won't redraw it</span>.
+            Not a bug — the cue is built from the still-correct local <span class="mono">transitionIndex</span>/<span class="mono">repertoire</span>.</p>
+        </article>
+      </section>
+
+      <!-- CLEAN -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-100">Checked &amp; clean</h2>
+
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-emerald-500 bg-slate-900 p-6 space-y-2">
+          <h3 class="text-lg text-slate-100">✓ <span class="mono">RespondsToEnergy</span> removal is complete</h3>
+          <ul class="list-disc pl-5 text-sm text-slate-300 space-y-1">
+            <li>Zero references remain in <span class="mono">Assets/</span>, <span class="mono">docs/</span>, or <span class="mono">CONTEXT.md</span>.</li>
+            <li>All three serialized <span class="mono">TransitionSettings/*.asset</span> Tags migrated: DirectionalWipe 4→0, NoiseTransition 6→2, RGBFade 4→0. No stale bit-4 values.</li>
+            <li>The separate <span class="mono">BeatManager.Energy</span> query API is untouched and still valid — only energy-based <em>casting</em> was removed, matching the documented Fill/Drop-only model.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-emerald-500 bg-slate-900 p-6 space-y-2">
+          <h3 class="text-lg text-slate-100">✓ Drop-detection refactor is behavior-preserving</h3>
+          <p class="text-sm text-slate-300">
+            Drop alignment moved into <span class="mono">ResolveEventIntent</span> against <span class="mono">CueMarkBeat − CurrentBeat</span>
+            instead of <span class="mono">beatPlan.ImpactBeat − CurrentBeat</span>. Since <span class="mono">FromCueMark</span> always lands
+            the Impact Point on the Cue Mark, the two are equal — a refactor, not a timing change.</p>
+        </article>
+
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-emerald-500 bg-slate-900 p-6 space-y-2">
+          <h3 class="text-lg text-slate-100">✓ Compiles &amp; well covered</h3>
+          <ul class="list-disc pl-5 text-sm text-slate-300 space-y-1">
+            <li>All referenced symbols exist: <span class="mono">BeatManager.Fill/.Drop</span>, <span class="mono">PhraseWindow.DefaultPhaseBeats</span>, <span class="mono">PhraseWindow.EndBeat</span>, <span class="mono">HasPhraseWindow</span>, all <span class="mono">PhraseEventInfo</span> fields.</li>
+            <li>22 new tests cover the tricky paths: Fill-overlap boundaries, Drop-over-Fill precedence, in-progress Fill vs Drop, held/manual transition preservation, preferred-can't-cue-now fallback, and a guard that concrete effects expose only Fill/Drop.</li>
+          </ul>
+        </article>
+
+        <article class="rounded-xl border border-slate-800 border-l-4 border-l-indigo-400 bg-slate-900 p-6 space-y-2">
+          <h3 class="text-lg text-slate-100">ℹ Documentation discipline is excellent</h3>
+          <p class="text-sm text-slate-300">
+            CONTEXT.md, the dated ADR-0005 amendment, code-map, and runtime-architecture all match the code — including the
+            subtle invariants ("Fill/Drop never creates or moves a Cue Mark", "deck rotates only when a cue is sent").</p>
+        </article>
+      </section>
+
+      <!-- MERGE READINESS -->
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif text-slate-100">Merge readiness</h2>
+        <div class="rounded-lg border border-slate-800 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+              <tr><th class="text-left px-4 py-2">Check</th><th class="text-left px-4 py-2">Result</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr><td class="px-4 py-2">master is ancestor of branch</td><td class="px-4 py-2 text-emerald-300">Yes — clean fast-forward</td></tr>
+              <tr><td class="px-4 py-2">Commits ahead / behind</td><td class="px-4 py-2">1 ahead, 0 behind</td></tr>
+              <tr><td class="px-4 py-2">New files added</td><td class="px-4 py-2 text-emerald-300">None — no .meta/GUID concerns</td></tr>
+              <tr><td class="px-4 py-2">Hardware / serial / OSC / port changes</td><td class="px-4 py-2 text-emerald-300">None</td></tr>
+              <tr><td class="px-4 py-2">Buffer / effect architecture changes</td><td class="px-4 py-2 text-emerald-300">None — stays in the deck/cue model</td></tr>
+              <tr><td class="px-4 py-2">Generated Unity files hand-edited</td><td class="px-4 py-2 text-emerald-300">None (only 3 authored .asset Tags)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TOP RECOMMENDATION -->
+      <section id="top-recommendation" class="deep rounded-xl border border-slate-700 p-6 space-y-2">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</div>
+        <h2 class="text-xl font-serif text-slate-50">Merge it. Optionally drop the unused API first.</h2>
+        <p class="text-slate-300">
+          The logic is sound and behavior-preserving where it refactors. The single highest-value cleanup is
+          <a href="#findings" class="text-indigo-300 underline">finding 1</a> — delete the unused
+          <span class="mono">TransitionDeckSelection.TryPullPreferred</span> and its tests. Run the Unity Editor test suite
+          as the final gate; this was a static review.
+        </p>
+        <p class="text-xs text-slate-500 mono">Aside: the commit is labelled fix(director) but is really a feature. Cosmetic only.</p>
+      </section>
+
+      <footer class="text-xs text-slate-500 mono pt-6 border-t border-slate-800">
+        Static review of director-event-aware-cue-intent @ e37cb23b vs master · PenroseArt · 2026-06-24
+      </footer>
+
+    </main>
+  </body>
+</html>
