@@ -12,6 +12,10 @@ We refined the cue handoff to be fire-and-forget from the Director's perspective
 
 We refined Synced Mode cue meaning without changing Cue Sheet ownership. A Cue Sheet remains a list of scheduled Cues derived from the Phrase's total beat length; each Cue has a phase-aligned Cue Mark where it lands. BeatManager Fill/Drop state does not create or move Cue Marks. `SyncedCueIntent` derives ordinary, Fill, or Drop Cue Intent by comparing the current Timing Frame's Cue Mark with BeatManager Fill/Drop phrase-event timing. The Director uses that intent to cast event-capable Effects and Transitions from Repertoire for the current scheduled Cue. If a preferred Transition cannot serve that Cue Mark now, the Director keeps the staged Transition instead of delaying the cue. The Switcher still receives only the chosen cue direction and executes it from Runway/Tail.
 
+## Amendment 2026-06-24 — On-Air Timing becomes a Phase determiner; Cue Sheet derivation relocates to the Director (ADR-0006)
+
+ADR-0006 makes On-Air Timing a pure Phase determiner and relocates Cue Sheet derivation — together with the cue cursor, change cadence, and pass-local cue memory — out of On-Air Timing into a Director-owned CuePlanner. This ADR's ownership split still stands: Cue Sheet planning stays tied to Phrase structure, the Director casts one cue at a time, and the Switcher owns cue lifecycle. Only the home of the derivation moves — On-Air Timing no longer builds Cue Sheets; the Director's CuePlanner does, consuming the read-only Phase/Phrase reading. The relocation lands during the ADR-0006 implementation.
+
 ## Considered options
 
 - **Keep Selected Phase Boundary planning as the canonical model** — rejected because the name makes a Phrase-level cue plan sound like a Phase implementation detail, and it encourages transition timing mechanics to leak back into the Director.
