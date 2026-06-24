@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>On-Air Timing redesign — design document · PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+    <style>
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mermaid { background: #0b1120; border-radius: 0.5rem; padding: 0.75rem; }
+      h2 { scroll-margin-top: 1rem; }
+      code { color: #a5b4fc; }
+      .chip { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      table td { vertical-align: top; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <!-- HEADER -->
+      <header class="space-y-4">
+        <p class="chip text-emerald-400">PenroseArt · design document (in progress)</p>
+        <h1 class="text-4xl font-serif text-slate-50">On-Air Timing redesign</h1>
+        <p class="text-slate-400 text-sm">2026-06-24 · phase-first locking · phrase-as-validator · cue eviction · this is a design-in-progress, not a finished spec</p>
+        <div class="rounded-lg deep border border-slate-800 p-5 text-slate-300 leading-relaxed space-y-3">
+          <p><span class="text-emerald-400 font-semibold">Thesis.</span> Today one file (<code>OnAirTiming.cs</code>) tangles three concerns at three altitudes: <strong>phase</strong> (the 16-beat grid — paramount), <strong>phrase</strong> (song structure — a validator), and <strong>cue planning</strong> (a Director concern that shouldn't live here at all). Separate them: a reusable <strong>PhaseLock</strong> core, a <strong>PhraseTracker</strong> that rides on it, and cue planning evicted to the Director. Make phase robust by fusing multiple OSC signals under one rule — <em>beat keeps the wheel, phrase validates, event edges re-anchor</em>.</p>
+          <p><span class="text-amber-400 font-semibold">Read this as a map of certainty:</span> §3 is locked, §4–6 are known facts, §7 is what we still must verify, §8 is what the grill still has to decide.</p>
+        </div>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-400 border-t border-slate-800 pt-3">
+          <span><span class="inline-block w-3 h-3 align-middle bg-emerald-900 border border-emerald-500 mr-1"></span>locked / known</span>
+          <span><span class="inline-block w-3 h-3 align-middle bg-amber-900 border border-amber-500 mr-1"></span>unknown — must verify</span>
+          <span><span class="inline-block w-3 h-3 align-middle bg-indigo-950 border border-indigo-500 mr-1"></span>open decision — grill</span>
+        </div>
+      </header>
+
+      <nav class="text-sm text-slate-400 grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <a class="hover:text-emerald-400" href="#problem">1 · The problem</a>
+        <a class="hover:text-emerald-400" href="#vocab">2 · Phase vs phrase</a>
+        <a class="hover:text-emerald-400" href="#arbiter">3 · The arbiter (LOCKED)</a>
+        <a class="hover:text-emerald-400" href="#arch">4 · Proposed architecture</a>
+        <a class="hover:text-emerald-400" href="#signals">5 · OSC signal inventory</a>
+        <a class="hover:text-emerald-400" href="#loops">6 · Loops are in-phase</a>
+        <a class="hover:text-emerald-400" href="#unknown">7 · What's unknown</a>
+        <a class="hover:text-emerald-400" href="#decide">8 · Open decisions (grill)</a>
+        <a class="hover:text-emerald-400" href="#next">9 · Next steps</a>
+      </nav>
+
+      <!-- 1 PROBLEM -->
+      <section id="problem" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">1 · The problem</h2>
+        <p class="text-slate-400"><code>OnAirTiming.cs</code> (999 lines) does three jobs at once, and they're entangled:</p>
+        <ul class="text-sm text-slate-300 space-y-1.5 list-disc pl-5">
+          <li><strong>Phase</strong> locking — "where is the one" on the 16-beat grid. Universal; every part of the runtime could use it.</li>
+          <li><strong>Phrase</strong> tracking — variable-length song-structure windows and boundaries.</li>
+          <li><strong>Cue planning</strong> — <code>CueSheetPlans</code> / <code>CueSheetCursor</code> live as private classes inside the timing module.</li>
+        </ul>
+        <p class="text-slate-400 text-sm">Consequences: cue scheduling (a Director concern) is welded to phase locking (a universal one); phase and phrase blur together; and the only consumer is the Director, so nothing else can ask "where's the one?" The deep-dive report (<code>on-air-timing-deepdive-2026-06-24.html</code>) found the concrete fallout — single-source phase trust, a 3–15 beat loop dead zone, split-brain pass-local state.</p>
+      </section>
+
+      <!-- 2 VOCAB -->
+      <section id="vocab" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">2 · Phase vs phrase — the distinction we must keep</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 p-4">
+            <p class="chip text-emerald-400 mb-1">Phase — paramount</p>
+            <p class="text-slate-300">The fixed 16-beat grid (4 bars). "Where is the one." Everything — cue marks, transitions, effect downbeats — hangs off this. If phase is wrong, everything is wrong.</p>
+          </div>
+          <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+            <p class="chip text-slate-300 mb-1">Phrase — the validator</p>
+            <p class="text-slate-300">Variable-length song structure (intro / buildup / drop …), always a whole number of phases (<code>length = N × 16</code>). Rides on phase; its job is to <em>cross-check</em>, not to drive.</p>
+          </div>
+        </div>
+        <div class="rounded-md border border-emerald-900 bg-emerald-950/10 p-3 text-sm text-slate-300">
+          <span class="text-emerald-400 font-semibold">The invariant: "phases must be in phrase."</span> Phase boundaries must coincide with the phrase grid. When live data violates that, the violation is not noise — it is <strong>the single most valuable diagnostic we have</strong>: the trigger that says "re-examine, something changed." We want to detect that, not paper over it.
+        </div>
+      </section>
+
+      <!-- 3 ARBITER -->
+      <section id="arbiter" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">3 · The decision arbiter <span class="chip text-emerald-400 align-middle">LOCKED</span></h2>
+        <p class="text-slate-400">There is <strong>no single source-of-truth clock</strong>. No live signal is trustworthy enough alone — beat can be offset, phrase detection re-segments, totals go stale. So the arbiter is a <em>method</em>, not a source:</p>
+        <div class="rounded-lg deep border border-emerald-900 p-4 text-slate-200 text-sm">
+          The arbiter is the <strong>most recently confirmed boundary (an anchor)</strong>, dead-reckoned forward by the beat and continuously cross-checked. Disagreement <strong>demotes confidence</strong> — it never silently picks a winner.
+        </div>
+        <div class="grid lg:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">precedence ladder (authority high → low)</p>
+            <ol class="text-sm text-slate-300 space-y-1.5 list-decimal pl-5">
+              <li><span class="text-emerald-400">Event-edge anchors</span> — phrase-label change, drop <code>active 0→1</code>. <strong>Redefine the one.</strong> Drift-immune boundary truth.</li>
+              <li><span class="text-emerald-300">Beat continuity</span> — dead-reckon phase forward from the anchor. The steady short-term clock.</li>
+              <li>Phrase structure (countdown + length) — the <strong>validator</strong>, and the bootstrap when no anchor exists. More volatile, so below beat.</li>
+              <li><code>total_beats mod 16</code> — coarse fallback grid.</li>
+              <li><code>beat_in_bar</code> — fine cross-check; catches off-by-a-beat.</li>
+            </ol>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">the lock's three honest states</p>
+            <ul class="text-sm text-slate-300 space-y-1.5">
+              <li><span class="font-mono text-emerald-400">LOCKED</span> — fresh anchor + all cross-checks agree. Director cues freely.</li>
+              <li><span class="font-mono text-amber-300">COASTING</span> — dead-reckoning, no contradiction, no recent anchor. Confidence decays with distance.</li>
+              <li><span class="font-mono text-red-400">CONTRADICTED</span> — phase ≠ phrase. Hold landmark decisions; actively hunt the next anchor to re-lock.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="rounded-md border border-emerald-900 bg-emerald-950/10 p-3 text-sm text-slate-300">
+          <span class="text-emerald-400 font-semibold">Tie-break (locked):</span> on <span class="font-mono text-red-400">CONTRADICTED</span> with no fresh edge, <strong>the beat keeps the wheel</strong> — visuals stay on the downbeat — we flag the contradiction, lower confidence, and wait for the next anchor (label change / drop) to reconcile. Phrase <em>raises the flag</em>, it doesn't seize control. Because everything is powers of four, small misalignment is tolerable; we detect it, we don't panic over it. Anchors are frequent (every phrase boundary, every drop), so the misalignment window is short.
+        </div>
+      </section>
+
+      <!-- 4 ARCH -->
+      <section id="arch" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">4 · Proposed architecture — three layers, cue stuff evicted</h2>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart TD
+  OSC["OSC signals · beat · beat_in_bar · total · phrase label+countdown · drop/energy edges"]:::ext
+  OSC --> PL["PhaseLock · CORE · reusable<br/>fuse signals → where is the one + confidence + lock state"]:::core
+  PL --> PT["PhraseTracker<br/>phrase window · boundaries · labels (rides on phase)"]:::core
+  PT --> RD["OnAirReading (read-only seam)<br/>PhaseReading · PhraseReading · LoopState · LockState"]:::seam
+  RD --> CP["Director · CuePlanner<br/>CueSheet + cursor + cadence (MOVED out of timing)"]:::dir
+  RD --> FX["Effects / HUD / anything<br/>can ask 'where is the one?'"]:::ext
+  classDef ext fill:#1e293b,stroke:#475569,color:#cbd5e1;
+  classDef core fill:#312e81,stroke:#818cf8,color:#e0e7ff;
+  classDef seam fill:#064e3b,stroke:#34d399,color:#d1fae5;
+  classDef dir fill:#4c1d95,stroke:#a78bfa,color:#ede9fe;
+          </pre>
+        </div>
+        <div class="grid md:grid-cols-3 gap-3 text-sm">
+          <div class="rounded border border-indigo-900 bg-indigo-950/20 p-3 text-slate-300"><span class="text-indigo-300 font-semibold">PhaseLock (core).</span> One job: the one + confidence + lock state, fused from all signals. Reusable by anything. No cue knowledge.</div>
+          <div class="rounded border border-indigo-900 bg-indigo-950/20 p-3 text-slate-300"><span class="text-indigo-300 font-semibold">PhraseTracker.</span> Phrase windows, boundaries, labels — built on a solid phase lock so boundaries snap to grid. Validates phase. No cue planning.</div>
+          <div class="rounded border border-violet-900 bg-violet-950/20 p-3 text-slate-300"><span class="text-violet-300 font-semibold">CuePlanner (Director).</span> Cue sheet + cursor + cadence move out of timing entirely. Consumes the reading; decides what to do.</div>
+        </div>
+        <p class="text-slate-400 text-sm">The seam is one read-only <code>OnAirReading</code>. Phase and phrase stop being conflated because they're separate modules at separate altitudes; the cue concern leaves the timing core; and any subsystem — not just the Director — can read phase.</p>
+      </section>
+
+      <!-- 5 SIGNALS -->
+      <section id="signals" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">5 · OSC signal inventory <span class="chip text-emerald-400 align-middle">grounded</span></h2>
+        <p class="text-slate-400">Verified from <code>RaveOscSnapshot.cs</code> + the parser. RaveSystem broadcasts 17 <code>/rave/onair/*</code> values at 60 Hz. State structs (<code>NamedState</code> for phrase/energy, <code>CountdownState</code> for drop/fill) share one shape: <code>active</code> tri-state (1 = now, 0 = counting to next, −1 = unavailable), <code>countBeats</code> (active 1 → beats to end; active 0 → beats to start), <code>lengthBeats</code>, <code>remaining</code>.</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left"><tr><th class="p-3">Signal</th><th class="p-3">Kind</th><th class="p-3">Used today?</th><th class="p-3">Role in new lock</th></tr></thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr><td class="p-3 font-mono text-xs">beat</td><td class="p-3">continuous clock</td><td class="p-3">✅</td><td class="p-3">Dead-reckoning clock · keeps the wheel</td></tr>
+              <tr><td class="p-3 font-mono text-xs">beat_in_bar</td><td class="p-3">independent downbeat</td><td class="p-3">✅ weak</td><td class="p-3">Fine cross-check (can disagree with beat → that's the value)</td></tr>
+              <tr><td class="p-3 font-mono text-xs">total_beats</td><td class="p-3">grid anchor</td><td class="p-3">✅ Closed tier</td><td class="p-3">Coarse fallback grid (<code>mod 16</code>)</td></tr>
+              <tr class="bg-emerald-950/20"><td class="p-3 font-mono text-xs">phrase_state label</td><td class="p-3 text-emerald-300">event edge</td><td class="p-3 text-red-400">❌ display only</td><td class="p-3"><strong>Re-anchor:</strong> label change = phrase boundary, drift-immune</td></tr>
+              <tr><td class="p-3 font-mono text-xs">phrase_state countdown/length</td><td class="p-3">structure</td><td class="p-3">⚠️ numerics</td><td class="p-3">Phrase validator + bootstrap</td></tr>
+              <tr class="bg-emerald-950/20"><td class="p-3 font-mono text-xs">drop_state active 0→1</td><td class="p-3 text-emerald-300">event edge</td><td class="p-3 text-red-400">❌ casting only</td><td class="p-3"><strong>Re-anchor:</strong> drop fires on the one</td></tr>
+              <tr><td class="p-3 font-mono text-xs">energy_state edge</td><td class="p-3">event edge</td><td class="p-3">❌</td><td class="p-3">Weaker boundary corroborator</td></tr>
+              <tr><td class="p-3 font-mono text-xs">bpm / beat_avg_ms</td><td class="p-3">tempo</td><td class="p-3">❌</td><td class="p-3">New-track / reset signal</td></tr>
+              <tr><td class="p-3 font-mono text-xs">bar</td><td class="p-3">derived</td><td class="p-3">❌</td><td class="p-3 text-slate-500">Redundant — <code>bar == beat / 4</code>. No independent info.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-slate-400 text-sm"><span class="text-emerald-400 font-semibold">The unlock:</span> we currently throw away the <strong>event edges</strong> (label transitions, drop downbeats) for phase. They're the highest-authority signal precisely because they fire exactly on boundaries and are immune to the countdown drift that loops and jumps cause.</p>
+      </section>
+
+      <!-- 6 LOOPS -->
+      <section id="loops" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">6 · Loops are in-phase — the reframe</h2>
+        <p class="text-slate-400">DJ loops are quantized to powers of four (usually ≥ 4 bars). Phase position is preserved exactly when <code>loopLength mod 16 == 0</code>:</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left"><tr><th class="p-3">Loop</th><th class="p-3">beats</th><th class="p-3">16-beat phase</th><th class="p-3">bar / downbeat</th></tr></thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr><td class="p-3">1 bar</td><td class="p-3">4</td><td class="p-3">rotates +4</td><td class="p-3 text-emerald-400">preserved</td></tr>
+              <tr><td class="p-3">2 bars</td><td class="p-3">8</td><td class="p-3">rotates +8</td><td class="p-3 text-emerald-400">preserved</td></tr>
+              <tr><td class="p-3">4 bars</td><td class="p-3">16</td><td class="p-3 text-emerald-400">preserved</td><td class="p-3 text-emerald-400">preserved</td></tr>
+              <tr><td class="p-3">8 bars</td><td class="p-3">32</td><td class="p-3 text-emerald-400">preserved</td><td class="p-3 text-emerald-400">preserved</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rounded-md border border-emerald-900 bg-emerald-950/10 p-3 text-sm text-slate-300">
+          <span class="text-emerald-400 font-semibold">Consequence:</span> a loop does <strong>not</strong> threaten phase — by construction it lands back in-phase (the common ≥4-bar case preserves the full grid; 1–2 bar loops still preserve the bar/downbeat). The current code treats any backward jump as a threat with a brittle 16-beat threshold — wrong frame. What a loop actually disturbs is only <strong>absolute-beat cue bookkeeping</strong> (the cursor, <code>lastCueBeat</code>) — and that's a cue concern we're evicting anyway. If cue bookkeeping is <em>phase/phrase-relative</em>, loops cost almost nothing. This retires the "3–15 beat dead zone" worry: phase survives loops; only absolute cue state ever cared.
+        </div>
+      </section>
+
+      <!-- 7 UNKNOWN -->
+      <section id="unknown" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">7 · What's unknown — verify before building</h2>
+        <ul class="space-y-2 text-sm">
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Exact <code>drop_state</code> / <code>energy_state</code> mapping.</strong> We've read the struct shape but not confirmed how <code>ContrivePhraseEvent</code> turns it into the edge we'd anchor on. Verify the <code>active 0→1</code> transition is cleanly detectable.</li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong><code>phrase_state.remaining</code> semantics.</strong> Unit is unconfirmed in our code (beats? bars? phrases?). Unused today; confirm with RaveSystem before relying on it.</li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Does RaveSystem always send phrase data?</strong> Today, beat-without-Track-Phase yields Unlocked. Whether that case actually occurs on your rig decides how much the <code>total_beats</code> fallback matters.</li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Relative reliability: phrase detection vs beat clock on your gear.</strong> The tie-break (beat keeps the wheel) assumes beat is the steadier signal. If your rig's phrase detection is actually more reliable, we'd revisit.</li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Label vocabulary &amp; edge frequency.</strong> How often do labels change, and are they reliable enough to be a primary re-anchor? Affects how heavily we lean on them.</li>
+        </ul>
+      </section>
+
+      <!-- 8 DECIDE -->
+      <section id="decide" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">8 · Open decisions — the remaining grill</h2>
+        <p class="text-slate-400">Decision #1 (the arbiter) is locked. Three remain.</p>
+        <div class="space-y-3 text-sm">
+          <div class="rounded-lg border border-indigo-800 bg-indigo-950/20 p-4">
+            <p class="text-indigo-300 font-semibold">#2 · Where does the cue cursor live once evicted?</p>
+            <p class="text-slate-300 mt-1">A standalone <code>CuePlanner</code> core module the Director owns and calls, <em>or</em> folded directly into the Director. Standalone keeps the Director thin and the cue logic independently testable; folding in is less ceremony but re-tangles the Director. <span class="text-slate-400">Lean: standalone.</span></p>
+          </div>
+          <div class="rounded-lg border border-indigo-800 bg-indigo-950/20 p-4">
+            <p class="text-indigo-300 font-semibold">#3 · Relative vs absolute cue bookkeeping <span class="chip text-amber-400">the big one</span></p>
+            <p class="text-slate-300 mt-1">Track the cursor/cadence in <strong>phase/phrase-relative</strong> terms (offset-within-phrase) — bigger rewrite, but loops and rewinds mostly evaporate — <em>or</em> keep absolute beats and bolt on explicit loop-folding (smaller change, more special-casing). This is the decision that most shapes the implementation. <span class="text-slate-400">Lean: relative, because §6 makes it nearly free.</span></p>
+          </div>
+          <div class="rounded-lg border border-indigo-800 bg-indigo-950/20 p-4">
+            <p class="text-indigo-300 font-semibold">#4 · The loop model</p>
+            <p class="text-slate-300 mt-1">When a loop is detected, is it a <strong>held section</strong> (freeze cue advancement, keep performing the current move) or a <strong>repeating phrase</strong> (keep advancing cue marks within the looped region)? And: do we need explicit loop <em>detection</em> at all if bookkeeping is relative — or does detection only matter for the <em>creative</em> choice of what to do during a loop?</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9 NEXT -->
+      <section id="next" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">9 · Next steps</h2>
+        <ol class="space-y-2 text-sm text-slate-300 list-decimal pl-5">
+          <li>Finish the grill: lock decisions #2, #3, #4.</li>
+          <li>Verify the §7 unknowns (drop/energy edge mapping, <code>remaining</code>, phrase availability on the rig).</li>
+          <li>Write an ADR recording the phase-first / phrase-validator / cue-eviction decision and the arbiter model.</li>
+          <li>Build a sequence/property test harness (scripted DJ timelines: loops of every length, forward seeks, dropouts, length changes) <em>before</em> touching code — it pins the behavior and will find regressions.</li>
+          <li>Implement in slices: <code>PhaseLock</code> core first (multi-signal + lock states), then <code>PhraseTracker</code> + the reading seam, then evict <code>CuePlanner</code> to the Director.</li>
+        </ol>
+        <div class="rounded-md border border-slate-700 bg-slate-900/40 p-3 text-sm text-slate-400">
+          Companion docs: <code>director-understanding-2026-06-24.html</code> (whole Director), <code>on-air-timing-deepdive-2026-06-24.html</code> (current module + its risks). This document is the forward-looking design; it supersedes neither but builds on both.
+        </div>
+      </section>
+
+      <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500">
+        Generated 2026-06-24 · design-in-progress · arbiter §3 locked with Hunter · grounded in RaveOscSnapshot.cs + OnAirTiming.cs + PhaseClock.cs · format: Matt HTML-REPORT
+      </footer>
+    </main>
+  </body>
+</html>

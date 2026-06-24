@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>On-Air Timing — deep dive · PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+    <style>
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mermaid { background: #0b1120; border-radius: 0.5rem; padding: 0.75rem; }
+      h2 { scroll-margin-top: 1rem; }
+      code { color: #a5b4fc; }
+      .chip { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      table td { vertical-align: top; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <!-- HEADER -->
+      <header class="space-y-4">
+        <p class="chip text-indigo-400">PenroseArt · deep dive</p>
+        <h1 class="text-4xl font-serif text-slate-50">On-Air Timing &amp; the Timing Frame</h1>
+        <p class="text-slate-400 text-sm">Branch <code>director-event-aware-cue-intent</code> · 2026-06-24 · all five source files read in full · the timing-interpretation seam</p>
+        <div class="rounded-lg deep border border-slate-800 p-5 text-slate-300 leading-relaxed space-y-3">
+          <p><span class="text-emerald-400 font-semibold">The job.</span> On-Air Timing is the one module that turns a live, untrustworthy stream of DJ rhythm data into a single, stable <strong>Timing Frame</strong> the Director can act on: "here is the beat to land your next change on, here is how confident I am, and here is why." It owns phase locking, phrase-window derivation, cue-mark planning, loop/rewind correction, and coasting.</p>
+          <p><span class="text-amber-400 font-semibold">Why it's hard.</span> The input <em>is the DJ playing live</em>. Beats rewind on loops, jump forward on hot cues, phrase length changes between tracks, and Track Phase can vanish mid-song. Every fact can change every frame. This module's entire purpose is to stay coherent across those discontinuities — and that is exactly where it is strong in some places and genuinely under-defended in others.</p>
+        </div>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-400 border-t border-slate-800 pt-3">
+          <span><span class="inline-block w-3 h-3 align-middle bg-emerald-900 border border-emerald-500 mr-1"></span>verified &amp; right</span>
+          <span><span class="inline-block w-3 h-3 align-middle bg-amber-900 border border-amber-500 mr-1"></span>works, but fragile / untested</span>
+          <span><span class="inline-block w-3 h-3 align-middle bg-red-950 border border-red-600 mr-1"></span>gap — the DJ-loop problem</span>
+        </div>
+      </header>
+
+      <!-- TOC -->
+      <nav class="text-sm text-slate-400 grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <a class="hover:text-indigo-400" href="#contract">1 · The contract</a>
+        <a class="hover:text-indigo-400" href="#parts">2 · The parts</a>
+        <a class="hover:text-indigo-400" href="#readframe">3 · How a frame resolves</a>
+        <a class="hover:text-indigo-400" href="#phaselock">4 · Phase locking</a>
+        <a class="hover:text-indigo-400" href="#sheetlife">5 · Cue-sheet lifecycle</a>
+        <a class="hover:text-indigo-400" href="#djcases">6 · The DJ cases</a>
+        <a class="hover:text-indigo-400" href="#right">7 · What's right</a>
+        <a class="hover:text-indigo-400" href="#wrong">8 · What's not</a>
+        <a class="hover:text-indigo-400" href="#coverage">9 · Test coverage</a>
+        <a class="hover:text-indigo-400" href="#reco">10 · Recommendations</a>
+      </nav>
+
+      <!-- 1. CONTRACT -->
+      <section id="contract" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">1 · The contract — messy in, one clean thing out</h2>
+        <p class="text-slate-400">The seam is narrow and that's its main virtue: <code>ReadFrame(input, passLocalState, minCadence) → TimingFrame</code>. Everything else in this report is implementation hidden behind that one call.</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart LR
+  subgraph IN["INPUT · OnAirTimingInput.From(BeatManager)"]
+    direction TB
+    i1["Beat · 1-based absolute · CAN REWIND"]
+    i2["TotalBeats"]
+    i3["BeatInBar"]
+    i4["TrackPhaseActive · tri-state 1 / 0 / -1"]
+    i5["BeatsUntilPhraseBoundary"]
+    i6["PhraseLengthBeats"]
+  end
+  IN --> RF["OnAirTiming.ReadFrame<br/>+ PassLocalTimingState<br/>+ minCadence (16)"]:::deep
+  RF --> OUT["TimingFrame<br/>CueMarkBeat · Phase · Confidence<br/>Source · Coast · Reanchored<br/>BeatRewound · corrected PassLocal"]:::out
+  classDef deep fill:#312e81,stroke:#818cf8,color:#e0e7ff;
+  classDef out fill:#064e3b,stroke:#34d399,color:#d1fae5;
+          </pre>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded border border-slate-800 p-3 text-slate-300">
+            <p class="chip text-cyan-400 mb-1">where the input comes from</p>
+            Built from <code>BeatManager.Phrase</code>, which reads the DJ's RaveSystem <code>phraseState</code> over OSC: <code>active</code> (in-phrase / present / absent), <code>countBeats</code> → <em>beats until the next phrase boundary</em>, <code>lengthBeats</code>, <code>remaining</code>. <strong>This geometry is re-broadcast by the DJ's gear every frame and can change discontinuously.</strong>
+          </div>
+          <div class="rounded border border-slate-800 p-3 text-slate-300">
+            <p class="chip text-emerald-400 mb-1">the split-brain caveat</p>
+            Timing memory is shared: On-Air Timing owns the phase anchor + cue-sheet cursor; the <em>Director</em> owns <code>lastCueBeat</code>/<code>lastChangeBeat</code> and passes them in as <code>PassLocalTimingState</code>. On a rewind, On-Air Timing <em>corrects the Director's</em> values and hands them back. Two owners of one cadence fact — a real source of past regressions (see §8).
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. THE PARTS -->
+      <section id="parts" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">2 · The parts</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left"><tr><th class="p-3">Module</th><th class="p-3">Depth</th><th class="p-3">Owns</th></tr></thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr><td class="p-3 font-mono text-xs">OnAirTiming.cs <span class="text-slate-500">(999)</span></td><td class="p-3"><span class="chip text-indigo-300">deep · stateful</span></td><td class="p-3">The orchestrator. <code>ReadFrame</code> decision tree, anchor/coast/reanchor state, the two inner classes below.</td></tr>
+              <tr><td class="p-3 font-mono text-xs">↳ CueSheetPlans</td><td class="p-3"><span class="chip text-amber-300">complex</span></td><td class="p-3">Current + pre-planned <em>upcoming</em> sheet, promotion at turnover. The trickiest sub-area.</td></tr>
+              <tr><td class="p-3 font-mono text-xs">↳ CueSheetCursor</td><td class="p-3"><span class="chip text-amber-300">complex</span></td><td class="p-3">Position within one sheet. Forward-only advance, rewind-to-zero, phrase-end detection.</td></tr>
+              <tr><td class="p-3 font-mono text-xs">PhaseClock.cs <span class="text-slate-500">(156)</span></td><td class="p-3"><span class="chip text-emerald-300">pure · stateless</span></td><td class="p-3">Where is "the one" on the 16-beat grid + a confidence tier. Recomputed every frame; self-healing.</td></tr>
+              <tr><td class="p-3 font-mono text-xs">PhraseWindow.cs <span class="text-slate-500">(126)</span></td><td class="p-3"><span class="chip text-emerald-300">pure</span></td><td class="p-3">Phrase span (start/end/length) from Track Phase; enumerates 16-beat boundaries.</td></tr>
+              <tr><td class="p-3 font-mono text-xs">CueSheet.cs <span class="text-slate-500">(121)</span></td><td class="p-3"><span class="chip text-emerald-300">pure</span></td><td class="p-3">Builds the phrase-relative mark plan (random interior + mandatory end + 64-beat gap fill).</td></tr>
+              <tr><td class="p-3 font-mono text-xs">ChangeCadence.cs <span class="text-slate-500">(12)</span></td><td class="p-3"><span class="chip text-emerald-300">pure</span></td><td class="p-3">One predicate: is this mark ≥ minBeats from the last one.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-slate-400 text-sm">The four small modules are pure and testable. <strong>All the difficulty is concentrated in <code>OnAirTiming.cs</code>'s mutable cross-frame state</strong> — five fields (<code>lastBeat</code>, <code>hasPhaseAnchor</code>, <code>phaseAnchorConfidence</code>, <code>phaseAnchorLandingBeat</code>, <code>lastSource</code>) plus the two cursor classes. That concentration is correct module design; it's also why this file is the one that needs the most care.</p>
+      </section>
+
+      <!-- 3. READFRAME -->
+      <section id="readframe" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">3 · How a frame resolves — the four branches</h2>
+        <p class="text-slate-400">Every frame, <code>ReadFrame</code> picks exactly one path. Order matters: Track-Phase-absent is checked <em>before</em> phase confidence.</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart TD
+  S["ReadFrame · resolve Phase · detect rewind · build pass-local"] --> Q1{"Track Phase absent?<br/>active &lt; 0 · beat ≥ 1"}
+  Q1 -->|yes| Q2{"have a coastable<br/>anchor?"}
+  Q2 -->|yes| C["COAST<br/>advance landing by 16s"]:::amber
+  Q2 -->|no| U1["UNLOCKED<br/>invent nothing"]:::slate
+  Q1 -->|no| Q3{"phase confidence<br/>≠ Unlocked · beat ≥ 1"}
+  Q3 -->|yes| A["RESOLVE CUE MARK<br/>→ ANCHORED frame<br/>(CueMark / TrackPhaseBoundary / grid)"]:::green
+  Q3 -->|no| Q4{"already have<br/>an anchor?"}
+  Q4 -->|yes| C2["COAST"]:::amber
+  Q4 -->|no| U2["UNLOCKED"]:::slate
+  classDef green fill:#064e3b,stroke:#34d399,color:#d1fae5;
+  classDef amber fill:#3f2d0a,stroke:#f59e0b,color:#fde68a;
+  classDef slate fill:#1e293b,stroke:#64748b,color:#cbd5e1;
+          </pre>
+        </div>
+        <div class="rounded-md border border-amber-900 bg-amber-950/20 p-3 text-sm text-slate-300">
+          <span class="text-amber-400 font-semibold">Subtle &amp; worth confirming:</span> a track that has a <em>beat clock but no Track Phase</em> (<code>active &lt; 0</code>) never produces a 16-beat grid — it goes <strong>Coast</strong> (if previously anchored) or <strong>Unlocked</strong>. The <code>PhaseClockGrid</code> source only appears as a fallback <em>inside</em> the "Track Phase present but no derivable window" path. So <strong>the system fundamentally needs Track Phase to lock</strong>; raw beats alone won't sustain sequencing. Confirm that matches what RaveSystem actually always sends.
+        </div>
+      </section>
+
+      <!-- 4. PHASE LOCK -->
+      <section id="phaselock" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">4 · Phase locking — the self-healing part</h2>
+        <p class="text-slate-400"><code>PhaseClock.Resolve</code> is <strong>stateless</strong> and recomputed every frame. That's its great strength: when the DJ's data is internally consistent, the phase lock <em>re-derives itself correctly each frame</em> regardless of history — no drift to accumulate.</p>
+        <div class="grid lg:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">confidence ladder (strongest first)</p>
+            <ul class="text-sm text-slate-300 space-y-1.5">
+              <li><span class="font-mono text-emerald-400">Structural</span> — beat + active phrase + length. <code>phraseStart = beat − (length − countdown)</code>; the one is pinned to live phrase data.</li>
+              <li><span class="font-mono">Closed</span> — beat + total beats. Grid recovered from track end: <code>offset = total mod 16</code>.</li>
+              <li><span class="font-mono">Open</span> — beat only. Assumes beat 1 is the one (<code>offset = 0</code>).</li>
+              <li><span class="font-mono">Provisional</span> — bar position only. A guess.</li>
+              <li><span class="font-mono text-slate-500">Unlocked</span> — nothing usable.</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">built-in sanity checks</p>
+            <ul class="text-sm text-slate-300 space-y-1.5">
+              <li><span class="text-emerald-400">Good:</span> <code>elapsedInPhrase &lt; 0</code> (countdown &gt; length — impossible data) returns <code>Unavailable</code> for that frame rather than computing garbage.</li>
+              <li><span class="text-emerald-400">Good:</span> <code>BeatInBarAgrees</code> cross-checks the computed bar position against the DJ's reported beat-in-bar — a contradiction flag the Director/HUD can surface.</li>
+              <li><span class="text-amber-400">Cost:</span> a single inconsistent frame (common mid-jump) drops to <code>Unavailable</code>, which can momentarily unlock or trigger a coast. Self-heals next frame, but it's a glitch source.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. SHEET LIFECYCLE -->
+      <section id="sheetlife" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">5 · Cue-sheet lifecycle — the most complex sub-area</h2>
+        <p class="text-slate-400">A sheet is a phrase-relative list of marks. The hard part is keeping a <em>current</em> sheet and a pre-planned <em>upcoming</em> sheet coherent as the DJ crosses a phrase boundary, while a cue may already be in flight.</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> NoSheet
+  NoSheet --> Current: Build (this phrase)
+  Current --> Current: AdvanceTo(beat) · forward-only
+  Current --> Current: RewindCursor (detected loop)
+  Current --> Upcoming: announced next phrase → PlanUpcoming
+  Upcoming --> Current: PromoteUpcoming<br/>(consumed through phrase end OR window matches)
+  Current --> NoSheet: length changed → regenerate
+  note right of Upcoming
+    reuse if length Matches
+    else rebuild
+  end note
+          </pre>
+        </div>
+        <div class="grid md:grid-cols-3 gap-3 text-sm">
+          <div class="rounded border border-emerald-900 bg-emerald-950/20 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Right:</span> same-length phrase reuse keeps the same random marks (no reroll); different length regenerates. Deterministic within a length.</div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/20 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Right:</span> the mandatory final boundary is always present, so a phrase can never pass without a cueable landing.</div>
+          <div class="rounded border border-amber-900 bg-amber-950/20 p-3 text-slate-300"><span class="text-amber-400 font-semibold">Smell:</span> <code>TryKeepUnconsumedMandatoryBoundaryAt</code> gates on <code>currentCueMark != beat || currentCueMark != PhraseEndBeat</code> — a double-negative that's correct but near-unreadable. Maintainability risk at a critical turnover point.</div>
+        </div>
+      </section>
+
+      <!-- 6. DJ CASES -->
+      <section id="djcases" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">6 · The DJ cases — your actual question, mapped to defenses</h2>
+        <p class="text-slate-400">This is the heart of it. Each live-DJ behavior, what the module does, and whether it holds.</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left"><tr><th class="p-3">DJ does…</th><th class="p-3">how it appears</th><th class="p-3">the defense</th><th class="p-3">holds?</th></tr></thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr><td class="p-3">Loops back a <strong>full phrase / ≥16 beats</strong></td><td class="p-3">Beat jumps backward ≥16</td><td class="p-3"><code>BeatRewoundToNewPass</code> → rewind cursor to 0, clear stale future pass-local cue/cadence</td><td class="p-3"><span class="chip text-emerald-400">yes · tested</span></td></tr>
+              <tr class="bg-red-950/20"><td class="p-3"><strong>Loops a 4 / 8 beat segment</strong></td><td class="p-3">Beat jumps backward 3–15</td><td class="p-3"><span class="text-red-400">None.</span> Below the 16-beat threshold it's neither "jitter" nor "new pass": cursor isn't rewound, pass-local isn't cleared</td><td class="p-3"><span class="chip text-red-400">GAP · untested</span></td></tr>
+              <tr><td class="p-3">Micro-jitter / out-of-order OSC</td><td class="p-3">Beat backsteps 1–2</td><td class="p-3">Explicitly ignored as jitter (below threshold)</td><td class="p-3"><span class="chip text-emerald-400">yes · tested</span></td></tr>
+              <tr><td class="p-3">Jumps <strong>forward</strong> to a hot cue</td><td class="p-3">Beat jumps up by a lot</td><td class="p-3">PhaseClock re-derives statelessly; cursor fast-forwards. No "jumped forward" handling for pass-local cadence</td><td class="p-3"><span class="chip text-amber-400">partial · untested</span></td></tr>
+              <tr><td class="p-3">Track Phase <strong>drops out</strong> mid-song</td><td class="p-3"><code>active</code> goes &lt; 0</td><td class="p-3"><code>Coast</code>: advance the last anchor in 16-beat steps; report <code>IsCoasting</code></td><td class="p-3"><span class="chip text-emerald-400">yes · tested</span></td></tr>
+              <tr><td class="p-3">Track Phase <strong>returns</strong></td><td class="p-3"><code>active</code> ≥ 1 again</td><td class="p-3"><code>Reanchored</code>: replace the coasted anchor with fresh structural data</td><td class="p-3"><span class="chip text-emerald-400">yes · tested</span></td></tr>
+              <tr><td class="p-3">New track, <strong>different phrase length</strong></td><td class="p-3"><code>lengthBeats</code> changes</td><td class="p-3">Sheet fails <code>Matches</code> → regenerate</td><td class="p-3"><span class="chip text-emerald-400">yes · tested</span></td></tr>
+              <tr><td class="p-3">Sends a <strong>contradictory frame</strong></td><td class="p-3"><code>countdown &gt; length</code>, or window off-grid</td><td class="p-3">PhaseClock → <code>Unavailable</code> that frame; window guards reject it</td><td class="p-3"><span class="chip text-amber-400">self-heals · glitchy</span></td></tr>
+              <tr><td class="p-3">Coasts across a <strong>32/64-beat</strong> phrase</td><td class="p-3">Phase absent during a long phrase</td><td class="p-3">Coast steps by <strong>16</strong> regardless of true length — marks may land off the real phrase grid until reanchor</td><td class="p-3"><span class="chip text-amber-400">approximate</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rounded-md border border-red-900/60 bg-red-950/20 p-4 text-sm text-slate-200">
+          <p class="text-red-400 font-semibold mb-1">The headline gap: the 3–15 beat loop dead zone.</p>
+          <p>Loop detection fires only when the backward jump is <code>≥ minimumChangeCadenceBeats</code> (16). A 4- or 8-beat loop — one of the most common things a DJ does — falls in a dead band: the cursor keeps its forward position, pass-local cue/cadence memory is never cleared, and the phase math (stateless) keeps re-pinning correctly while the <em>cue scheduling state</em> silently drifts out of step with where the beat actually is. There is no test anywhere in the 3–15 range. This is the most likely source of "it cued in the wrong place during a loop."</p>
+        </div>
+      </section>
+
+      <!-- 7. WHAT'S RIGHT -->
+      <section id="right" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">7 · What's right — credit where due</h2>
+        <div class="grid md:grid-cols-2 gap-3 text-sm">
+          <div class="rounded border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Narrow seam, deep module.</span> One <code>ReadFrame</code> call hides a large, gnarly implementation. The interface is far smaller than the implementation — textbook depth.</div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Stateless phase math.</span> Re-derived every frame, so it self-heals and never drifts. The right call for hostile input.</div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Invents nothing.</span> When it can't lock, it returns <code>Unlocked</code> with no fake target rather than guessing — the correct failure posture.</div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Provenance is observable.</span> <code>Source</code>, <code>Reanchored</code>, <code>IsCoasting</code>, <code>ClearedPassLocalState</code> all surface <em>why</em> a frame decided what it did — invaluable for the Observatory and for debugging exactly this class of problem.</div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Deterministic seam.</span> <code>randomRange</code> is injected, so cue-mark selection is fully testable without Unity.</div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Real loop/coast machinery exists.</span> The ≥16 rewind path, coast, and reanchor are genuine, working, and tested — the hard cases were taken seriously.</div>
+        </div>
+      </section>
+
+      <!-- 8. WHAT'S NOT -->
+      <section id="wrong" class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">8 · What's not — ranked by risk</h2>
+        <ol class="space-y-3 text-sm">
+          <li class="rounded border border-red-800 bg-red-950/20 p-3 text-slate-200"><span class="chip text-red-400">severe</span><p class="mt-1"><strong>3–15 beat loop dead zone.</strong> Sub-16-beat loops aren't corrected and aren't tested. Most likely cause of mid-loop mis-cueing. Needs an explicit decision: detect any backward jump (not just ≥16), or define the band's behavior on purpose.</p></li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><span class="chip text-amber-400">high</span><p class="mt-1"><strong>Split ownership of pass-local cadence.</strong> The Director holds <code>lastCueBeat</code>/<code>lastChangeBeat</code>; On-Air Timing mutates and returns them. Two owners of one fact across a seam — fragile, and historically the source of the regressions you've been fighting. Candidate to <em>deepen</em>: let On-Air Timing own pass-local state outright.</p></li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><span class="chip text-amber-400">high</span><p class="mt-1"><strong>Forward jumps untested.</strong> Hot-cue jumps forward have no dedicated path or test. Stale pass-local cadence could block or mis-time the first post-jump cue.</p></li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><span class="chip text-amber-400">medium</span><p class="mt-1"><strong>Coast assumes a 16-beat grid.</strong> Coasting steps by the cadence minimum, not the actual phrase length, so during a 32/64-beat phrase dropout the coasted marks can sit off the true grid until reanchor.</p></li>
+          <li class="rounded border border-slate-700 bg-slate-900/40 p-3 text-slate-300"><span class="chip text-slate-300">low</span><p class="mt-1"><strong>Readability at the turnover.</strong> The <code>A != B || A != C</code> guard and two <code>PromoteUpcoming</code> overloads concentrate accidental complexity exactly where the logic is hardest to verify by eye.</p></li>
+          <li class="rounded border border-slate-700 bg-slate-900/40 p-3 text-slate-300"><span class="chip text-slate-300">low</span><p class="mt-1"><strong>Beat-without-Track-Phase = Unlocked.</strong> Likely intentional, but it means a beat-only stream can't sustain sequencing. Worth a one-line confirmation against what RaveSystem guarantees.</p></li>
+        </ol>
+      </section>
+
+      <!-- 9. COVERAGE -->
+      <section id="coverage" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">9 · Test coverage map</h2>
+        <p class="text-slate-400">Hand-crafted scenario tests, well-chosen — but they pin specific points, not the space between them.</p>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/10 p-4">
+            <p class="chip text-emerald-400 mb-2">verified (≈ right)</p>
+            <ul class="text-slate-300 space-y-1 text-xs">
+              <li>interior + mandatory cue-mark selection · gap fill · cadence</li>
+              <li>same-length reuse · different-length regen</li>
+              <li>mandatory-boundary turnover &amp; upcoming promotion</li>
+              <li>coast on dropout · reanchor on return · unlock with no prior anchor</li>
+              <li>rewind ≥16 · cursor rewind · pass-local clear/keep</li>
+              <li>1–2 beat backstep = jitter</li>
+              <li>PhaseClock: Structural, Closed, beat-in-bar agreement, Unavailable</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-red-900 bg-red-950/10 p-4">
+            <p class="chip text-red-400 mb-2">unverified (risk)</p>
+            <ul class="text-slate-300 space-y-1 text-xs">
+              <li class="text-red-300">any backward jump of 3–15 beats (the dead zone)</li>
+              <li class="text-red-300">forward jumps / hot-cue seeks</li>
+              <li>coast across a 32/64-beat phrase (off-grid marks)</li>
+              <li>PhaseClock Open &amp; Provisional tiers</li>
+              <li>combined stress: rewind + coast + length-change interleaved</li>
+              <li>contradictory single frames (countdown &gt; length) mid-sequence</li>
+              <li>no property/fuzz testing over random DJ sequences</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10. RECOMMENDATIONS -->
+      <section id="reco" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">10 · Recommendations — before touching the code</h2>
+        <p class="text-slate-400">In priority order. The first two are understanding/decision tasks, not yet edits — match the deepening you'll do to a decision you've made on purpose.</p>
+        <ol class="space-y-3 text-sm text-slate-300">
+          <li class="rounded border border-slate-800 p-3"><span class="text-indigo-400 font-semibold">1 · Decide the loop model explicitly.</span> What <em>should</em> a 4/8/16-beat loop do to cue scheduling? Hold position? Re-walk? Today the answer is an accident of the 16-beat threshold. Decide it, then encode it — likely "detect any backward beat jump, classify by size."</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-indigo-400 font-semibold">2 · Build a sequence/property test harness.</span> Feed scripted DJ timelines (loops of every length, forward seeks, dropouts, length changes) frame-by-frame and assert invariants: cue mark never lands behind the beat, cadence never under-spaces, lock recovers within N frames. This converts the untested space into pinned behavior and will <em>find</em> the dead-zone bug, not just describe it.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-indigo-400 font-semibold">3 · Deepen pass-local ownership.</span> Move <code>lastCueBeat</code>/<code>lastChangeBeat</code> entirely behind the On-Air Timing seam so there is one owner of cadence memory. Removes the split-brain class of regression.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-indigo-400 font-semibold">4 · Make coast length-aware.</span> Step the coasted anchor by the last known phrase length, not a flat 16, so dropouts over long phrases stay on-grid.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-indigo-400 font-semibold">5 · Polish the turnover.</span> Replace the double-negative guard with a named predicate and collapse the two <code>PromoteUpcoming</code> overloads — accidental complexity removal only, behavior-preserving, after the harness exists to prove it.</li>
+        </ol>
+        <div class="rounded-md border border-emerald-900 bg-emerald-950/20 p-3 text-sm text-slate-300">
+          <span class="text-emerald-400 font-semibold">Bottom line.</span> The module is genuinely <em>deep</em> and its core instincts are right — stateless re-derivation, no fake targets, observable provenance, real coast/reanchor. The risk is concentrated in <strong>one place</strong>: how it reacts to backward beat motion shorter than a phrase. That's a tractable, well-bounded target. Understand the loop model first, harness it second, then deepen.
+        </div>
+      </section>
+
+      <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500">
+        Generated 2026-06-24 · OnAirTiming.cs / PhaseClock.cs / PhraseWindow.cs / CueSheet.cs / ChangeCadence.cs read in full · test inventory: OnAirTimingTests · PhaseClockTests · PhraseWindowTests · CueSheetTests · ChangeCadenceTests · DirectorSyncedTailTests · format: Matt HTML-REPORT
+      </footer>
+    </main>
+  </body>
+</html>

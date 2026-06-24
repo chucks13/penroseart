@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Director — how it works · PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mermaid { background: #0b1120; border-radius: 0.5rem; padding: 0.75rem; }
+      h2 { scroll-margin-top: 1rem; }
+      code { color: #a5b4fc; }
+      .chip { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <!-- ─────────────── HEADER ─────────────── -->
+      <header class="space-y-4">
+        <p class="chip text-emerald-400">PenroseArt · understanding report</p>
+        <h1 class="text-4xl font-serif text-slate-50">The Director — what it is, what it does, where its data comes from</h1>
+        <p class="text-slate-400 text-sm">Branch <code>director-event-aware-cue-intent</code> · grounded in code, 2026-06-24 · runtime architecture, not a deepening review</p>
+        <div class="rounded-lg deep border border-slate-800 p-5 text-slate-300 leading-relaxed">
+          <p><span class="text-emerald-400 font-semibold">In one sentence:</span> the <strong>Director</strong> is the per-frame decision layer that, every frame, reads available musical timing, decides <em>what</em> Performer plays next and <em>when</em> the change should land, and hands one fire-and-forget cue to the <strong>Mechanical Switcher</strong> — which is the only thing that actually moves pixels. The Director directs; the Switcher executes. Everything else on this page is the machinery that feeds that decision or carries it out.</p>
+        </div>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-400 border-t border-slate-800 pt-3">
+          <span><span class="inline-block w-3 h-3 align-middle border border-slate-500 mr-1"></span>module</span>
+          <span><span class="inline-block w-6 h-0 align-middle border-t-2 border-dashed border-slate-500 mr-1"></span>seam (interface)</span>
+          <span><span class="inline-block w-6 h-0 align-middle border-t-2 border-red-500 mr-1"></span>data the Director must <em>not</em> reach across</span>
+          <span><span class="inline-block w-3 h-3 align-middle bg-indigo-900 border border-indigo-500 mr-1"></span>deep module</span>
+        </div>
+      </header>
+
+      <!-- ─────────────── TOC ─────────────── -->
+      <nav class="text-sm text-slate-400 grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <a class="hover:text-emerald-400" href="#bigpicture">1 · Big picture</a>
+        <a class="hover:text-emerald-400" href="#subsystems">2 · Subsystem map</a>
+        <a class="hover:text-emerald-400" href="#frameloop">3 · The frame loop</a>
+        <a class="hover:text-emerald-400" href="#modes">4 · Three modes</a>
+        <a class="hover:text-emerald-400" href="#data">5 · Where data comes from</a>
+        <a class="hover:text-emerald-400" href="#onair">6 · On-Air Timing &amp; the Timing Frame</a>
+        <a class="hover:text-emerald-400" href="#cuesheet">7 · The Cue Sheet</a>
+        <a class="hover:text-emerald-400" href="#cueintent">8 · Cue intent &amp; event casting</a>
+        <a class="hover:text-emerald-400" href="#switcher">9 · The Switcher executes</a>
+        <a class="hover:text-emerald-400" href="#notdo">10 · What the Director won't do</a>
+        <a class="hover:text-emerald-400" href="#rules">11 · Invariants</a>
+        <a class="hover:text-emerald-400" href="#memories">12 · Stale-memory audit</a>
+      </nav>
+
+      <!-- ─────────────── 1. BIG PICTURE ─────────────── -->
+      <section id="bigpicture" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">1 · Big picture — one decision, fed by many subsystems</h2>
+        <p class="text-slate-400">The Director sits in the middle of a one-directional pipeline. Live music enters on the left, a rendered 900-tile frame leaves on the right. The Director itself holds almost no music interpretation — it asks <strong>On-Air Timing</strong> for a digested <strong>Timing Frame</strong>, asks <strong>Synced Cue Intent</strong> whether to fire, and tells the <strong>Switcher</strong> what to do.</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart LR
+  OSC["Rave OSC · UDP 7000"]:::ext --> ROR["RaveOscReceiver<br/>ApplyTo"]
+  ROR --> BM["BeatManager<br/>+ contrived queries"]:::ext
+  BM --> OAT["On-Air Timing<br/>ReadFrame"]:::deep
+  OAT -->|"Timing Frame"| DIR["Director<br/>Tick"]:::dir
+  BM -.->|"Fill · Drop · Energy"| SCI
+  DIR --> SCI["Synced Cue Intent<br/>Evaluate"]:::deep
+  SCI -->|"Wait · Cue · Blocked"| DIR
+  DIR -->|"SwitcherCueDirection (fire-and-forget)"| SW["Mechanical Switcher"]:::sw
+  SW -->|"Color buffer"| OUT["overlays · serial or UDP · Penrose preview"]:::ext
+  classDef ext fill:#1e293b,stroke:#475569,color:#cbd5e1;
+  classDef deep fill:#312e81,stroke:#818cf8,color:#e0e7ff;
+  classDef dir fill:#064e3b,stroke:#34d399,color:#d1fae5;
+  classDef sw fill:#4c1d95,stroke:#a78bfa,color:#ede9fe;
+          </pre>
+        </div>
+        <div class="grid sm:grid-cols-3 gap-3 text-sm">
+          <div class="rounded border border-slate-800 p-3"><span class="chip text-emerald-400">decides</span><p class="mt-1 text-slate-300">Director — which Performer, which Transition, which beat to land on.</p></div>
+          <div class="rounded border border-slate-800 p-3"><span class="chip text-indigo-400">interprets</span><p class="mt-1 text-slate-300">On-Air Timing + Synced Cue Intent — turn raw beats into a Cue Mark and a fire/wait verdict.</p></div>
+          <div class="rounded border border-slate-800 p-3"><span class="chip text-violet-400">executes</span><p class="mt-1 text-slate-300">Switcher — schedules, locks, runs the A→B transition, renders pixels.</p></div>
+        </div>
+      </section>
+
+      <!-- ─────────────── 2. SUBSYSTEM MAP ─────────────── -->
+      <section id="subsystems" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">2 · Subsystem map — every part that touches the Director</h2>
+        <p class="text-slate-400">All paths under <code>Assets/core/</code> unless noted. Files were reorganised into subdirectories (<code>Switching/</code>, <code>Rhythm/</code>, <code>IO/</code>, …); older memories that cite flat <code>Assets/core/Director.cs</code> paths are out of date.</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left">
+              <tr><th class="p-3">Subsystem</th><th class="p-3">File</th><th class="p-3">What it gives the Director</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr><td class="p-3 font-semibold text-emerald-300">Director</td><td class="p-3 font-mono text-xs">Switching/Director.cs <span class="text-slate-500">(933)</span></td><td class="p-3">The decision layer itself. Owns staged Next Effect / Next Transition, Hold, cadence state. Issues cues.</td></tr>
+              <tr><td class="p-3 font-semibold text-violet-300">Mechanical Switcher</td><td class="p-3 font-mono text-xs">Switching/Switcher.cs <span class="text-slate-500">(616)</span></td><td class="p-3">Execution-only. Holds one Loaded Cue, derives lock/start/progress, renders the active effect or A→B transition.</td></tr>
+              <tr><td class="p-3 font-semibold text-indigo-300">On-Air Timing</td><td class="p-3 font-mono text-xs">Switching/OnAirTiming.cs <span class="text-slate-500">(999)</span></td><td class="p-3">The timing-interpretation seam. <code>ReadFrame()</code> → one <code>TimingFrame</code>: current beat, phase reading, Cue Mark, phrase window, source, rewind/coast/re-anchor.</td></tr>
+              <tr><td class="p-3 font-semibold text-indigo-300">Synced Cue Intent</td><td class="p-3 font-mono text-xs">Switching/SyncedCueIntent.cs <span class="text-slate-500">(270)</span></td><td class="p-3"><code>Evaluate()</code> — the cue-window gate. Returns Wait / Cue / BlockedByCadence, classifies the event (Ordinary/Fill/Drop), casts a preferred Performer.</td></tr>
+              <tr><td class="p-3">Cue Sheet</td><td class="p-3 font-mono text-xs">Switching/CueSheet.cs <span class="text-slate-500">(121)</span></td><td class="p-3">Per-phrase plan of Cue Marks: random interior 16-beat boundaries + mandatory phrase end + long-gap fill.</td></tr>
+              <tr><td class="p-3">Phase Clock</td><td class="p-3 font-mono text-xs">Switching/PhaseClock.cs <span class="text-slate-500">(156)</span></td><td class="p-3">Resolves the fixed 16-beat phase grid position and a confidence tier (Unlocked→Structural).</td></tr>
+              <tr><td class="p-3">Phrase Window</td><td class="p-3 font-mono text-xs">Switching/PhraseWindow.cs <span class="text-slate-500">(126)</span></td><td class="p-3">Phrase span (start/end/length) derived from Track Phase; enumerates 16-beat boundaries.</td></tr>
+              <tr><td class="p-3">Change Cadence</td><td class="p-3 font-mono text-xs">Switching/ChangeCadence.cs <span class="text-slate-500">(12)</span></td><td class="p-3">The minimum-spacing rule between changes (Director uses a 16-beat minimum).</td></tr>
+              <tr><td class="p-3">Effect Deck Selection</td><td class="p-3 font-mono text-xs">Switching/EffectDeckSelection.cs</td><td class="p-3">Anti-repeat deck draw + Repertoire-aware preferred pulls, for both effect and transition decks.</td></tr>
+              <tr><td class="p-3">Transition Beat Plan</td><td class="p-3 font-mono text-xs">Transitions/TransitionBeatPlan.cs</td><td class="p-3">Cue Mark + Runway/Tail → Start / Impact / Complete beats. Shared by Director and Switcher.</td></tr>
+              <tr><td class="p-3">Repertoire</td><td class="p-3 font-mono text-xs">Effects/Repertoire.cs</td><td class="p-3"><code>[Flags] { None, HandlesFill, HandlesDrop }</code> — per-class capability on Effects; <code>TransitionRepertoire</code> on Transitions.</td></tr>
+              <tr><td class="p-3 font-semibold text-cyan-300">BeatManager</td><td class="p-3 font-mono text-xs">Rhythm/BeatManager.cs <span class="text-slate-500">(759)</span></td><td class="p-3">Live/simulated rhythm state. Raw nullable <code>Beat</code>, <code>TotalBeats</code>, <code>BeatInBar</code> + <code>IsLiveSource</code>.</td></tr>
+              <tr><td class="p-3 font-semibold text-cyan-300">BeatManager queries</td><td class="p-3 font-mono text-xs">Rhythm/BeatManagerQueries.cs <span class="text-slate-500">(781)</span></td><td class="p-3">ADR-0002 nullable "contrived" queries: <code>Phrase()</code>, <code>Fill()</code>, <code>Drop()</code>, <code>Energy()</code>, <code>Levels()</code>. <code>null</code> = not available now.</td></tr>
+              <tr><td class="p-3">Rave OSC receiver</td><td class="p-3 font-mono text-xs">IO/RaveOscReceiver.cs</td><td class="p-3">Bridges live Rave on-air OSC snapshots into BeatManager <em>before</em> the Director ticks.</td></tr>
+              <tr><td class="p-3">Controller (host)</td><td class="p-3 font-mono text-xs">Runtime/Controller.cs</td><td class="p-3">Constructs Director/Switcher, owns the frame order, the <code>Timer</code>, and the <code>heldEffect</code> field.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─────────────── 3. FRAME LOOP ─────────────── -->
+      <section id="frameloop" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">3 · The frame loop — the order matters</h2>
+        <p class="text-slate-400">Inside <code>Controller.Update()</code>. Live OSC is applied and BeatManager advanced <em>before</em> the Director ticks, so sequencing reads this frame's beat, not last frame's.</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart TD
+  A["1 · raveOsc.ApplyTo(beatManager)<br/>set IsLiveSource · copy OSC snapshot"] --> B["2 · beatManager.Update()<br/>derive offbeats · smooth levels"]
+  B --> C["3 · director.Tick(deltaTime)<br/>Standalone · Synced · Hold"]
+  C --> D["4 · switcher.RenderAtTime(Time.time)<br/>lock + start due cue · render A to B"]
+  D --> E["5 · overlays<br/>filter · drums · camera · pixel blend"]
+  E --> F["6 · output<br/>ENABLE_SERIAL: serial else UDP/ACN"]
+  F --> G["7 · Penrose.UpdateModelColors()<br/>Unity preview mesh + HUD"]
+  classDef n fill:#0f172a,stroke:#475569,color:#e2e8f0;
+  class A,B,C,D,E,F,G n;
+          </pre>
+        </div>
+        <p class="text-slate-400 text-sm">The Director's whole contribution is step 3 — and it is purely a <em>decision</em>. It never writes pixels; step 4 (the Switcher) is the only thing that produces the <code>Color[]</code> buffer.</p>
+      </section>
+
+      <!-- ─────────────── 4. MODES ─────────────── -->
+      <section id="modes" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">4 · The Director's job, split three ways</h2>
+        <p class="text-slate-400"><code>Tick()</code> branches on one fact: is there a live beat source? <code>IsSyncedMode</code> ⇐ <code>controller.beatManager.IsLiveSource</code>. Hold is layered on top of either. None of these is a "fallback" — Standalone is an equally intentional self-running mode.</p>
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/30 p-4 space-y-2">
+            <p class="chip text-emerald-400">Synced Mode</p>
+            <p class="text-sm text-slate-300">Live OSC present. The Director asks On-Air Timing for a Timing Frame and lands changes on musical Cue Marks. Anticipatory: a transition <em>starts</em> early so its Impact Point lands on the beat.</p>
+            <p class="text-xs text-slate-500 font-mono">TickSyncedMode(beat)</p>
+          </div>
+          <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-4 space-y-2">
+            <p class="chip text-slate-300">Standalone Mode</p>
+            <p class="text-sm text-slate-300">No live OSC. A wall-clock <code>Timer</code> drives cadence; <code>OnTimerFinished()</code> picks the staged next move and starts it immediately. Timer expiry is <em>ignored</em> while Synced.</p>
+            <p class="text-xs text-slate-500 font-mono">TickStandaloneMode(dt)</p>
+          </div>
+          <div class="rounded-lg border border-amber-900 bg-amber-950/20 p-4 space-y-2">
+            <p class="chip text-amber-400">Hold</p>
+            <p class="text-sm text-slate-300">An inspection freeze. A non-negative <code>heldEffect</code> pins one Effect and <strong>suspends</strong> the Director — no rotation, no cues — so a developer can tune it live. <code>-1</code> = Random = normal rotation.</p>
+            <p class="text-xs text-slate-500 font-mono">controller.TryGetHeldEffectIndex()</p>
+          </div>
+        </div>
+        <div class="rounded-md border border-slate-800 bg-white/5 p-3 text-sm text-slate-400">
+          <span class="text-slate-300 font-semibold">Staging.</span> The Director always keeps a concrete <code>NextEffectIndex</code> and <code>NextTransitionIndex</code> so the Tuning Window can show what's coming. Manual selection (<code>SetNextEffect/Transition</code>) is a <em>one-shot</em> override; "Hold Selected" keeps the staged choice across moves. Both Standalone and Synced consume the staged choice when a move actually fires.
+        </div>
+      </section>
+
+      <!-- ─────────────── 5. DATA SOURCES ─────────────── -->
+      <section id="data" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">5 · Where the Director gets its data</h2>
+        <p class="text-slate-400">Every musical fact the Director uses originates in <strong>BeatManager</strong>, fed by live Rave OSC. The Director and On-Air Timing never read raw OSC payloads — they read BeatManager's <em>nullable contrived queries</em> (ADR-0002), where <code>null</code> always means "not available right now", never an error.</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-800 p-4 space-y-2">
+            <p class="chip text-cyan-400">raw beat transport — consumed by On-Air Timing</p>
+            <ul class="text-sm text-slate-300 space-y-1">
+              <li><code>Beat</code> — absolute beat, 1-based ("the one"); may <em>rewind</em> on a looped track</li>
+              <li><code>TotalBeats</code> — track length in beats</li>
+              <li><code>BeatInBar</code> — 1-based beat label within the bar</li>
+              <li><code>Phrase()</code> → Track Phase: <code>inPhrase</code>, <code>beatsUntilNext</code>, <code>lengthBeats</code> (tri-state: active / announced-upcoming / absent)</li>
+              <li><code>BeatFraction</code> / <code>IntraBeatFraction()</code> — sub-beat progress, for smooth backdating</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4 space-y-2">
+            <p class="chip text-cyan-400">phrase events — consumed by Synced Cue Intent for casting only</p>
+            <ul class="text-sm text-slate-300 space-y-1">
+              <li><code>Fill()</code> → <code>PhraseEventInfo?</code> — inProgress, beatsUntilStart/End, length</li>
+              <li><code>Drop()</code> → <code>PhraseEventInfo?</code> — same shape; Drop wins ties</li>
+              <li><code>Energy()</code> → <code>EnergyInfo?</code> — Low/Mid/High. <span class="text-amber-400">Query kept, but no longer drives Director casting</span> (see §8).</li>
+              <li><code>Levels()</code> → band energy — for effects, not the Director</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="rounded-md border border-red-900/60 bg-red-950/20 p-3 text-sm text-slate-300">
+          <span class="text-red-400 font-semibold">The red rule:</span> Fill/Drop/Energy data is read by the Director <em>only to choose which Performer to cast</em>. It must never create, move, or delay a Cue Mark. Timing comes from the phrase structure (Cue Sheet); events only bias selection. Effects pull the live Fill/Drop data themselves and own <em>how</em> they react.
+        </div>
+
+        <p class="text-slate-400 text-sm"><code>RaveOscReceiver.ApplyTo(beatManager)</code> runs first each frame: it sets <code>IsLiveSource</code> from a liveness grace-window and deep-copies the latest on-air snapshot into BeatManager. When OSC stops, <code>IsLiveSource</code> goes false and the Director drops to Standalone — by preference, not degradation.</p>
+      </section>
+
+      <!-- ─────────────── 6. ON-AIR TIMING ─────────────── -->
+      <section id="onair" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">6 · On-Air Timing &amp; the Timing Frame <span class="chip text-indigo-400 align-middle">deep module</span></h2>
+        <p class="text-slate-400">This is the deepest module in the system: a wide, messy implementation (phase locking, phrase windows, cue-sheet cursoring, loop-rewind correction, coasting) behind one narrow interface — <code>ReadFrame(input, passLocalState, minCadence) → TimingFrame</code>. The Director consumes only the Timing Frame; it holds none of this machinery itself.</p>
+
+        <div class="grid lg:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">The Timing Frame carries</p>
+            <ul class="text-sm text-slate-300 space-y-1">
+              <li><code>CurrentBeat</code>, <code>Phase</code> reading</li>
+              <li><code>HasPhaseAnchor</code> + <code>PhaseAnchorConfidence</code></li>
+              <li><code>CueMarkBeat</code> + <code>BeatsUntilCueMark</code> — the target to land on</li>
+              <li><code>PhraseWindow</code> (when Track Phase known)</li>
+              <li><code>Source</code> — why this target exists</li>
+              <li><code>BeatRewoundToNewPass</code> + pass-local state correction</li>
+              <li><code>Coast</code> / <code>Reanchored</code> flags + <code>CueSheet</code> status</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">Timing source, strongest → weakest</p>
+            <ul class="text-sm text-slate-300 space-y-1">
+              <li><span class="text-emerald-400 font-mono">Structural</span> — Track Phase active: Cue Marks from the live phrase</li>
+              <li><span class="text-emerald-300 font-mono">TrackPhaseBoundary / CueMark</span> — sheet-driven targets</li>
+              <li><span class="text-amber-300 font-mono">Coast</span> — Track Phase vanished; advance the last anchor in 16-beat steps</li>
+              <li><span class="text-amber-300 font-mono">PhaseClockGrid</span> — beat known, no phrase: plain 16-beat grid</li>
+              <li><span class="text-slate-500 font-mono">Unlocked</span> — nothing to target; invents nothing</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">Phase Clock confidence tiers</p>
+            <ul class="text-sm text-slate-300 space-y-1">
+              <li><span class="font-mono text-emerald-400">Structural</span> — beat + active Track Phase + length → exact phrase "one"</li>
+              <li><span class="font-mono">Closed</span> — beat + total beats → grid recovered from track end</li>
+              <li><span class="font-mono">Open</span> — beat only → assume beat 1 is the one</li>
+              <li><span class="font-mono">Provisional</span> — bar position only → a guess</li>
+              <li><span class="font-mono text-slate-500">Unlocked</span> — nothing usable</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4">
+            <p class="chip text-slate-300 mb-2">Self-correction (loop restart)</p>
+            <p class="text-sm text-slate-300">Live <code>Beat</code> can rewind when a track loops. A backward jump ≥ the 16-beat minimum is treated as a <strong>new pass</strong>: the cursor rewinds, stale pass-local cue/cadence state at-or-after the new beat is cleared, and the Director is told so it doesn't let an old beat block the new loop. Tiny 1–2 beat backsteps are OSC jitter and ignored.</p>
+          </div>
+        </div>
+        <p class="text-slate-400 text-sm">Internally, two private classes do the heavy lifting: <code>CueSheetPlans</code> holds a <em>current</em> sheet plus a pre-planned <em>upcoming</em> sheet (built early from the announced next phrase, promoted at the boundary), and <code>CueSheetCursor</code> walks Cue Marks within one sheet. Reuse rule: a sheet is kept when the new phrase's length matches (<code>Matches</code>), regenerated otherwise.</p>
+      </section>
+
+      <!-- ─────────────── 7. CUE SHEET ─────────────── -->
+      <section id="cuesheet" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">7 · The Cue Sheet — a phrase timing plan, nothing more</h2>
+        <p class="text-slate-400">A Cue Sheet is a list of phrase-relative offsets where a change <em>may</em> land. It is pure timing structure: it stores no effect choices, no performer choices, no event labels. <code>CueSheet.Build()</code>:</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart TD
+  S["Phrase window (start, length)"] --> A["Divide phrase into 16-beat Phases<br/>DefaultPhaseBeats = 16"]
+  A --> B["Collect eligible interior boundaries<br/>(after now · before phrase end · cadence-legal)"]
+  B --> C["Pick a random COUNT in 0..eligibleCount<br/>randomRange(0, n+1)"]
+  C --> D["Always append the mandatory final<br/>phrase-boundary Cue Mark (= length)"]
+  D --> E["Fill any gap &gt; 64 beats<br/>MaximumCueMarkGapBeats = 64"]
+  E --> F["Sort → Cue Sheet"]
+  classDef n fill:#0f172a,stroke:#475569,color:#e2e8f0;
+  classDef hot fill:#3f2d0a,stroke:#f59e0b,color:#fde68a;
+  class S,A,B,C,E,F n; class D hot;
+          </pre>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-4 text-sm">
+          <div class="rounded border border-slate-800 p-3 text-slate-300"><span class="text-emerald-400 font-semibold">Worked example.</span> A 64-beat phrase has interior candidates at +16/+32/+48 (three — the +64 end is mandatory, the start is excluded). So 0–3 random interior marks <em>plus</em> the guaranteed end mark.</div>
+          <div class="rounded border border-amber-900 bg-amber-950/20 p-3 text-slate-300"><span class="text-amber-400 font-semibold">No near-end marks.</span> An earlier experiment added timing-only marks 8/4/2 beats before phrase end to "represent Fill timing". That fired cues mid-phase and was <strong>removed</strong>. The current sheet has only 16-beat boundaries + the mandatory end + 64-beat gap fills.</div>
+        </div>
+      </section>
+
+      <!-- ─────────────── 8. CUE INTENT ─────────────── -->
+      <section id="cueintent" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">8 · Cue intent &amp; event-aware casting</h2>
+        <p class="text-slate-400">Once On-Air Timing produces a Cue Mark, <code>SyncedCueIntent.Evaluate()</code> answers two questions: <em>should we fire on this beat?</em> and <em>who should we cast?</em></p>
+
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+sequenceDiagram
+  participant D as Director.TickSyncedMode
+  participant T as OnAirTiming
+  participant I as SyncedCueIntent
+  participant K as EffectDeck / TransitionDeck
+  participant S as Switcher
+  D->>T: ReadFrame(input, passLocal, minCadence)
+  T-->>D: TimingFrame (CueMarkBeat, anchor, source)
+  D->>I: ResolveEventIntent(frame, Fill, Drop)
+  I-->>D: Ordinary | Fill | Drop
+  D->>I: Evaluate(frame, repertoire, intent, staged, deck)
+  Note over I: gate = HasPhaseAnchor · IsCueBeat(runway) · ChangeCadence
+  I-->>D: Wait / Cue / BlockedByCadence (+ cast)
+  alt Kind == Cue
+    D->>K: PullAt / TryPullPreferred (rotate only now)
+    D->>S: UpsertLoadedCue(SwitcherCueDirection, clock)
+    D->>D: CommitSentCue (pass-local consume · stage next)
+  else Wait / Blocked
+    Note over D,K: deck untouched · no Cue Mark moved
+  end
+          </pre>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="rounded-lg border border-slate-800 p-4 space-y-1">
+            <p class="chip text-indigo-400">the verdict</p>
+            <p class="text-sm text-slate-300"><code>SyncedCueIntentKind</code>: <span class="font-mono">Wait</span> (not in runway / already cued), <span class="font-mono">Cue</span> (in runway, cadence permits), <span class="font-mono">BlockedByCadence</span> (too soon after last change).</p>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4 space-y-1">
+            <p class="chip text-indigo-400">the event</p>
+            <p class="text-sm text-slate-300"><code>CueEventIntent</code>: <span class="font-mono">Ordinary</span> / <span class="font-mono">Fill</span> / <span class="font-mono">Drop</span>. Computed by comparing the Cue Mark to BeatManager Fill/Drop timing. <strong>Drop wins ties.</strong></p>
+          </div>
+          <div class="rounded-lg border border-slate-800 p-4 space-y-1">
+            <p class="chip text-indigo-400">the casting</p>
+            <p class="text-sm text-slate-300"><code>HandlesFill</code> / <code>HandlesDrop</code> bias which Performer is pulled. Effect opt-ins today: <span class="font-mono">Lightning</span> = Fill+Drop, <span class="font-mono">ColorSparkle</span> = Fill.</p>
+          </div>
+        </div>
+
+        <div class="rounded-md border border-slate-800 bg-white/5 p-3 text-sm text-slate-300">
+          <span class="text-emerald-400 font-semibold">The deck rule (no silent rotation).</span> Decks are anti-repeat: draw from the top half, rotate the card to the bottom. Event casting <em>inspects</em> preferred candidates without mutating; the deck rotates <strong>only when a cue is actually sent</strong>. So a Wait or BlockedByCadence can never silently reorder the deck or change <code>NextTransition</code>. If a preferred Transition can't serve the Cue Mark <em>now</em>, the staged Transition is kept rather than delaying the cue.
+        </div>
+
+        <div class="rounded-md border border-slate-800 bg-white/5 p-3 text-sm text-slate-400">
+          <span class="text-slate-300 font-semibold">Transition timing math.</span> <code>TransitionBeatPlan.FromCueMark</code>: <code>StartBeat = CueMark − Runway</code>, <code>ImpactBeat = CueMark</code>, <code>CompleteBeat = CueMark + Tail</code>. Constraints: Runway, Tail ≥ 0 and <code>Runway + Tail ≤ 12</code>. <code>Runway=0, Tail=0</code> is a valid hard cut; <code>Runway=0, Tail&gt;0</code> stays cueable through its tail so a skipped exact-beat frame can still start the transition backdated to the Cue Mark.
+        </div>
+      </section>
+
+      <!-- ─────────────── 9. SWITCHER ─────────────── -->
+      <section id="switcher" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">9 · The Switcher executes — fire-and-forget</h2>
+        <p class="text-slate-400">The Director hands over one <code>SwitcherCueDirection</code> (Cue Mark beat, target effect, transition, repertoire) plus a tiny <code>SwitcherClockSnapshot</code> (current beat, beat fraction, seconds-per-beat, Unity time). Then it walks away. The Switcher owns the entire lifecycle from there.</p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart LR
+  L["Loaded<br/>UpsertLoadedCue"] --> K["Locked<br/>at LockPoint = StartBeat − 1<br/>refuses conflicting updates"]
+  K --> R["Started<br/>at StartBeat (RenderAtTime)<br/>backdate progress if late"]
+  R --> P["Promoted<br/>B becomes current on V ≥ 1"]
+  classDef n fill:#2e1065,stroke:#a78bfa,color:#ede9fe;
+  class L,K,R,P n;
+          </pre>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded border border-slate-800 p-3 text-slate-300">
+            <p class="chip text-violet-300 mb-1">A→B model</p>
+            A = source effect, B = target, V = progress 0→1, D = 1−V. Progress is derived from wall-clock against the beat-derived start: <code>V = (now − startTime) / durationSeconds</code>. The Impact Point lands on the Cue Mark regardless of when the cue arrived within the runway.
+          </div>
+          <div class="rounded border border-slate-800 p-3 text-slate-300">
+            <p class="chip text-violet-300 mb-1">edge behaviours</p>
+            Late cue inside runway → <strong>backdated</strong> progress (impact still lands on beat). New move while one is in flight → previous B becomes the new source (last-command-wins). Zero duration → completes instantly.
+          </div>
+        </div>
+        <p class="text-slate-400 text-sm">Standalone uses the simpler <code>ShowNow</code> (cut) and explicit <code>StartTransition</code> with a wall-clock default duration; Synced uses only <code>UpsertLoadedCue</code>. Either way the Switcher derives its own lock/start/progress — the Director supplies beats, never Unity times.</p>
+      </section>
+
+      <!-- ─────────────── 10. WHAT IT WON'T DO ─────────────── -->
+      <section id="notdo" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">10 · What the Director deliberately does <em>not</em> do</h2>
+        <p class="text-slate-400">These negative-space rules are the architecture. Most of the "things changed that shouldn't have been" bugs are violations of one of these seams.</p>
+        <div class="grid md:grid-cols-2 gap-3 text-sm">
+          <div class="rounded border border-red-900/50 bg-red-950/10 p-3 text-slate-300">Does not read raw OSC / Track Phase fields — only the <code>TimingFrame</code> from On-Air Timing.</div>
+          <div class="rounded border border-red-900/50 bg-red-950/10 p-3 text-slate-300">Does not inspect Switcher Loaded / Locked / Started status. Fire-and-forget; it records consumption from <em>its own</em> command.</div>
+          <div class="rounded border border-red-900/50 bg-red-950/10 p-3 text-slate-300">Does not compute Unity start times, durations, lock points, or transition progress for Synced cues — that's the Switcher's.</div>
+          <div class="rounded border border-red-900/50 bg-red-950/10 p-3 text-slate-300">Does not let Fill/Drop/Energy change cue <em>timing</em> — events bias casting only.</div>
+          <div class="rounded border border-red-900/50 bg-red-950/10 p-3 text-slate-300">Does not rotate a deck unless a cue is actually sent.</div>
+          <div class="rounded border border-red-900/50 bg-red-950/10 p-3 text-slate-300">Does not own the Cue Sheet — On-Air Timing builds/reuses it; the Director only reads <code>CueMarkBeat</code>.</div>
+        </div>
+        <p class="text-slate-400 text-sm">And the converse, for the Switcher: it must not read Track Phase, choose Cue Sheets or Cue Marks, cast Performers, or select decks. It executes the one cue it was handed.</p>
+      </section>
+
+      <!-- ─────────────── 11. INVARIANTS ─────────────── -->
+      <section id="rules" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">11 · Invariants worth memorising</h2>
+        <ul class="space-y-2 text-sm text-slate-300">
+          <li class="rounded border border-slate-800 p-3"><span class="text-emerald-400 font-semibold">Beats, not seconds.</span> Everything musical is beat-denominated, counted from one, in powers of four (4 beats = 1 bar). Synced scheduling never does sub-beat ms math — the incoming OSC already carries the runway.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-emerald-400 font-semibold">16-beat minimum cadence.</span> At least 16 beats (4 bars) between Performer changes, checked against the <em>landing</em> beat.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-emerald-400 font-semibold">Changes land on the one.</span> A transition's Impact Point lands on a Cue Mark (a phrase/phase boundary), never mid-bar.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-emerald-400 font-semibold">Standalone is a preference, not a fallback.</span> No-OSC behaviour is fully intentional self-running art, not a degraded path.</li>
+          <li class="rounded border border-slate-800 p-3"><span class="text-emerald-400 font-semibold">Core/editor two-layer rule.</span> Director / Switcher / Repertoire / Cue / Hold are plain core C# with no <code>UnityEditor</code> dependency; inspection &amp; live-tweak live in the editor layer (the <em>Director Observatory</em> in <code>ControllerEditor</code>).</li>
+        </ul>
+        <p class="text-slate-500 text-xs">Canonical sources: <code>docs/adr/0004-director-switcher-sequencing-dual-mode.md</code>, <code>docs/adr/0005-phrase-cue-sheets-and-armed-cues.md</code>, <code>docs/runtime-architecture.md</code>, <code>CONTEXT.md</code>. These are current and agree with the code.</p>
+      </section>
+
+      <!-- ─────────────── 12. STALE MEMORY AUDIT ─────────────── -->
+      <section id="memories" class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">12 · Stale-memory audit <span class="chip text-amber-400 align-middle">remediate after this report</span></h2>
+        <p class="text-slate-400">Memory Vault holds many Director memories accreted over three branches (<code>feature/director-switcher</code> → <code>refactor/deepen-director-on-air-timing</code> → <code>director-event-aware-cue-intent</code>). Below: each one checked against current code. Two cross-cutting signals: (a) a <strong>directory reorganisation</strong> moved flat <code>Assets/core/*.cs</code> files into subdirectories — any memory citing flat paths is path-stale; (b) several are completed <strong>worklogs</strong> describing in-flight, now-landed state.</p>
+
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left">
+              <tr><th class="p-3">Memory</th><th class="p-3">Verdict</th><th class="p-3">Why · suggested action</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300 align-top">
+              <tr>
+                <td class="p-3 font-mono text-xs">director-event-aware-cue-intent-implementation</td>
+                <td class="p-3"><span class="chip text-amber-400">1 stale bullet</span></td>
+                <td class="p-3">Mostly current (matches the branch). But it claims the Cue Sheet includes "timing-only near-end marks 8/4/2 beats before phrase end" — those were <strong>removed</strong> (mid-phase cue bug). <em>Edit out that bullet.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">director-architecture</td>
+                <td class="p-3"><span class="chip text-amber-400">bloated / mixed</span></td>
+                <td class="p-3">A 15+ section running log mixing three branches of design history with current truth. Newest sections are accurate; the mass of historical narrative makes it risky as a canonical reference. <em>Condense hard — keep current architecture, archive the evolution story.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">worklog-director-cue-sheet-report</td>
+                <td class="p-3"><span class="chip text-red-400">stale worklog</span></td>
+                <td class="p-3">Transient in-flight log for a landed branch; full of uncommitted-state narrative. <em>Delete.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">worklog-director-deepening</td>
+                <td class="p-3"><span class="chip text-red-400">stale worklog</span></td>
+                <td class="p-3">Same branch, completed. Uses the old <code>SelectedPhaseBoundaryPlan</code> name and flat paths. <em>Delete.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">worklog-event-cue-timing-regression-audit</td>
+                <td class="p-3"><span class="chip text-red-400">stale worklog</span></td>
+                <td class="p-3">Records the 8/4/2 near-end fix; findings now durable in ADR-0005 + the implementation memory. <em>Delete</em> (or promote the "events never change timing" rule if not already captured).</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">director-switcher-simplification-assessment</td>
+                <td class="p-3"><span class="chip text-amber-400">partly stale</span></td>
+                <td class="p-3">Flat paths; references retired <code>SyncedTransitionPlan</code>/<code>SyncedCueDecision</code>/<code>PhraseImpactPlan</code>. Its "no Effect overrides Repertoire" claim is now <strong>wrong</strong> (Lightning &amp; ColorSparkle do). Latest fire-and-forget section is current. <em>Update or archive.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">director-architecture-review-2026-06-22</td>
+                <td class="p-3"><span class="chip text-slate-300">dated snapshot</span></td>
+                <td class="p-3">Explicitly historical. Its "<code>runtime-architecture.md</code> is stale" note is itself stale — that doc was since refreshed and is now current. Director "~909 lines" → now 933. <em>Leave as dated, or annotate.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">tuning-window-director-staging</td>
+                <td class="p-3"><span class="chip text-emerald-400">mostly current</span></td>
+                <td class="p-3">Staging API (<code>NextEffectIndex</code>, <code>SetNextEffect/Transition</code>, Hold Selected) all still exists. Path stale: file is now <code>Assets/Editor/Tuning/PenroseTuningWindow.cs</code>. <em>Fix the path.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">director-ui-observability-plan</td>
+                <td class="p-3"><span class="chip text-amber-400">partly stale</span></td>
+                <td class="p-3">Says <code>ControllerEditor</code> "does not override inspector GUI" — but the <em>Director Observatory</em> foldout was since implemented (commit <code>27ca1713</code>). Uses mode label "Default" where code says "Standalone". <em>Update status; keep the still-useful guidance.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">phrase-event-view-seam</td>
+                <td class="p-3"><span class="chip text-red-400">core claim reverted</span></td>
+                <td class="p-3">Its whole point was moving <code>PhraseEventView.cs</code>/<code>RhythmText.cs</code> into the <em>runtime</em> assembly (<code>Assets/core/</code>). They now live in <code>Assets/Editor/Rhythm/</code> — moved back to editor. <em>Verify intent, then correct or delete.</em></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-mono text-xs">switcher-fire-and-forget-deepening</td>
+                <td class="p-3"><span class="chip text-slate-300">not verified</span></td>
+                <td class="p-3">Referenced as kept-updated through the fire-and-forget work but not independently read in this pass. <em>Spot-check next.</em></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rounded-md border border-emerald-900 bg-emerald-950/20 p-3 text-sm text-slate-300">
+          <span class="text-emerald-400 font-semibold">Remediation shape (for discussion).</span> Delete the three completed worklogs · fix one bullet + several paths in the survivors · condense <code>director-architecture</code> into a lean canonical reference · keep <code>director-event-aware-cue-intent-implementation</code> (corrected) as the current-state memory. No memory edits were made yet — this is the agreed pause point.
+        </div>
+      </section>
+
+      <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500">
+        Generated 2026-06-24 · grounded in <code>director-event-aware-cue-intent</code> source via Serena + parallel code reads · diagrams: Mermaid · format: Matt HTML-REPORT
+      </footer>
+    </main>
+  </body>
+</html>
