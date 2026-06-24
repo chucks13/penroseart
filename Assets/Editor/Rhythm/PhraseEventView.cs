@@ -1,6 +1,6 @@
-// Presentation of the contrived phrase-event rhythm query (ADR-0002), co-located with the
-// PhraseEventInfo data it formats so the inspector and any future telnet/OSC/debug readout share one
-// display vocabulary.
+// Editor-side presentation model for the core PhraseEventInfo rhythm query (ADR-0002). It lives in the
+// editor assembly alongside its only consumer — the BeatManager dashboard — while the PhraseEventInfo
+// data it formats stays in the runtime assembly (Assets/core/Rhythm/BeatManagerQueries.cs).
 
 #nullable enable
 

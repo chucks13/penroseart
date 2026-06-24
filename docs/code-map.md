@@ -34,8 +34,6 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Transitions/TransitionBeatPlan.cs` | Converts Cue Mark plus Transition Runway/Tail into start/impact/completion beats. |
 | `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
-| `Assets/core/Rhythm/PhraseEventView.cs` | Current display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Placement is under review because it mixes display vocabulary with core rhythm values. |
-| `Assets/core/Rhythm/RhythmText.cs` | Current text formatting for rhythm-query nullable beat/count values (`"16b"`, plain counts, `"—"` for null). Placement is under review because it is display text. |
 | `Assets/core/Rhythm/Waveform.cs` | Runtime waveform kernel for beat-synced brightness envelopes. |
 | `Assets/core/Rhythm/WaveformPool.cs` | Shared waveform pool codec and runtime load path for `StreamingAssets/penrose_waveforms.txt`. |
 | `Assets/core/ReactiveInputs/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
@@ -67,6 +65,8 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/BeatManagerDrawer.cs` | BeatManager property drawer and dashboard adapter. |
 | `Assets/Editor/Rhythm/BeatManagerDashboardModel.cs` | Editor-only rhythm dashboard display model, including phrase-event and rhythm text formatting. |
 | `Assets/Editor/Rhythm/BeatManagerDashboardRenderer.cs` | IMGUI rendering for the BeatManager dashboard. |
+| `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Formats the core `PhraseEventInfo` for the BeatManager dashboard. |
+| `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for rhythm-query nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/Editor/Rhythm/WallVariantControl.cs` | Editor-side wall variant selector state and writeback. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Evaluate` output. |
