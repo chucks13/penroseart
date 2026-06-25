@@ -38,6 +38,6 @@ Every value PhaseLock holds or emits is a whole-beat integer (`offset`, `positio
 
 - Cue Sheet derivation, the cue cursor, cadence, and pass-local cue memory move from On-Air Timing to a Director-owned CuePlanner; ADR-0005's "On-Air Timing derives Cue Sheets" is relocated, not its ownership split. What the Director does with Phase is immaterial to the timing core, which only emits a read-only reading.
 - PhaseLock consumes BeatManager's already-projected integer values (the path `OnAirTiming.ReadFrame` takes today), not raw OSC, and reads Phrase numerics directly so it does not depend on PhraseTracker.
-- The reading seam exposes Phase and Phrase separately (`PhaseReading` + `PhraseReading`); exact fields are implementation detail.
+- The reading seam exposes Phase and Phrase separately (`PhaseReading` + `PhraseTrackerReading` — named one word apart so the two never alias in a site that holds both); exact fields are implementation detail.
 - The seam is justified by testability: PhaseLock can be property-tested against scripted DJ timelines (loops of every length, lead-ins, non-power-of-two Phrases, seeks, dropouts, track changes, clock loss) independent of the Director. Effect-level consumption of the one is allowed to emerge; no speculative extension points are added for it.
 - Rig-empirical unknowns remain to verify but do not block the ADR or harness: whether Phrase data arrives before the boundary, whether Phrase data is always sent, the Phrase-boundary timing noise profile, how often the 4-count wobbles, and the unit of `phrase_state.remaining`.

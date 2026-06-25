@@ -139,6 +139,8 @@ public sealed class Director
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
     private readonly OnAirTiming onAirTiming = new OnAirTiming();
+    private readonly PhaseLock phaseLock = new PhaseLock();
+    private readonly PhraseTracker phraseTracker = new PhraseTracker();
 
     private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
@@ -153,6 +155,8 @@ public sealed class Director
     private int transitionStartBeat = -1;
     private int transitionLandingBeat = -1;
     private TimingFrame timingFrame = TimingFrame.Unavailable;
+    private PhaseReading phaseLockReading = PhaseReading.None;
+    private PhraseTrackerReading phraseTrackerReading = PhraseTrackerReading.None;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
 
@@ -462,11 +466,17 @@ public sealed class Director
             lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat);
         var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
         var previousConfidence = timingFrame.PhaseAnchorConfidence;
+        var input = OnAirTimingInput.From(controller.beatManager);
         timingFrame = onAirTiming.ReadFrame(
-            OnAirTimingInput.From(controller.beatManager),
+            input,
             passLocalState,
             MinimumChangeCadenceBeats);
         ApplyPassLocalTimingState(timingFrame.PassLocalState);
+
+        // Slice-03 composition: read the PHASE and PHRASE layers off the same input, alongside the
+        // legacy cue path (which still runs on PhaseClock below). Kept before the cue-anchor early
+        // returns so the readings refresh every frame regardless of anchor state.
+        RefreshPhraseReading(input);
 
         if (!timingFrame.HasPhaseAnchor)
         {
@@ -493,6 +503,43 @@ public sealed class Director
     {
         lastCueBeat = passLocalState.LastCueBeat ?? -1;
         lastChangeBeat = passLocalState.PreviousCueMarkBeat ?? int.MinValue;
+    }
+
+    /// <summary>
+    /// Reads the PHASE layer (<see cref="phaseLock"/>) and the PHRASE layer (<see cref="phraseTracker"/>,
+    /// which rides on it) for this frame and holds them in <see cref="phaseLockReading"/> /
+    /// <see cref="phraseTrackerReading"/>. Emits its own trace fragment — separate from the legacy
+    /// cue/anchor trace — and only when a structural field shifts, so the per-frame position advance
+    /// inside a Phrase does not spam the log.
+    /// </summary>
+    private void RefreshPhraseReading(in OnAirTimingInput input)
+    {
+        var previousPhase = phaseLockReading;
+        var previousPhrase = phraseTrackerReading;
+
+        phaseLockReading = phaseLock.Read(input);
+        phraseTrackerReading = phraseTracker.Read(
+            phaseLockReading,
+            input.TrackPhaseActive,
+            input.BeatsUntilPhraseBoundary,
+            input.PhraseLengthBeats);
+
+        if (PhraseReadingShifted(previousPhase, previousPhrase))
+        {
+            Trace($"PHASE2 beat={FormatBeat(input.Beat)} phase={FormatPhaseReading()} phrase={FormatPhraseTracker()}");
+        }
+    }
+
+    /// <summary>Whether a structurally meaningful field changed since the previous frame (the per-beat position advance is intentionally ignored).</summary>
+    private bool PhraseReadingShifted(in PhaseReading previousPhase, in PhraseTrackerReading previousPhrase)
+    {
+        return phaseLockReading.State != previousPhase.State
+            || phaseLockReading.Offset != previousPhase.Offset
+            || phraseTrackerReading.IsAcquired != previousPhrase.IsAcquired
+            || phraseTrackerReading.PhraseLengthBeats != previousPhrase.PhraseLengthBeats
+            || phraseTrackerReading.IsIrregular != previousPhrase.IsIrregular
+            || phraseTrackerReading.HasLookAhead != previousPhrase.HasLookAhead
+            || phraseTrackerReading.PredictedUpcomingLengthBeats != previousPhrase.PredictedUpcomingLengthBeats;
     }
 
     private bool TryStartMissedZeroRunwayTailedCue(TimingFrame previousFrame, TimingFrame currentFrame)
@@ -739,6 +786,25 @@ public sealed class Director
         return timingFrame.Phase.PhasePosition > 0
             ? $"{timingFrame.Phase.PhasePosition}/16:{timingFrame.Phase.Confidence}"
             : $"none:{timingFrame.Phase.Confidence}";
+    }
+
+    /// <summary>Trace fragment for the slice-03 PHASE-layer reading (PhaseLock), kept off the legacy <see cref="FormatPhase"/> fragment.</summary>
+    private string FormatPhaseReading()
+    {
+        return phaseLockReading.Position > 0
+            ? $"{phaseLockReading.Position}/16,offset={FormatBeat(phaseLockReading.Offset)},{phaseLockReading.State}"
+            : $"none,offset={FormatBeat(phaseLockReading.Offset)},{phaseLockReading.State}";
+    }
+
+    /// <summary>Trace fragment for the slice-03 PHRASE-layer reading (PhraseTracker).</summary>
+    private string FormatPhraseTracker()
+    {
+        if (!phraseTrackerReading.IsAcquired)
+        {
+            return "none";
+        }
+
+        return $"pos={FormatBeat(phraseTrackerReading.PositionInPhrase)},length={FormatBeat(phraseTrackerReading.PhraseLengthBeats)},untilNext={FormatBeat(phraseTrackerReading.BeatsUntilNextPhrase)},irregular={phraseTrackerReading.IsIrregular},lookahead={FormatBeat(phraseTrackerReading.PredictedUpcomingLengthBeats)}";
     }
 
     private string FormatTimingInput()

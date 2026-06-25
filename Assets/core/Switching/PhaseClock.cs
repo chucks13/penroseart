@@ -114,9 +114,10 @@ public static class PhaseGrid
 /// Legacy stateless resolver: locates the 16-beat phrase-grid position from one RaveSystem OSC
 /// on-air frame. This answers where the one is; signposts such as Fill, Drop, and Energy layer
 /// on top. The grid arithmetic now lives in <see cref="PhaseGrid"/>, and the stateful successor
-/// is <see cref="PhaseLock"/>. This adapter remains only until the Director path
-/// (OnAirTiming.ReadFrame → TimingFrame → ControllerEditor) is rewired onto PhaseLock +
-/// PhraseTracker (slice 03), after which it is removed.
+/// is <see cref="PhaseLock"/>. This adapter remains only until the Director's cue path
+/// (OnAirTiming.ReadFrame → TimingFrame → ControllerEditor) is rewired off it; that retargeting
+/// and this resolver's removal land in slice 04. Slice 03 composes PhaseLock + PhraseTracker in
+/// alongside it as a separate reading fragment, but deliberately leaves the cue path on this resolver.
 /// </summary>
 public static class PhaseClock
 {
