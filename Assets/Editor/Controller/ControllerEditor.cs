@@ -383,6 +383,13 @@ public sealed class ControllerEditor : Editor
 
     private static Color ColorForRole(PhaseSlotRole role, bool isCurrent, Color fallback)
     {
+        // The current beat always wins: it must stay trackable on top of any cue role color
+        // (runway / tail / lock point / cue mark), which would otherwise paint over it.
+        if (isCurrent)
+        {
+            return CurrentBeatColor;
+        }
+
         switch (role)
         {
             case PhaseSlotRole.CueMark:
@@ -393,10 +400,8 @@ public sealed class ControllerEditor : Editor
                 return RunwayColor;
             case PhaseSlotRole.Tail:
                 return TailColor;
-            case PhaseSlotRole.Current:
-                return CurrentBeatColor;
             default:
-                return isCurrent ? CurrentBeatColor : fallback;
+                return fallback;
         }
     }
 
