@@ -21,7 +21,7 @@ public sealed class PhraseTrackerTests
     public void InPhrase_PositionAdvancesAsBeatsUntilNextCountsDown()
     {
         // 64-beat Phrase, 57 beats still to run: 64 − 57 + 1 = 8th beat into the Phrase.
-        var reading = new PhraseTracker().Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
+        var reading = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
 
         Assert.That(reading.IsAcquired, Is.True);
         Assert.That(reading.PositionInPhrase, Is.EqualTo(8));
@@ -35,7 +35,7 @@ public sealed class PhraseTrackerTests
     {
         // beatsUntilNext == 0 is the boundary itself — that beat belongs to the next Phrase, so the
         // position must read none (-1), not length + 1 past the end of this Phrase.
-        var reading = new PhraseTracker().Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 0, activeOrUpcomingLengthBeats: 64);
+        var reading = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 0, activeOrUpcomingLengthBeats: 64);
 
         Assert.That(reading.PositionInPhrase, Is.EqualTo(-1));
     }
@@ -45,7 +45,7 @@ public sealed class PhraseTrackerTests
     {
         var unacquired = new PhaseReading(-1, -1, PhaseLockState.Coasting, 0, false, false);
 
-        var reading = new PhraseTracker().Read(unacquired, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
+        var reading = PhraseTracker.Read(unacquired, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
 
         Assert.That(reading, Is.EqualTo(PhraseTrackerReading.None));
         Assert.That(reading.IsAcquired, Is.False);
@@ -58,7 +58,7 @@ public sealed class PhraseTrackerTests
         // a mode exit (ADR-0004), so the Phrase layer must not emit phrase structure against a dead clock.
         var clockLost = new PhaseReading(0, -1, PhaseLockState.Coasting, 0, false, standAloneFloor: true);
 
-        var reading = new PhraseTracker().Read(clockLost, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
+        var reading = PhraseTracker.Read(clockLost, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
 
         Assert.That(reading, Is.EqualTo(PhraseTrackerReading.None));
         Assert.That(reading.IsAcquired, Is.False);
@@ -68,7 +68,7 @@ public sealed class PhraseTrackerTests
     public void IrregularPhrase_FlagsLengthNotMultipleOfSixteen()
     {
         // 24 beats does not subdivide into whole 16-beat Phases — phase ≠ phrase.
-        var reading = new PhraseTracker().Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 24);
+        var reading = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 24);
 
         Assert.That(reading.IsIrregular, Is.True);
     }
@@ -78,8 +78,8 @@ public sealed class PhraseTrackerTests
     {
         // Re-derived phrase-locally from the length, so even the very first Phrase reads correctly
         // (no offset-shift history is needed, unlike PhaseReading.IrregularPhrase).
-        var sixteen = new PhraseTracker().Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 16);
-        var thirtyTwo = new PhraseTracker().Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 32);
+        var sixteen = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 16);
+        var thirtyTwo = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 32);
 
         Assert.That(sixteen.IsIrregular, Is.False);
         Assert.That(thirtyTwo.IsIrregular, Is.False);
@@ -89,7 +89,7 @@ public sealed class PhraseTrackerTests
     public void CountingDownToNextPhrase_PredictsTheUpcomingLength()
     {
         // Track Phase present but not yet started (tri-state 0) = counting down to the next Phrase.
-        var reading = new PhraseTracker().Read(Acquired, trackPhaseActive: 0, beatsUntilNext: 8, activeOrUpcomingLengthBeats: 32);
+        var reading = PhraseTracker.Read(Acquired, trackPhaseActive: 0, beatsUntilNext: 8, activeOrUpcomingLengthBeats: 32);
 
         Assert.That(reading.HasLookAhead, Is.True);
         Assert.That(reading.PredictedUpcomingLengthBeats, Is.EqualTo(32));
@@ -101,7 +101,7 @@ public sealed class PhraseTrackerTests
     public void NoPhrase_RidesOnPhaseButReportsNoPhraseStructure()
     {
         // Phase is acquired, but the Phrase feed is absent (tri-state −1).
-        var reading = new PhraseTracker().Read(Acquired, trackPhaseActive: -1, beatsUntilNext: -1, activeOrUpcomingLengthBeats: -1);
+        var reading = PhraseTracker.Read(Acquired, trackPhaseActive: -1, beatsUntilNext: -1, activeOrUpcomingLengthBeats: -1);
 
         Assert.That(reading.IsAcquired, Is.True, "The reading still rides on the acquired Phase.");
         Assert.That(reading.PositionInPhrase, Is.EqualTo(-1));

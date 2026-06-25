@@ -4,7 +4,7 @@ using NUnit.Framework;
 // Behaviour of the Director-owned CuePlanner (formerly the cue half of OnAirTiming.ReadFrame).
 // CuePlanner owns its pass-local cue/cadence memory outright, so fixtures that used to inject a
 // PassLocalTimingState seed it with RecordCueIssued/MarkChanged before the Plan call instead.
-public sealed class OnAirTimingTests
+public sealed class CuePlannerTests
 {
     [Test]
     public void TrackPhaseFrameSelectsInteriorCueMarkBeforeMandatoryFinalCueMark()
@@ -354,7 +354,6 @@ public sealed class OnAirTimingTests
     {
         private readonly CuePlanner cuePlanner;
         private readonly PhaseLock phaseLock = new PhaseLock();
-        private readonly PhraseTracker phraseTracker = new PhraseTracker();
 
         public CueHarness(Func<int, int, int> randomRange)
         {
@@ -364,7 +363,7 @@ public sealed class OnAirTimingTests
         public TimingFrame Plan(OnAirTimingInput input, int minimumChangeCadenceBeats)
         {
             var phase = phaseLock.Read(input);
-            var phrase = phraseTracker.Read(
+            var phrase = PhraseTracker.Read(
                 phase,
                 input.TrackPhaseActive,
                 input.BeatsUntilPhraseBoundary,
@@ -381,7 +380,6 @@ public sealed class OnAirTimingTests
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats: -1,
             beatInBar: ((beat - 1) % 4) + 1,
             trackPhaseActive: 1,
             beatsUntilPhraseBoundary: beatsToPhraseBoundary,
@@ -392,7 +390,6 @@ public sealed class OnAirTimingTests
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats: -1,
             beatInBar: ((beat - 1) % 4) + 1,
             trackPhaseActive: 0,
             beatsUntilPhraseBoundary: beatsToPhraseStart,
@@ -403,7 +400,6 @@ public sealed class OnAirTimingTests
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats: -1,
             beatInBar: ((beat - 1) % 4) + 1,
             trackPhaseActive: 0,
             beatsUntilPhraseBoundary: -1,
@@ -414,7 +410,6 @@ public sealed class OnAirTimingTests
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats: -1,
             beatInBar: ((beat - 1) % 4) + 1,
             trackPhaseActive: -1,
             beatsUntilPhraseBoundary: -1,

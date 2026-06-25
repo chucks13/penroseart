@@ -140,7 +140,6 @@ public sealed class Director
     private readonly int[] transitionDeck;
     private readonly CuePlanner cuePlanner = new CuePlanner();
     private readonly PhaseLock phaseLock = new PhaseLock();
-    private readonly PhraseTracker phraseTracker = new PhraseTracker();
 
     private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
@@ -486,7 +485,7 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Reads the PHASE layer (<see cref="phaseLock"/>) and the PHRASE layer (<see cref="phraseTracker"/>,
+    /// Reads the PHASE layer (<see cref="phaseLock"/>) and the PHRASE layer (<see cref="PhraseTracker"/>,
     /// which rides on it) for this frame and holds them in <see cref="phaseLockReading"/> /
     /// <see cref="phraseTrackerReading"/>. Emits its own trace fragment — separate from the legacy
     /// cue/anchor trace — and only when a structural field shifts, so the per-frame position advance
@@ -498,7 +497,7 @@ public sealed class Director
         var previousPhrase = phraseTrackerReading;
 
         phaseLockReading = phaseLock.Read(input);
-        phraseTrackerReading = phraseTracker.Read(
+        phraseTrackerReading = PhraseTracker.Read(
             phaseLockReading,
             input.TrackPhaseActive,
             input.BeatsUntilPhraseBoundary,
@@ -551,7 +550,6 @@ public sealed class Director
     {
         var input = new OnAirTimingInput(
             currentFrame.CurrentBeat,
-            currentFrame.Input.TotalBeats,
             currentFrame.Input.BeatInBar,
             currentFrame.Input.TrackPhaseActive,
             cueFrame.CueMarkBeat - currentFrame.CurrentBeat,
@@ -779,7 +777,7 @@ public sealed class Director
     private string FormatTimingInput()
     {
         var input = timingFrame.Input;
-        return $"beat={input.Beat},total={FormatBeat(input.TotalBeats)},barBeat={FormatBeat(input.BeatInBar)},phaseActive={input.TrackPhaseActive},phaseCount={FormatBeat(input.BeatsUntilPhraseBoundary)},phaseLength={FormatBeat(input.PhraseLengthBeats)}";
+        return $"beat={input.Beat},barBeat={FormatBeat(input.BeatInBar)},phaseActive={input.TrackPhaseActive},phaseCount={FormatBeat(input.BeatsUntilPhraseBoundary)},phaseLength={FormatBeat(input.PhraseLengthBeats)}";
     }
 
     private static string FormatTimingSource(TimingFrameSource source)

@@ -22,13 +22,10 @@ public enum TimingFrameSource
 /// <summary>The live rhythm snapshot On-Air Timing needs to interpret the current synced frame.</summary>
 public readonly struct OnAirTimingInput
 {
-    public static OnAirTimingInput Unavailable { get; } = new OnAirTimingInput(-1, -1, -1, -1, -1, -1);
+    public static OnAirTimingInput Unavailable { get; } = new OnAirTimingInput(-1, -1, -1, -1, -1);
 
     /// <summary>Focused on-air absolute beat count, or -1 when unavailable.</summary>
     public readonly int Beat;
-
-    /// <summary>Focused on-air track length in beats, or -1 when unavailable.</summary>
-    public readonly int TotalBeats;
 
     /// <summary>Focused on-air 1-based beat label inside the current bar, or -1 when unavailable.</summary>
     public readonly int BeatInBar;
@@ -51,7 +48,6 @@ public readonly struct OnAirTimingInput
 
     public OnAirTimingInput(
         int beat,
-        int totalBeats,
         int beatInBar,
         int trackPhaseActive,
         int beatsUntilPhraseBoundary,
@@ -59,7 +55,6 @@ public readonly struct OnAirTimingInput
         int trackOrdinal = -1)
     {
         Beat = beat;
-        TotalBeats = totalBeats;
         BeatInBar = beatInBar;
         TrackPhaseActive = trackPhaseActive;
         BeatsUntilPhraseBoundary = beatsUntilPhraseBoundary;
@@ -78,7 +73,6 @@ public readonly struct OnAirTimingInput
         var phrase = beatManager.Phrase;
         return new OnAirTimingInput(
             beatManager.Beat ?? -1,
-            beatManager.TotalBeats ?? -1,
             beatManager.BeatInBar ?? -1,
             phrase is { inPhrase: true } ? 1 : phrase is { } ? 0 : -1,
             phrase?.beatsUntilNext ?? -1,

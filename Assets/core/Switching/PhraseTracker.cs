@@ -9,7 +9,7 @@ public readonly struct PhraseTrackerReading
 {
     /// <summary>Sentinel "no Phrase resolved" reading, emitted whenever the underlying Phase is unacquired.</summary>
     public static PhraseTrackerReading None { get; } =
-        new PhraseTrackerReading(-1, -1, false, -1, -1, false, false);
+        new PhraseTrackerReading(-1, -1, false, -1, -1, false);
 
     /// <summary>1-based beat of this frame inside the current Phrase (1..length), or -1 when not in a Phrase.</summary>
     public readonly int PositionInPhrase;
@@ -27,7 +27,7 @@ public readonly struct PhraseTrackerReading
     public readonly int PredictedUpcomingLengthBeats;
 
     /// <summary>A look-ahead is available: the feed is counting down to a known upcoming Phrase.</summary>
-    public readonly bool HasLookAhead;
+    public bool HasLookAhead => PredictedUpcomingLengthBeats != -1;
 
     /// <summary>The underlying Phase is acquired, so this reading is meaningful (distinguishes a live no-Phrase frame from <see cref="None"/>).</summary>
     public readonly bool IsAcquired;
@@ -38,7 +38,6 @@ public readonly struct PhraseTrackerReading
         bool isIrregular,
         int beatsUntilNext,
         int predictedUpcomingLengthBeats,
-        bool hasLookAhead,
         bool isAcquired)
     {
         PositionInPhrase = positionInPhrase;
@@ -46,7 +45,6 @@ public readonly struct PhraseTrackerReading
         IsIrregular = isIrregular;
         BeatsUntilNextPhrase = beatsUntilNext;
         PredictedUpcomingLengthBeats = predictedUpcomingLengthBeats;
-        HasLookAhead = hasLookAhead;
         IsAcquired = isAcquired;
     }
 }
@@ -57,16 +55,14 @@ public readonly struct PhraseTrackerReading
 /// the next boundary, and the active-or-upcoming Phrase length), it places the frame inside the live
 /// Phrase and projects one Phrase of look-ahead while the feed is counting down.
 /// <para>
-/// The Read is a pure per-frame mapping with no held state — the class is instance-shaped only to
-/// mirror <see cref="PhaseLock"/> and leave room for stateful Phrase history later. It owns no
+/// The Read is a stateless pure mapping exposed as a static method. It owns no
 /// re-anchoring: where the 16-grid sits, and whether the Phase is trustworthy, belong to
 /// <see cref="PhaseLock"/>; this reader rides on that <see cref="PhaseReading.State"/>.
 /// </para>
 /// <para>
-/// <see cref="PhraseTrackerReading.IsIrregular"/> is re-derived phrase-locally from the length
-/// (<c>length % PhaseGrid.PhraseBeats != 0</c>) rather than forwarded from <see cref="PhaseReading.IrregularPhrase"/>:
-/// the upstream flag only sets after an offset shift at a boundary, so it misses the very first
-/// Phrase, whereas re-deriving is phrase-honest and catches it immediately.
+/// <see cref="PhraseTrackerReading.IsIrregular"/> is derived phrase-locally from the length via
+/// <see cref="PhaseGrid.IsIrregularPhrase"/> — the single definition of phrase irregularity — so
+/// the phase and phrase layers agree on what counts as irregular.
 /// </para>
 /// </summary>
 public sealed class PhraseTracker
@@ -77,7 +73,7 @@ public sealed class PhraseTracker
     /// (<see cref="OnAirTimingInput.TrackPhaseActive"/>, <see cref="OnAirTimingInput.BeatsUntilPhraseBoundary"/>,
     /// <see cref="OnAirTimingInput.PhraseLengthBeats"/>).
     /// </summary>
-    public PhraseTrackerReading Read(in PhaseReading phase, int trackPhaseActive, int beatsUntilNext, int activeOrUpcomingLengthBeats)
+    public static PhraseTrackerReading Read(in PhaseReading phase, int trackPhaseActive, int beatsUntilNext, int activeOrUpcomingLengthBeats)
     {
         // No acquired Phase to ride on: there is nothing to place inside a Phrase. StandAloneFloor is a
         // mode exit (the 4-count clock is gone, ADR-0004) — even with a held offset still on the reading
@@ -102,7 +98,6 @@ public sealed class PhraseTracker
             : -1;
 
         var predictedUpcomingLengthBeats = countdown && hasLength && beatsUntilNext > 0 ? length : -1;
-        var hasLookAhead = predictedUpcomingLengthBeats != -1;
 
         // Re-derived from the length so it catches the first Phrase; covers the current in-Phrase
         // length and the upcoming length during a countdown (both arrive in the same field).
@@ -114,7 +109,6 @@ public sealed class PhraseTracker
             isIrregular,
             beatsUntilNext,
             predictedUpcomingLengthBeats,
-            hasLookAhead,
             isAcquired: true);
     }
 }

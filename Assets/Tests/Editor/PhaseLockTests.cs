@@ -247,11 +247,10 @@ public sealed class PhaseLockTests
     {
         // No Phrase data and nothing held (a fresh track before its first boundary, or a feed that
         // never sends Phrase data): PhaseLock lines the grid up on the running beat itself — offset 0,
-        // position = beat mod 16. The track length is ignored (total_beats here is deliberately a value
-        // whose mod 16 is not 0, to prove it no longer influences the grid). It is a guess, so it stays
-        // COASTING and is never latched.
+        // position = beat mod 16. The grid lines up on the running beat at offset 0. It is a guess,
+        // so it stays COASTING and is never latched.
         var readings = PhaseTimelineHarness.Run(
-            DjFrame.BeatOnly(beat: 12, totalBeats: 376));
+            DjFrame.BeatOnly(beat: 12));
 
         var fallback = readings[0];
         Assert.That(fallback.Offset, Is.EqualTo(0), "The fallback grid is offset 0 — lined up on the running beat, not the track length.");

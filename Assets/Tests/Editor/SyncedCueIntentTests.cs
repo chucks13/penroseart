@@ -384,7 +384,6 @@ public sealed class SyncedCueIntentTests
         return new TimingFrame(
             new OnAirTimingInput(
                 currentBeat,
-                totalBeats: -1,
                 beatInBar: ((currentBeat - 1) % 4) + 1,
                 trackPhaseActive: 1,
                 beatsUntilPhraseBoundary: cueMarkBeat - currentBeat,

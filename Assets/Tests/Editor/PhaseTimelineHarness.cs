@@ -18,13 +18,11 @@ public static class DjFrame
         int beat,
         int phraseStartBeat,
         int phraseLengthBeats,
-        int totalBeats = -1,
         int beatInBar = 0,
         int trackOrdinal = 1)
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats,
             BeatInBarOnGrid(beat, phraseStartBeat, beatInBar),
             trackPhaseActive: 1,
             beatsUntilPhraseBoundary: phraseStartBeat + phraseLengthBeats - beat,
@@ -37,13 +35,11 @@ public static class DjFrame
         int beat,
         int phraseStartBeat,
         int upcomingLengthBeats,
-        int totalBeats = -1,
         int beatInBar = 0,
         int trackOrdinal = 1)
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats,
             BeatInBarOnGrid(beat, phraseStartBeat, beatInBar),
             trackPhaseActive: 0,
             beatsUntilPhraseBoundary: phraseStartBeat - beat,
@@ -52,11 +48,10 @@ public static class DjFrame
     }
 
     /// <summary>A beat clock with no Phrase data: the Phrase feed dropped out but the clock continues.</summary>
-    public static OnAirTimingInput BeatOnly(int beat, int totalBeats = -1, int beatInBar = 0, int trackOrdinal = 1)
+    public static OnAirTimingInput BeatOnly(int beat, int beatInBar = 0, int trackOrdinal = 1)
     {
         return new OnAirTimingInput(
             beat,
-            totalBeats,
             BeatInBarOr(beat, beatInBar),
             trackPhaseActive: -1,
             beatsUntilPhraseBoundary: -1,
