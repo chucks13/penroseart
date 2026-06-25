@@ -41,4 +41,3 @@ public static class PhaseGrid
     /// </summary>
     public static bool IsIrregularPhrase(int phraseLengthBeats) => phraseLengthBeats % PhraseBeats != 0;
 }
-
