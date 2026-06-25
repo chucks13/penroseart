@@ -116,7 +116,6 @@ public sealed class PhaseLockTests
             DjFrame.InPhrase(beat: 73, phraseStartBeat: 73, phraseLengthBeats: 64));
 
         var irregular = readings[0];
-        Assert.That(irregular.IrregularPhrase, Is.True, "A phrase length of 24 is not a multiple of 16.");
         Assert.That(irregular.State, Is.EqualTo(PhaseLockState.Contradicted),
             "An irregular phrase is reported NOT-Locked (Contradicted) for its duration.");
         Assert.That(irregular.Offset, Is.EqualTo(0), "Phrase start 49 anchors the grid at offset 0.");
@@ -124,7 +123,6 @@ public sealed class PhaseLockTests
             "Position stays usable through the contradiction: beat 60 against offset 0.");
 
         var reLatched = readings[1];
-        Assert.That(reLatched.IrregularPhrase, Is.False, "The 64-beat phrase is a multiple of 16.");
         Assert.That(reLatched.State, Is.EqualTo(PhaseLockState.Locked),
             "The next regular phrase boundary re-latches cleanly to Locked.");
         Assert.That(reLatched.Offset, Is.EqualTo(8), "Phrase start 73 re-anchors the grid; offset becomes 8.");
@@ -141,7 +139,6 @@ public sealed class PhaseLockTests
         var reEstablished = readings[1];
         Assert.That(reEstablished.Offset, Is.EqualTo(12), "The next Phrase boundary re-establishes the offset (172 mod 16 = 12).");
         Assert.That(reEstablished.Position, Is.EqualTo(1));
-        Assert.That(reEstablished.BeatsSinceAnchor, Is.EqualTo(0), "A fresh re-latch resets the staleness count.");
         Assert.That(reEstablished.State, Is.EqualTo(PhaseLockState.Locked));
     }
 
@@ -157,7 +154,6 @@ public sealed class PhaseLockTests
         Assert.That(coasting.Offset, Is.EqualTo(0), "The offset is held through the dropout.");
         Assert.That(coasting.Position, Is.EqualTo(4), "Position keeps recomputing off the clock: beat 68 is position 4.");
         Assert.That(coasting.State, Is.EqualTo(PhaseLockState.Coasting));
-        Assert.That(coasting.BeatsSinceAnchor, Is.GreaterThan(0), "Dead-reckoning accrues staleness.");
         Assert.That(coasting.StandAloneFloor, Is.False, "A clock still exists, so we stay synced.");
     }
 

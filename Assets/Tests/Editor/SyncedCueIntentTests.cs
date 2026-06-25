@@ -388,7 +388,7 @@ public sealed class SyncedCueIntentTests
                 trackPhaseActive: 1,
                 beatsUntilPhraseBoundary: cueMarkBeat - currentBeat,
                 phraseLengthBeats: 32),
-            new PhaseReading(0, 1, PhaseLockState.Locked, 0, false, false),
+            new PhaseReading(0, 1, PhaseLockState.Locked, false),
             hasPhaseAnchor: true,
             cueMarkBeat,
             hasPhraseWindow: false,

@@ -15,7 +15,7 @@ public sealed class PhraseTrackerTests
 {
     /// <summary>An acquired Phase reading (offset on the grid) the tracker can ride on.</summary>
     private static PhaseReading Acquired =>
-        new PhaseReading(0, 1, PhaseLockState.Locked, 0, false, false);
+        new PhaseReading(0, 1, PhaseLockState.Locked, false);
 
     [Test]
     public void InPhrase_PositionAdvancesAsBeatsUntilNextCountsDown()
@@ -43,7 +43,7 @@ public sealed class PhraseTrackerTests
     [Test]
     public void UnacquiredPhase_ReadsNone()
     {
-        var unacquired = new PhaseReading(-1, -1, PhaseLockState.Coasting, 0, false, false);
+        var unacquired = new PhaseReading(-1, -1, PhaseLockState.Coasting, false);
 
         var reading = PhraseTracker.Read(unacquired, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
 
@@ -56,7 +56,7 @@ public sealed class PhraseTrackerTests
     {
         // The 4-count clock is gone (StandAloneFloor) but PhaseLock still carries a held offset. That is
         // a mode exit (ADR-0004), so the Phrase layer must not emit phrase structure against a dead clock.
-        var clockLost = new PhaseReading(0, -1, PhaseLockState.Coasting, 0, false, standAloneFloor: true);
+        var clockLost = new PhaseReading(0, -1, PhaseLockState.Coasting, standAloneFloor: true);
 
         var reading = PhraseTracker.Read(clockLost, trackPhaseActive: 1, beatsUntilNext: 57, activeOrUpcomingLengthBeats: 64);
 
@@ -76,8 +76,8 @@ public sealed class PhraseTrackerTests
     [Test]
     public void RegularPhrase_DoesNotFlagIrregular()
     {
-        // Re-derived phrase-locally from the length, so even the very first Phrase reads correctly
-        // (no offset-shift history is needed, unlike PhaseReading.IrregularPhrase).
+        // Re-derived phrase-locally from the length, so even the very first Phrase reads correctly —
+        // PhraseTracker.IsIrregular is the single irregular-phrase signal consumers read.
         var sixteen = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 16);
         var thirtyTwo = PhraseTracker.Read(Acquired, trackPhaseActive: 1, beatsUntilNext: 1, activeOrUpcomingLengthBeats: 32);
 

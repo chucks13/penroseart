@@ -1201,7 +1201,7 @@ public class Controller : Singleton<Controller>
         AppendIfNotEmpty(builder, FormatNextMove(directorStatus));
         if (directorStatus.IsSyncedMode)
         {
-            AppendIfNotEmpty(builder, directorStatus.HasPhaseAnchor ? (directorStatus.Phase.IrregularPhrase ? directorStatus.Phase.State + " (irregular)" : directorStatus.Phase.State.ToString()) : "unlocked");
+            AppendIfNotEmpty(builder, directorStatus.HasPhaseAnchor ? (directorStatus.Phrase.IsIrregular ? directorStatus.Phase.State + " (irregular)" : directorStatus.Phase.State.ToString()) : "unlocked");
             AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
             AppendIfNotEmpty(builder, FormatPhasePosition(directorStatus));
             AppendIfNotEmpty(builder, FormatLanding(directorStatus));

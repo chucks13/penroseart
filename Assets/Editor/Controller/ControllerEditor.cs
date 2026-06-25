@@ -290,7 +290,7 @@ public sealed class ControllerEditor : Editor
         DrawRow("Anchor", status.HasPhaseAnchor ? "locked" : "none");
         DrawRow("Lock State", status.HasPhaseAnchor ? status.Phase.State.ToString() : "unlocked");
         DrawRow("Offset", FormatBeat(status.Phase.Offset));
-        DrawRow("Irregular Phrase", status.Phase.IrregularPhrase ? "yes" : "no");
+        DrawRow("Irregular Phrase", status.Phrase.IsIrregular ? "yes" : "no");
     }
 
     private static void DrawHudLines(Controller controller)
