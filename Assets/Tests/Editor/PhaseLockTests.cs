@@ -174,11 +174,12 @@ public sealed class PhaseLockTests
             DjFrame.InPhrase(beat: 1, phraseStartBeat: 1, phraseLengthBeats: 64, trackOrdinal: 2));
 
         var reset = readings[1];
-        Assert.That(reset.Offset, Is.EqualTo(-1), "A track change drops the held offset; the old song's grid is meaningless.");
-        Assert.That(reset.State, Is.EqualTo(PhaseLockState.Coasting), "With nothing held and no track length here, it coasts pending re-acquire.");
+        Assert.That(reset.Offset, Is.EqualTo(0), "A track change drops the held offset; with nothing held the grid lines up on the running beat (offset 0), not the old song's grid.");
+        Assert.That(reset.Position, Is.EqualTo(1), "Beat 1 against offset 0 is grid position 1.");
+        Assert.That(reset.State, Is.EqualTo(PhaseLockState.Coasting), "A beat-only guess pending the new song's first Phrase is COASTING, not a lock.");
 
         var reAcquired = readings[2];
-        Assert.That(reAcquired.Offset, Is.EqualTo(0), "The new song's first Phrase start bootstraps the grid.");
+        Assert.That(reAcquired.Offset, Is.EqualTo(0), "The new song's Phrase data establishes the grid, the same way any Phrase does — no special first-Phrase bootstrap.");
         Assert.That(reAcquired.Position, Is.EqualTo(1));
         Assert.That(reAcquired.State, Is.EqualTo(PhaseLockState.Locked));
     }
@@ -242,18 +243,20 @@ public sealed class PhaseLockTests
     }
 
     [Test]
-    public void NoPhraseButTrackLength_FallsBackToTheEndAlignedGrid()
+    public void NoPhrase_FallsBackToTheRunningBeatGrid()
     {
-        // No Phrase data and nothing held (a fresh track before its first boundary): PhaseLock
-        // estimates the grid from the track length (total_beats mod 16). It is a guess — it may be
-        // wrong — so it never becomes the held offset and reports COASTING, not LOCKED.
+        // No Phrase data and nothing held (a fresh track before its first boundary, or a feed that
+        // never sends Phrase data): PhaseLock lines the grid up on the running beat itself — offset 0,
+        // position = beat mod 16. The track length is ignored (total_beats here is deliberately a value
+        // whose mod 16 is not 0, to prove it no longer influences the grid). It is a guess, so it stays
+        // COASTING and is never latched.
         var readings = PhaseTimelineHarness.Run(
             DjFrame.BeatOnly(beat: 12, totalBeats: 376));
 
         var fallback = readings[0];
-        Assert.That(fallback.Offset, Is.EqualTo(8), "offset = 376 mod 16 = 8, the end-aligned grid.");
-        Assert.That(fallback.Position, Is.EqualTo(4), "Position is recomputed off the fallback grid: beat 12 against offset 8.");
-        Assert.That(fallback.State, Is.EqualTo(PhaseLockState.Coasting), "A track-length guess is not a phrase lock.");
+        Assert.That(fallback.Offset, Is.EqualTo(0), "The fallback grid is offset 0 — lined up on the running beat, not the track length.");
+        Assert.That(fallback.Position, Is.EqualTo(12), "Position is beat mod 16: beat 12 against offset 0.");
+        Assert.That(fallback.State, Is.EqualTo(PhaseLockState.Coasting), "A beat-only guess is not a phrase lock.");
         Assert.That(fallback.StandAloneFloor, Is.False, "A clock still exists, so we stay synced.");
     }
 

@@ -9,7 +9,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void TrackPhaseFrameSelectsInteriorCueMarkBeforeMandatoryFinalCueMark()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 21, phraseLengthBeats: 32),
@@ -36,7 +36,7 @@ public sealed class OnAirTimingTests
     public void SameLengthPhraseUpdateReusesCueSheetWithoutRerollingCueMarks()
     {
         var randomCalls = 0;
-        var cuePlanner = new CuePlanner((minInclusive, maxExclusive) =>
+        var cuePlanner = new CueHarness((minInclusive, maxExclusive) =>
         {
             randomCalls++;
             return randomCalls == 1 && maxExclusive > minInclusive + 1 ? minInclusive + 1 : minInclusive;
@@ -62,7 +62,7 @@ public sealed class OnAirTimingTests
     public void DifferentLengthPhraseUpdateRegeneratesCueSheet()
     {
         var randomCalls = 0;
-        var cuePlanner = new CuePlanner((minInclusive, maxExclusive) =>
+        var cuePlanner = new CueHarness((minInclusive, maxExclusive) =>
         {
             randomCalls++;
             return randomCalls == 1 && maxExclusive > minInclusive + 1 ? minInclusive + 1 : minInclusive;
@@ -88,7 +88,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void NewPhraseFrameAtMandatoryBoundaryKeepsPreviousCueMarkCueable()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
@@ -105,7 +105,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void FiredMandatoryCueMarkImmediatelyPromotesPreplannedNextPhraseCueMark()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
@@ -128,7 +128,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void TrackPhaseDisappearanceAfterStructuralAnchorCoastsOnNextValidPhaseAnchor()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -151,7 +151,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void FreshTrackPhaseAfterCoastingReanchorsToStructuralPhraseData()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -178,7 +178,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void DifferentLengthFreshPhraseWindowReplacesCoastedCueSheet()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -205,7 +205,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void TrackPhaseDisappearanceWithoutPriorStructuralAnchorUnlocks()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
             TrackPhaseUnavailableInput(beat: 588),
@@ -222,7 +222,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void SamePhraseWindowBeatRewindKeepsCueSheetAndMovesCursorBack()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -247,7 +247,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void SamePhraseWindowBeatRewindClearsPassLocalStateThatWouldBlockLoopPass()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -271,7 +271,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void SamePhraseWindowBeatRewindKeepsPassLocalStateThatCannotBlockCurrentPass()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -295,7 +295,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void SmallBeatBackstepIsJitterAndDoesNotResetSelectedBoundaryCursorOrPassLocalState()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
@@ -322,7 +322,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void BeatOnlyFrameUsesPhaseClockGridWhenNoPhraseWindowIsAvailable()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
             BeatOnlyInput(beat: 589),
@@ -337,7 +337,7 @@ public sealed class OnAirTimingTests
     [Test]
     public void UnavailableFrameIsUnlockedWithoutFakeTarget()
     {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
             OnAirTimingInput.Unavailable,
@@ -347,6 +347,36 @@ public sealed class OnAirTimingTests
         Assert.That(frame.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Unlocked));
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Unlocked));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(-1));
+    }
+
+    // Drives the CuePlanner through the same PHASE/PHRASE composition the Director performs: each frame
+    // is read by a paired PhaseLock + PhraseTracker, then planned. Holds the stateful PhaseLock so the
+    // held offset carries across a test's frame sequence, exactly as in the live Director.
+    private sealed class CueHarness
+    {
+        private readonly CuePlanner cuePlanner;
+        private readonly PhaseLock phaseLock = new PhaseLock();
+        private readonly PhraseTracker phraseTracker = new PhraseTracker();
+
+        public CueHarness(Func<int, int, int> randomRange)
+        {
+            cuePlanner = new CuePlanner(randomRange);
+        }
+
+        public TimingFrame Plan(OnAirTimingInput input, int minimumChangeCadenceBeats)
+        {
+            var phase = phaseLock.Read(input);
+            var phrase = phraseTracker.Read(
+                phase,
+                input.TrackPhaseActive,
+                input.BeatsUntilPhraseBoundary,
+                input.PhraseLengthBeats);
+            return cuePlanner.Plan(input, phase, phrase, minimumChangeCadenceBeats);
+        }
+
+        public void RecordCueIssued(int beat) => cuePlanner.RecordCueIssued(beat);
+
+        public void MarkChanged(int beat) => cuePlanner.MarkChanged(beat);
     }
 
     private static OnAirTimingInput TrackPhaseInput(int beat, int beatsToPhraseBoundary, int phraseLengthBeats)

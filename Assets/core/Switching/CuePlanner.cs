@@ -405,6 +405,8 @@ public sealed class CuePlanner
     /// </summary>
     public TimingFrame Plan(
         OnAirTimingInput input,
+        in PhaseReading phase,
+        in PhraseTrackerReading phrase,
         int minimumChangeCadenceBeats)
     {
         if (minimumChangeCadenceBeats <= 0)
@@ -412,8 +414,9 @@ public sealed class CuePlanner
             throw new ArgumentOutOfRangeException(nameof(minimumChangeCadenceBeats), minimumChangeCadenceBeats, "Minimum cadence must be positive.");
         }
 
-        var phaseInput = input.ToPhaseInput();
-        var phase = PhaseClock.Resolve(phaseInput);
+        // Legacy stateless grid, kept only to populate the vestigial TimingFrame.Phase trace/status
+        // field; the cue decision below is driven entirely by the PhaseLock/PhraseTracker readings.
+        var legacyPhase = PhaseClock.Resolve(input.ToPhaseInput());
         var beatRewoundToNewPass = BeatRewoundToNewPass(lastBeat, input.Beat, minimumChangeCadenceBeats);
 
         var passLocalState = new PassLocalTimingState(
@@ -432,19 +435,23 @@ public sealed class CuePlanner
         {
             if (HasCoastablePhaseAnchor())
             {
-                return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
+                return BuildCoastingFrame(input, legacyPhase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
             }
 
             cueSheetPlans.ResetCurrent();
-            return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+            return BuildUnlockedFrame(input, legacyPhase, beatRewoundToNewPass, passState);
         }
 
-        if (phase.Confidence != PhaseConfidence.Unlocked && input.Beat >= 1)
+        // The gate is "do we have a usable grid position to plan interior cues against." A live phrase
+        // always yields Position >= 1, so the mandatory phrase-end cue is never suppressed here; a bare
+        // beat with no phrase and nothing held reads Position == -1 (the one is genuinely unknown) and
+        // falls through to coast/unlock rather than cueing off a fabricated offset.
+        if (phase.Position >= 1 && input.Beat >= 1)
         {
             var previousSource = lastSource;
             var target = ResolveCueMark(
                 input.Beat,
-                phaseInput,
+                phrase,
                 phase,
                 beatRewoundToNewPass,
                 passState.PreviousCueMarkBeat,
@@ -452,7 +459,7 @@ public sealed class CuePlanner
             var reanchored = ReanchoredFrom(previousSource, target.Source, hasPhaseAnchor);
             return BuildAnchoredFrame(
                 input,
-                phase,
+                legacyPhase,
                 target,
                 beatRewoundToNewPass,
                 passState,
@@ -461,10 +468,10 @@ public sealed class CuePlanner
 
         if (hasPhaseAnchor && input.Beat >= 1)
         {
-            return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
+            return BuildCoastingFrame(input, legacyPhase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
         }
 
-        return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+        return BuildUnlockedFrame(input, legacyPhase, beatRewoundToNewPass, passState);
     }
 
     private TimingFrame BuildCoastingFrame(
@@ -602,18 +609,18 @@ public sealed class CuePlanner
 
     private ResolvedTimingTarget ResolveCueMark(
         int beat,
-        PhaseInput phaseInput,
-        PhaseClockReading phase,
+        in PhraseTrackerReading phrase,
+        in PhaseReading phase,
         bool beatRewoundToNewPass,
         int? consumedCueMarkBeat,
         int minimumChangeCadenceBeats)
     {
-        if (PhraseWindow.TryFromUpcomingTrackPhase(
-            beat,
-            phaseInput.PhaseCountBeats,
-            phaseInput.PhaseLengthBeats,
-            out var upcomingPhraseWindow)
-            && phaseInput.PhaseActive == 0)
+        if (phrase.HasLookAhead
+            && PhraseWindow.TryFromUpcomingTrackPhase(
+                beat,
+                phrase.BeatsUntilNextPhrase,
+                phrase.PredictedUpcomingLengthBeats,
+                out var upcomingPhraseWindow))
         {
             cueSheetPlans.PlanUpcoming(
                 beat,
@@ -636,11 +643,11 @@ public sealed class CuePlanner
                 phraseWindow);
         }
 
-        if (phaseInput.PhaseActive >= 1
+        if (phrase.PhraseLengthBeats >= 1
             && PhraseWindow.TryFromTrackPhase(
                 beat,
-                phaseInput.PhaseCountBeats,
-                phaseInput.PhaseLengthBeats,
+                phrase.BeatsUntilNextPhrase,
+                phrase.PhraseLengthBeats,
                 out phraseWindow))
         {
             if (cueSheetPlans.HasUpcomingFor(phraseWindow))
@@ -678,7 +685,7 @@ public sealed class CuePlanner
         }
 
         cueSheetPlans.ResetCurrent();
-        return ResolvedTimingTarget.PhaseClockGrid(GetLandingBeatFromPhasePosition(beat, phase.PhasePosition));
+        return ResolvedTimingTarget.PhaseClockGrid(GetLandingBeatFromPhasePosition(beat, phase.Position));
     }
 
     private ResolvedTimingTarget ResolveCueMarkFromSheet(

@@ -462,12 +462,11 @@ public sealed class Director
         var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
         var previousConfidence = timingFrame.PhaseAnchorConfidence;
         var input = OnAirTimingInput.From(controller.beatManager);
-        timingFrame = cuePlanner.Plan(input, MinimumChangeCadenceBeats);
 
-        // Slice-03 composition: read the PHASE and PHRASE layers off the same input, alongside the
-        // legacy cue path (which still runs on PhaseClock below). Kept before the cue-anchor early
-        // returns so the readings refresh every frame regardless of anchor state.
+        // Compose the PHASE (PhaseLock) and PHRASE (PhraseTracker) readings first, then plan cues off
+        // them: the CuePlanner consumes those readings rather than resolving phase itself.
         RefreshPhraseReading(input);
+        timingFrame = cuePlanner.Plan(input, phaseLockReading, phraseTrackerReading, MinimumChangeCadenceBeats);
 
         if (!timingFrame.HasPhaseAnchor)
         {

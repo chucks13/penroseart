@@ -76,8 +76,9 @@ public readonly struct PhaseReading
 /// ON the tick (a real Phrase start is a downbeat); a Phrase start off the tick, or a held grid that
 /// drifts off it, is a Phrase-vs-pulse disagreement held and flagged
 /// <see cref="PhaseLockState.Contradicted"/> rather than silently applied. With no Phrase the offset
-/// is held (coast); with nothing held the end-aligned <see cref="OnAirTimingInput.TotalBeats"/> grid
-/// is a best-guess fallback. A track change resets everything — <c>beat</c> is a per-track counter, so
+/// is held (coast); with nothing held the grid lines up on the running <c>beat</c> itself (offset 0,
+/// position = beat mod 16) — a best-guess fallback grounded on the always-present 4-count, never the
+/// track length. A track change resets everything — <c>beat</c> is a per-track counter, so
 /// the old offset is meaningless on the new song — and the next frames re-acquire from scratch. The
 /// grid arithmetic is shared with the legacy <see cref="PhaseClock"/> through <see cref="PhaseGrid"/>.
 /// <para>
@@ -163,22 +164,17 @@ public sealed class PhaseLock
             return Hold(input, PhaseLockState.Coasting);
         }
 
-        // No Phrase and nothing held (e.g. a fresh track before its first boundary): fall back to the
-        // end-aligned grid from the track length. It is a guess — it may be wrong — so it never becomes
-        // the held offset and reports COASTING, not LOCKED.
-        if (input.TotalBeats >= 1)
-        {
-            var fallbackOffset = PhaseGrid.Mod(input.TotalBeats, PhaseGrid.PhraseBeats);
-            return new PhaseReading(
-                fallbackOffset,
-                PhaseGrid.PositionFor(input.Beat, fallbackOffset),
-                PhaseLockState.Coasting,
-                BeatsSinceAnchor(input.Beat),
-                irregularPhrase: false,
-                standAloneFloor: false);
-        }
-
-        return Emit(input, position: -1, PhaseLockState.Coasting);
+        // No Phrase and nothing held (a fresh track before its first boundary, or a feed that never
+        // sends Phrase data): line the grid up on the running beat itself — offset 0, so position is
+        // beat mod 16. The beat rides the always-present 4-count, so this is the honest fallback; it is
+        // a guess (the track may not start on the one), so it stays COASTING and is never latched.
+        return new PhaseReading(
+            0,
+            PhaseGrid.PositionFor(input.Beat, 0),
+            PhaseLockState.Coasting,
+            BeatsSinceAnchor(input.Beat),
+            irregularPhrase: false,
+            standAloneFloor: false);
     }
 
     /// <summary>
