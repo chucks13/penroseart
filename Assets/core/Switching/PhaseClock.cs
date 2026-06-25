@@ -108,6 +108,14 @@ public static class PhaseGrid
 
     /// <summary>The 1..4 count (beat-in-bar) of <paramref name="beat"/> from the running counter, grid offset 0: <c>(beat − 1) mod 4 + 1</c>.</summary>
     public static int FourCount(int beat) => BarPositionFor(beat, 0);
+
+    /// <summary>
+    /// Whether a Phrase of <paramref name="phraseLengthBeats"/> cannot subdivide into whole 16-beat
+    /// phases — its length is not a multiple of <see cref="PhraseBeats"/>. The single definition of
+    /// phrase irregularity, shared by PhaseLock (which drives CONTRADICTED) and PhraseTracker (the
+    /// Director's diagnostic), so the two never silently diverge. Callers guard non-positive lengths.
+    /// </summary>
+    public static bool IsIrregularPhrase(int phraseLengthBeats) => phraseLengthBeats % PhraseBeats != 0;
 }
 
 /// <summary>

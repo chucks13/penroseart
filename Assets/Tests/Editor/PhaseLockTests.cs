@@ -106,18 +106,29 @@ public sealed class PhaseLockTests
     }
 
     [Test]
-    public void NonPowerOfTwoPhrase_ReAnchorsTheGridAndFlagsIrregular()
+    public void IrregularPhrase_ReportsContradictedThenReLatchesToLockedAtTheNextRegularBoundary()
     {
-        // Phrase 1 is 24 beats (not a multiple of 16); the next boundary shifts the offset by a whole bar.
+        // A 24-beat phrase is not a multiple of 16, so it cannot subdivide into whole 16-beat phases.
+        // PhaseLock reports CONTRADICTED for the phrase's duration while still holding a usable position
+        // (the wall keeps rendering); the next regular phrase boundary re-latches cleanly to LOCKED.
         var readings = PhaseTimelineHarness.Run(
             DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 24),
             DjFrame.InPhrase(beat: 73, phraseStartBeat: 73, phraseLengthBeats: 64));
 
-        var atBoundary = readings[1];
-        Assert.That(atBoundary.Offset, Is.EqualTo(8), "Phrase start 73 re-anchors the grid; offset becomes 8.");
-        Assert.That(atBoundary.Position, Is.EqualTo(1));
-        Assert.That(atBoundary.IrregularPhrase, Is.True, "A phrase whose length is not a multiple of 16 is flagged irregular.");
-        Assert.That(atBoundary.State, Is.EqualTo(PhaseLockState.Locked));
+        var irregular = readings[0];
+        Assert.That(irregular.IrregularPhrase, Is.True, "A phrase length of 24 is not a multiple of 16.");
+        Assert.That(irregular.State, Is.EqualTo(PhaseLockState.Contradicted),
+            "An irregular phrase is reported NOT-Locked (Contradicted) for its duration.");
+        Assert.That(irregular.Offset, Is.EqualTo(0), "Phrase start 49 anchors the grid at offset 0.");
+        Assert.That(irregular.Position, Is.EqualTo(12),
+            "Position stays usable through the contradiction: beat 60 against offset 0.");
+
+        var reLatched = readings[1];
+        Assert.That(reLatched.IrregularPhrase, Is.False, "The 64-beat phrase is a multiple of 16.");
+        Assert.That(reLatched.State, Is.EqualTo(PhaseLockState.Locked),
+            "The next regular phrase boundary re-latches cleanly to Locked.");
+        Assert.That(reLatched.Offset, Is.EqualTo(8), "Phrase start 73 re-anchors the grid; offset becomes 8.");
+        Assert.That(reLatched.Position, Is.EqualTo(1));
     }
 
     [Test]

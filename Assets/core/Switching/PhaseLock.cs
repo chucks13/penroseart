@@ -40,7 +40,7 @@ public readonly struct PhaseReading
     /// <summary>Beats dead-reckoned since the last re-latch; a staleness count the Director can threshold.</summary>
     public readonly int BeatsSinceAnchor;
 
-    /// <summary>The latest Phrase ended off the 16-grid from its own start (length not a multiple of 16) — the "phase ≠ phrase" diagnostic.</summary>
+    /// <summary>The current Phrase's length is not a multiple of 16, so it cannot subdivide into whole 16-beat phases — the "phase ≠ phrase" diagnostic. Re-derived phrase-locally each frame (matches <see cref="PhraseTrackerReading.IsIrregular"/>); drives CONTRADICTED for the phrase's duration.</summary>
     public readonly bool IrregularPhrase;
 
     /// <summary>The clock itself is gone (<c>beat_in_bar == -1</c>): the trigger to exit synced mode and reinstate stand-alone timing (ADR-0004). A mode exit, not a Phase state.</summary>
@@ -100,7 +100,6 @@ public sealed class PhaseLock
     private int lastPhraseStart = UnsetPhraseStart;
     private int anchorBeat = -1;
     private int previousTrackOrdinal = UnsetOrdinal;
-    private bool irregular;
 
     /// <summary>
     /// Reads one frame of BeatManager's projected integer values and emits the current Phase
@@ -133,17 +132,26 @@ public sealed class PhaseLock
 
         if (HasPhrase(input))
         {
+            // A phrase whose length is not a multiple of 16 cannot subdivide into whole 16-beat phases,
+            // so the phase grid is in dispute: hold a usable offset/position but report CONTRADICTED for
+            // the phrase's duration (item A / ADR-0006). The next regular boundary re-latches to Locked.
+            // Irregularity is a pure per-frame fact of the active phrase, so it is threaded out by value
+            // rather than held — the non-phrase branches below report no irregular phrase, not a stale one.
+            var irregular = PhaseGrid.IsIrregularPhrase(input.PhraseLengthBeats);
+            var phraseState = irregular ? PhaseLockState.Contradicted : PhaseLockState.Locked;
+
             var phraseStart = input.Beat - (input.PhraseLengthBeats - input.BeatsUntilPhraseBoundary);
             if (lastPhraseStart == UnsetPhraseStart || phraseStart != lastPhraseStart)
             {
-                return ReLatch(input, phraseStart);
+                return ReLatch(input, phraseStart, phraseState, irregular);
             }
 
             // Same Phrase still confirming the grid; a within-Phrase loop just recomputes the position.
-            return Hold(input, PhaseLockState.Locked);
+            return Hold(input, phraseState, irregular);
         }
 
-        // Clock present but the Phrase feed dropped out: hold the phrase-anchored offset and coast.
+        // Clock present but the Phrase feed dropped out: hold the phrase-anchored offset and coast. No
+        // active phrase, so there is no irregular phrase to report.
         if (heldOffset != UnsetOffset)
         {
             return Hold(input, PhaseLockState.Coasting);
@@ -160,7 +168,7 @@ public sealed class PhaseLock
                 PhaseGrid.PositionFor(input.Beat, fallbackOffset),
                 PhaseLockState.Coasting,
                 BeatsSinceAnchor(input.Beat),
-                irregular,
+                irregularPhrase: false,
                 standAloneFloor: false);
         }
 
@@ -172,24 +180,24 @@ public sealed class PhaseLock
     /// must land ON the 4-count tick: the grid the new offset implies has to agree with the feed's
     /// <c>beat_in_bar</c>. The first latch (nothing held yet) bootstraps unconditionally; thereafter a
     /// Phrase start that is off the tick is a Phrase-vs-pulse contradiction — hold the last good offset
-    /// and flag CONTRADICTED. An accepted move that shifts the offset flags the prior Phrase irregular
-    /// (its length was not a multiple of 16). No special-casing for track change: a new song was already
-    /// reset to nothing held, so its first boundary is a clean bootstrap latch.
+    /// and flag CONTRADICTED. The accepted latch emits <paramref name="lockState"/>, which the caller sets
+    /// to CONTRADICTED for an irregular phrase (length not a multiple of 16) and LOCKED otherwise. No
+    /// special-casing for track change: a new song was already reset to nothing held, so its first
+    /// boundary is a clean bootstrap latch.
     /// </summary>
-    private PhaseReading ReLatch(in OnAirTimingInput input, int phraseStart)
+    private PhaseReading ReLatch(in OnAirTimingInput input, int phraseStart, PhaseLockState lockState, bool irregular)
     {
         var newOffset = PhaseGrid.OffsetForPhraseStart(phraseStart);
 
         if (heldOffset != UnsetOffset && !OnTick(input, newOffset))
         {
-            return Hold(input, PhaseLockState.Contradicted);
+            return Hold(input, PhaseLockState.Contradicted, irregular);
         }
 
-        irregular = heldOffset != UnsetOffset && newOffset != heldOffset;
         heldOffset = newOffset;
         lastPhraseStart = phraseStart;
         anchorBeat = input.Beat;
-        return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Locked);
+        return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), lockState, irregular);
     }
 
     /// <summary>
@@ -199,15 +207,15 @@ public sealed class PhaseLock
     /// Derived fresh each frame, so a contradiction never sticks past the frame whose disagreement
     /// caused it.
     /// </summary>
-    private PhaseReading Hold(in OnAirTimingInput input, PhaseLockState state)
+    private PhaseReading Hold(in OnAirTimingInput input, PhaseLockState state, bool irregular = false)
     {
         if (heldOffset == UnsetOffset)
         {
-            return Emit(input, position: -1, state);
+            return Emit(input, position: -1, state, irregular);
         }
 
         var resolved = OnTick(input, heldOffset) ? state : PhaseLockState.Contradicted;
-        return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), resolved);
+        return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), resolved, irregular);
     }
 
     /// <summary>Whether the grid implied by <paramref name="offset"/> agrees with the feed's 4-count tick this frame.</summary>
@@ -220,10 +228,9 @@ public sealed class PhaseLock
         heldOffset = UnsetOffset;
         lastPhraseStart = UnsetPhraseStart;
         anchorBeat = -1;
-        irregular = false;
     }
 
-    private PhaseReading Emit(in OnAirTimingInput input, int position, PhaseLockState state, bool standAloneFloor = false) =>
+    private PhaseReading Emit(in OnAirTimingInput input, int position, PhaseLockState state, bool irregular = false, bool standAloneFloor = false) =>
         new PhaseReading(heldOffset, position, state, BeatsSinceAnchor(input.Beat), irregular, standAloneFloor);
 
     /// <summary>Beats dead-reckoned since the last re-latch; 0 when no anchor or the beat is behind it.</summary>

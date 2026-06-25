@@ -106,7 +106,7 @@ public sealed class PhraseTracker
 
         // Re-derived from the length so it catches the first Phrase; covers the current in-Phrase
         // length and the upcoming length during a countdown (both arrive in the same field).
-        var isIrregular = hasLength && length % PhaseGrid.PhraseBeats != 0;
+        var isIrregular = hasLength && PhaseGrid.IsIrregularPhrase(length);
 
         return new PhraseTrackerReading(
             positionInPhrase,
