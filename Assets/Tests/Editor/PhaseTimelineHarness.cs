@@ -59,6 +59,23 @@ public static class DjFrame
             trackOrdinal: trackOrdinal);
     }
 
+    /// <summary>
+    /// A Phrase section is present but there is no active Phrase window this frame: the feed reports the
+    /// section inactive (Track-Phase tri-state 0) with no countdown or length. Distinct from
+    /// <see cref="BeatOnly"/> (tri-state -1, no Phrase feed at all): this idle-but-present state is not
+    /// "Track Phase unavailable", so the Director keeps the grid fallback instead of coasting/unlocking.
+    /// </summary>
+    public static OnAirTimingInput PhraseIdle(int beat, int beatInBar = 0, int trackOrdinal = 1)
+    {
+        return new OnAirTimingInput(
+            beat,
+            BeatInBarOr(beat, beatInBar),
+            trackPhaseActive: 0,
+            beatsUntilPhraseBoundary: -1,
+            phraseLengthBeats: -1,
+            trackOrdinal: trackOrdinal);
+    }
+
     /// <summary>No clock at all (every beat signal -1): the stand-alone floor.</summary>
     public static OnAirTimingInput NoClock() => OnAirTimingInput.Unavailable;
 

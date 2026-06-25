@@ -376,45 +376,25 @@ public sealed class CuePlannerTests
         public void MarkChanged(int beat) => cuePlanner.MarkChanged(beat);
     }
 
-    private static OnAirTimingInput TrackPhaseInput(int beat, int beatsToPhraseBoundary, int phraseLengthBeats)
-    {
-        return new OnAirTimingInput(
-            beat,
-            beatInBar: ((beat - 1) % 4) + 1,
-            trackPhaseActive: 1,
-            beatsUntilPhraseBoundary: beatsToPhraseBoundary,
-            phraseLengthBeats: phraseLengthBeats);
-    }
+    // These adapt the cue-test's "beats-to-boundary" parameterization onto the one shared
+    // OnAirTimingInput projection (DjFrame). They are NOT a second projection: the field layout and the
+    // Track-Phase tri-state live solely in DjFrame, so a change to OnAirTimingInput's shape can't drift
+    // between the two test suites. A Phrase start is a downbeat, so DjFrame derives a grid-consistent
+    // beat_in_bar (BeatInBarOnGrid) rather than the offset-0 form these fixtures used before.
 
-    private static OnAirTimingInput UpcomingTrackPhaseInput(int beat, int beatsToPhraseStart, int phraseLengthBeats)
-    {
-        return new OnAirTimingInput(
-            beat,
-            beatInBar: ((beat - 1) % 4) + 1,
-            trackPhaseActive: 0,
-            beatsUntilPhraseBoundary: beatsToPhraseStart,
-            phraseLengthBeats: phraseLengthBeats);
-    }
+    /// <summary>Inside an active Phrase, given the countdown to its boundary (the Phrase start is back-derived).</summary>
+    private static OnAirTimingInput TrackPhaseInput(int beat, int beatsToPhraseBoundary, int phraseLengthBeats) =>
+        DjFrame.InPhrase(beat, phraseStartBeat: beat + beatsToPhraseBoundary - phraseLengthBeats, phraseLengthBeats: phraseLengthBeats);
 
-    private static OnAirTimingInput BeatOnlyInput(int beat)
-    {
-        return new OnAirTimingInput(
-            beat,
-            beatInBar: ((beat - 1) % 4) + 1,
-            trackPhaseActive: 0,
-            beatsUntilPhraseBoundary: -1,
-            phraseLengthBeats: -1);
-    }
+    /// <summary>Counting down to an upcoming Phrase that has not started yet.</summary>
+    private static OnAirTimingInput UpcomingTrackPhaseInput(int beat, int beatsToPhraseStart, int phraseLengthBeats) =>
+        DjFrame.BeforePhrase(beat, phraseStartBeat: beat + beatsToPhraseStart, upcomingLengthBeats: phraseLengthBeats);
 
-    private static OnAirTimingInput TrackPhaseUnavailableInput(int beat)
-    {
-        return new OnAirTimingInput(
-            beat,
-            beatInBar: ((beat - 1) % 4) + 1,
-            trackPhaseActive: -1,
-            beatsUntilPhraseBoundary: -1,
-            phraseLengthBeats: -1);
-    }
+    /// <summary>A Phrase section is present but idle (tri-state 0, no window) — routes through the grid fallback.</summary>
+    private static OnAirTimingInput BeatOnlyInput(int beat) => DjFrame.PhraseIdle(beat);
+
+    /// <summary>The Track-Phase feed is absent (tri-state -1) — the coast/unlock path, distinct from an idle Phrase.</summary>
+    private static OnAirTimingInput TrackPhaseUnavailableInput(int beat) => DjFrame.BeatOnly(beat);
 
     private static Func<int, int, int> SelectFirstInteriorBoundary()
     {
