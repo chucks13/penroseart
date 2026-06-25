@@ -577,6 +577,33 @@ public sealed class DirectorSyncedTailTests
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(-1));
     }
 
+    [Test]
+    public void LiveButIdleSentinelDropsToStandaloneAndAbortsLoadedCue()
+    {
+        // OSC connected but idle: the source stays live while the wire carries 4-count/tempo sentinels.
+        // A cue was loaded while Synced; the clock then drops. The Director must reach Standalone (not
+        // freeze on a dead return) and abort the Switcher-held cue so it cannot fire into a dead clock.
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 20,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: controller.transitions[0].Repertoire);
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(currentBeat: 7, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+        Assume.That(switcher.LoadedCueStatus.HasCue, Is.True, "A cue should be loaded while Synced.");
+
+        controller.beatManager.beatData.snapshot.bpm = -1f;
+        controller.beatManager.beatData.snapshot.beatInBar = -1;
+        controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = -1, total = -1 };
+
+        var timerBefore = controller.timer.Value;
+        director.Tick(2f);
+
+        Assert.That(controller.beatManager.IsLiveSource, Is.True, "The OSC source is still connected.");
+        Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Standalone));
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Entering Standalone aborts the loaded cue.");
+        Assert.That(controller.timer.Value, Is.GreaterThan(timerBefore), "The Standalone rotation timer keeps ticking.");
+    }
+
     private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
     {
         controller.beatManager.beatData.snapshot.bpm = 120f;

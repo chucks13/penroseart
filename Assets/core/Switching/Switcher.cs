@@ -463,6 +463,26 @@ public sealed class Switcher
         Trace($"SWITCHER_START_CUE now={nowSeconds:0.###} elapsedBeats={elapsedBeats:0.###} start={beatPlan.StartBeat} cueMark={beatPlan.ImpactBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
     }
 
+    /// <summary>
+    /// Discards the Switcher-held Loaded Cue, even one already locked. The Director calls this when the
+    /// clock drops and the mode boundary crosses into Standalone: a beat-domain cue carries a Unity-time
+    /// start and would otherwise fire from Unity time into a dead clock (ADR-0007).
+    /// </summary>
+    /// <remarks>
+    /// A fire-and-forget command on the Director → Switcher seam, not lifecycle observation: idempotent,
+    /// safe to call every Standalone frame, and a no-op when no cue is loaded.
+    /// </remarks>
+    public void AbortLoadedCue()
+    {
+        if (!hasLoadedCue)
+        {
+            return;
+        }
+
+        Trace($"SWITCHER_ABORT_CUE cueMark={loadedCue.CueMarkBeat} locked={loadedCueLocked} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
+        ClearLoadedCue();
+    }
+
     private void ClearLoadedCue()
     {
         hasLoadedCue = false;

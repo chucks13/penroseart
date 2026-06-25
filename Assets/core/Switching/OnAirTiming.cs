@@ -46,6 +46,13 @@ public readonly struct OnAirTimingInput
     /// </summary>
     public readonly int TrackOrdinal;
 
+    /// <summary>
+    /// The Standalone/Synced mode authority carried across this seam: true while the 4-count is running
+    /// (<c>BeatInBar &gt;= 1</c>). Mirrors <see cref="BeatManager.IsSynced"/> — the one place the rule is
+    /// defined — so PhaseLock reads the mode floor from the authority instead of its own check (ADR-0007).
+    /// </summary>
+    public bool IsSynced => BeatInBar >= 1;
+
     public OnAirTimingInput(
         int beat,
         int beatInBar,

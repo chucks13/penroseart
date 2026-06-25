@@ -99,8 +99,10 @@ public sealed class PhaseLock
     public PhaseReading Read(in OnAirTimingInput input)
     {
         // Floor: no 4-count tick means the clock itself is gone. That is a mode exit to stand-alone
-        // timing (ADR-0004), not a degraded Phase state, so we emit no grid position.
-        if (input.BeatInBar < 1)
+        // timing (ADR-0004/0007), not a degraded Phase state, so we emit no grid position. The floor
+        // reads the one mode authority (BeatManager.IsSynced, carried as input.IsSynced) instead of
+        // re-deriving its own beat_in_bar check.
+        if (!input.IsSynced)
         {
             return Emit(position: -1, PhaseLockState.Coasting, standAloneFloor: true);
         }
@@ -209,7 +211,7 @@ public sealed class PhaseLock
 
     /// <summary>Whether the grid implied by <paramref name="offset"/> agrees with the feed's 4-count tick this frame.</summary>
     private static bool OnTick(in OnAirTimingInput input, int offset) =>
-        input.BeatInBar < 1 || PhaseGrid.BarPositionFor(input.Beat, offset) == input.BeatInBar;
+        !input.IsSynced || PhaseGrid.BarPositionFor(input.Beat, offset) == input.BeatInBar;
 
     /// <summary>Drops everything held so the next frames re-acquire Phase from the new track's own data.</summary>
     private void ResetForNewTrack()

@@ -190,8 +190,12 @@ public sealed class Director
     /// <summary>Absolute beat where the current phase anchor next lands, or -1 when unlocked.</summary>
     public int PhaseAnchorLandingBeat => timingFrame.PhaseAnchorLandingBeat;
 
-    /// <summary>Whether live OSC data is currently driving sequencing.</summary>
-    public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsLiveSource;
+    /// <summary>
+    /// Whether the wall is in Synced Mode: a usable beat clock is running. Reads the single mode authority
+    /// (<see cref="BeatManager.IsSynced"/>), not OSC transport liveness — OSC connected but idle (sentinels,
+    /// no track playing) is Standalone, not Synced (ADR-0007).
+    /// </summary>
+    public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsSynced;
 
     /// <summary>Current read-only sequencing snapshot for runtime HUDs and inspector diagnostics.</summary>
     public DirectorStatus Status => IsReady ? BuildStatus() : DirectorStatus.NotReady;
@@ -280,13 +284,12 @@ public sealed class Director
     {
         LogModeIfChanged();
 
-        if (IsSyncedMode)
+        // Synced Mode needs both the mode authority and a running absolute beat to sequence on structure.
+        // If the clock is gone (Standalone) — or a frame of Synced Mode arrives without a usable Beat —
+        // fall through to Standalone sequencing rather than freezing on a dead return (ADR-0007).
+        if (IsSyncedMode && controller.beatManager.Beat is { } beat)
         {
-            if (controller.beatManager.Beat is { } beat)
-            {
-                TickSyncedMode(beat);
-            }
-
+            TickSyncedMode(beat);
             return;
         }
 
@@ -428,6 +431,10 @@ public sealed class Director
     {
         timingFrame = TimingFrame.Unavailable;
         cuePlanner.Reset();
+        // The mode boundary owns cue teardown: a beat-domain cue loaded while Synced carries a Unity-time
+        // start and would fire into a dead clock, so abort any Switcher-held cue (even a locked one) on
+        // entering Standalone. Fire-and-forget and idempotent, so the every-frame call is fine (ADR-0007).
+        switcher.AbortLoadedCue();
         standaloneTimer.Update(deltaTime);
     }
 
@@ -911,7 +918,9 @@ public sealed class Director
 
     private void MarkChangedOnCurrentBeat()
     {
-        if (controller.beatManager.IsLiveSource && controller.beatManager.Beat is { } beat)
+        // A non-null Beat already implies the mode authority is Synced (Beat gates on IsActive => IsSynced),
+        // so the running beat is the only gate needed here — IsLiveSource is connectivity, never mode (ADR-0007).
+        if (controller.beatManager.Beat is { } beat)
         {
             cuePlanner.MarkChanged(beat);
         }

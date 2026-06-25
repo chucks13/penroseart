@@ -209,10 +209,24 @@ public partial class BeatManager
     public bool[] OffBeats => offBeats;
 
     /// <summary>
-    /// True while a usable beat clock is present: the transport carries a positive BPM from live RaveSystem
-    /// OSC. Derived, never stored — BeatData is transport-only.
+    /// The single Standalone/Synced mode authority: true while a usable beat clock is running. The running
+    /// 4-count (<c>beat_in_bar &gt;= 1</c>) is the truest "is a clock running" signal — it is bedrock,
+    /// always-on and given by the wire, never derived from the beat — so every consumer reads mode from it
+    /// rather than re-deriving from tempo or transport liveness (ADR-0007).
     /// </summary>
-    public bool IsActive => beatData != null && beatData.snapshot.bpm > 0f;
+    /// <remarks>
+    /// Reading the 4-count means trusting that a running 4-count implies a usable <c>bpm</c>: the tempo-derived
+    /// queries below still gate on this authority. That coupling holds because the wire clears <c>bpm</c> and
+    /// <c>beat_in_bar</c> together as a set (<see cref="ClearToNoBeat"/>), so a running 4-count never coexists
+    /// with an absent tempo on the rig. <see cref="IsLiveSource"/> is OSC-connectivity only, never mode.
+    /// </remarks>
+    public bool IsSynced => beatData != null && beatData.snapshot.beatInBar >= 1;
+
+    /// <summary>
+    /// True while a usable beat clock is present. Redefined onto the single mode authority
+    /// (<see cref="IsSynced"/>); the old <c>bpm &gt; 0</c> proxy is retired as a mode signal (ADR-0007).
+    /// </summary>
+    public bool IsActive => IsSynced;
 
     /// <summary>
     /// Advances the per-frame derived beat state from Unity time.
@@ -733,8 +747,8 @@ public partial class BeatManager
     {
         beatData.snapshot.playersLive = "";
         beatData.snapshot.track = "";
-        beatData.snapshot.bpm = UnavailableMs; // wire sentinel: no usable tempo, so IsActive derives to false
-        beatData.snapshot.beatInBar = 0;
+        beatData.snapshot.bpm = UnavailableMs; // wire sentinel: no usable tempo
+        beatData.snapshot.beatInBar = -1; // real 4-count sentinel (musically 1..4 or -1, never 0); clears IsSynced/IsActive
         beatData.snapshot.beatAverageMs = 0;
         beatData.snapshot.beatPulse = 0f;
         beatData.snapshot.beatsCountMs = CreateUnavailableCountdowns();

@@ -244,11 +244,17 @@ public partial class BeatManager
     // ordinary musical state ("this value isn't there right now"), never an error (ADR-0002).
 
     /// <summary>Focused on-air tempo in BPM, or null when no usable beat clock is present.</summary>
+    /// <summary>Focused on-air tempo in BPM, or null when no usable beat clock is present.</summary>
+    /// <remarks>
+    /// Guards the datum itself, not just the mode: with <see cref="IsActive"/> now keyed on the 4-count
+    /// (ADR-0007) rather than tempo, a non-positive <c>bpm</c> is still the wire's "no usable tempo"
+    /// sentinel and maps to null here, so the sentinel never crosses into effect math (ADR-0002).
+    /// </remarks>
     public float? Bpm
     {
         get
         {
-            if (!IsActive)
+            if (!IsActive || beatData.snapshot.bpm <= 0f)
             {
                 return null;
             }

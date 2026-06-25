@@ -376,6 +376,9 @@ public sealed class BeatManagerRaveOscIntegrationTests
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
         beatManager.beatData.snapshot.bpm = 120f;
+        // A running clock always carries a 1..4 beat label on the wire; the 4-count is now the mode
+        // authority (IsActive => IsSynced), so a live fixture must supply it (ADR-0007).
+        beatManager.beatData.snapshot.beatInBar = 1;
         beatManager.beatData.snapshot.beatAverageMs = 500;
         beatManager.beatData.snapshot.beatsCountMs = beatsCountMs;
         beatManager.beatData.snapshot.onBeats = new[] { false, false, false, false };
