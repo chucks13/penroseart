@@ -398,8 +398,6 @@ public sealed class SyncedCueIntentTests
             TimingFrameSource.TrackPhaseBoundary,
             beatRewoundToNewPass: false,
             new PassLocalTimingState(lastCueBeat, previousCueMarkBeat),
-            clearedPassLocalCueState: false,
-            clearedPassLocalCadenceState: false,
             reanchored: false);
     }
 

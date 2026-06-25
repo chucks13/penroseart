@@ -180,8 +180,6 @@ public readonly struct TimingFrame
         false,
         PassLocalTimingState.Empty,
         false,
-        false,
-        false,
         CueSheetStatus.Empty);
 
     /// <summary>The live rhythm snapshot that produced this frame.</summary>
@@ -226,15 +224,6 @@ public readonly struct TimingFrame
     /// <summary>Cue/cadence memory after On-Air Timing removes stale state from earlier loop passes.</summary>
     public readonly PassLocalTimingState PassLocalState;
 
-    /// <summary>True when a rewind made the previous cue beat stale for this pass.</summary>
-    public readonly bool ClearedPassLocalCueState;
-
-    /// <summary>True when a rewind made the previous cadence boundary stale for this pass.</summary>
-    public readonly bool ClearedPassLocalCadenceState;
-
-    /// <summary>True when any pass-local cue/cadence state was cleared for this timing frame.</summary>
-    public bool ClearedPassLocalState => ClearedPassLocalCueState || ClearedPassLocalCadenceState;
-
     /// <summary>True when this frame is continuing from the last known Phase Anchor.</summary>
     public bool IsCoasting => Source == TimingFrameSource.Coast;
 
@@ -252,8 +241,6 @@ public readonly struct TimingFrame
         TimingFrameSource source,
         bool beatRewoundToNewPass,
         PassLocalTimingState passLocalState,
-        bool clearedPassLocalCueState,
-        bool clearedPassLocalCadenceState,
         bool reanchored,
         CueSheetStatus cueSheet = default)
     {
@@ -270,8 +257,6 @@ public readonly struct TimingFrame
         Source = source;
         BeatRewoundToNewPass = beatRewoundToNewPass;
         PassLocalState = passLocalState;
-        ClearedPassLocalCueState = clearedPassLocalCueState;
-        ClearedPassLocalCadenceState = clearedPassLocalCadenceState;
         Reanchored = reanchored;
     }
 }

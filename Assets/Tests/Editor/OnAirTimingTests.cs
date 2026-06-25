@@ -264,8 +264,6 @@ public sealed class OnAirTimingTests
 
         Assert.That(frame.BeatRewoundToNewPass, Is.True);
         Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
-        Assert.That(frame.ClearedPassLocalCueState, Is.True);
-        Assert.That(frame.ClearedPassLocalCadenceState, Is.True);
         Assert.That(frame.PassLocalState.LastCueBeat, Is.Null);
         Assert.That(frame.PassLocalState.PreviousCueMarkBeat, Is.Null);
     }
@@ -290,7 +288,6 @@ public sealed class OnAirTimingTests
 
         Assert.That(frame.BeatRewoundToNewPass, Is.True);
         Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
-        Assert.That(frame.ClearedPassLocalState, Is.False);
         Assert.That(frame.PassLocalState.LastCueBeat, Is.EqualTo(580));
         Assert.That(frame.PassLocalState.PreviousCueMarkBeat, Is.EqualTo(577));
     }
@@ -318,7 +315,6 @@ public sealed class OnAirTimingTests
 
         Assert.That(frame.BeatRewoundToNewPass, Is.False);
         Assert.That(frame.CueMarkBeat, Is.EqualTo(641));
-        Assert.That(frame.ClearedPassLocalState, Is.False);
         Assert.That(frame.PassLocalState.LastCueBeat, Is.EqualTo(580));
         Assert.That(frame.PassLocalState.PreviousCueMarkBeat, Is.EqualTo(593));
     }

@@ -26,22 +26,6 @@ public sealed class CuePlanner
     private int lastCueBeat = -1;
     private int lastChangeBeat = int.MinValue;
 
-    private readonly struct FramePassLocalState
-    {
-        public readonly PassLocalTimingState State;
-        public readonly bool ClearedCueState;
-        public readonly bool ClearedCadenceState;
-
-        public FramePassLocalState(PassLocalTimingState state, PassLocalTimingState originalState)
-        {
-            State = state;
-            ClearedCueState = state.LastCueBeat != originalState.LastCueBeat;
-            ClearedCadenceState = state.PreviousCueMarkBeat != originalState.PreviousCueMarkBeat;
-        }
-
-        public int? ConsumedCueMarkBeat => State.PreviousCueMarkBeat;
-    }
-
     private readonly struct ResolvedTimingTarget
     {
         public readonly TimingFrameSource Source;
@@ -436,8 +420,8 @@ public sealed class CuePlanner
             lastCueBeat >= 0 ? lastCueBeat : (int?)null,
             lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat);
         var passState = BuildFramePassLocalState(passLocalState, input.Beat, beatRewoundToNewPass);
-        lastCueBeat = passState.State.LastCueBeat ?? -1;
-        lastChangeBeat = passState.State.PreviousCueMarkBeat ?? int.MinValue;
+        lastCueBeat = passState.LastCueBeat ?? -1;
+        lastChangeBeat = passState.PreviousCueMarkBeat ?? int.MinValue;
 
         if (input.Beat >= 1)
         {
@@ -463,7 +447,7 @@ public sealed class CuePlanner
                 phaseInput,
                 phase,
                 beatRewoundToNewPass,
-                passState.ConsumedCueMarkBeat,
+                passState.PreviousCueMarkBeat,
                 minimumChangeCadenceBeats);
             var reanchored = ReanchoredFrom(previousSource, target.Source, hasPhaseAnchor);
             return BuildAnchoredFrame(
@@ -487,7 +471,7 @@ public sealed class CuePlanner
         OnAirTimingInput input,
         PhaseClockReading phase,
         bool beatRewoundToNewPass,
-        FramePassLocalState passState,
+        PassLocalTimingState passState,
         int minimumChangeCadenceBeats)
     {
         CoastPhaseAnchor(input.Beat, minimumChangeCadenceBeats);
@@ -512,7 +496,7 @@ public sealed class CuePlanner
         PhaseClockReading phase,
         ResolvedTimingTarget target,
         bool beatRewoundToNewPass,
-        FramePassLocalState passState,
+        PassLocalTimingState passState,
         bool reanchored)
     {
         hasPhaseAnchor = true;
@@ -538,7 +522,7 @@ public sealed class CuePlanner
         OnAirTimingInput input,
         PhaseClockReading phase,
         bool beatRewoundToNewPass,
-        FramePassLocalState passState)
+        PassLocalTimingState passState)
     {
         hasPhaseAnchor = false;
         phaseAnchorConfidence = PhaseConfidence.Unlocked;
@@ -569,7 +553,7 @@ public sealed class CuePlanner
         PhraseWindow phraseWindow,
         TimingFrameSource source,
         bool beatRewoundToNewPass,
-        FramePassLocalState passState,
+        PassLocalTimingState passState,
         bool reanchored,
         CueSheetStatus cueSheet)
     {
@@ -583,9 +567,7 @@ public sealed class CuePlanner
             phraseWindow,
             source,
             beatRewoundToNewPass,
-            passState.State,
-            passState.ClearedCueState,
-            passState.ClearedCadenceState,
+            passState,
             reanchored,
             cueSheet);
     }
@@ -731,14 +713,14 @@ public sealed class CuePlanner
             && previousBeat - beat + 1 >= minimumChangeCadenceBeats;
     }
 
-    private static FramePassLocalState BuildFramePassLocalState(
+    private static PassLocalTimingState BuildFramePassLocalState(
         PassLocalTimingState passLocalState,
         int beat,
         bool beatRewoundToNewPass)
     {
         if (!beatRewoundToNewPass || beat < 1)
         {
-            return new FramePassLocalState(passLocalState, passLocalState);
+            return passLocalState;
         }
 
         var lastCueBeat = passLocalState.LastCueBeat is { } cueBeat && cueBeat >= beat
@@ -747,8 +729,7 @@ public sealed class CuePlanner
         var previousCueMarkBeat = passLocalState.PreviousCueMarkBeat is { } cueMarkBeat && cueMarkBeat >= beat
             ? (int?)null
             : passLocalState.PreviousCueMarkBeat;
-        var correctedState = new PassLocalTimingState(lastCueBeat, previousCueMarkBeat);
-        return new FramePassLocalState(correctedState, passLocalState);
+        return new PassLocalTimingState(lastCueBeat, previousCueMarkBeat);
     }
 
     private static int ClampIndex(int index, int length)

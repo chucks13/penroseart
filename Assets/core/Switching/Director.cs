@@ -573,8 +573,6 @@ public sealed class Director
             cueFrame.Source,
             currentFrame.BeatRewoundToNewPass,
             currentFrame.PassLocalState,
-            currentFrame.ClearedPassLocalCueState,
-            currentFrame.ClearedPassLocalCadenceState,
             currentFrame.Reanchored,
             cueFrame.CueSheet);
     }
