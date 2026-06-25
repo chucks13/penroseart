@@ -425,6 +425,13 @@ public partial class BeatManager
         }
     }
 
+    /// <summary>
+    /// Monotonic ordinal of the on-air track, or null when nothing is on air. The value changes whenever
+    /// the track title changes, giving the integer Phase seam (<see cref="OnAirTimingInput.TrackOrdinal"/>)
+    /// a track-change signal without exposing the raw title.
+    /// </summary>
+    public int? TrackOrdinal => Track == null ? (int?)null : trackOrdinal;
+
     /// <summary>CSV of live on-air player numbers (newest first), or null when none are live.</summary>
     public string? PlayersLive
     {

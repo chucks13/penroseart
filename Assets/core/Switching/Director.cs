@@ -528,7 +528,8 @@ public sealed class Director
             currentFrame.Input.BeatInBar,
             currentFrame.Input.TrackPhaseActive,
             cueFrame.CueMarkBeat - currentFrame.CurrentBeat,
-            cueFrame.Input.PhraseLengthBeats);
+            cueFrame.Input.PhraseLengthBeats,
+            currentFrame.Input.TrackOrdinal);
         return new TimingFrame(
             input,
             cueFrame.Phase,

@@ -235,6 +235,27 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
+    public void TrackOrdinalAdvancesWhenTheOnAirTrackTitleChanges()
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+
+        Assert.That(beatManager.TrackOrdinal, Is.Null, "No track on air yet.");
+
+        beatManager.beatData.snapshot.track = "Artist - One";
+        beatManager.Update(0f);
+        var first = beatManager.TrackOrdinal;
+        Assert.That(first, Is.Not.Null, "A track on air surfaces an ordinal.");
+
+        beatManager.Update(0f);
+        Assert.That(beatManager.TrackOrdinal, Is.EqualTo(first), "The same title holds the ordinal steady.");
+
+        beatManager.beatData.snapshot.track = "Artist - Two";
+        beatManager.Update(0f);
+        Assert.That(beatManager.TrackOrdinal, Is.EqualTo(first + 1), "A new title advances the ordinal.");
+    }
+
+    [Test]
     public void LiveSentinelSnapshotDisablesBeatAndOffBeatDerivation()
     {
         var beatManager = new BeatManager();

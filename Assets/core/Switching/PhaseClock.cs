@@ -75,14 +75,43 @@ public readonly struct PhaseClockReading
 }
 
 /// <summary>
-/// Resolves the 16-beat phrase-grid position from one RaveSystem OSC on-air frame.
-/// This answers where the one is; signposts such as Fill, Drop, and Energy layer on top.
+/// The 16-beat Phase grid arithmetic, in one place. Phase is exact integer modular math: the
+/// one of a phrase sits at <see cref="OffsetForPhraseStart"/> within the 16-beat grid, and a
+/// frame's grid <see cref="PositionFor"/> is recomputed from the running beat against that
+/// offset. Both <see cref="PhaseClock"/> (legacy stateless resolver) and <see cref="PhaseLock"/>
+/// (stateful determiner) share this, so the grid math is defined exactly once.
+/// </summary>
+public static class PhaseGrid
+{
+    /// <summary>Beats in one Phase — the 16-beat grid the one repeats on.</summary>
+    public const int PhraseBeats = 16;
+
+    /// <summary>Beats in one bar — the 4-count.</summary>
+    public const int BarBeats = 4;
+
+    /// <summary>Floored modulo that stays non-negative for negative dividends (loops jump the beat backward).</summary>
+    public static int Mod(int value, int modulus) => ((value % modulus) + modulus) % modulus;
+
+    /// <summary>Where the one of a phrase starting at <paramref name="phraseStartBeat"/> sits in the 16-grid (0..15).</summary>
+    public static int OffsetForPhraseStart(int phraseStartBeat) => Mod(phraseStartBeat - 1, PhraseBeats);
+
+    /// <summary>The 1..16 grid position of <paramref name="beat"/> given a held <paramref name="offset"/>: <c>((beat − 1) − offset) mod 16 + 1</c>.</summary>
+    public static int PositionFor(int beat, int offset) => Mod((beat - 1) - offset, PhraseBeats) + 1;
+
+    /// <summary>The 1..4 count (beat-in-bar) of <paramref name="beat"/> from the running counter: <c>(beat − 1) mod 4 + 1</c>.</summary>
+    public static int FourCount(int beat) => Mod(beat - 1, BarBeats) + 1;
+}
+
+/// <summary>
+/// Legacy stateless resolver: locates the 16-beat phrase-grid position from one RaveSystem OSC
+/// on-air frame. This answers where the one is; signposts such as Fill, Drop, and Energy layer
+/// on top. The grid arithmetic now lives in <see cref="PhaseGrid"/>, and the stateful successor
+/// is <see cref="PhaseLock"/>. This adapter remains only until the Director path
+/// (OnAirTiming.ReadFrame → TimingFrame → ControllerEditor) is rewired onto PhaseLock +
+/// PhraseTracker (slice 03), after which it is removed.
 /// </summary>
 public static class PhaseClock
 {
-    public const int PhraseBeats = 16;
-    public const int BarBeats = 4;
-
     public static PhaseClockReading Resolve(in PhaseInput osc)
     {
         var hasBeat = osc.Beat >= 1;
@@ -101,12 +130,12 @@ public static class PhaseClock
             }
 
             var phraseStart = osc.Beat - elapsedInPhrase;
-            offset = Mod(phraseStart - 1, PhraseBeats);
+            offset = PhaseGrid.OffsetForPhraseStart(phraseStart);
             confidence = PhaseConfidence.Structural;
         }
         else if (hasBeat && hasTotal)
         {
-            offset = Mod(osc.TotalBeats, PhraseBeats);
+            offset = PhaseGrid.Mod(osc.TotalBeats, PhaseGrid.PhraseBeats);
             confidence = PhaseConfidence.Closed;
         }
         else if (hasBeat)
@@ -114,7 +143,7 @@ public static class PhaseClock
             offset = 0;
             confidence = PhaseConfidence.Open;
         }
-        else if (osc.BeatInBar is >= 1 and <= BarBeats)
+        else if (osc.BeatInBar is >= 1 and <= PhaseGrid.BarBeats)
         {
             return new PhaseClockReading(
                 PhaseConfidence.Provisional,
@@ -131,12 +160,12 @@ public static class PhaseClock
             return PhaseClockReading.Unavailable;
         }
 
-        var rel = Mod((osc.Beat - 1) - offset, PhraseBeats);
+        var rel = PhaseGrid.Mod((osc.Beat - 1) - offset, PhaseGrid.PhraseBeats);
         var phasePosition = rel + 1;
         var oneOfCurrentPhrase = osc.Beat - rel;
-        var barInPhrase = rel / BarBeats + 1;
-        var beatInBar = rel % BarBeats + 1;
-        var cleanGrid = hasTotal && osc.TotalBeats % PhraseBeats == 0;
+        var barInPhrase = rel / PhaseGrid.BarBeats + 1;
+        var beatInBar = rel % PhaseGrid.BarBeats + 1;
+        var cleanGrid = hasTotal && osc.TotalBeats % PhaseGrid.PhraseBeats == 0;
 
         var beatInBarAgrees = osc.BeatInBar < 1 || beatInBar == osc.BeatInBar;
 
@@ -150,7 +179,4 @@ public static class PhaseClock
             cleanGrid,
             beatInBarAgrees);
     }
-
-    private static int Mod(int value, int modulus) => ((value % modulus) + modulus) % modulus;
-
 }

@@ -42,13 +42,21 @@ public readonly struct OnAirTimingInput
     /// <summary>Total length of the active or upcoming Phrase Window in beats, or -1 when unavailable.</summary>
     public readonly int PhraseLengthBeats;
 
+    /// <summary>
+    /// Integer-pure track identity: a monotonically increasing ordinal that changes when the
+    /// on-air track title changes, or -1 when no track is on air. PhaseLock detects a track
+    /// change by a change in this value (the raw title stays out of the integer Phase seam).
+    /// </summary>
+    public readonly int TrackOrdinal;
+
     public OnAirTimingInput(
         int beat,
         int totalBeats,
         int beatInBar,
         int trackPhaseActive,
         int beatsUntilPhraseBoundary,
-        int phraseLengthBeats)
+        int phraseLengthBeats,
+        int trackOrdinal = -1)
     {
         Beat = beat;
         TotalBeats = totalBeats;
@@ -56,6 +64,7 @@ public readonly struct OnAirTimingInput
         TrackPhaseActive = trackPhaseActive;
         BeatsUntilPhraseBoundary = beatsUntilPhraseBoundary;
         PhraseLengthBeats = phraseLengthBeats;
+        TrackOrdinal = trackOrdinal;
     }
 
     /// <summary>Captures the nullable BeatManager rhythm queries without exposing raw Track Phase interpretation to callers.</summary>
@@ -73,7 +82,8 @@ public readonly struct OnAirTimingInput
             beatManager.BeatInBar ?? -1,
             phrase is { inPhrase: true } ? 1 : phrase is { } ? 0 : -1,
             phrase?.beatsUntilNext ?? -1,
-            phrase?.lengthBeats ?? -1);
+            phrase?.lengthBeats ?? -1,
+            beatManager.TrackOrdinal ?? -1);
     }
 
     /// <summary>Converts the snapshot into the low-level PhaseClock input kept behind On-Air Timing.</summary>
@@ -950,7 +960,7 @@ public sealed class OnAirTiming
 
     private static int GetLandingBeatFromPhasePosition(int beat, int phasePosition)
     {
-        var beatsUntilLanding = PhaseClock.PhraseBeats - phasePosition + 1;
+        var beatsUntilLanding = PhaseGrid.PhraseBeats - phasePosition + 1;
         return beat + beatsUntilLanding;
     }
 

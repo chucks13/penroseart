@@ -69,26 +69,137 @@ public readonly struct PhaseReading
 /// <summary>
 /// Stateful Phase determiner. It holds the one as an <see cref="PhaseReading.Offset"/> and
 /// recomputes the <see cref="PhaseReading.Position"/> every frame from the running beat, so a
-/// loop — a bar-aligned backward beat jump — is absorbed for free with no explicit loop
-/// detection. Phrase wins the grid (re-latch at every boundary, gated by bar-alignment);
-/// total_beats is only an end-aligned fallback when Phrase data is absent.
+/// loop — a backward beat jump within the current Phrase — is absorbed for free with no explicit
+/// loop detection. Phrase wins the grid: the offset re-latches whenever the derived Phrase start
+/// changes (forward or backward), gated by bar-alignment so a sub-bar offset shift or a broken
+/// 4-count is rejected and flagged <see cref="PhaseLockState.Contradicted"/> rather than silently
+/// applied. A track change soft-holds the offset and forces the new track's first boundary to
+/// re-latch free of that gate (the previous track's grid is irrelevant to the new one). The grid
+/// arithmetic is shared with the legacy <see cref="PhaseClock"/> through <see cref="PhaseGrid"/>.
 /// <para>
-/// Slice 01 is the red contract phase: this is the seam and a compiling skeleton only.
-/// The held-offset latch, the bar-alignment gate, phrase-boundary detection, per-layer
-/// degradation, and the stand-alone floor land in slice 02. Until then <see cref="Read"/>
-/// emits <see cref="PhaseReading.None"/>, which the contract tests run red against.
+/// Layer-0 (the 4-count pulse) and Layer-1 (where the one sits) both currently surface their
+/// disagreement through <see cref="PhaseLockState.Contradicted"/> / <see cref="PhaseReading.IsContradicted"/>.
+/// A distinct Layer-0 "four-count continuous" field is intentionally NOT modelled yet: no consumer
+/// distinguishes a broken pulse from a phase contradiction, and one hypothetical caller is not
+/// evidence for the seam. Add it when the Director (slice 03/04) actually needs the distinction.
+/// The <see cref="PhaseLockState"/> is derived fresh each frame, so a contradiction never sticks
+/// past the frame whose disagreement caused it.
 /// </para>
 /// </summary>
 public sealed class PhaseLock
 {
+    private const int UnsetOffset = -1;
+    private const int UnsetPhraseStart = int.MinValue;
+    private const int UnsetOrdinal = int.MinValue;
+
+    private int heldOffset = UnsetOffset;
+    private int lastPhraseStart = UnsetPhraseStart;
+    private int anchorBeat = -1;
+    private int previousTrackOrdinal = UnsetOrdinal;
+    private bool irregular;
+
+    // Set when a track change is observed, cleared at the next successful re-latch: it lets the new
+    // track's first boundary latch free of the bar-alignment gate (the old grid is irrelevant to it),
+    // while the offset is soft-held in the meantime so the one is never dropped.
+    private bool relatchUngated;
+
     /// <summary>
     /// Reads one frame of BeatManager's projected integer values and emits the current Phase
-    /// reading. Stateful: call once per frame on a single instance so the held offset and
-    /// lock state carry across frames.
+    /// reading. Stateful: call once per frame on a single instance so the held offset carries
+    /// across frames. The lock state is derived fresh each frame from the branch that runs.
     /// </summary>
     public PhaseReading Read(in OnAirTimingInput input)
     {
-        // Slice 01 skeleton — no Phase logic yet. Slice 02 fills in the held-offset model.
-        return PhaseReading.None;
+        // Floor: no 4-count pulse means the clock itself is gone. That is a mode exit to stand-alone
+        // timing (ADR-0004), not a degraded Phase state, so we emit no grid position.
+        if (input.BeatInBar < 1)
+        {
+            return Emit(input, position: -1, PhaseLockState.Coasting, standAloneFloor: true);
+        }
+
+        // A track change soft-holds the offset (don't drop the one) and clears the boundary memory so
+        // the new track's first Phrase re-latches — ungated — even when it restarts the beat below the
+        // old track or sits a sub-bar amount off the old grid.
+        if (TrackChanged(input.TrackOrdinal))
+        {
+            lastPhraseStart = UnsetPhraseStart;
+            relatchUngated = true;
+        }
+        previousTrackOrdinal = input.TrackOrdinal;
+
+        // Without a running beat there is no grid position to place; coast on whatever offset is held.
+        if (input.Beat < 1)
+        {
+            return Emit(input, position: -1, PhaseLockState.Coasting);
+        }
+
+        // Layer-0 anomaly: the feed's 4-count disagrees with the count derived from the running beat
+        // (a sub-bar flub / glitch). Hold the last good offset and flag CONTRADICTED for this frame
+        // only — never re-latch on a broken pulse. It clears the moment the 4-count agrees again.
+        if (heldOffset != UnsetOffset && input.BeatInBar != PhaseGrid.FourCount(input.Beat))
+        {
+            return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Contradicted);
+        }
+
+        if (HasPhrase(input))
+        {
+            var phraseStart = input.Beat - (input.PhraseLengthBeats - input.BeatsUntilPhraseBoundary);
+            if (lastPhraseStart == UnsetPhraseStart || phraseStart != lastPhraseStart)
+            {
+                return ReLatch(input, phraseStart);
+            }
+
+            // Same Phrase still confirming the grid; a within-Phrase loop just recomputes the position.
+            return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Locked);
+        }
+
+        // Clock present but the Phrase feed dropped out: coast on the held offset (degrade, never floor).
+        var coastPosition = heldOffset == UnsetOffset ? -1 : PhaseGrid.PositionFor(input.Beat, heldOffset);
+        return Emit(input, coastPosition, PhaseLockState.Coasting);
     }
+
+    /// <summary>
+    /// Re-latches the held offset from a fresh Phrase boundary. Within continuous playback the offset
+    /// must move by a whole bar — the 4-count is already known continuous here, so the gate reduces to
+    /// that — and a sub-bar shift is rejected (hold, flag CONTRADICTED). The first latch and a track
+    /// change bypass the gate. An accepted continuous move flags the prior Phrase irregular (its length
+    /// was not a multiple of 16); a track-change move does not (it is a discontinuity, not a bad phrase).
+    /// </summary>
+    private PhaseReading ReLatch(in OnAirTimingInput input, int phraseStart)
+    {
+        var newOffset = PhaseGrid.OffsetForPhraseStart(phraseStart);
+        var gated = heldOffset != UnsetOffset && !relatchUngated;
+
+        if (gated && PhaseGrid.Mod(newOffset - heldOffset, PhaseGrid.BarBeats) != 0)
+        {
+            return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Contradicted);
+        }
+
+        irregular = gated && newOffset != heldOffset;
+        heldOffset = newOffset;
+        lastPhraseStart = phraseStart;
+        anchorBeat = input.Beat;
+        relatchUngated = false;
+        return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Locked);
+    }
+
+    private PhaseReading Emit(in OnAirTimingInput input, int position, PhaseLockState state, bool standAloneFloor = false) =>
+        new PhaseReading(heldOffset, position, state, BeatsSinceAnchor(input.Beat), irregular, standAloneFloor);
+
+    /// <summary>Beats dead-reckoned since the last re-latch; 0 when no anchor or the beat is behind it.</summary>
+    private int BeatsSinceAnchor(int beat)
+    {
+        if (anchorBeat < 1 || beat < 1)
+        {
+            return 0;
+        }
+        var delta = beat - anchorBeat;
+        return delta > 0 ? delta : 0;
+    }
+
+    private bool TrackChanged(int trackOrdinal) =>
+        previousTrackOrdinal != UnsetOrdinal && trackOrdinal >= 0 && trackOrdinal != previousTrackOrdinal;
+
+    private static bool HasPhrase(in OnAirTimingInput input) =>
+        input.TrackPhaseActive >= 1 && input.BeatsUntilPhraseBoundary > 0 && input.PhraseLengthBeats >= 1;
 }

@@ -19,7 +19,8 @@ public static class DjFrame
         int phraseStartBeat,
         int phraseLengthBeats,
         int totalBeats = -1,
-        int beatInBar = 0)
+        int beatInBar = 0,
+        int trackOrdinal = 1)
     {
         return new OnAirTimingInput(
             beat,
@@ -27,7 +28,8 @@ public static class DjFrame
             BeatInBarOr(beat, beatInBar),
             trackPhaseActive: 1,
             beatsUntilPhraseBoundary: phraseStartBeat + phraseLengthBeats - beat,
-            phraseLengthBeats: phraseLengthBeats);
+            phraseLengthBeats: phraseLengthBeats,
+            trackOrdinal: trackOrdinal);
     }
 
     /// <summary>Counting down to an upcoming Phrase that has not started yet (lead-in / look-ahead).</summary>
@@ -36,7 +38,8 @@ public static class DjFrame
         int phraseStartBeat,
         int upcomingLengthBeats,
         int totalBeats = -1,
-        int beatInBar = 0)
+        int beatInBar = 0,
+        int trackOrdinal = 1)
     {
         return new OnAirTimingInput(
             beat,
@@ -44,11 +47,12 @@ public static class DjFrame
             BeatInBarOr(beat, beatInBar),
             trackPhaseActive: 0,
             beatsUntilPhraseBoundary: phraseStartBeat - beat,
-            phraseLengthBeats: upcomingLengthBeats);
+            phraseLengthBeats: upcomingLengthBeats,
+            trackOrdinal: trackOrdinal);
     }
 
     /// <summary>A beat clock with no Phrase data: the Phrase feed dropped out but the clock continues.</summary>
-    public static OnAirTimingInput BeatOnly(int beat, int totalBeats = -1, int beatInBar = 0)
+    public static OnAirTimingInput BeatOnly(int beat, int totalBeats = -1, int beatInBar = 0, int trackOrdinal = 1)
     {
         return new OnAirTimingInput(
             beat,
@@ -56,14 +60,15 @@ public static class DjFrame
             BeatInBarOr(beat, beatInBar),
             trackPhaseActive: -1,
             beatsUntilPhraseBoundary: -1,
-            phraseLengthBeats: -1);
+            phraseLengthBeats: -1,
+            trackOrdinal: trackOrdinal);
     }
 
     /// <summary>No clock at all (every beat signal -1): the stand-alone floor.</summary>
     public static OnAirTimingInput NoClock() => OnAirTimingInput.Unavailable;
 
-    /// <summary>The 1-based 4-count for an absolute beat (beat 1 → 1, beat 5 → 1).</summary>
-    public static int FourCount(int beat) => ((beat - 1) % 4) + 1;
+    /// <summary>The 1-based 4-count for an absolute beat (beat 1 → 1, beat 5 → 1) — the same grid math PhaseLock uses.</summary>
+    public static int FourCount(int beat) => PhaseGrid.FourCount(beat);
 
     /// <summary>The explicit beat-in-bar when one is supplied (&gt; 0), else the 4-count derived from the beat.</summary>
     private static int BeatInBarOr(int beat, int beatInBar) => beatInBar > 0 ? beatInBar : FourCount(beat);

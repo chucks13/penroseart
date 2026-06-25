@@ -153,13 +153,13 @@ public sealed class PhaseLockTests
     [Test]
     public void TrackChange_SoftHoldsThenReLatchesAtNextBoundary()
     {
-        // The totalBeats jump (384 -> 512) is a Slice 01 stand-in for the track change. The real
-        // signal is the /rave/onair/track title (already in RaveOscSnapshot/BeatManager, not yet
-        // surfaced); Slice 02 surfaces it and drives this fixture off it. See issue 02.
+        // The track change is the real signal now: the /rave/onair/track title becomes a track ordinal
+        // (BeatManager.TrackOrdinal -> OnAirTimingInput.TrackOrdinal). The ordinal stepping 1 -> 2 is a
+        // new track; PhaseLock soft-holds the offset and re-latches at the new track's first boundary.
         var readings = PhaseTimelineHarness.Run(
-            DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64, totalBeats: 384),
-            DjFrame.BeatOnly(beat: 1, totalBeats: 512),
-            DjFrame.InPhrase(beat: 1, phraseStartBeat: 1, phraseLengthBeats: 64, totalBeats: 512));
+            DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64, trackOrdinal: 1),
+            DjFrame.BeatOnly(beat: 1, trackOrdinal: 2),
+            DjFrame.InPhrase(beat: 1, phraseStartBeat: 1, phraseLengthBeats: 64, trackOrdinal: 2));
 
         var softHold = readings[1];
         Assert.That(softHold.Offset, Is.EqualTo(0), "A track change soft-holds the offset rather than dropping the one.");
@@ -209,5 +209,57 @@ public sealed class PhaseLockTests
         Assert.That(afterLoop.Offset, Is.EqualTo(6));
         Assert.That(afterLoop.Position, Is.EqualTo(8));
         Assert.That(afterLoop.State, Is.EqualTo(PhaseLockState.Locked));
+    }
+
+    [Test]
+    public void TrackChange_ReLatchesToANonBarAlignedNewTrackOffset()
+    {
+        // The new track's first one sits 2 beats off the old grid (offset 0 -> 2). The bar-alignment
+        // gate guards within-track phrase boundaries; a track change must re-latch free of it, against
+        // the new track's own grid — not Contradict and keep the previous track's stale offset.
+        var readings = PhaseTimelineHarness.Run(
+            DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64, trackOrdinal: 1),
+            DjFrame.BeatOnly(beat: 1, trackOrdinal: 2),
+            DjFrame.InPhrase(beat: 3, phraseStartBeat: 3, phraseLengthBeats: 64, trackOrdinal: 2));
+
+        var reLatched = readings[2];
+        Assert.That(reLatched.Offset, Is.EqualTo(2), "The new track's phrase start 3 re-latches the grid to offset 2.");
+        Assert.That(reLatched.Position, Is.EqualTo(1));
+        Assert.That(reLatched.IsContradicted, Is.False, "A track change is not gated against the old track's grid.");
+        Assert.That(reLatched.State, Is.EqualTo(PhaseLockState.Locked));
+    }
+
+    [Test]
+    public void BackwardSeekToADifferentPhrase_ReLatchesInsteadOfHoldingTheStaleOffset()
+    {
+        // No track-change signal (same ordinal): a backward jump into an earlier Phrase with a
+        // different offset must re-latch off the new Phrase start, not fall into the same-Phrase
+        // branch and report Locked while computing the position from the old (wrong) offset.
+        var readings = PhaseTimelineHarness.Run(
+            DjFrame.InPhrase(beat: 200, phraseStartBeat: 193, phraseLengthBeats: 64),
+            DjFrame.InPhrase(beat: 140, phraseStartBeat: 137, phraseLengthBeats: 64));
+
+        var reLatched = readings[1];
+        Assert.That(reLatched.Offset, Is.EqualTo(8), "Phrase start 137 re-anchors the grid (136 mod 16 = 8).");
+        Assert.That(reLatched.Position, Is.EqualTo(4), "Beat 140 is grid position 4 against offset 8.");
+        Assert.That(reLatched.State, Is.EqualTo(PhaseLockState.Locked));
+    }
+
+    [Test]
+    public void Contradiction_ClearsToCoastingWhenThePulseRecoversDuringADropout()
+    {
+        // A sub-bar flub contradicts, then the Phrase feed drops out while the 4-count recovers. The
+        // contradiction must not stick: it is a per-frame anomaly, so the dropout coasts cleanly.
+        var readings = PhaseTimelineHarness.Run(
+            DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64),
+            DjFrame.InPhrase(beat: 57, phraseStartBeat: 49, phraseLengthBeats: 64, beatInBar: 2),
+            DjFrame.BeatOnly(beat: 61));
+
+        Assert.That(readings[1].IsContradicted, Is.True, "The sub-bar flub contradicts.");
+
+        var recovered = readings[2];
+        Assert.That(recovered.IsContradicted, Is.False, "Once the 4-count agrees again the contradiction clears.");
+        Assert.That(recovered.State, Is.EqualTo(PhaseLockState.Coasting), "With the Phrase feed gone it coasts on the held offset.");
+        Assert.That(recovered.Offset, Is.EqualTo(0), "The offset is still held through the anomaly and the dropout.");
     }
 }

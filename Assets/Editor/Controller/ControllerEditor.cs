@@ -314,7 +314,7 @@ public sealed class ControllerEditor : Editor
     {
         EditorGUILayout.BeginHorizontal();
         var previousColor = GUI.backgroundColor;
-        for (var i = 1; i <= PhaseClock.PhraseBeats; i++)
+        for (var i = 1; i <= PhaseGrid.PhraseBeats; i++)
         {
             var role = RoleForPhaseSlot(i, phasePosition, cueOverlay);
             GUI.backgroundColor = ColorForRole(role, i == phasePosition, previousColor);
@@ -375,10 +375,10 @@ public sealed class ControllerEditor : Editor
 
     private static int PhaseSlotForBeat(int beat, int cueMarkBeat)
     {
-        var offset = (beat - cueMarkBeat) % PhaseClock.PhraseBeats;
+        var offset = (beat - cueMarkBeat) % PhaseGrid.PhraseBeats;
         if (offset < 0)
         {
-            offset += PhaseClock.PhraseBeats;
+            offset += PhaseGrid.PhraseBeats;
         }
 
         return offset + 1;
@@ -468,7 +468,7 @@ public sealed class ControllerEditor : Editor
 
     private static string FormatPhaseCount(int phasePosition)
     {
-        return phasePosition > 0 ? $"{phasePosition} / {PhaseClock.PhraseBeats}" : "—";
+        return phasePosition > 0 ? $"{phasePosition} / {PhaseGrid.PhraseBeats}" : "—";
     }
 
     private static string FormatBeat(int beat)
