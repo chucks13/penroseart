@@ -70,7 +70,7 @@ public readonly struct PhaseReading
 /// position = beat mod 16) — a best-guess fallback grounded on the always-present 4-count, never the
 /// track length. A track change resets everything — <c>beat</c> is a per-track counter, so
 /// the old offset is meaningless on the new song — and the next frames re-acquire from scratch. The
-/// grid arithmetic is shared with the legacy <see cref="PhaseClock"/> through <see cref="PhaseGrid"/>.
+/// grid arithmetic is defined once in <see cref="PhaseGrid"/>.
 /// <para>
 /// Layer-0 (the 4-count pulse) and Layer-1 (where the one sits) both currently surface their
 /// disagreement through <see cref="PhaseLockState.Contradicted"/> / <see cref="PhaseReading.IsContradicted"/>.

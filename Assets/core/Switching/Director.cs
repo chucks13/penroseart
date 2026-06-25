@@ -761,7 +761,7 @@ public sealed class Director
     {
         switch (source)
         {
-            case TimingFrameSource.PhaseClockGrid:
+            case TimingFrameSource.GridFallback:
                 return "phase-clock-grid";
             case TimingFrameSource.CueMark:
                 return "cue-mark";

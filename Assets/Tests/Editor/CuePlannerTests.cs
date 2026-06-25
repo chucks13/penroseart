@@ -319,7 +319,7 @@ public sealed class CuePlannerTests
     }
 
     [Test]
-    public void BeatOnlyFrameUsesPhaseClockGridWhenNoPhraseWindowIsAvailable()
+    public void BeatOnlyFrameUsesGridFallbackWhenNoPhraseWindowIsAvailable()
     {
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
@@ -329,7 +329,7 @@ public sealed class CuePlannerTests
 
         Assert.That(frame.HasPhaseAnchor, Is.True);
         Assert.That(frame.HasPhraseWindow, Is.False);
-        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.PhaseClockGrid));
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.GridFallback));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
     }
 

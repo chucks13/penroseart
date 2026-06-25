@@ -7,7 +7,7 @@ public enum TimingFrameSource
     Unlocked,
 
     /// <summary>The next target is inferred from the 16-beat Phase grid.</summary>
-    PhaseClockGrid,
+    GridFallback,
 
     /// <summary>The next target is an interior Cue Mark selected inside the current Phrase Window.</summary>
     CueMark,

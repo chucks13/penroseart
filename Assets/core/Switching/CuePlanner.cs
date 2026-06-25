@@ -44,10 +44,10 @@ public sealed class CuePlanner
             PhraseWindow = phraseWindow;
         }
 
-        public static ResolvedTimingTarget PhaseClockGrid(int cueMarkBeat)
+        public static ResolvedTimingTarget GridFallback(int cueMarkBeat)
         {
             return new ResolvedTimingTarget(
-                TimingFrameSource.PhaseClockGrid,
+                TimingFrameSource.GridFallback,
                 cueMarkBeat,
                 false,
                 default);
@@ -292,7 +292,10 @@ public sealed class CuePlanner
             var originalIndex = index;
             AdvanceTo(beat, consumedCueMarkBeat);
             var currentCueMark = CurrentCueMarkOr(-1);
-            if (currentCueMark != beat || currentCueMark != PhraseEndBeat)
+            // Keep the mark only when this beat IS the cursor's mark AND that mark is the phrase end —
+            // i.e. beat == currentCueMark == PhraseEndBeat. Written as the chain so it doesn't read as
+            // two independent checks (a foot-gun on this mandatory-cue path).
+            if (currentCueMark != beat || beat != PhraseEndBeat)
             {
                 index = originalIndex;
                 return false;
@@ -600,7 +603,7 @@ public sealed class CuePlanner
     {
         return hadPhaseAnchor
             && (source == TimingFrameSource.TrackPhaseBoundary || source == TimingFrameSource.CueMark)
-            && (previousSource == TimingFrameSource.Coast || previousSource == TimingFrameSource.PhaseClockGrid);
+            && (previousSource == TimingFrameSource.Coast || previousSource == TimingFrameSource.GridFallback);
     }
 
     private bool HasCoastablePhaseAnchor()
@@ -702,7 +705,7 @@ public sealed class CuePlanner
         }
 
         cueSheetPlans.ResetCurrent();
-        return ResolvedTimingTarget.PhaseClockGrid(GetLandingBeatFromPhasePosition(beat, phase.Position));
+        return ResolvedTimingTarget.GridFallback(GetLandingBeatFromPhasePosition(beat, phase.Position));
     }
 
     private ResolvedTimingTarget ResolveCueMarkFromSheet(

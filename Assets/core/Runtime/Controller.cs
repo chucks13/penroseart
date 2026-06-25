@@ -1268,7 +1268,7 @@ public class Controller : Singleton<Controller>
         string source;
         switch (status.TimingSource)
         {
-            case TimingFrameSource.PhaseClockGrid:
+            case TimingFrameSource.GridFallback:
                 source = "phase-clock-grid";
                 break;
             case TimingFrameSource.CueMark:
