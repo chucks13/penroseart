@@ -87,7 +87,7 @@
           <span class="text-emerald-400 font-semibold">The invariant: "phases in phrase."</span> A phrase is normally a whole number of 16-beat phases, so every phrase boundary shares one <code>mod 16</code> residue. When a phrase ends <em>off</em> the 16-grid from its own start, that violation isn't noise — it's the <strong>diagnostic</strong>: a non-power-of-two phrase, flagged as irregular (§6).
         </div>
         <div class="rounded-md border border-slate-700 bg-slate-900/40 p-3 text-sm text-slate-300">
-          <span class="text-slate-200 font-semibold">Currency: integer beats, end to end.</span> Every timing metric the phase determiner holds or emits is a whole-beat integer — <code>offset</code>, <code>phasePosition</code>, <code>beatsSinceAnchor</code>, <code>beatsUntilNext</code>, <code>lengthBeats</code>, <code>phraseStart</code>. The model is correct <em>because</em> it's exact integer modular arithmetic; floats would invite drift and fuzzy comparisons in grid math that must be crisp. The rhythm system's existing floats (<code>progress</code>, <code>IntraBeatFraction</code>, anticipation ramps) are BeatManager presentation-smoothing and stay <strong>out</strong> of the phase core.
+          <span class="text-slate-200 font-semibold">Currency: integer beats, end to end.</span> Every timing metric the phase determiner holds or emits is a whole-beat integer — <code>offset</code>, <code>phasePosition</code>, <code>beatsUntilNext</code>, <code>lengthBeats</code>, <code>phraseStart</code>. The model is correct <em>because</em> it's exact integer modular arithmetic; floats would invite drift and fuzzy comparisons in grid math that must be crisp. The rhythm system's existing floats (<code>progress</code>, <code>IntraBeatFraction</code>, anticipation ramps) are BeatManager presentation-smoothing and stay <strong>out</strong> of the phase core.
         </div>
       </section>
 
@@ -115,7 +115,7 @@
               <li><span class="font-mono text-indigo-300">Phase</span> — <span class="font-mono text-emerald-400">LOCKED</span> / <span class="font-mono text-amber-300">COASTING</span> / <span class="font-mono text-red-400">CONTRADICTED</span>, independently.</li>
               <li><span class="font-mono text-slate-300">Phrase</span> — same three states, riding on phase.</li>
             </ul>
-            <p class="text-slate-400 text-xs mt-2">Within synced mode there is <strong>no "Unlocked"</strong>; output is always consumable plus a trust signal. Confidence is the <strong>state enum + <code>beatsSinceAnchor</code></strong> (how long we've dead-reckoned), so the Director can threshold, not just read on/off.</p>
+            <p class="text-slate-400 text-xs mt-2">Within synced mode there is <strong>no "Unlocked"</strong>; output is always consumable plus a trust signal. Confidence is the <strong>state enum</strong> (LOCKED / COASTING / CONTRADICTED), so the Director reads a trust level, not just on/off.</p>
           </div>
         </div>
 
@@ -149,13 +149,13 @@ flowchart LR
         <div class="grid md:grid-cols-2 gap-4 text-sm">
           <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 p-4 space-y-2">
             <p class="chip text-emerald-400">the rule</p>
-            <p class="text-slate-300"><strong>Phrase decides the grid.</strong> Latch <code>offset</code> from the <strong>phrase boundary</strong> when available (the phrase start <em>is</em> a one); with no phrase, fall back to the end-aligned <code>total_beats</code> grid (a guess). Then <strong>hold</strong> and recompute position off the running <code>beat</code>, cross-checked against the 4-count tick, until the next trigger.</p>
+            <p class="text-slate-300"><strong>Phrase decides the grid.</strong> Latch <code>offset</code> from the <strong>phrase boundary</strong> when available (the phrase start <em>is</em> a one); with no phrase, fall back to <code>beat mod 16</code> — offset 0 on the running beat (a guess). Then <strong>hold</strong> and recompute position off the running <code>beat</code>, cross-checked against the 4-count tick, until the next trigger.</p>
             <p class="text-slate-400 text-xs">Phrase wins as the <em>latch source</em> (only it says where a real one is); the 4-count wins as the <em>driver</em> (it's stable). We never chase phrase frame-to-frame.</p>
           </div>
           <div class="rounded-lg border border-slate-800 p-4 space-y-2">
             <p class="chip text-slate-300">re-latch triggers</p>
             <ul class="text-slate-300 space-y-1 list-disc pl-5">
-              <li><strong>Track-title change</strong> — <em>reset</em>: a new song is a clean slate (<code>beat</code> is a per-track counter, so the held offset is meaningless). Drop everything and re-acquire from the new song's first phrase; <code>total_beats</code> covers the gap.</li>
+              <li><strong>Track-title change</strong> — <em>reset</em>: a new song is a clean slate (<code>beat</code> is a per-track counter, so the held offset is meaningless). Drop everything and re-acquire from the new song's first phrase; <code>beat mod 16</code> covers the gap.</li>
               <li><strong>Phrase boundary</strong> — re-latch (confirm or correct the offset).</li>
             </ul>
             <p class="chip text-slate-300 pt-1">the gate</p>
@@ -188,12 +188,12 @@ flowchart LR
               <tr class="bg-amber-950/10"><td class="p-3"><code>phrase_state</code> null (clock present)</td><td class="p-3">hold offset, dead-reckon off 4-count; Director decides</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING / CONTRADICTED</td></tr>
               <tr class="bg-amber-950/10"><td class="p-3">running <code>beat</code> null, <strong>pulse present</strong></td><td class="p-3">drive on the 4-count pulse</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING</td></tr>
               <tr class="bg-amber-950/20"><td class="p-3"><strong>No clock</strong> — beat signals <code>-1</code> (no pulse)</td><td class="p-3">exit synced mode → reinstate stand-alone</td><td class="p-3 text-amber-200 font-mono text-xs">→ STAND-ALONE</td></tr>
-              <tr><td class="p-3"><strong>Track-title change</strong></td><td class="p-3">reset; re-acquire from the new song's first phrase (<code>total_beats</code> fallback covers the gap)</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING → LOCKED</td></tr>
+              <tr><td class="p-3"><strong>Track-title change</strong></td><td class="p-3">reset; re-acquire from the new song's first phrase (<code>beat mod 16</code> fallback covers the gap)</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING → LOCKED</td></tr>
             </tbody>
           </table>
         </div>
         <div class="grid md:grid-cols-2 gap-3 text-xs text-slate-400">
-          <p><span class="text-emerald-400 font-semibold">On track change:</span> <code>beat</code> is a per-track counter, so the held offset — tied to the old song's counter — is meaningless on the new song. We reset and re-acquire from the new song's own phrase, with the <code>total_beats</code> fallback covering the gap until its first boundary. No soft-hold, no cross-track carry; phase correctness never depends on cross-track state.</p>
+          <p><span class="text-emerald-400 font-semibold">On track change:</span> <code>beat</code> is a per-track counter, so the held offset — tied to the old song's counter — is meaningless on the new song. We reset and re-acquire from the new song's own phrase, with the <code>beat mod 16</code> fallback covering the gap until its first boundary. No soft-hold, no cross-track carry; phase correctness never depends on cross-track state.</p>
           <p><span class="text-emerald-400 font-semibold">Recovery from CONTRADICTED / anomaly:</span> it clears as soon as the grid <strong>agrees with the tick</strong> again — a phrase boundary that lands on the tick, or the pulse re-aligning. State is derived fresh each frame, so a contradiction never sticks; no separate timer.</p>
         </div>
       </section>
@@ -220,7 +220,7 @@ flowchart LR
           </div>
           <div class="space-y-3">
             <p class="text-slate-300 font-semibold">Non-power-of-two phrase — phrase wins the grid.</p>
-            <p class="text-slate-400">A phrase whose length isn't a multiple of 16 (e.g. a 24-beat / 6-bar phrase) shifts the offset for everything after it — boundaries stop sharing a <code>mod 16</code> residue, and only live <code>phrase_state</code> sees the drift (<code>total_beats</code> is blind to it). The <strong>re-latch-every-boundary</strong> rule handles it with no special case: each new phrase start becomes a one, the 16-grid re-aligns to the phrase.</p>
+            <p class="text-slate-400">A phrase whose length isn't a multiple of 16 (e.g. a 24-beat / 6-bar phrase) shifts the offset for everything after it — boundaries stop sharing a <code>mod 16</code> residue, and only live <code>phrase_state</code> sees the drift. The <strong>re-latch-every-boundary</strong> rule handles it with no special case: each new phrase start becomes a one, the 16-grid re-aligns to the phrase.</p>
             <div class="rounded-md border border-emerald-900 bg-emerald-950/10 p-3 text-slate-300">
               <span class="text-emerald-400 font-semibold">Detection:</span> if a phrase ends off the 16-grid from its own start (<code>length ∤ 16</code>), flag it <strong>irregular</strong> — that <em>is</em> the "phase ≠ phrase" event. We re-latch and keep driving; we record the irregularity for the Director. Lead-ins are the same mechanism: a constant offset the first phrase boundary establishes.
             </div>
@@ -240,14 +240,14 @@ flowchart LR
               <tr class="bg-emerald-950/20"><td class="p-3 font-mono text-xs">beat_in_bar</td><td class="p-3 text-emerald-300">the 4-count (1-4)</td><td class="p-3"><strong>Bedrock pulse</strong> — the driving clock and the continuity trust gate. Its absence (<code>-1</code>) is the exit to stand-alone. (Weak only as an anchor for <em>which</em> bar.)</td></tr>
               <tr><td class="p-3 font-mono text-xs">beat</td><td class="p-3">running 1-based counter across the track</td><td class="p-3">Position input — phase position is computed from it vs the held offset. Jumpy (rewinds on loops).</td></tr>
               <tr class="bg-indigo-950/20"><td class="p-3 font-mono text-xs">phrase_state</td><td class="p-3 text-indigo-300">label · next · inPhrase · beatsUntilNext · lengthBeats · remaining · progress</td><td class="p-3"><strong>Latch source for the one</strong> + look-ahead. <code>lengthBeats</code> = active <em>or upcoming</em> phrase length ⇒ predict-then-confirm. Boundary = derived <code>phraseStart</code> advances.</td></tr>
-              <tr><td class="p-3 font-mono text-xs">total_beats</td><td class="p-3 text-amber-300">track <em>length</em> in beats <span class="text-slate-500">(correction: not a position)</span></td><td class="p-3">Fallback offset when phrase is absent: end-aligned grid, <code>length mod 16</code>. Catches a constant lead-in; blind to mid-track drift.</td></tr>
+              <tr><td class="p-3 font-mono text-xs">total_beats</td><td class="p-3 text-amber-300">track <em>length</em> in beats <span class="text-slate-500">(not a position)</span></td><td class="p-3">Track length only — <strong>not</strong> consulted for Phase. The phrase-absent fallback is <code>beat mod 16</code> (offset 0 on the running beat), not an end-aligned <code>total_beats</code> grid. <span class="text-slate-500">(superseded 2026-06-25; see ADR-0006 Status)</span></td></tr>
               <tr><td class="p-3 font-mono text-xs">bar</td><td class="p-3 text-slate-500">derived, <code>bar == beat / 4</code></td><td class="p-3 text-slate-500">Redundant — no independent information.</td></tr>
               <tr><td class="p-3 font-mono text-xs">bpm / beat_avg_ms</td><td class="p-3">tempo</td><td class="p-3 text-slate-500">New-track hint only; not a phase signal.</td></tr>
               <tr class="bg-red-950/10"><td class="p-3 font-mono text-xs">drop / energy / fill</td><td class="p-3">section signposts</td><td class="p-3 text-red-400"><strong>Out.</strong> Not phase signals — nothing to do with where the one is. (Correction: earlier drafts used drop/energy edges as re-anchors.)</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="text-slate-400 text-xs"><span class="text-emerald-400 font-semibold">The two phase authorities</span> reduce to: the running <code>beat</code> (position) and <code>phrase_state</code> (the offset latch), grounded on the <code>beat_in_bar</code> pulse, with <code>total_beats mod 16</code> as the phrase-absent fallback. <code>phrase_state.remaining</code> = remaining phrase <em>changes</em> in the track (count) — end-of-track bookkeeping, not phase.</p>
+        <p class="text-slate-400 text-xs"><span class="text-emerald-400 font-semibold">The two phase authorities</span> reduce to: the running <code>beat</code> (position) and <code>phrase_state</code> (the offset latch), grounded on the <code>beat_in_bar</code> pulse, with <code>beat mod 16</code> as the phrase-absent fallback. <code>phrase_state.remaining</code> = remaining phrase <em>changes</em> in the track (count) — end-of-track bookkeeping, not phase.</p>
       </section>
 
       <!-- 8 ARCH -->
@@ -256,7 +256,7 @@ flowchart LR
         <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
           <pre class="mermaid">
 flowchart TD
-  BM["BeatManager projection<br/>beat · beat_in_bar · total_beats · PhraseInfo (integer beats)"]:::ext
+  BM["BeatManager projection<br/>beat · beat_in_bar · PhraseInfo (integer beats)"]:::ext
   BM --> PL["PhaseLock · CORE · reusable<br/>held offset + recomputed position + per-layer confidence"]:::core
   PL --> PT["PhraseTracker<br/>phrase label · position-in-phrase · length · look-ahead · irregular flag"]:::core
   PT --> RD["reading seam (read-only)<br/>PhaseReading + PhraseReading"]:::seam
@@ -275,7 +275,7 @@ flowchart TD
         <div class="rounded-md border border-emerald-900 bg-emerald-950/10 p-3 text-sm text-slate-300">
           <span class="text-emerald-400 font-semibold">Why the seam is justified, not speculative.</span> The payoff is <strong>testability</strong>: a <code>PhaseLock</code> with a projected-values-in / <code>PhaseReading</code>-out interface can be property-tested against scripted DJ timelines — loops of every length, lead-ins, non-pow2 phrases, seeks, dropouts, track changes — <em>independent of the Director</em>. That harness is the leverage. Effect-level consumption is allowed to <strong>emerge</strong>; we add no extension points for hypothetical consumers (YAGNI). We build for the Director and the harness.
         </div>
-        <p class="text-slate-400 text-xs"><span class="text-slate-300 font-semibold">Input boundary:</span> PhaseLock consumes BeatManager's already-projected integer values (the path <code>OnAirTiming.ReadFrame</code> takes today) — it does not re-parse OSC. <span class="text-slate-300 font-semibold">Reading fields</span> are ADR detail, not a design decision. Candidate phase fields: confidence (state enum + <code>beatsSinceAnchor</code>), phasePosition, oneOfCurrentPhrase, beatsUntilNextOne, offset, barInPhrase, beatInBar, fourCountContinuous, irregularPhrase, provenance (source / reanchored / coasting). All integer-beat valued.</p>
+        <p class="text-slate-400 text-xs"><span class="text-slate-300 font-semibold">Input boundary:</span> PhaseLock consumes BeatManager's already-projected integer values (the path <code>OnAirTiming.ReadFrame</code> takes today) — it does not re-parse OSC. <span class="text-slate-300 font-semibold">Reading fields</span> are ADR detail, not a design decision. Candidate phase fields: confidence (state enum), phasePosition, oneOfCurrentPhrase, beatsUntilNextOne, offset, barInPhrase, beatInBar, fourCountContinuous, irregularPhrase, provenance (source / reanchored / coasting). All integer-beat valued.</p>
       </section>
 
       <!-- 9 UNKNOWN -->
@@ -284,7 +284,7 @@ flowchart TD
         <p class="text-slate-400 text-sm">The design is locked; these are empirical facts about the gear that tune it. None blocks writing the ADR or the test harness.</p>
         <ul class="space-y-2 text-sm">
           <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Does <code>phrase_state</code> arrive before the boundary?</strong> Predict-then-confirm needs the upcoming phrase's <code>lengthBeats</code> (and <code>beatsUntilNext</code>) populated <em>ahead of</em> the boundary. If it only flips at the boundary, we degrade gracefully to react-at-boundary — but confirm which we get.</li>
-          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Does RaveSystem always send phrase data?</strong> If beat-without-phrase actually occurs on your rig, the <code>total_beats mod 16</code> fallback (and "assume 0") carries more weight than expected.</li>
+          <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Does RaveSystem always send phrase data?</strong> If beat-without-phrase actually occurs on your rig, the <code>beat mod 16</code> (offset 0) fallback carries more weight than expected.</li>
           <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>Phrase-boundary timing reliability vs the beat clock.</strong> "Phrase wins the grid" and the bar-alignment gate assume phrase boundaries are accurate and bar-aligned. If phrase detection is noisy on your gear, the gate's sub-bar-jump rejection earns its keep — confirm the noise profile.</li>
           <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong>How often does the 4-count actually wobble?</strong> Sub-bar loops / flubs are the only thing that perturbs the bedrock. If they're vanishingly rare, the single Layer-0 anomaly flag is enough; if not, we'd consider a richer recovery.</li>
           <li class="rounded border border-amber-800 bg-amber-950/20 p-3 text-slate-200"><strong><code>phrase_state.remaining</code> unit.</strong> Read as "remaining phrase changes (count)"; confirm before any end-of-track use. Not phase-critical.</li>

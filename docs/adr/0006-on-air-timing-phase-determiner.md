@@ -2,9 +2,16 @@
 
 `OnAirTiming.cs` tangles a universal job — determining Phase, "where is the one" on the 16-beat grid — with a Director job: Cue Sheet planning (`CueSheetPlans`, `CueSheetCursor`, and pass-local cue memory round-tripped through the Director every frame). We split them. On-Air Timing becomes a **pure Phase determiner** exposed as two deep modules: a reusable **PhaseLock** core that answers where the one is, and a **PhraseTracker** that rides on it for song structure. Cue Sheet planning moves out to a Director-owned **CuePlanner** (relocating the derivation ADR-0005 placed in On-Air Timing). The full operational design lives in the companion doc `docs/architecture-reviews/on-air-timing-redesign-2026-06-24.html`; this ADR records the decisions and why.
 
-## The 4-count is bedrock; the running beat is position; total_beats is track length
+## Status
 
-`beat_in_bar` (the 4-count) is the clock we ground on: always present, locally defined, and loop-invariant for any loop ≥ 1 bar. It is the driving pulse, not — as today's stateless `PhaseClock` ranks it — the weakest signal; that ranking judged only its weak second role as an anchor for *which* bar carries the one. The running `beat` counter supplies position. `total_beats` is the **track length** (a per-track constant), used only as an end-aligned fallback grid (`length mod 16`) when Phrase data is absent — it is not a running position. Drop, energy, and fill carry no Phase information and are not consulted.
+Amended 2026-06-25 during slice 04c implementation:
+
+- The phrase-absent fallback changed from the end-aligned `total_beats mod 16` grid to a start-aligned `beat mod 16` (offset 0). `total_beats` is end-of-track *length*, not phase information, and the running `beat` already rides the always-present 4-count — so grounding the fallback on the beat is the honest guess and let `total_beats` drop out of the Phase input entirely. The sections below describe the shipped `beat mod 16` fallback.
+- The per-layer `beatsSinceAnchor` staleness count was dropped: no consumer ever thresholded it (the promised Director use never materialised), so it was speculative interface surface.
+
+## The 4-count is bedrock; the running beat is position and the phrase-absent fallback
+
+`beat_in_bar` (the 4-count) is the clock we ground on: always present, locally defined, and loop-invariant for any loop ≥ 1 bar. It is the driving pulse, not — as the deleted stateless `PhaseClock` ranked it — the weakest signal; that ranking judged only its weak second role as an anchor for *which* bar carries the one. The running `beat` counter supplies position. When Phrase data is absent the grid lines up on the running `beat` itself — offset 0, so position is `beat mod 16` — a best-guess fallback grounded on the always-present 4-count, never the track length. (`total_beats` is the track *length*, a per-track constant; it carries no running position and is not consulted for Phase.) Drop, energy, and fill carry no Phase information and are not consulted either.
 
 ## The one is a held offset; Phase position is recomputed every frame
 
@@ -16,22 +23,22 @@ The Phrase decides where the 16-grid starts: On-Air Timing latches `offset` from
 
 ## A track change is a clean re-acquisition, not a carry-over
 
-`beat` is a per-track counter, so the held `offset` — meaningful only relative to the previous track's counter — carries no information about the new song's grid. On a track-title change On-Air Timing therefore **resets**: it drops the held offset, boundary memory, and anchor and re-acquires from the new song's own Phrase, exactly as it does at the start of any track. The end-aligned `total_beats` fallback covers the gap until the new song's first Phrase boundary lands. Phase correctness no longer depends on any cross-track state.
+`beat` is a per-track counter, so the held `offset` — meaningful only relative to the previous track's counter — carries no information about the new song's grid. On a track-title change On-Air Timing therefore **resets**: it drops the held offset, boundary memory, and anchor and re-acquires from the new song's own Phrase, exactly as it does at the start of any track. The `beat mod 16` fallback (offset 0) covers the gap until the new song's first Phrase boundary lands. Phase correctness no longer depends on any cross-track state.
 
 ## Degradation is per-layer with a stand-alone floor
 
-Confidence degrades top-down and never loses the floor: the pulse is ≈always locked while a clock exists, while Phase and Phrase each carry their own LOCKED / COASTING / CONTRADICTED plus a `beatsSinceAnchor` staleness count. There is no global "Unlocked" inside synced mode. The floor is the clock itself: when the beat signals read `-1` (no `beat_in_bar`), On-Air Timing exits to stand-alone Mode (the Director's free-running timer, ADR-0004) — a mode exit, not a degraded Phase state. With a clock but no Phrase data we stay synced and COASTING/CONTRADICTED, and what to do there is the Director's decision, not the timing core's.
+Confidence degrades top-down and never loses the floor: the pulse is ≈always locked while a clock exists, while Phase and Phrase each carry their own LOCKED / COASTING / CONTRADICTED state. There is no global "Unlocked" inside synced mode. The floor is the clock itself: when the beat signals read `-1` (no `beat_in_bar`), On-Air Timing exits to stand-alone Mode (the Director's free-running timer, ADR-0004) — a mode exit, not a degraded Phase state. With a clock but no Phrase data we stay synced and COASTING/CONTRADICTED, and what to do there is the Director's decision, not the timing core's.
 
 ## All timing metrics are integer beats
 
-Every value PhaseLock holds or emits is a whole-beat integer (`offset`, `position`, `beatsSinceAnchor`, `beatsUntilNext`, `lengthBeats`, `phraseStart`). The model is correct because it is exact integer modular arithmetic; floats would invite drift and fuzzy comparisons in grid math that must be crisp. The rhythm system's existing floats (`progress`, `IntraBeatFraction`, anticipation ramps) are BeatManager presentation-smoothing and stay out of the Phase core.
+Every value PhaseLock holds or emits is a whole-beat integer (`offset`, `position`, `beatsUntilNext`, `lengthBeats`, `phraseStart`). The model is correct because it is exact integer modular arithmetic; floats would invite drift and fuzzy comparisons in grid math that must be crisp. The rhythm system's existing floats (`progress`, `IntraBeatFraction`, anticipation ramps) are BeatManager presentation-smoothing and stay out of the Phase core.
 
 ## Considered options
 
 - **A multi-signal voting / confidence-estimator arbiter** (the earlier locked framing) — rejected as more machinery than the problem needs. Phrase already encodes the downbeat and lead-in that beat-in-bar and drop edges would corroborate, so extra authorities are redundant and reintroduce the conflicting-winner problem. Two authorities — running `beat` for position, Phrase for the offset — grounded on the 4-count, suffice.
 - **Keep the stateless per-frame `PhaseClock`** — rejected because it cannot coast through a Phrase-data dropout and cannot detect a contradiction (a freshly derived offset disagreeing with the held one), which is the tripwire for loops, non-power-of-two Phrases, and track changes.
 - **Absolute-beat cue bookkeeping with explicit loop-folding** — moot once cue planning leaves On-Air Timing, but rejected in principle: held-offset + recomputed-position makes loops free, where absolute beats carry loop-detection logic and its dead-zone failure forever.
-- **Soft-hold the offset across a track change** (an earlier draft of this ADR) — rejected once it was clear `beat` is a per-track counter. The held offset is meaningful only against the old track's `beat`; applied to the new song's counter it is a stale number, not a continuation. Soft-holding it forces special-case gate-bypass logic and can lock the new song onto a wrong one. We reset and re-acquire instead; the new song's first Phrase boundary re-anchors, with the `total_beats` fallback covering the gap.
+- **Soft-hold the offset across a track change** (an earlier draft of this ADR) — rejected once it was clear `beat` is a per-track counter. The held offset is meaningful only against the old track's `beat`; applied to the new song's counter it is a stale number, not a continuation. Soft-holding it forces special-case gate-bypass logic and can lock the new song onto a wrong one. We reset and re-acquire instead; the new song's first Phrase boundary re-anchors, with the `beat mod 16` fallback covering the gap.
 - **Treat drop/energy edges as Phase re-anchors** (an earlier draft) — rejected: they are section signposts, not Phase information.
 
 ## Consequences
