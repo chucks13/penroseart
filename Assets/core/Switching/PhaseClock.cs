@@ -98,8 +98,16 @@ public static class PhaseGrid
     /// <summary>The 1..16 grid position of <paramref name="beat"/> given a held <paramref name="offset"/>: <c>((beat − 1) − offset) mod 16 + 1</c>.</summary>
     public static int PositionFor(int beat, int offset) => Mod((beat - 1) - offset, PhraseBeats) + 1;
 
-    /// <summary>The 1..4 count (beat-in-bar) of <paramref name="beat"/> from the running counter: <c>(beat − 1) mod 4 + 1</c>.</summary>
-    public static int FourCount(int beat) => Mod(beat - 1, BarBeats) + 1;
+    /// <summary>
+    /// The 1..4 bar position of <paramref name="beat"/> against a held <paramref name="offset"/>:
+    /// <c>((beat − 1) − offset) mod 4 + 1</c>. This is the grid's own 4-count; a coherent feed's
+    /// <c>beat_in_bar</c> tick must match it, so it is the single reference both the re-latch gate
+    /// and the hold-time anomaly check compare against.
+    /// </summary>
+    public static int BarPositionFor(int beat, int offset) => Mod((beat - 1) - offset, BarBeats) + 1;
+
+    /// <summary>The 1..4 count (beat-in-bar) of <paramref name="beat"/> from the running counter, grid offset 0: <c>(beat − 1) mod 4 + 1</c>.</summary>
+    public static int FourCount(int beat) => BarPositionFor(beat, 0);
 }
 
 /// <summary>

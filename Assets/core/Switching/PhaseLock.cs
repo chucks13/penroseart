@@ -67,15 +67,19 @@ public readonly struct PhaseReading
 }
 
 /// <summary>
-/// Stateful Phase determiner. It holds the one as an <see cref="PhaseReading.Offset"/> and
-/// recomputes the <see cref="PhaseReading.Position"/> every frame from the running beat, so a
-/// loop — a backward beat jump within the current Phrase — is absorbed for free with no explicit
-/// loop detection. Phrase wins the grid: the offset re-latches whenever the derived Phrase start
-/// changes (forward or backward), gated by bar-alignment so a sub-bar offset shift or a broken
-/// 4-count is rejected and flagged <see cref="PhaseLockState.Contradicted"/> rather than silently
-/// applied. A track change soft-holds the offset and forces the new track's first boundary to
-/// re-latch free of that gate (the previous track's grid is irrelevant to the new one). The grid
-/// arithmetic is shared with the legacy <see cref="PhaseClock"/> through <see cref="PhaseGrid"/>.
+/// Stateful Phase determiner, grounded on the 4-count tick. The feed's <c>beat_in_bar</c> is bedrock
+/// (always-on, given, never derived from the beat); the running <see cref="OnAirTimingInput.Beat"/>
+/// supplies position; the Phrase decides where the 16-grid starts. It holds the one as an
+/// <see cref="PhaseReading.Offset"/> and recomputes the <see cref="PhaseReading.Position"/> every
+/// frame, so a loop — a backward beat jump within the current Phrase — is absorbed for free with no
+/// explicit loop detection. A Phrase boundary re-latches the offset, but only when the new grid lands
+/// ON the tick (a real Phrase start is a downbeat); a Phrase start off the tick, or a held grid that
+/// drifts off it, is a Phrase-vs-pulse disagreement held and flagged
+/// <see cref="PhaseLockState.Contradicted"/> rather than silently applied. With no Phrase the offset
+/// is held (coast); with nothing held the end-aligned <see cref="OnAirTimingInput.TotalBeats"/> grid
+/// is a best-guess fallback. A track change resets everything — <c>beat</c> is a per-track counter, so
+/// the old offset is meaningless on the new song — and the next frames re-acquire from scratch. The
+/// grid arithmetic is shared with the legacy <see cref="PhaseClock"/> through <see cref="PhaseGrid"/>.
 /// <para>
 /// Layer-0 (the 4-count pulse) and Layer-1 (where the one sits) both currently surface their
 /// disagreement through <see cref="PhaseLockState.Contradicted"/> / <see cref="PhaseReading.IsContradicted"/>.
@@ -98,11 +102,6 @@ public sealed class PhaseLock
     private int previousTrackOrdinal = UnsetOrdinal;
     private bool irregular;
 
-    // Set when a track change is observed, cleared at the next successful re-latch: it lets the new
-    // track's first boundary latch free of the bar-alignment gate (the old grid is irrelevant to it),
-    // while the offset is soft-held in the meantime so the one is never dropped.
-    private bool relatchUngated;
-
     /// <summary>
     /// Reads one frame of BeatManager's projected integer values and emits the current Phase
     /// reading. Stateful: call once per frame on a single instance so the held offset carries
@@ -110,20 +109,19 @@ public sealed class PhaseLock
     /// </summary>
     public PhaseReading Read(in OnAirTimingInput input)
     {
-        // Floor: no 4-count pulse means the clock itself is gone. That is a mode exit to stand-alone
+        // Floor: no 4-count tick means the clock itself is gone. That is a mode exit to stand-alone
         // timing (ADR-0004), not a degraded Phase state, so we emit no grid position.
         if (input.BeatInBar < 1)
         {
             return Emit(input, position: -1, PhaseLockState.Coasting, standAloneFloor: true);
         }
 
-        // A track change soft-holds the offset (don't drop the one) and clears the boundary memory so
-        // the new track's first Phrase re-latches — ungated — even when it restarts the beat below the
-        // old track or sits a sub-bar amount off the old grid.
+        // A new song is a clean slate. `beat` is a per-track counter, so the held offset — tied to the
+        // previous track's counter — is meaningless here. Drop it and re-acquire from this track's own
+        // Phrase, with the total_beats fallback covering the gap until the first boundary lands.
         if (TrackChanged(input.TrackOrdinal))
         {
-            lastPhraseStart = UnsetPhraseStart;
-            relatchUngated = true;
+            ResetForNewTrack();
         }
         previousTrackOrdinal = input.TrackOrdinal;
 
@@ -131,14 +129,6 @@ public sealed class PhaseLock
         if (input.Beat < 1)
         {
             return Emit(input, position: -1, PhaseLockState.Coasting);
-        }
-
-        // Layer-0 anomaly: the feed's 4-count disagrees with the count derived from the running beat
-        // (a sub-bar flub / glitch). Hold the last good offset and flag CONTRADICTED for this frame
-        // only — never re-latch on a broken pulse. It clears the moment the 4-count agrees again.
-        if (heldOffset != UnsetOffset && input.BeatInBar != PhaseGrid.FourCount(input.Beat))
-        {
-            return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Contradicted);
         }
 
         if (HasPhrase(input))
@@ -150,37 +140,87 @@ public sealed class PhaseLock
             }
 
             // Same Phrase still confirming the grid; a within-Phrase loop just recomputes the position.
-            return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Locked);
+            return Hold(input, PhaseLockState.Locked);
         }
 
-        // Clock present but the Phrase feed dropped out: coast on the held offset (degrade, never floor).
-        var coastPosition = heldOffset == UnsetOffset ? -1 : PhaseGrid.PositionFor(input.Beat, heldOffset);
-        return Emit(input, coastPosition, PhaseLockState.Coasting);
+        // Clock present but the Phrase feed dropped out: hold the phrase-anchored offset and coast.
+        if (heldOffset != UnsetOffset)
+        {
+            return Hold(input, PhaseLockState.Coasting);
+        }
+
+        // No Phrase and nothing held (e.g. a fresh track before its first boundary): fall back to the
+        // end-aligned grid from the track length. It is a guess — it may be wrong — so it never becomes
+        // the held offset and reports COASTING, not LOCKED.
+        if (input.TotalBeats >= 1)
+        {
+            var fallbackOffset = PhaseGrid.Mod(input.TotalBeats, PhaseGrid.PhraseBeats);
+            return new PhaseReading(
+                fallbackOffset,
+                PhaseGrid.PositionFor(input.Beat, fallbackOffset),
+                PhaseLockState.Coasting,
+                BeatsSinceAnchor(input.Beat),
+                irregular,
+                standAloneFloor: false);
+        }
+
+        return Emit(input, position: -1, PhaseLockState.Coasting);
     }
 
     /// <summary>
-    /// Re-latches the held offset from a fresh Phrase boundary. Within continuous playback the offset
-    /// must move by a whole bar — the 4-count is already known continuous here, so the gate reduces to
-    /// that — and a sub-bar shift is rejected (hold, flag CONTRADICTED). The first latch and a track
-    /// change bypass the gate. An accepted continuous move flags the prior Phrase irregular (its length
-    /// was not a multiple of 16); a track-change move does not (it is a discontinuity, not a bad phrase).
+    /// Re-latches the held offset from a fresh Phrase boundary. A real Phrase start is a downbeat, so it
+    /// must land ON the 4-count tick: the grid the new offset implies has to agree with the feed's
+    /// <c>beat_in_bar</c>. The first latch (nothing held yet) bootstraps unconditionally; thereafter a
+    /// Phrase start that is off the tick is a Phrase-vs-pulse contradiction — hold the last good offset
+    /// and flag CONTRADICTED. An accepted move that shifts the offset flags the prior Phrase irregular
+    /// (its length was not a multiple of 16). No special-casing for track change: a new song was already
+    /// reset to nothing held, so its first boundary is a clean bootstrap latch.
     /// </summary>
     private PhaseReading ReLatch(in OnAirTimingInput input, int phraseStart)
     {
         var newOffset = PhaseGrid.OffsetForPhraseStart(phraseStart);
-        var gated = heldOffset != UnsetOffset && !relatchUngated;
 
-        if (gated && PhaseGrid.Mod(newOffset - heldOffset, PhaseGrid.BarBeats) != 0)
+        if (heldOffset != UnsetOffset && !OnTick(input, newOffset))
         {
-            return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Contradicted);
+            return Hold(input, PhaseLockState.Contradicted);
         }
 
-        irregular = gated && newOffset != heldOffset;
+        irregular = heldOffset != UnsetOffset && newOffset != heldOffset;
         heldOffset = newOffset;
         lastPhraseStart = phraseStart;
         anchorBeat = input.Beat;
-        relatchUngated = false;
         return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), PhaseLockState.Locked);
+    }
+
+    /// <summary>
+    /// Emits the position recomputed from the held offset after cross-checking that grid against the
+    /// tick. If the grid still agrees with <c>beat_in_bar</c> the requested state stands; if it disagrees
+    /// (a sub-bar flub / broken pulse) the grid is held but flagged CONTRADICTED for this frame only.
+    /// Derived fresh each frame, so a contradiction never sticks past the frame whose disagreement
+    /// caused it.
+    /// </summary>
+    private PhaseReading Hold(in OnAirTimingInput input, PhaseLockState state)
+    {
+        if (heldOffset == UnsetOffset)
+        {
+            return Emit(input, position: -1, state);
+        }
+
+        var resolved = OnTick(input, heldOffset) ? state : PhaseLockState.Contradicted;
+        return Emit(input, PhaseGrid.PositionFor(input.Beat, heldOffset), resolved);
+    }
+
+    /// <summary>Whether the grid implied by <paramref name="offset"/> agrees with the feed's 4-count tick this frame.</summary>
+    private static bool OnTick(in OnAirTimingInput input, int offset) =>
+        input.BeatInBar < 1 || PhaseGrid.BarPositionFor(input.Beat, offset) == input.BeatInBar;
+
+    /// <summary>Drops everything held so the next frames re-acquire Phase from the new track's own data.</summary>
+    private void ResetForNewTrack()
+    {
+        heldOffset = UnsetOffset;
+        lastPhraseStart = UnsetPhraseStart;
+        anchorBeat = -1;
+        irregular = false;
     }
 
     private PhaseReading Emit(in OnAirTimingInput input, int position, PhaseLockState state, bool standAloneFloor = false) =>

@@ -149,17 +149,17 @@ flowchart LR
         <div class="grid md:grid-cols-2 gap-4 text-sm">
           <div class="rounded-lg border border-emerald-900 bg-emerald-950/20 p-4 space-y-2">
             <p class="chip text-emerald-400">the rule</p>
-            <p class="text-slate-300"><strong>Phrase wins the grid.</strong> Latch <code>offset</code> from the <strong>phrase boundary</strong> when available (the phrase start <em>is</em> a one); fall back to the running <code>beat</code>; else assume 0. Then <strong>hold</strong> and dead-reckon off the 4-count until the next trigger.</p>
+            <p class="text-slate-300"><strong>Phrase decides the grid.</strong> Latch <code>offset</code> from the <strong>phrase boundary</strong> when available (the phrase start <em>is</em> a one); with no phrase, fall back to the end-aligned <code>total_beats</code> grid (a guess). Then <strong>hold</strong> and recompute position off the running <code>beat</code>, cross-checked against the 4-count tick, until the next trigger.</p>
             <p class="text-slate-400 text-xs">Phrase wins as the <em>latch source</em> (only it says where a real one is); the 4-count wins as the <em>driver</em> (it's stable). We never chase phrase frame-to-frame.</p>
           </div>
           <div class="rounded-lg border border-slate-800 p-4 space-y-2">
             <p class="chip text-slate-300">re-latch triggers</p>
             <ul class="text-slate-300 space-y-1 list-disc pl-5">
-              <li><strong>Track-title change</strong> — soft-hold the offset, drop confidence, force a re-latch at the next phrase boundary.</li>
+              <li><strong>Track-title change</strong> — <em>reset</em>: a new song is a clean slate (<code>beat</code> is a per-track counter, so the held offset is meaningless). Drop everything and re-acquire from the new song's first phrase; <code>total_beats</code> covers the gap.</li>
               <li><strong>Phrase boundary</strong> — re-latch (confirm or correct the offset).</li>
             </ul>
             <p class="chip text-slate-300 pt-1">the gate</p>
-            <p class="text-slate-300 text-xs">Accept a re-latch <strong>only if</strong> the 4-count is continuous across the boundary <strong>and</strong> the new offset is a whole-<em>bar</em> shift (multiple of 4). A sub-bar offset jump is noise → <strong>hold</strong> the old offset, flag <span class="font-mono text-red-400">CONTRADICTED</span>. <span class="text-slate-400">The gate outranks "force": a forced re-latch (track change) still passes through it — a sub-bar shift is rejected even on a new track.</span></p>
+            <p class="text-slate-300 text-xs">The gate is grounded on the <strong>tick</strong>, not the previous offset: a real phrase start is a downbeat, so accept a re-latch <strong>only if</strong> the grid the new offset implies agrees with the feed's <code>beat_in_bar</code>. A phrase start off the tick — or a held grid drifting off it (a sub-bar flub) — is noise → <strong>hold</strong> the old offset, flag <span class="font-mono text-red-400">CONTRADICTED</span>. <span class="text-slate-400">Anchoring on the tick (not "the offset shifted a whole bar from the last one") is what stays correct when the held offset is stale or the <code>beat</code> counter doesn't start on a downbeat. Track changes need no special case here — they reset first (see triggers).</span></p>
           </div>
         </div>
         <div class="rounded-md border border-emerald-900 bg-emerald-950/10 p-3 text-sm text-slate-300">
@@ -188,13 +188,13 @@ flowchart LR
               <tr class="bg-amber-950/10"><td class="p-3"><code>phrase_state</code> null (clock present)</td><td class="p-3">hold offset, dead-reckon off 4-count; Director decides</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING / CONTRADICTED</td></tr>
               <tr class="bg-amber-950/10"><td class="p-3">running <code>beat</code> null, <strong>pulse present</strong></td><td class="p-3">drive on the 4-count pulse</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING</td></tr>
               <tr class="bg-amber-950/20"><td class="p-3"><strong>No clock</strong> — beat signals <code>-1</code> (no pulse)</td><td class="p-3">exit synced mode → reinstate stand-alone</td><td class="p-3 text-amber-200 font-mono text-xs">→ STAND-ALONE</td></tr>
-              <tr><td class="p-3"><strong>Track-title change</strong></td><td class="p-3">soft-hold offset + 4-count; drop confidence; force re-latch at next boundary</td><td class="p-3 text-amber-300 font-mono text-xs">→ LOCKED</td></tr>
+              <tr><td class="p-3"><strong>Track-title change</strong></td><td class="p-3">reset; re-acquire from the new song's first phrase (<code>total_beats</code> fallback covers the gap)</td><td class="p-3 text-amber-300 font-mono text-xs">COASTING → LOCKED</td></tr>
             </tbody>
           </table>
         </div>
         <div class="grid md:grid-cols-2 gap-3 text-xs text-slate-400">
-          <p><span class="text-emerald-400 font-semibold">On track change:</span> DJ transitions are beatmatched and usually phrase-aligned, so the grid typically continues — soft-hold keeps the one and the 4-count never glitches; if the new track has a lead-in, the next phrase boundary corrects the offset.</p>
-          <p><span class="text-emerald-400 font-semibold">Recovery from CONTRADICTED / anomaly:</span> the <strong>next gated clean re-latch</strong> clears it — a bar-aligned phrase boundary whose offset passes the gate re-locks and drops the flag. No separate timer; a 4-count anomaly likewise reconciles at the next phrase boundary.</p>
+          <p><span class="text-emerald-400 font-semibold">On track change:</span> <code>beat</code> is a per-track counter, so the held offset — tied to the old song's counter — is meaningless on the new song. We reset and re-acquire from the new song's own phrase, with the <code>total_beats</code> fallback covering the gap until its first boundary. No soft-hold, no cross-track carry; phase correctness never depends on cross-track state.</p>
+          <p><span class="text-emerald-400 font-semibold">Recovery from CONTRADICTED / anomaly:</span> it clears as soon as the grid <strong>agrees with the tick</strong> again — a phrase boundary that lands on the tick, or the pulse re-aligning. State is derived fresh each frame, so a contradiction never sticks; no separate timer.</p>
         </div>
       </section>
 

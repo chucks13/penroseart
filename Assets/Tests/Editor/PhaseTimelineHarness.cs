@@ -25,7 +25,7 @@ public static class DjFrame
         return new OnAirTimingInput(
             beat,
             totalBeats,
-            BeatInBarOr(beat, beatInBar),
+            BeatInBarOnGrid(beat, phraseStartBeat, beatInBar),
             trackPhaseActive: 1,
             beatsUntilPhraseBoundary: phraseStartBeat + phraseLengthBeats - beat,
             phraseLengthBeats: phraseLengthBeats,
@@ -44,7 +44,7 @@ public static class DjFrame
         return new OnAirTimingInput(
             beat,
             totalBeats,
-            BeatInBarOr(beat, beatInBar),
+            BeatInBarOnGrid(beat, phraseStartBeat, beatInBar),
             trackPhaseActive: 0,
             beatsUntilPhraseBoundary: phraseStartBeat - beat,
             phraseLengthBeats: upcomingLengthBeats,
@@ -72,6 +72,15 @@ public static class DjFrame
 
     /// <summary>The explicit beat-in-bar when one is supplied (&gt; 0), else the 4-count derived from the beat.</summary>
     private static int BeatInBarOr(int beat, int beatInBar) => beatInBar > 0 ? beatInBar : FourCount(beat);
+
+    /// <summary>
+    /// The beat-in-bar consistent with the Phrase grid: a real Phrase start is a downbeat, so the tick
+    /// is derived from the Phrase's own offset, not from assuming beat 1 is the downbeat. This keeps
+    /// fixtures honest for Phrases whose grid is sub-bar-shifted from the running beat counter. An
+    /// explicit override (&gt; 0) wins, so a fixture can deliberately break the 4-count.
+    /// </summary>
+    private static int BeatInBarOnGrid(int beat, int phraseStartBeat, int beatInBar) =>
+        beatInBar > 0 ? beatInBar : PhaseGrid.BarPositionFor(beat, PhaseGrid.OffsetForPhraseStart(phraseStartBeat));
 }
 
 /// <summary>

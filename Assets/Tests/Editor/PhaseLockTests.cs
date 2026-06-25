@@ -151,24 +151,25 @@ public sealed class PhaseLockTests
     }
 
     [Test]
-    public void TrackChange_SoftHoldsThenReLatchesAtNextBoundary()
+    public void TrackChange_ResetsThenReAcquiresAtTheNewSongsFirstBoundary()
     {
-        // The track change is the real signal now: the /rave/onair/track title becomes a track ordinal
-        // (BeatManager.TrackOrdinal -> OnAirTimingInput.TrackOrdinal). The ordinal stepping 1 -> 2 is a
-        // new track; PhaseLock soft-holds the offset and re-latches at the new track's first boundary.
+        // The track change is the real signal: the /rave/onair/track title becomes a track ordinal
+        // (BeatManager.TrackOrdinal -> OnAirTimingInput.TrackOrdinal). A new song is a clean slate —
+        // `beat` is a per-track counter, so the old offset is meaningless. PhaseLock resets and
+        // re-acquires from the new song's first Phrase.
         var readings = PhaseTimelineHarness.Run(
             DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64, trackOrdinal: 1),
             DjFrame.BeatOnly(beat: 1, trackOrdinal: 2),
             DjFrame.InPhrase(beat: 1, phraseStartBeat: 1, phraseLengthBeats: 64, trackOrdinal: 2));
 
-        var softHold = readings[1];
-        Assert.That(softHold.Offset, Is.EqualTo(0), "A track change soft-holds the offset rather than dropping the one.");
-        Assert.That(softHold.State, Is.EqualTo(PhaseLockState.Coasting), "Confidence drops pending a re-latch.");
+        var reset = readings[1];
+        Assert.That(reset.Offset, Is.EqualTo(-1), "A track change drops the held offset; the old song's grid is meaningless.");
+        Assert.That(reset.State, Is.EqualTo(PhaseLockState.Coasting), "With nothing held and no track length here, it coasts pending re-acquire.");
 
-        var reLatched = readings[2];
-        Assert.That(reLatched.Offset, Is.EqualTo(0));
-        Assert.That(reLatched.Position, Is.EqualTo(1));
-        Assert.That(reLatched.State, Is.EqualTo(PhaseLockState.Locked));
+        var reAcquired = readings[2];
+        Assert.That(reAcquired.Offset, Is.EqualTo(0), "The new song's first Phrase start bootstraps the grid.");
+        Assert.That(reAcquired.Position, Is.EqualTo(1));
+        Assert.That(reAcquired.State, Is.EqualTo(PhaseLockState.Locked));
     }
 
     [Test]
@@ -212,21 +213,19 @@ public sealed class PhaseLockTests
     }
 
     [Test]
-    public void TrackChange_ReLatchesToANonBarAlignedNewTrackOffset()
+    public void NoPhraseButTrackLength_FallsBackToTheEndAlignedGrid()
     {
-        // The new track's first one sits 2 beats off the old grid (offset 0 -> 2). The bar-alignment
-        // gate guards within-track phrase boundaries; a track change must re-latch free of it, against
-        // the new track's own grid — not Contradict and keep the previous track's stale offset.
+        // No Phrase data and nothing held (a fresh track before its first boundary): PhaseLock
+        // estimates the grid from the track length (total_beats mod 16). It is a guess — it may be
+        // wrong — so it never becomes the held offset and reports COASTING, not LOCKED.
         var readings = PhaseTimelineHarness.Run(
-            DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64, trackOrdinal: 1),
-            DjFrame.BeatOnly(beat: 1, trackOrdinal: 2),
-            DjFrame.InPhrase(beat: 3, phraseStartBeat: 3, phraseLengthBeats: 64, trackOrdinal: 2));
+            DjFrame.BeatOnly(beat: 12, totalBeats: 376));
 
-        var reLatched = readings[2];
-        Assert.That(reLatched.Offset, Is.EqualTo(2), "The new track's phrase start 3 re-latches the grid to offset 2.");
-        Assert.That(reLatched.Position, Is.EqualTo(1));
-        Assert.That(reLatched.IsContradicted, Is.False, "A track change is not gated against the old track's grid.");
-        Assert.That(reLatched.State, Is.EqualTo(PhaseLockState.Locked));
+        var fallback = readings[0];
+        Assert.That(fallback.Offset, Is.EqualTo(8), "offset = 376 mod 16 = 8, the end-aligned grid.");
+        Assert.That(fallback.Position, Is.EqualTo(4), "Position is recomputed off the fallback grid: beat 12 against offset 8.");
+        Assert.That(fallback.State, Is.EqualTo(PhaseLockState.Coasting), "A track-length guess is not a phrase lock.");
+        Assert.That(fallback.StandAloneFloor, Is.False, "A clock still exists, so we stay synced.");
     }
 
     [Test]
