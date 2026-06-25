@@ -122,7 +122,13 @@ public sealed class PhaseLock
         {
             ResetForNewTrack();
         }
-        previousTrackOrdinal = input.TrackOrdinal;
+        // Only remember a real ordinal. A title blank reports -1 ("track unknown"), not a new song;
+        // storing that sentinel would make the same track resuming look like a track change next frame
+        // and spuriously drop the held offset mid-track.
+        if (input.TrackOrdinal >= 0)
+        {
+            previousTrackOrdinal = input.TrackOrdinal;
+        }
 
         // Without a running beat there is no grid position to place; coast on whatever offset is held.
         if (input.Beat < 1)

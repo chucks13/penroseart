@@ -184,6 +184,24 @@ public sealed class PhaseLockTests
     }
 
     [Test]
+    public void TransientTitleBlank_KeepsTheHeldOffsetWhenTheSameTrackResumes()
+    {
+        // A momentary /rave/onair/track title dropout reports TrackOrdinal -1 for a frame, then the
+        // SAME track resumes with its unchanged ordinal. The -1 is "title unknown", not "new song",
+        // so it must not poison the track-change detection: the held offset has to survive the blank.
+        var readings = PhaseTimelineHarness.Run(
+            DjFrame.InPhrase(beat: 60, phraseStartBeat: 49, phraseLengthBeats: 64, trackOrdinal: 5),
+            DjFrame.BeatOnly(beat: 61, trackOrdinal: -1),
+            DjFrame.BeatOnly(beat: 62, trackOrdinal: 5));
+
+        var resumed = readings[2];
+        Assert.That(resumed.Offset, Is.EqualTo(0),
+            "The same track resuming after a title blank keeps the held offset; the -1 sentinel is not a track change.");
+        Assert.That(resumed.Position, Is.EqualTo(14), "Position keeps recomputing off the held offset: beat 62 is position 14.");
+        Assert.That(resumed.State, Is.EqualTo(PhaseLockState.Coasting), "Phrase feed is still out, so it coasts on the held offset.");
+    }
+
+    [Test]
     public void ClockLoss_SignalsStandAloneFloor()
     {
         var readings = PhaseTimelineHarness.Run(
