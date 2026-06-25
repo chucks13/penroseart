@@ -138,7 +138,7 @@ public sealed class Director
     private readonly Timer standaloneTimer;
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
-    private readonly OnAirTiming onAirTiming = new OnAirTiming();
+    private readonly CuePlanner cuePlanner = new CuePlanner();
     private readonly PhaseLock phaseLock = new PhaseLock();
     private readonly PhraseTracker phraseTracker = new PhraseTracker();
 
@@ -150,8 +150,6 @@ public sealed class Director
     private bool nextEffectIsManualSelection;
     private bool nextTransitionIsManualSelection;
     private int lastSyncedBeat = -1;
-    private int lastChangeBeat = int.MinValue;
-    private int lastCueBeat = -1;
     private int transitionStartBeat = -1;
     private int transitionLandingBeat = -1;
     private TimingFrame timingFrame = TimingFrame.Unavailable;
@@ -305,7 +303,7 @@ public sealed class Director
         Trace($"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
         switcher.ShowNow(effectIndex);
         currentEffectIndexForSelection = effectIndex;
-        onAirTiming.Reset();
+        cuePlanner.Reset();
         timingFrame = TimingFrame.Unavailable;
         MarkChangedOnCurrentBeat();
         standaloneTimer.Set(durationSeconds);
@@ -368,7 +366,7 @@ public sealed class Director
             timingFrame.Source,
             timingFrame.Reanchored,
             timingFrame.PhaseAnchorLandingBeat,
-            lastChangeBeat,
+            cuePlanner.LastChangeBeat,
             transitionLandingBeat,
             currentBeat,
             beatsUntilLanding,
@@ -417,12 +415,12 @@ public sealed class Director
 
     private int GetBeatsUntilCadenceReady(int currentBeat)
     {
-        if (currentBeat < 0 || lastChangeBeat == int.MinValue)
+        if (currentBeat < 0 || cuePlanner.LastChangeBeat == int.MinValue)
         {
             return 0;
         }
 
-        var cadenceReadyBeat = lastChangeBeat + MinimumChangeCadenceBeats;
+        var cadenceReadyBeat = cuePlanner.LastChangeBeat + MinimumChangeCadenceBeats;
         // Match the cue path: cadence belongs to the selected Cue Mark, not the
         // current beat. A tailed transition can complete while the next Cue Mark
         // is already valid.
@@ -433,7 +431,7 @@ public sealed class Director
     private void TickStandaloneMode(float deltaTime)
     {
         timingFrame = TimingFrame.Unavailable;
-        onAirTiming.Reset();
+        cuePlanner.Reset();
         standaloneTimer.Update(deltaTime);
     }
 
@@ -461,17 +459,10 @@ public sealed class Director
 
     private void RefreshTimingFrame()
     {
-        var passLocalState = new PassLocalTimingState(
-            lastCueBeat >= 0 ? lastCueBeat : (int?)null,
-            lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat);
         var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
         var previousConfidence = timingFrame.PhaseAnchorConfidence;
         var input = OnAirTimingInput.From(controller.beatManager);
-        timingFrame = onAirTiming.ReadFrame(
-            input,
-            passLocalState,
-            MinimumChangeCadenceBeats);
-        ApplyPassLocalTimingState(timingFrame.PassLocalState);
+        timingFrame = cuePlanner.Plan(input, MinimumChangeCadenceBeats);
 
         // Slice-03 composition: read the PHASE and PHRASE layers off the same input, alongside the
         // legacy cue path (which still runs on PhaseClock below). Kept before the cue-anchor early
@@ -497,12 +488,6 @@ public sealed class Director
         {
             Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} phase={FormatPhase()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
         }
-    }
-
-    private void ApplyPassLocalTimingState(PassLocalTimingState passLocalState)
-    {
-        lastCueBeat = passLocalState.LastCueBeat ?? -1;
-        lastChangeBeat = passLocalState.PreviousCueMarkBeat ?? int.MinValue;
     }
 
     /// <summary>
@@ -555,7 +540,7 @@ public sealed class Director
         var beatPlan = TransitionBeatPlan.FromCueMark(previousFrame.CueMarkBeat, repertoire);
         var isZeroRunway = beatPlan.StartBeat == beatPlan.ImpactBeat;
         var hasTail = beatPlan.CompleteBeat > beatPlan.ImpactBeat;
-        var alreadyCommittedImpact = lastChangeBeat == beatPlan.ImpactBeat;
+        var alreadyCommittedImpact = cuePlanner.LastChangeBeat == beatPlan.ImpactBeat;
         if (!isZeroRunway
             || !hasTail
             || !beatPlan.IsCueBeat(currentFrame.CurrentBeat)
@@ -607,8 +592,8 @@ public sealed class Director
     {
         transitionStartBeat = beatPlan.StartBeat;
         transitionLandingBeat = beatPlan.ImpactBeat;
-        MarkChangedOnBeat(beatPlan.ImpactBeat);
-        lastCueBeat = beat;
+        cuePlanner.MarkChanged(beatPlan.ImpactBeat);
+        cuePlanner.RecordCueIssued(beat);
         controller.currentTransition = cue.TransitionIndex;
         currentEffectIndexForSelection = cue.TargetEffectIndex;
         StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
@@ -651,8 +636,8 @@ public sealed class Director
 
         if (cueIntent.BlockedByCadence)
         {
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(lastChangeBeat)}");
-            lastCueBeat = beat;
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+            cuePlanner.RecordCueIssued(beat);
             return true;
         }
 
@@ -730,7 +715,7 @@ public sealed class Director
             return;
         }
 
-        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} phase={FormatPhase()} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
+        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} phase={FormatPhase()} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
     }
 
     private void LogSyncedBeatIfNeeded(int beat)
@@ -742,7 +727,7 @@ public sealed class Director
 
         var beatsUntilLanding = timingFrame.HasPhaseAnchor ? timingFrame.PhaseAnchorLandingBeat - beat : -1;
         var canChangeAtLanding = timingFrame.HasPhaseAnchor && CanChangeAtBeat(timingFrame.PhaseAnchorLandingBeat);
-        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} phase={FormatPhase()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(lastChangeBeat)}");
+        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} phase={FormatPhase()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
         lastLoggedSyncedBeat = beat;
     }
 
@@ -758,7 +743,7 @@ public sealed class Director
 
     private bool CanChangeAtBeat(int beat)
     {
-        var previousCueMarkBeat = lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+        var previousCueMarkBeat = cuePlanner.LastChangeBeat == int.MinValue ? (int?)null : cuePlanner.LastChangeBeat;
         return ChangeCadence.CanChangeAt(beat, previousCueMarkBeat, MinimumChangeCadenceBeats);
     }
 
@@ -969,13 +954,8 @@ public sealed class Director
     {
         if (controller.beatManager.IsLiveSource && controller.beatManager.Beat is { } beat)
         {
-            MarkChangedOnBeat(beat);
+            cuePlanner.MarkChanged(beat);
         }
-    }
-
-    private void MarkChangedOnBeat(int beat)
-    {
-        lastChangeBeat = beat;
     }
 
     private static int PullCard(int[] deck)

@@ -1,0 +1,768 @@
+using System;
+
+/// <summary>
+/// Director-owned cue planner: interprets one live rhythm snapshot into the Director-facing
+/// <see cref="TimingFrame"/>. Owns PhaseInput construction, Cue Sheet derivation, the Cue Mark
+/// cursor, change-cadence memory, substantial beat-rewind handling, and Phase Anchor coasting.
+///
+/// Relocated from the former On-Air Timing core (slice 04b). On-Air Timing is now a pure
+/// Phase/Phrase determiner (PhaseLock + PhraseTracker readings the Director composes); the cue
+/// decisions live here, fed by plain data — never a reference back to the timing source. The
+/// pass-local cue/cadence memory it used to round-trip through the Director is now owned outright.
+/// </summary>
+public sealed class CuePlanner
+{
+    private readonly Func<int, int, int> randomRange;
+
+    private int lastBeat = -1;
+    private bool hasPhaseAnchor;
+    private PhaseConfidence phaseAnchorConfidence = PhaseConfidence.Unlocked;
+    private int phaseAnchorLandingBeat = -1;
+    private readonly CueSheetPlans cueSheetPlans = new CueSheetPlans();
+    private TimingFrameSource lastSource = TimingFrameSource.Unlocked;
+
+    // Pass-local cue/cadence memory, owned outright (no Director round-trip). lastChangeBeat is the
+    // change cadence memory the Director also queries and marks (cue commits and manual ShowNow).
+    private int lastCueBeat = -1;
+    private int lastChangeBeat = int.MinValue;
+
+    private readonly struct FramePassLocalState
+    {
+        public readonly PassLocalTimingState State;
+        public readonly bool ClearedCueState;
+        public readonly bool ClearedCadenceState;
+
+        public FramePassLocalState(PassLocalTimingState state, PassLocalTimingState originalState)
+        {
+            State = state;
+            ClearedCueState = state.LastCueBeat != originalState.LastCueBeat;
+            ClearedCadenceState = state.PreviousCueMarkBeat != originalState.PreviousCueMarkBeat;
+        }
+
+        public int? ConsumedCueMarkBeat => State.PreviousCueMarkBeat;
+    }
+
+    private readonly struct ResolvedTimingTarget
+    {
+        public readonly TimingFrameSource Source;
+        public readonly int CueMarkBeat;
+        public readonly bool HasPhraseWindow;
+        public readonly PhraseWindow PhraseWindow;
+
+        public ResolvedTimingTarget(
+            TimingFrameSource source,
+            int cueMarkBeat,
+            bool hasPhraseWindow,
+            PhraseWindow phraseWindow)
+        {
+            Source = source;
+            CueMarkBeat = cueMarkBeat;
+            HasPhraseWindow = hasPhraseWindow;
+            PhraseWindow = phraseWindow;
+        }
+
+        public static ResolvedTimingTarget PhaseClockGrid(int cueMarkBeat)
+        {
+            return new ResolvedTimingTarget(
+                TimingFrameSource.PhaseClockGrid,
+                cueMarkBeat,
+                false,
+                default);
+        }
+    }
+
+    private sealed class CueSheetPlans
+    {
+        private readonly CueSheetCursor current = new CueSheetCursor();
+        private bool hasUpcoming;
+        private CueSheet upcoming;
+        private int upcomingPhraseStartBeat;
+
+        public CueSheetStatus Status(int currentCueMarkBeat)
+        {
+            return current.Status(currentCueMarkBeat);
+        }
+
+        public void ResetAll()
+        {
+            current.Reset();
+            ClearUpcoming();
+        }
+
+        public void ResetCurrent()
+        {
+            current.Reset();
+        }
+
+        public void PlanUpcoming(
+            int beat,
+            PhraseWindow phraseWindow,
+            int? consumedCueMarkBeat,
+            int minimumChangeCadenceBeats,
+            Func<int, int, int> randomRange)
+        {
+            if (hasUpcoming && upcoming.Matches(phraseWindow))
+            {
+                upcomingPhraseStartBeat = phraseWindow.StartBeat;
+                return;
+            }
+
+            upcoming = CueSheet.Build(
+                phraseWindow,
+                beat,
+                cueMarkBeat => ChangeCadence.CanChangeAt(cueMarkBeat, consumedCueMarkBeat, minimumChangeCadenceBeats),
+                randomRange,
+                includePhraseStart: true);
+            upcomingPhraseStartBeat = phraseWindow.StartBeat;
+            hasUpcoming = true;
+        }
+
+        public bool TryKeepUnconsumedMandatoryBoundaryAt(
+            int beat,
+            int? consumedCueMarkBeat,
+            out int cueMarkBeat,
+            out PhraseWindow phraseWindow)
+        {
+            return current.TryKeepUnconsumedMandatoryBoundaryAt(
+                beat,
+                consumedCueMarkBeat,
+                out cueMarkBeat,
+                out phraseWindow);
+        }
+
+        public bool TryGetActivePhraseWindow(int beat, out PhraseWindow phraseWindow)
+        {
+            return current.TryGetActivePhraseWindow(beat, out phraseWindow);
+        }
+
+        public bool HasUpcomingFor(PhraseWindow phraseWindow)
+        {
+            return hasUpcoming && upcoming.Matches(phraseWindow);
+        }
+
+        public bool TryGetUpcomingPhraseWindow(out PhraseWindow phraseWindow)
+        {
+            phraseWindow = default;
+            return hasUpcoming
+                && PhraseWindow.TryFromStartAndLength(upcomingPhraseStartBeat, upcoming.PhraseLengthBeats, out phraseWindow);
+        }
+
+        public void PromoteUpcoming()
+        {
+            if (hasUpcoming
+                && PhraseWindow.TryFromStartAndLength(upcomingPhraseStartBeat, upcoming.PhraseLengthBeats, out var phraseWindow))
+            {
+                current.Replace(upcoming, phraseWindow);
+            }
+            else
+            {
+                current.Reset();
+            }
+
+            ClearUpcoming();
+        }
+
+        public void PromoteUpcoming(PhraseWindow phraseWindow)
+        {
+            if (hasUpcoming)
+            {
+                current.Replace(upcoming, phraseWindow);
+            }
+            else
+            {
+                current.Reset();
+            }
+
+            ClearUpcoming();
+        }
+
+        public TimingFrameSource ResolveCurrent(
+            int beat,
+            PhraseWindow phraseWindow,
+            bool beatRewoundToNewPass,
+            int? consumedCueMarkBeat,
+            int minimumChangeCadenceBeats,
+            Func<int, int, int> randomRange,
+            out int cueMarkBeat)
+        {
+            if (current.NeedsSheet(phraseWindow))
+            {
+                BuildCurrent(
+                    beat,
+                    phraseWindow,
+                    consumedCueMarkBeat,
+                    minimumChangeCadenceBeats,
+                    randomRange);
+            }
+            else
+            {
+                current.UpdatePhraseWindow(phraseWindow);
+                if (beatRewoundToNewPass)
+                {
+                    current.RewindCursor();
+                }
+            }
+
+            current.AdvanceTo(beat, consumedCueMarkBeat);
+            if (current.IsConsumedThroughPhraseEnd(consumedCueMarkBeat) && hasUpcoming)
+            {
+                PromoteUpcoming();
+                current.AdvanceTo(beat, consumedCueMarkBeat);
+            }
+
+            cueMarkBeat = current.CurrentCueMarkOr(phraseWindow.EndBeat);
+            return cueMarkBeat == current.PhraseEndBeat
+                ? TimingFrameSource.TrackPhaseBoundary
+                : TimingFrameSource.CueMark;
+        }
+
+        private void BuildCurrent(
+            int beat,
+            PhraseWindow phraseWindow,
+            int? consumedCueMarkBeat,
+            int minimumChangeCadenceBeats,
+            Func<int, int, int> randomRange)
+        {
+            var sheet = CueSheet.Build(
+                phraseWindow,
+                beat,
+                cueMarkBeat => ChangeCadence.CanChangeAt(cueMarkBeat, consumedCueMarkBeat, minimumChangeCadenceBeats),
+                randomRange);
+            current.Replace(sheet, phraseWindow);
+        }
+
+        private void ClearUpcoming()
+        {
+            hasUpcoming = false;
+            upcoming = default;
+            upcomingPhraseStartBeat = -1;
+        }
+    }
+
+    private sealed class CueSheetCursor
+    {
+        private CueSheet sheet;
+        private int phraseStartBeat;
+        private int index;
+
+        public bool HasSheet { get; private set; }
+
+        public int PhraseEndBeat => phraseStartBeat + sheet.PhraseLengthBeats;
+
+        public void Reset()
+        {
+            HasSheet = false;
+            sheet = default;
+            phraseStartBeat = -1;
+            index = 0;
+        }
+
+        public void Replace(CueSheet cueSheet, PhraseWindow phraseWindow)
+        {
+            HasSheet = true;
+            sheet = cueSheet;
+            phraseStartBeat = phraseWindow.StartBeat;
+            index = 0;
+        }
+
+        public void UpdatePhraseWindow(PhraseWindow phraseWindow)
+        {
+            phraseStartBeat = phraseWindow.StartBeat;
+        }
+
+        public void RewindCursor()
+        {
+            index = 0;
+        }
+
+        public bool NeedsSheet(PhraseWindow phraseWindow)
+        {
+            var cueMarkOffsets = CueMarkOffsets;
+            return !HasSheet
+                || cueMarkOffsets.Length == 0
+                || !sheet.Matches(phraseWindow);
+        }
+
+        public bool TryGetActivePhraseWindow(int beat, out PhraseWindow phraseWindow)
+        {
+            phraseWindow = default;
+            return HasSheet
+                && PhraseEndBeat >= beat
+                && PhraseWindow.TryFromStartAndLength(phraseStartBeat, sheet.PhraseLengthBeats, out phraseWindow);
+        }
+
+        public bool TryKeepUnconsumedMandatoryBoundaryAt(
+            int beat,
+            int? consumedCueMarkBeat,
+            out int cueMarkBeat,
+            out PhraseWindow phraseWindow)
+        {
+            cueMarkBeat = -1;
+            phraseWindow = default;
+            if (!HasSheet
+                || IsConsumedThroughPhraseEnd(consumedCueMarkBeat)
+                || !PhraseWindow.TryFromStartAndLength(phraseStartBeat, sheet.PhraseLengthBeats, out phraseWindow))
+            {
+                return false;
+            }
+
+            var originalIndex = index;
+            AdvanceTo(beat, consumedCueMarkBeat);
+            var currentCueMark = CurrentCueMarkOr(-1);
+            if (currentCueMark != beat || currentCueMark != PhraseEndBeat)
+            {
+                index = originalIndex;
+                return false;
+            }
+
+            cueMarkBeat = currentCueMark;
+            return true;
+        }
+
+        public void AdvanceTo(int beat, int? consumedCueMarkBeat)
+        {
+            var cueMarkOffsets = CueMarkOffsets;
+            while (index < cueMarkOffsets.Length - 1 && CueMarkAt(index) < beat)
+            {
+                index++;
+            }
+
+            while (index < cueMarkOffsets.Length - 1
+                && consumedCueMarkBeat is { } firedCueMark
+                && CueMarkAt(index) <= firedCueMark)
+            {
+                index++;
+            }
+        }
+
+        public int CurrentCueMarkOr(int fallbackCueMark)
+        {
+            var cueMarkOffsets = CueMarkOffsets;
+            return cueMarkOffsets.Length > 0
+                ? CueMarkAt(ClampIndex(index, cueMarkOffsets.Length))
+                : fallbackCueMark;
+        }
+
+        public bool IsConsumedThroughPhraseEnd(int? consumedCueMarkBeat)
+        {
+            return consumedCueMarkBeat is { } firedCueMark && firedCueMark >= PhraseEndBeat;
+        }
+
+        public CueSheetStatus Status(int currentCueMarkBeat)
+        {
+            if (!HasSheet)
+            {
+                return CueSheetStatus.Empty;
+            }
+
+            var cueMarkOffsets = CueMarkOffsets;
+            var currentCueMarkIndex = cueMarkOffsets.Length > 0 ? ClampIndex(index, cueMarkOffsets.Length) : -1;
+            return new CueSheetStatus(
+                true,
+                phraseStartBeat,
+                PhraseEndBeat,
+                sheet.PhraseLengthBeats,
+                currentCueMarkIndex,
+                currentCueMarkBeat,
+                (int[])cueMarkOffsets.Clone());
+        }
+
+        private int CueMarkAt(int cueMarkIndex)
+        {
+            var cueMarkOffsets = CueMarkOffsets;
+            return sheet.ToAbsoluteBeat(phraseStartBeat, cueMarkOffsets[ClampIndex(cueMarkIndex, cueMarkOffsets.Length)]);
+        }
+
+        private int[] CueMarkOffsets => sheet.CueMarkOffsets ?? Array.Empty<int>();
+    }
+
+    /// <summary>Creates a Cue Planner using Unity's runtime random source for boundary selection.</summary>
+    public CuePlanner()
+        : this((minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive))
+    {
+    }
+
+    /// <summary>Creates a Cue Planner with an explicit random source for deterministic seam tests.</summary>
+    public CuePlanner(Func<int, int, int> randomRange)
+    {
+        this.randomRange = randomRange ?? throw new ArgumentNullException(nameof(randomRange));
+    }
+
+    /// <summary>The last beat any change committed, or <see cref="int.MinValue"/> when none — the change cadence memory the Director queries.</summary>
+    public int LastChangeBeat => lastChangeBeat;
+
+    /// <summary>Records that a change committed on <paramref name="beat"/> (a synced cue impact or a manual show-now), feeding change cadence.</summary>
+    public void MarkChanged(int beat)
+    {
+        lastChangeBeat = beat;
+    }
+
+    /// <summary>Records that a synced cue was issued on <paramref name="beat"/>, so the same pass does not re-cue it.</summary>
+    public void RecordCueIssued(int beat)
+    {
+        lastCueBeat = beat;
+    }
+
+    /// <summary>Clears all remembered timing state so the next synced frame starts a new interpretation.</summary>
+    public void Reset()
+    {
+        lastBeat = -1;
+        hasPhaseAnchor = false;
+        phaseAnchorConfidence = PhaseConfidence.Unlocked;
+        phaseAnchorLandingBeat = -1;
+        cueSheetPlans.ResetAll();
+        lastSource = TimingFrameSource.Unlocked;
+    }
+
+    /// <summary>
+    /// Builds the current Timing Frame from one live rhythm snapshot. Owns the pass-local cue/cadence
+    /// memory (no Director round-trip): it reads its own remembered cue/change beats, clears the stale
+    /// ones when the beat rewound into a new pass, and remembers the corrected values for the next call.
+    /// </summary>
+    public TimingFrame Plan(
+        OnAirTimingInput input,
+        int minimumChangeCadenceBeats)
+    {
+        if (minimumChangeCadenceBeats <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minimumChangeCadenceBeats), minimumChangeCadenceBeats, "Minimum cadence must be positive.");
+        }
+
+        var phaseInput = input.ToPhaseInput();
+        var phase = PhaseClock.Resolve(phaseInput);
+        var beatRewoundToNewPass = BeatRewoundToNewPass(lastBeat, input.Beat, minimumChangeCadenceBeats);
+
+        var passLocalState = new PassLocalTimingState(
+            lastCueBeat >= 0 ? lastCueBeat : (int?)null,
+            lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat);
+        var passState = BuildFramePassLocalState(passLocalState, input.Beat, beatRewoundToNewPass);
+        lastCueBeat = passState.State.LastCueBeat ?? -1;
+        lastChangeBeat = passState.State.PreviousCueMarkBeat ?? int.MinValue;
+
+        if (input.Beat >= 1)
+        {
+            lastBeat = input.Beat;
+        }
+
+        if (TrackPhaseUnavailable(input) && input.Beat >= 1)
+        {
+            if (HasCoastablePhaseAnchor())
+            {
+                return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
+            }
+
+            cueSheetPlans.ResetCurrent();
+            return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+        }
+
+        if (phase.Confidence != PhaseConfidence.Unlocked && input.Beat >= 1)
+        {
+            var previousSource = lastSource;
+            var target = ResolveCueMark(
+                input.Beat,
+                phaseInput,
+                phase,
+                beatRewoundToNewPass,
+                passState.ConsumedCueMarkBeat,
+                minimumChangeCadenceBeats);
+            var reanchored = ReanchoredFrom(previousSource, target.Source, hasPhaseAnchor);
+            return BuildAnchoredFrame(
+                input,
+                phase,
+                target,
+                beatRewoundToNewPass,
+                passState,
+                reanchored);
+        }
+
+        if (hasPhaseAnchor && input.Beat >= 1)
+        {
+            return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
+        }
+
+        return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+    }
+
+    private TimingFrame BuildCoastingFrame(
+        OnAirTimingInput input,
+        PhaseClockReading phase,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState,
+        int minimumChangeCadenceBeats)
+    {
+        CoastPhaseAnchor(input.Beat, minimumChangeCadenceBeats);
+        lastSource = TimingFrameSource.Coast;
+        return CreateFrame(
+            input,
+            phase,
+            true,
+            phaseAnchorConfidence,
+            phaseAnchorLandingBeat,
+            false,
+            default,
+            TimingFrameSource.Coast,
+            beatRewoundToNewPass,
+            passState,
+            false,
+            CueSheetStatus.Empty);
+    }
+
+    private TimingFrame BuildAnchoredFrame(
+        OnAirTimingInput input,
+        PhaseClockReading phase,
+        ResolvedTimingTarget target,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState,
+        bool reanchored)
+    {
+        hasPhaseAnchor = true;
+        phaseAnchorConfidence = phase.Confidence;
+        phaseAnchorLandingBeat = target.CueMarkBeat;
+        lastSource = target.Source;
+        return CreateFrame(
+            input,
+            phase,
+            true,
+            phaseAnchorConfidence,
+            phaseAnchorLandingBeat,
+            target.HasPhraseWindow,
+            target.PhraseWindow,
+            target.Source,
+            beatRewoundToNewPass,
+            passState,
+            reanchored,
+            cueSheetPlans.Status(phaseAnchorLandingBeat));
+    }
+
+    private TimingFrame BuildUnlockedFrame(
+        OnAirTimingInput input,
+        PhaseClockReading phase,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState)
+    {
+        hasPhaseAnchor = false;
+        phaseAnchorConfidence = PhaseConfidence.Unlocked;
+        phaseAnchorLandingBeat = -1;
+        lastSource = TimingFrameSource.Unlocked;
+        return CreateFrame(
+            input,
+            phase,
+            false,
+            PhaseConfidence.Unlocked,
+            -1,
+            false,
+            default,
+            TimingFrameSource.Unlocked,
+            beatRewoundToNewPass,
+            passState,
+            false,
+            CueSheetStatus.Empty);
+    }
+
+    private static TimingFrame CreateFrame(
+        OnAirTimingInput input,
+        PhaseClockReading phase,
+        bool hasPhaseAnchor,
+        PhaseConfidence phaseAnchorConfidence,
+        int cueMarkBeat,
+        bool hasPhraseWindow,
+        PhraseWindow phraseWindow,
+        TimingFrameSource source,
+        bool beatRewoundToNewPass,
+        FramePassLocalState passState,
+        bool reanchored,
+        CueSheetStatus cueSheet)
+    {
+        return new TimingFrame(
+            input,
+            phase,
+            hasPhaseAnchor,
+            phaseAnchorConfidence,
+            cueMarkBeat,
+            hasPhraseWindow,
+            phraseWindow,
+            source,
+            beatRewoundToNewPass,
+            passState.State,
+            passState.ClearedCueState,
+            passState.ClearedCadenceState,
+            reanchored,
+            cueSheet);
+    }
+
+    private static bool ReanchoredFrom(TimingFrameSource previousSource, TimingFrameSource source, bool hadPhaseAnchor)
+    {
+        return hadPhaseAnchor
+            && (source == TimingFrameSource.TrackPhaseBoundary || source == TimingFrameSource.CueMark)
+            && (previousSource == TimingFrameSource.Coast || previousSource == TimingFrameSource.PhaseClockGrid);
+    }
+
+    private bool HasCoastablePhaseAnchor()
+    {
+        return hasPhaseAnchor
+            && (lastSource == TimingFrameSource.CueMark
+                || lastSource == TimingFrameSource.TrackPhaseBoundary
+                || lastSource == TimingFrameSource.Coast);
+    }
+
+    private static bool TrackPhaseUnavailable(OnAirTimingInput input)
+    {
+        return input.TrackPhaseActive < 0;
+    }
+
+    private void CoastPhaseAnchor(int beat, int minimumChangeCadenceBeats)
+    {
+        while (beat >= phaseAnchorLandingBeat)
+        {
+            phaseAnchorLandingBeat += minimumChangeCadenceBeats;
+        }
+    }
+
+    private ResolvedTimingTarget ResolveCueMark(
+        int beat,
+        PhaseInput phaseInput,
+        PhaseClockReading phase,
+        bool beatRewoundToNewPass,
+        int? consumedCueMarkBeat,
+        int minimumChangeCadenceBeats)
+    {
+        if (PhraseWindow.TryFromUpcomingTrackPhase(
+            beat,
+            phaseInput.PhaseCountBeats,
+            phaseInput.PhaseLengthBeats,
+            out var upcomingPhraseWindow)
+            && phaseInput.PhaseActive == 0)
+        {
+            cueSheetPlans.PlanUpcoming(
+                beat,
+                upcomingPhraseWindow,
+                consumedCueMarkBeat,
+                minimumChangeCadenceBeats,
+                randomRange);
+        }
+
+        if (cueSheetPlans.TryKeepUnconsumedMandatoryBoundaryAt(
+            beat,
+            consumedCueMarkBeat,
+            out var cueMarkBeat,
+            out var phraseWindow))
+        {
+            return new ResolvedTimingTarget(
+                TimingFrameSource.TrackPhaseBoundary,
+                cueMarkBeat,
+                true,
+                phraseWindow);
+        }
+
+        if (phaseInput.PhaseActive >= 1
+            && PhraseWindow.TryFromTrackPhase(
+                beat,
+                phaseInput.PhaseCountBeats,
+                phaseInput.PhaseLengthBeats,
+                out phraseWindow))
+        {
+            if (cueSheetPlans.HasUpcomingFor(phraseWindow))
+            {
+                cueSheetPlans.PromoteUpcoming(phraseWindow);
+            }
+
+            return ResolveCueMarkFromSheet(
+                beat,
+                phraseWindow,
+                beatRewoundToNewPass,
+                consumedCueMarkBeat,
+                minimumChangeCadenceBeats);
+        }
+
+        if (cueSheetPlans.TryGetActivePhraseWindow(beat, out phraseWindow))
+        {
+            return ResolveCueMarkFromSheet(
+                beat,
+                phraseWindow,
+                beatRewoundToNewPass,
+                consumedCueMarkBeat,
+                minimumChangeCadenceBeats);
+        }
+
+        if (cueSheetPlans.TryGetUpcomingPhraseWindow(out phraseWindow))
+        {
+            cueSheetPlans.PromoteUpcoming();
+            return ResolveCueMarkFromSheet(
+                beat,
+                phraseWindow,
+                beatRewoundToNewPass,
+                consumedCueMarkBeat,
+                minimumChangeCadenceBeats);
+        }
+
+        cueSheetPlans.ResetCurrent();
+        return ResolvedTimingTarget.PhaseClockGrid(GetLandingBeatFromPhasePosition(beat, phase.PhasePosition));
+    }
+
+    private ResolvedTimingTarget ResolveCueMarkFromSheet(
+        int beat,
+        PhraseWindow phraseWindow,
+        bool beatRewoundToNewPass,
+        int? consumedCueMarkBeat,
+        int minimumChangeCadenceBeats)
+    {
+        var source = cueSheetPlans.ResolveCurrent(
+            beat,
+            phraseWindow,
+            beatRewoundToNewPass,
+            consumedCueMarkBeat,
+            minimumChangeCadenceBeats,
+            randomRange,
+            out var cueMarkBeat);
+        return new ResolvedTimingTarget(source, cueMarkBeat, true, phraseWindow);
+    }
+
+    private static int GetLandingBeatFromPhasePosition(int beat, int phasePosition)
+    {
+        var beatsUntilLanding = PhaseGrid.PhraseBeats - phasePosition + 1;
+        return beat + beatsUntilLanding;
+    }
+
+    private static bool BeatRewoundToNewPass(int previousBeat, int beat, int minimumChangeCadenceBeats)
+    {
+        return previousBeat >= 1
+            && beat >= 1
+            && beat < previousBeat
+            && previousBeat - beat + 1 >= minimumChangeCadenceBeats;
+    }
+
+    private static FramePassLocalState BuildFramePassLocalState(
+        PassLocalTimingState passLocalState,
+        int beat,
+        bool beatRewoundToNewPass)
+    {
+        if (!beatRewoundToNewPass || beat < 1)
+        {
+            return new FramePassLocalState(passLocalState, passLocalState);
+        }
+
+        var lastCueBeat = passLocalState.LastCueBeat is { } cueBeat && cueBeat >= beat
+            ? (int?)null
+            : passLocalState.LastCueBeat;
+        var previousCueMarkBeat = passLocalState.PreviousCueMarkBeat is { } cueMarkBeat && cueMarkBeat >= beat
+            ? (int?)null
+            : passLocalState.PreviousCueMarkBeat;
+        var correctedState = new PassLocalTimingState(lastCueBeat, previousCueMarkBeat);
+        return new FramePassLocalState(correctedState, passLocalState);
+    }
+
+    private static int ClampIndex(int index, int length)
+    {
+        if (length <= 0)
+        {
+            return 0;
+        }
+
+        if (index < 0)
+        {
+            return 0;
+        }
+
+        return index >= length ? length - 1 : index;
+    }
+}
