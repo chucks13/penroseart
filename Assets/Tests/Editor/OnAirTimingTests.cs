@@ -16,7 +16,7 @@ public sealed class OnAirTimingTests
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.HasPhaseAnchor, Is.True);
-        Assert.That(frame.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Locked));
         Assert.That(frame.HasPhraseWindow, Is.True);
         Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577));
         Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(609));
@@ -142,7 +142,7 @@ public sealed class OnAirTimingTests
         Assert.That(frame.HasPhraseWindow, Is.False);
         Assert.That(frame.IsCoasting, Is.True);
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Coast));
-        Assert.That(frame.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Coasting));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
         Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(15));
         Assert.That(frame.Reanchored, Is.False);
@@ -170,7 +170,7 @@ public sealed class OnAirTimingTests
         Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(641));
         Assert.That(frame.IsCoasting, Is.False);
         Assert.That(frame.Reanchored, Is.True);
-        Assert.That(frame.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Locked));
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(641));
     }
@@ -212,8 +212,7 @@ public sealed class OnAirTimingTests
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.HasPhaseAnchor, Is.False);
-        Assert.That(frame.Phase.Confidence, Is.EqualTo(PhaseConfidence.Open));
-        Assert.That(frame.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Unlocked));
+        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Coasting));
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Unlocked));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(-1));
         Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(-1));
@@ -344,7 +343,6 @@ public sealed class OnAirTimingTests
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.HasPhaseAnchor, Is.False);
-        Assert.That(frame.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Unlocked));
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Unlocked));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(-1));
     }

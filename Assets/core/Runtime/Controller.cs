@@ -1201,7 +1201,7 @@ public class Controller : Singleton<Controller>
         AppendIfNotEmpty(builder, FormatNextMove(directorStatus));
         if (directorStatus.IsSyncedMode)
         {
-            AppendIfNotEmpty(builder, directorStatus.PhaseAnchorConfidence.ToString());
+            AppendIfNotEmpty(builder, directorStatus.HasPhaseAnchor ? (directorStatus.Phase.IrregularPhrase ? directorStatus.Phase.State + " (irregular)" : directorStatus.Phase.State.ToString()) : "unlocked");
             AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
             AppendIfNotEmpty(builder, FormatPhasePosition(directorStatus));
             AppendIfNotEmpty(builder, FormatLanding(directorStatus));
@@ -1209,7 +1209,6 @@ public class Controller : Singleton<Controller>
             AppendIfNotEmpty(builder, directorStatus.BeatsUntilCadenceReady > 0
                 ? $"cadence +{directorStatus.BeatsUntilCadenceReady}b"
                 : "cadence ready");
-            AppendIfNotEmpty(builder, directorStatus.Phase.BeatInBar > 0 ? $"bar beat {directorStatus.Phase.BeatInBar}" : string.Empty);
         }
         else if (directorStatus.Mode == DirectorMode.Standalone)
         {
@@ -1291,7 +1290,7 @@ public class Controller : Singleton<Controller>
 
     private static string FormatPhasePosition(DirectorStatus status)
     {
-        return status.Phase.PhasePosition > 0 ? $"{status.Phase.PhasePosition}/16" : "no phase";
+        return status.Phase.Position > 0 ? $"{status.Phase.Position}/16" : "no phase";
     }
 
     private static string FormatLanding(DirectorStatus status)

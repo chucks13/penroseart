@@ -177,10 +177,10 @@ public sealed class ControllerEditor : Editor
     private static void DrawTimingAndCueSheet(DirectorStatus status, CueTimingOverlay cueOverlay)
     {
         EditorGUILayout.LabelField("TIMING / CUE SHEET", EditorStyles.boldLabel);
-        DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Phase Count {FormatPhaseCount(status.Phase.PhasePosition)} · Beat In Bar {FormatBeat(status.Phase.BeatInBar)}");
+        DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Phase Count {FormatPhaseCount(status.Phase.Position)}");
         DrawRow("Timing Source", FormatTimingSource(status));
         DrawCueTimingRows(status, cueOverlay);
-        DrawPhaseStrip(status.Phase.PhasePosition, cueOverlay);
+        DrawPhaseStrip(status.Phase.Position, cueOverlay);
         DrawCueSheet(status.CueSheet, status.CurrentBeat);
     }
 
@@ -288,12 +288,9 @@ public sealed class ControllerEditor : Editor
         }
 
         DrawRow("Anchor", status.HasPhaseAnchor ? "locked" : "none");
-        DrawRow("Confidence", status.PhaseAnchorConfidence.ToString());
-        DrawRow("Bar In Phrase", FormatBeat(status.Phase.BarInPhrase));
-        DrawRow("One Beat", FormatBeat(status.Phase.OneOfCurrentPhrase));
+        DrawRow("Lock State", status.HasPhaseAnchor ? status.Phase.State.ToString() : "unlocked");
         DrawRow("Offset", FormatBeat(status.Phase.Offset));
-        DrawRow("Clean Grid", status.Phase.CleanGrid ? "yes" : "no");
-        DrawRow("Beat-In-Bar Agrees", status.Phase.BeatInBarAgrees ? "yes" : "no");
+        DrawRow("Irregular Phrase", status.Phase.IrregularPhrase ? "yes" : "no");
     }
 
     private static void DrawHudLines(Controller controller)

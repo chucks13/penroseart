@@ -85,18 +85,6 @@ public readonly struct OnAirTimingInput
             phrase?.lengthBeats ?? -1,
             beatManager.TrackOrdinal ?? -1);
     }
-
-    /// <summary>Converts the snapshot into the low-level PhaseClock input kept behind On-Air Timing.</summary>
-    public PhaseInput ToPhaseInput()
-    {
-        return new PhaseInput(
-            Beat,
-            TotalBeats,
-            BeatInBar,
-            TrackPhaseActive,
-            BeatsUntilPhraseBoundary,
-            PhraseLengthBeats);
-    }
 }
 
 /// <summary>Director cue/cadence memory that is valid only within one forward pass through on-air timing.</summary>
@@ -170,9 +158,8 @@ public readonly struct TimingFrame
 {
     public static TimingFrame Unavailable { get; } = new TimingFrame(
         OnAirTimingInput.Unavailable,
-        PhaseClockReading.Unavailable,
+        PhaseReading.None,
         false,
-        PhaseConfidence.Unlocked,
         -1,
         false,
         default,
@@ -188,14 +175,11 @@ public readonly struct TimingFrame
     /// <summary>Current on-air beat, or -1 when unavailable.</summary>
     public readonly int CurrentBeat;
 
-    /// <summary>The 16-beat Phase reading for this frame.</summary>
-    public readonly PhaseClockReading Phase;
+    /// <summary>The Phase Lock reading for this frame.</summary>
+    public readonly PhaseReading Phase;
 
     /// <summary>Whether this frame has a Phase Anchor the Director can target.</summary>
     public readonly bool HasPhaseAnchor;
-
-    /// <summary>Confidence for the current Phase Anchor.</summary>
-    public readonly PhaseConfidence PhaseAnchorConfidence;
 
     /// <summary>Cue Mark where the Director should land its next Impact Point.</summary>
     public readonly int CueMarkBeat;
@@ -232,9 +216,8 @@ public readonly struct TimingFrame
 
     public TimingFrame(
         OnAirTimingInput input,
-        PhaseClockReading phase,
+        PhaseReading phase,
         bool hasPhaseAnchor,
-        PhaseConfidence phaseAnchorConfidence,
         int cueMarkBeat,
         bool hasPhraseWindow,
         PhraseWindow phraseWindow,
@@ -248,7 +231,6 @@ public readonly struct TimingFrame
         CurrentBeat = input.Beat;
         Phase = phase;
         HasPhaseAnchor = hasPhaseAnchor;
-        PhaseAnchorConfidence = phaseAnchorConfidence;
         CueMarkBeat = cueMarkBeat;
         BeatsUntilCueMark = hasPhaseAnchor && input.Beat >= 1 ? cueMarkBeat - input.Beat : -1;
         HasPhraseWindow = hasPhraseWindow;

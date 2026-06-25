@@ -32,8 +32,8 @@ public readonly struct DirectorStatus
         DirectorDecision.NotReady,
         false,
         false,
-        PhaseConfidence.Unlocked,
-        PhaseClockReading.Unavailable,
+        PhaseReading.None,
+        PhraseTrackerReading.None,
         TimingFrameSource.Unlocked,
         false,
         -1,
@@ -54,8 +54,8 @@ public readonly struct DirectorStatus
     public readonly DirectorDecision Decision;
     public readonly bool IsSyncedMode;
     public readonly bool HasPhaseAnchor;
-    public readonly PhaseConfidence PhaseAnchorConfidence;
-    public readonly PhaseClockReading Phase;
+    public readonly PhaseReading Phase;
+    public readonly PhraseTrackerReading Phrase;
     /// <summary>Source of the current On-Air Timing target.</summary>
     public readonly TimingFrameSource TimingSource;
     /// <summary>Whether fresh Track Phase replaced a coasted or weaker On-Air Timing target.</summary>
@@ -79,8 +79,8 @@ public readonly struct DirectorStatus
         DirectorDecision decision,
         bool isSyncedMode,
         bool hasPhaseAnchor,
-        PhaseConfidence phaseAnchorConfidence,
-        PhaseClockReading phase,
+        PhaseReading phase,
+        PhraseTrackerReading phrase,
         TimingFrameSource timingSource,
         bool timingReanchored,
         int phaseAnchorLandingBeat,
@@ -101,8 +101,8 @@ public readonly struct DirectorStatus
         Decision = decision;
         IsSyncedMode = isSyncedMode;
         HasPhaseAnchor = hasPhaseAnchor;
-        PhaseAnchorConfidence = phaseAnchorConfidence;
         Phase = phase;
+        Phrase = phrase;
         TimingSource = timingSource;
         TimingReanchored = timingReanchored;
         PhaseAnchorLandingBeat = phaseAnchorLandingBeat;
@@ -187,9 +187,6 @@ public sealed class Director
 
     /// <summary>Whether the Director currently has a phase grid to aim at.</summary>
     public bool HasPhaseAnchor => timingFrame.HasPhaseAnchor;
-
-    /// <summary>Confidence for the current phase anchor.</summary>
-    public PhaseConfidence PhaseAnchorConfidence => timingFrame.PhaseAnchorConfidence;
 
     /// <summary>Absolute beat where the current phase anchor next lands, or -1 when unlocked.</summary>
     public int PhaseAnchorLandingBeat => timingFrame.PhaseAnchorLandingBeat;
@@ -361,8 +358,8 @@ public sealed class Director
             decision,
             isSynced,
             timingFrame.HasPhaseAnchor,
-            timingFrame.PhaseAnchorConfidence,
             timingFrame.Phase,
+            phraseTrackerReading,
             timingFrame.Source,
             timingFrame.Reanchored,
             timingFrame.PhaseAnchorLandingBeat,
@@ -460,7 +457,6 @@ public sealed class Director
     private void RefreshTimingFrame()
     {
         var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
-        var previousConfidence = timingFrame.PhaseAnchorConfidence;
         var input = OnAirTimingInput.From(controller.beatManager);
 
         // Compose the PHASE (PhaseLock) and PHRASE (PhraseTracker) readings first, then plan cues off
@@ -483,9 +479,9 @@ public sealed class Director
             return;
         }
 
-        if (timingFrame.PhaseAnchorLandingBeat != previousLandingBeat || timingFrame.PhaseAnchorConfidence != previousConfidence)
+        if (timingFrame.PhaseAnchorLandingBeat != previousLandingBeat)
         {
-            Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} phase={FormatPhase()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
+            Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} phase={FormatPhaseReading()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
         }
     }
 
@@ -565,7 +561,6 @@ public sealed class Director
             input,
             cueFrame.Phase,
             cueFrame.HasPhaseAnchor,
-            cueFrame.PhaseAnchorConfidence,
             cueFrame.CueMarkBeat,
             cueFrame.HasPhraseWindow,
             cueFrame.PhraseWindow,
@@ -712,7 +707,7 @@ public sealed class Director
             return;
         }
 
-        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} phase={FormatPhase()} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} phase={FormatPhaseReading()} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
     }
 
     private void LogSyncedBeatIfNeeded(int beat)
@@ -724,7 +719,7 @@ public sealed class Director
 
         var beatsUntilLanding = timingFrame.HasPhaseAnchor ? timingFrame.PhaseAnchorLandingBeat - beat : -1;
         var canChangeAtLanding = timingFrame.HasPhaseAnchor && CanChangeAtBeat(timingFrame.PhaseAnchorLandingBeat);
-        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} phase={FormatPhase()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} phase={FormatPhaseReading()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
         lastLoggedSyncedBeat = beat;
     }
 
@@ -763,14 +758,6 @@ public sealed class Director
             : $"{transitionIndex}:<none>";
     }
 
-    private string FormatPhase()
-    {
-        return timingFrame.Phase.PhasePosition > 0
-            ? $"{timingFrame.Phase.PhasePosition}/16:{timingFrame.Phase.Confidence}"
-            : $"none:{timingFrame.Phase.Confidence}";
-    }
-
-    /// <summary>Trace fragment for the slice-03 PHASE-layer reading (PhaseLock), kept off the legacy <see cref="FormatPhase"/> fragment.</summary>
     private string FormatPhaseReading()
     {
         return phaseLockReading.Position > 0

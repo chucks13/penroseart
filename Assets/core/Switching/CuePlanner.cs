@@ -2,8 +2,8 @@ using System;
 
 /// <summary>
 /// Director-owned cue planner: interprets one live rhythm snapshot into the Director-facing
-/// <see cref="TimingFrame"/>. Owns PhaseInput construction, Cue Sheet derivation, the Cue Mark
-/// cursor, change-cadence memory, substantial beat-rewind handling, and Phase Anchor coasting.
+/// <see cref="TimingFrame"/>. Owns Cue Sheet derivation, the Cue Mark cursor, change-cadence
+/// memory, substantial beat-rewind handling, and Phase Anchor coasting.
 ///
 /// Relocated from the former On-Air Timing core (slice 04b). On-Air Timing is now a pure
 /// Phase/Phrase determiner (PhaseLock + PhraseTracker readings the Director composes); the cue
@@ -16,7 +16,6 @@ public sealed class CuePlanner
 
     private int lastBeat = -1;
     private bool hasPhaseAnchor;
-    private PhaseConfidence phaseAnchorConfidence = PhaseConfidence.Unlocked;
     private int phaseAnchorLandingBeat = -1;
     private readonly CueSheetPlans cueSheetPlans = new CueSheetPlans();
     private TimingFrameSource lastSource = TimingFrameSource.Unlocked;
@@ -392,7 +391,6 @@ public sealed class CuePlanner
     {
         lastBeat = -1;
         hasPhaseAnchor = false;
-        phaseAnchorConfidence = PhaseConfidence.Unlocked;
         phaseAnchorLandingBeat = -1;
         cueSheetPlans.ResetAll();
         lastSource = TimingFrameSource.Unlocked;
@@ -414,9 +412,6 @@ public sealed class CuePlanner
             throw new ArgumentOutOfRangeException(nameof(minimumChangeCadenceBeats), minimumChangeCadenceBeats, "Minimum cadence must be positive.");
         }
 
-        // Legacy stateless grid, kept only to populate the vestigial TimingFrame.Phase trace/status
-        // field; the cue decision below is driven entirely by the PhaseLock/PhraseTracker readings.
-        var legacyPhase = PhaseClock.Resolve(input.ToPhaseInput());
         var beatRewoundToNewPass = BeatRewoundToNewPass(lastBeat, input.Beat, minimumChangeCadenceBeats);
 
         var passLocalState = new PassLocalTimingState(
@@ -435,11 +430,11 @@ public sealed class CuePlanner
         {
             if (HasCoastablePhaseAnchor())
             {
-                return BuildCoastingFrame(input, legacyPhase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
+                return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
             }
 
             cueSheetPlans.ResetCurrent();
-            return BuildUnlockedFrame(input, legacyPhase, beatRewoundToNewPass, passState);
+            return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
         }
 
         // The gate is "do we have a usable grid position to plan interior cues against." A live phrase
@@ -459,7 +454,7 @@ public sealed class CuePlanner
             var reanchored = ReanchoredFrom(previousSource, target.Source, hasPhaseAnchor);
             return BuildAnchoredFrame(
                 input,
-                legacyPhase,
+                phase,
                 target,
                 beatRewoundToNewPass,
                 passState,
@@ -468,15 +463,15 @@ public sealed class CuePlanner
 
         if (hasPhaseAnchor && input.Beat >= 1)
         {
-            return BuildCoastingFrame(input, legacyPhase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
+            return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
         }
 
-        return BuildUnlockedFrame(input, legacyPhase, beatRewoundToNewPass, passState);
+        return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
     }
 
     private TimingFrame BuildCoastingFrame(
         OnAirTimingInput input,
-        PhaseClockReading phase,
+        in PhaseReading phase,
         bool beatRewoundToNewPass,
         PassLocalTimingState passState,
         int minimumChangeCadenceBeats)
@@ -487,7 +482,6 @@ public sealed class CuePlanner
             input,
             phase,
             true,
-            phaseAnchorConfidence,
             phaseAnchorLandingBeat,
             false,
             default,
@@ -500,21 +494,19 @@ public sealed class CuePlanner
 
     private TimingFrame BuildAnchoredFrame(
         OnAirTimingInput input,
-        PhaseClockReading phase,
+        in PhaseReading phase,
         ResolvedTimingTarget target,
         bool beatRewoundToNewPass,
         PassLocalTimingState passState,
         bool reanchored)
     {
         hasPhaseAnchor = true;
-        phaseAnchorConfidence = phase.Confidence;
         phaseAnchorLandingBeat = target.CueMarkBeat;
         lastSource = target.Source;
         return CreateFrame(
             input,
             phase,
             true,
-            phaseAnchorConfidence,
             phaseAnchorLandingBeat,
             target.HasPhraseWindow,
             target.PhraseWindow,
@@ -527,19 +519,17 @@ public sealed class CuePlanner
 
     private TimingFrame BuildUnlockedFrame(
         OnAirTimingInput input,
-        PhaseClockReading phase,
+        in PhaseReading phase,
         bool beatRewoundToNewPass,
         PassLocalTimingState passState)
     {
         hasPhaseAnchor = false;
-        phaseAnchorConfidence = PhaseConfidence.Unlocked;
         phaseAnchorLandingBeat = -1;
         lastSource = TimingFrameSource.Unlocked;
         return CreateFrame(
             input,
             phase,
             false,
-            PhaseConfidence.Unlocked,
             -1,
             false,
             default,
@@ -552,9 +542,8 @@ public sealed class CuePlanner
 
     private static TimingFrame CreateFrame(
         OnAirTimingInput input,
-        PhaseClockReading phase,
+        in PhaseReading phase,
         bool hasPhaseAnchor,
-        PhaseConfidence phaseAnchorConfidence,
         int cueMarkBeat,
         bool hasPhraseWindow,
         PhraseWindow phraseWindow,
@@ -568,7 +557,6 @@ public sealed class CuePlanner
             input,
             phase,
             hasPhaseAnchor,
-            phaseAnchorConfidence,
             cueMarkBeat,
             hasPhraseWindow,
             phraseWindow,

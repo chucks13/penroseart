@@ -370,7 +370,7 @@ public sealed class DirectorSyncedTailTests
             director.Tick(0f);
             Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
-            Assert.That(director.Status.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+            Assert.That(director.Status.Phase.State, Is.EqualTo(PhaseLockState.Coasting));
             Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
             Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
 
@@ -408,7 +408,7 @@ public sealed class DirectorSyncedTailTests
 
             Assert.That(director.Status.TimingReanchored, Is.True);
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-            Assert.That(director.Status.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Structural));
+            Assert.That(director.Status.Phase.State, Is.EqualTo(PhaseLockState.Locked));
             Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(641));
         }
         finally
@@ -429,7 +429,6 @@ public sealed class DirectorSyncedTailTests
         Assert.That(director.Status.IsSyncedMode, Is.True);
         Assert.That(director.Status.HasPhaseAnchor, Is.False);
         Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Unlocked));
-        Assert.That(director.Status.PhaseAnchorConfidence, Is.EqualTo(PhaseConfidence.Unlocked));
         Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForPhase));
         Assert.That(switcher.Status.TargetEffectIndex, Is.Not.EqualTo(1), "Unlocked timing should not cue the staged target.");
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(-1));
