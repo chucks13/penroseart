@@ -567,6 +567,35 @@ public sealed class CuePlanner
             cueSheet);
     }
 
+    /// <summary>
+    /// Re-aims a prior cue frame at the current beat for the Director's missed-zero-runway retarget: the
+    /// cue's phase, anchor, mark, window, source, and sheet are preserved while the beat-relative fields
+    /// (the current beat and the countdown to the mark) advance to <paramref name="currentFrame"/>.
+    /// TimingFrame assembly stays here so the Director never hand-builds one.
+    /// </summary>
+    public static TimingFrame Retarget(in TimingFrame cueFrame, in TimingFrame currentFrame)
+    {
+        var input = new OnAirTimingInput(
+            currentFrame.CurrentBeat,
+            currentFrame.Input.BeatInBar,
+            currentFrame.Input.TrackPhaseActive,
+            cueFrame.CueMarkBeat - currentFrame.CurrentBeat,
+            cueFrame.Input.PhraseLengthBeats,
+            currentFrame.Input.TrackOrdinal);
+        return CreateFrame(
+            input,
+            cueFrame.Phase,
+            cueFrame.HasPhaseAnchor,
+            cueFrame.CueMarkBeat,
+            cueFrame.HasPhraseWindow,
+            cueFrame.PhraseWindow,
+            cueFrame.Source,
+            currentFrame.BeatRewoundToNewPass,
+            currentFrame.PassLocalState,
+            currentFrame.Reanchored,
+            cueFrame.CueSheet);
+    }
+
     private static bool ReanchoredFrom(TimingFrameSource previousSource, TimingFrameSource source, bool hadPhaseAnchor)
     {
         return hadPhaseAnchor

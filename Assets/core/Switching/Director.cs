@@ -543,30 +543,7 @@ public sealed class Director
             return false;
         }
 
-        return TryStartSyncedCue(RetargetTimingFrame(previousFrame, currentFrame));
-    }
-
-    private static TimingFrame RetargetTimingFrame(TimingFrame cueFrame, TimingFrame currentFrame)
-    {
-        var input = new OnAirTimingInput(
-            currentFrame.CurrentBeat,
-            currentFrame.Input.BeatInBar,
-            currentFrame.Input.TrackPhaseActive,
-            cueFrame.CueMarkBeat - currentFrame.CurrentBeat,
-            cueFrame.Input.PhraseLengthBeats,
-            currentFrame.Input.TrackOrdinal);
-        return new TimingFrame(
-            input,
-            cueFrame.Phase,
-            cueFrame.HasPhaseAnchor,
-            cueFrame.CueMarkBeat,
-            cueFrame.HasPhraseWindow,
-            cueFrame.PhraseWindow,
-            cueFrame.Source,
-            currentFrame.BeatRewoundToNewPass,
-            currentFrame.PassLocalState,
-            currentFrame.Reanchored,
-            cueFrame.CueSheet);
+        return TryStartSyncedCue(CuePlanner.Retarget(previousFrame, currentFrame));
     }
 
     private SwitcherClockSnapshot CurrentSwitcherClockSnapshot(int beat)
