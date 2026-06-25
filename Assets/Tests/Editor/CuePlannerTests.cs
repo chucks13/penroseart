@@ -347,6 +347,31 @@ public sealed class CuePlannerTests
         Assert.That(frame.CueMarkBeat, Is.EqualTo(-1));
     }
 
+    [Test]
+    public void IrregularContradictedPhraseStillLandsTheMandatoryCueAtThePhraseBoundary()
+    {
+        // The load-bearing invariant: the phrase-end (mandatory) cue is phrase-driven and is NEVER gated
+        // on phase being Locked. A phrase whose length is not a multiple of 16 reads Contradicted (the
+        // 16-grid is in dispute), but the boundary is feed bedrock and always known, so the cue must
+        // still land at the phrase end. Phase state only refines interior placement.
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        // A 56-beat phrase (56 % 16 = 8) cannot subdivide into whole 16-beat phases. It runs 585..641
+        // with interior 16-beat marks at 585/601/617/633; beat 636 is past the last interior mark, so the
+        // mandatory phrase-end cue at 641 is the only target left.
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 636, beatsToPhraseBoundary: 5, phraseLengthBeats: 56),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Contradicted),
+            "A 56-beat phrase is irregular, so the phase grid is reported Contradicted.");
+        Assert.That(frame.HasPhraseWindow, Is.True);
+        Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(641));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(641),
+            "The mandatory phrase-end cue lands at the boundary despite the Contradicted phase.");
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+    }
+
     // Drives the CuePlanner through the same PHASE/PHRASE composition the Director performs: each frame
     // is read by a paired PhaseLock + PhraseTracker, then planned. Holds the stateful PhaseLock so the
     // held offset carries across a test's frame sequence, exactly as in the live Director.
