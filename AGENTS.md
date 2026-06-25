@@ -45,6 +45,7 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
 - When the user asks to replace a source of truth or data model, make the existing core system reflect the new model and update its real consumers. Do not import new runtime data into a side snapshot while leaving the application on the old model unless the user asks for a staged migration.
+- Do not cargo cult code for downstream aspects like, custom property drawers, custom inspectors. This is all for debug purposes. Do not preserving code, values, or functionality, for these purposes. Change them as needed. 
 
 ## Core Files and Systems
 
