@@ -179,6 +179,7 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.LabelField("TIMING / CUE SHEET", EditorStyles.boldLabel);
         DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Phase Count {FormatPhaseCount(status.Phase.Position)}");
         DrawRow("Timing Source", FormatTimingSource(status));
+        DrawRow("Beats Until Cue", FormatBeats(status.BeatsUntilLanding));
         DrawCueTimingRows(status, cueOverlay);
         DrawPhaseStrip(status.Phase.Position, cueOverlay);
         DrawCueSheet(status.CueSheet, status.CurrentBeat);

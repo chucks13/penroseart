@@ -33,6 +33,13 @@ public sealed class CuePlanner
     private int lastCueBeat = -1;
     private int lastChangeBeat = int.MinValue;
 
+    // Synthetic-fallback loop guard: the previous synthetic Cue Mark and its countdown. A countdown that
+    // climbs for the same mark on a substantial rewind means a loop sent the beat back before the mark
+    // could land — it is stranded past the looped section — so the fallback grids until it is reached.
+    private int syntheticCueMarkBeat = -1;
+    private int syntheticBeatsUntilCueMark = int.MinValue;
+    private bool syntheticCueMarkStranded;
+
     private readonly struct ResolvedTimingTarget
     {
         public readonly TimingFrameSource Source;
@@ -476,6 +483,7 @@ public sealed class CuePlanner
         phaseAnchorLandingBeat = -1;
         cueSheetPlans.ResetAll();
         syntheticCueGrid.Reset();
+        ResetSyntheticLoopGuard();
         lastSource = TimingFrameSource.Unlocked;
     }
 
@@ -633,11 +641,14 @@ public sealed class CuePlanner
         int minimumChangeCadenceBeats)
     {
         // Clear the real Cue Sheet lifecycle once on entering the fallback so a stale real sheet can't be
-        // reused (CueSheet.Matches is length-only) when a Phrase track later loads. Edge-triggered: while
-        // the synthetic grid drives nothing rebuilds the real plans, so re-clearing every frame is waste.
+        // reused (CueSheet.Matches is length-only) when a Phrase track later loads, and drop a stale loop
+        // guard so a stranded latch from an earlier synthetic spell can't leak across a real-Phrase
+        // excursion. Edge-triggered: while the synthetic grid drives nothing rebuilds the real plans, so
+        // re-clearing every frame is waste.
         if (lastSource != TimingFrameSource.SyntheticPhrase)
         {
             cueSheetPlans.ResetAll();
+            ResetSyntheticLoopGuard();
         }
 
         if (!syntheticCueGrid.TryResolve(
@@ -653,12 +664,44 @@ public sealed class CuePlanner
                 out var cueSheetStatus))
         {
             // Too early in the track to anchor a full synthetic window (its start would precede beat 1).
+            ResetSyntheticLoopGuard();
             return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
         }
 
+        var beatsUntilCueMark = resolvedCueMarkBeat - input.Beat;
+        var stranded = UpdateSyntheticLoopGuard(resolvedCueMarkBeat, beatsUntilCueMark);
+
         hasPhaseAnchor = true;
-        phaseAnchorLandingBeat = resolvedCueMarkBeat;
+        // Hold lastSource at SyntheticPhrase even while gridding: the mode is still the synthetic fallback,
+        // so the edge-triggered real-sheet clear above must not re-fire each looped frame, and a later real
+        // Phrase still reads SyntheticPhrase as the prior source for Reanchored.
         lastSource = TimingFrameSource.SyntheticPhrase;
+
+        if (stranded)
+        {
+            // A loop sent the beat back before this synthetic Cue Mark could land, so the mark sits past the
+            // looped section and is never reached. Cue on the 16-beat Phase grid instead — the same grid
+            // landing the real path uses with no Cue Sheet — until the countdown to the synthetic mark
+            // naturally reaches zero (the loop releases and the beat carries through), then resume synthetic
+            // cueing. The synthetic sheet status still rides along so the observatory shows the stranded
+            // mark we are coasting the grid beneath; the Director cues off the grid landing, not the sheet.
+            var gridLandingBeat = GetLandingBeatFromPhasePosition(input.Beat, phase.Position);
+            phaseAnchorLandingBeat = gridLandingBeat;
+            return CreateFrame(
+                input,
+                phase,
+                true,
+                gridLandingBeat,
+                false,
+                default,
+                TimingFrameSource.GridFallback,
+                beatRewoundToNewPass,
+                passState,
+                false,
+                cueSheetStatus);
+        }
+
+        phaseAnchorLandingBeat = resolvedCueMarkBeat;
         return CreateFrame(
             input,
             phase,
@@ -671,6 +714,46 @@ public sealed class CuePlanner
             passState,
             false,
             cueSheetStatus);
+    }
+
+    /// <summary>
+    /// Tracks the synthetic Cue Mark countdown across frames and reports whether the mark is stranded by a
+    /// loop. The countdown normally falls one-per-beat; any climb for the same mark means the beat moved
+    /// backward before the mark landed, so it is unreachable until the beat carries through. No rewind-size
+    /// gate — a loop of any length is caught, and a stray backstep just grids harmlessly until the mark is
+    /// reached. A new mark (the window rolled, or first frame) tracks clean; reaching the mark clears it.
+    /// </summary>
+    private bool UpdateSyntheticLoopGuard(int cueMarkBeat, int beatsUntilCueMark)
+    {
+        if (cueMarkBeat != syntheticCueMarkBeat)
+        {
+            syntheticCueMarkBeat = cueMarkBeat;
+            syntheticBeatsUntilCueMark = beatsUntilCueMark;
+            syntheticCueMarkStranded = false;
+            return false;
+        }
+
+        if (beatsUntilCueMark <= 0)
+        {
+            // Reached (or passed) the mark — any loop has released and carried through. Resume synthetic cueing.
+            syntheticCueMarkStranded = false;
+        }
+        else if (beatsUntilCueMark > syntheticBeatsUntilCueMark)
+        {
+            // The countdown climbed for the same mark: the beat looped back before the mark could land, so it
+            // is stranded past the looped section. Stays gridded until the mark is reached (clause above).
+            syntheticCueMarkStranded = true;
+        }
+
+        syntheticBeatsUntilCueMark = beatsUntilCueMark;
+        return syntheticCueMarkStranded;
+    }
+
+    private void ResetSyntheticLoopGuard()
+    {
+        syntheticCueMarkBeat = -1;
+        syntheticBeatsUntilCueMark = int.MinValue;
+        syntheticCueMarkStranded = false;
     }
 
     private static TimingFrame CreateFrame(

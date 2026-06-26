@@ -222,6 +222,10 @@ _Avoid_: calling this a fallback; it is the deliberate Synced Mode behavior for 
 Replacing the current Phase Anchor with a new one when fresh Track Phase data appears or contradicts the grid being coasted. Re-anchoring is how the wall gets back in phase after startup, data gaps, song position changes, or loop-like movement the current data can reveal.
 _Avoid_: layering multiple anchors; the Director has one current phase anchor.
 
+**Synthetic Phrase**:
+The beat-only fallback for a track that carries no Track Phase at all (never had phrase data), distinct from Coast, which continues a *recently lost* real anchor. When the clock runs but no Track Phase is present, the Director fabricates a rolling 64-beat Phrase Window on the running 4-count grid and runs it through the same Cue Sheet builder, so a phrase-less track still cues sparsely-but-bounded instead of idling, until a phrase-bearing track loads. If a Loop strands a synthetic Cue Mark — one sitting past the looped section, so the beat never reaches it — the wall cues on the bare 16-beat Phase grid until that mark is finally reached, then resumes synthetic cueing (ADR-0008).
+_Avoid_: reusing a synthetic Cue Sheet for a real Phrase; confusing it with Coast (Coast continues a real anchor, Synthetic Phrase invents one for a feed that never had phrase); calling the grid-while-looped behavior a separate scheduler.
+
 **Loop**:
 A live repeated section of the current music. Loops are powers of four and usually preserve Phase, but they can rewind or repeat beat numbers in ways that make absolute beat progress stale. A Loop inside the same Phrase Window is a new pass through the same Cue Sheet: it should keep the Phrase Window's Cue Marks and move the Director's cursor back to the next Cue Mark after the current beat, not create a new Phrase Window or reroll the sheet.
 _Avoid_: assuming a Loop means the wall is out of phase; assuming old absolute progress remains valid after a loop rewind; treating a same-window Loop as a new Phrase Window.

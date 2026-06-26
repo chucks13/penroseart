@@ -253,6 +253,69 @@ public sealed class CuePlannerTests
     }
 
     [Test]
+    public void SyntheticLoopStrandsTailCueMarkSoItGridFallsBackThenResumesWhenReached()
+    {
+        // An 8-bar (32-beat) loop in beat-only fallback replays only the front of the 64-beat synthetic
+        // window, so a Cue Mark selected in the tail is never reached: each loop rewinds the beat before
+        // it lands. The planner detects the stranding (the countdown to the same mark climbs on a rewind),
+        // cues on the 16-beat Phase grid meanwhile, then resumes the synthetic mark once the loop releases
+        // and the beat carries through to it (ADR-0008).
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        // Window 577..641; the first selected interior mark sits at 609, inside the looped-away tail.
+        var frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 600), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(9));
+
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 608), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(1));
+
+        // The loop sends the beat back to 577 (a 31-beat rewind) before 609 lands: stranded. Cue on the
+        // grid instead — a 16-grid one, not the synthetic 609.
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 577), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.BeatRewoundToNewPass, Is.True);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.GridFallback));
+        Assert.That(frame.HasPhraseWindow, Is.False);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
+        Assert.That(frame.CueMarkBeat, Is.Not.EqualTo(609));
+
+        // The loop releases and the beat carries through to 609: the synthetic mark lands and cueing resumes.
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 609), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void SyntheticShortLoopBelowChangeCadenceStillStrandsAndGridsThenResumes()
+    {
+        // The stranding detection has no rewind-size gate: ANY climb in the countdown for the same mark
+        // means the beat moved backward before the mark landed, so a loop shorter than the change cadence
+        // is caught just like a long one. Window 577..641, tail mark 609.
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        var frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 599), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
+
+        // A 7-beat loop sends the beat back to 592 — below the 16-beat cadence, so NOT counted as a new pass
+        // (BeatRewoundToNewPass stays false) — yet the climbing countdown still strands 609 and grids on phase.
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 592), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.BeatRewoundToNewPass, Is.False);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.GridFallback));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
+        Assert.That(frame.CueMarkBeat, Is.Not.EqualTo(609));
+
+        // The beat carries through to the mark: synthetic cueing resumes.
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 609), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(0));
+    }
+
+    [Test]
     public void SyntheticPhraseFallbackReanchorsWhenRealPhraseReturns()
     {
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
