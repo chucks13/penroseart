@@ -1271,6 +1271,9 @@ public class Controller : Singleton<Controller>
             case TimingFrameSource.GridFallback:
                 source = "phase-clock-grid";
                 break;
+            case TimingFrameSource.SyntheticPhrase:
+                source = "synthetic-phrase";
+                break;
             case TimingFrameSource.CueMark:
                 source = "cue-mark";
                 break;

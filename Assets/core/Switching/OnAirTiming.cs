@@ -9,6 +9,9 @@ public enum TimingFrameSource
     /// <summary>The next target is inferred from the 16-beat Phase grid.</summary>
     GridFallback,
 
+    /// <summary>The next target comes from a fabricated rolling Phrase Window when no Track Phase is present (beat-only fallback, ADR-0008).</summary>
+    SyntheticPhrase,
+
     /// <summary>The next target is an interior Cue Mark selected inside the current Phrase Window.</summary>
     CueMark,
 

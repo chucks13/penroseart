@@ -203,19 +203,71 @@ public sealed class CuePlannerTests
     }
 
     [Test]
-    public void TrackPhaseDisappearanceWithoutPriorStructuralAnchorUnlocks()
+    public void BeatOnlyWithoutPriorAnchorCuesFromSyntheticPhrase()
     {
+        // No Track Phase and no coastable anchor (a track that never carried phrase data): instead of
+        // idling Unlocked, the planner fabricates a 64-beat rolling Phrase Window anchored on the grid one
+        // and cues from it (ADR-0008). At beat 589 the window is 577..641 and the first selected mark is
+        // the interior 593.
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         var frame = cuePlanner.Plan(
-            TrackPhaseUnavailableInput(beat: 588),
+            TrackPhaseUnavailableInput(beat: 589),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.False);
-        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Coasting));
-        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Unlocked));
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(-1));
-        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(-1));
+        Assert.That(frame.HasPhaseAnchor, Is.True);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(frame.HasPhraseWindow, Is.True);
+        Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577));
+        Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(641));
+        Assert.That(frame.PhraseWindow.LengthBeats, Is.EqualTo(64));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void SyntheticPhraseWindowReusesWithinWindowThenRollsForwardWithFreshSubset()
+    {
+        var randomCalls = 0;
+        var cuePlanner = new CueHarness((minInclusive, maxExclusive) =>
+        {
+            randomCalls++;
+            return randomCalls == 1 && maxExclusive > minInclusive + 1 ? minInclusive + 1 : minInclusive;
+        });
+
+        var frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 589), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577));
+        var callsAfterFirstWindow = randomCalls;
+
+        // Same 64-window, beat advanced: the synthetic sheet is reused, not re-rolled.
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 600), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577), "Within the window the synthetic sheet is reused.");
+        Assert.That(randomCalls, Is.EqualTo(callsAfterFirstWindow), "A within-window advance must not re-roll the subset.");
+
+        // Past the window end: the window rolls forward by its length and re-rolls a fresh subset.
+        frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 650), minimumChangeCadenceBeats: 16);
+        Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(641), "Crossing the window end rolls the synthetic window forward 64 beats.");
+        Assert.That(frame.PhraseWindow.LengthBeats, Is.EqualTo(64));
+        Assert.That(randomCalls, Is.GreaterThan(callsAfterFirstWindow), "A roll re-rolls a fresh random subset.");
+    }
+
+    [Test]
+    public void SyntheticPhraseFallbackReanchorsWhenRealPhraseReturns()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        var synthetic = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 589), minimumChangeCadenceBeats: 16);
+        Assert.That(synthetic.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+
+        // A phrase-bearing track loads: the real path replaces the fabricated anchor and reports Reanchored.
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.Reanchored, Is.True);
+        Assert.That(frame.HasPhraseWindow, Is.True);
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary).Or.EqualTo(TimingFrameSource.CueMark));
     }
 
     [Test]

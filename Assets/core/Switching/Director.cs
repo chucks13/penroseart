@@ -770,6 +770,8 @@ public sealed class Director
         {
             case TimingFrameSource.GridFallback:
                 return "phase-clock-grid";
+            case TimingFrameSource.SyntheticPhrase:
+                return "synthetic-phrase";
             case TimingFrameSource.CueMark:
                 return "cue-mark";
             case TimingFrameSource.TrackPhaseBoundary:

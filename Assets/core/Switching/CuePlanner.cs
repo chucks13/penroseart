@@ -12,12 +12,20 @@ using System;
 /// </summary>
 public sealed class CuePlanner
 {
+    /// <summary>
+    /// Length in beats of the fabricated Phrase Window used for the beat-only fallback: four 16-beat
+    /// Phases, so the random subset has real interior choices and the window ties to the 64-beat
+    /// maximum Cue Mark gap (ADR-0008).
+    /// </summary>
+    private const int SyntheticPhraseLengthBeats = 64;
+
     private readonly Func<int, int, int> randomRange;
 
     private int lastBeat = -1;
     private bool hasPhaseAnchor;
     private int phaseAnchorLandingBeat = -1;
     private readonly CueSheetPlans cueSheetPlans = new CueSheetPlans();
+    private readonly SyntheticCueGrid syntheticCueGrid = new SyntheticCueGrid();
     private TimingFrameSource lastSource = TimingFrameSource.Unlocked;
 
     // Pass-local cue/cadence memory, owned outright (no Director round-trip). lastChangeBeat is the
@@ -362,6 +370,77 @@ public sealed class CuePlanner
         private int[] CueMarkOffsets => sheet.CueMarkOffsets ?? Array.Empty<int>();
     }
 
+    /// <summary>
+    /// Fabricates a rolling Cue Sheet for the beat-only fallback (no Track Phase). It anchors a
+    /// fixed-length synthetic Phrase Window on the grid one PhaseLock already holds, runs it through the
+    /// real <see cref="CueSheet.Build"/> so the fallback inherits the same sparse-but-bounded Cue Mark
+    /// character, and drives a real <see cref="CueSheetCursor"/> over it — so cursor advancement, the
+    /// consumed-mark skip, beat-rewind handling, and Status all match the live-phrase path exactly rather
+    /// than re-implementing them. It rolls the window forward by its length once consumed, re-rolling a
+    /// fresh random subset only on that advance. Kept separate from <see cref="CueSheetPlans"/> so a
+    /// fabricated sheet can never be reused for a real Phrase (ADR-0008).
+    /// </summary>
+    private sealed class SyntheticCueGrid
+    {
+        private readonly CueSheetCursor cursor = new CueSheetCursor();
+        private int phraseStartBeat = -1;
+
+        public void Reset()
+        {
+            cursor.Reset();
+            phraseStartBeat = -1;
+        }
+
+        public bool TryResolve(
+            int beat,
+            int gridOffset,
+            int lengthBeats,
+            bool beatRewoundToNewPass,
+            int? consumedCueMarkBeat,
+            int minimumChangeCadenceBeats,
+            Func<int, int, int> randomRange,
+            out int cueMarkBeat,
+            out PhraseWindow window,
+            out CueSheetStatus status)
+        {
+            cueMarkBeat = -1;
+            status = CueSheetStatus.Empty;
+
+            // The most recent length-aligned grid one at or before this beat. Honours PhaseLock's held
+            // offset so the window stays aligned through a transient mid-track Phrase dropout; for a track
+            // that never had Phrase the offset is 0 and the one sits at beat ≡ 1 (mod 16).
+            var startBeat = beat - PhaseGrid.Mod(beat - 1 - gridOffset, lengthBeats);
+            if (!PhraseWindow.TryFromStartAndLength(startBeat, lengthBeats, out window))
+            {
+                return false;
+            }
+
+            if (!cursor.HasSheet || startBeat != phraseStartBeat)
+            {
+                // The window advanced (or this is the first frame): re-roll a fresh sparse subset. The
+                // cadence predicate is built only here — not every frame — so steady-state fallback
+                // allocates nothing on the timing path.
+                var sheet = CueSheet.Build(
+                    window,
+                    beat,
+                    candidateCueMarkBeat => ChangeCadence.CanChangeAt(candidateCueMarkBeat, consumedCueMarkBeat, minimumChangeCadenceBeats),
+                    randomRange);
+                cursor.Replace(sheet, window);
+                phraseStartBeat = startBeat;
+            }
+            else if (beatRewoundToNewPass)
+            {
+                // A loop/rewind inside the same window re-arms the interior marks the looped section replays.
+                cursor.RewindCursor();
+            }
+
+            cursor.AdvanceTo(beat, consumedCueMarkBeat);
+            cueMarkBeat = cursor.CurrentCueMarkOr(window.EndBeat);
+            status = cursor.Status(cueMarkBeat);
+            return true;
+        }
+    }
+
     /// <summary>Creates a Cue Planner using Unity's runtime random source for boundary selection.</summary>
     public CuePlanner()
         : this((minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive))
@@ -396,6 +475,7 @@ public sealed class CuePlanner
         hasPhaseAnchor = false;
         phaseAnchorLandingBeat = -1;
         cueSheetPlans.ResetAll();
+        syntheticCueGrid.Reset();
         lastSource = TimingFrameSource.Unlocked;
     }
 
@@ -431,19 +511,21 @@ public sealed class CuePlanner
 
         if (TrackPhaseUnavailable(input) && input.Beat >= 1)
         {
+            // A recently lost real anchor keeps coasting its known grid; a track that never had Track
+            // Phase (no coastable anchor) cues from a fabricated rolling Phrase Window instead of idling,
+            // so a phrase-less track still sequences until phrase data loads (ADR-0008).
             if (HasCoastablePhaseAnchor())
             {
                 return BuildCoastingFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
             }
 
-            cueSheetPlans.ResetCurrent();
-            return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+            return BuildSyntheticFrame(input, phase, beatRewoundToNewPass, passState, minimumChangeCadenceBeats);
         }
 
         // The gate is "do we have a usable grid position to plan interior cues against." A live phrase
-        // always yields Position >= 1, so the mandatory phrase-end cue is never suppressed here; a bare
-        // beat with no phrase and nothing held reads Position == -1 (the one is genuinely unknown) and
-        // falls through to coast/unlock rather than cueing off a fabricated offset.
+        // always yields Position >= 1, so the mandatory phrase-end cue is never suppressed here. The
+        // beat-only case (no Track Phase) is handled above, so this branch only sees a present Track
+        // Phase channel — an active window or the idle tri-state-0 grid fallback.
         if (phase.Position >= 1 && input.Beat >= 1)
         {
             var previousSource = lastSource;
@@ -543,6 +625,54 @@ public sealed class CuePlanner
             CueSheetStatus.Empty);
     }
 
+    private TimingFrame BuildSyntheticFrame(
+        OnAirTimingInput input,
+        in PhaseReading phase,
+        bool beatRewoundToNewPass,
+        PassLocalTimingState passState,
+        int minimumChangeCadenceBeats)
+    {
+        // Clear the real Cue Sheet lifecycle once on entering the fallback so a stale real sheet can't be
+        // reused (CueSheet.Matches is length-only) when a Phrase track later loads. Edge-triggered: while
+        // the synthetic grid drives nothing rebuilds the real plans, so re-clearing every frame is waste.
+        if (lastSource != TimingFrameSource.SyntheticPhrase)
+        {
+            cueSheetPlans.ResetAll();
+        }
+
+        if (!syntheticCueGrid.TryResolve(
+                input.Beat,
+                phase.Offset,
+                SyntheticPhraseLengthBeats,
+                beatRewoundToNewPass,
+                passState.PreviousCueMarkBeat,
+                minimumChangeCadenceBeats,
+                randomRange,
+                out var resolvedCueMarkBeat,
+                out var phraseWindow,
+                out var cueSheetStatus))
+        {
+            // Too early in the track to anchor a full synthetic window (its start would precede beat 1).
+            return BuildUnlockedFrame(input, phase, beatRewoundToNewPass, passState);
+        }
+
+        hasPhaseAnchor = true;
+        phaseAnchorLandingBeat = resolvedCueMarkBeat;
+        lastSource = TimingFrameSource.SyntheticPhrase;
+        return CreateFrame(
+            input,
+            phase,
+            true,
+            resolvedCueMarkBeat,
+            true,
+            phraseWindow,
+            TimingFrameSource.SyntheticPhrase,
+            beatRewoundToNewPass,
+            passState,
+            false,
+            cueSheetStatus);
+    }
+
     private static TimingFrame CreateFrame(
         OnAirTimingInput input,
         in PhaseReading phase,
@@ -603,7 +733,9 @@ public sealed class CuePlanner
     {
         return hadPhaseAnchor
             && (source == TimingFrameSource.TrackPhaseBoundary || source == TimingFrameSource.CueMark)
-            && (previousSource == TimingFrameSource.Coast || previousSource == TimingFrameSource.GridFallback);
+            && (previousSource == TimingFrameSource.Coast
+                || previousSource == TimingFrameSource.GridFallback
+                || previousSource == TimingFrameSource.SyntheticPhrase);
     }
 
     private bool HasCoastablePhaseAnchor()

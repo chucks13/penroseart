@@ -418,27 +418,47 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void TrackPhaseDisappearanceWithoutPriorAnchorWaitsInSyncedMode()
+    public void TrackPhaseDisappearanceWithoutPriorAnchorCuesFromSyntheticPhrase()
     {
-        director.SetNextEffect(1);
-
         SetTrackPhaseUnavailableBeat(605);
         director.Tick(0f);
 
+        // A track that never had Track Phase no longer idles waiting for phrase data: it anchors on a
+        // fabricated rolling Phrase Window and cues from it (ADR-0008). The fabricated subset is random,
+        // so this pins only the always-true contract: a real future cue mark on a 16-grid downbeat.
         Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
         Assert.That(director.Status.IsSyncedMode, Is.True);
-        Assert.That(director.Status.HasPhaseAnchor, Is.False);
-        Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Unlocked));
-        Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForPhase));
-        Assert.That(switcher.Status.TargetEffectIndex, Is.Not.EqualTo(1), "Unlocked timing should not cue the staged target.");
-        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(-1));
+        Assert.That(director.Status.HasPhaseAnchor, Is.True);
+        Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.GreaterThan(605), "The synthetic anchor targets a real future beat.");
+        Assert.That((director.Status.PhaseAnchorLandingBeat - 1) % 16, Is.EqualTo(0), "Synthetic cue marks land on a 16-grid downbeat.");
+    }
 
-        SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
-        director.Tick(0f);
+    [Test]
+    public void SyntheticPhraseFallbackReanchorsToRealPhraseInDirector()
+    {
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
 
-        Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Fresh structural timing should let the Director resume cueing from a valid boundary.");
-        Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
+            SetTrackPhaseUnavailableBeat(605);
+            director.Tick(0f);
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
+
+            // A phrase-bearing track loads after the beat-only stretch: the Director hands back to the real
+            // structural path and reports the reanchor (ADR-0008). The mandatory boundary is deterministic.
+            SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 3, phraseLengthBeats: 32);
+            director.Tick(0f);
+
+            Assert.That(director.Status.TimingReanchored, Is.True);
+            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
     }
 
     [Test]
