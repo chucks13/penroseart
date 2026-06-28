@@ -1,5 +1,6 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
+using System.Xml.Linq;
 
 /// <summary>
 /// Alternates two colors across tile types with a ping-pong time curve.
@@ -12,6 +13,9 @@ public class Pulse : EffectBase
     private float seconds;
     private Color color;
     private float colorDelta;
+    private float[] wave = new float[100];
+    int beatMode;
+    float maxradius = 0;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -27,6 +31,7 @@ public class Pulse : EffectBase
     public override void Init()
     {
         base.Init();
+
     }
 
     /// <summary>
@@ -38,9 +43,16 @@ public class Pulse : EffectBase
         color = Color.HSVToRGB(Random.value, 1f, 1f);
         seconds = Random.Range(1f, 5f);
         colorDelta = Random.Range(0.25f, 0.75f);
-
+        beatVariant=beatManager.GetRandomVariantChill();
         startColor = color;
         endColor = startColor.Delta(colorDelta);
+        beatMode = Random.Range(0, 2);
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            float r = tiles[i].radius;
+            if (r > maxradius)
+                maxradius = r;
+        }
     }
 
     /// <summary>
@@ -54,13 +66,38 @@ public class Pulse : EffectBase
     public override void Draw()
     {
         var t = Mathf.InverseLerp(0f, seconds, Mathf.PingPong(effectTime, seconds));
+        float waveHeight = beatManager.GetBeatBrightness(beatVariant, 0.0f, 1.0f, beatEnable);
+        for (int i = wave.Length - 1; i > 0; i--)
+            wave[i] = wave[i - 1];
+        wave[0] = waveHeight;
+
 
         var color1 = Color.Lerp(color, endColor, t);
         var color2 = Color.Lerp(endColor, color, t);
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = tiles[i].type == 0 ? color1 : color2;
+            int waveidx = (int)(tiles[i].radius/maxradius*(wave.Length-1));
+            if (waveidx >= wave.Length)
+                waveidx = wave.Length - 1;
+
+            Color color = tiles[i].type == 0 ? color1 : color2;
+            Color.RGBToHSV(color, out float h, out float s, out float v);
+
+            switch (beatMode)
+            {
+                case 0:
+                    h += wave[waveidx];
+                    break;
+                case 1:
+                    s += wave[waveidx];
+                    break;
+                case 2:
+                    v += wave[waveidx];
+                    break;
+            }
+
+            buffer[i] = Color.HSVToRGB(h % 1f, s, v);
         }
     }
 }
