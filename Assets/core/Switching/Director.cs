@@ -290,10 +290,20 @@ public sealed class Director
         if (IsSyncedMode && controller.beatManager.Beat is { } beat)
         {
             TickSyncedMode(beat);
-            return;
+        }
+        else
+        {
+            // No grid position is derivable without a synced beat. TickSyncedMode would have refreshed
+            // phaseLockReading; the standalone path must reset it explicitly so a stale synced reading
+            // never leaks past a mode exit and the published Phase reads "not in phase" immediately.
+            phaseLockReading = PhaseReading.None;
+            TickStandaloneMode(deltaTime);
         }
 
-        TickStandaloneMode(deltaTime);
+        // Single writer, every frame: mirror this frame's verdict (including None) into the effect-facing
+        // BeatManager facade, so effects read the live Phase without reaching into the Switching layer.
+        // Publish-before-render is safe — Controller ticks the Director before the Switcher renders.
+        controller.beatManager.PublishPhase(phaseLockReading);
     }
 
     /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence.</summary>

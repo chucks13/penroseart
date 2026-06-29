@@ -211,8 +211,8 @@ The Director's ongoing effort to keep Performer changes aligned to the Phase Anc
 _Avoid_: assuming the wall is either perfectly synced or unsynced forever; phase lock is continuously maintained.
 
 **Phase Confidence**:
-How strongly the current Phase Anchor is trusted, from unknown, to beat-in-bar guess, to absolute-beat assumption, to track-end cross-check, to true Track Phase structure. Confidence describes the evidence for where the one is, not how good the visual looks.
-_Avoid_: treating all beat-derived anchors as equally musical; Track Phase is stronger evidence than plain beat count.
+How much to trust where the one sits on the 16-beat Phase this frame, expressed as the three `PhaseLockState` values: **Locked** (offset freshly anchored or steadily dead-reckoned — the one is trusted), **Coasting** (no fresh anchor, e.g. Track Phase dropped out, so the last good offset is held), and **Contradicted** (a freshly derived offset disagreed with the held one, kept pending the next clean re-latch). Effects read it as `BeatManager.Phase.Confidence`; all three are *in-phase* readings with a valid Phase Count — they differ only in trust. Confidence is about the evidence for where the one is, not how good the visual looks. Losing the clock is **not** a low-confidence value — it is a Standalone Mode exit, surfaced as a null `BeatManager.Phase`, not a fourth state.
+_Avoid_: describing Phase Confidence as a five-level evidence ladder (retired); conflating it with the **Timing Frame** source/reason (which kind of target the next cue aims at — Cue Mark, Track Phase Boundary, Synthetic Phrase, Grid Fallback, Coast); treating Coasting or Contradicted as out-of-phase.
 
 **Coast**:
 Continuing on the last known Phase Anchor when Track Phase data temporarily disappears. Coasting preserves the last musical grid until fresh phrase data returns or no anchor has ever been known.
@@ -321,6 +321,10 @@ _Avoid_: using Selected Phase Boundary as the canonical name for Cue Sheet items
 **Phase Count**:
 The wall's 1-based count within the current Phase. A 4-beat Runway begins at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
+
+**`BeatManager.Phase` (`PhaseInfo`)**:
+The effect-facing read of the live **Phase**: a nullable `PhaseInfo { Confidence, Count, Progress }` (null = not in a phase). `Confidence` is the **Phase Confidence** `PhaseLockState`; `Count` is the 1..16 **Phase Count**; `Progress` is the 0..1 position through the 16-beat Phase. The Director owns the `PhaseLock` and publishes its reading into BeatManager once per frame; effects read only this facade, never the Switching layer. The struct is intentionally one letter from the phrase-window `PhraseInfo` (the **Track Phase** read) — distinct concepts.
+_Avoid_: confusing `PhaseInfo` with `PhraseInfo`; reaching into `Director`/`PhaseLock` from an effect; treating a null `Phase` as an error rather than "not in a phase right now".
 
 **Fill**:
 A Fill is the musical event described by BeatManager's Fill state. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). The Director only uses Fill state to cast Effects and Transitions whose Repertoire says they support Fill for the relevant Cue. The selected Effect or Transition owns how it renders the Fill from BeatManager data.
