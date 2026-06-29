@@ -235,6 +235,57 @@ public struct Waveform
     }
 
     /// <summary>
+    /// Returns the shortest normalized bar distance between any two audible peaks in this Waveform.
+    /// </summary>
+    /// <remarks>
+    /// Only Humps with amplitude greater than 0 count as peaks. The closing wrap gap from the last audible
+    /// peak back to the first audible peak in the next bar is included. Returns 0 when fewer than two audible
+    /// peaks exist.
+    /// </remarks>
+    public float ShortestNonZeroPeakSpacing()
+    {
+        if (humps == null || humps.Length < 2)
+        {
+            return 0f;
+        }
+
+        var firstPeak = -1f;
+        var previousPeak = -1f;
+        var shortest = 1f;
+        var audiblePeakCount = 0;
+
+        for (var i = 0; i < humps.Length; i++)
+        {
+            var h = humps[i];
+            if (h.amp <= 0f || h.width <= 0f || h.start < 0f || h.start >= 1f)
+            {
+                continue;
+            }
+
+            var peak = h.start;
+            if (audiblePeakCount == 0)
+            {
+                firstPeak = peak;
+            }
+            else
+            {
+                shortest = Mathf.Min(shortest, peak - previousPeak);
+            }
+
+            previousPeak = peak;
+            audiblePeakCount++;
+        }
+
+        if (audiblePeakCount < 2)
+        {
+            return 0f;
+        }
+
+        var wrapGap = (firstPeak + 1f) - previousPeak;
+        return Mathf.Clamp01(Mathf.Min(shortest, wrapGap));
+    }
+
+    /// <summary>
     /// Shapes the peak: returns brightness in <c>[0..1]</c> at normalized distance <paramref name="u"/> from a beat.
     /// </summary>
     /// <remarks>

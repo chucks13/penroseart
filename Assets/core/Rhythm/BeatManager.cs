@@ -693,6 +693,27 @@ public partial class BeatManager
     }
 
     /// <summary>
+    /// Returns the shortest time, in milliseconds, between audible peaks in the selected Waveform.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Waveform.ShortestNonZeroPeakSpacing"/> returns a normalized fraction of the whole bar, while
+    /// <c>beatAverageMs</c> is one beat. Multiplying by <see cref="Waveform.BeatsPerBar"/> converts the spacing
+    /// to beat units before converting to milliseconds. Returns 0 when the beat clock is inactive/unavailable,
+    /// the average beat duration is not known, or the Waveform has fewer than two audible peaks.
+    /// </remarks>
+    public float GetShortestNonZeroPeakSpacingMs(int variant)
+    {
+        if (!IsActive || beatData.snapshot.beatAverageMs <= 0)
+        {
+            return 0f;
+        }
+
+        return GetWaveform(variant).ShortestNonZeroPeakSpacing()
+            * Waveform.BeatsPerBar
+            * beatData.snapshot.beatAverageMs;
+    }
+
+    /// <summary>
     /// Returns true while the current beat gate is active and allowed by one-shot beat variants.
     /// </summary>
     /// <remarks>

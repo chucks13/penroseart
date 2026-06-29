@@ -110,6 +110,38 @@ public sealed class WaveformTests
         Assert.That(wf.Evaluate(0f), Is.EqualTo(0f).Within(Tol));
     }
 
+    // --- Peak spacing ---
+
+    [Test]
+    public void ShortestNonZeroPeakSpacing_ReturnsClosestAudiblePeakGap()
+    {
+        var wf = Waveform.Parse("HQQ", "844"); // audible peaks at 0, 0.5, 0.75; wrap gap back to 0 is 0.25
+        Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(0.25f).Within(Tol));
+    }
+
+    [Test]
+    public void ShortestNonZeroPeakSpacing_IgnoresSilentPeaks()
+    {
+        var wf = Waveform.Parse("QQQQ", "8080"); // audible peaks at 0 and 0.5 only
+        Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(0.5f).Within(Tol));
+    }
+
+    [Test]
+    public void ShortestNonZeroPeakSpacing_ReturnsZeroForSingleAudiblePeak()
+    {
+        var wf = Waveform.Parse("QQQQ", "8000");
+        Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(0f).Within(Tol));
+    }
+
+    [Test]
+    public void GetShortestNonZeroPeakSpacingMs_ConvertsBarFractionToMilliseconds()
+    {
+        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // 500 ms per beat
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.GetShortestNonZeroPeakSpacingMs(0), Is.EqualTo(500f).Within(Tol));
+    }
+
     // --- Malformation is logged, never silently substituted ---
 
     [Test]
