@@ -444,11 +444,6 @@ public sealed class Director
         var previousTimingFrame = timingFrame;
         lastSyncedBeat = beat;
 
-        if (controller.TryGetHeldEffectIndex(out _))
-        {
-            return;
-        }
-
         RefreshTimingFrame();
 
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
@@ -628,6 +623,13 @@ public sealed class Director
             cueIntent.TargetEffectIndex,
             transitionIndex,
             repertoire);
+        if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
+        {
+            cuePlanner.RecordCueIssued(beat);
+            Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} start={cueIntent.BeatPlan.StartBeat} impact={cueIntent.BeatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+            return true;
+        }
+
         var clock = CurrentSwitcherClockSnapshot(beat);
         switcher.UpsertLoadedCue(cue, clock);
         CommitSentCue(beat, cue, cueIntent.BeatPlan);

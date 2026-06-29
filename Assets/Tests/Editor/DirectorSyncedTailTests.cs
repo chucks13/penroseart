@@ -597,6 +597,22 @@ public sealed class DirectorSyncedTailTests
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(-1));
     }
 
+
+    [Test]
+    public void HeldEffectStillRefreshesOnAirTimingPhase()
+    {
+        controller.heldEffect = 1;
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Hold));
+        Assert.That(director.Status.HasPhaseAnchor, Is.True);
+        Assert.That(director.Status.Phase.Position, Is.EqualTo(13));
+        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.CueSheet.HasSheet, Is.True);
+    }
+
     [Test]
     public void LiveButIdleSentinelDropsToStandaloneAndAbortsLoadedCue()
     {
