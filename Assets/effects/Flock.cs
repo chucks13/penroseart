@@ -15,7 +15,7 @@ public class Flock : EffectBase
     private float alignment = 0.75f;
     private float cohesion = 1f;
     private float separation = 1.25f;
-    private int lastPhasePosition = -1;
+    private int lastPhaseCount;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -65,7 +65,7 @@ public class Flock : EffectBase
     public override void OnStart()
     {
         base.OnStart();
-        lastPhasePosition = controller.DirectorStatus.Phase.Position;
+        lastPhaseCount = beatManager.Phase?.Count ?? 0;
 
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
@@ -96,17 +96,20 @@ public class Flock : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// Selects a new Waveform once at the one of each 16-beat On-Air Timing Phase.
+    /// Selects a new Waveform once at the one of each 16-beat On-Air Timing Phase, but only when the Phase
+    /// lock is trusted (<see cref="PhaseLockState.Locked"/>) so a Coasting / Contradicted reading holds the
+    /// current Waveform instead of re-rolling on a low-trust Phase.
     /// </summary>
     private void RerollWaveformOnPhaseOne()
     {
-        var phasePosition = controller.DirectorStatus.Phase.Position;
-        if (phasePosition == 1 && lastPhasePosition != 1)
+        var phase = beatManager.Phase;
+        var phaseCount = phase?.Count ?? 0;
+        if (phaseCount == 1 && lastPhaseCount != 1 && phase?.Confidence == PhaseLockState.Locked)
         {
             beatVariant = beatManager.GetRandomVariant();
         }
 
-        lastPhasePosition = phasePosition;
+        lastPhaseCount = phaseCount;
     }
 
     /// <summary>
