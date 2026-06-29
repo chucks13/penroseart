@@ -16,6 +16,7 @@ public class Pulse : EffectBase
     private float[] wave = new float[100];
     int beatMode;
     float maxradius = 0;
+    float pulseMultipler;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -43,10 +44,11 @@ public class Pulse : EffectBase
         color = Color.HSVToRGB(Random.value, 1f, 1f);
         seconds = Random.Range(1f, 5f);
         colorDelta = Random.Range(0.25f, 0.75f);
-        beatVariant=beatManager.GetRandomVariantChill();
+        beatVariant = beatManager.GetRandomVariantChill();
         startColor = color;
         endColor = startColor.Delta(colorDelta);
         beatMode = Random.Range(0, 2);
+        pulseMultipler = Random.value * 0.125f + 0.125f;
         for (int i = 0; i < buffer.Length; i++)
         {
             float r = tiles[i].radius;
@@ -77,25 +79,26 @@ public class Pulse : EffectBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            int waveidx = (int)(tiles[i].radius/maxradius*(wave.Length-1));
+            int waveidx = (int)(tiles[i].radius / maxradius * (wave.Length - 1));
             if (waveidx >= wave.Length)
                 waveidx = wave.Length - 1;
 
             Color color = tiles[i].type == 0 ? color1 : color2;
             Color.RGBToHSV(color, out float h, out float s, out float v);
 
-            switch (beatMode)
-            {
-                case 0:
-                    h += wave[waveidx];
-                    break;
-                case 1:
-                    s += wave[waveidx];
-                    break;
-                case 2:
-                    v += wave[waveidx];
-                    break;
-            }
+            if (IsBeatActive)
+                switch (beatMode)
+                {
+                    case 0:
+                        h += wave[waveidx] * pulseMultipler;
+                        break;
+                    case 1:
+                        s += wave[waveidx] * pulseMultipler * 2f;
+                        break;
+                    case 2:
+                        v += wave[waveidx] * (1f - pulseMultipler);
+                        break;
+                }
 
             buffer[i] = Color.HSVToRGB(h % 1f, s, v);
         }
