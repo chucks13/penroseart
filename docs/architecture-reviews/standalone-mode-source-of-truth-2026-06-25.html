@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Standalone-mode source of truth — PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+    <style>
+      body { background: #020617; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mermaid { background: #0b1120; border-radius: 0.5rem; padding: 0.75rem; }
+      .chip { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      code { color: #a5b4fc; }
+      a { color: #6ee7b7; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+      table td, table th { vertical-align: top; }
+      .leak { stroke: #dc2626; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-6xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-5">
+        <p class="chip text-emerald-400">PenroseArt · critical-issue investigation · 2026-06-25</p>
+        <h1 class="text-4xl font-serif text-slate-50">Standalone mode has no single source of truth</h1>
+        <div class="rounded-lg deep border border-slate-800 p-5 space-y-3 text-sm">
+          <p class="text-slate-300">
+            Follow-up to the on-air-timing branch review's Critical finding. Scope: every site in the runtime that
+            decides or consumes "are we in standalone (no-beat) mode?". Reviewed on <code>master</code> at
+            <code>19f686e8</code> (the merged branch). Conclusion verified against code, not docs.
+          </p>
+          <p class="text-slate-200">
+            <span class="font-semibold text-red-300">Conclusion:</span> the standalone/synced decision is not one
+            decision. It is re-derived independently at <strong>five</strong> places from <strong>three different
+            signals</strong> at three strictness levels. The <em>effects</em> and the <em>Director</em> read
+            different signals, so they disagree in exactly one state — live OSC present, no usable clock — and in
+            that state the Director freezes while the effects correctly run standalone. This is a missing seam, not
+            a missing wire.
+          </p>
+        </div>
+        <div class="grid sm:grid-cols-4 gap-3 text-sm">
+          <div class="rounded border border-red-900 bg-red-950/20 p-3"><p class="chip text-red-300">Symptom</p><p>Director sequencing freezes on no-clock OSC</p></div>
+          <div class="rounded border border-amber-900 bg-amber-950/20 p-3"><p class="chip text-amber-300">Root cause</p><p>Mode re-derived from 3 signals, no authority</p></div>
+          <div class="rounded border border-indigo-900 bg-indigo-950/20 p-3"><p class="chip text-indigo-300">Divergence</p><p>Effects read <code>IsActive</code>; Director reads <code>IsLiveSource</code></p></div>
+          <div class="rounded border border-emerald-900 bg-emerald-950/20 p-3"><p class="chip text-emerald-300">Fix shape</p><p>One predicate, owned by BeatManager</p></div>
+        </div>
+        <p class="text-xs text-slate-500">
+          Legend: solid box = module · dashed line = seam · <span class="text-red-400">red edge = signal read by the wrong consumer</span> ·
+          thick box = proposed deep module.
+        </p>
+      </header>
+
+      <!-- ===================== THE THREE SIGNALS ===================== -->
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">Three signals, one question</h2>
+        <p class="text-sm text-slate-400 max-w-3xl">
+          Everything downstream is trying to answer one question — <em>is there a usable musical clock right now?</em> —
+          but each consumer asks a different proxy. The proxies agree most of the time, which is why this hid until
+          the on-air-timing work made the Director act on the wrong one.
+        </p>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart TD
+  OSC["RaveOscReceiver (UDP 7000)<br/>IsBroadcasting = hasSnapshot AND packet &lt; 0.25s ago"]:::ext
+  OSC -->|"SetLiveBeatSource(broadcasting)"| LIVE
+  OSC -->|"CopyFrom(latest): bpm, beat_in_bar applied verbatim<br/>(sentinel -1 is valid data)"| BPM
+
+  LIVE["BeatManager.IsLiveSource<br/>= liveBeatActive<br/><b>transport liveness</b>"]:::sig
+  BPM["BeatManager.IsActive<br/>= beatData != null AND bpm &gt; 0<br/><b>usable clock</b>"]:::sig
+  BEAT["BeatManagerQueries.Beat<br/>= IsActive AND beat.current &gt;= 1<br/><b>usable beat number</b>"]:::sig
+  FLOOR["PhaseLock.StandAloneFloor<br/>= beat_in_bar &lt; 1<br/><b>4-count gone</b>"]:::sig
+
+  BPM --> BEAT
+  BPM -.derives.-> FLOOR
+
+  LIVE ==>|"Director.IsSyncedMode"| DIR
+  BEAT ==>|"Tick inner gate"| DIR
+  LIVE ==>|"MarkChangedOnCurrentBeat (+ Beat)"| DIR
+  BPM ==>|"IsBeatActive + all nullable queries"| FX
+  FLOOR ==> PT
+
+  DIR["Director<br/>mode + sequencing"]:::dir
+  FX["Effects / Transitions<br/>idle vs beat-reactive"]:::fx
+  PT["PhraseTracker<br/>suppress phrase"]:::core
+
+  classDef ext fill:#1e293b,stroke:#64748b,color:#dbeafe;
+  classDef sig fill:#3730a3,stroke:#818cf8,color:#e0e7ff;
+  classDef dir fill:#7f1d1d,stroke:#f87171,color:#fee2e2;
+  classDef fx fill:#064e3b,stroke:#34d399,color:#d1fae5;
+  classDef core fill:#312e81,stroke:#a5b4fc,color:#e0e7ff;
+          </pre>
+        </div>
+        <p class="text-sm text-slate-400">
+          The Director's mode branch keys off <code>IsLiveSource</code> (transport). Every effect keys off
+          <code>IsActive</code> (usable clock). Those are not the same predicate, and nothing reconciles them.
+        </p>
+      </section>
+
+      <!-- ===================== INVENTORY ===================== -->
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">Where the mode decision lives today</h2>
+        <p class="text-sm text-slate-400">Every site that produces or consumes the standalone/synced distinction. Verified on <code>master</code>.</p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left">
+              <tr><th class="p-3">Site</th><th class="p-3">Signal it reads</th><th class="p-3">Effective meaning</th><th class="p-3">Role</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td class="p-3"><code>RaveOscReceiver.ApplyTo</code><br/><span class="text-slate-500 text-xs">RaveOscReceiver.cs:106–123, 126–129</span></td>
+                <td class="p-3"><code>IsBroadcasting</code> (hasSnapshot + 0.25s grace)</td>
+                <td class="p-3">OSC transport carrying recognized packets</td>
+                <td class="p-3 text-indigo-300">Producer — sets liveness</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>BeatManager.IsLiveSource</code><br/><span class="text-slate-500 text-xs">BeatManager.cs:151</span></td>
+                <td class="p-3"><code>liveBeatActive</code></td>
+                <td class="p-3">Transport is live (says nothing about tempo)</td>
+                <td class="p-3 text-indigo-300">Authority A (transport)</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>BeatManager.IsActive</code><br/><span class="text-slate-500 text-xs">BeatManager.cs:215</span></td>
+                <td class="p-3"><code>beatData != null &amp;&amp; bpm &gt; 0</code></td>
+                <td class="p-3">A usable clock exists</td>
+                <td class="p-3 text-emerald-300">Authority B (usable clock)</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>BeatManagerQueries.Beat</code> &amp; siblings<br/><span class="text-slate-500 text-xs">BeatManagerQueries.cs:261–271, Envelope/Pulse/Phase/…</span></td>
+                <td class="p-3"><code>IsActive &amp;&amp; beat.current &gt;= 1</code> → null</td>
+                <td class="p-3">A usable beat <em>number</em> exists</td>
+                <td class="p-3 text-emerald-300">Authority C (usable beat)</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>PhaseLock.StandAloneFloor</code><br/><span class="text-slate-500 text-xs">PhaseLock.cs:98–105</span></td>
+                <td class="p-3"><code>beat_in_bar &lt; 1</code></td>
+                <td class="p-3">The 4-count clock is gone (ADR-0004 mode exit)</td>
+                <td class="p-3 text-amber-300">Authority D (4-count)</td>
+              </tr>
+              <tr class="bg-red-950/10">
+                <td class="p-3"><code>Director.IsSyncedMode</code><br/><span class="text-slate-500 text-xs">Director.cs:193</span></td>
+                <td class="p-3 text-red-300"><code>IsLiveSource</code></td>
+                <td class="p-3">Treats transport-live as synced</td>
+                <td class="p-3 text-red-300">Consumer — mode branch</td>
+              </tr>
+              <tr class="bg-red-950/10">
+                <td class="p-3"><code>Director.Tick</code><br/><span class="text-slate-500 text-xs">Director.cs:278–293</span></td>
+                <td class="p-3 text-red-300"><code>IsSyncedMode</code> then <code>Beat</code> (no else)</td>
+                <td class="p-3">Synced+no-beat falls through to nothing</td>
+                <td class="p-3 text-red-300">Consumer — the freeze</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>Director.OnTimerFinished</code> / <code>MarkChangedOnCurrentBeat</code><br/><span class="text-slate-500 text-xs">Director.cs:331–341, 912–918</span></td>
+                <td class="p-3"><code>IsSyncedMode</code> / <code>IsLiveSource &amp;&amp; Beat</code></td>
+                <td class="p-3">Two more inline combinations of the same signals</td>
+                <td class="p-3 text-amber-300">Consumer — inconsistent</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>EffectBase.IsBeatActive</code> + helpers + all effects<br/><span class="text-slate-500 text-xs">EffectBase.cs:34, 99–116; Flock, ColorSparkle, Angles, …</span></td>
+                <td class="p-3 text-emerald-300"><code>IsActive</code> (via queries → null)</td>
+                <td class="p-3">Idle when no usable clock; react when present</td>
+                <td class="p-3 text-emerald-300">Consumer — correct &amp; consistent</td>
+              </tr>
+              <tr>
+                <td class="p-3"><code>Director.LogModeIfChanged</code> / Controller HUD<br/><span class="text-slate-500 text-xs">Director.cs:661–676; Controller.cs:1174–1218</span></td>
+                <td class="p-3"><code>DirectorMode</code> (from <code>IsLiveSource</code>)</td>
+                <td class="p-3">Reports SYNC/STANDALONE/HOLD off transport</td>
+                <td class="p-3 text-slate-400">Consumer — diagnostics</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
+          The trace at <code>Director.cs:674</code> already prints both signals side by side:
+          <code>MODE …->… live={IsLiveSource} beat={Beat}</code>. The author knew they were two different things;
+          the mode branch just picked the wrong one. <code>MODE Synced live=True beat=null</code> is a representable,
+          logged state — and it is the freeze.
+        </div>
+      </section>
+
+      <!-- ===================== TRI-STATE ===================== -->
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">The world is tri-state; the Director's branch is binary</h2>
+        <p class="text-sm text-slate-400 max-w-3xl">
+          <code>ClearToNoBeat</code> (BeatManager.cs:731–742) and the live-sentinel path <em>both</em> leave
+          <code>bpm = -1</code>, so <code>IsActive</code> is false in two different worlds. The only thing separating
+          them is <code>liveBeatActive</code>. That makes three real states, and the consumers map them differently.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left">
+              <tr>
+                <th class="p-3">State</th>
+                <th class="p-3"><code>IsLiveSource</code></th>
+                <th class="p-3"><code>IsActive</code></th>
+                <th class="p-3"><code>Beat</code></th>
+                <th class="p-3">Effects do</th>
+                <th class="p-3">Director does</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td class="p-3 font-semibold text-slate-100">1 · No OSC</td>
+                <td class="p-3 text-slate-400">false</td>
+                <td class="p-3 text-slate-400">false</td>
+                <td class="p-3 text-slate-400">null</td>
+                <td class="p-3 text-emerald-300">idle (standalone) ✓</td>
+                <td class="p-3 text-emerald-300">standalone timer ✓</td>
+              </tr>
+              <tr class="bg-red-950/20">
+                <td class="p-3 font-semibold text-red-200">2 · OSC live, no clock<br/><span class="text-xs text-slate-400">bpm=-1 / beat_in_bar=-1 — between tracks, deck idle</span></td>
+                <td class="p-3 text-amber-300">true</td>
+                <td class="p-3 text-slate-400">false</td>
+                <td class="p-3 text-slate-400">null</td>
+                <td class="p-3 text-emerald-300">idle (standalone) ✓</td>
+                <td class="p-3 text-red-300"><b>nothing — frozen</b> ✗</td>
+              </tr>
+              <tr>
+                <td class="p-3 font-semibold text-slate-100">3 · OSC live, real beat</td>
+                <td class="p-3 text-emerald-300">true</td>
+                <td class="p-3 text-emerald-300">true</td>
+                <td class="p-3 text-emerald-300">N</td>
+                <td class="p-3 text-emerald-300">react ✓</td>
+                <td class="p-3 text-emerald-300">synced sequencing ✓</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400">
+          State 2 is reachable and proven: <code>BeatManagerRaveOscIntegrationTests.cs:77–101</code> asserts
+          <code>IsLiveSource == true</code> while <code>IsActive == false</code> for a sentinel-bpm snapshot. On the rig
+          this is "OSC software open, no track playing." The effects degrade gracefully; the Director stalls — no
+          rotation, no transitions, and its standalone rotation timer never ticks because
+          <code>TickStandaloneMode</code> is never reached.
+        </p>
+      </section>
+
+      <!-- ===================== THE FREEZE ===================== -->
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">The freeze, one frame</h2>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+sequenceDiagram
+  participant C as Controller.Update
+  participant R as RaveOscReceiver
+  participant B as BeatManager
+  participant D as Director.Tick
+  participant S as Switcher
+  C->>R: ApplyTo(beatManager)
+  R->>B: SetLiveBeatSource(true)   %% packet recent
+  R->>B: CopyFrom(latest)  bpm = -1 (sentinel)
+  C->>B: Update()  %% liveBeatActive → keeps sentinel, IsActive=false
+  C->>D: Tick(dt)
+  Note over D: IsSyncedMode == true (IsLiveSource)
+  Note over D: Beat is null (IsActive false)
+  D-->>C: return — TickStandaloneMode NOT reached
+  C->>S: RenderAtTime(Time.time)
+  Note over S: renders current effect (idle) + may fire a stale loaded cue
+          </pre>
+        </div>
+        <p class="text-sm text-slate-400">
+          Rendering keeps running (Controller.cs:1609), so the wall isn't black — it shows one effect in its idle
+          behavior, unchanging. Worse, a beat-domain cue loaded while synced is still started from Unity time
+          (<code>StartLoadedCueIfDue</code>), because nothing clears it on the (never-taken) mode exit. That is the
+          High finding from the branch review, and it lands here: <strong>teardown belongs at the mode boundary that
+          does not currently exist.</strong>
+        </p>
+      </section>
+
+      <!-- ===================== RECOMMENDATION ===================== -->
+      <section class="space-y-6">
+        <h2 class="text-2xl font-serif text-slate-100">Recommendation: one predicate, owned by BeatManager</h2>
+        <p class="text-sm text-slate-400 max-w-3xl">
+          The mode question is a deep predicate scattered as a shallow re-derivation across five consumers. Concentrate
+          it. <code>BeatManager</code> already owns the snapshot, <code>IsActive</code>, and <code>IsLiveSource</code> —
+          it is the natural owner of the answer. The effects already consume the right predicate
+          (<code>IsActive</code>); the fix is to make every other consumer read the same one.
+        </p>
+
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart LR
+  subgraph now["now — re-derived per consumer"]
+    L1["IsLiveSource"]:::sig --> Dn["Director: synced?"]:::bad
+    A1["IsActive"]:::sig --> Fn["Effects: react?"]:::ok
+    B1["Beat==null"]:::sig --> Dn
+    F1["StandAloneFloor"]:::sig --> Pn["PhraseTracker"]:::core
+  end
+  subgraph after["after — one authority"]
+    SRC["BeatManager.SourceMode<br/>{ Standalone | Synced }<br/>= usable clock present"]:::deep
+    SRC --> Da["Director routes on it (real else)"]:::ok
+    SRC --> Fa["Effects read it (unchanged: IsActive is it)"]:::ok
+    SRC --> Pa["PhaseLock floor folds in"]:::ok
+    SRC --> Ha["HUD reports it"]:::ok
+  end
+  classDef sig fill:#3730a3,stroke:#818cf8,color:#e0e7ff;
+  classDef deep fill:#052e16,stroke:#34d399,color:#d1fae5,stroke-width:3px;
+  classDef ok fill:#064e3b,stroke:#34d399,color:#d1fae5;
+  classDef bad fill:#7f1d1d,stroke:#f87171,color:#fee2e2;
+  classDef core fill:#312e81,stroke:#a5b4fc,color:#e0e7ff;
+          </pre>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+          <article class="rounded-lg border border-emerald-800 bg-emerald-950/10 p-4 space-y-2">
+            <div class="flex gap-2"><span class="chip rounded bg-emerald-900 px-2 py-1 text-emerald-100">Recommended</span><span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">in-process</span></div>
+            <h3 class="text-lg font-semibold text-emerald-100">A · Single predicate authority</h3>
+            <p class="text-slate-300">Make "usable clock present" (today's <code>IsActive</code>) <em>the</em> mode authority on <code>BeatManager</code>. Director's <code>IsSyncedMode</code> and <code>Tick</code> route on it with a real standalone <code>else</code>. <code>IsLiveSource</code> demoted to pure connectivity diagnostics.</p>
+            <ul class="list-disc pl-5 text-slate-300 space-y-1">
+              <li>locality: one predicate, one place to change</li>
+              <li>effects unchanged — they already read it</li>
+              <li>freeze (state 2) collapses into standalone</li>
+              <li>leverage: every consumer agrees by construction</li>
+            </ul>
+          </article>
+          <article class="rounded-lg border border-amber-800 bg-amber-950/10 p-4 space-y-2">
+            <div class="flex gap-2"><span class="chip rounded bg-amber-900 px-2 py-1 text-amber-100">Worth exploring</span><span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">enum + event</span></div>
+            <h3 class="text-lg font-semibold text-amber-100">B · Mode enum with transition hook</h3>
+            <p class="text-slate-300">Same authority, but expose <code>SourceMode</code> and raise on change so consumers can run <em>entry/exit</em> work — Director clears the loaded cue and resets the cue planner on entering standalone.</p>
+            <ul class="list-disc pl-5 text-slate-300 space-y-1">
+              <li>gives the mode boundary a real seam</li>
+              <li>home for cue teardown (the High finding)</li>
+              <li>only justified once a 2nd consumer needs the transition</li>
+            </ul>
+          </article>
+          <article class="rounded-lg border border-slate-700 bg-slate-900/60 p-4 space-y-2">
+            <div class="flex gap-2"><span class="chip rounded bg-slate-700 px-2 py-1 text-slate-100">Hotfix only</span><span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">band-aid</span></div>
+            <h3 class="text-lg font-semibold text-slate-100">C · Patch the Tick gate</h3>
+            <p class="text-slate-300">Make <code>Tick</code> fall to <code>TickStandaloneMode</code> when <code>Beat</code> is null even while live. Unfreezes the wall.</p>
+            <ul class="list-disc pl-5 text-slate-300 space-y-1">
+              <li>smallest possible change</li>
+              <li>still two definitions of standalone</li>
+              <li>no single source of truth — the thing you asked for</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="rounded-lg border border-amber-900 bg-amber-950/20 p-4 text-sm text-slate-300">
+          <p class="font-semibold text-amber-200">Design decisions to settle before coding (ADR-worthy):</p>
+          <ul class="list-disc pl-5 mt-2 space-y-1">
+            <li><strong>Authority = usable clock, not transport.</strong> Mode keys off <code>IsActive</code>; <code>IsLiveSource</code> survives only as "is OSC connected?" for diagnostics/HUD. Confirm that matches the rig intent (between-tracks should be standalone, not a wait).</li>
+            <li><strong>Fold the floor in.</strong> <code>PhaseLock.StandAloneFloor</code> (<code>beat_in_bar &lt; 1</code>) and <code>IsActive</code> (<code>bpm &gt; 0</code>) are separate thresholds that happen to travel together in the sentinel. Decide whether the one authority is "bpm &gt; 0", "beat_in_bar ≥ 1", or both — then everyone derives from it.</li>
+            <li><strong>Mode boundary owns teardown.</strong> Entering standalone must reset the cue planner <em>and</em> clear the Switcher's loaded cue (today only the former happens, and only when the never-reached <code>TickStandaloneMode</code> runs).</li>
+            <li><strong>Tests at the seam.</strong> Add a Director/BeatManager mode-boundary test: live + sentinel → standalone, loaded cue cleared, standalone timer ticks. The current suite covers <code>StandAloneFloor</code> only at the PhaseLock unit level.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ===================== TOP REC ===================== -->
+      <section class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">Top recommendation</h2>
+        <div class="rounded-lg deep border border-emerald-900 p-5 space-y-2">
+          <p class="text-emerald-200 font-semibold">Adopt Option A, with Option B's transition hook only if cue teardown needs it.</p>
+          <p class="text-sm text-slate-300">
+            One predicate on <code>BeatManager</code> answers "usable musical clock?". The Director and the HUD stop
+            reading <code>IsLiveSource</code> for mode; the effects keep reading exactly what they read now. State 2
+            stops being a hole because there is no longer a second opinion about what standalone means. If you want
+            the freeze gone today, ship Option C as a stopgap — but it is not the source of truth you're asking for,
+            so treat it as a bridge to A, not the destination.
+          </p>
+        </div>
+      </section>
+
+      <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500">
+        Generated 2026-06-25. Evidence: live reads of <code>BeatManager.cs</code>, <code>BeatManagerQueries.cs</code>,
+        <code>RaveOscReceiver.cs</code>, <code>Director.cs</code>, <code>EffectBase.cs</code>, <code>PhaseLock.cs</code>,
+        <code>PhraseTracker.cs</code>, <code>Controller.cs</code>, and <code>BeatManagerRaveOscIntegrationTests.cs</code>
+        on <code>master @ 19f686e8</code>, plus two Serena-backed sub-agent sweeps (effect-side consumers; OSC liveness chain).
+      </footer>
+    </main>
+  </body>
+</html>

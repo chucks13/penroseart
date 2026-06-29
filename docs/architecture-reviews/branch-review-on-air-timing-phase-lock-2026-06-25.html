@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Branch review - On-Air Timing Phase Lock - PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", flowchart: { curve: "basis" } });
+    </script>
+    <style>
+      body { background: #020617; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .mermaid { background: #0b1120; border-radius: 0.5rem; padding: 0.75rem; }
+      .chip { font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      code { color: #a5b4fc; }
+      a { color: #6ee7b7; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+      table td, table th { vertical-align: top; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-6xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-5">
+        <p class="chip text-emerald-400">PenroseArt - branch review - 2026-06-25</p>
+        <h1 class="text-4xl font-serif text-slate-50">On-Air Timing Phase Lock branch review</h1>
+        <div class="rounded-lg deep border border-slate-800 p-5 space-y-3">
+          <p class="text-slate-300">
+            Branch <code>refactor/on-air-timing-phase-lock</code> was reviewed against <code>master</code>
+            (<code>10c684d4</code>). Scope: PRD/issues under <code>.scratch/on-air-timing-phase-lock/</code>,
+            <code>docs/architecture-reviews/on-air-timing-redesign-2026-06-24.html</code>, runtime diff,
+            Unity/editor impact, tests, and the branch's current readiness.
+          </p>
+          <p class="text-slate-200">
+            <span class="font-semibold text-red-300">Conclusion:</span> this is a strong architectural branch,
+            but it is not ready for merge if the PRD is the acceptance contract. The core modules are much
+            deeper and well-tested; the remaining risk is at the mode seam. Some of that seam behavior predates
+            this branch, but the branch now claims a <code>StandAloneFloor</code> contract that the runtime does
+            not consume end to end.
+          </p>
+        </div>
+        <div class="grid sm:grid-cols-4 gap-3 text-sm">
+          <div class="rounded border border-emerald-900 bg-emerald-950/20 p-3"><p class="chip text-emerald-300">Validation</p><p>Unity EditMode: <strong>260/260 passed</strong></p></div>
+          <div class="rounded border border-indigo-900 bg-indigo-950/20 p-3"><p class="chip text-indigo-300">Diff</p><p>31 files, +2038 / -1292 vs master</p></div>
+          <div class="rounded border border-amber-900 bg-amber-950/20 p-3"><p class="chip text-amber-300">State</p><p>Feature shape is strong; acceptance seam remains</p></div>
+          <div class="rounded border border-red-900 bg-red-950/20 p-3"><p class="chip text-red-300">Recommendation</p><p>Fix or explicitly descope floor consumption</p></div>
+        </div>
+      </header>
+
+      <section class="space-y-4">
+        <h2 class="text-2xl font-serif text-slate-100">What Went Right</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/10 p-4">
+            <p class="font-semibold text-emerald-300">The module depth improved.</p>
+            <p class="text-slate-300 mt-2">The old broad timing module was collapsed into clear interfaces: <code>PhaseLock</code>, <code>PhraseTracker</code>, <code>PhaseGrid</code>, and Director-owned <code>CuePlanner</code>. The interface surface is smaller and the implementation now hides real behavior.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/10 p-4">
+            <p class="font-semibold text-emerald-300">The tests exercise caller-visible seams.</p>
+            <p class="text-slate-300 mt-2"><code>PhaseTimelineHarness</code>, <code>PhaseLockTests</code>, <code>PhraseTrackerTests</code>, and retargeted <code>CuePlannerTests</code> cover loops, phrase dropouts, track changes, irregular phrases, cue sheet behavior, and mandatory cue invariants.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/10 p-4">
+            <p class="font-semibold text-emerald-300">The old resolver is gone.</p>
+            <p class="text-slate-300 mt-2"><code>PhaseClock.cs</code> and <code>PhaseClockTests.cs</code> are deleted in favor of the stateful phase determiner. Shared grid math lives in <code>PhaseGrid</code>.</p>
+          </div>
+          <div class="rounded-lg border border-emerald-900 bg-emerald-950/10 p-4">
+            <p class="font-semibold text-emerald-300">Cue planning moved to the right owner.</p>
+            <p class="text-slate-300 mt-2"><code>CuePlanner</code> owns cue sheet derivation, cursor, cadence, and pass-local cue memory instead of round-tripping that state through timing.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">System Shape</h2>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-4">
+          <pre class="mermaid">
+flowchart LR
+  BM["BeatManager queries<br/>beat, beat_in_bar, phrase, track ordinal"]:::ext
+  PL["PhaseLock<br/>held offset + recomputed position"]:::core
+  PT["PhraseTracker<br/>phrase position + look-ahead"]:::core
+  CP["CuePlanner<br/>cue sheet + cursor + cadence"]:::dir
+  D["Director<br/>mode + casting"]:::dir
+  S["Switcher<br/>loaded cue + execution"]:::mech
+  BM --> PL --> PT --> CP --> D --> S
+  BM --> CP
+  classDef ext fill:#1e293b,stroke:#64748b,color:#dbeafe;
+  classDef core fill:#312e81,stroke:#818cf8,color:#e0e7ff;
+  classDef dir fill:#064e3b,stroke:#34d399,color:#d1fae5;
+  classDef mech fill:#451a03,stroke:#f59e0b,color:#ffedd5;
+          </pre>
+        </div>
+        <p class="text-sm text-slate-400">
+          The design direction is right: Phase and Phrase are now readable seams, and cue planning is Director-owned.
+          The remaining risk is not inside the phase math; it is where the new reading seam crosses Director mode and
+          Switcher execution state.
+        </p>
+      </section>
+
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">Attribution And Scope</h2>
+        <div class="rounded-lg border border-indigo-900 bg-indigo-950/20 p-5 space-y-3 text-sm text-slate-300">
+          <p>
+            A later counter-review correctly checked these findings against <code>master</code>. That attribution
+            matters: <code>Director.IsSyncedMode</code> already keyed off OSC transport liveness, and
+            <code>Switcher.cs</code> is unchanged by this branch. Those are not new regressions in the narrow
+            diff sense.
+          </p>
+          <p>
+            The merge question is broader than diff attribution. This branch introduces and documents
+            <code>StandAloneFloor</code>, while the PRD says the Director's existing mode machinery acts on that
+            floor. In the current code, it does not. So the precise finding is: inherited Director/Switcher
+            behavior prevents this branch's new floor signal from satisfying its claimed end-to-end contract.
+          </p>
+          <p class="text-indigo-100">
+            If the branch is merged as a pure model refactor, the docs and issues should explicitly say
+            <code>StandAloneFloor</code> is emitted but currently unconsumed. If the branch is merged as the PRD
+            implementation, the Director/Switcher mode seam needs tests and code before merge.
+          </p>
+        </div>
+      </section>
+
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">Findings</h2>
+
+        <article class="rounded-lg border border-red-800 bg-red-950/20 p-5 space-y-3">
+          <div class="flex flex-wrap gap-2">
+            <span class="chip rounded bg-red-900 px-2 py-1 text-red-100">Critical</span>
+            <span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">mode seam</span>
+          </div>
+          <h3 class="text-xl font-semibold text-red-100">StandAloneFloor is produced but not consumed; live no-clock can freeze sequencing.</h3>
+          <p class="text-sm text-slate-300">
+            The design says <code>beat_in_bar == -1</code> is the floor: exit synced mode and run the Director's free-running timer.
+            <code>PhaseLock</code> emits <code>StandAloneFloor</code>, but <code>Director.Tick</code> never reaches it when live OSC is
+            present but the beat query is unavailable. <code>IsSyncedMode</code> is transport liveness, and the synced branch returns
+            even when <code>Beat</code> is null.
+          </p>
+          <p class="text-sm text-slate-300">
+            Attribution: the liveness-vs-usable-clock mode decision is inherited from <code>master</code>. The
+            branch-specific gap is that the new floor signal is documented as actionable but remains orphaned
+            at the Director mode seam.
+          </p>
+          <p class="text-xs text-slate-400">
+            Evidence: <code>Assets/core/Switching/Director.cs:193-195</code>, <code>Director.cs:283-290</code>,
+            <code>Assets/core/Switching/PhaseLock.cs:101-105</code>, <code>Assets/core/Rhythm/BeatManagerRaveOscIntegrationTests.cs:77-101</code>.
+          </p>
+          <p class="text-sm text-red-100">Impact: the wall can stop scheduling changes while OSC is still broadcasting sentinel/no-clock data.</p>
+        </article>
+
+        <article class="rounded-lg border border-red-800 bg-red-950/20 p-5 space-y-3">
+          <div class="flex flex-wrap gap-2">
+            <span class="chip rounded bg-amber-900 px-2 py-1 text-amber-100">High</span>
+            <span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">Switcher execution</span>
+          </div>
+          <h3 class="text-xl font-semibold text-amber-100">Pending beat-domain loaded cues can survive a mode exit.</h3>
+          <p class="text-sm text-slate-300">
+            <code>TickStandaloneMode</code> resets the timing frame and <code>CuePlanner</code>, but it does not clear the Switcher's loaded cue.
+            <code>Switcher.RenderAtTime</code> still calls <code>StartLoadedCueIfDue</code> from Unity time. A cue loaded while synced can
+            therefore start after the Director has moved to standalone/no-clock behavior.
+          </p>
+          <p class="text-sm text-slate-300">
+            Attribution: <code>Switcher.cs</code> is byte-for-byte unchanged against <code>master</code>. This is
+            a pre-existing execution lifetime, not a regression introduced by this branch. It still belongs in
+            this report because any fix that makes <code>StandAloneFloor</code> exit synced mode must also define
+            what happens to already-loaded beat-domain cues.
+          </p>
+          <p class="text-xs text-slate-400">
+            Evidence: <code>Assets/core/Switching/Director.cs:427-431</code>, <code>Assets/core/Switching/Switcher.cs:293-310</code>,
+            <code>Switcher.cs:364-367</code>, <code>Switcher.cs:424-456</code>.
+          </p>
+          <p class="text-sm text-amber-100">Impact: stale musical intent can execute after the live timing source is no longer valid.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-800 bg-amber-950/20 p-5 space-y-3">
+          <div class="flex flex-wrap gap-2">
+            <span class="chip rounded bg-amber-900 px-2 py-1 text-amber-100">High</span>
+            <span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">track reset</span>
+          </div>
+          <h3 class="text-xl font-semibold text-amber-100">Track-change reset is local to PhaseLock, not the full scheduling seam.</h3>
+          <p class="text-sm text-slate-300">
+            <code>PhaseLock</code> drops its held offset on <code>TrackOrdinal</code> changes, but <code>CuePlanner</code> receives no track-change
+            signal. It preserves <code>lastCueBeat</code>, <code>lastChangeBeat</code>, cue sheet cursor state, and any Switcher loaded cue.
+            Because <code>CueSheet.Matches</code> is length-only, a same-length phrase in the next track can reuse the previous track's cue
+            sheet/cursor instead of starting a clean interpretation.
+          </p>
+          <p class="text-sm text-slate-300">
+            Nuance from the counter-review: <code>UpdatePhraseWindow</code> re-anchors the phrase window and a
+            beat reset can rewind the cursor, so the worst stale-beat misfire may be masked. That does not prove
+            the behavior benign; same-length phrase reuse still carries randomized cue pattern and cadence state
+            unless a track-change reset is defined and tested.
+          </p>
+          <p class="text-xs text-slate-400">
+            Evidence: <code>Assets/core/Switching/PhaseLock.cs:111-120</code>, <code>Assets/core/Switching/CuePlanner.cs:392-400</code>,
+            <code>CuePlanner.cs:418-425</code>, <code>Assets/core/Switching/CueSheet.cs:108-114</code>.
+          </p>
+          <p class="text-sm text-amber-100">Impact: new songs can inherit prior-song cadence/cue state unless the surrounding mode/liveness path happens to reset it.</p>
+        </article>
+
+        <article class="rounded-lg border border-amber-800 bg-amber-950/20 p-5 space-y-3">
+          <div class="flex flex-wrap gap-2">
+            <span class="chip rounded bg-amber-900 px-2 py-1 text-amber-100">Medium</span>
+            <span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">documentation</span>
+          </div>
+          <h3 class="text-xl font-semibold text-amber-100">PRD/issues and redesign doc carry older contracts.</h3>
+          <p class="text-sm text-slate-300">
+            ADR-0006 now records the shipped fallback and dropped fields, but the PRD/issues still mention
+            <code>total_beats</code> fallback and <code>beatsSinceAnchor</code>. The redesign document still has remnants of
+            <code>PhraseReading</code> naming and older irregular-phrase wording. The implementation is ahead of the planning docs.
+          </p>
+          <p class="text-xs text-slate-400">
+            Evidence: <code>.scratch/on-air-timing-phase-lock/PRD.md</code>, issue 01/02/03/04, and
+            <code>docs/architecture-reviews/on-air-timing-redesign-2026-06-24.html</code> compared with
+            <code>docs/adr/0006-on-air-timing-phase-determiner.md</code>.
+          </p>
+          <p class="text-sm text-amber-100">Impact: future agents can implement against stale acceptance criteria unless the branch docs are reconciled.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-700 bg-slate-900/60 p-5 space-y-3">
+          <div class="flex flex-wrap gap-2">
+            <span class="chip rounded bg-slate-700 px-2 py-1 text-slate-100">Low</span>
+            <span class="chip rounded bg-slate-800 px-2 py-1 text-slate-300">polish</span>
+          </div>
+          <h3 class="text-xl font-semibold text-slate-100">Small cleanup remains.</h3>
+          <ul class="text-sm text-slate-300 list-disc pl-5 space-y-1">
+            <li><code>CuePlanner.cs:443-446</code> says bare beat/no phrase/nothing held yields <code>Position == -1</code>; <code>PhaseLock</code> intentionally emits offset 0 and a grid position.</li>
+            <li><code>git diff --check master...HEAD</code> reports new blank lines at EOF in <code>OnAirTiming.cs</code> and <code>PhaseGrid.cs</code>.</li>
+            <li><code>FormatTimingSource</code> still emits <code>"phase-clock-grid"</code> for the renamed grid fallback source in both Director trace and Controller HUD paths.</li>
+            <li><code>PhaseLock.HasPhrase</code> uses <code>TrackPhaseActive &gt;= 1</code> while <code>PhraseTracker.Read</code> uses <code>== 1</code>; documented values agree, but a shared predicate would make the tri-state contract explicit.</li>
+            <li>Add small regression tests for transient blank track title stability and the <code>HasLookAhead</code> consume transition.</li>
+            <li><code>PhraseTracker</code> can be a static class, and <code>PhaseReading.None</code> has stale skeleton-era wording.</li>
+            <li><code>PhaseSlotRole.Current</code>, <code>BeatsUntilNextPhrase</code> naming, and nullable/sentinel cue-beat plumbing are harmless polish candidates.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">Test Coverage</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-300 text-left">
+              <tr><th class="p-3">Area</th><th class="p-3">State</th><th class="p-3">Notes</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 text-slate-300">
+              <tr><td class="p-3">Unity EditMode suite</td><td class="p-3 text-emerald-300">260/260 passed</td><td class="p-3"><code>scripts/unity-tests.sh</code>, results in <code>/tmp/penrose-unity-tests.xml</code>.</td></tr>
+              <tr><td class="p-3">PhaseLock core</td><td class="p-3 text-emerald-300">Strong</td><td class="p-3">Loops, dropouts, track change, flub, irregular phrase, clock loss.</td></tr>
+              <tr><td class="p-3">PhraseTracker</td><td class="p-3 text-emerald-300">Good</td><td class="p-3">Static reading seam, look-ahead, irregularity, unacquired phase.</td></tr>
+              <tr><td class="p-3">CuePlanner</td><td class="p-3 text-emerald-300">Good for steady phrase/cue behavior</td><td class="p-3">Cue sheet reuse/regeneration, coasting, pass-local state, mandatory cue invariant.</td></tr>
+              <tr><td class="p-3">Director/Switcher mode boundary</td><td class="p-3 text-red-300">Missing</td><td class="p-3">No test proves live no-clock input ticks standalone, consumes <code>StandAloneFloor</code>, clears loaded cues, or resets full cue state on track change.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="space-y-5">
+        <h2 class="text-2xl font-serif text-slate-100">Overall Assessment</h2>
+        <div class="rounded-lg border border-slate-800 bg-white/5 p-5 space-y-3">
+          <p class="text-slate-300">
+            The branch did the hard architectural work well. It replaced a shallow timing/cue interface with deeper modules,
+            moved cue planning to the Director side, retained deterministic seams, and added meaningful tests. The code is
+            easier to reason about than the pre-branch shape.
+          </p>
+          <p class="text-slate-300">
+            The problem is that the new phase floor is not yet wired into the actual runtime mode decision. The system can
+            represent "clock gone" inside <code>PhaseReading</code>, but the Director can bypass the reading entirely when OSC
+            transport remains live and the beat query is absent. The underlying mode behavior predates this branch; the
+            branch-specific issue is that the new contract and docs imply that behavior is now handled. Separately,
+            Switcher loaded-cue state outlives Director timing resets, which must be specified when the mode exit is wired.
+          </p>
+          <p class="text-slate-100 font-semibold">
+            Recommendation: either wire <code>StandAloneFloor</code> through the Director/Switcher mode seam and add tests, or
+            explicitly descope that behavior in the PRD/issues/redesign doc as a follow-up. Then reconcile the remaining stale
+            docs and re-run the full Unity suite. After that, this branch looks close.
+          </p>
+        </div>
+      </section>
+
+      <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500">
+        Generated by Codex review on 2026-06-25. Sources: local PRD/issues, ADR-0006, on-air timing redesign doc,
+        branch diff against master, three read-only sub-agent reviews, and <code>scripts/unity-tests.sh</code>.
+      </footer>
+    </main>
+  </body>
+</html>
