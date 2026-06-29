@@ -8,9 +8,14 @@ public class Flock : EffectBase
 {
     private Boid[] flock;
     private int total = 80;
+    private const float BaseSpeedMultiplier = 1f;
+    private const float BeatSpeedLift = 2f;
+    private const float LowEnergyHueShift = 0.2f;
+
     private float alignment = 0.75f;
     private float cohesion = 1f;
     private float separation = 1.25f;
+    private int lastPhasePosition = -1;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -18,14 +23,32 @@ public class Flock : EffectBase
     public override string DebugText() { return $""; }
 
     /// <summary>
-    /// Maps Rave beat pulse to flock movement speed. Disabled beat movement stays at normal speed.
+    /// Maps the selected Waveform envelope to flock movement speed. Disabled beat movement stays at normal speed.
     /// </summary>
-    public static float GetBeatSpeedMultiplier(float beatPulse, bool beatEnabled)
+    public static float GetBeatSpeedMultiplier(float envelope, bool beatEnabled)
     {
-        if (!beatEnabled) return 1f;
+        if (!beatEnabled) return BaseSpeedMultiplier;
 
-        float shapedPulse = Mathf.Pow(Mathf.Clamp01(beatPulse), 1.5f);
-        return Mathf.Lerp(0.25f, 3.0f, shapedPulse);
+        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(envelope), 1.5f);
+        return BaseSpeedMultiplier + (shapedEnvelope * BeatSpeedLift);
+    }
+
+
+    /// <summary>
+    /// Slightly bends a palette color's hue from the smoothed low-band energy level.
+    /// </summary>
+    public static Color ShiftHueByLowEnergy(Color color, float lowEnergy)
+    {
+        var amount = Mathf.Clamp01(lowEnergy);
+        if (amount <= 0f)
+        {
+            return color;
+        }
+
+        Color.RGBToHSV(color, out var hue, out var saturation, out var value);
+        var shifted = Color.HSVToRGB((hue + (amount * LowEnergyHueShift)) % 1f, saturation, value);
+        shifted.a = color.a;
+        return shifted;
     }
 
     /// <summary>
@@ -42,6 +65,8 @@ public class Flock : EffectBase
     public override void OnStart()
     {
         base.OnStart();
+        lastPhasePosition = controller.DirectorStatus.Phase.Position;
+
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
 
@@ -54,7 +79,7 @@ public class Flock : EffectBase
         for (int i = 0; i < total; i++)
         {
             Color bcolor;
-            bcolor = Color.HSVToRGB((float)i / total % 1f, 1f, 1f);
+            bcolor = APalette.read((float)i / total, true);
             flock[i] = new Boid(min, max, this)
             {
                 color = bcolor,
@@ -71,17 +96,35 @@ public class Flock : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
+    /// Selects a new Waveform once at the one of each 16-beat On-Air Timing Phase.
+    /// </summary>
+    private void RerollWaveformOnPhaseOne()
+    {
+        var phasePosition = controller.DirectorStatus.Phase.Position;
+        if (phasePosition == 1 && lastPhasePosition != 1)
+        {
+            beatVariant = beatManager.GetRandomVariant();
+        }
+
+        lastPhasePosition = phasePosition;
+    }
+
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
     public override void Draw()
     {
-        float speedMultiplier = GetBeatSpeedMultiplier(beatManager.Pulse ?? 0f, beatEnable && beatManager.IsActive);
+        RerollWaveformOnPhaseOne();
+
+        var envelope = beatManager.Envelope(beatVariant) ?? 0f;
+        var lowEnergy = beatManager.Levels?.low ?? 0f;
+        float speedMultiplier = GetBeatSpeedMultiplier(envelope, beatEnable && beatManager.IsActive);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
         {
             var f = flock[i];
             f.Update(effectDelta * speedMultiplier);
-            buffer[controller.penrose.GetIndexFromPosition(f.position)] = f.color;
+            buffer[controller.penrose.GetIndexFromPosition(f.position)] = ShiftHueByLowEnergy(f.color, lowEnergy);
         }
     }
 
