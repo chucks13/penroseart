@@ -1,31 +1,28 @@
 // penrose_waveforms.txt — Waveform Pool
 //
-// The hand-vetted set of Presets that random rhythm selection draws from, and the
-// runtime source of truth for the Waveform Pool. Read at startup by BeatManager.
+// Canonically rewritten by the Waveform Pool editor (Window > Penrose). Comments and hand formatting
+// are NOT preserved across a save — only DEFINE_WAVEFORM records survive. Hand-editing is the
+// bootstrap/fallback path; the editor is the primary one.
 //
 // Format, one Preset per line:
 //   DEFINE_WAVEFORM(name){ sequence | amplitude | rounding | offset }
-//
-//   sequence   note-value tokens, one per Hump, widths sum to one bar (4/4):
-//              W=whole(4 beats) H=half(2) Q=quarter(1) E=eighth(1/2) S=sixteenth(1/4)
-//   amplitude  one digit 0-8 per Hump, read straight across; digit/8 -> [0..1].
-//              0 is the gate: a silent Hump = a skipped beat.
+//   sequence   note-value tokens per Hump: W=whole(4) H=half(2) Q=quarter(1) E=eighth(1/2) S=sixteenth(1/4);
+//              widths sum to one bar (4/4).
+//   amplitude  one digit 0-8 per Hump, read straight across (digit/8 -> [0..1]). 0 is the gate: a
+//              silent Hump = a skipped beat.
 //   rounding   0..1 peak shape: 0 sharp triangle -> ~0.5 cosine dome -> 1 flat top.
 //   offset     phase shift in beats; 0.5 lands on the "&" (offbeat).
 //
-// Lines beginning with // are comments. Blank lines are ignored.
-//
-// NOTE: the entry ORDER is load-bearing. The legacy `int beatVariant` currency
-// indexes this list, and BeatManager.IsBeatTriggered couples its gate labels to
-// indexes 1/2/3 (beats 1&3, beats 2&4, measure start). The "chill" random subset
-// is the lower-index range. Reorder with that in mind. The Waveform property
-// drawer rewrites this whole file canonically on save — hand-authored comments and
-// formatting do not survive a drawer save.
+// NOTE: the entry ORDER is load-bearing. The legacy `int beatVariant` currency indexes this list, and
+// BeatManager.IsBeatTriggered couples its gate labels to indexes 1/2/3 (beats 1&3, beats 2&4, measure
+// start). The "chill" random subset is the lower-index range. Reorder with that in mind.
 
-DEFINE_WAVEFORM(beat pulse)    { QQQQ     | 8888     | 0.3 | 0   }
-DEFINE_WAVEFORM(beats 1 and 3) { QQQQ     | 8080     | 0.3 | 0   }
-DEFINE_WAVEFORM(beats 2 and 4) { QQQQ     | 0808     | 0.3 | 0   }
-DEFINE_WAVEFORM(measure start) { QQQQ     | 8000     | 0.3 | 0   }
-DEFINE_WAVEFORM(beats 1 and 4) { QQQQ     | 8008     | 0.3 | 0   }
+DEFINE_WAVEFORM(beat pulse)    { QQQQ     | 8888     | 0.3 | 0 }
+DEFINE_WAVEFORM(beats 1 and 3) { QQQQ     | 8080     | 0.3 | 0 }
+DEFINE_WAVEFORM(beats 2 and 4) { QQQQ     | 0808     | 0.3 | 0 }
+DEFINE_WAVEFORM(measure start) { QQQQ     | 8000     | 0.3 | 0 }
+DEFINE_WAVEFORM(beats 1 and 4) { QQQQ     | 8008     | 0.3 | 0 }
 DEFINE_WAVEFORM(offbeat)       { QQQQ     | 8888     | 0.3 | 0.5 }
-DEFINE_WAVEFORM(every eighth)  { EEEEEEEE | 88888888 | 0.3 | 0   }
+DEFINE_WAVEFORM(every eighth)  { EEEEEEEE | 88888888 | 0.3 | 0 }
+DEFINE_WAVEFORM(dance for me)  { EEQSSSSQ | 88488884 | 0.5 | 0 }
+DEFINE_WAVEFORM(heartbeat)     { EEQEEQ   | 860860   | 0.3 | 0 }
