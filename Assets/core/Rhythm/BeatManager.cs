@@ -699,7 +699,7 @@ public partial class BeatManager
     /// <see cref="Waveform.ShortestNonZeroPeakSpacing"/> returns a normalized fraction of the whole bar, while
     /// <c>beatAverageMs</c> is one beat. Multiplying by <see cref="Waveform.BeatsPerBar"/> converts the spacing
     /// to beat units before converting to milliseconds. Returns 0 when the beat clock is inactive/unavailable,
-    /// the average beat duration is not known, or the Waveform has fewer than two audible peaks.
+    /// the average beat duration is not known, or the Waveform has no audible peaks.
     /// </remarks>
     public float GetShortestNonZeroPeakSpacingMs(int variant)
     {

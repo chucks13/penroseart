@@ -127,9 +127,17 @@ public sealed class WaveformTests
     }
 
     [Test]
-    public void ShortestNonZeroPeakSpacing_ReturnsZeroForSingleAudiblePeak()
+    public void ShortestNonZeroPeakSpacing_ReturnsFullBarForSingleAudiblePeak()
     {
         var wf = Waveform.Parse("QQQQ", "8000");
+        Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(1f).Within(Tol));
+    }
+
+
+    [Test]
+    public void ShortestNonZeroPeakSpacing_ReturnsZeroWhenNoAudiblePeaksExist()
+    {
+        var wf = Waveform.Parse("QQQQ", "0000");
         Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(0f).Within(Tol));
     }
 
@@ -140,6 +148,16 @@ public sealed class WaveformTests
         beatManager.Update(0f);
 
         Assert.That(beatManager.GetShortestNonZeroPeakSpacingMs(0), Is.EqualTo(500f).Within(Tol));
+    }
+
+
+    [Test]
+    public void GetShortestNonZeroPeakSpacingMs_ConvertsSinglePeakToFullBarMilliseconds()
+    {
+        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // 500 ms per beat, 2000 ms per bar
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.GetShortestNonZeroPeakSpacingMs(3), Is.EqualTo(2000f).Within(Tol));
     }
 
     // --- Malformation is logged, never silently substituted ---

@@ -239,12 +239,12 @@ public struct Waveform
     /// </summary>
     /// <remarks>
     /// Only Humps with amplitude greater than 0 count as peaks. The closing wrap gap from the last audible
-    /// peak back to the first audible peak in the next bar is included. Returns 0 when fewer than two audible
-    /// peaks exist.
+    /// peak back to the first audible peak in the next bar is included. A single audible peak is one full-bar
+    /// spacing from itself next bar, so it returns 1; no audible peaks return 0.
     /// </remarks>
     public float ShortestNonZeroPeakSpacing()
     {
-        if (humps == null || humps.Length < 2)
+        if (humps == null || humps.Length == 0)
         {
             return 0f;
         }
@@ -276,9 +276,14 @@ public struct Waveform
             audiblePeakCount++;
         }
 
-        if (audiblePeakCount < 2)
+        if (audiblePeakCount == 0)
         {
             return 0f;
+        }
+
+        if (audiblePeakCount == 1)
+        {
+            return 1f;
         }
 
         var wrapGap = (firstPeak + 1f) - previousPeak;
