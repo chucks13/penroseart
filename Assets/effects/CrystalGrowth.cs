@@ -46,6 +46,11 @@ using Random = UnityEngine.Random;
 /// </remarks>
 public class CrystalGrowth : EffectBase
 {
+    /// <summary>Crystal Growth expresses both phrase cues: the fill ratchet builds the strobe/lunge into the change,
+    /// and the Drop downbeat fires its one-shot whole-wall surge. Advertise both so the Director can deliberately
+    /// cast it into Fill and Drop moments, not only react when it happens to be on-air.</summary>
+    public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
+
     /// <summary>Front heat below this is treated as cold and stops advancing the rim (the tail dies here).</summary>
     private const float HeatEpsilon = 0.01f;
 
