@@ -8,6 +8,7 @@ public class NoiseMixer : MixerBase
 
     private EffectBase[] effects;
     private Color border;
+    private int distortionMode; // 0: time, 1: width
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -51,6 +52,7 @@ public class NoiseMixer : MixerBase
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
             border = Color.HSVToRGB(Random.value, 1, 1);
         }
+        distortionMode = Random.Range(0, 2);
 
         controller.debugText.text = debugText;
     }
@@ -70,18 +72,22 @@ public class NoiseMixer : MixerBase
             effects[i].UpdateTime();
             effects[i].Draw();
         }
+        float sampleTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
+        float width = 0.1f;
+        if (distortionMode == 1)
+            width = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.1f);
 
         for (int i = 0; i < buffer.Length; i++)
         {
             float scale = 0.07f;
             float x = tiles[i].center.x * scale;
             float y = tiles[i].center.y * scale;
-            float z = effectTime; // use local mixer time
+            float z = (distortionMode == 0) ? sampleTime : effectTime; // use local mixer time
 
             float n = Perlin.Noise(x, y, z);
-            if (n > 0.1)
+            if (n > width)
                 buffer[i] = effects[0].buffer[i];
-            else if (n > -0.1)
+            else if (n > -width)
                 buffer[i] = border;
             else
                 buffer[i] = effects[1].buffer[i];
