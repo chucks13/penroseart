@@ -21,6 +21,9 @@ public class Tunnel : EffectBase
     private float speed;
     private float mix;
 
+    /// <summary>Scales tile center coordinates into the tunnel's radial-distance space; smaller = wider, more spread-out rings.</summary>
+    private const float CenterScale = 0.03f;
+
     /// <summary>Extra scroll-rate multiple at full Fill: the color scroll rushes this much faster at the build's peak. Tune on the readout.</summary>
     private const float FillRush = 5f;
 
@@ -141,10 +144,6 @@ public class Tunnel : EffectBase
         (fillEnv > 0.01f ? $"FILL {fillEnv:0.00}\n" : "") +
         (dropEnv > 0.01f ? $"DROP {dropEnv:0.00}\n" : "");
     }
-    public override void Init()
-    {
-        base.Init();
-    }
 
     /// <summary>
     /// Renders one frame of radial tunnel bands directly into the tile buffer.
@@ -174,8 +173,8 @@ public class Tunnel : EffectBase
         if (dropEnv > 0f)
         {
             dropElapsed += effectDelta;
-            float u = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
-            dropEnv = 1f - Mathf.SmoothStep(0f, 1f, u);
+            float decayProgress = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
+            dropEnv = 1f - Mathf.SmoothStep(0f, 1f, decayProgress);
         }
         dropScroll = Mathf.Repeat(dropScroll - (speed * DropRush * dropEnv * effectDelta), 1f);
 
@@ -183,8 +182,8 @@ public class Tunnel : EffectBase
 
         for (int i = 0; i < Penrose.Total; i++)
         {
-            float x = Mathf.Abs(tiles[i].center.x * 0.03f);
-            float y = Mathf.Abs(tiles[i].center.y * 0.03f);
+            float x = Mathf.Abs(tiles[i].center.x * CenterScale);
+            float y = Mathf.Abs(tiles[i].center.y * CenterScale);
             float distance = Mathf.Sqrt((x * x) + (y * y));
             float phase = (i * density + (effectTime * speed) + fillScroll + dropScroll + (distance * mix * zoom)) % 1f;
             buffer[i] = Color.HSVToRGB(phase, 1f, 1f) * beatBrightness;
