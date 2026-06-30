@@ -103,7 +103,7 @@ public class ShapeGlitch : MixerBase
         effect.Init();
         effect.OnStart();
         // ShapeGlitch owns the overlay rhythm, so the child effect does not pulse independently.
-        effect.beatEnable = false;
+//        effect.beatEnable = false;
         var debugText = $"{effect.Name}";
         controller.debugText.text = debugText;
     }
