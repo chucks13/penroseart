@@ -8,13 +8,13 @@ using UnityEngine;
 public class TileShapes : EffectBase
 {
     private bool randomColor;
-    private Color color;
+    private float hue;
     private int[] shape;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-    public override string DebugText() => randomColor ? "Color: random" : $"Color: {color.ToString()}";
+    public override string DebugText() => randomColor ? "Color: random" : $"hue: {hue}";
 
     /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
@@ -34,12 +34,11 @@ public class TileShapes : EffectBase
         if (Random.value > 0.5f)
         {
             randomColor = true;
-            color = Color.clear;
         }
         else
         {
             randomColor = false;
-            color = Color.HSVToRGB(Random.value, 1f, 1f);
+            hue=Random.value;
         }
 
         switch (Random.Range(0, 9))
@@ -73,7 +72,7 @@ public class TileShapes : EffectBase
                 break;
         }
 
-        var text = (randomColor) ? "random" : color.ToString();
+        var text = (randomColor) ? "random" : hue.ToString();
         controller.debugText.text = $"Color: {text}";
         buffer.Clear();
     }
@@ -90,15 +89,17 @@ public class TileShapes : EffectBase
     public override void Draw()
     {
         // Beat pulse scales randomly selected shape flashes.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.75f, beatEnable);
+        float hueShift = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.0f);
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
         count = count / 5;
         for (int i = 0; i < count; i++)
         {
+            Color color = Color.HSVToRGB(hue+hueShift, 1f, 1f);
 
             if (randomColor)
-                color = Color.HSVToRGB(Random.value, 1f, 1f);
+                color = Color.HSVToRGB(Random.value, 1f, 1f)* beatBrightness;
 
 
             int loop = Random.Range(0, shape[0]);
@@ -109,7 +110,7 @@ public class TileShapes : EffectBase
             {
                 int idx = shape[j];
                 if (idx >= 0)
-                    buffer[idx] = color * beatBrightness;
+                    buffer[idx] = color;
             }
         }
     }
