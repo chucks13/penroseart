@@ -15,8 +15,8 @@ public sealed class CuePlannerTests
             TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 21, phraseLengthBeats: 32),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.True);
-        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Locked));
+        Assert.That(frame.HasGridAnchor, Is.True);
+        Assert.That(frame.Grid.State, Is.EqualTo(GridSyncState.Locked));
         Assert.That(frame.HasPhraseWindow, Is.True);
         Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577));
         Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(609));
@@ -138,11 +138,11 @@ public sealed class CuePlannerTests
             TrackPhaseUnavailableInput(beat: 594),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.True);
+        Assert.That(frame.HasGridAnchor, Is.True);
         Assert.That(frame.HasPhraseWindow, Is.False);
         Assert.That(frame.IsCoasting, Is.True);
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Coast));
-        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Coasting));
+        Assert.That(frame.Grid.State, Is.EqualTo(GridSyncState.Coasting));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
         Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(15));
         Assert.That(frame.Reanchored, Is.False);
@@ -164,13 +164,13 @@ public sealed class CuePlannerTests
             TrackPhaseInput(beat: 600, beatsToPhraseBoundary: 41, phraseLengthBeats: 64),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.True);
+        Assert.That(frame.HasGridAnchor, Is.True);
         Assert.That(frame.HasPhraseWindow, Is.True);
         Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577));
         Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(641));
         Assert.That(frame.IsCoasting, Is.False);
         Assert.That(frame.Reanchored, Is.True);
-        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Locked));
+        Assert.That(frame.Grid.State, Is.EqualTo(GridSyncState.Locked));
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(641));
     }
@@ -192,7 +192,7 @@ public sealed class CuePlannerTests
             TrackPhaseInput(beat: 600, beatsToPhraseBoundary: 41, phraseLengthBeats: 48),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.True);
+        Assert.That(frame.HasGridAnchor, Is.True);
         Assert.That(frame.HasPhraseWindow, Is.True);
         Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(593));
         Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(641));
@@ -215,7 +215,7 @@ public sealed class CuePlannerTests
             TrackPhaseUnavailableInput(beat: 589),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.True);
+        Assert.That(frame.HasGridAnchor, Is.True);
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
         Assert.That(frame.HasPhraseWindow, Is.True);
         Assert.That(frame.PhraseWindow.StartBeat, Is.EqualTo(577));
@@ -258,7 +258,7 @@ public sealed class CuePlannerTests
         // An 8-bar (32-beat) loop in beat-only fallback replays only the front of the 64-beat synthetic
         // window, so a Cue Mark selected in the tail is never reached: each loop rewinds the beat before
         // it lands. The planner detects the stranding (the countdown to the same mark climbs on a rewind),
-        // cues on the 16-beat Phase grid meanwhile, then resumes the synthetic mark once the loop releases
+        // cues on the 16-beat Grid meanwhile, then resumes the synthetic mark once the loop releases
         // and the beat carries through to it (ADR-0008).
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
@@ -301,7 +301,7 @@ public sealed class CuePlannerTests
         Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
 
         // A 7-beat loop sends the beat back to 592 — below the 16-beat cadence, so NOT counted as a new pass
-        // (BeatRewoundToNewPass stays false) — yet the climbing countdown still strands 609 and grids on phase.
+        // (BeatRewoundToNewPass stays false) — yet the climbing countdown still strands 609 and grids on the grid.
         frame = cuePlanner.Plan(TrackPhaseUnavailableInput(beat: 592), minimumChangeCadenceBeats: 16);
         Assert.That(frame.BeatRewoundToNewPass, Is.False);
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.GridFallback));
@@ -442,7 +442,7 @@ public sealed class CuePlannerTests
             BeatOnlyInput(beat: 589),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.True);
+        Assert.That(frame.HasGridAnchor, Is.True);
         Assert.That(frame.HasPhraseWindow, Is.False);
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.GridFallback));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
@@ -457,7 +457,7 @@ public sealed class CuePlannerTests
             OnAirTimingInput.Unavailable,
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.HasPhaseAnchor, Is.False);
+        Assert.That(frame.HasGridAnchor, Is.False);
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.Unlocked));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(-1));
     }
@@ -466,34 +466,34 @@ public sealed class CuePlannerTests
     public void IrregularContradictedPhraseStillLandsTheMandatoryCueAtThePhraseBoundary()
     {
         // The load-bearing invariant: the phrase-end (mandatory) cue is phrase-driven and is NEVER gated
-        // on phase being Locked. A phrase whose length is not a multiple of 16 reads Contradicted (the
+        // on the grid being Locked. A phrase whose length is not a multiple of 16 reads Contradicted (the
         // 16-grid is in dispute), but the boundary is feed bedrock and always known, so the cue must
-        // still land at the phrase end. Phase state only refines interior placement.
+        // still land at the phrase end. Grid state only refines interior placement.
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
-        // A 56-beat phrase (56 % 16 = 8) cannot subdivide into whole 16-beat phases. It runs 585..641
+        // A 56-beat phrase (56 % 16 = 8) cannot subdivide into whole 16-beat grids. It runs 585..641
         // with interior 16-beat marks at 585/601/617/633; beat 636 is past the last interior mark, so the
         // mandatory phrase-end cue at 641 is the only target left.
         var frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 636, beatsToPhraseBoundary: 5, phraseLengthBeats: 56),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.Phase.State, Is.EqualTo(PhaseLockState.Contradicted),
-            "A 56-beat phrase is irregular, so the phase grid is reported Contradicted.");
+        Assert.That(frame.Grid.State, Is.EqualTo(GridSyncState.Contradicted),
+            "A 56-beat phrase is irregular, so the grid is reported Contradicted.");
         Assert.That(frame.HasPhraseWindow, Is.True);
         Assert.That(frame.PhraseWindow.EndBeat, Is.EqualTo(641));
         Assert.That(frame.CueMarkBeat, Is.EqualTo(641),
-            "The mandatory phrase-end cue lands at the boundary despite the Contradicted phase.");
+            "The mandatory phrase-end cue lands at the boundary despite the Contradicted grid.");
         Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
     }
 
     // Drives the CuePlanner through the same PHASE/PHRASE composition the Director performs: each frame
-    // is read by a paired PhaseLock + PhraseTracker, then planned. Holds the stateful PhaseLock so the
+    // is read by a paired GridSync + PhraseTracker, then planned. Holds the stateful GridSync so the
     // held offset carries across a test's frame sequence, exactly as in the live Director.
     private sealed class CueHarness
     {
         private readonly CuePlanner cuePlanner;
-        private readonly PhaseLock phaseLock = new PhaseLock();
+        private readonly GridSync gridSync = new GridSync();
 
         public CueHarness(Func<int, int, int> randomRange)
         {
@@ -502,13 +502,13 @@ public sealed class CuePlannerTests
 
         public TimingFrame Plan(OnAirTimingInput input, int minimumChangeCadenceBeats)
         {
-            var phase = phaseLock.Read(input);
+            var grid = gridSync.Read(input);
             var phrase = PhraseTracker.Read(
-                phase,
+                grid,
                 input.TrackPhaseActive,
                 input.BeatsUntilPhraseBoundary,
                 input.PhraseLengthBeats);
-            return cuePlanner.Plan(input, phase, phrase, minimumChangeCadenceBeats);
+            return cuePlanner.Plan(input, grid, phrase, minimumChangeCadenceBeats);
         }
 
         public void RecordCueIssued(int beat) => cuePlanner.RecordCueIssued(beat);

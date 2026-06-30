@@ -6,7 +6,7 @@ public enum TimingFrameSource
     /// <summary>No usable live timing target is available.</summary>
     Unlocked,
 
-    /// <summary>The next target is inferred from the 16-beat Phase grid.</summary>
+    /// <summary>The next target is inferred from the 16-beat Grid.</summary>
     GridFallback,
 
     /// <summary>The next target comes from a fabricated rolling Phrase Window when no Track Phase is present (beat-only fallback, ADR-0008).</summary>
@@ -18,7 +18,7 @@ public enum TimingFrameSource
     /// <summary>The next target is a mandatory structural Track Phase boundary.</summary>
     TrackPhaseBoundary,
 
-    /// <summary>The target is coasting from the last known Phase Anchor.</summary>
+    /// <summary>The target is coasting from the last known Grid Anchor.</summary>
     Coast,
 }
 
@@ -44,15 +44,15 @@ public readonly struct OnAirTimingInput
 
     /// <summary>
     /// Integer-pure track identity: a monotonically increasing ordinal that changes when the
-    /// on-air track title changes, or -1 when no track is on air. PhaseLock detects a track
-    /// change by a change in this value (the raw title stays out of the integer Phase seam).
+    /// on-air track title changes, or -1 when no track is on air. GridSync detects a track
+    /// change by a change in this value (the raw title stays out of the integer Grid seam).
     /// </summary>
     public readonly int TrackOrdinal;
 
     /// <summary>
     /// The Standalone/Synced mode authority carried across this seam: true while the 4-count is running
     /// (<c>BeatInBar &gt;= 1</c>). Mirrors <see cref="BeatManager.IsSynced"/> — the one place the rule is
-    /// defined — so PhaseLock reads the mode floor from the authority instead of its own check (ADR-0007).
+    /// defined — so GridSync reads the mode floor from the authority instead of its own check (ADR-0007).
     /// </summary>
     public bool IsSynced => BeatInBar >= 1;
 
@@ -162,7 +162,7 @@ public readonly struct TimingFrame
 {
     public static TimingFrame Unavailable { get; } = new TimingFrame(
         OnAirTimingInput.Unavailable,
-        PhaseReading.None,
+        GridReading.None,
         false,
         -1,
         false,
@@ -179,17 +179,17 @@ public readonly struct TimingFrame
     /// <summary>Current on-air beat, or -1 when unavailable.</summary>
     public readonly int CurrentBeat;
 
-    /// <summary>The Phase Lock reading for this frame.</summary>
-    public readonly PhaseReading Phase;
+    /// <summary>The Grid Sync reading for this frame.</summary>
+    public readonly GridReading Grid;
 
-    /// <summary>Whether this frame has a Phase Anchor the Director can target.</summary>
-    public readonly bool HasPhaseAnchor;
+    /// <summary>Whether this frame has a Grid Anchor the Director can target.</summary>
+    public readonly bool HasGridAnchor;
 
     /// <summary>Cue Mark where the Director should land its next Impact Point.</summary>
     public readonly int CueMarkBeat;
 
-    /// <summary>Absolute beat where the current Phase Anchor lands, or -1 when unlocked.</summary>
-    public int PhaseAnchorLandingBeat => CueMarkBeat;
+    /// <summary>Absolute beat where the current Grid Anchor lands, or -1 when unlocked.</summary>
+    public int GridAnchorLandingBeat => CueMarkBeat;
 
     /// <summary>Beats until the Cue Mark, or -1 when unlocked.</summary>
     public readonly int BeatsUntilCueMark;
@@ -212,7 +212,7 @@ public readonly struct TimingFrame
     /// <summary>Cue/cadence memory after On-Air Timing removes stale state from earlier loop passes.</summary>
     public readonly PassLocalTimingState PassLocalState;
 
-    /// <summary>True when this frame is continuing from the last known Phase Anchor.</summary>
+    /// <summary>True when this frame is continuing from the last known Grid Anchor.</summary>
     public bool IsCoasting => Source == TimingFrameSource.Coast;
 
     /// <summary>True when fresh structural timing replaced a coasted or weaker anchor.</summary>
@@ -220,8 +220,8 @@ public readonly struct TimingFrame
 
     public TimingFrame(
         OnAirTimingInput input,
-        PhaseReading phase,
-        bool hasPhaseAnchor,
+        GridReading grid,
+        bool hasGridAnchor,
         int cueMarkBeat,
         bool hasPhraseWindow,
         PhraseWindow phraseWindow,
@@ -233,10 +233,10 @@ public readonly struct TimingFrame
     {
         Input = input;
         CurrentBeat = input.Beat;
-        Phase = phase;
-        HasPhaseAnchor = hasPhaseAnchor;
+        Grid = grid;
+        HasGridAnchor = hasGridAnchor;
         CueMarkBeat = cueMarkBeat;
-        BeatsUntilCueMark = hasPhaseAnchor && input.Beat >= 1 ? cueMarkBeat - input.Beat : -1;
+        BeatsUntilCueMark = hasGridAnchor && input.Beat >= 1 ? cueMarkBeat - input.Beat : -1;
         HasPhraseWindow = hasPhraseWindow;
         PhraseWindow = phraseWindow;
         CueSheet = cueSheet;

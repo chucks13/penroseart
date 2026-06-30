@@ -1,13 +1,13 @@
 /// <summary>
 /// Read-only Phrase reading <see cref="PhraseTracker"/> emits each frame. This is the PHRASE layer:
 /// where the frame sits inside the live musical Phrase, how long that Phrase is, whether it is
-/// irregular (its length is not a whole number of 16-beat Phases), and a one-Phrase look-ahead while
+/// irregular (its length is not a whole number of 16-beat Grids), and a one-Phrase look-ahead while
 /// the feed is counting down to the next Phrase. Every value is a whole-beat integer, matching the
-/// exact integer model of the PHASE-layer <see cref="PhaseReading"/> it rides on.
+/// exact integer model of the GRID-layer <see cref="GridReading"/> it rides on.
 /// </summary>
 public readonly struct PhraseTrackerReading
 {
-    /// <summary>Sentinel "no Phrase resolved" reading, emitted whenever the underlying Phase is unacquired.</summary>
+    /// <summary>Sentinel "no Phrase resolved" reading, emitted whenever the underlying Grid is unacquired.</summary>
     public static PhraseTrackerReading None { get; } =
         new PhraseTrackerReading(-1, -1, false, -1, -1, false);
 
@@ -17,7 +17,7 @@ public readonly struct PhraseTrackerReading
     /// <summary>Length of the current Phrase in beats, or -1 when not in a Phrase.</summary>
     public readonly int PhraseLengthBeats;
 
-    /// <summary>The current or upcoming Phrase does not subdivide into whole 16-beat Phases (length not a multiple of 16).</summary>
+    /// <summary>The current or upcoming Phrase does not subdivide into whole 16-beat Grids (length not a multiple of 16).</summary>
     public readonly bool IsIrregular;
 
     /// <summary>Whole beats until the next Phrase boundary (the next Phrase start, equivalently the current Phrase's end), or -1 when unavailable.</summary>
@@ -29,7 +29,7 @@ public readonly struct PhraseTrackerReading
     /// <summary>A look-ahead is available: the feed is counting down to a known upcoming Phrase.</summary>
     public bool HasLookAhead => PredictedUpcomingLengthBeats != -1;
 
-    /// <summary>The underlying Phase is acquired, so this reading is meaningful (distinguishes a live no-Phrase frame from <see cref="None"/>).</summary>
+    /// <summary>The underlying Grid is acquired, so this reading is meaningful (distinguishes a live no-Phrase frame from <see cref="None"/>).</summary>
     public readonly bool IsAcquired;
 
     public PhraseTrackerReading(
@@ -50,35 +50,35 @@ public readonly struct PhraseTrackerReading
 }
 
 /// <summary>
-/// Phrase-layer reader that rides on the PHASE-layer <see cref="PhaseReading"/>. Given the Phase
+/// Phrase-layer reader that rides on the GRID-layer <see cref="GridReading"/>. Given the Grid
 /// reading plus the feed's three Phrase numerics (the tri-state Track-Phase-active flag, beats until
 /// the next boundary, and the active-or-upcoming Phrase length), it places the frame inside the live
 /// Phrase and projects one Phrase of look-ahead while the feed is counting down.
 /// <para>
 /// The Read is a stateless pure mapping exposed as a static method. It owns no
-/// re-anchoring: where the 16-grid sits, and whether the Phase is trustworthy, belong to
-/// <see cref="PhaseLock"/>; this reader rides on that <see cref="PhaseReading.State"/>.
+/// re-anchoring: where the 16-grid sits, and whether the Grid is trustworthy, belong to
+/// <see cref="GridSync"/>; this reader rides on that <see cref="GridReading.State"/>.
 /// </para>
 /// <para>
 /// <see cref="PhraseTrackerReading.IsIrregular"/> is derived phrase-locally from the length via
-/// <see cref="PhaseGrid.IsIrregularPhrase"/> — the single definition of phrase irregularity — so
-/// the phase and phrase layers agree on what counts as irregular.
+/// <see cref="Grid.IsIrregularPhrase"/> — the single definition of phrase irregularity — so
+/// the grid and phrase layers agree on what counts as irregular.
 /// </para>
 /// </summary>
 public sealed class PhraseTracker
 {
     /// <summary>
-    /// Reads one frame and emits the current Phrase reading. <paramref name="phase"/> is this frame's
-    /// PHASE reading; the three integers are the feed's Phrase numerics
+    /// Reads one frame and emits the current Phrase reading. <paramref name="grid"/> is this frame's
+    /// GRID reading; the three integers are the feed's Phrase numerics
     /// (<see cref="OnAirTimingInput.TrackPhaseActive"/>, <see cref="OnAirTimingInput.BeatsUntilPhraseBoundary"/>,
     /// <see cref="OnAirTimingInput.PhraseLengthBeats"/>).
     /// </summary>
-    public static PhraseTrackerReading Read(in PhaseReading phase, int trackPhaseActive, int beatsUntilNext, int activeOrUpcomingLengthBeats)
+    public static PhraseTrackerReading Read(in GridReading grid, int trackPhaseActive, int beatsUntilNext, int activeOrUpcomingLengthBeats)
     {
-        // No acquired Phase to ride on: there is nothing to place inside a Phrase. StandAloneFloor is a
+        // No acquired Grid to ride on: there is nothing to place inside a Phrase. StandAloneFloor is a
         // mode exit (the 4-count clock is gone, ADR-0004) — even with a held offset still on the reading
         // there is no live grid to ride, so the Phrase layer reports None too.
-        if (phase.Offset < 0 || phase.StandAloneFloor)
+        if (grid.Offset < 0 || grid.StandAloneFloor)
         {
             return PhraseTrackerReading.None;
         }
@@ -101,7 +101,7 @@ public sealed class PhraseTracker
 
         // Re-derived from the length so it catches the first Phrase; covers the current in-Phrase
         // length and the upcoming length during a countdown (both arrive in the same field).
-        var isIrregular = hasLength && PhaseGrid.IsIrregularPhrase(length);
+        var isIrregular = hasLength && Grid.IsIrregularPhrase(length);
 
         return new PhraseTrackerReading(
             positionInPhrase,

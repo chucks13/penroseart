@@ -15,7 +15,7 @@ public class Flock : EffectBase
     private float alignment = 0.75f;
     private float cohesion = 1f;
     private float separation = 1.25f;
-    private int lastPhaseCount;
+    private int lastGridCount;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -65,7 +65,7 @@ public class Flock : EffectBase
     public override void OnStart()
     {
         base.OnStart();
-        lastPhaseCount = beatManager.Phase?.Count ?? 0;
+        lastGridCount = beatManager.Grid?.Count ?? 0;
 
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
@@ -96,20 +96,20 @@ public class Flock : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// Selects a new Waveform once at the one of each 16-beat On-Air Timing Phase, but only when the Phase
-    /// lock is trusted (<see cref="PhaseLockState.Locked"/>) so a Coasting / Contradicted reading holds the
-    /// current Waveform instead of re-rolling on a low-trust Phase.
+    /// Selects a new Waveform once at the one of each 16-beat On-Air Timing Grid, but only when the Grid
+    /// lock is trusted (<see cref="GridSyncState.Locked"/>) so a Coasting / Contradicted reading holds the
+    /// current Waveform instead of re-rolling on a low-trust Grid.
     /// </summary>
-    private void RerollWaveformOnPhaseOne()
+    private void RerollWaveformOnGridOne()
     {
-        var phase = beatManager.Phase;
-        var phaseCount = phase?.Count ?? 0;
-        if (phaseCount == 1 && lastPhaseCount != 1 && phase?.Confidence == PhaseLockState.Locked)
+        var grid = beatManager.Grid;
+        var gridCount = grid?.Count ?? 0;
+        if (gridCount == 1 && lastGridCount != 1 && grid?.Confidence == GridSyncState.Locked)
         {
             beatVariant = beatManager.GetRandomVariant();
         }
 
-        lastPhaseCount = phaseCount;
+        lastGridCount = gridCount;
     }
 
     /// <summary>
@@ -117,7 +117,7 @@ public class Flock : EffectBase
     /// </summary>
     public override void Draw()
     {
-        RerollWaveformOnPhaseOne();
+        RerollWaveformOnGridOne();
 
         var envelope = beatManager.Envelope(beatVariant) ?? 0f;
         var lowEnergy = beatManager.Levels?.low ?? 0f;

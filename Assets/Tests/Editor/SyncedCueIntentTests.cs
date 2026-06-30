@@ -249,7 +249,7 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
-    public void ResolveEventIntentUsesFillThatOverlapsNextPhase()
+    public void ResolveEventIntentUsesFillThatOverlapsNextGrid()
     {
         var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
 
@@ -262,7 +262,7 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
-    public void ResolveEventIntentIgnoresFillThatEndsBeforeNextPhase()
+    public void ResolveEventIntentIgnoresFillThatEndsBeforeNextGrid()
     {
         var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
 
@@ -275,7 +275,7 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
-    public void ResolveEventIntentIgnoresFillThatStartsAfterNextPhase()
+    public void ResolveEventIntentIgnoresFillThatStartsAfterNextGrid()
     {
         var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
 
@@ -388,8 +388,8 @@ public sealed class SyncedCueIntentTests
                 trackPhaseActive: 1,
                 beatsUntilPhraseBoundary: cueMarkBeat - currentBeat,
                 phraseLengthBeats: 32),
-            new PhaseReading(0, 1, PhaseLockState.Locked, false),
-            hasPhaseAnchor: true,
+            new GridReading(0, 1, GridSyncState.Locked, false),
+            hasGridAnchor: true,
             cueMarkBeat,
             hasPhraseWindow: false,
             default,

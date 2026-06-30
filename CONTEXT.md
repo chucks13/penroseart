@@ -155,7 +155,7 @@ A ready-to-use value BeatManager builds from raw broadcast state — gated, norm
 _Avoid_: "cooked" (retired term); effects reading `BeatData` directly — raw values flow through BeatManager queries too; sentinel values crossing into effect math; treating `null` as an error instead of an ordinary musical state.
 
 **Standalone Mode / Synced Mode**:
-The two intentional personalities for rhythm-aware behavior. The dividing line is a single authority — whether a usable musical clock (the running 4-count) is present. **Synced Mode** is active whenever that clock is present; the wall syncs to whatever musical timing the signal currently provides. **Standalone Mode** is the self-running art behavior whenever the clock is absent — whether no OSC is connected at all, or OSC is connected but no track is playing or yet analysed — and it must look fully intentional on its own. One shared flag decides this for every consumer (effects, Director, HUD, Phase floor) so they can never disagree about which mode the wall is in. This is a preference, not a fallback: the wall prefers a live clock and works deliberately without one.
+The two intentional personalities for rhythm-aware behavior. The dividing line is a single authority — whether a usable musical clock (the running 4-count) is present. **Synced Mode** is active whenever that clock is present; the wall syncs to whatever musical timing the signal currently provides. **Standalone Mode** is the self-running art behavior whenever the clock is absent — whether no OSC is connected at all, or OSC is connected but no track is playing or yet analysed — and it must look fully intentional on its own. One shared flag decides this for every consumer (effects, Director, HUD, Grid floor) so they can never disagree about which mode the wall is in. This is a preference, not a fallback: the wall prefers a live clock and works deliberately without one.
 _Avoid_: deciding mode from transport connectivity or tempo instead of the running 4-count; multiple consumers each re-deriving the mode; effects that freeze, glitch, or go dark when the clock is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase (clock still running) as Standalone Mode.
 
 **Director**:
@@ -163,20 +163,20 @@ The decision layer that owns *what* plays on the wall and which Phrase Cue Mark 
 _Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
 
 **On-Air Timing**:
-The Synced Mode timing interpretation seam. It reads the current on-air rhythm facts, especially live beat and Track Phase, and turns them into one Timing Frame for the Director. It owns Phase/Phrase interpretation, Cue Sheet planning, Beat Rewind correction, Coast, and Re-anchor behavior.
+The Synced Mode timing interpretation seam. It reads the current on-air rhythm facts, especially live beat and Track Phase, and turns them into one Timing Frame for the Director. It owns Grid/Phrase interpretation, Cue Sheet planning, Beat Rewind correction, Coast, and Re-anchor behavior.
 _Avoid_: making the Director read raw Track Phase fields; treating On-Air Timing as another clock source or as Switcher execution state.
 
 **Timing Frame**:
-The Director-facing snapshot of one Synced Mode timing moment: current beat, Phase reading, Phase Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether the next fire-and-forget cue command should wait, cue, or block on cadence.
+The Director-facing snapshot of one Synced Mode timing moment: current beat, Grid reading, Grid Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether the next fire-and-forget cue command should wait, cue, or block on cadence.
 _Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
 
 **Cue Sheet**:
-A simple per-Phrase list of scheduled Cues generated from the Phrase's total beat length: divide the Phrase into Phases, choose some interior phase starts, and always include the final phrase boundary. Its identity is the total Phrase length, not phrase name or absolute start/end beat, so an upcoming Cue Sheet can be reused when the announced length is unchanged.
+A simple per-Phrase list of scheduled Cues generated from the Phrase's total beat length: divide the Phrase into Grids, choose some interior Grid starts, and always include the final phrase boundary. Its identity is the total Phrase length, not phrase name or absolute start/end beat, so an upcoming Cue Sheet can be reused when the announced length is unchanged.
 _Avoid_: putting Effect or Transition choices in the Cue Sheet; treating it as a queue of loaded Cues; rerolling just because same-length phrase timing shifted.
 
 **Cue Mark**:
-A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; marks include selected 16-beat Phase Boundaries and the mandatory final phrase boundary. Fill/Drop state does not create or move Cue Marks; it only informs which Effect and Transition the Director should cast for an existing Cue Mark.
-_Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Phase Boundary when speaking about the Phrase plan.
+A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; marks include selected 16-beat Grid Boundaries and the mandatory final phrase boundary. Fill/Drop state does not create or move Cue Marks; it only informs which Effect and Transition the Director should cast for an existing Cue Mark.
+_Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Grid Boundary when speaking about the Phrase plan.
 
 **Loaded Cue**:
 The Switcher-held stage-directed Cue for the next Cue Mark: which destination Performer, which Transition, and which musical mark the move should hit. It is mutable only inside the Switcher before its Lock Point; the Director sends cue directions fire-and-forget and does not inspect Loaded Cue state.
@@ -202,32 +202,32 @@ _Avoid_: choosing the Transition at the last moment; treating the selected next 
 The Effect already chosen as the destination for the Director's next A-to-B move. It lets a person know what the wall is moving toward and gives tuning tools something concrete to show before the move begins.
 _Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to preview or tune the next destination.
 
-**Phase Anchor**:
-The current musical grid target the wall is locked to: a Cue Mark from a Phrase Cue Sheet when phrase structure is known, or the best known Phase Boundary when only weaker beat/grid evidence is available. When Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
+**Grid Anchor**:
+The current musical grid target the wall is locked to: a Cue Mark from a Phrase Cue Sheet when phrase structure is known, or the best known Grid Boundary when only weaker beat/grid evidence is available. When Track Phase disappears, the wall can continue on the last known grid instead of snapping to an arbitrary beat-only count.
 _Avoid_: treating the anchor as a new clock source; it is an interpretation of incoming musical structure, not transition progress or Switcher state.
 
-**Phase Lock**:
-The Director's ongoing effort to keep Performer changes aligned to the Phase Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
-_Avoid_: assuming the wall is either perfectly synced or unsynced forever; phase lock is continuously maintained.
+**Grid Sync**:
+The Director's ongoing effort to keep Performer changes aligned to the Grid Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
+_Avoid_: assuming the wall is either perfectly synced or unsynced forever; grid sync is continuously maintained.
 
-**Phase Confidence**:
-How much to trust where the one sits on the 16-beat Phase this frame, expressed as the three `PhaseLockState` values: **Locked** (offset freshly anchored or steadily dead-reckoned — the one is trusted), **Coasting** (no fresh anchor, e.g. Track Phase dropped out, so the last good offset is held), and **Contradicted** (a freshly derived offset disagreed with the held one, kept pending the next clean re-latch). Effects read it as `BeatManager.Phase.Confidence`; all three are *in-phase* readings with a valid Phase Count — they differ only in trust. Confidence is about the evidence for where the one is, not how good the visual looks. Losing the clock is **not** a low-confidence value — it is a Standalone Mode exit, surfaced as a null `BeatManager.Phase`, not a fourth state.
-_Avoid_: describing Phase Confidence as a five-level evidence ladder (retired); conflating it with the **Timing Frame** source/reason (which kind of target the next cue aims at — Cue Mark, Track Phase Boundary, Synthetic Phrase, Grid Fallback, Coast); treating Coasting or Contradicted as out-of-phase.
+**Grid Confidence**:
+How much to trust where the one sits on the 16-beat Grid this frame, expressed as the three `GridSyncState` values: **Locked** (offset freshly anchored or steadily dead-reckoned — the one is trusted), **Coasting** (no fresh anchor, e.g. Track Phase dropped out, so the last good offset is held), and **Contradicted** (a freshly derived offset disagreed with the held one, kept pending the next clean re-latch). Effects read it as `BeatManager.Grid.Confidence`; all three are *on-grid* readings with a valid Grid Count — they differ only in trust. Confidence is about the evidence for where the one is, not how good the visual looks. Losing the clock is **not** a low-confidence value — it is a Standalone Mode exit, surfaced as a null `BeatManager.Grid`, not a fourth state.
+_Avoid_: describing Grid Confidence as a five-level evidence ladder (retired); conflating it with the **Timing Frame** source/reason (which kind of target the next cue aims at — Cue Mark, Track Phase Boundary, Synthetic Phrase, Grid Fallback, Coast); treating Coasting or Contradicted as off-grid.
 
 **Coast**:
-Continuing on the last known Phase Anchor when Track Phase data temporarily disappears. Coasting preserves the last musical grid until fresh phrase data returns or no anchor has ever been known.
+Continuing on the last known Grid Anchor when Track Phase data temporarily disappears. Coasting preserves the last musical grid until fresh phrase data returns or no anchor has ever been known.
 _Avoid_: calling this a fallback; it is the deliberate Synced Mode behavior for intermittent phrase visibility.
 
 **Re-anchor**:
-Replacing the current Phase Anchor with a new one when fresh Track Phase data appears or contradicts the grid being coasted. Re-anchoring is how the wall gets back in phase after startup, data gaps, song position changes, or loop-like movement the current data can reveal.
-_Avoid_: layering multiple anchors; the Director has one current phase anchor.
+Replacing the current Grid Anchor with a new one when fresh Track Phase data appears or contradicts the grid being coasted. Re-anchoring is how the wall gets back on grid after startup, data gaps, song position changes, or loop-like movement the current data can reveal.
+_Avoid_: layering multiple anchors; the Director has one current grid anchor.
 
 **Synthetic Phrase**:
-The beat-only fallback for a track that carries no Track Phase at all (never had phrase data), distinct from Coast, which continues a *recently lost* real anchor. When the clock runs but no Track Phase is present, the Director fabricates a rolling 64-beat Phrase Window on the running 4-count grid and runs it through the same Cue Sheet builder, so a phrase-less track still cues sparsely-but-bounded instead of idling, until a phrase-bearing track loads. If a Loop strands a synthetic Cue Mark — one sitting past the looped section, so the beat never reaches it — the wall cues on the bare 16-beat Phase grid until that mark is finally reached, then resumes synthetic cueing (ADR-0008).
+The beat-only fallback for a track that carries no Track Phase at all (never had phrase data), distinct from Coast, which continues a *recently lost* real anchor. When the clock runs but no Track Phase is present, the Director fabricates a rolling 64-beat Phrase Window on the running 4-count grid and runs it through the same Cue Sheet builder, so a phrase-less track still cues sparsely-but-bounded instead of idling, until a phrase-bearing track loads. If a Loop strands a synthetic Cue Mark — one sitting past the looped section, so the beat never reaches it — the wall cues on the bare 16-beat Grid until that mark is finally reached, then resumes synthetic cueing (ADR-0008).
 _Avoid_: reusing a synthetic Cue Sheet for a real Phrase; confusing it with Coast (Coast continues a real anchor, Synthetic Phrase invents one for a feed that never had phrase); calling the grid-while-looped behavior a separate scheduler.
 
 **Loop**:
-A live repeated section of the current music. Loops are powers of four and usually preserve Phase, but they can rewind or repeat beat numbers in ways that make absolute beat progress stale. A Loop inside the same Phrase Window is a new pass through the same Cue Sheet: it should keep the Phrase Window's Cue Marks and move the Director's cursor back to the next Cue Mark after the current beat, not create a new Phrase Window or reroll the sheet.
+A live repeated section of the current music. Loops are powers of four and usually preserve Grid, but they can rewind or repeat beat numbers in ways that make absolute beat progress stale. A Loop inside the same Phrase Window is a new pass through the same Cue Sheet: it should keep the Phrase Window's Cue Marks and move the Director's cursor back to the next Cue Mark after the current beat, not create a new Phrase Window or reroll the sheet.
 _Avoid_: assuming a Loop means the wall is out of phase; assuming old absolute progress remains valid after a loop rewind; treating a same-window Loop as a new Phrase Window.
 
 **Beat Rewind**:
@@ -243,7 +243,7 @@ What a Performer advertises it can do, so the Director can cast it knowingly: ha
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **A-to-B Transition**:
-A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Phrase Window or Phase Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
+A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Phrase Window or Grid Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
 _Avoid_: treating every Transition as if its only goal is to complete on a Cue Mark; treating transition progress, completion, or busy state as music-structure evidence.
 
 **Transition Repertoire**:
@@ -267,8 +267,8 @@ How forcefully a Transition reads as a musical move: Subtle, Medium, or High. In
 _Avoid_: treating Intensity as brightness or audio level; it describes the visual force of the Transition itself.
 
 **Impact Point**:
-A Transition-local progress point where that Transition's main visual hit happens. The Switcher aligns the Impact Point to the Armed Cue's Cue Mark, but the Impact Point is not itself Phase or Phrase structure; it only describes where the Transition should be in its own A-to-B motion when it hits its mark.
-_Avoid_: treating Impact Point as a phrase boundary, Cue Mark, Phase Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
+A Transition-local progress point where that Transition's main visual hit happens. The Switcher aligns the Impact Point to the Armed Cue's Cue Mark, but the Impact Point is not itself Grid or Phrase structure; it only describes where the Transition should be in its own A-to-B motion when it hits its mark.
+_Avoid_: treating Impact Point as a phrase boundary, Cue Mark, Grid Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
 
 **Transition Duration**:
 The full length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail; both parts are non-negative, the total must not exceed 12 beats, and zero duration is a hard cut.
@@ -279,7 +279,7 @@ The lead-in before a Transition's Impact Point — how many beats before the Arm
 _Avoid_: using Runway to mean the whole Transition; a Transition can continue after impact; requiring a fake one-beat Runway for hard cuts.
 
 **Tail**:
-The part of a Transition after the Impact Point. Tail is visual resolution to B after the Transition has hit its mark; it has no effect on Phrase Window, Cue Sheet, Cue Mark, or Phase Anchor decisions.
+The part of a Transition after the Impact Point. Tail is visual resolution to B after the Transition has hit its mark; it has no effect on Phrase Window, Cue Sheet, Cue Mark, or Grid Anchor decisions.
 _Avoid_: treating post-impact motion as late or wrong; treating Tail completion as a musical scheduling event.
 
 **Transition Completion**:
@@ -299,32 +299,32 @@ An inspection freeze that suspends the Director so a developer can sit on one ef
 _Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; re-asserting the held effect every frame (nothing fights it once the one decider is suspended).
 
 **Track Phase**:
-RaveSystem's name for the analyzed phrase signal: current/next phrase labels, active state, beats remaining to the phrase boundary or upcoming phrase start, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window** in song structure; it is not the wall's **Phase**. In the current OSC stream, `active=1` describes the current Phrase Window, `active=0` can describe an upcoming Phrase Window, and `active=-1` means unavailable.
-_Avoid_: confusing Track Phase with **Bar Phase** or **Phase**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
+RaveSystem's name for the analyzed phrase signal: current/next phrase labels, active state, beats remaining to the phrase boundary or upcoming phrase start, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase Window** in song structure; it is not the wall's **Grid**. In the current OSC stream, `active=1` describes the current Phrase Window, `active=0` can describe an upcoming Phrase Window, and `active=-1` means unavailable.
+_Avoid_: confusing Track Phase with **Bar Phase** or the wall's **Grid**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Phrase Window**:
-The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Phases, and is usually at least 8 bars / 32 beats while often doubling or extending from there. Its total beat length is the source for a Phrase Cue Sheet.
+The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Grids, and is usually at least 8 bars / 32 beats while often doubling or extending from there. Its total beat length is the source for a Phrase Cue Sheet.
 _Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase Window.
 
-**Phase** (a.k.a. **16-Beat Phase**):
-A fixed 4-bar / 16-beat timing unit inside a Phrase Window. The wall uses Phase Boundaries as its minimum switching cadence; a Phrase Window can contain several Phases, and the Director may choose some interior Phase Boundaries rather than switching at every one.
-_Avoid_: using "phase" when the whole Phrase Window is meant; assuming every Phase Boundary must trigger a transition.
+**Grid** (a.k.a. **16-Beat Grid**):
+A fixed 4-bar / 16-beat timing unit inside a Phrase Window. The wall uses Grid Boundaries as its minimum switching cadence; a Phrase Window can contain several Grids, and the Director may choose some interior Grid Boundaries rather than switching at every one. "Grid" here is the wall's own cyclic 16-beat unit — *not* RaveSystem's **Beat Grid** (the analyzed per-beat → time map), which the wall does not use under this name.
+_Avoid_: using "grid" when the whole Phrase Window is meant; assuming every Grid Boundary must trigger a transition; conflating the wall's Grid with RaveSystem's per-beat Beat Grid.
 
-**Phase Boundary**:
-The beat where a Phase starts or ends. A phrase boundary is always also a Phase Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final Cue Mark.
-_Avoid_: calling every bar downbeat a Phase Boundary; a Phase Boundary is the 16-beat one, not every 4-beat bar one.
+**Grid Boundary**:
+The beat where a Grid starts or ends. A phrase boundary is always also a Grid Boundary, so the final boundary of a Phrase Window is always eligible as the mandatory final Cue Mark.
+_Avoid_: calling every bar downbeat a Grid Boundary; a Grid Boundary is the 16-beat one, not every 4-beat bar one.
 
-**Selected Phase Boundary**:
-A Phase Boundary chosen as a transition target by the current implementation. In domain language, prefer **Cue Mark** for the Phrase-level plan; the important concept is that the mark belongs to the Phrase grid and a Transition's local Impact Point hits it.
-_Avoid_: using Selected Phase Boundary as the canonical name for Cue Sheet items; calling it an Impact Point or treating it as Transition Completion.
+**Selected Grid Boundary**:
+A Grid Boundary chosen as a transition target by the current implementation. In domain language, prefer **Cue Mark** for the Phrase-level plan; the important concept is that the mark belongs to the Grid and a Transition's local Impact Point hits it.
+_Avoid_: using Selected Grid Boundary as the canonical name for Cue Sheet items; calling it an Impact Point or treating it as Transition Completion.
 
-**Phase Count**:
-The wall's 1-based count within the current Phase. A 4-beat Runway begins at count 13 so the Impact Point lands on the next Phase Boundary: `13, 14, 15, 16, X`.
+**Grid Count**:
+The wall's 1-based count within the current Grid. A 4-beat Runway begins at count 13 so the Impact Point lands on the next Grid Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
-**`BeatManager.Phase` (`PhaseInfo`)**:
-The effect-facing read of the live **Phase**: a nullable `PhaseInfo { Confidence, Count, Progress }` (null = not in a phase). `Confidence` is the **Phase Confidence** `PhaseLockState`; `Count` is the 1..16 **Phase Count**; `Progress` is the 0..1 position through the 16-beat Phase. The Director owns the `PhaseLock` and publishes its reading into BeatManager once per frame; effects read only this facade, never the Switching layer. The struct is intentionally one letter from the phrase-window `PhraseInfo` (the **Track Phase** read) — distinct concepts.
-_Avoid_: confusing `PhaseInfo` with `PhraseInfo`; reaching into `Director`/`PhaseLock` from an effect; treating a null `Phase` as an error rather than "not in a phase right now".
+**`BeatManager.Grid` (`GridInfo`)**:
+The effect-facing read of the live **Grid**: a nullable `GridInfo { Confidence, Count, Progress }` (null = not on a grid). `Confidence` is the **Grid Confidence** `GridSyncState`; `Count` is the 1..16 **Grid Count**; `Progress` is the 0..1 position through the 16-beat Grid. The Director owns the `GridSync` and publishes its reading into BeatManager once per frame; effects read only this facade, never the Switching layer. `GridInfo` is deliberately named to stand clear of the phrase-window `PhraseInfo` (the **Track Phase** read); these were once the one-letter twin `PhaseInfo`/`PhraseInfo`, and renaming the cyclic side to **Grid** is what resolved that collision.
+_Avoid_: reaching into `Director`/`GridSync` from an effect; treating a null `Grid` as an error rather than "not on a grid right now".
 
 **Fill**:
 A Fill is the musical event described by BeatManager's Fill state. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). The Director only uses Fill state to cast Effects and Transitions whose Repertoire says they support Fill for the relevant Cue. The selected Effect or Transition owns how it renders the Fill from BeatManager data.

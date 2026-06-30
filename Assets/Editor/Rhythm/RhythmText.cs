@@ -6,7 +6,7 @@
 
 /// <summary>
 /// Formats the nullable beat/count values of BeatManager's rhythm queries (phrase events, energy,
-/// phase) into display text, rendering null as "—". One vocabulary so every rhythm-query readout
+/// grid) into display text, rendering null as "—". One vocabulary so every rhythm-query readout
 /// reads the same.
 /// </summary>
 public static class RhythmText

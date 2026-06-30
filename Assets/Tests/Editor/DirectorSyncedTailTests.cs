@@ -64,7 +64,7 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
         Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
     }
 
@@ -115,7 +115,7 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0), "The tailed transition should have completed.");
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(625));
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(625));
     }
 
     [Test]
@@ -138,7 +138,7 @@ public sealed class DirectorSyncedTailTests
 
         SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
         director.Tick(0f);
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
         SetTrackPhaseBeat(610, phaseActive: 1, beatsToPhraseBoundary: 31, phraseLengthBeats: 32);
@@ -173,7 +173,7 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The previous transition Tail is still mechanically rendering in this test.");
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(625));
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(625));
         Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
     }
 
@@ -214,7 +214,7 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
         SetTrackPhaseBeat(600, phaseActive: 0, beatsToPhraseBoundary: 9, phraseLengthBeats: 64);
         director.Tick(0f);
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609), "The current phrase boundary Cue Mark should stay loaded while the next Phrase is preplanned.");
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609), "The current phrase boundary Cue Mark should stay loaded while the next Phrase is preplanned.");
 
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
@@ -222,7 +222,7 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.GreaterThan(609));
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.GreaterThan(609));
         Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
     }
 
@@ -370,8 +370,8 @@ public sealed class DirectorSyncedTailTests
             director.Tick(0f);
             Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
-            Assert.That(director.Status.Phase.State, Is.EqualTo(PhaseLockState.Coasting));
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+            Assert.That(director.Status.Grid.State, Is.EqualTo(GridSyncState.Coasting));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
             Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
 
             SetTrackPhaseUnavailableBeat(605);
@@ -408,8 +408,8 @@ public sealed class DirectorSyncedTailTests
 
             Assert.That(director.Status.TimingReanchored, Is.True);
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-            Assert.That(director.Status.Phase.State, Is.EqualTo(PhaseLockState.Locked));
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(641));
+            Assert.That(director.Status.Grid.State, Is.EqualTo(GridSyncState.Locked));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(641));
         }
         finally
         {
@@ -428,10 +428,10 @@ public sealed class DirectorSyncedTailTests
         // so this pins only the always-true contract: a real future cue mark on a 16-grid downbeat.
         Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
         Assert.That(director.Status.IsSyncedMode, Is.True);
-        Assert.That(director.Status.HasPhaseAnchor, Is.True);
+        Assert.That(director.Status.HasGridAnchor, Is.True);
         Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.GreaterThan(605), "The synthetic anchor targets a real future beat.");
-        Assert.That((director.Status.PhaseAnchorLandingBeat - 1) % 16, Is.EqualTo(0), "Synthetic cue marks land on a 16-grid downbeat.");
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.GreaterThan(605), "The synthetic anchor targets a real future beat.");
+        Assert.That((director.Status.GridAnchorLandingBeat - 1) % 16, Is.EqualTo(0), "Synthetic cue marks land on a 16-grid downbeat.");
     }
 
     [Test]
@@ -453,7 +453,7 @@ public sealed class DirectorSyncedTailTests
 
             Assert.That(director.Status.TimingReanchored, Is.True);
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
         }
         finally
         {
@@ -470,17 +470,17 @@ public sealed class DirectorSyncedTailTests
             Random.InitState(20);
             SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(593));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
 
             SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(641));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(641));
 
             SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(593));
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(int.MinValue));
         }
         finally
@@ -513,7 +513,7 @@ public sealed class DirectorSyncedTailTests
             SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(593));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The rewound loop pass should be allowed to cue the same Cue Mark again.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
@@ -538,12 +538,12 @@ public sealed class DirectorSyncedTailTests
 
             SetTrackPhaseBeat(584, phaseActive: 1, beatsToPhraseBoundary: 57, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(staleCueMarkBeat));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(staleCueMarkBeat));
             Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
             SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
             director.Tick(0f);
-            Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(currentCueMarkBeat));
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(currentCueMarkBeat));
             Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
 
             SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
@@ -599,7 +599,7 @@ public sealed class DirectorSyncedTailTests
 
 
     [Test]
-    public void HeldEffectStillRefreshesOnAirTimingPhase()
+    public void HeldEffectStillRefreshesOnAirTimingGrid()
     {
         controller.heldEffect = 1;
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
@@ -607,9 +607,9 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
 
         Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Hold));
-        Assert.That(director.Status.HasPhaseAnchor, Is.True);
-        Assert.That(director.Status.Phase.Position, Is.EqualTo(13));
-        Assert.That(director.Status.PhaseAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.HasGridAnchor, Is.True);
+        Assert.That(director.Status.Grid.Position, Is.EqualTo(13));
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
         Assert.That(director.Status.CueSheet.HasSheet, Is.True);
     }
 

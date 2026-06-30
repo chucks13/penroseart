@@ -167,30 +167,30 @@ public readonly struct PhraseInfo
 }
 
 /// <summary>
-/// The live 16-beat Phase: where the one sits within the current phrase, surfaced to effects so they
-/// can, e.g., pick a new waveform/variant on each new Phase. The structural facts come from the
-/// Director's <see cref="PhaseReading"/>; <see cref="BeatManager"/> adds the sub-beat <see cref="Progress"/>.
+/// The live 16-beat Grid: where the one sits within the current phrase, surfaced to effects so they
+/// can, e.g., pick a new waveform/variant on each new Grid. The structural facts come from the
+/// Director's <see cref="GridReading"/>; <see cref="BeatManager"/> adds the sub-beat <see cref="Progress"/>.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Phase"/>; null there means the wall is not in a phase right now
+/// Returned by <see cref="BeatManager.Grid"/>; null there means the wall is not on the grid right now
 /// (Standalone, the clock gone, or no offset resolved yet). All three <see cref="Confidence"/> values are
-/// in-phase readings with a valid <see cref="Count"/> — they differ only in how much to trust the held
-/// offset (see CONTEXT.md "Phase Confidence"). Losing the clock is not a low-confidence value; it surfaces
-/// as a null <see cref="BeatManager.Phase"/>, not a fourth state. Intentionally one letter from the
-/// phrase-window <see cref="PhraseInfo"/> twin — the durable fix renames the phrase side, not this one.
+/// on-grid readings with a valid <see cref="Count"/> — they differ only in how much to trust the held
+/// offset (see CONTEXT.md "Grid Confidence"). Losing the clock is not a low-confidence value; it surfaces
+/// as a null <see cref="BeatManager.Grid"/>, not a fourth state. Formerly one letter from the
+/// phrase-window <see cref="PhraseInfo"/> twin; ADR-0009 renamed this cyclic side (PhaseInfo→GridInfo) to end the collision, keeping the phrase side.
 /// </remarks>
-public readonly struct PhaseInfo
+public readonly struct GridInfo
 {
     /// <summary>How much to trust where the one sits this frame: Locked, Coasting, or Contradicted.</summary>
-    public readonly PhaseLockState Confidence;
+    public readonly GridSyncState Confidence;
 
-    /// <summary>Canonical Phase Count: where this frame sits on the 16-beat grid, 1..16.</summary>
+    /// <summary>Canonical Grid Count: where this frame sits on the 16-beat grid, 1..16.</summary>
     public readonly int Count;
 
-    /// <summary>Position through the 16-beat Phase in [0..1], smoothed by the intra-beat fraction.</summary>
+    /// <summary>Position through the 16-beat Grid in [0..1], smoothed by the intra-beat fraction.</summary>
     public readonly float Progress;
 
-    public PhaseInfo(PhaseLockState confidence, int count, float progress)
+    public GridInfo(GridSyncState confidence, int count, float progress)
     {
         Confidence = confidence;
         Count = count;
@@ -465,7 +465,7 @@ public partial class BeatManager
 
     /// <summary>
     /// Monotonic ordinal of the on-air track, or null when nothing is on air. The value changes whenever
-    /// the track title changes, giving the integer Phase seam (<see cref="OnAirTimingInput.TrackOrdinal"/>)
+    /// the track title changes, giving the integer Grid seam (<see cref="OnAirTimingInput.TrackOrdinal"/>)
     /// a track-change signal without exposing the raw title.
     /// </summary>
     public int? TrackOrdinal => Track == null ? (int?)null : trackOrdinal;
@@ -526,41 +526,41 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// The Director's most recent Phase verdict, mirrored here once per frame by <see cref="PublishPhase"/>.
-    /// <see cref="PhaseReading.None"/> until the first publish (and whenever the Director is out of phase).
+    /// The Director's most recent Grid verdict, mirrored here once per frame by <see cref="PublishGrid"/>.
+    /// <see cref="GridReading.None"/> until the first publish (and whenever the Director is off the grid).
     /// </summary>
-    private PhaseReading lastPhase = PhaseReading.None;
+    private GridReading lastGrid = GridReading.None;
 
     /// <summary>
-    /// Mirrors the Director's per-frame Phase verdict into the facade. The Director is the single writer,
+    /// Mirrors the Director's per-frame Grid verdict into the facade. The Director is the single writer,
     /// calling this once at the end of <c>Director.Tick</c> — before the Switcher renders — so effects read
-    /// a fresh reading through <see cref="Phase"/> without reaching into the Switching layer.
+    /// a fresh reading through <see cref="Grid"/> without reaching into the Switching layer.
     /// </summary>
-    public void PublishPhase(in PhaseReading reading)
+    public void PublishGrid(in GridReading reading)
     {
-        lastPhase = reading;
+        lastGrid = reading;
     }
 
     /// <summary>
-    /// The live 16-beat Phase, or null when the wall is not in a phase (Standalone, the clock gone, or no
-    /// offset resolved). The structural facts come from the Director's published <see cref="PhaseReading"/>;
-    /// <see cref="PhaseInfo.Progress"/> is enriched here with <see cref="IntraBeatFraction"/>, the sub-beat
+    /// The live 16-beat Grid, or null when the wall is not on the grid (Standalone, the clock gone, or no
+    /// offset resolved). The structural facts come from the Director's published <see cref="GridReading"/>;
+    /// <see cref="GridInfo.Progress"/> is enriched here with <see cref="IntraBeatFraction"/>, the sub-beat
     /// clock only BeatManager holds. Read in the same frame the Director published it, so the fraction and
     /// the published position share one <c>beatData.snapshot</c>.
     /// </summary>
-    public PhaseInfo? Phase
+    public GridInfo? Grid
     {
         get
         {
-            // Position 1..16 on a real grid is in phase (Locked/Coasting/Contradicted alike); Position -1
-            // (PhaseReading.None) or a Standalone floor is out of phase and reads null.
-            if (lastPhase.Position < 1 || lastPhase.StandAloneFloor)
+            // Position 1..16 on a real grid reads on the grid (Locked/Coasting/Contradicted alike); Position -1
+            // (GridReading.None) or a Standalone floor is off the grid and reads null.
+            if (lastGrid.Position < 1 || lastGrid.StandAloneFloor)
             {
                 return null;
             }
 
-            var progress = Mathf.Clamp01(((lastPhase.Position - 1) + IntraBeatFraction()) / 16f);
-            return new PhaseInfo(lastPhase.State, lastPhase.Position, progress);
+            var progress = Mathf.Clamp01(((lastGrid.Position - 1) + IntraBeatFraction()) / 16f);
+            return new GridInfo(lastGrid.State, lastGrid.Position, progress);
         }
     }
 

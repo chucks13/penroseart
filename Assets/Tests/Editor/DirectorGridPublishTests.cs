@@ -7,11 +7,11 @@ using UnityEngine;
 
 /// <summary>
 /// Pins the single-writer publish from <see cref="Director.Tick"/> into the BeatManager facade: every frame
-/// the Director mirrors its Phase verdict — including "out of phase" the instant the clock is gone — so
-/// effects read the live Phase through <see cref="BeatManager.Phase"/> without reaching into the Switching
-/// layer. Asserts the wiring, not PhaseLock's internal grid math (covered by PhaseLockTests).
+/// the Director mirrors its Grid verdict — including "off the grid" the instant the clock is gone — so
+/// effects read the live Grid through <see cref="BeatManager.Grid"/> without reaching into the Switching
+/// layer. Asserts the wiring, not GridSync's internal grid math (covered by GridSyncTests).
 /// </summary>
-public sealed class DirectorPhasePublishTests
+public sealed class DirectorGridPublishTests
 {
     private GameObject controllerObject = null!;
     private Controller controller = null!;
@@ -21,7 +21,7 @@ public sealed class DirectorPhasePublishTests
     [SetUp]
     public void SetUp()
     {
-        controllerObject = new GameObject("DirectorPhasePublishTestsController");
+        controllerObject = new GameObject("DirectorGridPublishTestsController");
         controller = controllerObject.AddComponent<Controller>();
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
@@ -63,52 +63,52 @@ public sealed class DirectorPhasePublishTests
     }
 
     [Test]
-    public void SyncedTickPublishesTheLivePhaseToTheFacade()
+    public void SyncedTickPublishesTheLiveGridToTheFacade()
     {
-        // Synced beat with no phrase: PhaseLock lines the grid up on the running beat (offset 0), so the
+        // Synced beat with no phrase: GridSync lines the grid up on the running beat (offset 0), so the
         // 1..16 Count is beat-mod-16. Beat 5 -> Count 5. The point is the wiring: a real position reaches
         // the facade after Tick.
         SetSyncedBeat(5);
 
         director.Tick(0f);
 
-        var phase = controller.beatManager.Phase;
-        Assert.That(phase, Is.Not.Null);
-        Assert.That(phase!.Value.Count, Is.EqualTo(5));
+        var grid = controller.beatManager.Grid;
+        Assert.That(grid, Is.Not.Null);
+        Assert.That(grid!.Value.Count, Is.EqualTo(5));
     }
 
     [Test]
-    public void StandaloneTickPublishesNoneSoTheFacadeReadsOutOfPhase()
+    public void StandaloneTickPublishesNoneSoTheFacadeReadsOffTheGrid()
     {
-        // Prime a real Phase, then drop the clock. The standalone branch must republish None the same frame
+        // Prime a real Grid, then drop the clock. The standalone branch must republish None the same frame
         // so a stale synced reading never lingers on the facade.
         SetSyncedBeat(5);
         director.Tick(0f);
-        Assert.That(controller.beatManager.Phase, Is.Not.Null);
+        Assert.That(controller.beatManager.Grid, Is.Not.Null);
 
         SetStandalone();
         director.Tick(0f);
 
-        Assert.That(controller.beatManager.Phase, Is.Null);
+        Assert.That(controller.beatManager.Grid, Is.Null);
     }
 
     [Test]
     public void SyncedWithoutAnAbsoluteBeatPublishesNone()
     {
         // Synced mode (beatInBar present) but no absolute beat is limbo: no grid position is derivable, so
-        // the facade reads out of phase rather than holding a stale count.
+        // the facade reads off the grid rather than holding a stale count.
         SetSyncedBeat(7);
         director.Tick(0f);
-        Assert.That(controller.beatManager.Phase, Is.Not.Null);
+        Assert.That(controller.beatManager.Grid, Is.Not.Null);
 
         // Drop only the absolute beat; beatInBar stays >= 1 so IsSyncedMode is still true.
         controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = -1, total = -1 };
         director.Tick(0f);
 
-        Assert.That(controller.beatManager.Phase, Is.Null);
+        Assert.That(controller.beatManager.Grid, Is.Null);
     }
 
-    /// <summary>Seeds a synced, absolute-beat transport with no phrase data (so PhaseLock uses its beat-grid fallback).</summary>
+    /// <summary>Seeds a synced, absolute-beat transport with no phrase data (so GridSync uses its beat-grid fallback).</summary>
     private void SetSyncedBeat(int beat)
     {
         var snapshot = controller.beatManager.beatData.snapshot;

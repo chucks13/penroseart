@@ -15,7 +15,7 @@ public sealed class PhraseWindowTests
         Assert.That(window.StartBeat, Is.EqualTo(577));
         Assert.That(window.EndBeat, Is.EqualTo(609));
         Assert.That(window.LengthBeats, Is.EqualTo(32));
-        Assert.That(window.PhaseBoundariesAfter(588).ToArray(), Is.EqualTo(new[] { 593, 609 }));
+        Assert.That(window.GridBoundariesAfter(588).ToArray(), Is.EqualTo(new[] { 593, 609 }));
     }
 
     [Test]

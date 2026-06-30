@@ -1,11 +1,11 @@
 /// <summary>
 /// How much to trust where the one sits this frame. Degrades top-down and never
-/// loses the floor: while a clock exists the pulse is ≈always locked, and Phase
+/// loses the floor: while a clock exists the pulse is ≈always locked, and Grid
 /// carries its own confidence here. There is no "Unlocked" inside synced mode —
-/// loss of the clock itself is a mode exit (see <see cref="PhaseReading.StandAloneFloor"/>),
-/// not a degraded Phase state.
+/// loss of the clock itself is a mode exit (see <see cref="GridReading.StandAloneFloor"/>),
+/// not a degraded Grid state.
 /// </summary>
-public enum PhaseLockState
+public enum GridSyncState
 {
     /// <summary>Offset is freshly anchored or steadily dead-reckoned; the one is trusted.</summary>
     Locked,
@@ -18,15 +18,15 @@ public enum PhaseLockState
 }
 
 /// <summary>
-/// Read-only Phase reading <see cref="PhaseLock"/> emits each frame. Every value is a
+/// Read-only Grid reading <see cref="GridSync"/> emits each frame. Every value is a
 /// whole-beat integer: the model is exact integer modular arithmetic, so no floats leak
 /// into grid math that must stay crisp.
 /// </summary>
-public readonly struct PhaseReading
+public readonly struct GridReading
 {
-    /// <summary>Sentinel "no Phase resolved" reading. The slice-01 skeleton emits this every frame.</summary>
-    public static PhaseReading None { get; } =
-        new PhaseReading(-1, -1, PhaseLockState.Coasting, false);
+    /// <summary>Sentinel "no Grid resolved" reading. The slice-01 skeleton emits this every frame.</summary>
+    public static GridReading None { get; } =
+        new GridReading(-1, -1, GridSyncState.Coasting, false);
 
     /// <summary>Held position of the one in the 16-beat grid (0..15), or -1 when unknown. Re-latched only at structural triggers.</summary>
     public readonly int Offset;
@@ -35,18 +35,18 @@ public readonly struct PhaseReading
     public readonly int Position;
 
     /// <summary>Confidence in the held offset this frame.</summary>
-    public readonly PhaseLockState State;
+    public readonly GridSyncState State;
 
-    /// <summary>The clock itself is gone (<c>beat_in_bar == -1</c>): the trigger to exit synced mode and reinstate stand-alone timing (ADR-0004). A mode exit, not a Phase state.</summary>
+    /// <summary>The clock itself is gone (<c>beat_in_bar == -1</c>): the trigger to exit synced mode and reinstate stand-alone timing (ADR-0004). A mode exit, not a Grid state.</summary>
     public readonly bool StandAloneFloor;
 
     /// <summary>True while the held offset is being defended against a contradicting derivation. Derived from <see cref="State"/> — the enum is the single source of truth.</summary>
-    public bool IsContradicted => State == PhaseLockState.Contradicted;
+    public bool IsContradicted => State == GridSyncState.Contradicted;
 
-    public PhaseReading(
+    public GridReading(
         int offset,
         int position,
-        PhaseLockState state,
+        GridSyncState state,
         bool standAloneFloor)
     {
         Offset = offset;
@@ -57,31 +57,31 @@ public readonly struct PhaseReading
 }
 
 /// <summary>
-/// Stateful Phase determiner, grounded on the 4-count tick. The feed's <c>beat_in_bar</c> is bedrock
+/// Stateful Grid determiner, grounded on the 4-count tick. The feed's <c>beat_in_bar</c> is bedrock
 /// (always-on, given, never derived from the beat); the running <see cref="OnAirTimingInput.Beat"/>
 /// supplies position; the Phrase decides where the 16-grid starts. It holds the one as an
-/// <see cref="PhaseReading.Offset"/> and recomputes the <see cref="PhaseReading.Position"/> every
+/// <see cref="GridReading.Offset"/> and recomputes the <see cref="GridReading.Position"/> every
 /// frame, so a loop — a backward beat jump within the current Phrase — is absorbed for free with no
 /// explicit loop detection. A Phrase boundary re-latches the offset, but only when the new grid lands
 /// ON the tick (a real Phrase start is a downbeat); a Phrase start off the tick, or a held grid that
 /// drifts off it, is a Phrase-vs-pulse disagreement held and flagged
-/// <see cref="PhaseLockState.Contradicted"/> rather than silently applied. With no Phrase the offset
+/// <see cref="GridSyncState.Contradicted"/> rather than silently applied. With no Phrase the offset
 /// is held (coast); with nothing held the grid lines up on the running <c>beat</c> itself (offset 0,
 /// position = beat mod 16) — a best-guess fallback grounded on the always-present 4-count, never the
 /// track length. A track change resets everything — <c>beat</c> is a per-track counter, so
 /// the old offset is meaningless on the new song — and the next frames re-acquire from scratch. The
-/// grid arithmetic is defined once in <see cref="PhaseGrid"/>.
+/// grid arithmetic is defined once in <see cref="Grid"/>.
 /// <para>
 /// Layer-0 (the 4-count pulse) and Layer-1 (where the one sits) both currently surface their
-/// disagreement through <see cref="PhaseLockState.Contradicted"/> / <see cref="PhaseReading.IsContradicted"/>.
+/// disagreement through <see cref="GridSyncState.Contradicted"/> / <see cref="GridReading.IsContradicted"/>.
 /// A distinct Layer-0 "four-count continuous" field is intentionally NOT modelled yet: no consumer
-/// distinguishes a broken pulse from a phase contradiction, and one hypothetical caller is not
+/// distinguishes a broken pulse from a grid contradiction, and one hypothetical caller is not
 /// evidence for the seam. Add it when the Director (slice 03/04) actually needs the distinction.
-/// The <see cref="PhaseLockState"/> is derived fresh each frame, so a contradiction never sticks
+/// The <see cref="GridSyncState"/> is derived fresh each frame, so a contradiction never sticks
 /// past the frame whose disagreement caused it.
 /// </para>
 /// </summary>
-public sealed class PhaseLock
+public sealed class GridSync
 {
     private const int UnsetOffset = -1;
     private const int UnsetPhraseStart = int.MinValue;
@@ -92,19 +92,19 @@ public sealed class PhaseLock
     private int previousTrackOrdinal = UnsetOrdinal;
 
     /// <summary>
-    /// Reads one frame of BeatManager's projected integer values and emits the current Phase
+    /// Reads one frame of BeatManager's projected integer values and emits the current Grid
     /// reading. Stateful: call once per frame on a single instance so the held offset carries
     /// across frames. The lock state is derived fresh each frame from the branch that runs.
     /// </summary>
-    public PhaseReading Read(in OnAirTimingInput input)
+    public GridReading Read(in OnAirTimingInput input)
     {
         // Floor: no 4-count tick means the clock itself is gone. That is a mode exit to stand-alone
-        // timing (ADR-0004/0007), not a degraded Phase state, so we emit no grid position. The floor
+        // timing (ADR-0004/0007), not a degraded Grid state, so we emit no grid position. The floor
         // reads the one mode authority (BeatManager.IsSynced, carried as input.IsSynced) instead of
         // re-deriving its own beat_in_bar check.
         if (!input.IsSynced)
         {
-            return Emit(position: -1, PhaseLockState.Coasting, standAloneFloor: true);
+            return Emit(position: -1, GridSyncState.Coasting, standAloneFloor: true);
         }
 
         // A new song is a clean slate. `beat` is a per-track counter, so the held offset — tied to the
@@ -125,19 +125,19 @@ public sealed class PhaseLock
         // Without a running beat there is no grid position to place; coast on whatever offset is held.
         if (input.Beat < 1)
         {
-            return Emit(position: -1, PhaseLockState.Coasting);
+            return Emit(position: -1, GridSyncState.Coasting);
         }
 
         if (HasPhrase(input))
         {
-            // A phrase whose length is not a multiple of 16 cannot subdivide into whole 16-beat phases,
-            // so the phase grid is in dispute: hold a usable offset/position but report CONTRADICTED for
+            // A phrase whose length is not a multiple of 16 cannot subdivide into whole 16-beat grids,
+            // so the grid is in dispute: hold a usable offset/position but report CONTRADICTED for
             // the phrase's duration (item A / ADR-0006). The next regular boundary re-latches to Locked.
             // The phrase layer (PhraseTracker.IsIrregular) carries the irregular fact for consumers;
-            // PhaseLock only reflects it in the lock state.
-            var phraseState = PhaseGrid.IsIrregularPhrase(input.PhraseLengthBeats)
-                ? PhaseLockState.Contradicted
-                : PhaseLockState.Locked;
+            // GridSync only reflects it in the lock state.
+            var phraseState = Grid.IsIrregularPhrase(input.PhraseLengthBeats)
+                ? GridSyncState.Contradicted
+                : GridSyncState.Locked;
 
             var phraseStart = input.Beat - (input.PhraseLengthBeats - input.BeatsUntilPhraseBoundary);
             if (lastPhraseStart == UnsetPhraseStart || phraseStart != lastPhraseStart)
@@ -153,17 +153,17 @@ public sealed class PhaseLock
         // active phrase, so there is no irregular phrase to report.
         if (heldOffset != UnsetOffset)
         {
-            return Hold(input, PhaseLockState.Coasting);
+            return Hold(input, GridSyncState.Coasting);
         }
 
         // No Phrase and nothing held (a fresh track before its first boundary, or a feed that never
         // sends Phrase data): line the grid up on the running beat itself — offset 0, so position is
         // beat mod 16. The beat rides the always-present 4-count, so this is the honest fallback; it is
         // a guess (the track may not start on the one), so it stays COASTING and is never latched.
-        return new PhaseReading(
+        return new GridReading(
             0,
-            PhaseGrid.PositionFor(input.Beat, 0),
-            PhaseLockState.Coasting,
+            Grid.PositionFor(input.Beat, 0),
+            GridSyncState.Coasting,
             standAloneFloor: false);
     }
 
@@ -177,18 +177,18 @@ public sealed class PhaseLock
     /// special-casing for track change: a new song was already reset to nothing held, so its first
     /// boundary is a clean bootstrap latch.
     /// </summary>
-    private PhaseReading ReLatch(in OnAirTimingInput input, int phraseStart, PhaseLockState lockState)
+    private GridReading ReLatch(in OnAirTimingInput input, int phraseStart, GridSyncState lockState)
     {
-        var newOffset = PhaseGrid.OffsetForPhraseStart(phraseStart);
+        var newOffset = Grid.OffsetForPhraseStart(phraseStart);
 
         if (heldOffset != UnsetOffset && !OnTick(input, newOffset))
         {
-            return Hold(input, PhaseLockState.Contradicted);
+            return Hold(input, GridSyncState.Contradicted);
         }
 
         heldOffset = newOffset;
         lastPhraseStart = phraseStart;
-        return Emit(PhaseGrid.PositionFor(input.Beat, heldOffset), lockState);
+        return Emit(Grid.PositionFor(input.Beat, heldOffset), lockState);
     }
 
     /// <summary>
@@ -198,30 +198,30 @@ public sealed class PhaseLock
     /// Derived fresh each frame, so a contradiction never sticks past the frame whose disagreement
     /// caused it.
     /// </summary>
-    private PhaseReading Hold(in OnAirTimingInput input, PhaseLockState state)
+    private GridReading Hold(in OnAirTimingInput input, GridSyncState state)
     {
         if (heldOffset == UnsetOffset)
         {
             return Emit(position: -1, state);
         }
 
-        var resolved = OnTick(input, heldOffset) ? state : PhaseLockState.Contradicted;
-        return Emit(PhaseGrid.PositionFor(input.Beat, heldOffset), resolved);
+        var resolved = OnTick(input, heldOffset) ? state : GridSyncState.Contradicted;
+        return Emit(Grid.PositionFor(input.Beat, heldOffset), resolved);
     }
 
     /// <summary>Whether the grid implied by <paramref name="offset"/> agrees with the feed's 4-count tick this frame.</summary>
     private static bool OnTick(in OnAirTimingInput input, int offset) =>
-        !input.IsSynced || PhaseGrid.BarPositionFor(input.Beat, offset) == input.BeatInBar;
+        !input.IsSynced || Grid.BarPositionFor(input.Beat, offset) == input.BeatInBar;
 
-    /// <summary>Drops everything held so the next frames re-acquire Phase from the new track's own data.</summary>
+    /// <summary>Drops everything held so the next frames re-acquire Grid from the new track's own data.</summary>
     private void ResetForNewTrack()
     {
         heldOffset = UnsetOffset;
         lastPhraseStart = UnsetPhraseStart;
     }
 
-    private PhaseReading Emit(int position, PhaseLockState state, bool standAloneFloor = false) =>
-        new PhaseReading(heldOffset, position, state, standAloneFloor);
+    private GridReading Emit(int position, GridSyncState state, bool standAloneFloor = false) =>
+        new GridReading(heldOffset, position, state, standAloneFloor);
 
     private bool TrackChanged(int trackOrdinal) =>
         previousTrackOrdinal != UnsetOrdinal && trackOrdinal >= 0 && trackOrdinal != previousTrackOrdinal;

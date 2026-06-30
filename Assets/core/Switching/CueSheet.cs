@@ -48,7 +48,7 @@ public readonly struct CueSheet
         }
 
         var eligibleInteriorCueMarkOffsets = new List<int>();
-        foreach (var candidateCueMarkBeat in window.PhaseBoundariesAfter(currentBeat))
+        foreach (var candidateCueMarkBeat in window.GridBoundariesAfter(currentBeat))
         {
             var candidateCueMarkOffset = candidateCueMarkBeat - window.StartBeat;
             if (candidateCueMarkBeat < window.EndBeat && canChangeAtBeat(candidateCueMarkBeat))

@@ -21,7 +21,7 @@ public enum CueEventIntent
     /// <summary>The Cue is ordinary phrase motion.</summary>
     Ordinary,
 
-    /// <summary>The phase reached by the Cue contains or overlaps a Fill.</summary>
+    /// <summary>The Grid reached by the Cue contains or overlaps a Fill.</summary>
     Fill,
 
     /// <summary>The Cue Mark lands on an upcoming Drop.</summary>
@@ -88,9 +88,9 @@ public readonly struct SyncedCueIntent
         Func<int, Repertoire> repertoireForEffect,
         int minimumChangeCadenceBeats)
     {
-        if (!frame.HasPhaseAnchor)
+        if (!frame.HasGridAnchor)
         {
-            throw new InvalidOperationException("Cannot evaluate a synced cue intent without a Phase Anchor.");
+            throw new InvalidOperationException("Cannot evaluate a synced cue intent without a Grid Anchor.");
         }
 
         var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, transitionRepertoire);
@@ -149,20 +149,20 @@ public readonly struct SyncedCueIntent
             castPreferredPerformer);
     }
 
-    /// <summary>Combines the phase reached by a scheduled Cue with live phrase events for casting.</summary>
+    /// <summary>Combines the Grid reached by a scheduled Cue with live phrase events for casting.</summary>
     public static CueEventIntent ResolveEventIntent(
         TimingFrame frame,
         PhraseEventInfo? fill,
         PhraseEventInfo? drop)
     {
-        if (!frame.HasPhaseAnchor)
+        if (!frame.HasGridAnchor)
         {
             return CueEventIntent.Ordinary;
         }
 
         return ResolveEventIntent(
             frame.CueMarkBeat - frame.CurrentBeat,
-            BeatsUntilPhaseEnd(frame),
+            BeatsUntilGridEnd(frame),
             fill,
             drop);
     }
@@ -198,7 +198,7 @@ public readonly struct SyncedCueIntent
 
     private static CueEventIntent ResolveEventIntent(
         int beatsUntilImpact,
-        int beatsUntilPhaseEnd,
+        int beatsUntilGridEnd,
         PhraseEventInfo? fill,
         PhraseEventInfo? drop)
     {
@@ -208,7 +208,7 @@ public readonly struct SyncedCueIntent
             return CueEventIntent.Drop;
         }
 
-        if (FillOverlapsNextPhase(beatsUntilImpact, beatsUntilPhaseEnd, fill))
+        if (FillOverlapsNextGrid(beatsUntilImpact, beatsUntilGridEnd, fill))
         {
             return CueEventIntent.Fill;
         }
@@ -216,18 +216,18 @@ public readonly struct SyncedCueIntent
         return CueEventIntent.Ordinary;
     }
 
-    private static int BeatsUntilPhaseEnd(TimingFrame frame)
+    private static int BeatsUntilGridEnd(TimingFrame frame)
     {
-        var phaseEndBeat = frame.CueMarkBeat + PhraseWindow.DefaultPhaseBeats;
+        var gridEndBeat = frame.CueMarkBeat + PhraseWindow.DefaultGridBeats;
         if (frame.HasPhraseWindow)
         {
-            phaseEndBeat = Math.Min(phaseEndBeat, frame.PhraseWindow.EndBeat);
+            gridEndBeat = Math.Min(gridEndBeat, frame.PhraseWindow.EndBeat);
         }
 
-        return phaseEndBeat - frame.CurrentBeat;
+        return gridEndBeat - frame.CurrentBeat;
     }
 
-    private static bool FillOverlapsNextPhase(int beatsUntilPhaseStart, int beatsUntilPhaseEnd, PhraseEventInfo? fill)
+    private static bool FillOverlapsNextGrid(int beatsUntilGridStart, int beatsUntilGridEnd, PhraseEventInfo? fill)
     {
         if (fill is not { } value)
         {
@@ -236,7 +236,7 @@ public readonly struct SyncedCueIntent
 
         if (value.inProgress)
         {
-            return value.beatsUntilEnd == null || value.beatsUntilEnd >= beatsUntilPhaseStart;
+            return value.beatsUntilEnd == null || value.beatsUntilEnd >= beatsUntilGridStart;
         }
 
         if (value.beatsUntilStart is not { } beatsUntilStart)
@@ -251,7 +251,7 @@ public readonly struct SyncedCueIntent
 
         var lengthBeats = value.lengthBeats ?? 1;
         var beatsUntilEnd = beatsUntilStart + Math.Max(1, lengthBeats);
-        return beatsUntilStart < beatsUntilPhaseEnd && beatsUntilEnd >= beatsUntilPhaseStart;
+        return beatsUntilStart < beatsUntilGridEnd && beatsUntilEnd >= beatsUntilGridStart;
     }
 
     /// <summary>Maps a resolved <see cref="CueEventIntent"/> to the Performer Repertoire it asks the Director to cast.</summary>

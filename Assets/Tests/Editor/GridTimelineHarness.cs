@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
-/// Projects a DJ-domain moment into the BeatManager integer frame <see cref="PhaseLock"/>
+/// Projects a DJ-domain moment into the BeatManager integer frame <see cref="GridSync"/>
 /// consumes (<see cref="OnAirTimingInput"/>). Scripted-DJ-timeline scenarios are written as
 /// data through these factories; the projection plumbing lives here once, so a new scenario
 /// is a list of frames, not new test plumbing.
@@ -79,8 +79,8 @@ public static class DjFrame
     /// <summary>No clock at all (every beat signal -1): the stand-alone floor.</summary>
     public static OnAirTimingInput NoClock() => OnAirTimingInput.Unavailable;
 
-    /// <summary>The 1-based 4-count for an absolute beat (beat 1 → 1, beat 5 → 1) — the same grid math PhaseLock uses.</summary>
-    public static int FourCount(int beat) => PhaseGrid.FourCount(beat);
+    /// <summary>The 1-based 4-count for an absolute beat (beat 1 → 1, beat 5 → 1) — the same grid math GridSync uses.</summary>
+    public static int FourCount(int beat) => Grid.FourCount(beat);
 
     /// <summary>The explicit beat-in-bar when one is supplied (&gt; 0), else the 4-count derived from the beat.</summary>
     private static int BeatInBarOr(int beat, int beatInBar) => beatInBar > 0 ? beatInBar : FourCount(beat);
@@ -92,19 +92,19 @@ public static class DjFrame
     /// explicit override (&gt; 0) wins, so a fixture can deliberately break the 4-count.
     /// </summary>
     private static int BeatInBarOnGrid(int beat, int phraseStartBeat, int beatInBar) =>
-        beatInBar > 0 ? beatInBar : PhaseGrid.BarPositionFor(beat, PhaseGrid.OffsetForPhraseStart(phraseStartBeat));
+        beatInBar > 0 ? beatInBar : Grid.BarPositionFor(beat, Grid.OffsetForPhraseStart(phraseStartBeat));
 }
 
 /// <summary>
-/// Drives a single <see cref="PhaseLock"/> instance across a scripted DJ timeline and
-/// surfaces the <see cref="PhaseReading"/> emitted for each frame, so a scenario asserts the
-/// externally visible Phase contract frame by frame rather than reaching into PhaseLock state.
+/// Drives a single <see cref="GridSync"/> instance across a scripted DJ timeline and
+/// surfaces the <see cref="GridReading"/> emitted for each frame, so a scenario asserts the
+/// externally visible Grid contract frame by frame rather than reaching into GridSync state.
 /// </summary>
-public static class PhaseTimelineHarness
+public static class GridTimelineHarness
 {
-    public static IReadOnlyList<PhaseReading> Run(params OnAirTimingInput[] frames)
+    public static IReadOnlyList<GridReading> Run(params OnAirTimingInput[] frames)
     {
-        var phaseLock = new PhaseLock();
-        return frames.Select(frame => phaseLock.Read(frame)).ToList();
+        var gridSync = new GridSync();
+        return frames.Select(frame => gridSync.Read(frame)).ToList();
     }
 }

@@ -1,5 +1,5 @@
 /// <summary>
-/// Minimum beat spacing between Director-selected Phase Boundaries.
+/// Minimum beat spacing between Director-selected Grid Boundaries.
 /// </summary>
 public static class ChangeCadence
 {

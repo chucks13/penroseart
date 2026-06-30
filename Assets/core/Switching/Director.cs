@@ -15,7 +15,7 @@ public enum DirectorDecision
 {
     NotReady,
     StandaloneTimer,
-    WaitingForPhase,
+    WaitingForGrid,
     WaitingForRunway,
     WaitingForCadence,
     CueingTransition,
@@ -32,7 +32,7 @@ public readonly struct DirectorStatus
         DirectorDecision.NotReady,
         false,
         false,
-        PhaseReading.None,
+        GridReading.None,
         PhraseTrackerReading.None,
         TimingFrameSource.Unlocked,
         false,
@@ -53,14 +53,14 @@ public readonly struct DirectorStatus
     public readonly DirectorMode Mode;
     public readonly DirectorDecision Decision;
     public readonly bool IsSyncedMode;
-    public readonly bool HasPhaseAnchor;
-    public readonly PhaseReading Phase;
+    public readonly bool HasGridAnchor;
+    public readonly GridReading Grid;
     public readonly PhraseTrackerReading Phrase;
     /// <summary>Source of the current On-Air Timing target.</summary>
     public readonly TimingFrameSource TimingSource;
     /// <summary>Whether fresh Track Phase replaced a coasted or weaker On-Air Timing target.</summary>
     public readonly bool TimingReanchored;
-    public readonly int PhaseAnchorLandingBeat;
+    public readonly int GridAnchorLandingBeat;
     public readonly int LastChangeBeat;
     public readonly int TransitionLandingBeat;
     public readonly int BeatsUntilLanding;
@@ -78,12 +78,12 @@ public readonly struct DirectorStatus
         DirectorMode mode,
         DirectorDecision decision,
         bool isSyncedMode,
-        bool hasPhaseAnchor,
-        PhaseReading phase,
+        bool hasGridAnchor,
+        GridReading grid,
         PhraseTrackerReading phrase,
         TimingFrameSource timingSource,
         bool timingReanchored,
-        int phaseAnchorLandingBeat,
+        int gridAnchorLandingBeat,
         int lastChangeBeat,
         int transitionLandingBeat,
         int currentBeat,
@@ -100,12 +100,12 @@ public readonly struct DirectorStatus
         Mode = mode;
         Decision = decision;
         IsSyncedMode = isSyncedMode;
-        HasPhaseAnchor = hasPhaseAnchor;
-        Phase = phase;
+        HasGridAnchor = hasGridAnchor;
+        Grid = grid;
         Phrase = phrase;
         TimingSource = timingSource;
         TimingReanchored = timingReanchored;
-        PhaseAnchorLandingBeat = phaseAnchorLandingBeat;
+        GridAnchorLandingBeat = gridAnchorLandingBeat;
         LastChangeBeat = lastChangeBeat;
         TransitionLandingBeat = transitionLandingBeat;
         CurrentBeat = currentBeat;
@@ -139,7 +139,7 @@ public sealed class Director
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
     private readonly CuePlanner cuePlanner = new CuePlanner();
-    private readonly PhaseLock phaseLock = new PhaseLock();
+    private readonly GridSync gridSync = new GridSync();
 
     private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
@@ -152,7 +152,7 @@ public sealed class Director
     private int transitionStartBeat = -1;
     private int transitionLandingBeat = -1;
     private TimingFrame timingFrame = TimingFrame.Unavailable;
-    private PhaseReading phaseLockReading = PhaseReading.None;
+    private GridReading gridReading = GridReading.None;
     private PhraseTrackerReading phraseTrackerReading = PhraseTrackerReading.None;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
@@ -184,11 +184,11 @@ public sealed class Director
         }
     }
 
-    /// <summary>Whether the Director currently has a phase grid to aim at.</summary>
-    public bool HasPhaseAnchor => timingFrame.HasPhaseAnchor;
+    /// <summary>Whether the Director currently has a grid to aim at.</summary>
+    public bool HasGridAnchor => timingFrame.HasGridAnchor;
 
-    /// <summary>Absolute beat where the current phase anchor next lands, or -1 when unlocked.</summary>
-    public int PhaseAnchorLandingBeat => timingFrame.PhaseAnchorLandingBeat;
+    /// <summary>Absolute beat where the current grid anchor next lands, or -1 when unlocked.</summary>
+    public int GridAnchorLandingBeat => timingFrame.GridAnchorLandingBeat;
 
     /// <summary>
     /// Whether the wall is in Synced Mode: a usable beat clock is running. Reads the single mode authority
@@ -294,16 +294,16 @@ public sealed class Director
         else
         {
             // No grid position is derivable without a synced beat. TickSyncedMode would have refreshed
-            // phaseLockReading; the standalone path must reset it explicitly so a stale synced reading
-            // never leaks past a mode exit and the published Phase reads "not in phase" immediately.
-            phaseLockReading = PhaseReading.None;
+            // gridReading; the standalone path must reset it explicitly so a stale synced reading
+            // never leaks past a mode exit and the published Grid reads "off the grid" immediately.
+            gridReading = GridReading.None;
             TickStandaloneMode(deltaTime);
         }
 
         // Single writer, every frame: mirror this frame's verdict (including None) into the effect-facing
-        // BeatManager facade, so effects read the live Phase without reaching into the Switching layer.
+        // BeatManager facade, so effects read the live Grid without reaching into the Switching layer.
         // Publish-before-render is safe — Controller ticks the Director before the Switcher renders.
-        controller.beatManager.PublishPhase(phaseLockReading);
+        controller.beatManager.PublishGrid(gridReading);
     }
 
     /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence.</summary>
@@ -358,7 +358,7 @@ public sealed class Director
         var isSynced = IsSyncedMode;
         var isHeld = controller.TryGetHeldEffectIndex(out _);
         var currentBeat = isSynced && controller.beatManager.Beat is { } beat ? beat : -1;
-        var beatsUntilLanding = timingFrame.HasPhaseAnchor && currentBeat >= 0 ? timingFrame.PhaseAnchorLandingBeat - currentBeat : -1;
+        var beatsUntilLanding = timingFrame.HasGridAnchor && currentBeat >= 0 ? timingFrame.GridAnchorLandingBeat - currentBeat : -1;
         var runwayBeats = NextTransitionRepertoire.RunwayBeats;
         var beatsUntilCadenceReady = GetBeatsUntilCadenceReady(currentBeat);
 
@@ -369,12 +369,12 @@ public sealed class Director
             mode,
             decision,
             isSynced,
-            timingFrame.HasPhaseAnchor,
-            timingFrame.Phase,
+            timingFrame.HasGridAnchor,
+            timingFrame.Grid,
             phraseTrackerReading,
             timingFrame.Source,
             timingFrame.Reanchored,
-            timingFrame.PhaseAnchorLandingBeat,
+            timingFrame.GridAnchorLandingBeat,
             cuePlanner.LastChangeBeat,
             transitionLandingBeat,
             currentBeat,
@@ -406,9 +406,9 @@ public sealed class Director
             return DirectorDecision.StandaloneTimer;
         }
 
-        if (!timingFrame.HasPhaseAnchor)
+        if (!timingFrame.HasGridAnchor)
         {
-            return DirectorDecision.WaitingForPhase;
+            return DirectorDecision.WaitingForGrid;
         }
 
         if (beatsUntilCadenceReady > 0)
@@ -433,7 +433,7 @@ public sealed class Director
         // Match the cue path: cadence belongs to the selected Cue Mark, not the
         // current beat. A tailed transition can complete while the next Cue Mark
         // is already valid.
-        var cueMarkSatisfiesCadence = timingFrame.HasPhaseAnchor && timingFrame.CueMarkBeat >= cadenceReadyBeat;
+        var cueMarkSatisfiesCadence = timingFrame.HasGridAnchor && timingFrame.CueMarkBeat >= cadenceReadyBeat;
         return cueMarkSatisfiesCadence ? 0 : Math.Max(0, cadenceReadyBeat - currentBeat);
     }
 
@@ -467,65 +467,65 @@ public sealed class Director
 
     private void RefreshTimingFrame()
     {
-        var previousLandingBeat = timingFrame.PhaseAnchorLandingBeat;
+        var previousLandingBeat = timingFrame.GridAnchorLandingBeat;
         var input = OnAirTimingInput.From(controller.beatManager);
 
-        // Compose the PHASE (PhaseLock) and PHRASE (PhraseTracker) readings first, then plan cues off
-        // them: the CuePlanner consumes those readings rather than resolving phase itself.
+        // Compose the GRID (GridSync) and PHRASE (PhraseTracker) readings first, then plan cues off
+        // them: the CuePlanner consumes those readings rather than resolving the grid itself.
         RefreshPhraseReading(input);
-        timingFrame = cuePlanner.Plan(input, phaseLockReading, phraseTrackerReading, MinimumChangeCadenceBeats);
+        timingFrame = cuePlanner.Plan(input, gridReading, phraseTrackerReading, MinimumChangeCadenceBeats);
 
-        if (!timingFrame.HasPhaseAnchor)
+        if (!timingFrame.HasGridAnchor)
         {
             return;
         }
 
         if (timingFrame.IsCoasting)
         {
-            if (timingFrame.PhaseAnchorLandingBeat != previousLandingBeat)
+            if (timingFrame.GridAnchorLandingBeat != previousLandingBeat)
             {
-                Trace($"ANCHOR_COAST beat={timingFrame.CurrentBeat} input={FormatTimingInput()} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
+                Trace($"ANCHOR_COAST beat={timingFrame.CurrentBeat} input={FormatTimingInput()} landing={timingFrame.GridAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
             }
 
             return;
         }
 
-        if (timingFrame.PhaseAnchorLandingBeat != previousLandingBeat)
+        if (timingFrame.GridAnchorLandingBeat != previousLandingBeat)
         {
-            Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} phase={FormatPhaseReading()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.PhaseAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
+            Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} grid={FormatGridReading()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.GridAnchorLandingBeat} previousLanding={FormatBeat(previousLandingBeat)}");
         }
     }
 
     /// <summary>
-    /// Reads the PHASE layer (<see cref="phaseLock"/>) and the PHRASE layer (<see cref="PhraseTracker"/>,
-    /// which rides on it) for this frame and holds them in <see cref="phaseLockReading"/> /
+    /// Reads the GRID layer (<see cref="gridSync"/>) and the PHRASE layer (<see cref="PhraseTracker"/>,
+    /// which rides on it) for this frame and holds them in <see cref="gridReading"/> /
     /// <see cref="phraseTrackerReading"/>. Emits its own trace fragment — separate from the legacy
     /// cue/anchor trace — and only when a structural field shifts, so the per-frame position advance
     /// inside a Phrase does not spam the log.
     /// </summary>
     private void RefreshPhraseReading(in OnAirTimingInput input)
     {
-        var previousPhase = phaseLockReading;
+        var previousGrid = gridReading;
         var previousPhrase = phraseTrackerReading;
 
-        phaseLockReading = phaseLock.Read(input);
+        gridReading = gridSync.Read(input);
         phraseTrackerReading = PhraseTracker.Read(
-            phaseLockReading,
+            gridReading,
             input.TrackPhaseActive,
             input.BeatsUntilPhraseBoundary,
             input.PhraseLengthBeats);
 
-        if (PhraseReadingShifted(previousPhase, previousPhrase))
+        if (PhraseReadingShifted(previousGrid, previousPhrase))
         {
-            Trace($"PHASE2 beat={FormatBeat(input.Beat)} phase={FormatPhaseReading()} phrase={FormatPhraseTracker()}");
+            Trace($"PHASE2 beat={FormatBeat(input.Beat)} grid={FormatGridReading()} phrase={FormatPhraseTracker()}");
         }
     }
 
     /// <summary>Whether a structurally meaningful field changed since the previous frame (the per-beat position advance is intentionally ignored).</summary>
-    private bool PhraseReadingShifted(in PhaseReading previousPhase, in PhraseTrackerReading previousPhrase)
+    private bool PhraseReadingShifted(in GridReading previousGrid, in PhraseTrackerReading previousPhrase)
     {
-        return phaseLockReading.State != previousPhase.State
-            || phaseLockReading.Offset != previousPhase.Offset
+        return gridReading.State != previousGrid.State
+            || gridReading.Offset != previousGrid.Offset
             || phraseTrackerReading.IsAcquired != previousPhrase.IsAcquired
             || phraseTrackerReading.PhraseLengthBeats != previousPhrase.PhraseLengthBeats
             || phraseTrackerReading.IsIrregular != previousPhrase.IsIrregular
@@ -535,7 +535,7 @@ public sealed class Director
 
     private bool TryStartMissedZeroRunwayTailedCue(TimingFrame previousFrame, TimingFrame currentFrame)
     {
-        if (!previousFrame.HasPhaseAnchor || currentFrame.CurrentBeat <= previousFrame.CueMarkBeat)
+        if (!previousFrame.HasGridAnchor || currentFrame.CurrentBeat <= previousFrame.CueMarkBeat)
         {
             return false;
         }
@@ -581,7 +581,7 @@ public sealed class Director
 
     private bool TryStartSyncedCue(TimingFrame frame)
     {
-        if (!frame.HasPhaseAnchor)
+        if (!frame.HasGridAnchor)
         {
             return false;
         }
@@ -701,7 +701,7 @@ public sealed class Director
             return;
         }
 
-        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} phase={FormatPhaseReading()} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} grid={FormatGridReading()} anchor={FormatBeat(timingFrame.GridAnchorLandingBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
     }
 
     private void LogSyncedBeatIfNeeded(int beat)
@@ -711,9 +711,9 @@ public sealed class Director
             return;
         }
 
-        var beatsUntilLanding = timingFrame.HasPhaseAnchor ? timingFrame.PhaseAnchorLandingBeat - beat : -1;
-        var canChangeAtLanding = timingFrame.HasPhaseAnchor && CanChangeAtBeat(timingFrame.PhaseAnchorLandingBeat);
-        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} phase={FormatPhaseReading()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.PhaseAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+        var beatsUntilLanding = timingFrame.HasGridAnchor ? timingFrame.GridAnchorLandingBeat - beat : -1;
+        var canChangeAtLanding = timingFrame.HasGridAnchor && CanChangeAtBeat(timingFrame.GridAnchorLandingBeat);
+        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} grid={FormatGridReading()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.GridAnchorLandingBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
         lastLoggedSyncedBeat = beat;
     }
 
@@ -752,11 +752,11 @@ public sealed class Director
             : $"{transitionIndex}:<none>";
     }
 
-    private string FormatPhaseReading()
+    private string FormatGridReading()
     {
-        return phaseLockReading.Position > 0
-            ? $"{phaseLockReading.Position}/16,offset={FormatBeat(phaseLockReading.Offset)},{phaseLockReading.State}"
-            : $"none,offset={FormatBeat(phaseLockReading.Offset)},{phaseLockReading.State}";
+        return gridReading.Position > 0
+            ? $"{gridReading.Position}/16,offset={FormatBeat(gridReading.Offset)},{gridReading.State}"
+            : $"none,offset={FormatBeat(gridReading.Offset)},{gridReading.State}";
     }
 
     /// <summary>Trace fragment for the slice-03 PHRASE-layer reading (PhraseTracker).</summary>
@@ -781,7 +781,7 @@ public sealed class Director
         switch (source)
         {
             case TimingFrameSource.GridFallback:
-                return "phase-clock-grid";
+                return "clock-grid";
             case TimingFrameSource.SyntheticPhrase:
                 return "synthetic-phrase";
             case TimingFrameSource.CueMark:

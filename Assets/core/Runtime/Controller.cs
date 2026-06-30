@@ -1201,9 +1201,9 @@ public class Controller : Singleton<Controller>
         AppendIfNotEmpty(builder, FormatNextMove(directorStatus));
         if (directorStatus.IsSyncedMode)
         {
-            AppendIfNotEmpty(builder, directorStatus.HasPhaseAnchor ? (directorStatus.Phrase.IsIrregular ? directorStatus.Phase.State + " (irregular)" : directorStatus.Phase.State.ToString()) : "unlocked");
+            AppendIfNotEmpty(builder, directorStatus.HasGridAnchor ? (directorStatus.Phrase.IsIrregular ? directorStatus.Grid.State + " (irregular)" : directorStatus.Grid.State.ToString()) : "unlocked");
             AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
-            AppendIfNotEmpty(builder, FormatPhasePosition(directorStatus));
+            AppendIfNotEmpty(builder, FormatGridPosition(directorStatus));
             AppendIfNotEmpty(builder, FormatLanding(directorStatus));
             AppendIfNotEmpty(builder, FormatDropCue());
             AppendIfNotEmpty(builder, directorStatus.BeatsUntilCadenceReady > 0
@@ -1269,7 +1269,7 @@ public class Controller : Singleton<Controller>
         switch (status.TimingSource)
         {
             case TimingFrameSource.GridFallback:
-                source = "phase-clock-grid";
+                source = "clock-grid";
                 break;
             case TimingFrameSource.SyntheticPhrase:
                 source = "synthetic-phrase";
@@ -1291,9 +1291,9 @@ public class Controller : Singleton<Controller>
         return status.TimingReanchored ? $"re-anchor {source}" : source;
     }
 
-    private static string FormatPhasePosition(DirectorStatus status)
+    private static string FormatGridPosition(DirectorStatus status)
     {
-        return status.Phase.Position > 0 ? $"{status.Phase.Position}/16" : "no phase";
+        return status.Grid.Position > 0 ? $"{status.Grid.Position}/16" : "no grid";
     }
 
     private static string FormatLanding(DirectorStatus status)
@@ -1307,8 +1307,8 @@ public class Controller : Singleton<Controller>
         {
             case DirectorDecision.StandaloneTimer:
                 return "timer";
-            case DirectorDecision.WaitingForPhase:
-                return "waiting phase";
+            case DirectorDecision.WaitingForGrid:
+                return "waiting grid";
             case DirectorDecision.WaitingForRunway:
                 return "waiting runway";
             case DirectorDecision.WaitingForCadence:

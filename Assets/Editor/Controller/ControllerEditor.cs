@@ -105,7 +105,7 @@ public sealed class ControllerEditor : Editor
         }
     }
 
-    private enum PhaseSlotRole
+    private enum GridSlotRole
     {
         None,
         Current,
@@ -165,10 +165,10 @@ public sealed class ControllerEditor : Editor
             return CueTimingOverlay.Loaded(cueStatus);
         }
 
-        if (directorStatus.HasPhaseAnchor
+        if (directorStatus.HasGridAnchor
             && TryGetTransitionRepertoire(controller, directorStatus.NextTransitionIndex, out var repertoire))
         {
-            return CueTimingOverlay.Candidate(directorStatus.PhaseAnchorLandingBeat, repertoire);
+            return CueTimingOverlay.Candidate(directorStatus.GridAnchorLandingBeat, repertoire);
         }
 
         return CueTimingOverlay.None;
@@ -177,11 +177,11 @@ public sealed class ControllerEditor : Editor
     private static void DrawTimingAndCueSheet(DirectorStatus status, CueTimingOverlay cueOverlay)
     {
         EditorGUILayout.LabelField("TIMING / CUE SHEET", EditorStyles.boldLabel);
-        DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Phase Count {FormatPhaseCount(status.Phase.Position)}");
+        DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(status.Grid.Position)}");
         DrawRow("Timing Source", FormatTimingSource(status));
         DrawRow("Beats Until Cue", FormatBeats(status.BeatsUntilLanding));
         DrawCueTimingRows(status, cueOverlay);
-        DrawPhaseStrip(status.Phase.Position, cueOverlay);
+        DrawGridStrip(status.Grid.Position, cueOverlay);
         DrawCueSheet(status.CueSheet, status.CurrentBeat);
     }
 
@@ -288,9 +288,9 @@ public sealed class ControllerEditor : Editor
             return;
         }
 
-        DrawRow("Anchor", status.HasPhaseAnchor ? "locked" : "none");
-        DrawRow("Lock State", status.HasPhaseAnchor ? status.Phase.State.ToString() : "unlocked");
-        DrawRow("Offset", FormatBeat(status.Phase.Offset));
+        DrawRow("Anchor", status.HasGridAnchor ? "locked" : "none");
+        DrawRow("Lock State", status.HasGridAnchor ? status.Grid.State.ToString() : "unlocked");
+        DrawRow("Offset", FormatBeat(status.Grid.Offset));
         DrawRow("Irregular Phrase", status.Phrase.IsIrregular ? "yes" : "no");
     }
 
@@ -308,49 +308,49 @@ public sealed class ControllerEditor : Editor
         }
     }
 
-    private static void DrawPhaseStrip(int phasePosition, CueTimingOverlay cueOverlay)
+    private static void DrawGridStrip(int gridPosition, CueTimingOverlay cueOverlay)
     {
         EditorGUILayout.BeginHorizontal();
         var previousColor = GUI.backgroundColor;
-        for (var i = 1; i <= PhaseGrid.PhraseBeats; i++)
+        for (var i = 1; i <= Grid.GridBeats; i++)
         {
-            var role = RoleForPhaseSlot(i, phasePosition, cueOverlay);
-            GUI.backgroundColor = ColorForRole(role, i == phasePosition, previousColor);
-            GUILayout.Label(FormatPhaseSlotLabel(i, phasePosition, role), EditorStyles.miniButton, GUILayout.MinWidth(28f));
+            var role = RoleForGridSlot(i, gridPosition, cueOverlay);
+            GUI.backgroundColor = ColorForRole(role, i == gridPosition, previousColor);
+            GUILayout.Label(FormatGridSlotLabel(i, gridPosition, role), EditorStyles.miniButton, GUILayout.MinWidth(28f));
         }
 
         GUI.backgroundColor = previousColor;
         EditorGUILayout.EndHorizontal();
     }
 
-    private static PhaseSlotRole RoleForPhaseSlot(int slot, int phasePosition, CueTimingOverlay cueOverlay)
+    private static GridSlotRole RoleForGridSlot(int slot, int gridPosition, CueTimingOverlay cueOverlay)
     {
         if (!cueOverlay.HasCue)
         {
-            return slot == phasePosition ? PhaseSlotRole.Current : slot == 1 ? PhaseSlotRole.CueMark : PhaseSlotRole.None;
+            return slot == gridPosition ? GridSlotRole.Current : slot == 1 ? GridSlotRole.CueMark : GridSlotRole.None;
         }
 
-        if (PhaseSlotForBeat(cueOverlay.CueMarkBeat, cueOverlay.CueMarkBeat) == slot)
+        if (GridSlotForBeat(cueOverlay.CueMarkBeat, cueOverlay.CueMarkBeat) == slot)
         {
-            return PhaseSlotRole.CueMark;
+            return GridSlotRole.CueMark;
         }
 
-        if (PhaseSlotForBeat(cueOverlay.LockPointBeat, cueOverlay.CueMarkBeat) == slot)
+        if (GridSlotForBeat(cueOverlay.LockPointBeat, cueOverlay.CueMarkBeat) == slot)
         {
-            return PhaseSlotRole.LockPoint;
+            return GridSlotRole.LockPoint;
         }
 
         if (SlotContainsBeatRange(slot, cueOverlay.StartBeat, cueOverlay.CueMarkBeat - 1, cueOverlay.CueMarkBeat))
         {
-            return PhaseSlotRole.Runway;
+            return GridSlotRole.Runway;
         }
 
         if (SlotContainsBeatRange(slot, cueOverlay.CueMarkBeat + 1, cueOverlay.CompleteBeat, cueOverlay.CueMarkBeat))
         {
-            return PhaseSlotRole.Tail;
+            return GridSlotRole.Tail;
         }
 
-        return slot == phasePosition ? PhaseSlotRole.Current : PhaseSlotRole.None;
+        return slot == gridPosition ? GridSlotRole.Current : GridSlotRole.None;
     }
 
     private static bool SlotContainsBeatRange(int slot, int startBeat, int endBeat, int cueMarkBeat)
@@ -362,7 +362,7 @@ public sealed class ControllerEditor : Editor
 
         for (var beat = startBeat; beat <= endBeat; beat++)
         {
-            if (PhaseSlotForBeat(beat, cueMarkBeat) == slot)
+            if (GridSlotForBeat(beat, cueMarkBeat) == slot)
             {
                 return true;
             }
@@ -371,18 +371,18 @@ public sealed class ControllerEditor : Editor
         return false;
     }
 
-    private static int PhaseSlotForBeat(int beat, int cueMarkBeat)
+    private static int GridSlotForBeat(int beat, int cueMarkBeat)
     {
-        var offset = (beat - cueMarkBeat) % PhaseGrid.PhraseBeats;
+        var offset = (beat - cueMarkBeat) % Grid.GridBeats;
         if (offset < 0)
         {
-            offset += PhaseGrid.PhraseBeats;
+            offset += Grid.GridBeats;
         }
 
         return offset + 1;
     }
 
-    private static Color ColorForRole(PhaseSlotRole role, bool isCurrent, Color fallback)
+    private static Color ColorForRole(GridSlotRole role, bool isCurrent, Color fallback)
     {
         // The current beat always wins: it must stay trackable on top of any cue role color
         // (runway / tail / lock point / cue mark), which would otherwise paint over it.
@@ -393,22 +393,22 @@ public sealed class ControllerEditor : Editor
 
         switch (role)
         {
-            case PhaseSlotRole.CueMark:
+            case GridSlotRole.CueMark:
                 return CueMarkColor;
-            case PhaseSlotRole.LockPoint:
+            case GridSlotRole.LockPoint:
                 return LockPointColor;
-            case PhaseSlotRole.Runway:
+            case GridSlotRole.Runway:
                 return RunwayColor;
-            case PhaseSlotRole.Tail:
+            case GridSlotRole.Tail:
                 return TailColor;
             default:
                 return fallback;
         }
     }
 
-    private static string FormatPhaseSlotLabel(int slot, int phasePosition, PhaseSlotRole role)
+    private static string FormatGridSlotLabel(int slot, int gridPosition, GridSlotRole role)
     {
-        return role == PhaseSlotRole.LockPoint ? "L" : slot == 1 ? "X" : slot.ToString();
+        return role == GridSlotRole.LockPoint ? "L" : slot == 1 ? "X" : slot.ToString();
     }
 
     private static void DrawProgress(string label, float value)
@@ -469,9 +469,9 @@ public sealed class ControllerEditor : Editor
         return status.TimingReanchored ? $"Re-anchor {source}" : source;
     }
 
-    private static string FormatPhaseCount(int phasePosition)
+    private static string FormatGridCount(int gridPosition)
     {
-        return phasePosition > 0 ? $"{phasePosition} / {PhaseGrid.PhraseBeats}" : "—";
+        return gridPosition > 0 ? $"{gridPosition} / {Grid.GridBeats}" : "—";
     }
 
     private static string FormatBeat(int beat)

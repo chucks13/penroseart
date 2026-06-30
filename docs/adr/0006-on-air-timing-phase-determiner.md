@@ -48,3 +48,7 @@ Every value PhaseLock holds or emits is a whole-beat integer (`offset`, `positio
 - The reading seam exposes Phase and Phrase separately (`PhaseReading` + `PhraseTrackerReading` — named one word apart so the two never alias in a site that holds both); exact fields are implementation detail.
 - The seam is justified by testability: PhaseLock can be property-tested against scripted DJ timelines (loops of every length, lead-ins, non-power-of-two Phrases, seeks, dropouts, track changes, clock loss) independent of the Director. Effect-level consumption of the one is allowed to emerge; no speculative extension points are added for it.
 - Rig-empirical unknowns remain to verify but do not block the ADR or harness: whether Phrase data arrives before the boundary, whether Phrase data is always sent, the Phrase-boundary timing noise profile, how often the 4-count wobbles, and the unit of `phrase_state.remaining`.
+
+## Amendment 2026-06-29
+
+The cyclic 16-beat "Phase" vocabulary in this ADR was renamed to "Grid" (PhaseLock→GridSync, PhaseReading→GridReading, Phase Anchor→Grid Anchor) per ADR-0009, to end the PhaseInfo/PhraseInfo collision. The determiner decision is unchanged.

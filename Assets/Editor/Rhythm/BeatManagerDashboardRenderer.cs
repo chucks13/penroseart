@@ -24,7 +24,7 @@ internal static class BeatManagerDashboardRenderer
     private const float QueryRowHeight = 22f;
     private const float QueryRowGap = 6f;
     private const float SwatchRowHeight = 26f;
-    private const int QueryRowCount = 6; // envelope, fill, drop, energy, phase, levels
+    private const int QueryRowCount = 6; // envelope, fill, drop, energy, phrase, levels
 
     public const float DashboardHeight =
         PanelPadding + HeaderHeight + HeaderGap + BodyHeight + BodyGap + ChipHeight
