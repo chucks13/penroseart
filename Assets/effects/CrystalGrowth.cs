@@ -200,9 +200,6 @@ public class CrystalGrowth : EffectBase
     /// <summary>Last frame's "kick present" state, so each bass hit is edge-detected into one bloom.</summary>
     private bool lastKick;
 
-    /// <summary>Last frame's 16-beat Grid Count (1..16), so a wrap into a new Grid can be edge-detected. 0 = off the grid last frame.</summary>
-    private int lastGridCount;
-
     /// <summary>Last frame's sixteenth-gate state, so each onset of the fill ratchet seeds exactly one burst.</summary>
     private bool lastSixteenthOn;
 
@@ -257,7 +254,6 @@ public class CrystalGrowth : EffectBase
         fillActive = false;
         fillLevel = 0f;
         lastSixteenthOn = false;
-        lastGridCount = beatManager.Grid?.Count ?? 0;
         lastBeatInBar = beatManager.BeatInBar;
 
         // Arm the Drop edge to the current state so activating mid-drop doesn't fire a false flash; the flash is for
@@ -302,8 +298,6 @@ public class CrystalGrowth : EffectBase
         // spread surge, and the brightness pulse all gate off and the crystal just keeps growing calmly instead
         // of chasing a beat nobody can hear. 'activity' is 1 (full coupling) when no Levels are available.
         float activity = ReadLevels();
-
-        SwitchPaletteOnNewGrid();
 
         // The fill is the short transition that leads into the next phrase. It carries a small, fast-attack
         // build: the strobe/lunge ramp 0→full over the first FillBuildFraction of the fill, then hold
@@ -535,23 +529,10 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Selects a fresh wall palette at the start of every 16-beat Grid — i.e. each time the Grid Count wraps to
-    /// 1 onto a new Grid (the same new-Grid edge <c>EmptyEffect.RerollVariantOnNewGrid</c> uses). The palette
-    /// cross-fades, so the crystals recolor smoothly. <see cref="BeatManager.Grid"/> is null off the grid
-    /// (Standalone / no beat clock), so this never fires there.
+    /// Selects a fresh wall palette at the start of every 16-beat Grid (the base <see cref="EffectBase.OnNewGrid"/>
+    /// edge — Count wraps to 1 on a Locked grid). The palette cross-fades, so the crystals recolor smoothly.
     /// </summary>
-    private void SwitchPaletteOnNewGrid()
-    {
-        int count = beatManager.Grid?.Count ?? 0;
-
-        // Fire once on the wrap to Count 1 (the downbeat of a new Grid), not every frame it stays 1.
-        if (count == 1 && lastGridCount != 1)
-        {
-            APalette.Change();
-        }
-
-        lastGridCount = count;
-    }
+    protected override void OnNewGrid() => APalette.Change();
 
     /// <summary>
     /// Energy-aware seeding (used when live Levels exist): each rising edge of the bass kick blooms a burst sized

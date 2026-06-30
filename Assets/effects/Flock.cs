@@ -15,7 +15,6 @@ public class Flock : EffectBase
     private float alignment = 0.75f;
     private float cohesion = 1f;
     private float separation = 1.25f;
-    private int lastGridCount;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -65,7 +64,6 @@ public class Flock : EffectBase
     public override void OnStart()
     {
         base.OnStart();
-        lastGridCount = beatManager.Grid?.Count ?? 0;
 
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
@@ -95,30 +93,14 @@ public class Flock : EffectBase
     /// </summary>
     public override void OnEnd() { }
 
-    /// <summary>
-    /// Selects a new Waveform once at the one of each 16-beat On-Air Timing Grid, but only when the Grid
-    /// lock is trusted (<see cref="GridSyncState.Locked"/>) so a Coasting / Contradicted reading holds the
-    /// current Waveform instead of re-rolling on a low-trust Grid.
-    /// </summary>
-    private void RerollWaveformOnGridOne()
-    {
-        var grid = beatManager.Grid;
-        var gridCount = grid?.Count ?? 0;
-        if (gridCount == 1 && lastGridCount != 1 && grid?.Confidence == GridSyncState.Locked)
-        {
-            beatVariant = beatManager.GetRandomVariant();
-        }
-
-        lastGridCount = gridCount;
-    }
+    /// <summary>Picks a new Waveform variant at the one of each new 16-beat Grid (the base Locked-gated edge).</summary>
+    protected override void OnNewGrid() => beatVariant = beatManager.GetRandomVariant();
 
     /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
     public override void Draw()
     {
-        RerollWaveformOnGridOne();
-
         var envelope = beatManager.Envelope(beatVariant) ?? 0f;
         var lowEnergy = beatManager.Levels?.low ?? 0f;
         float speedMultiplier = GetBeatSpeedMultiplier(envelope, beatEnable && beatManager.IsActive);
