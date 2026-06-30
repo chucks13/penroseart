@@ -38,9 +38,12 @@ public override void OnEnd()
 Init()       once after reflection creates the catalog instance
 OnStart()   whenever the effect becomes active
 UpdateTime() called by Controller before Draw()
+OnNewGrid() once on the downbeat of each new Locked 16-beat Grid
 Draw()      every active frame
 OnEnd()     not currently called
 ```
+
+`OnNewGrid()` is a base hook on `EffectBase`. `UpdateTime()` edge-detects the downbeat of each new 16-beat Grid (Count wraps 16 → 1) and calls it once, gated on a `Locked` grid. Override it to re-roll a look, switch palette, or pick a new beat variant in step with the music. It never fires off the beat clock (Standalone), and an effect nested in a mixer only receives it if the mixer forwards `UpdateTime()`.
 
 Use `Init()` for reusable setup that depends on `Controller.Instance`, `penrose`, or `tiles` existing.
 
@@ -100,6 +103,74 @@ shape[1..shape[0]] = tile indexes or pointers, depending on the source list
 ```
 
 Check the consuming effect before reusing a shape list. Some lists are direct tile lists; others are lists of indexes into another shape collection.
+
+## Reacting to musical structure (Fill and Drop)
+
+A **Fill** is the build that leads up to a change; a **Drop** is the impact at the change. An effect can express both. The pattern below is the one used by `Tunnel`, and it generalizes to any effect with a continuous phase/motion term.
+
+### 1. Advertise the capability
+
+Override `Repertoire` so the Director can cast this effect into those moments:
+
+```csharp
+public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
+```
+
+### 2. Find the motion term, and never scale `effectTime`
+
+Identify the one accumulator that drives the look (for `Tunnel`: `phase = i*density + effectTime*speed + distance*mix`). `effectTime` is seeded with a large random offset (0–14400s), so multiplying `effectTime*speed` to "speed up" teleports the phase. Instead, keep a **separate bounded accumulator** per response and integrate a rate into it each frame:
+
+```csharp
+fillScroll = Mathf.Repeat(fillScroll + speed * FillRush * fillEnv * effectDelta, 1f);
+dropScroll = Mathf.Repeat(dropScroll - speed * DropRush * dropEnv * effectDelta, 1f);
+// phase = (... + fillScroll + dropScroll + ...) % 1f
+```
+
+`Mathf.Repeat(…, 1f)` keeps each accumulator in `[0,1)` so it never drifts. Fill adds (`+`), Drop subtracts (`-`) — make the two motions **opposite** so the Drop reads as an inversion of the Fill, not just "more of it."
+
+### 3. Shape each moment with the right envelope
+
+- **Fill is continuous** — drive it from `BeatManager.Fill` progress so it ramps with the music. Use fast attack / slow release so even a one-beat fill slams to full and tails off cleanly:
+
+  ```csharp
+  PhraseEventInfo? fill = beatManager.Fill;
+  float fillTarget = fill is { inProgress: true } ? Mathf.Clamp01(fill.Value.progress ?? 0f) : 0f;
+  float fillRate = fillTarget > fillEnv ? FillAttack : FillRelease;   // e.g. 22 / 5
+  fillEnv = Mathf.Lerp(fillEnv, fillTarget, 1f - Mathf.Exp(-fillRate * effectDelta));
+  ```
+
+- **Drop is a one-shot** — snap to 1 at the instant, then `SmoothStep`-decay over a BPM-derived duration (with a seconds fallback when no BPM):
+
+  ```csharp
+  dropSeconds = beatManager.Bpm is { } bpm && bpm > 0f
+      ? (60f / bpm) * BeatsPerBar * DropBars : DropFallbackSeconds;
+  // in Draw(): dropEnv = 1f - Mathf.SmoothStep(0f, 1f, dropElapsed / dropSeconds);
+  ```
+
+### 4. Trigger the Drop off the grid edge, once per drop
+
+The Drop fires on beat one of the grid *inside* a drop — a discrete instant — so ride the `OnNewGrid()` hook, not a poll in `Draw()`. Latch it so it fires once per drop, and clear the latch in `Draw()` when the drop ends:
+
+```csharp
+protected override void OnNewGrid()
+{
+    Reroll();                                          // fresh look every grid
+    if (beatManager.Drop is { inProgress: true } && !dropFlashed)
+    {
+        TriggerDrop();                                 // dropEnv = 1; reset decay clock
+        dropFlashed = true;
+    }
+}
+// in Draw(): if (!(beatManager.Drop is { inProgress: true })) dropFlashed = false;
+```
+
+### 5. Fold envelopes into every consequence, and expose them
+
+One envelope can drive several visual results (scroll **and** zoom) so the gesture feels coherent: `zoom = 1 + FillZoom*fillEnv + DropZoom*dropEnv`. Make every magnitude a named, documented `const`, and surface the live envelopes on `DebugText()` (`FILL 0.83`, `DROP 0.41`) so they can be tuned on the wall instead of by guessing.
+
+### Lift shared plumbing into the base
+
+When the same beat-detection plumbing appears in a second effect, it belongs in `EffectBase`, not copied. The grid-downbeat edge detection now lives in `EffectBase.UpdateTime()` → `OnNewGrid()` for exactly this reason; effects just override the hook.
 
 ## Documentation expectations for new effects
 
