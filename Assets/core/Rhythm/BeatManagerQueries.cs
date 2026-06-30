@@ -16,6 +16,43 @@ public enum EnergyLevel
 }
 
 /// <summary>
+/// A named position on the beat grid, shared by <see cref="BeatManager.PulseOf"/> and
+/// <see cref="BeatManager.GateOf"/>. Every member is one row in the rhythm family's
+/// <c>(period, offset)</c> table — a pulse rate plus an optional phase shift — so the whole vocabulary
+/// (downbeat through sixteenths, on and off) is one model rather than a scatter of bespoke pulses.
+/// </summary>
+/// <remarks>
+/// Groove names, not note names: <see cref="Beat"/> and <see cref="Offbeat"/> are the synthesized
+/// siblings of the wire-sourced <see cref="BeatManager.Pulse"/> and the derived
+/// <see cref="BeatManager.OffBeatPulse"/>, so the family speaks the same language the wall already does.
+/// Rates derive from <c>BeatSlotCount</c>, so <see cref="Bar"/>/<see cref="Half"/>/<see cref="Backbeat"/>
+/// follow the meter rather than assuming a fixed four.
+/// </remarks>
+public enum Subdivision
+{
+    /// <summary>Once per bar, on the downbeat (a whole note).</summary>
+    Bar,
+
+    /// <summary>Twice per bar, on beats 1 and 3 (a half note).</summary>
+    Half,
+
+    /// <summary>Twice per bar, on beats 2 and 4 — the backbeat (a half note, offset one beat).</summary>
+    Backbeat,
+
+    /// <summary>Every beat (a quarter note) — the synthesized sibling of <see cref="BeatManager.Pulse"/>.</summary>
+    Beat,
+
+    /// <summary>Every "and", between the beats (an eighth-note offset) — the sibling of <see cref="BeatManager.OffBeatPulse"/>.</summary>
+    Offbeat,
+
+    /// <summary>Every half beat (an eighth note): beats and "ands" together.</summary>
+    Eighth,
+
+    /// <summary>Every quarter beat (a sixteenth note) — the fastest the family goes.</summary>
+    Sixteenth,
+}
+
+/// <summary>
 /// Contrived phrase-event state shared by Fill and Drop: an event effects can anticipate before it
 /// starts and ride while it plays. <see cref="BeatManager.Fill"/> and <see cref="BeatManager.Drop"/>
 /// each return their own instance of this shape.
@@ -363,6 +400,74 @@ public partial class BeatManager
 
             return offBeatPulse;
         }
+    }
+
+    /// <summary>
+    /// A smooth pulse on a chosen <see cref="Subdivision"/> — 1 at each onset, smoothstep-decaying toward 0
+    /// at the next — or null when no beat clock is present. The continuous member of the rhythm family,
+    /// for swelling brightness/time/scale with the groove.
+    /// </summary>
+    /// <remarks>
+    /// Synthesized from <see cref="BarPhase"/> (so it locks to the beat at any tempo without needing a
+    /// matching Waveform in the Pool) and shaped by the same <see cref="GetPulse"/> envelope as
+    /// <see cref="OffBeatPulse"/>, so the whole family shares one decay shape. <see cref="Subdivision.Beat"/>
+    /// is the synthesized sibling of the wire-sourced <see cref="Pulse"/>; <see cref="Pulse"/> stays the
+    /// canonical, freshest beat pulse from the source and is intentionally not folded in here.
+    /// </remarks>
+    public float? PulseOf(Subdivision subdivision)
+    {
+        if (!IsActive)
+        {
+            return null;
+        }
+
+        return GetPulse(SubdivisionPhase(subdivision), 1f);
+    }
+
+    /// <summary>
+    /// A hard on/off ratchet on a chosen <see cref="Subdivision"/> — 1 for the first <paramref name="duty"/>
+    /// of each onset's period, 0 after — or null when no beat clock is present. The square member of the
+    /// rhythm family, for stutter/strobe reactions where a decaying pulse would read as a swell.
+    /// </summary>
+    /// <param name="duty">Fraction of each period the gate stays open, in [0..1]; 0.5 is an even on/off split.</param>
+    public float? GateOf(Subdivision subdivision, float duty = 0.5f)
+    {
+        if (!IsActive)
+        {
+            return null;
+        }
+
+        return SubdivisionPhase(subdivision) < duty ? 1f : 0f;
+    }
+
+    /// <summary>
+    /// The rhythm family's <c>(period, offset)</c> table: each <see cref="Subdivision"/> as a pulse period
+    /// and phase offset, both in beats. Rates scale with <see cref="BeatSlotCount"/> so the bar-spanning
+    /// members track the meter rather than assuming four beats.
+    /// </summary>
+    private (float periodBeats, float offsetBeats) SubdivisionTiming(Subdivision subdivision) =>
+        subdivision switch
+        {
+            Subdivision.Bar       => (BeatSlotCount, 0f),
+            Subdivision.Half      => (BeatSlotCount / 2f, 0f),
+            Subdivision.Backbeat  => (BeatSlotCount / 2f, 1f), // a half note shifted one beat → 2 & 4
+            Subdivision.Beat      => (1f, 0f),
+            Subdivision.Offbeat   => (1f, 0.5f),               // a beat shifted half a beat → the "and"
+            Subdivision.Eighth    => (0.5f, 0f),
+            Subdivision.Sixteenth => (0.25f, 0f),
+            _                     => (1f, 0f),
+        };
+
+    /// <summary>
+    /// Phase within one subdivision period in [0..1): 0 at each onset, approaching 1 just before the next.
+    /// Looks up the subdivision's <c>(period, offset)</c> in <see cref="SubdivisionTiming"/> and reads it
+    /// against <see cref="BarPhase"/>, so every family member shares one bar-locked clock.
+    /// </summary>
+    private float SubdivisionPhase(Subdivision subdivision)
+    {
+        var (periodBeats, offsetBeats) = SubdivisionTiming(subdivision);
+        float beatsIntoBar = BarPhase * BeatSlotCount;
+        return Mathf.Repeat((beatsIntoBar - offsetBeats) / periodBeats, 1f);
     }
 
     /// <summary>Fraction elapsed through the current beat in [0..1], or null when no usable beat clock is present.</summary>

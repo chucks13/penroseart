@@ -454,4 +454,87 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.Energy, Is.Null);
         Assert.That(beatManager.Levels, Is.Null);
     }
+
+    // --- Subdivision rhythm family (PulseOf / GateOf) ---
+
+    /// <summary>
+    /// Live manager pinned to an exact bar position: beat <paramref name="beatInBar"/> with
+    /// <paramref name="msToNextBeat"/> left of the 500 ms average, so BarPhase and every Subdivision phase land
+    /// on known values. The default 500 sits exactly on that beat's onset (intra-beat fraction 0).
+    /// </summary>
+    private static BeatManager LiveAtBeat(int beatInBar, int msToNextBeat = 500)
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        var snapshot = beatManager.beatData.snapshot;
+        snapshot.bpm = 128f;
+        snapshot.beatInBar = beatInBar;
+        snapshot.beatAverageMs = 500;
+        // IntraBeatFraction reads the next label's slot (label % 4); only that slot must carry a countdown.
+        var countdowns = new[] { -1, -1, -1, -1 };
+        countdowns[beatInBar % 4] = msToNextBeat;
+        snapshot.beatsCountMs = countdowns;
+        return beatManager;
+    }
+
+    [Test]
+    public void SubdivisionQueriesAreNullWithoutBeatClock()
+    {
+        var beatManager = new BeatManager(); // Standalone: no clock
+
+        Assert.That(beatManager.PulseOf(Subdivision.Beat), Is.Null);
+        Assert.That(beatManager.GateOf(Subdivision.Sixteenth), Is.Null);
+    }
+
+    [Test]
+    public void BeatPulsePeaksOnEveryBeatOnset()
+    {
+        Assert.That(LiveAtBeat(1).PulseOf(Subdivision.Beat), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(LiveAtBeat(2).PulseOf(Subdivision.Beat), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(LiveAtBeat(3).PulseOf(Subdivision.Beat), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(LiveAtBeat(4).PulseOf(Subdivision.Beat), Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [Test]
+    public void BackbeatFiresOnTwoAndFourNotOneAndThree()
+    {
+        // The hard gate is open only on the 2 and 4 onsets.
+        Assert.That(LiveAtBeat(1).GateOf(Subdivision.Backbeat), Is.EqualTo(0f));
+        Assert.That(LiveAtBeat(2).GateOf(Subdivision.Backbeat), Is.EqualTo(1f));
+        Assert.That(LiveAtBeat(3).GateOf(Subdivision.Backbeat), Is.EqualTo(0f));
+        Assert.That(LiveAtBeat(4).GateOf(Subdivision.Backbeat), Is.EqualTo(1f));
+
+        // The smooth pulse peaks there too.
+        Assert.That(LiveAtBeat(2).PulseOf(Subdivision.Backbeat), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(LiveAtBeat(4).PulseOf(Subdivision.Backbeat), Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [Test]
+    public void BarPulseDecaysAcrossTheWholeBarFromTheDownbeat()
+    {
+        Assert.That(LiveAtBeat(1).PulseOf(Subdivision.Bar), Is.EqualTo(1f).Within(0.0001f));   // downbeat peak
+        Assert.That(LiveAtBeat(3).PulseOf(Subdivision.Bar), Is.EqualTo(0.5f).Within(0.0001f)); // halfway through the bar
+    }
+
+    [Test]
+    public void OffbeatIsTheSynthesizedSiblingOfTheBeatAtTheAnd()
+    {
+        // CreateLiveBeatManager pins BarPhase 0.125 — the "and" of beat 1, where the offbeat onset lands and
+        // the on-beat pulse sits in its trough (the same fixture the Envelope offbeat-variant test uses).
+        var beatManager = CreateLiveBeatManager();
+
+        Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(0.0001f));
+        Assert.That(beatManager.PulseOf(Subdivision.Offbeat), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(beatManager.GateOf(Subdivision.Offbeat), Is.EqualTo(1f));
+        Assert.That(beatManager.PulseOf(Subdivision.Beat), Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(beatManager.GateOf(Subdivision.Beat), Is.EqualTo(0f));
+    }
+
+    [Test]
+    public void SixteenthGateRatchetsOnAndOffWithinABeat()
+    {
+        Assert.That(LiveAtBeat(1).GateOf(Subdivision.Sixteenth), Is.EqualTo(1f));      // beat onset = a 16th onset
+        Assert.That(LiveAtBeat(1, 400).GateOf(Subdivision.Sixteenth), Is.EqualTo(0f)); // 1/5 into the beat = mid-16th, shut
+        Assert.That(LiveAtBeat(1, 375).GateOf(Subdivision.Sixteenth), Is.EqualTo(1f)); // 1/4 into the beat = next 16th onset
+    }
 }
