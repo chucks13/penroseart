@@ -52,6 +52,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Fraction of the wall the current generation must claim before the next layer blooms on top.</summary>
     private const float CoverageToAdvance = 0.85f;
 
+    /// <summary>Cap on ring passes advanced in one frame, so a long frame hitch catches up a little rather than
+    /// detonating the front across the whole wall in a single step.</summary>
+    private const int MaxFrontPassesPerFrame = 6;
+
     /// <summary>A grown tile's brightness never fades below this — the crystal lingers as a dim layer instead of going black. Unreached tiles still render pure black.</summary>
     private const float CrystalFloor = 0.5f;
 
@@ -70,6 +74,9 @@ public class CrystalGrowth : EffectBase
     /// <summary>Golden-ratio conjugate: the step that spaces successive seed colors evenly across the palette.</summary>
     private const float GoldenStep = 0.618034f;
 
+    /// <summary>Extra seeds added to a bloom while a Drop is in progress — the drop crystallizes the wall in a rush.</summary>
+    private const int DropSeedBonus = 4;
+
     /// <summary>Seconds between idle seeds in Standalone Mode, where the self-metronome drives all growth.</summary>
     private const float StandaloneSeedMin = 0.18f;
     private const float StandaloneSeedMax = 0.35f;
@@ -81,6 +88,22 @@ public class CrystalGrowth : EffectBase
     /// <summary>Seconds per synthetic Standalone downbeat (re-jittered each tick so it never feels mechanical).</summary>
     private const float SelfBeatPeriodMin = 1.2f;
     private const float SelfBeatPeriodMax = 2.2f;
+
+    /// <summary>Per-second decay of the Standalone spread surge, so each synthetic downbeat is a lunge, not a sustained sprint.</summary>
+    private const float SelfPulseDecayPerSec = 2.5f;
+
+    /// <summary>Extra spread multiplier added on each sixteenth's on-phase during a fill — the front lunges in stutters.</summary>
+    private const float FillRatchetSpread = 4f;
+
+    /// <summary>How far the whole field is knocked toward black on a fill sixteenth's off-phase — the hard strobe depth.</summary>
+    private const float FillStrobeDepth = 0.9f;
+
+    /// <summary>Seeds planted on each sixteenth onset during a fill. Fixed — seeds hit full from the first 16th, only the strobe/lunge build.</summary>
+    private const int FillSeedBurst = 12;
+
+    /// <summary>Fraction of the fill spent ramping the strobe/lunge up to full; the rest plays full-drastic. Fill progress is
+    /// normalized, so this makes the build's wall-clock length scale with the fill — short fills snap in, long fills lead in.</summary>
+    private const float FillBuildFraction = 0.3f;
 
     /// <summary>Per-tile front heat in [0..1]; the bright moving band. Decays toward 0, but a grown tile still renders at <see cref="CrystalFloor"/> (keyed on <see cref="gen"/>), so charge is only the bright part above the floor.</summary>
     private float[] charge;
@@ -150,6 +173,15 @@ public class CrystalGrowth : EffectBase
     /// <summary>Last frame's 16-beat Grid Count (1..16), so a wrap into a new Grid can be edge-detected. 0 = off the grid last frame.</summary>
     private int lastGridCount;
 
+    /// <summary>Last frame's sixteenth-gate state, so each onset of the fill ratchet seeds exactly one burst.</summary>
+    private bool lastSixteenthOn;
+
+    /// <summary>Whether this frame is inside a fill, kept for the debug readout.</summary>
+    private bool fillActive;
+
+    /// <summary>This frame's fill build level [0..1] (the fast-attack ramp, plateaued at full), kept for the debug readout.</summary>
+    private float fillLevel;
+
     /// <summary>
     /// Allocates the per-tile state buffers once. Sizes follow <see cref="Penrose.Total"/>.
     /// </summary>
@@ -192,6 +224,9 @@ public class CrystalGrowth : EffectBase
         selfPulse = 0f;
         lastKick = false;
         energyNow = -1f;
+        fillActive = false;
+        fillLevel = 0f;
+        lastSixteenthOn = false;
         lastGridCount = beatManager.Grid?.Count ?? 0;
         lastBeatInBar = beatManager.BeatInBar;
 
@@ -211,7 +246,8 @@ public class CrystalGrowth : EffectBase
         string levels = energyNow < 0f
             ? "Levels: n/a"
             : $"Energy: {energyNow:0.00}{(energyNow < KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > KickThreshold ? "ON" : "--")}";
-        return $"Crystal Growth\nMode: {mode}\nLayer: {generation}\n{levels}";
+        string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (16th ratchet)" : "";
+        return $"Crystal Growth\nMode: {mode}\nLayer: {generation}\n{levels}{fillReadout}";
     }
 
     /// <summary>
@@ -231,18 +267,33 @@ public class CrystalGrowth : EffectBase
 
         SwitchPaletteOnNewGrid();
 
+        // The fill is the short transition that leads into the next phrase. It carries a small, fast-attack
+        // build: the strobe/lunge ramp 0→full over the first FillBuildFraction of the fill, then hold
+        // full-drastic for the rest, gated to a hard sixteenth ratchet (1 on each 16th, 0 between) so the wall
+        // stutters, then snap back as the new phrase (and its palette) arrives. Because Fill.progress is
+        // normalized to the fill's length, the build's wall-clock length scales with it — short fills snap in,
+        // long fills lead in. Seeding hits full from the first 16th; only the strobe/lunge ride fillAmount.
+        PhraseEventInfo? fillInfo = beatManager.Fill;
+        bool inFill = fillInfo is { inProgress: true };
+        float progress = inFill ? (fillInfo.Value.progress ?? 1f) : 0f;
+        float fillAmount = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / FillBuildFraction));
+        float ratchet = beatManager.GateOf(Subdivision.Sixteenth) ?? 0f;
+        fillActive = inFill;
+        fillLevel = fillAmount;
+
         SeedThisFrame(dt);
+        SeedFillRatchet(inFill, ratchet);
 
         // The beat surges how far the front lunges this frame. Synced rides the live Pulse; Standalone falls
         // back to the self-driven surge. The surge is scaled by 'activity' so the front stops lunging to an
-        // inaudible beat during a quiet break.
+        // inaudible beat during a quiet break. During a fill, each sixteenth on-phase adds a hard extra lunge.
         float pulse = (beatManager.Pulse ?? selfPulse) * activity;
-        float spread = spreadPerSec * (1f + (beatSurge * pulse));
+        float spread = spreadPerSec * (1f + (beatSurge * pulse)) * (1f + (FillRatchetSpread * fillAmount * ratchet));
 
         // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
         spreadBudget += spread * dt;
         int passes = 0;
-        while (spreadBudget >= 1f && passes < 6)
+        while (spreadBudget >= 1f && passes < MaxFrontPassesPerFrame)
         {
             spreadBudget -= 1f;
             passes++;
@@ -264,6 +315,12 @@ public class CrystalGrowth : EffectBase
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
         float bright = BeatBrightness(Mathf.Lerp(1f, 0.8f, activity));
 
+        // Hard fill strobe: on a fill, every sixteenth's off-phase knocks the whole field toward black, deepening
+        // with fillAmount as the short build attacks, so the wall flashes on each 16th. Applied to the final
+        // color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to 1 (no
+        // strobe) whenever there is no fill.
+        float strobe = 1f - (fillAmount * (1f - ratchet) * FillStrobeDepth);
+
         for (int i = 0; i < buffer.Length; i++)
         {
             if (gen[i] == 0)
@@ -284,7 +341,7 @@ public class CrystalGrowth : EffectBase
             // sqrt widens the bright band: the whole active growth area stays bright and only the oldest tail
             // eases down to the floor, so the crystal reads as a defined glowing region instead of a bright dot.
             float factor = Mathf.Max(Mathf.Sqrt(c) * bright, CrystalFloor);
-            buffer[i] = col * factor;
+            buffer[i] = col * (factor * strobe);
         }
     }
 
@@ -366,10 +423,17 @@ public class CrystalGrowth : EffectBase
             return;
         }
 
-        // Standalone Mode: no beat clock, so run a self-driven metronome that mimics the synced liveliness —
-        // a steady trickle of seeds keeps several fronts crawling at once, and a synthetic downbeat periodically
-        // blooms a burst and kicks the spread surge so the wall pulses in waves.
-        lastBeatInBar = beatInBar; // tracks null here; re-arms cleanly when the beat returns
+        SeedSelfDriven(dt);
+    }
+
+    /// <summary>
+    /// Standalone seeding (no beat clock): a self-driven metronome that mimics the synced liveliness — a steady
+    /// trickle of seeds keeps several fronts crawling at once, and a synthetic downbeat periodically blooms a
+    /// burst and kicks the spread surge so the wall pulses in waves.
+    /// </summary>
+    private void SeedSelfDriven(float dt)
+    {
+        lastBeatInBar = beatManager.BeatInBar; // tracks null here; re-arms cleanly when the beat returns
 
         selfBeatPhase += dt / selfBeatPeriod;
         if (selfBeatPhase >= 1f)
@@ -378,11 +442,7 @@ public class CrystalGrowth : EffectBase
             selfBeatPeriod = Random.Range(SelfBeatPeriodMin, SelfBeatPeriodMax);
             selfPulse = 1f; // peak surge, decays below
 
-            int burst = BloomCount();
-            for (int s = 0; s < burst; s++)
-            {
-                PlantSeed();
-            }
+            PlantSeeds(BloomCount());
         }
 
         // Steady fill between downbeats so there are always several live fronts, not one lonely crystal.
@@ -395,7 +455,7 @@ public class CrystalGrowth : EffectBase
         }
 
         // Decay the synthetic surge toward 0 so each downbeat is a lunge, not a sustained sprint.
-        selfPulse = Mathf.Max(0f, selfPulse - (dt * 2.5f));
+        selfPulse = Mathf.Max(0f, selfPulse - (dt * SelfPulseDecayPerSec));
     }
 
     /// <summary>
@@ -459,13 +519,11 @@ public class CrystalGrowth : EffectBase
 
             if (beatManager.Drop is { inProgress: true })
             {
-                burst += 4; // the drop crystallizes the wall in a rush
+                burst += DropSeedBonus;
             }
 
-            for (int s = 0; s < burst; s++)
-            {
-                PlantSeed();
-            }
+            // The fill is NOT seeded here — it gets its own drastic sixteenth ratchet in SeedFillRatchet.
+            PlantSeeds(burst);
         }
 
         lastKick = kickNow;
@@ -496,13 +554,27 @@ public class CrystalGrowth : EffectBase
         int seeds = bib == 1 ? 3 : 1; // the bar's one blooms several fronts at once
         if (beatManager.Drop is { inProgress: true })
         {
-            seeds += 4; // the drop crystallizes the wall in a rush
+            seeds += DropSeedBonus;
         }
 
-        for (int s = 0; s < seeds; s++)
+        PlantSeeds(seeds);
+    }
+
+    /// <summary>
+    /// The fill's drastic seeding: on each rising edge of the sixteenth ratchet during a fill, plant a fixed
+    /// <see cref="FillSeedBurst"/> of fresh fronts so the wall machine-guns through the transition. Full-drastic
+    /// from the first sixteenth — no build. Edge-detected off the hard gate so exactly one burst lands per
+    /// sixteenth, not one per frame. No-op outside a fill and in Standalone (ratchet is 0 there).
+    /// </summary>
+    private void SeedFillRatchet(bool inFill, float ratchet)
+    {
+        bool on = ratchet > 0.5f;
+        if (on && !lastSixteenthOn && inFill)
         {
-            PlantSeed();
+            PlantSeeds(FillSeedBurst);
         }
+
+        lastSixteenthOn = on;
     }
 
     /// <summary>
@@ -518,6 +590,15 @@ public class CrystalGrowth : EffectBase
         charge[t] = 1f;
         gen[t] = generation;
         hue[t] = hueCursor;
+    }
+
+    /// <summary>Plants <paramref name="count"/> seeds at once — one bloom's worth of fresh fronts.</summary>
+    private void PlantSeeds(int count)
+    {
+        for (int s = 0; s < count; s++)
+        {
+            PlantSeed();
+        }
     }
 
     /// <summary>
@@ -600,12 +681,7 @@ public class CrystalGrowth : EffectBase
     private void StartNextGeneration()
     {
         generation++;
-
-        int blooms = BloomCount();
-        for (int s = 0; s < blooms; s++)
-        {
-            PlantSeed();
-        }
+        PlantSeeds(BloomCount());
     }
 
     /// <summary>A bloom is 3–5 seeds — used for the bar's-one bloom, a new generation, and the Standalone downbeat.</summary>
