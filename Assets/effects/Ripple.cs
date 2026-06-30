@@ -28,6 +28,7 @@ public class Ripple : ScreenEffect
     public override void Init()
     {
         base.Init();
+        drops = new Drop[0];
     }
 
     /// <summary>
@@ -37,7 +38,6 @@ public class Ripple : ScreenEffect
     {
         base.OnStart();
         intensity = Random.Range(0.01f, 0.02f);
-        drops = new Drop[0];
     }
 
     /// <summary>
@@ -51,7 +51,7 @@ public class Ripple : ScreenEffect
     public override void Draw()
     {
         // Beat pulse scales ripple brightness while drop radius/progression remains independent.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float hueShift = beatManager.GetBeatBrightness(beatVariant, 0.2f, 0.0f);
         if (Random.value < intensity)
         {
             Array.Resize(ref drops, drops.Length + 1);
@@ -75,7 +75,7 @@ public class Ripple : ScreenEffect
                 }
                 sum += 0.5f;
                 sum %= 1f;
-                screenBuffer[idx] = APalette.read(sum, true) * beatBrightness;
+                screenBuffer[idx] = APalette.read(sum + hueShift, true);
             }
         }
 
