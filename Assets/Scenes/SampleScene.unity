@@ -2119,7 +2119,7 @@ MonoBehaviour:
   showVerboseRuntimeHud: 0
   runtimeHudAlpha: 0.78
   configureCompactHudLayout: 1
-  logDirectorSwitching: 1
+  logDirectorSwitching: 0
   myIPText: {fileID: 2070754382}
   penrose: {fileID: 0}
   effectDelta: 0

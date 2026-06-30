@@ -517,7 +517,7 @@ public sealed class Director
 
         if (PhraseReadingShifted(previousGrid, previousPhrase))
         {
-            Trace($"PHASE2 beat={FormatBeat(input.Beat)} grid={FormatGridReading()} phrase={FormatPhraseTracker()}");
+            Trace($"READING_SHIFT beat={FormatBeat(input.Beat)} grid={FormatGridReading()} phrase={FormatPhraseTracker()}");
         }
     }
 

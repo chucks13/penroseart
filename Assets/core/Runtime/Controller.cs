@@ -318,7 +318,7 @@ public class Controller : Singleton<Controller>
 
     [Header("Director Debug Logging")]
     /// <summary>Writes tagged Director/Switcher sequencing diagnostics to the Unity log for post-run debugging.</summary>
-    public bool logDirectorSwitching = true;
+    public bool logDirectorSwitching = false;
 
     /// <summary>UI label listing local IPv4 addresses.</summary>
     public TextMeshProUGUI myIPText;
