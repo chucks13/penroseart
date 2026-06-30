@@ -44,7 +44,7 @@ The active runtime frame flow is:
 2. `RaveOscReceiver.ApplyTo(beatManager)` applies the newest live Rave OSC state before any sequencing decision.
 3. `BeatManager.Update()` advances live or simulated rhythm state and exposes nullable rhythm queries.
 4. `Director.Tick(deltaTime)` chooses Standalone, Synced, or Hold behavior.
-5. In Synced Mode, `OnAirTiming.ReadFrame(...)` interprets the live beat and Track Phase state into one Director-facing `TimingFrame`.
+5. In Synced Mode, the Director composes the Grid (`GridSync`) and Phrase (`PhraseTracker`) readings and runs `CuePlanner.Plan(...)` to produce one Director-facing `TimingFrame`.
 6. `SyncedCueIntent` combines the `TimingFrame`, Fill/Drop phrase-event timing, selected Transition Repertoire, staged choices, and Effect Repertoire to assign ordinary/Fill/Drop Cue Intent and decide Wait / Cue / BlockedByCadence plus any preferred Performer casting.
 7. The Director issues stage commands only: `Switcher.ShowNow(...)` or a fire-and-forget `Switcher.UpsertLoadedCue(...)` with a beat-domain `SwitcherCueDirection` and tiny `SwitcherClockSnapshot`.
 8. `Switcher.RenderAtTime(...)` internally locks/starts due Loaded Cues, then renders the current Effect or active A-to-B Transition into `penrose.buffer`.
@@ -64,19 +64,15 @@ Standalone Mode is the intentional self-running behavior when no live OSC source
 
 ### Synced Mode
 
-Synced Mode is active when live OSC data is present. The Director does not read raw Track Phase fields directly. Instead, it asks On-Air Timing for a `TimingFrame`.
+Synced Mode is active when live OSC data is present. The Director does not read raw Track Phase fields directly. Instead, it composes the timing interpretation itself from deep modules and plans cues from the result.
 
-On-Air Timing owns the musical interpretation seam:
+Each frame the Director:
 
 - converts `BeatManager` rhythm queries into `OnAirTimingInput`;
-- resolves the 16-beat Phase reading through `PhaseClock`;
-- derives active and upcoming `PhraseWindow` values from Track Phase;
-- owns `CueSheet` planning and cursor advancement for current/upcoming Phrase Windows;
-- corrects pass-local cue/cadence state after substantial Beat Rewinds;
-- coasts when Track Phase disappears after a structural anchor;
-- reports re-anchor when fresh structural Track Phase replaces a coasted or weaker target.
+- composes the GRID reading via `GridSync` (where "the one" sits on the 16-beat Grid) and the PHRASE reading via `PhraseTracker` (song structure, riding on the Grid reading);
+- runs `CuePlanner.Plan(...)`, which consumes those readings, derives active and upcoming `PhraseWindow` values from Track Phase, and owns `CueSheet` planning and cursor advancement, pass-local cue/cadence correction after substantial Beat Rewinds, Grid Anchor coasting when Track Phase disappears, and re-anchor when fresh structural Track Phase replaces a coasted or weaker target.
 
-The returned `TimingFrame` is the Director-facing interface: current beat, Phase reading, Phase Anchor availability/confidence, Cue Mark, Phrase Window identity when known, source/reason, Beat Rewind, pass-local state correction, Coast, and Re-anchor.
+The resulting `TimingFrame` is the Director-facing interface: current beat, Grid reading, Grid Anchor availability/confidence, Cue Mark, Phrase Window identity when known, source/reason, Beat Rewind, pass-local state correction, Coast, and Re-anchor.
 
 Cue/casting then happens from domain facts, not raw OSC fields. `SyncedCueIntent` combines the `TimingFrame`'s current Cue Mark with BeatManager Fill/Drop phrase-event timing to classify the cue as ordinary, Fill, or Drop for casting only. Fill/Drop intent can reserve a preferred Effect through `EffectDeckSelection`, unless manual or held staging says to preserve the current staged choice. The Director uses the same event intent to prefer Transitions whose saved/code `TransitionRepertoire.Tags` match the event and whose Runway/Tail shape can serve the current Cue Mark now. Event preference never creates a Cue Mark, moves a Cue Mark, or delays a valid staged cue; the transition deck rotates only when a cue is sent. When that happens, the Director sends one `SwitcherCueDirection` and records pass-local Cue Mark consumption from its own command; it does not inspect Switcher Loaded/Locked/Started state.
 
@@ -89,7 +85,7 @@ A Transition's `TransitionRepertoire` declares its beat timing:
 - **Tail**: visual resolution after the Impact Point.
 - **Tags**: Fill/Drop event suitability. Timing shape makes a Transition schedulable; tags make it artistically suitable for an event.
 
-`TransitionBeatPlan.FromCueMark(...)` is the shared beat-domain Runway/Tail math. The Director chooses the Cue Mark, destination Performer, and Transition; the Switcher derives Loaded Cue Lock Point, start, progress, and completion so the Impact Point lands on that Cue Mark. Tail completion and Switcher progress are execution facts only; they are not musical scheduling inputs and do not redefine the next Phrase Window or Phase Anchor. Saved `Assets/transitions/Resources/TransitionSettings/*.asset` values participate in the live Transition Repertoire through `TransitionSettingsProvider`, so code defaults alone are not the full runtime truth.
+`TransitionBeatPlan.FromCueMark(...)` is the shared beat-domain Runway/Tail math. The Director chooses the Cue Mark, destination Performer, and Transition; the Switcher derives Loaded Cue Lock Point, start, progress, and completion so the Impact Point lands on that Cue Mark. Tail completion and Switcher progress are execution facts only; they are not musical scheduling inputs and do not redefine the next Phrase Window or Grid Anchor. Saved `Assets/transitions/Resources/TransitionSettings/*.asset` values participate in the live Transition Repertoire through `TransitionSettingsProvider`, so code defaults alone are not the full runtime truth.
 
 ## Catalog discovery and indexing
 
@@ -171,7 +167,7 @@ Switcher-rendered Effect or Transition buffer
 | Runtime hub | `Assets/core/Runtime/Controller.cs` | Unity host for catalogs, lifecycle, input routing, output routing, overlays, preview update, and the per-frame call order. |
 | Geometry/model | `Assets/core/Runtime/Penrose.cs` | JSON data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
 | Sequencing decision | `Assets/core/Switching/Director.cs` | Standalone/Synced/Hold decision layer, staged choices, cue issuing, and read-only sequencing status. |
-| Timing interpretation | `Assets/core/Switching/OnAirTiming.cs`, `Assets/core/Switching/PhaseClock.cs`, `Assets/core/Switching/PhraseWindow.cs`, `Assets/core/Switching/CueSheet.cs`, `Assets/core/Switching/ChangeCadence.cs` | Convert live beat/Track Phase facts into a Director-facing Timing Frame and current Cue Mark. |
+| Timing interpretation | `Assets/core/Switching/OnAirTiming.cs`, `Assets/core/Switching/GridSync.cs`, `Assets/core/Switching/Grid.cs`, `Assets/core/Switching/PhraseTracker.cs`, `Assets/core/Switching/CuePlanner.cs`, `Assets/core/Switching/PhraseWindow.cs`, `Assets/core/Switching/CueSheet.cs`, `Assets/core/Switching/ChangeCadence.cs` | Convert live beat/Track Phase facts into a Director-facing Timing Frame and current Cue Mark. |
 | Cue/casting | `Assets/core/Switching/SyncedCueIntent.cs`, `Assets/core/Transitions/TransitionBeatPlan.cs`, `Assets/core/Switching/EffectDeckSelection.cs`, `Assets/core/Effects/Repertoire.cs` | Classify Cue Marks as ordinary/Fill/Drop intent, decide whether a Synced cue command should fire, and choose event-capable Effects/Transitions. |
 | Mechanical execution | `Assets/core/Switching/Switcher.cs` | ShowNow/StartTransition/RenderAtTime execution, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | Effects | `Assets/core/Effects/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames and express their own Repertoire from BeatManager data. |

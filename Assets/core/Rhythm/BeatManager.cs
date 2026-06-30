@@ -197,7 +197,7 @@ public partial class BeatManager
     private string trackOrdinalTitle;
 
     /// <summary>
-    /// Monotonic ordinal bumped each time the on-air track title changes. Lets the integer Phase seam
+    /// Monotonic ordinal bumped each time the on-air track title changes. Lets the integer Grid seam
     /// (<see cref="OnAirTimingInput.TrackOrdinal"/>) observe track changes without the raw title crossing it.
     /// </summary>
     private int trackOrdinal;
@@ -302,7 +302,7 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Advances <see cref="trackOrdinal"/> when the on-air track title changes, so the integer Phase seam can
+    /// Advances <see cref="trackOrdinal"/> when the on-air track title changes, so the integer Grid seam can
     /// detect a new track. Uses the same "on air" gate as <see cref="Track"/>: an empty/cleared title is no
     /// track and does not bump the ordinal.
     /// </summary>

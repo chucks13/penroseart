@@ -21,12 +21,15 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Transitions/TransitionBase.cs` | Base for effect-to-effect transitions and transition-as-blender behavior. |
 | `Assets/core/Reference/Transition.cs` | Legacy/orphaned transition shape inheriting `EffectBase`; not used by the current controller. |
 | `Assets/core/Rhythm/BeatManager.cs` | Shared live/simulated rhythm state and beat-reactive helper functions. |
-| `Assets/core/Rhythm/BeatManagerQueries.cs` | Contrived rhythm-query layer (ADR-0002): the nullable `PhraseEventInfo`/`EnergyInfo`/`PhaseInfo`/`LevelsInfo` shapes and the `BeatManager` queries that build them. |
+| `Assets/core/Rhythm/BeatManagerQueries.cs` | Contrived rhythm-query layer (ADR-0002): the nullable `PhraseEventInfo`/`EnergyInfo`/`GridInfo`/`LevelsInfo` shapes and the `BeatManager` queries that build them. |
 | `Assets/core/IO/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
 | `Assets/core/Switching/Director.cs` | Decision layer for Standalone/Synced/Hold sequencing, staged choices, cues, and status. |
-| `Assets/core/Switching/OnAirTiming.cs` | Synced Mode timing seam that turns live beat/Track Phase state into a Director-facing Timing Frame and current Cue Mark. |
-| `Assets/core/Switching/PhaseClock.cs` | Resolves the fixed 16-beat Phase reading from beat, bar, and Track Phase evidence. |
-| `Assets/core/Switching/PhraseWindow.cs` | Derives phrase spans and phase boundaries from Track Phase countdown/length data. |
+| `Assets/core/Switching/CuePlanner.cs` | Director-owned cue planner: interprets one rhythm snapshot into the `TimingFrame`, owning Cue Sheet derivation, the Cue Mark cursor, change-cadence memory, beat-rewind handling, and Grid Anchor coasting (relocated from On-Air Timing, ADR-0006). |
+| `Assets/core/Switching/OnAirTiming.cs` | Synced Mode timing data contract: the `OnAirTimingInput`, `TimingFrame`, `TimingFrameSource`, and pass-local timing-state structs the Director composes. No longer a seam class — cue planning moved to `CuePlanner` (ADR-0006). |
+| `Assets/core/Switching/GridSync.cs` | Stateful 16-beat Grid determiner: holds the offset and resolves the per-frame `GridReading` (where "the one" sits) with Locked/Coasting/Contradicted confidence. |
+| `Assets/core/Switching/Grid.cs` | 16-beat Grid arithmetic in one place: offset-for-phrase-start and per-frame position math, used by `GridSync`. |
+| `Assets/core/Switching/PhraseTracker.cs` | Phrase-layer reader riding on the `GridReading`: places the frame inside the live Phrase and projects one phrase of look-ahead. Stateless pure mapping; owns no re-anchoring. |
+| `Assets/core/Switching/PhraseWindow.cs` | Derives phrase spans and grid boundaries from Track Phase countdown/length data. |
 | `Assets/core/Switching/CueSheet.cs` | Selects relative Cue Marks inside a Phrase while keeping the final phrase boundary mandatory and reusing same-length plans. |
 | `Assets/core/Switching/ChangeCadence.cs` | Minimum-change cadence rule shared by timing, cue, and status decisions. |
 | `Assets/core/Switching/SyncedCueIntent.cs` | Synced cue/casting seam combining Timing Frame, Fill/Drop event timing, staged choices, and Effect Repertoire into ordinary/Fill/Drop Cue Intent. |

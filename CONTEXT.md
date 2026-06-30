@@ -163,7 +163,7 @@ The decision layer that owns *what* plays on the wall and which Phrase Cue Mark 
 _Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
 
 **On-Air Timing**:
-The Synced Mode timing interpretation seam. It reads the current on-air rhythm facts, especially live beat and Track Phase, and turns them into one Timing Frame for the Director. It owns Grid/Phrase interpretation, Cue Sheet planning, Beat Rewind correction, Coast, and Re-anchor behavior.
+The Synced Mode timing interpretation: it reads the current on-air rhythm facts, especially live beat and Track Phase, and resolves where *the one* sits — the Grid reading — alongside the live Phrase reading. It is a pure Grid/Phrase determiner; the Director composes those readings into the Timing Frame and owns Cue Sheet planning, Beat Rewind correction, Coast, and Re-anchor (relocated to the Director by ADR-0006).
 _Avoid_: making the Director read raw Track Phase fields; treating On-Air Timing as another clock source or as Switcher execution state.
 
 **Timing Frame**:
