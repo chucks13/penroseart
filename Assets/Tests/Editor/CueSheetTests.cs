@@ -49,7 +49,7 @@ public sealed class CueSheetTests
     }
 
     [Test]
-    public void BuildCanIncludeFuturePhraseStartForTurnoverPlan()
+    public void BuildBeforeThePhraseStartsIncludesTheBoundaryAsACueMark()
     {
         Assert.That(PhraseWindow.TryFromUpcomingTrackPhase(
             beat: 613,
@@ -61,8 +61,7 @@ public sealed class CueSheetTests
             window,
             currentBeat: 613,
             canChangeAtBeat: _ => true,
-            randomRange: (minInclusive, _) => minInclusive,
-            includePhraseStart: true);
+            randomRange: (minInclusive, _) => minInclusive);
 
         Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 0, 32 }));
         Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(625));
@@ -82,8 +81,7 @@ public sealed class CueSheetTests
             window,
             currentBeat: 613,
             canChangeAtBeat: cueMarkBeat => cueMarkBeat != window.StartBeat,
-            randomRange: (minInclusive, _) => minInclusive,
-            includePhraseStart: true);
+            randomRange: (minInclusive, _) => minInclusive);
 
         Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 32 }));
     }

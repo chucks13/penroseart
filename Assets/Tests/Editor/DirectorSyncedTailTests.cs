@@ -206,7 +206,7 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void FiredCueImmediatelyLoadsNextPreplannedPhraseBoundary()
+    public void FiredCueLoadsTheUpcomingPhraseCueMarkOnceTheReadingCountsDown()
     {
         director.SetNextEffect(1);
 
@@ -214,11 +214,11 @@ public sealed class DirectorSyncedTailTests
         director.Tick(0f);
         SetTrackPhaseBeat(600, phaseActive: 0, beatsToPhraseBoundary: 9, phraseLengthBeats: 64);
         director.Tick(0f);
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609), "The current phrase boundary Cue Mark should stay loaded while the next Phrase is preplanned.");
+        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609), "The pending phrase boundary Cue Mark should stay loaded while Track Phase counts down to the next Phrase.");
 
         SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
         director.Tick(0f);
-        SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 3, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(606, phaseActive: 0, beatsToPhraseBoundary: 3, phraseLengthBeats: 64);
         director.Tick(0f);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));

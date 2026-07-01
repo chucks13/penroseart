@@ -22,14 +22,14 @@ public readonly struct CueSheet
 
     /// <summary>
     /// Randomly selects eligible interior Cue Marks, fills generated gaps longer than 64 beats,
-    /// and always includes the mandatory final Cue Mark.
+    /// and always includes the mandatory final Cue Mark. A sheet built before its Phrase starts
+    /// also includes the start beat — the Track Phase boundary — as a Cue Mark when cadence allows.
     /// </summary>
     public static CueSheet Build(
         PhraseWindow window,
         int currentBeat,
         Func<int, bool> canChangeAtBeat,
-        Func<int, int, int> randomRange,
-        bool includePhraseStart = false)
+        Func<int, int, int> randomRange)
     {
         if (canChangeAtBeat == null)
         {
@@ -42,7 +42,7 @@ public readonly struct CueSheet
         }
 
         var cueMarkOffsets = new List<int>();
-        if (includePhraseStart && window.StartBeat > currentBeat && canChangeAtBeat(window.StartBeat))
+        if (window.StartBeat > currentBeat && canChangeAtBeat(window.StartBeat))
         {
             cueMarkOffsets.Add(0);
         }

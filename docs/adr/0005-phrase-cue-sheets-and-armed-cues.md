@@ -16,6 +16,17 @@ We refined Synced Mode cue meaning without changing Cue Sheet ownership. A Cue S
 
 ADR-0006 makes On-Air Timing a pure Phase determiner and relocates Cue Sheet derivation — together with the cue cursor, change cadence, and pass-local cue memory — out of On-Air Timing into a Director-owned CuePlanner. This ADR's ownership split still stands: Cue Sheet planning stays tied to Phrase structure, the Director casts one cue at a time, and the Switcher owns cue lifecycle. Only the home of the derivation moves — On-Air Timing no longer builds Cue Sheets; the Director's CuePlanner does, consuming the read-only Phase/Phrase reading. The relocation lands during the ADR-0006 implementation.
 
+## Amendment 2026-07-01 — One live Cue Sheet; the upcoming-sheet lifecycle is deleted
+
+We removed the CuePlanner's pre-planned upcoming sheet, its promotion at Phrase turnover, and the cursor surgery that kept the mandatory boundary alive across that promotion. One live Cue Sheet now serves all planning:
+
+- The sheet is **rebuilt** when the Phrase length changes, or when first adopting a Phrase that has not started yet (a look-ahead window). A sheet built before its Phrase starts rolls the start beat — the Track Phase boundary itself — in as a Cue Mark when cadence allows; this replaces the upcoming sheet's phrase-start option.
+- The sheet is **reused by length identity** (`CueSheet.Matches`) and re-anchored with a cursor rewind for same-length windows already underway. Timing shifts and same-length turnover replay the same mark pattern from its first mark — no reroll.
+- A **pending unconsumed mandatory boundary is held** as the frame target from its beat through the late-cue window before the sheet moves to the next window, so cueing on the exact boundary beat (or late, backdated) survives Track Phase promoting the next Phrase on that beat.
+- A sheet whose mandatory end was **consumed stops driving**; the next window — live or look-ahead — takes over. Until the reading actually leaves the fired Phrase, the frame stays on the consumed mark (previously a cached preplanned sheet was promoted immediately); look-ahead interior marks start at least one Grid past the boundary, so no cue opportunity is lost in that gap.
+
+Cue Sheet identity and ownership are unchanged: identity is still the Phrase's total beat length, planning still lives in the Director-owned CuePlanner, and the Switcher still owns cue lifecycle.
+
 ## Considered options
 
 - **Keep Selected Phase Boundary planning as the canonical model** — rejected because the name makes a Phrase-level cue plan sound like a Phase implementation detail, and it encourages transition timing mechanics to leak back into the Director.

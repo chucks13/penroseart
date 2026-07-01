@@ -24,7 +24,7 @@ public sealed class CuePlanner
     private int lastBeat = -1;
     private bool hasGridAnchor;
     private int gridAnchorLandingBeat = -1;
-    private readonly CueSheetPlans cueSheetPlans = new CueSheetPlans();
+    private readonly CueSheetCursor cueSheet = new CueSheetCursor();
     private readonly SyntheticCueGrid syntheticCueGrid = new SyntheticCueGrid();
     private TimingFrameSource lastSource = TimingFrameSource.Unlocked;
 
@@ -69,177 +69,6 @@ public sealed class CuePlanner
         }
     }
 
-    private sealed class CueSheetPlans
-    {
-        private readonly CueSheetCursor current = new CueSheetCursor();
-        private bool hasUpcoming;
-        private CueSheet upcoming;
-        private int upcomingPhraseStartBeat;
-
-        public CueSheetStatus Status(int currentCueMarkBeat)
-        {
-            return current.Status(currentCueMarkBeat);
-        }
-
-        public void ResetAll()
-        {
-            current.Reset();
-            ClearUpcoming();
-        }
-
-        public void ResetCurrent()
-        {
-            current.Reset();
-        }
-
-        public void PlanUpcoming(
-            int beat,
-            PhraseWindow phraseWindow,
-            int? consumedCueMarkBeat,
-            int minimumChangeCadenceBeats,
-            Func<int, int, int> randomRange)
-        {
-            if (hasUpcoming && upcoming.Matches(phraseWindow))
-            {
-                upcomingPhraseStartBeat = phraseWindow.StartBeat;
-                return;
-            }
-
-            upcoming = CueSheet.Build(
-                phraseWindow,
-                beat,
-                cueMarkBeat => ChangeCadence.CanChangeAt(cueMarkBeat, consumedCueMarkBeat, minimumChangeCadenceBeats),
-                randomRange,
-                includePhraseStart: true);
-            upcomingPhraseStartBeat = phraseWindow.StartBeat;
-            hasUpcoming = true;
-        }
-
-        public bool TryKeepUnconsumedMandatoryBoundaryAt(
-            int beat,
-            int? consumedCueMarkBeat,
-            int lateCueWindowBeats,
-            out int cueMarkBeat,
-            out PhraseWindow phraseWindow)
-        {
-            return current.TryKeepUnconsumedMandatoryBoundaryAt(
-                beat,
-                consumedCueMarkBeat,
-                lateCueWindowBeats,
-                out cueMarkBeat,
-                out phraseWindow);
-        }
-
-        public bool TryGetActivePhraseWindow(int beat, out PhraseWindow phraseWindow)
-        {
-            return current.TryGetActivePhraseWindow(beat, out phraseWindow);
-        }
-
-        public bool HasUpcomingFor(PhraseWindow phraseWindow)
-        {
-            return hasUpcoming && upcoming.Matches(phraseWindow);
-        }
-
-        public bool TryGetUpcomingPhraseWindow(out PhraseWindow phraseWindow)
-        {
-            phraseWindow = default;
-            return hasUpcoming
-                && PhraseWindow.TryFromStartAndLength(upcomingPhraseStartBeat, upcoming.PhraseLengthBeats, out phraseWindow);
-        }
-
-        public void PromoteUpcoming()
-        {
-            if (hasUpcoming
-                && PhraseWindow.TryFromStartAndLength(upcomingPhraseStartBeat, upcoming.PhraseLengthBeats, out var phraseWindow))
-            {
-                current.Replace(upcoming, phraseWindow);
-            }
-            else
-            {
-                current.Reset();
-            }
-
-            ClearUpcoming();
-        }
-
-        public void PromoteUpcoming(PhraseWindow phraseWindow)
-        {
-            if (hasUpcoming)
-            {
-                current.Replace(upcoming, phraseWindow);
-            }
-            else
-            {
-                current.Reset();
-            }
-
-            ClearUpcoming();
-        }
-
-        public TimingFrameSource ResolveCurrent(
-            int beat,
-            PhraseWindow phraseWindow,
-            bool beatRewoundToNewPass,
-            int? consumedCueMarkBeat,
-            int minimumChangeCadenceBeats,
-            int lateCueWindowBeats,
-            Func<int, int, int> randomRange,
-            out int cueMarkBeat)
-        {
-            if (current.NeedsSheet(phraseWindow))
-            {
-                BuildCurrent(
-                    beat,
-                    phraseWindow,
-                    consumedCueMarkBeat,
-                    minimumChangeCadenceBeats,
-                    randomRange);
-            }
-            else
-            {
-                current.UpdatePhraseWindow(phraseWindow);
-                if (beatRewoundToNewPass)
-                {
-                    current.RewindCursor();
-                }
-            }
-
-            current.AdvanceTo(beat, consumedCueMarkBeat, lateCueWindowBeats);
-            if (current.IsConsumedThroughPhraseEnd(consumedCueMarkBeat) && hasUpcoming)
-            {
-                PromoteUpcoming();
-                current.AdvanceTo(beat, consumedCueMarkBeat, lateCueWindowBeats);
-            }
-
-            cueMarkBeat = current.CurrentCueMarkOr(phraseWindow.EndBeat);
-            return cueMarkBeat == current.PhraseEndBeat
-                ? TimingFrameSource.TrackPhaseBoundary
-                : TimingFrameSource.CueMark;
-        }
-
-        private void BuildCurrent(
-            int beat,
-            PhraseWindow phraseWindow,
-            int? consumedCueMarkBeat,
-            int minimumChangeCadenceBeats,
-            Func<int, int, int> randomRange)
-        {
-            var sheet = CueSheet.Build(
-                phraseWindow,
-                beat,
-                cueMarkBeat => ChangeCadence.CanChangeAt(cueMarkBeat, consumedCueMarkBeat, minimumChangeCadenceBeats),
-                randomRange);
-            current.Replace(sheet, phraseWindow);
-        }
-
-        private void ClearUpcoming()
-        {
-            hasUpcoming = false;
-            upcoming = default;
-            upcomingPhraseStartBeat = -1;
-        }
-    }
-
     private sealed class CueSheetCursor
     {
         private CueSheet sheet;
@@ -266,9 +95,20 @@ public sealed class CuePlanner
             index = 0;
         }
 
-        public void UpdatePhraseWindow(PhraseWindow phraseWindow)
+        /// <summary>
+        /// Moves the sheet onto a same-length Phrase Window. When the start beat moves — a timing
+        /// shift or a same-length turnover — the cursor rewinds so the reused pattern replays from
+        /// its first mark; AdvanceTo re-skips whatever this pass already consumed or passed.
+        /// </summary>
+        public void Reanchor(PhraseWindow phraseWindow)
         {
+            if (phraseStartBeat == phraseWindow.StartBeat)
+            {
+                return;
+            }
+
             phraseStartBeat = phraseWindow.StartBeat;
+            index = 0;
         }
 
         public void RewindCursor()
@@ -276,18 +116,27 @@ public sealed class CuePlanner
             index = 0;
         }
 
-        public bool NeedsSheet(PhraseWindow phraseWindow)
+        public bool NeedsSheet(PhraseWindow phraseWindow, int beat)
         {
             var cueMarkOffsets = CueMarkOffsets;
             return !HasSheet
                 || cueMarkOffsets.Length == 0
-                || !sheet.Matches(phraseWindow);
+                || !sheet.Matches(phraseWindow)
+                // Adopting a Phrase that has not started yet (a look-ahead window): build its sheet
+                // fresh so the start beat — the Track Phase boundary — gets rolled in as a Cue Mark
+                // (CueSheet.Build). Length-identity reuse applies only to windows already underway.
+                || (phraseWindow.StartBeat > beat && phraseStartBeat != phraseWindow.StartBeat);
         }
 
-        public bool TryGetActivePhraseWindow(int beat, out PhraseWindow phraseWindow)
+        /// <summary>
+        /// The sheet's own window while it still has planning to serve. A sheet whose mandatory end
+        /// was already consumed no longer drives; the next window (live or look-ahead) takes over.
+        /// </summary>
+        public bool TryGetActivePhraseWindow(int beat, int? consumedCueMarkBeat, out PhraseWindow phraseWindow)
         {
             phraseWindow = default;
             return HasSheet
+                && !IsConsumedThroughPhraseEnd(consumedCueMarkBeat)
                 && PhraseEndBeat >= beat
                 && PhraseWindow.TryFromStartAndLength(phraseStartBeat, sheet.PhraseLengthBeats, out phraseWindow);
         }
@@ -308,17 +157,16 @@ public sealed class CuePlanner
                 return false;
             }
 
-            var originalIndex = index;
             AdvanceTo(beat, consumedCueMarkBeat, lateCueWindowBeats);
             var currentCueMark = CurrentCueMarkOr(-1);
             // Keep the mark only when the cursor's mark is the phrase end and this beat is at that mark
             // or late inside its cue window — an unconsumed mandatory boundary can still cue while a
-            // Tail can complete there.
+            // Tail can complete there. AdvanceTo is monotone and idempotent, so advancing here costs
+            // nothing when the keep declines.
             if (currentCueMark != PhraseEndBeat
                 || beat < PhraseEndBeat
                 || beat > PhraseEndBeat + lateCueWindowBeats)
             {
-                index = originalIndex;
                 return false;
             }
 
@@ -390,8 +238,8 @@ public sealed class CuePlanner
     /// character, and drives a real <see cref="CueSheetCursor"/> over it — so cursor advancement, the
     /// consumed-mark skip, beat-rewind handling, and Status all match the live-phrase path exactly rather
     /// than re-implementing them. It rolls the window forward by its length once consumed, re-rolling a
-    /// fresh random subset only on that advance. Kept separate from <see cref="CueSheetPlans"/> so a
-    /// fabricated sheet can never be reused for a real Phrase (ADR-0008).
+    /// fresh random subset only on that advance. Kept on its own cursor, separate from the live Cue
+    /// Sheet, so a fabricated sheet can never be reused for a real Phrase (ADR-0008).
     /// </summary>
     private sealed class SyntheticCueGrid
     {
@@ -488,7 +336,7 @@ public sealed class CuePlanner
         lastBeat = -1;
         hasGridAnchor = false;
         gridAnchorLandingBeat = -1;
-        cueSheetPlans.ResetAll();
+        cueSheet.Reset();
         syntheticCueGrid.Reset();
         ResetSyntheticLoopGuard();
         lastSource = TimingFrameSource.Unlocked;
@@ -620,7 +468,7 @@ public sealed class CuePlanner
             beatRewoundToNewPass,
             passState,
             reanchored,
-            cueSheetPlans.Status(gridAnchorLandingBeat));
+            cueSheet.Status(gridAnchorLandingBeat));
     }
 
     private TimingFrame BuildUnlockedFrame(
@@ -661,7 +509,7 @@ public sealed class CuePlanner
         // re-clearing every frame is waste.
         if (lastSource != TimingFrameSource.SyntheticPhrase)
         {
-            cueSheetPlans.ResetAll();
+            cueSheet.Reset();
             ResetSyntheticLoopGuard();
         }
 
@@ -837,22 +685,9 @@ public sealed class CuePlanner
         int minimumChangeCadenceBeats,
         int lateCueWindowBeats)
     {
-        if (phrase.HasLookAhead
-            && PhraseWindow.TryFromUpcomingTrackPhase(
-                beat,
-                phrase.BeatsUntilNextPhrase,
-                phrase.PredictedUpcomingLengthBeats,
-                out var upcomingPhraseWindow))
-        {
-            cueSheetPlans.PlanUpcoming(
-                beat,
-                upcomingPhraseWindow,
-                consumedCueMarkBeat,
-                minimumChangeCadenceBeats,
-                randomRange);
-        }
-
-        if (cueSheetPlans.TryKeepUnconsumedMandatoryBoundaryAt(
+        // A pending unconsumed mandatory boundary outlives its Phrase reading: it stays the target
+        // through its late-cue window even after Track Phase has moved to the next Phrase Window.
+        if (cueSheet.TryKeepUnconsumedMandatoryBoundaryAt(
             beat,
             consumedCueMarkBeat,
             lateCueWindowBeats,
@@ -873,11 +708,6 @@ public sealed class CuePlanner
                 phrase.PhraseLengthBeats,
                 out phraseWindow))
         {
-            if (cueSheetPlans.HasUpcomingFor(phraseWindow))
-            {
-                cueSheetPlans.PromoteUpcoming(phraseWindow);
-            }
-
             return ResolveCueMarkFromSheet(
                 beat,
                 phraseWindow,
@@ -887,7 +717,9 @@ public sealed class CuePlanner
                 lateCueWindowBeats);
         }
 
-        if (cueSheetPlans.TryGetActivePhraseWindow(beat, out phraseWindow))
+        // No live window (Track Phase is counting down or idle): the sheet keeps serving its own
+        // window until its mandatory end is consumed or passed.
+        if (cueSheet.TryGetActivePhraseWindow(beat, consumedCueMarkBeat, out phraseWindow))
         {
             return ResolveCueMarkFromSheet(
                 beat,
@@ -898,9 +730,15 @@ public sealed class CuePlanner
                 lateCueWindowBeats);
         }
 
-        if (cueSheetPlans.TryGetUpcomingPhraseWindow(out phraseWindow))
+        // A look-ahead window builds the next Phrase's sheet early; its start beat — the Track Phase
+        // boundary itself — is already a Cue Mark when cadence allows (CueSheet.Build).
+        if (phrase.HasLookAhead
+            && PhraseWindow.TryFromUpcomingTrackPhase(
+                beat,
+                phrase.BeatsUntilNextPhrase,
+                phrase.PredictedUpcomingLengthBeats,
+                out phraseWindow))
         {
-            cueSheetPlans.PromoteUpcoming();
             return ResolveCueMarkFromSheet(
                 beat,
                 phraseWindow,
@@ -910,7 +748,7 @@ public sealed class CuePlanner
                 lateCueWindowBeats);
         }
 
-        cueSheetPlans.ResetCurrent();
+        cueSheet.Reset();
         return ResolvedTimingTarget.GridFallback(GetLandingBeatFromGridPosition(beat, grid.Position));
     }
 
@@ -922,15 +760,31 @@ public sealed class CuePlanner
         int minimumChangeCadenceBeats,
         int lateCueWindowBeats)
     {
-        var source = cueSheetPlans.ResolveCurrent(
-            beat,
-            phraseWindow,
-            beatRewoundToNewPass,
-            consumedCueMarkBeat,
-            minimumChangeCadenceBeats,
-            lateCueWindowBeats,
-            randomRange,
-            out var cueMarkBeat);
+        if (cueSheet.NeedsSheet(phraseWindow, beat))
+        {
+            // A new Phrase length rerolls the sheet. Same-length windows never reach here: the sheet
+            // is reused by length identity (CueSheet.Matches) and only re-anchored below.
+            var sheet = CueSheet.Build(
+                phraseWindow,
+                beat,
+                candidateCueMarkBeat => ChangeCadence.CanChangeAt(candidateCueMarkBeat, consumedCueMarkBeat, minimumChangeCadenceBeats),
+                randomRange);
+            cueSheet.Replace(sheet, phraseWindow);
+        }
+        else
+        {
+            cueSheet.Reanchor(phraseWindow);
+            if (beatRewoundToNewPass)
+            {
+                cueSheet.RewindCursor();
+            }
+        }
+
+        cueSheet.AdvanceTo(beat, consumedCueMarkBeat, lateCueWindowBeats);
+        var cueMarkBeat = cueSheet.CurrentCueMarkOr(phraseWindow.EndBeat);
+        var source = cueMarkBeat == cueSheet.PhraseEndBeat
+            ? TimingFrameSource.TrackPhaseBoundary
+            : TimingFrameSource.CueMark;
         return new ResolvedTimingTarget(source, cueMarkBeat, true, phraseWindow);
     }
 

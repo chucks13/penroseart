@@ -103,22 +103,65 @@ public sealed class CuePlannerTests
     }
 
     [Test]
-    public void FiredMandatoryCueMarkImmediatelyPromotesPreplannedNextPhraseCueMark()
+    public void SameLengthPhraseTurnoverReusesTheCueSheetFromItsFirstMark()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        // Phrase (577, 64): the deterministic roll selects one interior Cue Mark at 593 (offset 16).
+        cuePlanner.Plan(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+        // Mid-phrase the cursor advances past 593 toward the mandatory end 641.
+        cuePlanner.Plan(
+            TrackPhaseInput(beat: 620, beatsToPhraseBoundary: 21, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+
+        // Same-length turnover to (641, 64): the sheet is reused without a reroll and the cursor
+        // rewinds, so the new Phrase's first mark (offset 16 -> 657) is the target — not the
+        // mandatory end 705 a stale cursor would report.
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 642, beatsToPhraseBoundary: 63, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(657));
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.CueMark));
+    }
+
+    [Test]
+    public void UpcomingPhraseFrameKeepsThePendingMandatoryBoundaryLoaded()
     {
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
 
         cuePlanner.Plan(
             TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
             minimumChangeCadenceBeats: 16);
-        var currentFrame = cuePlanner.Plan(
+
+        // Track Phase counts down to the next Phrase while this one's mandatory boundary is still
+        // pending: the loaded Cue Mark must not be unset by the look-ahead.
+        var frame = cuePlanner.Plan(
             UpcomingTrackPhaseInput(beat: 600, beatsToPhraseStart: 9, phraseLengthBeats: 64),
             minimumChangeCadenceBeats: 16);
-        Assert.That(currentFrame.CueMarkBeat, Is.EqualTo(609), "Preplanning the next Phrase must not unset the loaded current Cue Mark.");
 
-        cuePlanner.RecordCueIssued(605);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+    }
+
+    [Test]
+    public void FiredMandatoryBoundaryHandsOffToTheUpcomingPhraseCueMark()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        cuePlanner.Plan(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
+            minimumChangeCadenceBeats: 16);
+
+        cuePlanner.RecordCueIssued(608);
         cuePlanner.MarkChanged(609);
+
+        // The consumed sheet no longer drives: the look-ahead window builds the next Phrase's sheet
+        // and its first mark past the fired boundary becomes the target.
         var frame = cuePlanner.Plan(
-            TrackPhaseInput(beat: 605, beatsToPhraseBoundary: 4, phraseLengthBeats: 32),
+            UpcomingTrackPhaseInput(beat: 607, beatsToPhraseStart: 2, phraseLengthBeats: 64),
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.CueMarkBeat, Is.EqualTo(625));
