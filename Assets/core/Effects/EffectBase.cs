@@ -95,7 +95,11 @@ public abstract class EffectBase
     /// </summary>
     private void DetectNewGrid()
     {
-        var grid = beatManager.Grid;
+        // Null-safe on the whole beat context, not just Grid: UpdateTime() runs on every active frame
+        // (and on effects a mixer forwards to), but a Performer may have no controller/BeatManager bound
+        // yet — e.g. a lightweight test double, or any frame before Init(). No beat context is the same as
+        // "off the beat clock": Grid is absent, so this no-ops exactly as it does in Standalone.
+        var grid = controller?.beatManager?.Grid;
         int count = grid?.Count ?? 0;
         if (count == 1 && lastGridCount != 1 && grid?.Confidence == GridSyncState.Locked)
         {
