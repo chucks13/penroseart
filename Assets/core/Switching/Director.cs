@@ -156,6 +156,7 @@ public sealed class Director
     private PhraseTrackerReading phraseTrackerReading = PhraseTrackerReading.None;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
+    private int lastDropProtectedBeat = -1;
 
     private readonly struct TransitionCueSelection
     {
@@ -591,6 +592,27 @@ public sealed class Director
             frame,
             controller.beatManager.Fill,
             controller.beatManager.Drop);
+
+        // Drop guard (drop-protect, half A): when a Drop coincides with this Cue Mark and the on-air
+        // Performer already expresses Drops, issue NO cue. A transition landing on the drop would step on
+        // the effect's own slam, and the effect reads beatManager.Drop itself — so the most dramatic drop
+        // is to leave the capable Performer on stage. Bails before any deck pull/consume; the Cue Mark is
+        // not stranded because the cursor advances once the beat passes the mark and a phrase boundary
+        // promotes off live Track Phase, not off cue consumption. (Cast-ahead, half B, runs the Grid
+        // before via CueEventIntent.DropApproaching, so a Drop-capable Performer is usually already here.)
+        if (eventIntent == CueEventIntent.Drop
+            && IsValidEffectIndex(currentEffectIndexForSelection)
+            && (controller.effects[currentEffectIndexForSelection].Repertoire & Repertoire.HandlesDrop) != 0)
+        {
+            if (beat != lastDropProtectedBeat)
+            {
+                Trace($"SYNC_CUE_DROP_PROTECTED beat={beat} cueMark={frame.CueMarkBeat} current={FormatEffect(currentEffectIndexForSelection)}");
+                lastDropProtectedBeat = beat;
+            }
+
+            return false;
+        }
+
         var transitionSelection = SelectTransitionForEventIntent(frame, eventIntent);
         var transitionIndex = transitionSelection.TransitionIndex;
         var stagedEffectIndex = nextEffectIndex;

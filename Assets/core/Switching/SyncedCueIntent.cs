@@ -25,7 +25,14 @@ public enum CueEventIntent
     Fill,
 
     /// <summary>The Cue Mark lands on an upcoming Drop.</summary>
-    Drop
+    Drop,
+
+    /// <summary>
+    /// A Drop lands within one Grid AFTER this (ordinary) Cue Mark. Cast a Drop-capable Performer on
+    /// this Cue so it is already on stage and settled entering the Drop (the cast-ahead half of the
+    /// drop-protect design); the Drop's own Cue Mark is then suppressed by the Director's drop guard.
+    /// </summary>
+    DropApproaching
 }
 
 /// <summary>
@@ -208,6 +215,16 @@ public readonly struct SyncedCueIntent
             return CueEventIntent.Drop;
         }
 
+        // Cast ahead: a Drop landing within one Grid after this mark asks this ordinary Cue to put a
+        // Drop-capable Performer on stage now, so it is settled before the Drop. Wins over a coincident
+        // Fill — Drops are the higher-priority structural event the Director positions for.
+        if (drop is { inProgress: false, beatsUntilStart: { } approachingDropBeats }
+            && approachingDropBeats > beatsUntilImpact
+            && approachingDropBeats <= beatsUntilImpact + PhraseWindow.DefaultGridBeats)
+        {
+            return CueEventIntent.DropApproaching;
+        }
+
         if (FillOverlapsNextGrid(beatsUntilImpact, beatsUntilGridEnd, fill))
         {
             return CueEventIntent.Fill;
@@ -262,6 +279,7 @@ public readonly struct SyncedCueIntent
             case CueEventIntent.Fill:
                 return Repertoire.HandlesFill;
             case CueEventIntent.Drop:
+            case CueEventIntent.DropApproaching:
                 return Repertoire.HandlesDrop;
             default:
                 return Repertoire.None;
