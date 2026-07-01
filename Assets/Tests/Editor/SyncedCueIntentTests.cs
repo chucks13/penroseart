@@ -301,9 +301,27 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
-    public void EvaluateWaitsAtImpactBeat()
+    public void EvaluateCuesAtImpactBeatWhenRunwayWasMissed()
     {
         var intent = Evaluate(Frame(currentBeat: 609, cueMarkBeat: 609));
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void EvaluateCuesLateInsideTailWhenImpactWasMissed()
+    {
+        var intent = Evaluate(Frame(currentBeat: 611, cueMarkBeat: 609));
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
+        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(-2));
+    }
+
+    [Test]
+    public void EvaluateWaitsPastCompleteBeat()
+    {
+        var intent = Evaluate(Frame(currentBeat: 614, cueMarkBeat: 609));
 
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
         Assert.That(intent.ShouldCue, Is.False);
@@ -344,6 +362,18 @@ public sealed class SyncedCueIntentTests
         Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.BlockedByCadence));
         Assert.That(intent.BlockedByCadence, Is.True);
         Assert.That(intent.ShouldCue, Is.False);
+    }
+
+    [Test]
+    public void EvaluateWaitsWhenCueMarkAlreadyCommittedThisPass()
+    {
+        var intent = Evaluate(Frame(
+            currentBeat: 611,
+            cueMarkBeat: 609,
+            previousCueMarkBeat: 609));
+
+        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
+        Assert.That(intent.BlockedByCadence, Is.False, "A committed Cue Mark is done, not paced.");
     }
 
     [Test]

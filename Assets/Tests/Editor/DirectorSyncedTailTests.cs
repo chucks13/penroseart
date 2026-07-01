@@ -366,7 +366,9 @@ public sealed class DirectorSyncedTailTests
             SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            SetTrackPhaseUnavailableBeat(594);
+            // 598 is past the missed interior mark's late-cue window (593 + Tail 4), so the coast
+            // rolls to the next cadence landing instead of holding the mark for a late cue.
+            SetTrackPhaseUnavailableBeat(598);
             director.Tick(0f);
             Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
@@ -517,6 +519,42 @@ public sealed class DirectorSyncedTailTests
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The rewound loop pass should be allowed to cue the same Cue Mark again.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
+    }
+
+    [Test]
+    public void LoopReplayIntoAFiredCueMarksWindowDoesNotRefireIt()
+    {
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
+            director.SetNextEffect(1);
+            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
+            director.Tick(0f);
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Setup: the Cue Mark cues on the first pass.");
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
+
+            SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+            director.Tick(0f);
+            director.SetNextEffect(2);
+
+            // The loop replays from 597 — after the fired mark, inside its late-cue window (593 +
+            // Tail 4). The pass-local commit memory (593 < 597) survives this rewind, so the fired
+            // mark must not be re-presented or re-fired; only a replay from before the mark re-arms it.
+            SetTrackPhaseBeat(597, phaseActive: 1, beatsToPhraseBoundary: 44, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(641), "The fired mark must not be re-presented inside its window.");
+            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "No new cue may fire for the already-committed mark.");
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
         }
         finally

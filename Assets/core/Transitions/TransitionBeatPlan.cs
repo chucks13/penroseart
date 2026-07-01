@@ -31,18 +31,11 @@ public readonly struct TransitionBeatPlan
     }
 
     /// <summary>
-    /// Whether this beat should start the plan.
-    /// Normal Runways cue before impact; zero-Runway tailed transitions can cue during their Tail and backdate progress from the Cue Mark.
+    /// Whether this beat can start the plan: any beat from Runway start through completion.
+    /// A start after the Runway begins is late; the Switcher backdates its progress from the Cue Mark.
     /// </summary>
     public bool IsCueBeat(int beat)
     {
-        if (StartBeat != ImpactBeat)
-        {
-            return beat >= StartBeat && beat < ImpactBeat;
-        }
-
-        return CompleteBeat == ImpactBeat
-            ? beat == ImpactBeat
-            : beat >= ImpactBeat && beat < CompleteBeat;
+        return beat >= StartBeat && beat <= CompleteBeat;
     }
 }

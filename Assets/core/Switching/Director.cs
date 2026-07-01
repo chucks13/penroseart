@@ -452,7 +452,6 @@ public sealed class Director
     private void TickSyncedMode(int beat)
     {
         var previousSyncedBeat = lastSyncedBeat;
-        var previousTimingFrame = timingFrame;
         lastSyncedBeat = beat;
 
         RefreshTimingFrame();
@@ -460,10 +459,18 @@ public sealed class Director
         LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
         LogSyncedBeatIfNeeded(beat);
 
-        if (!TryStartMissedZeroRunwayTailedCue(previousTimingFrame, timingFrame))
-        {
-            TryStartSyncedCue(timingFrame);
-        }
+        TryStartSyncedCue(timingFrame);
+    }
+
+    /// <summary>
+    /// Tail of the staged Next Transition — the late-cue window the planner holds an unconsumed
+    /// Cue Mark open for, since a cue there can still start backdated and complete.
+    /// </summary>
+    private int StagedTransitionTailBeats()
+    {
+        return IsValidTransitionIndex(nextTransitionIndex)
+            ? controller.transitions[nextTransitionIndex].Repertoire.TailBeats
+            : 0;
     }
 
     private void RefreshTimingFrame()
@@ -474,7 +481,12 @@ public sealed class Director
         // Compose the GRID (GridSync) and PHRASE (PhraseTracker) readings first, then plan cues off
         // them: the CuePlanner consumes those readings rather than resolving the grid itself.
         RefreshPhraseReading(input);
-        timingFrame = cuePlanner.Plan(input, gridReading, phraseTrackerReading, MinimumChangeCadenceBeats);
+        timingFrame = cuePlanner.Plan(
+            input,
+            gridReading,
+            phraseTrackerReading,
+            MinimumChangeCadenceBeats,
+            StagedTransitionTailBeats());
 
         if (!timingFrame.HasGridAnchor)
         {
@@ -532,31 +544,6 @@ public sealed class Director
             || phraseTrackerReading.IsIrregular != previousPhrase.IsIrregular
             || phraseTrackerReading.HasLookAhead != previousPhrase.HasLookAhead
             || phraseTrackerReading.PredictedUpcomingLengthBeats != previousPhrase.PredictedUpcomingLengthBeats;
-    }
-
-    private bool TryStartMissedZeroRunwayTailedCue(TimingFrame previousFrame, TimingFrame currentFrame)
-    {
-        if (!previousFrame.HasGridAnchor || currentFrame.CurrentBeat <= previousFrame.CueMarkBeat)
-        {
-            return false;
-        }
-
-        var transitionIndex = nextTransitionIndex;
-        ValidateTransitionIndex(transitionIndex);
-        var repertoire = controller.transitions[transitionIndex].Repertoire;
-        var beatPlan = TransitionBeatPlan.FromCueMark(previousFrame.CueMarkBeat, repertoire);
-        var isZeroRunway = beatPlan.StartBeat == beatPlan.ImpactBeat;
-        var hasTail = beatPlan.CompleteBeat > beatPlan.ImpactBeat;
-        var alreadyCommittedImpact = cuePlanner.LastChangeBeat == beatPlan.ImpactBeat;
-        if (!isZeroRunway
-            || !hasTail
-            || !beatPlan.IsCueBeat(currentFrame.CurrentBeat)
-            || alreadyCommittedImpact)
-        {
-            return false;
-        }
-
-        return TryStartSyncedCue(CuePlanner.Retarget(previousFrame, currentFrame));
     }
 
     private SwitcherClockSnapshot CurrentSwitcherClockSnapshot(int beat)

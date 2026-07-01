@@ -434,6 +434,115 @@ public sealed class CuePlannerTests
     }
 
     [Test]
+    public void MissedUnconsumedCueMarkStaysCueableInsideTheLateCueWindow()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
+
+        frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 47, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16,
+            lateCueWindowBeats: 4);
+
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593),
+            "An unconsumed Cue Mark stays the target while a late cue can still complete inside the window.");
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void MissedMandatoryBoundaryStaysCueableAcrossPhraseTurnoverInsideTheLateCueWindow()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        cuePlanner.Plan(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 15, phraseLengthBeats: 32),
+            minimumChangeCadenceBeats: 16);
+
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 610, beatsToPhraseBoundary: 31, phraseLengthBeats: 32),
+            minimumChangeCadenceBeats: 16,
+            lateCueWindowBeats: 8);
+
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609),
+            "The missed boundary Cue Mark stays cueable across the turnover while a Tail can still complete.");
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void LoopRewindIntoAFiredCueMarksLateWindowDoesNotRepresentIt()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
+
+        cuePlanner.RecordCueIssued(589);
+        cuePlanner.MarkChanged(593);
+        cuePlanner.Plan(
+            TrackPhaseInput(beat: 620, beatsToPhraseBoundary: 21, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+
+        // The loop replays from 594 — inside the fired mark's late window. The pass-local commit
+        // memory (593 < 594) survives the rewind, so the fired mark must not come back.
+        frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 594, beatsToPhraseBoundary: 47, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16,
+            lateCueWindowBeats: 8);
+
+        Assert.That(frame.BeatRewoundToNewPass, Is.True);
+        Assert.That(frame.PassLocalState.PreviousCueMarkBeat, Is.EqualTo(593), "The commit memory survives a rewind to after the fired mark.");
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(641), "The fired mark must not be re-presented inside its late window.");
+    }
+
+    [Test]
+    public void MissedCueMarkPastItsLateWindowIsSkipped()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        var frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
+
+        frame = cuePlanner.Plan(
+            TrackPhaseInput(beat: 602, beatsToPhraseBoundary: 39, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16,
+            lateCueWindowBeats: 8);
+
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(641), "A mark whose cue window has fully closed is skipped, not held.");
+    }
+
+    [Test]
+    public void CoastedGridAnchorStaysCueableInsideTheLateCueWindow()
+    {
+        var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
+
+        cuePlanner.Plan(
+            TrackPhaseInput(beat: 588, beatsToPhraseBoundary: 53, phraseLengthBeats: 64),
+            minimumChangeCadenceBeats: 16);
+
+        var frame = cuePlanner.Plan(
+            TrackPhaseUnavailableInput(beat: 593),
+            minimumChangeCadenceBeats: 16,
+            lateCueWindowBeats: 4);
+        Assert.That(frame.IsCoasting, Is.True);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(593), "The coasted anchor holds at its landing beat while a cue can still land.");
+
+        frame = cuePlanner.Plan(
+            TrackPhaseUnavailableInput(beat: 598),
+            minimumChangeCadenceBeats: 16,
+            lateCueWindowBeats: 4);
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(609), "Past the late window the coast rolls to the next cadence landing.");
+    }
+
+    [Test]
     public void BeatOnlyFrameUsesGridFallbackWhenNoPhraseWindowIsAvailable()
     {
         var cuePlanner = new CueHarness(SelectFirstInteriorBoundary());
@@ -500,7 +609,7 @@ public sealed class CuePlannerTests
             cuePlanner = new CuePlanner(randomRange);
         }
 
-        public TimingFrame Plan(OnAirTimingInput input, int minimumChangeCadenceBeats)
+        public TimingFrame Plan(OnAirTimingInput input, int minimumChangeCadenceBeats, int lateCueWindowBeats = 0)
         {
             var grid = gridSync.Read(input);
             var phrase = PhraseTracker.Read(
@@ -508,7 +617,7 @@ public sealed class CuePlannerTests
                 input.TrackPhaseActive,
                 input.BeatsUntilPhraseBoundary,
                 input.PhraseLengthBeats);
-            return cuePlanner.Plan(input, grid, phrase, minimumChangeCadenceBeats);
+            return cuePlanner.Plan(input, grid, phrase, minimumChangeCadenceBeats, lateCueWindowBeats);
         }
 
         public void RecordCueIssued(int beat) => cuePlanner.RecordCueIssued(beat);

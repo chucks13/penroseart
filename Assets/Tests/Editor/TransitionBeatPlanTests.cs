@@ -23,19 +23,17 @@ public sealed class TransitionBeatPlanTests
     [TestCase(1, 11)]
     [TestCase(11, 1)]
     [TestCase(0, 0)]
-    public void CueWindowMatchesRunwayTailShape(int runwayBeats, int tailBeats)
+    public void CueWindowSpansStartThroughComplete(int runwayBeats, int tailBeats)
     {
         var plan = TransitionBeatPlan.FromCueMark(609, TransitionRepertoireFor(runwayBeats, tailBeats));
-        var firstCueBeat = runwayBeats > 0 ? 609 - runwayBeats : 609;
-        var lastCueBeat = runwayBeats > 0
-            ? 608
-            : tailBeats > 0 ? 609 + tailBeats - 1 : 609;
-        var firstNonCueBeatAfterWindow = lastCueBeat + 1;
+        var firstCueBeat = 609 - runwayBeats;
+        var lastCueBeat = 609 + tailBeats;
 
         Assert.That(plan.IsCueBeat(firstCueBeat - 1), Is.False);
         Assert.That(plan.IsCueBeat(firstCueBeat), Is.True);
+        Assert.That(plan.IsCueBeat(609), Is.True, "The Impact Point is always inside the cue window.");
         Assert.That(plan.IsCueBeat(lastCueBeat), Is.True);
-        Assert.That(plan.IsCueBeat(firstNonCueBeatAfterWindow), Is.False);
+        Assert.That(plan.IsCueBeat(lastCueBeat + 1), Is.False);
     }
 
     private static TransitionRepertoire TransitionRepertoireFor(int runwayBeats, int tailBeats)

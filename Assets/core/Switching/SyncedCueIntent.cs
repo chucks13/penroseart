@@ -101,7 +101,9 @@ public readonly struct SyncedCueIntent
         }
 
         var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, transitionRepertoire);
-        if (frame.PassLocalState.LastCueBeat == frame.CurrentBeat || !beatPlan.IsCueBeat(frame.CurrentBeat))
+        if (frame.PassLocalState.LastCueBeat == frame.CurrentBeat
+            || frame.PassLocalState.PreviousCueMarkBeat == frame.CueMarkBeat
+            || !beatPlan.IsCueBeat(frame.CurrentBeat))
         {
             return NoCue(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, eventIntent);
         }
