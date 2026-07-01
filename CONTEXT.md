@@ -191,7 +191,7 @@ The beat after which a Loaded Cue can no longer change. The Lock Point depends o
 _Avoid_: one global lock beat for every Transition; locking at the Impact Point; putting transition start math into the Cue Sheet.
 
 **Cue Intent**:
-The Director-facing result of combining a Timing Frame's current Cue Mark with BeatManager's Fill/Drop phrase-event timing, staged choices, current Performer, deck state, and Performer Repertoire. Cue Intent classifies a Cue as ordinary, Fill, or Drop only for casting. It says whether the Director should wait, send a cue command with a target Performer, or block on cadence; transition deck candidates are only rotated once a cue is actually sent.
+The Director-facing result of combining a Timing Frame's current Cue Mark with BeatManager's Fill/Drop phrase-event timing, staged choices, current Performer, deck state, and Performer Repertoire. Cue Intent classifies a Cue as ordinary, Fill, or Drop only for casting. It says whether the Director should wait, send a cue command with a target Performer, or block on cadence; deck candidates — effect and transition alike — are only rotated once a cue is actually sent.
 _Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split; using Fill/Drop to create alternate Cue Mark timing.
 
 **Next Transition**:

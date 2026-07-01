@@ -277,7 +277,7 @@ public sealed class Director
         currentEffectIndexForSelection = switcher.CurrentEffectIndex;
         SetNextTransition(initialTransitionIndex);
         nextTransitionIsManualSelection = false;
-        StageNextEffect(Repertoire.None, currentEffectIndexForSelection);
+        StageNextEffect(currentEffectIndexForSelection);
     }
 
     /// <summary>Advances the Director's current cadence clock or live musical scheduling.</summary>
@@ -318,7 +318,7 @@ public sealed class Director
         MarkChangedOnCurrentBeat();
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
-        StageNextChoices(Repertoire.None);
+        StageNextChoices();
     }
 
     /// <summary>
@@ -563,7 +563,7 @@ public sealed class Director
         cuePlanner.RecordCueIssued(beat);
         controller.currentTransition = cue.TransitionIndex;
         currentEffectIndexForSelection = cue.TargetEffectIndex;
-        StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
+        StageNextChoices(currentEffectIndexForSelection);
         Trace($"SYNC_CUE_SENT beat={beat} start={beatPlan.StartBeat} impact={beatPlan.ImpactBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} runway={cue.TransitionRepertoire.RunwayBeats}");
     }
 
@@ -630,13 +630,6 @@ public sealed class Director
         }
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
-        if (transitionSelection.DeckIndex >= 0)
-        {
-            // Consume the preferred card so the fresh Next Transition staged in CommitSentCue won't redraw it.
-            transitionIndex = TransitionDeckSelection.PullAt(transitionDeck, transitionSelection.DeckIndex);
-            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(transitionIndex)} preferred={SyncedCueIntent.PreferredRepertoireFor(eventIntent)}");
-        }
-
         var cue = new SwitcherCueDirection(
             cueIntent.BeatPlan.ImpactBeat,
             cueIntent.TargetEffectIndex,
@@ -647,6 +640,21 @@ public sealed class Director
             cuePlanner.RecordCueIssued(beat);
             Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} start={cueIntent.BeatPlan.StartBeat} impact={cueIntent.BeatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
             return true;
+        }
+
+        // Deck candidates rotate only when a cue is actually sent (the Cue Intent contract): the
+        // event-cast cards found above are pulled here, at the commit point, so the fresh choices
+        // staged in CommitSentCue cannot redraw them — and a Wait, cadence block, or Hold leaves
+        // the decks untouched.
+        if (transitionSelection.DeckIndex >= 0)
+        {
+            Deck.PullAt(transitionDeck, transitionSelection.DeckIndex);
+            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(transitionIndex)} preferred={SyncedCueIntent.PreferredRepertoireFor(eventIntent)}");
+        }
+
+        if (cueIntent.EffectDeckIndex >= 0)
+        {
+            Deck.PullAt(effectDeck, cueIntent.EffectDeckIndex);
         }
 
         var clock = CurrentSwitcherClockSnapshot(beat);
@@ -671,14 +679,17 @@ public sealed class Director
             return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
         }
 
-        if (TransitionDeckSelection.TryFindPreferred(
+        if (Deck.TryFindPreferred(
             transitionDeck,
-            preferredRepertoire,
-            transitionIndex => controller.transitions[transitionIndex].Repertoire,
-            repertoire => CanTransitionCueNow(frame, repertoire),
-            out var deckIndex,
-            out var preferredTransitionIndex))
+            candidateIndex =>
+            {
+                var candidateRepertoire = controller.transitions[candidateIndex].Repertoire;
+                return (candidateRepertoire.Tags & preferredRepertoire) != 0
+                    && CanTransitionCueNow(frame, candidateRepertoire);
+            },
+            out var deckIndex))
         {
+            var preferredTransitionIndex = transitionDeck[deckIndex];
             var preferredTransitionRepertoire = controller.transitions[preferredTransitionIndex].Repertoire;
             return TransitionCueSelection.DeckCandidate(preferredTransitionIndex, preferredTransitionRepertoire, deckIndex);
         }
@@ -849,23 +860,23 @@ public sealed class Director
             TransitionStartTiming.FromDefaultDuration(Time.time));
         controller.currentTransition = transitionIndex;
         currentEffectIndexForSelection = targetEffectIndex;
-        StageNextChoices(Repertoire.None, currentEffectIndexForSelection);
+        StageNextChoices(currentEffectIndexForSelection);
         standaloneTimer.Set(transitionDurationSeconds + controller.effectTime);
         standaloneTimer.Reset();
     }
 
-    private void StageNextChoices(Repertoire preferredRepertoire)
+    private void StageNextChoices()
     {
-        StageNextChoices(preferredRepertoire, currentEffectIndexForSelection);
+        StageNextChoices(currentEffectIndexForSelection);
     }
 
-    private void StageNextChoices(Repertoire preferredRepertoire, int currentEffectIndex)
+    private void StageNextChoices(int currentEffectIndex)
     {
-        StageNextEffect(preferredRepertoire, currentEffectIndex);
+        StageNextEffect(currentEffectIndex);
         StageNextTransition();
     }
 
-    private void StageNextEffect(Repertoire preferredRepertoire, int currentEffectIndex)
+    private void StageNextEffect(int currentEffectIndex)
     {
         if (holdSelectedEffect)
         {
@@ -873,9 +884,12 @@ public sealed class Director
             return;
         }
 
-        nextEffectIndex = PullEffect(preferredRepertoire, currentEffectIndex);
+        nextEffectIndex = Deck.PullRandom(
+            effectDeck,
+            candidateIndex => currentEffectIndex < 0 || candidateIndex != currentEffectIndex,
+            (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
         nextEffectIsManualSelection = false;
-        Trace($"NEXT_EFFECT_STAGED nextEffect={FormatEffect(nextEffectIndex)} preferred={preferredRepertoire}");
+        Trace($"NEXT_EFFECT_STAGED nextEffect={FormatEffect(nextEffectIndex)}");
     }
 
     private void StageNextTransition()
@@ -887,7 +901,10 @@ public sealed class Director
             return;
         }
 
-        nextTransitionIndex = PullCard(transitionDeck);
+        nextTransitionIndex = Deck.PullRandom(
+            transitionDeck,
+            _ => true,
+            (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
         nextTransitionIsManualSelection = false;
         controller.currentTransition = nextTransitionIndex;
         Trace($"NEXT_TRANSITION_STAGED nextTransition={FormatTransition(nextTransitionIndex)}");
@@ -929,16 +946,6 @@ public sealed class Director
         return IsValidTransitionIndex(transitionIndex) ? controller.transitions[transitionIndex].Name : string.Empty;
     }
 
-    private int PullEffect(Repertoire preferredRepertoire, int currentEffectIndex)
-    {
-        return EffectDeckSelection.PullNext(
-            effectDeck,
-            currentEffectIndex,
-            preferredRepertoire,
-            effectIndex => controller.effects[effectIndex].Repertoire,
-            (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
-    }
-
     private void MarkChangedOnCurrentBeat()
     {
         // A non-null Beat already implies the mode authority is Synced (Beat gates on IsActive => IsSynced),
@@ -949,23 +956,7 @@ public sealed class Director
         }
     }
 
-    private static int PullCard(int[] deck)
-    {
-        var length = deck.Length;
-        var index = UnityEngine.Random.Range(0, length / 2);
-        var result = deck[index];
-        RemoveDeckCardAt(deck, index);
-        return result;
-    }
+    
 
-    private static void RemoveDeckCardAt(int[] deck, int index)
-    {
-        var result = deck[index];
-        for (var i = index; i < deck.Length - 1; i++)
-        {
-            deck[i] = deck[i + 1];
-        }
-
-        deck[deck.Length - 1] = result;
-    }
+    
 }

@@ -45,7 +45,7 @@ public sealed class SyncedCueIntentTests
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
         Assert.That(intent.CastPreferredPerformer, Is.True);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 0, 2 }));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Evaluating an intent must not rotate deck candidates; the card is pulled only when the cue is sent.");
     }
 
     [Test]
@@ -232,7 +232,7 @@ public sealed class SyncedCueIntentTests
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesFill));
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
         Assert.That(intent.CastPreferredPerformer, Is.True);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 0, 2 }));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Evaluating an intent must not rotate deck candidates; the card is pulled only when the cue is sent.");
     }
 
     [Test]

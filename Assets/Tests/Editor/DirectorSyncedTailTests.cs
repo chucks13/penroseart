@@ -259,6 +259,26 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
+    public void HeldEffectCueLeavesDeckCandidatesUnrotated()
+    {
+        controller.effectDeck = new[] { 1, 2, 0 };
+        RebuildSwitcherAndDirectorWithTransitions(
+            new TransitionBase[] { new TailedTransition(), new TailedTransition(), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 4, tailBeats: 0) },
+            new[] { 0, 2, 1 });
+        controller.heldEffect = 1;
+        var effectDeckBeforeTick = (int[])controller.effectDeck.Clone();
+        var transitionDeckBeforeTick = (int[])controller.transitionDeck.Clone();
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "A held cue must not start a transition.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBeforeTick), "Deck candidates rotate only when a cue is actually sent; a held cue sends none.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckBeforeTick), "Deck candidates rotate only when a cue is actually sent; a held cue sends none.");
+    }
+
+    [Test]
     public void DropAlignedCuePreservesManualStagedPerformerWhenDropCapablePerformerIsAvailable()
     {
         director.SetNextEffect(1);

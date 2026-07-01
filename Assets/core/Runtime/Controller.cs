@@ -420,20 +420,6 @@ public class Controller : Singleton<Controller>
             deck[i] = i;
         return deck;
     }
-    /// <summary>
-    /// Draws a random entry from the top half of a deck, shifts the deck up,
-    /// and moves the drawn card to the bottom to reduce immediate repeats.
-    /// </summary>
-    private int pullCard(int[] deck)
-    {
-        int length = deck.Length;
-        int idx = Random.Range(0, length / 2);
-        int result = deck[idx];
-        for (int i = idx; i < length - 1; i++)
-            deck[i] = deck[i + 1];
-        deck[length - 1] = result;
-        return result;
-    }
 
     /// <summary>
     /// Formats catalog names with stable numeric indexes for startup logs.
@@ -1472,7 +1458,7 @@ public class Controller : Singleton<Controller>
         if (TryGetHeldEffectIndex(out int heldEffectIndex))
             return heldEffectIndex;
 
-        return pullCard(effectDeck);
+        return Deck.PullRandom(effectDeck, _ => true, (minInclusive, maxExclusive) => Random.Range(minInclusive, maxExclusive));
     }
 
     /// <summary>

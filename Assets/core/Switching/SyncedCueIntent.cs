@@ -49,6 +49,13 @@ public readonly struct SyncedCueIntent
     public readonly Repertoire PreferredRepertoire;
     public readonly bool CastPreferredPerformer;
 
+    /// <summary>
+    /// Deck position of the preferred Performer card this cue casts from the effect deck, or -1 when
+    /// the target is the staged choice. The Director pulls the card at the Cue commit point — deck
+    /// candidates rotate only when a cue is actually sent.
+    /// </summary>
+    public readonly int EffectDeckIndex;
+
     private SyncedCueIntent(
         SyncedCueIntentKind kind,
         TransitionBeatPlan beatPlan,
@@ -56,7 +63,8 @@ public readonly struct SyncedCueIntent
         int targetEffectIndex,
         CueEventIntent eventIntent,
         Repertoire preferredRepertoire,
-        bool castPreferredPerformer)
+        bool castPreferredPerformer,
+        int effectDeckIndex)
     {
         Kind = kind;
         BeatPlan = beatPlan;
@@ -66,6 +74,7 @@ public readonly struct SyncedCueIntent
         EventIntent = eventIntent;
         PreferredRepertoire = preferredRepertoire;
         CastPreferredPerformer = castPreferredPerformer;
+        EffectDeckIndex = effectDeckIndex;
     }
 
     public bool ShouldCue => Kind == SyncedCueIntentKind.Cue;
@@ -81,8 +90,8 @@ public readonly struct SyncedCueIntent
     /// <summary>
     /// Builds a Synced Mode cue intent from the Timing Frame, selected Transition timing,
     /// event-aware casting context, staged Effect choice, and advertised Effect Repertoire.
-    /// When an event-aligned cue casts a preferred Performer from the deck, evaluating the intent
-    /// reserves that card by rotating it through <see cref="EffectDeckSelection.TryPullPreferred"/>.
+    /// Evaluation never rotates the deck: a preferred Performer found on the deck is reported through
+    /// <see cref="EffectDeckIndex"/>, and the Director pulls that card only when the cue is sent.
     /// </summary>
     public static SyncedCueIntent Evaluate(
         TimingFrame frame,
@@ -129,6 +138,7 @@ public readonly struct SyncedCueIntent
         }
 
         var targetEffectIndex = stagedEffectIndex;
+        var effectDeckIndex = -1;
         var castPreferredPerformer = StagedEffectMatchesPreferredRepertoire(
             stagedEffectIndex,
             currentEffectIndex,
@@ -137,14 +147,14 @@ public readonly struct SyncedCueIntent
         if (!castPreferredPerformer
             && preferredRepertoire != Repertoire.None
             && !preserveStagedEffect
-            && EffectDeckSelection.TryPullPreferred(
+            && Deck.TryFindPreferred(
                 deck,
-                currentEffectIndex,
-                preferredRepertoire,
-                repertoireForEffect,
-                out var preferredEffectIndex))
+                candidateIndex => (currentEffectIndex < 0 || candidateIndex != currentEffectIndex)
+                    && (repertoireForEffect(candidateIndex) & preferredRepertoire) != 0,
+                out var preferredDeckIndex))
         {
-            targetEffectIndex = preferredEffectIndex;
+            targetEffectIndex = deck[preferredDeckIndex];
+            effectDeckIndex = preferredDeckIndex;
             castPreferredPerformer = true;
         }
 
@@ -155,7 +165,8 @@ public readonly struct SyncedCueIntent
             targetEffectIndex,
             eventIntent,
             preferredRepertoire,
-            castPreferredPerformer);
+            castPreferredPerformer,
+            effectDeckIndex);
     }
 
     /// <summary>Combines the Grid reached by a scheduled Cue with live phrase events for casting.</summary>
@@ -191,7 +202,8 @@ public readonly struct SyncedCueIntent
             stagedEffectIndex,
             eventIntent,
             preferredRepertoire,
-            false);
+            castPreferredPerformer: false,
+            effectDeckIndex: -1);
     }
 
     private static bool StagedEffectMatchesPreferredRepertoire(
