@@ -122,7 +122,7 @@ public class Tunnel : EffectBase
     private void TriggerDrop()
     {
         dropSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-            ? (60f / bpm) * BeatsPerBar * DropBars
+            ? 60f / bpm * BeatsPerBar * DropBars
             : DropFallbackSeconds;
         dropElapsed = 0f;
         dropEnv = 1f;
@@ -146,37 +146,56 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Renders one frame of radial tunnel bands directly into the tile buffer.
+    /// Exponentially eases a value toward a target at a frame-rate-independent rate.
     /// </summary>
-    public override void Draw()
-    {
-        // Beat pulse scales tunnel brightness without changing the tunnel phase.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, BeatBrightnessFloor, beatEnable);
+    private static float SmoothToward(float current, float target, float rate, float deltaTime) =>
+        Mathf.Lerp(current, target, 1f - Mathf.Exp(-rate * deltaTime));
 
-        // Fill build: ease a smoothed envelope toward Fill.progress, then drive rush (extra integrated scroll
-        // rate) and zoom (radial band compression). Integrating the rush keeps it from jumping the phase the
-        // way scaling absolute effectTime would. Fast attack slams it to full even on a one-beat fill; slower
-        // release lets the rush/zoom tail off past the fill instead of snapping back.
+    /// <summary>
+    /// Updates the Fill build: the smoothed envelope tracks Fill.progress with fast attack / slower release,
+    /// then integrates an extra scroll rate from that envelope. Integrating the rush preserves tunnel phase;
+    /// scaling absolute effectTime would make the bands jump when a Fill starts or ends.
+    /// </summary>
+    private void UpdateFillEnvelope()
+    {
         PhraseEventInfo? fill = beatManager.Fill;
         float fillTarget = fill is { inProgress: true } ? Mathf.Clamp01(fill.Value.progress ?? 0f) : 0f;
         float fillRate = fillTarget > fillEnv ? FillAttack : FillRelease;
-        fillEnv = Mathf.Lerp(fillEnv, fillTarget, 1f - Mathf.Exp(-fillRate * effectDelta));
+        fillEnv = SmoothToward(fillEnv, fillTarget, fillRate, effectDelta);
         fillScroll = Mathf.Repeat(fillScroll + (speed * FillRush * fillEnv * effectDelta), 1f);
+    }
 
-        // Drop slam: fired on the first Grid downbeat inside a Drop (see OnNewGrid), it snaps to full and decays
-        // over ~2 bars. It warps the scroll the OTHER way (inward, the inverse of the Fill's forward rush) and
-        // punches the zoom deeper. Re-arm the once-per-Drop guard whenever no Drop is in progress.
-        if (!(beatManager.Drop is { inProgress: true }))
+    /// <summary>
+    /// Updates the one-shot Drop slam: re-arms after the Drop window ends, eases the envelope back to zero over
+    /// the BPM-sized window, and integrates reverse scroll. The reverse phase is intentionally the inverse of
+    /// the Fill rush, so the Drop reads as an inward warp instead of a stronger version of the build.
+    /// </summary>
+    private void UpdateDropSlam()
+    {
+        if (beatManager.Drop is not { inProgress: true })
         {
             dropFlashed = false;
         }
+
         if (dropEnv > 0f)
         {
             dropElapsed += effectDelta;
             float decayProgress = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
             dropEnv = 1f - Mathf.SmoothStep(0f, 1f, decayProgress);
         }
+
         dropScroll = Mathf.Repeat(dropScroll - (speed * DropRush * dropEnv * effectDelta), 1f);
+    }
+
+    /// <summary>
+    /// Renders one frame of radial tunnel bands directly into the tile buffer.
+    /// </summary>
+    public override void Draw()
+    {
+        // Beat pulse scales tunnel brightness without changing the tunnel phase.
+        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, BeatBrightnessFloor, beatEnable);
+        UpdateFillEnvelope();
+        UpdateDropSlam();
 
         float zoom = 1f + (FillZoom * fillEnv) + (DropZoom * dropEnv);
 

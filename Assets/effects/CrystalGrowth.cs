@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -236,9 +237,9 @@ public class CrystalGrowth : EffectBase
     {
         base.OnStart();
 
-        System.Array.Clear(charge, 0, charge.Length);
-        System.Array.Clear(hue, 0, hue.Length);
-        System.Array.Clear(gen, 0, gen.Length);
+        Array.Clear(charge, 0, charge.Length);
+        Array.Clear(hue, 0, hue.Length);
+        Array.Clear(gen, 0, gen.Length);
 
         // Per-activation variety: faster spread with a sharper leak reads as a crisp racing front; slower
         // spread with a gentler leak reads as a thick, creeping bloom.
@@ -391,7 +392,7 @@ public class CrystalGrowth : EffectBase
             // The Drop flash adds a luminance lift weighted by front heat (c) and the eased envelope, so the boost
             // rides the sweeping leading edge — a bright colored wavefront crossing the wall — and trails back to
             // normal behind it, all in the tile's own palette color (never toward white). Collapses to ×1 off a flash.
-            float factor = Mathf.Max(Mathf.Sqrt(c) * bright, CrystalFloor) * (1f + (DropFlashBrightness * dropFlash * c));
+            float factor = Mathf.Max(Mathf.Sqrt(c) * bright, CrystalFloor) * (1f + DropFlashBrightness * dropFlash * c);
             buffer[i] = col * (factor * strobe);
         }
     }
@@ -412,7 +413,7 @@ public class CrystalGrowth : EffectBase
             return;
         }
 
-        System.Array.Copy(hue, nextHue, hue.Length);
+        Array.Copy(hue, nextHue, hue.Length);
 
         for (int i = 0; i < hue.Length; i++)
         {
@@ -442,7 +443,7 @@ public class CrystalGrowth : EffectBase
 
             if (n > 0)
             {
-                nextHue[i] = Mathf.Repeat(h + ((sumOffset / n) * k), 1f);
+                nextHue[i] = Mathf.Repeat(h + (sumOffset / n * k), 1f);
             }
         }
 
@@ -666,7 +667,7 @@ public class CrystalGrowth : EffectBase
             PlantUnisonSeeds(DropFlashSeeds);
 
             dropFlashSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-                ? (60f / bpm) * BeatsPerBar * DropFlashBars
+                ? 60f / bpm * BeatsPerBar * DropFlashBars
                 : DropFlashFallbackSeconds;
             dropFlashElapsed = 0f;
             dropFlash = 1f;
@@ -691,9 +692,9 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void PropagateFrontOnce()
     {
-        System.Array.Copy(charge, nextCharge, charge.Length);
-        System.Array.Copy(gen, nextGen, gen.Length);
-        System.Array.Copy(hue, nextHue, hue.Length);
+        Array.Copy(charge, nextCharge, charge.Length);
+        Array.Copy(gen, nextGen, gen.Length);
+        Array.Copy(hue, nextHue, hue.Length);
 
         for (int i = 0; i < charge.Length; i++)
         {

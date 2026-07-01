@@ -2,21 +2,21 @@
 using UnityEngine;
 // Chuck Sommerville
 
-[System.Serializable]
 /// <summary>
 /// Builds stochastic branching paths outward from center-star tiles.
 /// </summary>
+[System.Serializable]
 public class Lightning : EffectBase
 {
-    float fadeValue;
-    float starthue;
-    float deltastart = 0f;
-    float deltaray = 0f;
-    float deltatile = 0f;
+    private float fadeValue;
+    private float starthue;
+    private float deltastart = 0f;
+    private float deltaray = 0f;
+    private float deltatile = 0f;
 
-    int beatMode;
+    private int beatMode;
 
-    int mode = 0;
+    private int mode = 0;
 
     /// <summary>Lightning is a sharp beat-scaled burst. On a Fill it HOLDS a frozen bolt that hard-snaps to entirely
     /// new positions on every eighth note while strobing on the sixteenths (see <see cref="Draw"/>) — held, but
@@ -156,10 +156,109 @@ public class Lightning : EffectBase
     private void TriggerDrop()
     {
         dropSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-            ? (60f / bpm) * BeatsPerBar * DropBars
+            ? 60f / bpm * BeatsPerBar * DropBars
             : DropFallbackSeconds;
         dropElapsed = 0f;
         dropEnv = 1f;
+    }
+
+    /// <summary>
+    /// Updates the one-shot Drop envelope: a Grid-aligned Drop snaps it to full in <see cref="TriggerDrop"/>,
+    /// this eases it back to zero over the BPM-sized window, and the guard re-arms only after the Drop window
+    /// ends. At zero, every Drop term collapses out and the normal bright-bolts-on-black render is unchanged.
+    /// </summary>
+    private void UpdateDropSlam()
+    {
+        if (beatManager.Drop is not { inProgress: true })
+        {
+            dropFlashed = false;
+        }
+
+        if (dropEnv <= 0f)
+        {
+            return;
+        }
+
+        dropElapsed += effectDelta;
+        float decayProgress = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
+        dropEnv = 1f - Mathf.SmoothStep(0f, 1f, decayProgress);
+    }
+
+    /// <summary>
+    /// Returns the Drop's whole-picture electric flicker multiplier. The flicker is a fast Perlin stutter scaled
+    /// by the Drop envelope, so it is sharp at impact and disappears as the Drop resolves; 1 means no flicker.
+    /// </summary>
+    private float DropFlicker()
+    {
+        if (dropEnv <= 0f)
+        {
+            return 1f;
+        }
+
+        float noise = Mathf.PerlinNoise(effectTime * DropFlickerHz, 0.37f);
+        return 1f - (DropFlickerDepth * dropEnv * (1f - noise));
+    }
+
+    /// <summary>
+    /// Floods the background during the Drop to invert figure and ground: the wall moves toward a bright rolled
+    /// palette field, then the bolt is rendered as a dark cut through it. The field gets a brief white lift at
+    /// impact but settles back into the pure inverted color as the envelope fades.
+    /// </summary>
+    private void FloodDropField(float flicker)
+    {
+        if (dropEnv <= 0f)
+        {
+            return;
+        }
+
+        Color fieldColor = RolledColor(starthue);
+        // Flash the field a touch brighter (toward white) at the peak, fading out with the envelope so the impact
+        // hits bright and then settles back into the pure inverted color.
+        Color floodColor = Color.Lerp(fieldColor * flicker, Color.white, DropFieldBright * dropEnv);
+        float flood = dropEnv * DropFieldFlood;
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            buffer[i] = Color.Lerp(buffer[i], floodColor, flood);
+        }
+    }
+
+    /// <summary>
+    /// Updates the Fill hold/jerk path. Outside a Fill the bolt re-walks every frame; inside a Fill it freezes
+    /// and only re-walks on the rising edge of the eighth-note gate, so the whole branch hard-snaps to new
+    /// positions twice a beat instead of flowing continuously. If the beat gate is unavailable, it holds.
+    /// </summary>
+    private void UpdateHeldBolt()
+    {
+        heldActive = beatManager.Fill is { inProgress: true };
+        if (heldActive)
+        {
+            bool open = GateOpen(beatManager.GateOf(Subdivision.Eighth));
+            if ((open && !eighthGateOpen) || heldRays == null)
+            {
+                GenerateBolt();
+            }
+
+            eighthGateOpen = open;
+        }
+        else
+        {
+            GenerateBolt();
+            eighthGateOpen = false;
+        }
+    }
+
+    /// <summary>
+    /// Returns the Fill's hard sixteenth-note strobe multiplier. The held bolt blinks between full and
+    /// <see cref="FillStrobeFloor"/> while the sixteenth gate is closed; outside a Fill, 1 means no strobe.
+    /// </summary>
+    private float FillStrobe()
+    {
+        if (!heldActive)
+        {
+            return 1f;
+        }
+
+        return GateOpen(beatManager.GateOf(Subdivision.Sixteenth, FillStrobeDuty)) ? 1f : FillStrobeFloor;
     }
 
     /// <summary>
@@ -171,69 +270,14 @@ public class Lightning : EffectBase
         float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
         float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
 
-        // Drop slam: fired on the first Grid downbeat inside a Drop (see OnNewGrid), it snaps to full and decays
-        // over ~2 bars. It swells the bolt intensity (value, not chroma — keeps the rolled colors), strobes a fast
-        // flicker, and INVERTS figure and ground: the wall floods with the rolled palette field and the bolts cut
-        // through it as dark negative space, all easing back as the envelope decays. Re-arm the once-per-Drop guard
-        // whenever no Drop is in progress. At dropEnv 0 every Drop term collapses out, so the ordinary bright-bolts-
-        // on-black look is unchanged.
-        if (!(beatManager.Drop is { inProgress: true }))
-        {
-            dropFlashed = false;
-        }
-        if (dropEnv > 0f)
-        {
-            dropElapsed += effectDelta;
-            float decayProgress = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
-            dropEnv = 1f - Mathf.SmoothStep(0f, 1f, decayProgress);
-        }
-
-        // Fast electric flicker during the Drop (whole-picture strobe), easing out with the envelope. 1 = no flicker.
-        float flicker = 1f;
-        if (dropEnv > 0f)
-        {
-            float noise = Mathf.PerlinNoise(effectTime * DropFlickerHz, 0.37f);
-            flicker = 1f - (DropFlickerDepth * dropEnv * (1f - noise));
-        }
+        UpdateDropSlam();
+        float flicker = DropFlicker();
 
         buffer.Fade(Mathf.Lerp(fadeValue, DropFadeHold, dropEnv));
+        FloodDropField(flicker);
 
-        // Figure/ground inversion: flood every tile toward a bright (flickering) rolled-palette field so the bolts
-        // drawn below carve through it as dark negative space — the inverse of the normal bright-bolts-on-black.
-        if (dropEnv > 0f)
-        {
-            Color fieldColor = RolledColor(starthue);
-            // Flash the field a touch brighter (toward white) at the peak, fading out with the envelope so the impact
-            // hits bright and then settles back into the pure inverted color.
-            Color floodColor = Color.Lerp(fieldColor * flicker, Color.white, DropFieldBright * dropEnv);
-            float flood = dropEnv * DropFieldFlood;
-            for (int i = 0; i < buffer.Length; i++)
-                buffer[i] = Color.Lerp(buffer[i], floodColor, flood);
-        }
-
-        // Hold / jerk: outside a Fill the bolt re-walks every frame (continuous lightning). Inside a Fill it FREEZES
-        // and only re-walks on the rising edge of the eighth-note gate, so the whole branch hard-snaps to entirely new
-        // positions twice a beat — a held bolt that jerks, not a flowing one. GateOf is null off-clock, so a Fill
-        // without a beat lock just holds whatever was last walked.
-        heldActive = beatManager.Fill is { inProgress: true };
-        if (heldActive)
-        {
-            bool open = GateOpen(beatManager.GateOf(Subdivision.Eighth));
-            if ((open && !eighthGateOpen) || heldRays == null)
-                GenerateBolt();
-            eighthGateOpen = open;
-        }
-        else
-        {
-            GenerateBolt();
-            eighthGateOpen = false;
-        }
-
-        // Hard sixteenth-note strobe during the Fill: the held bolt blinks between full and FillStrobeFloor on every
-        // sixteenth, so it flashes even while a position is held. 1 = no strobe (outside a Fill).
-        float strobe = 1f;
-        if (heldActive)
-            strobe = GateOpen(beatManager.GateOf(Subdivision.Sixteenth, FillStrobeDuty)) ? 1f : FillStrobeFloor;
+        UpdateHeldBolt();
+        float strobe = FillStrobe();
 
         RenderBolt(beatBrightness, beatHue, flicker, strobe);
     }
