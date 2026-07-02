@@ -698,6 +698,114 @@ public sealed class DirectorSyncedTailTests
         Assert.That(controller.timer.Value, Is.GreaterThan(timerBefore), "The Standalone rotation timer keeps ticking.");
     }
 
+    [Test]
+    public void DropAlignedSentCueReportsDeckFindCastInLastCueDecision()
+    {
+        Assert.That(director.Status.LastCue.Outcome, Is.EqualTo(CueDecisionOutcome.None), "No decision is reported before the first terminal cue decision.");
+
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        var decision = director.Status.LastCue;
+        Assert.That(decision.Outcome, Is.EqualTo(CueDecisionOutcome.Sent));
+        Assert.That(decision.Beat, Is.EqualTo(605));
+        Assert.That(decision.ImpactBeat, Is.EqualTo(609));
+        Assert.That(decision.BeatsBeforeImpact, Is.EqualTo(4));
+        Assert.That(decision.EventIntent, Is.EqualTo(CueEventIntent.Drop));
+        Assert.That(decision.PreferredRepertoire, Is.EqualTo(RepertoireFlags.HandlesDrop));
+        Assert.That(decision.EffectIndex, Is.EqualTo(2), "The Drop-capable Performer found on the deck is the reported cast.");
+        Assert.That(decision.EffectSource, Is.EqualTo(CueCastSource.DeckFind));
+        Assert.That(decision.TransitionSource, Is.EqualTo(CueCastSource.NoPreferredAvailable), "No transition in this catalog handles Drops, so the staged one stood in.");
+    }
+
+    [Test]
+    public void OrdinarySentCueReportsStagedCastInLastCueDecision()
+    {
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        var decision = director.Status.LastCue;
+        Assert.That(decision.Outcome, Is.EqualTo(CueDecisionOutcome.Sent));
+        Assert.That(decision.EventIntent, Is.EqualTo(CueEventIntent.Ordinary));
+        Assert.That(decision.PreferredRepertoire, Is.EqualTo(RepertoireFlags.None));
+        Assert.That(decision.EffectIndex, Is.EqualTo(switcher.Status.TargetEffectIndex));
+        Assert.That(decision.EffectSource, Is.EqualTo(CueCastSource.Staged));
+        Assert.That(decision.TransitionSource, Is.EqualTo(CueCastSource.Staged));
+    }
+
+    [Test]
+    public void DropProtectedDecisionReportsTheProtectedOnStagePerformer()
+    {
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "Setup: the first Drop cue casts the Drop-capable Performer.");
+        RenderTransitionPastCompletion();
+
+        SetUpcomingDrop(beatsUntilStart: 4);
+        SetTrackPhaseBeat(621, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        var decision = director.Status.LastCue;
+        Assert.That(decision.Outcome, Is.EqualTo(CueDecisionOutcome.DropProtected));
+        Assert.That(decision.EventIntent, Is.EqualTo(CueEventIntent.Drop));
+        Assert.That(decision.ImpactBeat, Is.EqualTo(625));
+        Assert.That(decision.EffectIndex, Is.EqualTo(2), "The protected on-stage Performer is reported, not a cast target.");
+        Assert.That(decision.EffectSource, Is.EqualTo(CueCastSource.None));
+    }
+
+    [Test]
+    public void CadenceBlockedMarkReportsBlockedDecision()
+    {
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609), "Setup: a cue commits the 609 mark.");
+
+        SetTrackPhaseBeat(613, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 8);
+        director.Tick(0f);
+
+        var decision = director.Status.LastCue;
+        Assert.That(decision.Outcome, Is.EqualTo(CueDecisionOutcome.BlockedByCadence));
+        Assert.That(decision.Beat, Is.EqualTo(613));
+        Assert.That(decision.ImpactBeat, Is.EqualTo(617));
+        Assert.That(decision.EffectIndex, Is.EqualTo(-1), "A blocked mark casts nothing.");
+    }
+
+    [Test]
+    public void HeldCueReportsHeldDecisionWithoutSendingAnything()
+    {
+        controller.heldEffect = 1;
+        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+
+        director.Tick(0f);
+
+        var decision = director.Status.LastCue;
+        Assert.That(decision.Outcome, Is.EqualTo(CueDecisionOutcome.Held));
+        Assert.That(decision.ImpactBeat, Is.EqualTo(609));
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "A held cue sends nothing to the Switcher.");
+    }
+
+    [Test]
+    public void LateSentCueReportsHardCutImpactDistance()
+    {
+        controller.transitions[0] = new ZeroRunwayTailedTransition();
+        controller.transitions[0].Init();
+        director.SetNextTransition(0);
+        SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
+        director.Tick(0f);
+        Assert.That(director.Status.LastCue.Outcome, Is.EqualTo(CueDecisionOutcome.None), "Setup: nothing may fire before the impact beat for a zero-Runway transition.");
+
+        SetTrackPhaseBeat(610, phaseActive: 1, beatsToPhraseBoundary: 31, phraseLengthBeats: 32);
+        director.Tick(0f);
+
+        var decision = director.Status.LastCue;
+        Assert.That(decision.Outcome, Is.EqualTo(CueDecisionOutcome.Sent));
+        Assert.That(decision.Beat, Is.EqualTo(610));
+        Assert.That(decision.ImpactBeat, Is.EqualTo(609));
+        Assert.That(decision.BeatsBeforeImpact, Is.EqualTo(-1), "A cue sent after its Impact Point lands as a hard cut.");
+    }
+
     private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
     {
         controller.beatManager.beatData.snapshot.bpm = 120f;

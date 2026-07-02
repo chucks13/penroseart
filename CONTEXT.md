@@ -194,6 +194,10 @@ _Avoid_: one global lock beat for every Transition; locking at the Impact Point;
 The Director-facing casting result of combining a cue's musical event meaning (ordinary, Fill, or Drop) with staged choices, current Performer, deck state, and Performer Repertoire: which target Performer the cue should cast. Whether the Director should wait, send the cue, or block on cadence is the Cue Planner's per-beat timing verdict, answered from its own pass-local memory; deck candidates — effect and transition alike — are only rotated once a cue is actually sent.
 _Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split; using Fill/Drop to create alternate Cue Mark timing.
 
+**Cue Decision**:
+The Director's most recent terminal answer at a Cue Mark — Sent, Held, Blocked by cadence, or Drop protected — together with the musical event it classified, the Performer/Transition it cast and where each came from (staged choice, deck find, or no preferred candidate), and how many beats before the Impact Point the cue was sent (zero or negative means the move lands as a hard cut). A read-only observability record surfaced through `DirectorStatus.LastCue` for the Director Observatory; it never drives behavior.
+_Avoid_: reading the Cue Decision back into sequencing logic; treating per-beat Waits as decisions (only terminal outcomes are recorded).
+
 **Next Transition**:
 The Transition already chosen for the Director's next cue command. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Switcher still honors that Transition's Runway, Tail, and Impact Point when the Cue is loaded and armed.
 _Avoid_: choosing the Transition at the last moment; treating the selected next Transition as permission to bypass Runway, Tail, or Impact Point timing.

@@ -25,6 +25,126 @@ public enum DirectorDecision
 /// <summary>
 /// Read-only snapshot of Director sequencing state for the HUD and Unity Inspector.
 /// </summary>
+/// <summary>Terminal outcome of the Director's most recent Synced cue decision.</summary>
+public enum CueDecisionOutcome
+{
+    /// <summary>No Synced cue decision has been reached yet.</summary>
+    None,
+
+    /// <summary>The cue was sent to the Switcher.</summary>
+    Sent,
+
+    /// <summary>The cue cleared timing but a held effect suppressed it; nothing was sent.</summary>
+    Held,
+
+    /// <summary>The Cue Mark fell inside the minimum change cadence; the mark was skipped.</summary>
+    BlockedByCadence,
+
+    /// <summary>
+    /// A Drop coincided with the Cue Mark while a Drop-capable Performer was already on stage, so the
+    /// Director issued no cue and left that Performer to play the Drop itself (drop-protect).
+    /// </summary>
+    DropProtected
+}
+
+/// <summary>Where a cast choice came from when the Director committed a cue.</summary>
+public enum CueCastSource
+{
+    /// <summary>No cast was made for this decision.</summary>
+    None,
+
+    /// <summary>The staged choice was used.</summary>
+    Staged,
+
+    /// <summary>A read-only deck find matched the preferred Repertoire and was pulled at the commit point.</summary>
+    DeckFind,
+
+    /// <summary>The event asked for a Repertoire no candidate could satisfy; the staged choice stood in.</summary>
+    NoPreferredAvailable
+}
+
+/// <summary>
+/// Read-only record of the Director's most recent terminal Synced cue decision: what the musical
+/// event asked for, what timing answered, and — when a cast happened — which Performer and
+/// Transition were chosen and where they came from. Surfaced through
+/// <see cref="DirectorStatus.LastCue"/> so the observatory can answer "why did the wall just do that".
+/// </summary>
+public readonly struct CueDecision
+{
+    /// <summary>The empty decision reported before any Synced cue decision is reached.</summary>
+    public static CueDecision None { get; } = new CueDecision(
+        CueDecisionOutcome.None,
+        beat: -1,
+        impactBeat: -1,
+        CueEventIntent.Ordinary,
+        Repertoire.None,
+        effectIndex: -1,
+        effectName: string.Empty,
+        CueCastSource.None,
+        transitionIndex: -1,
+        transitionName: string.Empty,
+        CueCastSource.None);
+
+    public readonly CueDecisionOutcome Outcome;
+
+    /// <summary>Beat the decision was made on.</summary>
+    public readonly int Beat;
+
+    /// <summary>Impact Point the decision aimed at (the Cue Mark), or -1 when none applied.</summary>
+    public readonly int ImpactBeat;
+
+    /// <summary>Musical event meaning the cue was classified as.</summary>
+    public readonly CueEventIntent EventIntent;
+
+    /// <summary>Repertoire the event asked the Director to cast, or None for an ordinary cue.</summary>
+    public readonly Repertoire PreferredRepertoire;
+
+    /// <summary>
+    /// Effect the decision settled on: the cast target for Sent/Held, the protected on-stage
+    /// Performer for DropProtected, or -1 when no effect was involved.
+    /// </summary>
+    public readonly int EffectIndex;
+    public readonly string EffectName;
+    public readonly CueCastSource EffectSource;
+
+    /// <summary>Transition the decision selected, or -1 when none was selected.</summary>
+    public readonly int TransitionIndex;
+    public readonly string TransitionName;
+    public readonly CueCastSource TransitionSource;
+
+    /// <summary>
+    /// Beats between the decision and its Impact Point. Zero or negative means the transition starts
+    /// with no Runway left — the move lands as a hard cut.
+    /// </summary>
+    public int BeatsBeforeImpact => ImpactBeat - Beat;
+
+    public CueDecision(
+        CueDecisionOutcome outcome,
+        int beat,
+        int impactBeat,
+        CueEventIntent eventIntent,
+        Repertoire preferredRepertoire,
+        int effectIndex,
+        string effectName,
+        CueCastSource effectSource,
+        int transitionIndex,
+        string transitionName,
+        CueCastSource transitionSource)
+    {
+        Outcome = outcome;
+        Beat = beat;
+        ImpactBeat = impactBeat;
+        EventIntent = eventIntent;
+        PreferredRepertoire = preferredRepertoire;
+        EffectIndex = effectIndex;
+        EffectName = effectName ?? string.Empty;
+        EffectSource = effectSource;
+        TransitionIndex = transitionIndex;
+        TransitionName = transitionName ?? string.Empty;
+        TransitionSource = transitionSource;
+    }
+}
+
 public readonly struct DirectorStatus
 {
     public static DirectorStatus NotReady { get; } = new DirectorStatus(
@@ -48,7 +168,8 @@ public readonly struct DirectorStatus
         string.Empty,
         false,
         false,
-        CueSheetStatus.Empty);
+        CueSheetStatus.Empty,
+        CueDecision.None);
 
     public readonly DirectorMode Mode;
     public readonly DirectorDecision Decision;
@@ -74,6 +195,9 @@ public readonly struct DirectorStatus
     /// <summary>Current Cue Sheet snapshot from On-Air Timing.</summary>
     public readonly CueSheetStatus CueSheet;
 
+    /// <summary>The Director's most recent terminal Synced cue decision.</summary>
+    public readonly CueDecision LastCue;
+
     public DirectorStatus(
         DirectorMode mode,
         DirectorDecision decision,
@@ -95,7 +219,8 @@ public readonly struct DirectorStatus
         string nextTransitionName,
         bool holdSelectedEffect,
         bool holdSelectedTransition,
-        CueSheetStatus cueSheet)
+        CueSheetStatus cueSheet,
+        CueDecision lastCue)
     {
         Mode = mode;
         Decision = decision;
@@ -118,6 +243,7 @@ public readonly struct DirectorStatus
         HoldSelectedEffect = holdSelectedEffect;
         HoldSelectedTransition = holdSelectedTransition;
         CueSheet = cueSheet;
+        LastCue = lastCue;
     }
 
     /// <summary>Current live beat observed by the Director, or -1 outside Synced Mode.</summary>
@@ -157,6 +283,7 @@ public sealed class Director
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
     private int lastLoggedSyncedBeat = -1;
     private int lastDropProtectedBeat = -1;
+    private CueDecision lastCueDecision = CueDecision.None;
 
     private readonly struct TransitionCueSelection
     {
@@ -315,6 +442,7 @@ public sealed class Director
         currentEffectIndexForSelection = effectIndex;
         cuePlanner.Reset();
         timingFrame = TimingFrame.Unavailable;
+        lastCueDecision = CueDecision.None;
         MarkChangedOnCurrentBeat();
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
@@ -387,7 +515,8 @@ public sealed class Director
             TransitionName(nextTransitionIndex),
             holdSelectedEffect,
             holdSelectedTransition,
-            timingFrame.CueSheet);
+            timingFrame.CueSheet,
+            lastCueDecision);
     }
 
     private DirectorDecision ResolveDecision(
@@ -591,6 +720,18 @@ public sealed class Director
             && IsValidEffectIndex(currentEffectIndexForSelection)
             && (controller.effects[currentEffectIndexForSelection].Repertoire & Repertoire.HandlesDrop) != 0)
         {
+            lastCueDecision = new CueDecision(
+                CueDecisionOutcome.DropProtected,
+                beat,
+                frame.CueMarkBeat,
+                eventIntent,
+                Repertoire.HandlesDrop,
+                currentEffectIndexForSelection,
+                EffectName(currentEffectIndexForSelection),
+                CueCastSource.None,
+                transitionIndex: -1,
+                transitionName: string.Empty,
+                CueCastSource.None);
             if (beat != lastDropProtectedBeat)
             {
                 Trace($"SYNC_CUE_DROP_PROTECTED beat={beat} cueMark={frame.CueMarkBeat} current={FormatEffect(currentEffectIndexForSelection)}");
@@ -606,6 +747,12 @@ public sealed class Director
         ValidateTransitionIndex(transitionIndex);
         ValidateEffectIndex(stagedEffectIndex);
         var repertoire = transitionSelection.Repertoire;
+        var preferredRepertoire = SyncedCueIntent.PreferredRepertoireFor(eventIntent);
+        var transitionSource = transitionSelection.DeckIndex >= 0
+            ? CueCastSource.DeckFind
+            : preferredRepertoire != Repertoire.None && (repertoire.Tags & preferredRepertoire) == 0
+                ? CueCastSource.NoPreferredAvailable
+                : CueCastSource.Staged;
         var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire);
         var verdict = cuePlanner.EvaluateCueTiming(beatPlan, beat, MinimumChangeCadenceBeats);
         if (verdict == CueTimingVerdict.Wait)
@@ -615,6 +762,18 @@ public sealed class Director
 
         if (verdict == CueTimingVerdict.BlockedByCadence)
         {
+            lastCueDecision = new CueDecision(
+                CueDecisionOutcome.BlockedByCadence,
+                beat,
+                beatPlan.ImpactBeat,
+                eventIntent,
+                preferredRepertoire,
+                effectIndex: -1,
+                effectName: string.Empty,
+                CueCastSource.None,
+                transitionIndex,
+                TransitionName(transitionIndex),
+                transitionSource);
             Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={beatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
             cuePlanner.RecordCueIssued(beat);
             return true;
@@ -629,6 +788,11 @@ public sealed class Director
             repertoireForEffect: effectIndex => controller.effects[effectIndex].Repertoire);
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
+        var effectSource = cueIntent.EffectDeckIndex >= 0
+            ? CueCastSource.DeckFind
+            : cueIntent.PreferredRepertoire != Repertoire.None && !cueIntent.CastPreferredPerformer
+                ? CueCastSource.NoPreferredAvailable
+                : CueCastSource.Staged;
         var cue = new SwitcherCueDirection(
             beatPlan.ImpactBeat,
             cueIntent.TargetEffectIndex,
@@ -636,6 +800,18 @@ public sealed class Director
             repertoire);
         if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
         {
+            lastCueDecision = new CueDecision(
+                CueDecisionOutcome.Held,
+                beat,
+                beatPlan.ImpactBeat,
+                eventIntent,
+                cueIntent.PreferredRepertoire,
+                cueIntent.TargetEffectIndex,
+                EffectName(cueIntent.TargetEffectIndex),
+                effectSource,
+                transitionIndex,
+                TransitionName(transitionIndex),
+                transitionSource);
             cuePlanner.RecordCueIssued(beat);
             Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} start={beatPlan.StartBeat} impact={beatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
             return true;
@@ -648,7 +824,7 @@ public sealed class Director
         if (transitionSelection.DeckIndex >= 0)
         {
             Deck.PullAt(transitionDeck, transitionSelection.DeckIndex);
-            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(transitionIndex)} preferred={SyncedCueIntent.PreferredRepertoireFor(eventIntent)}");
+            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(transitionIndex)} preferred={preferredRepertoire}");
         }
 
         if (cueIntent.EffectDeckIndex >= 0)
@@ -659,6 +835,18 @@ public sealed class Director
         var clock = CurrentSwitcherClockSnapshot(beat);
         switcher.UpsertLoadedCue(cue, clock);
         CommitSentCue(beat, cue, beatPlan);
+        lastCueDecision = new CueDecision(
+            CueDecisionOutcome.Sent,
+            beat,
+            beatPlan.ImpactBeat,
+            eventIntent,
+            cueIntent.PreferredRepertoire,
+            cueIntent.TargetEffectIndex,
+            EffectName(cueIntent.TargetEffectIndex),
+            effectSource,
+            transitionIndex,
+            TransitionName(transitionIndex),
+            transitionSource);
         return true;
     }
 

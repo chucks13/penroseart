@@ -149,6 +149,8 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.Space(6f);
         DrawDirectorIntent(directorStatus);
         EditorGUILayout.Space(6f);
+        DrawLastCueDecision(directorStatus);
+        EditorGUILayout.Space(6f);
         DrawLoadedCue(controller, directorStatus, cueStatus);
         EditorGUILayout.Space(6f);
         DrawSwitcherExecution(switcherStatus);
@@ -242,6 +244,82 @@ public sealed class ControllerEditor : Editor
         DrawRow("Last Change", FormatBeat(status.LastChangeBeat));
         DrawRow("Last Sent Cue Mark", FormatBeat(status.TransitionLandingBeat));
         DrawRow("Cadence Ready In", FormatBeats(status.BeatsUntilCadenceReady));
+    }
+
+    private static void DrawLastCueDecision(DirectorStatus status)
+    {
+        EditorGUILayout.LabelField("LAST CUE DECISION", EditorStyles.boldLabel);
+        var decision = status.LastCue;
+        if (decision.Outcome == CueDecisionOutcome.None)
+        {
+            DrawRow("Outcome", "—");
+            return;
+        }
+
+        DrawRow("Outcome", $"{FormatCueOutcome(decision.Outcome)} @ beat {decision.Beat}");
+        DrawRow("Cue Event", FormatCueEvent(decision));
+        DrawRow("Impact", FormatCueImpact(decision));
+        if (decision.EffectIndex >= 0)
+        {
+            DrawRow(
+                decision.Outcome == CueDecisionOutcome.DropProtected ? "Protected Effect" : "Cast Effect",
+                FormatIndexedName(decision.EffectIndex, decision.EffectName) + FormatCastSource(decision.EffectSource, decision.PreferredRepertoire));
+        }
+
+        if (decision.TransitionIndex >= 0)
+        {
+            DrawRow(
+                "Cast Transition",
+                FormatIndexedName(decision.TransitionIndex, decision.TransitionName) + FormatCastSource(decision.TransitionSource, decision.PreferredRepertoire));
+        }
+    }
+
+    private static string FormatCueOutcome(CueDecisionOutcome outcome)
+    {
+        switch (outcome)
+        {
+            case CueDecisionOutcome.Sent: return "Sent";
+            case CueDecisionOutcome.Held: return "Held (nothing sent)";
+            case CueDecisionOutcome.BlockedByCadence: return "Blocked by cadence";
+            case CueDecisionOutcome.DropProtected: return "Drop protected (no cue)";
+            default: return outcome.ToString();
+        }
+    }
+
+    private static string FormatCueEvent(CueDecision decision)
+    {
+        return decision.PreferredRepertoire == Repertoire.None
+            ? decision.EventIntent.ToString()
+            : $"{decision.EventIntent} (wants {decision.PreferredRepertoire})";
+    }
+
+    private static string FormatCueImpact(CueDecision decision)
+    {
+        if (decision.Outcome != CueDecisionOutcome.Sent && decision.Outcome != CueDecisionOutcome.Held)
+        {
+            return $"beat {decision.ImpactBeat}";
+        }
+
+        var beatsBeforeImpact = decision.BeatsBeforeImpact;
+        if (beatsBeforeImpact > 0)
+        {
+            return $"beat {decision.ImpactBeat} — sent {beatsBeforeImpact}b before impact";
+        }
+
+        return beatsBeforeImpact == 0
+            ? $"beat {decision.ImpactBeat} — sent on impact (hard cut)"
+            : $"beat {decision.ImpactBeat} — sent {-beatsBeforeImpact}b after impact (hard cut)";
+    }
+
+    private static string FormatCastSource(CueCastSource source, Repertoire preferredRepertoire)
+    {
+        switch (source)
+        {
+            case CueCastSource.Staged: return " (staged)";
+            case CueCastSource.DeckFind: return " (deck find)";
+            case CueCastSource.NoPreferredAvailable: return $" (no {preferredRepertoire} candidate)";
+            default: return string.Empty;
+        }
     }
 
     private static void DrawLoadedCue(Controller controller, DirectorStatus directorStatus, SwitcherCueStatus cueStatus)
