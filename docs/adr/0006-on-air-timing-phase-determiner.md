@@ -4,6 +4,11 @@
 
 ## Status
 
+Amended 2026-07-01 — the pass-local round-trip residue is deleted, finishing this ADR's relocation:
+
+- The per-beat cue timing verdict (wait / cue / blocked-on-cadence) is now answered by the CuePlanner itself (`EvaluateCueTiming`) from its own pass-local cue/cadence memory. `PassLocalTimingState` no longer exists and the `TimingFrame` carries no pass-local echo — the frame said back to the Director what the planner already knew, and `SyncedCueIntent` re-derived the verdict from that echo. `SyncedCueIntent` is now the casting half only (event classification and Performer choice); it never answers "when".
+- Change-cadence checks all live inside the CuePlanner (`CanChangeAt` and the Cue Sheet build predicate); the Director's status trace asks the planner instead of re-running the cadence rule.
+
 Amended 2026-06-25 during slice 04c implementation:
 
 - The phrase-absent fallback changed from the end-aligned `total_beats mod 16` grid to a start-aligned `beat mod 16` (offset 0). `total_beats` is end-of-track *length*, not phase information, and the running `beat` already rides the always-present 4-count — so grounding the fallback on the beat is the honest guess and let `total_beats` drop out of the Phase input entirely. The sections below describe the shipped `beat mod 16` fallback.

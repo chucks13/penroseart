@@ -1,20 +1,5 @@
 using System;
 
-/// <summary>
-/// Result of asking whether the Director should issue a Synced Mode transition cue on the current beat.
-/// </summary>
-public enum SyncedCueIntentKind
-{
-    /// <summary>No cue should be issued on this beat.</summary>
-    Wait,
-
-    /// <summary>The current beat is inside the transition runway and cadence permits the cue.</summary>
-    Cue,
-
-    /// <summary>The current beat is inside the transition runway, but the minimum-change cadence blocks it.</summary>
-    BlockedByCadence
-}
-
 /// <summary>Musical event meaning used to cast a Director-facing Cue.</summary>
 public enum CueEventIntent
 {
@@ -36,14 +21,12 @@ public enum CueEventIntent
 }
 
 /// <summary>
-/// Director-facing intent for a Synced Mode Cue, including beat timing and Repertoire-aware casting.
+/// The casting half of a Synced Mode Cue: which Performer the cue targets, given the musical event
+/// intent and the staged/deck choices. Timing — wait, cue, or block on cadence — is the Cue
+/// Planner's verdict (<see cref="CuePlanner.EvaluateCueTiming"/>); this type never answers "when".
 /// </summary>
 public readonly struct SyncedCueIntent
 {
-    public readonly SyncedCueIntentKind Kind;
-    public readonly TransitionBeatPlan BeatPlan;
-    public readonly int CurrentBeat;
-    public readonly int BeatsUntilImpact;
     public readonly int TargetEffectIndex;
     public readonly CueEventIntent EventIntent;
     public readonly Repertoire PreferredRepertoire;
@@ -57,29 +40,18 @@ public readonly struct SyncedCueIntent
     public readonly int EffectDeckIndex;
 
     private SyncedCueIntent(
-        SyncedCueIntentKind kind,
-        TransitionBeatPlan beatPlan,
-        int currentBeat,
         int targetEffectIndex,
         CueEventIntent eventIntent,
         Repertoire preferredRepertoire,
         bool castPreferredPerformer,
         int effectDeckIndex)
     {
-        Kind = kind;
-        BeatPlan = beatPlan;
-        CurrentBeat = currentBeat;
-        BeatsUntilImpact = beatPlan.ImpactBeat - currentBeat;
         TargetEffectIndex = targetEffectIndex;
         EventIntent = eventIntent;
         PreferredRepertoire = preferredRepertoire;
         CastPreferredPerformer = castPreferredPerformer;
         EffectDeckIndex = effectDeckIndex;
     }
-
-    public bool ShouldCue => Kind == SyncedCueIntentKind.Cue;
-
-    public bool BlockedByCadence => Kind == SyncedCueIntentKind.BlockedByCadence;
 
     /// <summary>True when the scheduled Cue asks for a Fill-capable Performer.</summary>
     public bool FillAligned => EventIntent == CueEventIntent.Fill;
@@ -88,50 +60,20 @@ public readonly struct SyncedCueIntent
     public bool DropAligned => EventIntent == CueEventIntent.Drop;
 
     /// <summary>
-    /// Builds a Synced Mode cue intent from the Timing Frame, selected Transition timing,
-    /// event-aware casting context, staged Effect choice, and advertised Effect Repertoire.
-    /// Evaluation never rotates the deck: a preferred Performer found on the deck is reported through
+    /// Casts the Performer for a cue that the Cue Planner already cleared to fire: the staged choice
+    /// by default, or — for an event-aligned cue without held/manual staging — a preferred Performer
+    /// found on the deck. Casting never rotates the deck: a deck find is reported through
     /// <see cref="EffectDeckIndex"/>, and the Director pulls that card only when the cue is sent.
     /// </summary>
-    public static SyncedCueIntent Evaluate(
-        TimingFrame frame,
-        TransitionRepertoire transitionRepertoire,
+    public static SyncedCueIntent Cast(
         CueEventIntent eventIntent,
         int stagedEffectIndex,
         bool preserveStagedEffect,
         int currentEffectIndex,
         int[] deck,
-        Func<int, Repertoire> repertoireForEffect,
-        int minimumChangeCadenceBeats)
+        Func<int, Repertoire> repertoireForEffect)
     {
-        if (!frame.HasGridAnchor)
-        {
-            throw new InvalidOperationException("Cannot evaluate a synced cue intent without a Grid Anchor.");
-        }
-
-        var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, transitionRepertoire);
-        if (frame.PassLocalState.LastCueBeat == frame.CurrentBeat
-            || frame.PassLocalState.PreviousCueMarkBeat == frame.CueMarkBeat
-            || !beatPlan.IsCueBeat(frame.CurrentBeat))
-        {
-            return NoCue(SyncedCueIntentKind.Wait, beatPlan, frame.CurrentBeat, stagedEffectIndex, eventIntent);
-        }
-
         var preferredRepertoire = PreferredRepertoireFor(eventIntent);
-        if (!ChangeCadence.CanChangeAt(
-            frame.CueMarkBeat,
-            frame.PassLocalState.PreviousCueMarkBeat,
-            minimumChangeCadenceBeats))
-        {
-            return NoCue(
-                SyncedCueIntentKind.BlockedByCadence,
-                beatPlan,
-                frame.CurrentBeat,
-                stagedEffectIndex,
-                eventIntent,
-                preferredRepertoire);
-        }
-
         if (preferredRepertoire != Repertoire.None && repertoireForEffect == null)
         {
             throw new ArgumentNullException(nameof(repertoireForEffect));
@@ -159,9 +101,6 @@ public readonly struct SyncedCueIntent
         }
 
         return new SyncedCueIntent(
-            SyncedCueIntentKind.Cue,
-            beatPlan,
-            frame.CurrentBeat,
             targetEffectIndex,
             eventIntent,
             preferredRepertoire,
@@ -185,25 +124,6 @@ public readonly struct SyncedCueIntent
             BeatsUntilGridEnd(frame),
             fill,
             drop);
-    }
-
-    private static SyncedCueIntent NoCue(
-        SyncedCueIntentKind kind,
-        TransitionBeatPlan beatPlan,
-        int currentBeat,
-        int stagedEffectIndex,
-        CueEventIntent eventIntent,
-        Repertoire preferredRepertoire = Repertoire.None)
-    {
-        return new SyncedCueIntent(
-            kind,
-            beatPlan,
-            currentBeat,
-            stagedEffectIndex,
-            eventIntent,
-            preferredRepertoire,
-            castPreferredPerformer: false,
-            effectDeckIndex: -1);
     }
 
     private static bool StagedEffectMatchesPreferredRepertoire(

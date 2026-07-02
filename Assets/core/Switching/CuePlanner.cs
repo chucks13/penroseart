@@ -10,6 +10,19 @@ using System;
 /// decisions live here, fed by plain data — never a reference back to the timing source. The
 /// pass-local cue/cadence memory it used to round-trip through the Director is now owned outright.
 /// </summary>
+/// <summary>Per-beat answer to "may a cue for this Transition's beat plan fire on this beat?"</summary>
+public enum CueTimingVerdict
+{
+    /// <summary>No cue should be issued on this beat.</summary>
+    Wait,
+
+    /// <summary>The beat is inside the cue window and cadence permits the cue.</summary>
+    Cue,
+
+    /// <summary>The beat is inside the cue window, but the minimum-change cadence blocks it.</summary>
+    BlockedByCadence
+}
+
 public sealed class CuePlanner
 {
     /// <summary>
@@ -318,6 +331,9 @@ public sealed class CuePlanner
     /// <summary>The last beat any change committed, or <see cref="int.MinValue"/> when none — the change cadence memory the Director queries.</summary>
     public int LastChangeBeat => lastChangeBeat;
 
+    /// <summary>The last committed Cue Mark this pass, or null — the cadence anchor and consumed-mark memory.</summary>
+    private int? ConsumedCueMarkBeat => lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat;
+
     /// <summary>Records that a change committed on <paramref name="beat"/> (a synced cue impact or a manual show-now), feeding change cadence.</summary>
     public void MarkChanged(int beat)
     {
@@ -328,6 +344,32 @@ public sealed class CuePlanner
     public void RecordCueIssued(int beat)
     {
         lastCueBeat = beat;
+    }
+
+    /// <summary>
+    /// The per-beat cue timing verdict, answered from the planner's own pass-local memory: a beat
+    /// that already issued a cue waits, an already-committed Cue Mark waits, a beat outside the
+    /// Transition's cue window waits, and a Mark whose landing violates the minimum change cadence
+    /// blocks. Timing is decided here; casting (which Performer/Transition) stays with the Director.
+    /// </summary>
+    public CueTimingVerdict EvaluateCueTiming(TransitionBeatPlan beatPlan, int beat, int minimumChangeCadenceBeats)
+    {
+        if (lastCueBeat == beat
+            || lastChangeBeat == beatPlan.ImpactBeat
+            || !beatPlan.IsCueBeat(beat))
+        {
+            return CueTimingVerdict.Wait;
+        }
+
+        return CanChangeAt(beatPlan.ImpactBeat, minimumChangeCadenceBeats)
+            ? CueTimingVerdict.Cue
+            : CueTimingVerdict.BlockedByCadence;
+    }
+
+    /// <summary>Whether the minimum change cadence permits a change landing on <paramref name="beat"/>.</summary>
+    public bool CanChangeAt(int beat, int minimumChangeCadenceBeats)
+    {
+        return ChangeCadence.CanChangeAt(beat, ConsumedCueMarkBeat, minimumChangeCadenceBeats);
     }
 
     /// <summary>Clears all remembered timing state so the next synced frame starts a new interpretation.</summary>
@@ -364,12 +406,20 @@ public sealed class CuePlanner
 
         var beatRewoundToNewPass = BeatRewoundToNewPass(lastBeat, input.Beat, minimumChangeCadenceBeats);
 
-        var passLocalState = new PassLocalTimingState(
-            lastCueBeat >= 0 ? lastCueBeat : (int?)null,
-            lastChangeBeat == int.MinValue ? (int?)null : lastChangeBeat);
-        var passState = BuildFramePassLocalState(passLocalState, input.Beat, beatRewoundToNewPass);
-        lastCueBeat = passState.LastCueBeat ?? -1;
-        lastChangeBeat = passState.PreviousCueMarkBeat ?? int.MinValue;
+        // A rewound beat starts a new pass: cue/commit memory at or after the rewound beat belongs to
+        // the previous pass and would wrongly block this one, so it clears; memory before it still binds.
+        if (beatRewoundToNewPass && input.Beat >= 1)
+        {
+            if (lastCueBeat >= input.Beat)
+            {
+                lastCueBeat = -1;
+            }
+
+            if (lastChangeBeat != int.MinValue && lastChangeBeat >= input.Beat)
+            {
+                lastChangeBeat = int.MinValue;
+            }
+        }
 
         if (input.Beat >= 1)
         {
@@ -383,10 +433,10 @@ public sealed class CuePlanner
             // so a phrase-less track still sequences until phrase data loads (ADR-0008).
             if (HasCoastableGridAnchor())
             {
-                return BuildCoastingFrame(input, grid, beatRewoundToNewPass, passState, minimumChangeCadenceBeats, lateCueWindowBeats);
+                return BuildCoastingFrame(input, grid, beatRewoundToNewPass, minimumChangeCadenceBeats, lateCueWindowBeats);
             }
 
-            return BuildSyntheticFrame(input, grid, beatRewoundToNewPass, passState, minimumChangeCadenceBeats, lateCueWindowBeats);
+            return BuildSyntheticFrame(input, grid, beatRewoundToNewPass, minimumChangeCadenceBeats, lateCueWindowBeats);
         }
 
         // The gate is "do we have a usable grid position to plan interior cues against." A live phrase
@@ -401,7 +451,7 @@ public sealed class CuePlanner
                 phrase,
                 grid,
                 beatRewoundToNewPass,
-                passState.PreviousCueMarkBeat,
+                ConsumedCueMarkBeat,
                 minimumChangeCadenceBeats,
                 lateCueWindowBeats);
             var reanchored = ReanchoredFrom(previousSource, target.Source, hasGridAnchor);
@@ -410,23 +460,21 @@ public sealed class CuePlanner
                 grid,
                 target,
                 beatRewoundToNewPass,
-                passState,
                 reanchored);
         }
 
         if (hasGridAnchor && input.Beat >= 1)
         {
-            return BuildCoastingFrame(input, grid, beatRewoundToNewPass, passState, minimumChangeCadenceBeats, lateCueWindowBeats);
+            return BuildCoastingFrame(input, grid, beatRewoundToNewPass, minimumChangeCadenceBeats, lateCueWindowBeats);
         }
 
-        return BuildUnlockedFrame(input, grid, beatRewoundToNewPass, passState);
+        return BuildUnlockedFrame(input, grid, beatRewoundToNewPass);
     }
 
     private TimingFrame BuildCoastingFrame(
         OnAirTimingInput input,
         in GridReading grid,
         bool beatRewoundToNewPass,
-        PassLocalTimingState passState,
         int minimumChangeCadenceBeats,
         int lateCueWindowBeats)
     {
@@ -441,7 +489,6 @@ public sealed class CuePlanner
             default,
             TimingFrameSource.Coast,
             beatRewoundToNewPass,
-            passState,
             false,
             CueSheetStatus.Empty);
     }
@@ -451,7 +498,6 @@ public sealed class CuePlanner
         in GridReading grid,
         ResolvedTimingTarget target,
         bool beatRewoundToNewPass,
-        PassLocalTimingState passState,
         bool reanchored)
     {
         hasGridAnchor = true;
@@ -466,7 +512,6 @@ public sealed class CuePlanner
             target.PhraseWindow,
             target.Source,
             beatRewoundToNewPass,
-            passState,
             reanchored,
             cueSheet.Status(gridAnchorLandingBeat));
     }
@@ -474,8 +519,7 @@ public sealed class CuePlanner
     private TimingFrame BuildUnlockedFrame(
         OnAirTimingInput input,
         in GridReading grid,
-        bool beatRewoundToNewPass,
-        PassLocalTimingState passState)
+        bool beatRewoundToNewPass)
     {
         hasGridAnchor = false;
         gridAnchorLandingBeat = -1;
@@ -489,7 +533,6 @@ public sealed class CuePlanner
             default,
             TimingFrameSource.Unlocked,
             beatRewoundToNewPass,
-            passState,
             false,
             CueSheetStatus.Empty);
     }
@@ -498,7 +541,6 @@ public sealed class CuePlanner
         OnAirTimingInput input,
         in GridReading grid,
         bool beatRewoundToNewPass,
-        PassLocalTimingState passState,
         int minimumChangeCadenceBeats,
         int lateCueWindowBeats)
     {
@@ -518,7 +560,7 @@ public sealed class CuePlanner
                 grid.Offset,
                 SyntheticPhraseLengthBeats,
                 beatRewoundToNewPass,
-                passState.PreviousCueMarkBeat,
+                ConsumedCueMarkBeat,
                 minimumChangeCadenceBeats,
                 lateCueWindowBeats,
                 randomRange,
@@ -528,7 +570,7 @@ public sealed class CuePlanner
         {
             // Too early in the track to anchor a full synthetic window (its start would precede beat 1).
             ResetSyntheticLoopGuard();
-            return BuildUnlockedFrame(input, grid, beatRewoundToNewPass, passState);
+            return BuildUnlockedFrame(input, grid, beatRewoundToNewPass);
         }
 
         var beatsUntilCueMark = resolvedCueMarkBeat - input.Beat;
@@ -559,7 +601,6 @@ public sealed class CuePlanner
                 default,
                 TimingFrameSource.GridFallback,
                 beatRewoundToNewPass,
-                passState,
                 false,
                 cueSheetStatus);
         }
@@ -574,7 +615,6 @@ public sealed class CuePlanner
             phraseWindow,
             TimingFrameSource.SyntheticPhrase,
             beatRewoundToNewPass,
-            passState,
             false,
             cueSheetStatus);
     }
@@ -628,7 +668,6 @@ public sealed class CuePlanner
         PhraseWindow phraseWindow,
         TimingFrameSource source,
         bool beatRewoundToNewPass,
-        PassLocalTimingState passState,
         bool reanchored,
         CueSheetStatus cueSheet)
     {
@@ -641,7 +680,6 @@ public sealed class CuePlanner
             phraseWindow,
             source,
             beatRewoundToNewPass,
-            passState,
             reanchored,
             cueSheet);
     }
@@ -802,24 +840,7 @@ public sealed class CuePlanner
             && previousBeat - beat + 1 >= minimumChangeCadenceBeats;
     }
 
-    private static PassLocalTimingState BuildFramePassLocalState(
-        PassLocalTimingState passLocalState,
-        int beat,
-        bool beatRewoundToNewPass)
-    {
-        if (!beatRewoundToNewPass || beat < 1)
-        {
-            return passLocalState;
-        }
-
-        var lastCueBeat = passLocalState.LastCueBeat is { } cueBeat && cueBeat >= beat
-            ? (int?)null
-            : passLocalState.LastCueBeat;
-        var previousCueMarkBeat = passLocalState.PreviousCueMarkBeat is { } cueMarkBeat && cueMarkBeat >= beat
-            ? (int?)null
-            : passLocalState.PreviousCueMarkBeat;
-        return new PassLocalTimingState(lastCueBeat, previousCueMarkBeat);
-    }
+    
 
     private static int ClampIndex(int index, int length)
     {

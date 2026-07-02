@@ -167,7 +167,7 @@ The Synced Mode timing interpretation: it reads the current on-air rhythm facts,
 _Avoid_: making the Director read raw Track Phase fields; treating On-Air Timing as another clock source or as Switcher execution state.
 
 **Timing Frame**:
-The Director-facing snapshot of one Synced Mode timing moment: current beat, Grid reading, Grid Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, Coast/Re-anchor, and pass-local cue/cadence correction. The Director consumes it to decide whether the next fire-and-forget cue command should wait, cue, or block on cadence.
+The Director-facing snapshot of one Synced Mode timing moment: current beat, Grid reading, Grid Anchor availability/confidence, current Cue Mark when known, Phrase Window when known, timing source/reason, Beat Rewind, and Coast/Re-anchor. The Director consumes it — together with the Cue Planner's per-beat timing verdict — to decide whether the next fire-and-forget cue command should wait, cue, or block on cadence; the pass-local cue/cadence memory behind that verdict lives in the Cue Planner and does not ride the frame.
 _Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
 
 **Cue Sheet**:
@@ -191,7 +191,7 @@ The beat after which a Loaded Cue can no longer change. The Lock Point depends o
 _Avoid_: one global lock beat for every Transition; locking at the Impact Point; putting transition start math into the Cue Sheet.
 
 **Cue Intent**:
-The Director-facing result of combining a Timing Frame's current Cue Mark with BeatManager's Fill/Drop phrase-event timing, staged choices, current Performer, deck state, and Performer Repertoire. Cue Intent classifies a Cue as ordinary, Fill, or Drop only for casting. It says whether the Director should wait, send a cue command with a target Performer, or block on cadence; deck candidates — effect and transition alike — are only rotated once a cue is actually sent.
+The Director-facing casting result of combining a cue's musical event meaning (ordinary, Fill, or Drop) with staged choices, current Performer, deck state, and Performer Repertoire: which target Performer the cue should cast. Whether the Director should wait, send the cue, or block on cadence is the Cue Planner's per-beat timing verdict, answered from its own pass-local memory; deck candidates — effect and transition alike — are only rotated once a cue is actually sent.
 _Avoid_: using Cue Intent for pixel-level commands; letting it configure Effect internals; bypassing the Director/Switcher split; using Fill/Drop to create alternate Cue Mark timing.
 
 **Next Transition**:

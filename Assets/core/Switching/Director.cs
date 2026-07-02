@@ -606,39 +606,38 @@ public sealed class Director
         ValidateTransitionIndex(transitionIndex);
         ValidateEffectIndex(stagedEffectIndex);
         var repertoire = transitionSelection.Repertoire;
-        var cueIntent = SyncedCueIntent.Evaluate(
-            frame,
-            repertoire,
+        var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire);
+        var verdict = cuePlanner.EvaluateCueTiming(beatPlan, beat, MinimumChangeCadenceBeats);
+        if (verdict == CueTimingVerdict.Wait)
+        {
+            return false;
+        }
+
+        if (verdict == CueTimingVerdict.BlockedByCadence)
+        {
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={beatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+            cuePlanner.RecordCueIssued(beat);
+            return true;
+        }
+
+        var cueIntent = SyncedCueIntent.Cast(
             eventIntent,
             stagedEffectIndex,
             preserveStagedEffect: holdSelectedEffect || nextEffectIsManualSelection,
             currentEffectIndex: currentEffectIndexForSelection,
             deck: effectDeck,
-            repertoireForEffect: effectIndex => controller.effects[effectIndex].Repertoire,
-            minimumChangeCadenceBeats: MinimumChangeCadenceBeats);
-
-        if (cueIntent.Kind == SyncedCueIntentKind.Wait)
-        {
-            return false;
-        }
-
-        if (cueIntent.BlockedByCadence)
-        {
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={cueIntent.BeatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
-            cuePlanner.RecordCueIssued(beat);
-            return true;
-        }
+            repertoireForEffect: effectIndex => controller.effects[effectIndex].Repertoire);
 
         ValidateEffectIndex(cueIntent.TargetEffectIndex);
         var cue = new SwitcherCueDirection(
-            cueIntent.BeatPlan.ImpactBeat,
+            beatPlan.ImpactBeat,
             cueIntent.TargetEffectIndex,
             transitionIndex,
             repertoire);
         if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
         {
             cuePlanner.RecordCueIssued(beat);
-            Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} start={cueIntent.BeatPlan.StartBeat} impact={cueIntent.BeatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+            Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} start={beatPlan.StartBeat} impact={beatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
             return true;
         }
 
@@ -659,7 +658,7 @@ public sealed class Director
 
         var clock = CurrentSwitcherClockSnapshot(beat);
         switcher.UpsertLoadedCue(cue, clock);
-        CommitSentCue(beat, cue, cueIntent.BeatPlan);
+        CommitSentCue(beat, cue, beatPlan);
         return true;
     }
 
@@ -749,8 +748,7 @@ public sealed class Director
 
     private bool CanChangeAtBeat(int beat)
     {
-        var previousCueMarkBeat = cuePlanner.LastChangeBeat == int.MinValue ? (int?)null : cuePlanner.LastChangeBeat;
-        return ChangeCadence.CanChangeAt(beat, previousCueMarkBeat, MinimumChangeCadenceBeats);
+        return cuePlanner.CanChangeAt(beat, MinimumChangeCadenceBeats);
     }
 
     private void Trace(string message)

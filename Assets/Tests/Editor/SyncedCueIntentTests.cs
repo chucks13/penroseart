@@ -1,238 +1,152 @@
 using NUnit.Framework;
 
+// Casting behavior of SyncedCueIntent (which Performer a cleared cue targets, and how live phrase
+// events classify a cue for casting). The per-beat timing verdict — wait/cue/blocked-on-cadence —
+// lives on CuePlanner.EvaluateCueTiming and is covered by CuePlannerTests.
 public sealed class SyncedCueIntentTests
 {
     [Test]
-    public void EvaluateWaitsBeforeRunway()
-    {
-        var intent = Evaluate(Frame(currentBeat: 604, cueMarkBeat: 609));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
-        Assert.That(intent.BeatPlan.StartBeat, Is.EqualTo(605));
-        Assert.That(intent.BeatPlan.ImpactBeat, Is.EqualTo(609));
-    }
-
-    [Test]
-    public void EvaluateCuesInsideRunway()
-    {
-        var intent = Evaluate(Frame(currentBeat: 605, cueMarkBeat: 609));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.ShouldCue, Is.True);
-        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(4));
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void DropAlignedCueCastsPreferredPerformerFromDeck()
+    public void OrdinaryCastKeepsTheStagedPerformer()
     {
         var deck = new[] { 1, 2, 0 };
 
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
-            CueEventIntent.Drop,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: false,
-            currentEffectIndex: 0,
-            deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Drop));
-        Assert.That(intent.DropAligned, Is.True);
-        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
-        Assert.That(intent.CastPreferredPerformer, Is.True);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Evaluating an intent must not rotate deck candidates; the card is pulled only when the cue is sent.");
-    }
-
-    [Test]
-    public void DropAlignedCueKeepsStagedPerformerWhenItAlreadyMatchesPreferredRepertoire()
-    {
-        var deck = new[] { 2, 0, 1 };
-
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
-            CueEventIntent.Drop,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: false,
-            currentEffectIndex: 0,
-            deck,
-            effectIndex => effectIndex is 1 or 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
-        Assert.That(intent.CastPreferredPerformer, Is.True);
-        Assert.That(deck, Is.EqualTo(new[] { 2, 0, 1 }));
-    }
-
-    [Test]
-    public void DropAlignedCueKeepsStagedPerformerWhenNoPreferredPerformerIsAvailable()
-    {
-        var deck = new[] { 1, 2, 0 };
-
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
-            CueEventIntent.Drop,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: false,
-            currentEffectIndex: 0,
-            deck,
-            _ => Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
-        Assert.That(intent.CastPreferredPerformer, Is.False);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
-    }
-
-    [Test]
-    public void DropAlignedCuePreservesStagedPerformerForHeldOrManualSelection()
-    {
-        var deck = new[] { 1, 2, 0 };
-
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
-            CueEventIntent.Drop,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: true,
-            currentEffectIndex: 0,
-            deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
-        Assert.That(intent.CastPreferredPerformer, Is.False);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
-    }
-
-    [Test]
-    public void MisalignedDropCueDoesNotCastPreferredPerformer()
-    {
-        var deck = new[] { 1, 2, 0 };
-
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
+        var intent = SyncedCueIntent.Cast(
             CueEventIntent.Ordinary,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
             deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None);
 
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
         Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Ordinary));
         Assert.That(intent.DropAligned, Is.False);
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
         Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
         Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
     }
 
     [Test]
-    public void InProgressDropCueDoesNotCastPreferredPerformer()
+    public void DropAlignedCastFindsPreferredPerformerOnTheDeckWithoutRotatingIt()
     {
         var deck = new[] { 1, 2, 0 };
 
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
-            CueEventIntent.Ordinary,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: false,
-            currentEffectIndex: 0,
-            deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.DropAligned, Is.False);
-        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
-        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
-        Assert.That(intent.CastPreferredPerformer, Is.False);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
-    }
-
-    [Test]
-    public void DropAlignedCueBlockedByCadenceDoesNotRotatePreferredDeckCard()
-    {
-        var deck = new[] { 1, 2, 0 };
-
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(
-                currentBeat: 605,
-                cueMarkBeat: 609,
-                previousCueMarkBeat: 600),
-            FourBeatRunway(),
+        var intent = SyncedCueIntent.Cast(
             CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
             deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None);
 
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.BlockedByCadence));
         Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Drop));
+        Assert.That(intent.DropAligned, Is.True);
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
+        Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(1));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Casting must not rotate deck candidates; the card is pulled only when the cue is sent.");
+    }
+
+    [Test]
+    public void DropAlignedCastKeepsStagedPerformerWhenItAlreadyMatchesPreferredRepertoire()
+    {
+        var deck = new[] { 2, 0, 1 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Drop,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex is 1 or 2 ? Repertoire.HandlesDrop : Repertoire.None);
+
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
+        Assert.That(deck, Is.EqualTo(new[] { 2, 0, 1 }));
+    }
+
+    [Test]
+    public void DropAlignedCastKeepsStagedPerformerWhenNoPreferredPerformerIsAvailable()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Drop,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            _ => Repertoire.None);
+
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
         Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
         Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
     }
 
     [Test]
-    public void DropAlignedCuePreservesMatchingHeldOrManualStagedPerformer()
+    public void DropAlignedCastPreservesStagedPerformerForHeldOrManualSelection()
     {
-        var deck = new[] { 2, 0, 1 };
+        var deck = new[] { 1, 2, 0 };
 
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
+        var intent = SyncedCueIntent.Cast(
             CueEventIntent.Drop,
             stagedEffectIndex: 1,
             preserveStagedEffect: true,
             currentEffectIndex: 0,
             deck,
-            effectIndex => effectIndex is 1 or 2 ? Repertoire.HandlesDrop : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop : Repertoire.None);
+
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }));
+    }
+
+    [Test]
+    public void DropAlignedCastPreservesMatchingHeldOrManualStagedPerformer()
+    {
+        var deck = new[] { 2, 0, 1 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Drop,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: true,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex is 1 or 2 ? Repertoire.HandlesDrop : Repertoire.None);
 
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
         Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
         Assert.That(deck, Is.EqualTo(new[] { 2, 0, 1 }));
     }
 
     [Test]
-    public void FillAlignedCueCastsPreferredPerformerFromDeck()
+    public void FillAlignedCastFindsPreferredPerformerOnTheDeckWithoutRotatingIt()
     {
         var deck = new[] { 1, 2, 0 };
 
-        var intent = SyncedCueIntent.Evaluate(
-            Frame(currentBeat: 605, cueMarkBeat: 609),
-            FourBeatRunway(),
+        var intent = SyncedCueIntent.Cast(
             CueEventIntent.Fill,
             stagedEffectIndex: 1,
             preserveStagedEffect: false,
             currentEffectIndex: 0,
             deck,
-            effectIndex => effectIndex == 2 ? Repertoire.HandlesFill : Repertoire.None,
-            minimumChangeCadenceBeats: 16);
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesFill : Repertoire.None);
 
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
         Assert.That(intent.EventIntent, Is.EqualTo(CueEventIntent.Fill));
         Assert.That(intent.FillAligned, Is.True);
         Assert.That(intent.DropAligned, Is.False);
         Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesFill));
         Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
         Assert.That(intent.CastPreferredPerformer, Is.True);
-        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Evaluating an intent must not rotate deck candidates; the card is pulled only when the cue is sent.");
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(1));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Casting must not rotate deck candidates; the card is pulled only when the cue is sent.");
     }
 
     [Test]
@@ -300,116 +214,7 @@ public sealed class SyncedCueIntentTests
         Assert.That(eventIntent, Is.EqualTo(CueEventIntent.Fill));
     }
 
-    [Test]
-    public void EvaluateCuesAtImpactBeatWhenRunwayWasMissed()
-    {
-        var intent = Evaluate(Frame(currentBeat: 609, cueMarkBeat: 609));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(0));
-    }
-
-    [Test]
-    public void EvaluateCuesLateInsideTailWhenImpactWasMissed()
-    {
-        var intent = Evaluate(Frame(currentBeat: 611, cueMarkBeat: 609));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(-2));
-    }
-
-    [Test]
-    public void EvaluateWaitsPastCompleteBeat()
-    {
-        var intent = Evaluate(Frame(currentBeat: 614, cueMarkBeat: 609));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
-        Assert.That(intent.ShouldCue, Is.False);
-    }
-
-    [Test]
-    public void EvaluateCuesZeroRunwayAtImpactBeat()
-    {
-        var intent = Evaluate(
-            Frame(currentBeat: 609, cueMarkBeat: 609),
-            transitionRepertoire: HardCut());
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.ShouldCue, Is.True);
-        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(0));
-    }
-
-    [Test]
-    public void EvaluateCuesZeroRunwayTailAfterImpactBeat()
-    {
-        var intent = Evaluate(
-            Frame(currentBeat: 610, cueMarkBeat: 609),
-            transitionRepertoire: ZeroRunwayTail());
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Cue));
-        Assert.That(intent.ShouldCue, Is.True);
-        Assert.That(intent.BeatsUntilImpact, Is.EqualTo(-1));
-    }
-
-    [Test]
-    public void EvaluateBlocksCadenceInsideRunway()
-    {
-        var intent = Evaluate(Frame(
-            currentBeat: 605,
-            cueMarkBeat: 609,
-            previousCueMarkBeat: 600));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.BlockedByCadence));
-        Assert.That(intent.BlockedByCadence, Is.True);
-        Assert.That(intent.ShouldCue, Is.False);
-    }
-
-    [Test]
-    public void EvaluateWaitsWhenCueMarkAlreadyCommittedThisPass()
-    {
-        var intent = Evaluate(Frame(
-            currentBeat: 611,
-            cueMarkBeat: 609,
-            previousCueMarkBeat: 609));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
-        Assert.That(intent.BlockedByCadence, Is.False, "A committed Cue Mark is done, not paced.");
-    }
-
-    [Test]
-    public void EvaluateWaitsWhenCurrentBeatAlreadyIssuedCue()
-    {
-        var intent = Evaluate(Frame(
-            currentBeat: 605,
-            cueMarkBeat: 609,
-            lastCueBeat: 605));
-
-        Assert.That(intent.Kind, Is.EqualTo(SyncedCueIntentKind.Wait));
-        Assert.That(intent.ShouldCue, Is.False);
-    }
-
-    private static SyncedCueIntent Evaluate(
-        TimingFrame frame,
-        TransitionRepertoire? transitionRepertoire = null)
-    {
-        var deck = new[] { 1, 2, 0 };
-        return SyncedCueIntent.Evaluate(
-            frame,
-            transitionRepertoire ?? FourBeatRunway(),
-            CueEventIntent.Ordinary,
-            stagedEffectIndex: 1,
-            preserveStagedEffect: true,
-            currentEffectIndex: 0,
-            deck,
-            _ => Repertoire.None,
-            minimumChangeCadenceBeats: 16);
-    }
-
-    private static TimingFrame Frame(
-        int currentBeat,
-        int cueMarkBeat,
-        int? lastCueBeat = null,
-        int? previousCueMarkBeat = null)
+    private static TimingFrame Frame(int currentBeat, int cueMarkBeat)
     {
         return new TimingFrame(
             new OnAirTimingInput(
@@ -425,7 +230,6 @@ public sealed class SyncedCueIntentTests
             default,
             TimingFrameSource.TrackPhaseBoundary,
             beatRewoundToNewPass: false,
-            new PassLocalTimingState(lastCueBeat, previousCueMarkBeat),
             reanchored: false);
     }
 
@@ -479,38 +283,5 @@ public sealed class SyncedCueIntentTests
             anticipation: null,
             lengthBeats: 8,
             remaining: 1);
-    }
-
-    private static TransitionRepertoire FourBeatRunway()
-    {
-        return TransitionRepertoire.FromRunwayAndTail(
-            Repertoire.None,
-            runwayBeats: 4,
-            tailBeats: 4,
-            TransitionShape.Dissolve,
-            TransitionIntensity.High,
-            defaultDurationSeconds: 4f);
-    }
-
-    private static TransitionRepertoire HardCut()
-    {
-        return TransitionRepertoire.FromRunwayAndTail(
-            Repertoire.None,
-            runwayBeats: 0,
-            tailBeats: 0,
-            TransitionShape.Blend,
-            TransitionIntensity.High,
-            defaultDurationSeconds: 0f);
-    }
-
-    private static TransitionRepertoire ZeroRunwayTail()
-    {
-        return TransitionRepertoire.FromRunwayAndTail(
-            Repertoire.None,
-            runwayBeats: 0,
-            tailBeats: 12,
-            TransitionShape.Blend,
-            TransitionIntensity.High,
-            defaultDurationSeconds: 12f);
     }
 }

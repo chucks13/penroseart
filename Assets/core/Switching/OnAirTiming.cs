@@ -91,26 +91,6 @@ public readonly struct OnAirTimingInput
     }
 }
 
-/// <summary>Director cue/cadence memory that is valid only within one forward pass through on-air timing.</summary>
-public readonly struct PassLocalTimingState
-{
-    /// <summary>No prior cue or cadence memory is active for the current pass.</summary>
-    public static PassLocalTimingState Empty { get; } = new PassLocalTimingState(null, null);
-
-    /// <summary>The last absolute beat that issued a synced cue, or null when no cue from this pass should block.</summary>
-    public readonly int? LastCueBeat;
-
-    /// <summary>The last Cue Mark used for cadence, or null when this pass has no prior boundary.</summary>
-    public readonly int? PreviousCueMarkBeat;
-
-    /// <summary>Creates pass-local cue/cadence memory from the Director's current synced state.</summary>
-    public PassLocalTimingState(int? lastCueBeat, int? previousCueMarkBeat)
-    {
-        LastCueBeat = lastCueBeat;
-        PreviousCueMarkBeat = previousCueMarkBeat;
-    }
-}
-
 /// <summary>Read-only snapshot of the active Cue Sheet used by On-Air Timing.</summary>
 public readonly struct CueSheetStatus
 {
@@ -169,7 +149,6 @@ public readonly struct TimingFrame
         default,
         TimingFrameSource.Unlocked,
         false,
-        PassLocalTimingState.Empty,
         false,
         CueSheetStatus.Empty);
 
@@ -209,9 +188,6 @@ public readonly struct TimingFrame
     /// <summary>True when the current beat substantially rewound into a new pass.</summary>
     public readonly bool BeatRewoundToNewPass;
 
-    /// <summary>Cue/cadence memory after On-Air Timing removes stale state from earlier loop passes.</summary>
-    public readonly PassLocalTimingState PassLocalState;
-
     /// <summary>True when this frame is continuing from the last known Grid Anchor.</summary>
     public bool IsCoasting => Source == TimingFrameSource.Coast;
 
@@ -227,7 +203,6 @@ public readonly struct TimingFrame
         PhraseWindow phraseWindow,
         TimingFrameSource source,
         bool beatRewoundToNewPass,
-        PassLocalTimingState passLocalState,
         bool reanchored,
         CueSheetStatus cueSheet = default)
     {
@@ -242,7 +217,6 @@ public readonly struct TimingFrame
         CueSheet = cueSheet;
         Source = source;
         BeatRewoundToNewPass = beatRewoundToNewPass;
-        PassLocalState = passLocalState;
         Reanchored = reanchored;
     }
 }
