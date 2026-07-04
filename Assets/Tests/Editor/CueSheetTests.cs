@@ -23,7 +23,6 @@ public sealed class CueSheetTests
             });
 
         Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 16, 32 }));
-        Assert.That(sheet.Matches(window), Is.True);
         Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(593));
         Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[1]), Is.EqualTo(609));
     }
@@ -44,7 +43,6 @@ public sealed class CueSheetTests
             randomRange: (minInclusive, _) => minInclusive);
 
         Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 32 }));
-        Assert.That(sheet.Matches(window), Is.True);
         Assert.That(sheet.ToAbsoluteBeat(window.StartBeat, sheet.CueMarkOffsets[0]), Is.EqualTo(609));
     }
 
@@ -124,40 +122,5 @@ public sealed class CueSheetTests
             randomRange: (minInclusive, _) => minInclusive);
 
         Assert.That(sheet.CueMarkOffsets, Is.EqualTo(new[] { 128, 192 }));
-    }
-
-    [Test]
-    public void MatchesSamePhraseLengthInsteadOfExactAbsoluteTiming()
-    {
-        Assert.That(PhraseWindow.TryFromTrackPhase(
-            beat: 588,
-            beatsToPhraseBoundary: 21,
-            phraseLengthBeats: 32,
-            out var window), Is.True);
-        Assert.That(PhraseWindow.TryFromTrackPhase(
-            beat: 589,
-            beatsToPhraseBoundary: 20,
-            phraseLengthBeats: 32,
-            out var sameTiming), Is.True);
-        Assert.That(PhraseWindow.TryFromTrackPhase(
-            beat: 589,
-            beatsToPhraseBoundary: 21,
-            phraseLengthBeats: 32,
-            out var shiftedTiming), Is.True);
-        Assert.That(PhraseWindow.TryFromTrackPhase(
-            beat: 589,
-            beatsToPhraseBoundary: 20,
-            phraseLengthBeats: 48,
-            out var differentLength), Is.True);
-
-        var sheet = CueSheet.Build(
-            window,
-            currentBeat: 588,
-            canChangeAtBeat: _ => true,
-            randomRange: (minInclusive, _) => minInclusive);
-
-        Assert.That(sheet.Matches(sameTiming), Is.True);
-        Assert.That(sheet.Matches(shiftedTiming), Is.True);
-        Assert.That(sheet.Matches(differentLength), Is.False);
     }
 }

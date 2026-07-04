@@ -7,6 +7,10 @@ using System.Xml.Linq;
 /// </summary>
 public class Pulse : EffectBase
 {
+    /// <summary>Pulse's throbbing accents suit Fills and Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private Color startColor;
     private Color endColor;

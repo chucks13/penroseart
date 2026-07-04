@@ -7,6 +7,10 @@ using UnityEngine;
 /// </summary>
 public class TileShapes : EffectBase
 {
+    /// <summary>TileShapes' snapping shapes accent Fills and suit Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
     private bool randomColor;
     private float hue;
     private int[] shape;

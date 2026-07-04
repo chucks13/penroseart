@@ -7,6 +7,10 @@ using System.Numerics;
 /// </summary>
 public class AnimateLoops : EffectBase
 {
+    /// <summary>AnimateLoops' looping motion suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private Color[] colors;
     private float background;

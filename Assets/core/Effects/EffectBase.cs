@@ -109,7 +109,7 @@ public abstract class EffectBase
 
     /// <summary>
     /// Edge-detects the downbeat of each new 16-beat Grid (Count wraps to 1) and fires <see cref="OnNewGrid"/>
-    /// once, gated on a Locked reading so a Coasting/Contradicted grid does not trigger. Driven from
+    /// once, gated on a Locked reading so a Coasting/Disputed grid does not trigger. Driven from
     /// <see cref="UpdateTime"/>, so it runs once per active frame just before Draw. <see cref="BeatManager.Grid"/>
     /// is null off the beat clock, so this never fires in Standalone. Note: effects nested inside a mixer only
     /// receive this if the mixer forwards <see cref="UpdateTime"/> to them.
@@ -122,7 +122,7 @@ public abstract class EffectBase
         // "off the beat clock": Grid is absent, so this no-ops exactly as it does in Standalone.
         var grid = controller?.beatManager?.Grid;
         int count = grid?.Count ?? 0;
-        if (count == 1 && lastGridCount != 1 && grid?.Confidence == GridSyncState.Locked)
+        if (count == 1 && lastGridCount != 1 && grid?.Confidence == GridConfidence.Locked)
         {
             OnNewGrid();
         }

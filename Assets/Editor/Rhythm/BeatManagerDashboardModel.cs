@@ -126,7 +126,7 @@ internal readonly struct BeatManagerDashboardModel
             BuildPhraseEventRow(beatManager?.Fill),
             BuildPhraseEventRow(beatManager?.Drop),
             BuildEnergyRow(beatManager?.Energy),
-            BuildPhraseRow(beatManager?.Phrase),
+            BuildPhraseRow(beatManager?.Phrase, beatManager?.NextPhrase),
             BuildLevelsRow(beatManager?.Levels),
             new ColorBankRowView(beatManager?.LevelsRgb, beatManager?.LevelsHue, beatManager?.LevelsPalette));
     }
@@ -221,18 +221,18 @@ internal readonly struct BeatManagerDashboardModel
             energy.level.ToString().ToUpperInvariant(),
             energy.level,
             energy.runProgress ?? 0f,
-            $"{heading} · ×{RhythmText.Count(energy.changesRemaining)}");
+            heading);
     }
 
-    private static PhraseRowView BuildPhraseRow(PhraseInfo? info)
+    private static PhraseRowView BuildPhraseRow(PhraseInfo? info, NextPhraseInfo? nextInfo)
     {
         if (!(info is { } phrase))
         {
             return PhraseRowView.Null;
         }
 
-        var heading = phrase.next != null
-            ? $"→ {phrase.next} in {RhythmText.Beats(phrase.beatsUntilNext)}"
+        var heading = nextInfo is { } next
+            ? $"→ {next.label} in {RhythmText.Beats(next.beatsUntilChange)}"
             : $"len {RhythmText.Count(phrase.lengthBeats)}";
         return new PhraseRowView(true, phrase.label, phrase.progress ?? 0f, heading);
     }

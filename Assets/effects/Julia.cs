@@ -7,6 +7,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Julia : ScreenEffect
 {
+    /// <summary>Julia's fractal drift suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private float angle;
     private int iterations = 100;

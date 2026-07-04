@@ -185,12 +185,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatData.snapshot.levels.low, Is.EqualTo(0.25f));
         Assert.That(beatData.snapshot.levels.mid, Is.EqualTo(0.5f));
         Assert.That(beatData.snapshot.levels.high, Is.EqualTo(0.75f));
-        Assert.That(beatData.snapshot.phraseState.current, Is.EqualTo("Drop"));
-        Assert.That(beatData.snapshot.phraseState.next, Is.EqualTo("Break"));
-        Assert.That(beatData.snapshot.phraseState.active, Is.EqualTo(1));
+        Assert.That(beatData.snapshot.phraseState.label, Is.EqualTo("Drop"));
         Assert.That(beatData.snapshot.phraseState.countBeats, Is.EqualTo(12));
         Assert.That(beatData.snapshot.phraseState.lengthBeats, Is.EqualTo(32));
-        Assert.That(beatData.snapshot.phraseState.remaining, Is.EqualTo(8));
+        Assert.That(beatData.snapshot.phraseState.irregular, Is.EqualTo(0));
         Assert.That(beatData.snapshot.dropState.active, Is.EqualTo(1));
         Assert.That(beatData.snapshot.dropState.countBeats, Is.EqualTo(0));
         Assert.That(beatData.snapshot.dropState.lengthBeats, Is.EqualTo(32));
@@ -199,12 +197,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatData.snapshot.fillState.countBeats, Is.EqualTo(16));
         Assert.That(beatData.snapshot.fillState.lengthBeats, Is.EqualTo(8));
         Assert.That(beatData.snapshot.fillState.remaining, Is.EqualTo(1));
-        Assert.That(beatData.snapshot.energyState.current, Is.EqualTo("High"));
-        Assert.That(beatData.snapshot.energyState.next, Is.EqualTo("Mid"));
-        Assert.That(beatData.snapshot.energyState.active, Is.EqualTo(1));
+        Assert.That(beatData.snapshot.energyState.label, Is.EqualTo("High"));
         Assert.That(beatData.snapshot.energyState.countBeats, Is.EqualTo(4));
         Assert.That(beatData.snapshot.energyState.lengthBeats, Is.EqualTo(16));
-        Assert.That(beatData.snapshot.energyState.remaining, Is.EqualTo(2));
+        Assert.That(beatData.snapshot.nextEnergyState.label, Is.EqualTo("Mid"));
     }
 
     [Test]
@@ -235,24 +231,49 @@ public sealed class BeatManagerRaveOscIntegrationTests
     }
 
     [Test]
-    public void TrackOrdinalAdvancesWhenTheOnAirTrackTitleChanges()
+    public void TrackIdChangesWhenTheOnAirTrackIdChanges()
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
 
-        Assert.That(beatManager.TrackOrdinal, Is.Null, "No track on air yet.");
+        beatManager.beatData.snapshot.trackId = 11;
+        beatManager.Update(0f);
+        Assert.That(beatManager.TrackId, Is.EqualTo(11));
 
+        beatManager.beatData.snapshot.trackId = 22;
+        beatManager.Update(0f);
+        Assert.That(beatManager.TrackId, Is.EqualTo(22));
+    }
+
+    [Test]
+    public void TrackIdIsNullWhenTrackIdIsSentinel()
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.beatData.snapshot.trackId = -1;
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.TrackId, Is.Null);
+    }
+
+    [Test]
+    public void TrackIdIgnoresATitleChangeWithoutATrackIdChange()
+    {
+        // TrackId only tracks snapshot.trackId, so a title-only rewrite of the same track must leave it
+        // untouched (a bare title change is not a new track).
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.beatData.snapshot.trackId = 7;
         beatManager.beatData.snapshot.track = "Artist - One";
         beatManager.Update(0f);
-        var first = beatManager.TrackOrdinal;
-        Assert.That(first, Is.Not.Null, "A track on air surfaces an ordinal.");
-
-        beatManager.Update(0f);
-        Assert.That(beatManager.TrackOrdinal, Is.EqualTo(first), "The same title holds the ordinal steady.");
+        var first = beatManager.TrackId;
+        Assert.That(first, Is.EqualTo(7));
 
         beatManager.beatData.snapshot.track = "Artist - Two";
         beatManager.Update(0f);
-        Assert.That(beatManager.TrackOrdinal, Is.EqualTo(first + 1), "A new title advances the ordinal.");
+
+        Assert.That(beatManager.TrackId, Is.EqualTo(first));
     }
 
     [Test]
@@ -400,10 +421,11 @@ public sealed class BeatManagerRaveOscIntegrationTests
             beatAverageMs = 468,
             beatPulse = 0.625f,
             levels = new Levels { low = 0.25f, mid = 0.5f, high = 0.75f },
-            phraseState = new NamedState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 },
+            phraseState = new PhraseState { label = "Drop", countBeats = 12, lengthBeats = 32, irregular = 0 },
             dropState = new CountdownState { active = 1, countBeats = 0, lengthBeats = 32, remaining = 2 },
             fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 },
-            energyState = new NamedState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 },
+            energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 },
+            nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 },
         };
     }
 }

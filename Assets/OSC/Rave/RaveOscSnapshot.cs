@@ -33,27 +33,92 @@ public struct Levels {
 }
 
 /// <summary>
-/// Current/next named beat state used by phrase and energy projections.
-/// Mirrors RaveSystem's track phase state shape: labels, tri-state active value, beat count, length, and remaining count.
+/// Current phrase of the on-air focus from <c>/rave/onair/phrase_state</c> (<c>siii</c>).
+/// <c>countBeats</c> is beats remaining in the phrase; <c>lengthBeats</c> its total length.
 /// </summary>
 [Serializable]
-public struct NamedState {
-    public string? current;
-    public string? next;
-
-    /// <summary>
-    /// RaveSystem tri-state: <c>1</c> = active now, <c>0</c> = counting to the next occurrence,
-    /// <c>-1</c> = unavailable. Mirrors <c>TrackCountdownState.Active</c>; do not collapse to a bool.
-    /// </summary>
-    public int active;
+public struct PhraseState {
+    /// <summary>Phrase name; empty/null = unavailable.</summary>
+    public string? label;
 
     public int countBeats;
     public int lengthBeats;
-    public int remaining;
 
-    /// <summary>Named state whose fields are all unavailable (-1 sentinels, empty labels).</summary>
-    public static NamedState Unavailable =>
-        new NamedState { current = null, next = null, active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+    /// <summary>
+    /// RaveSystem tri-state: <c>1</c> = phrase length not divisible by 16, <c>0</c> = regular,
+    /// <c>-1</c> = unavailable. Do not collapse to a bool.
+    /// </summary>
+    public int irregular;
+
+    /// <summary>Phrase state whose fields are all unavailable (-1 sentinels, empty label).</summary>
+    public static PhraseState Unavailable =>
+        new PhraseState { label = null, countBeats = -1, lengthBeats = -1, irregular = -1 };
+}
+
+/// <summary>
+/// Labeled beat countdown shared by <c>/rave/onair/next_phrase_state</c>, <c>energy_state</c>, and
+/// <c>next_energy_state</c> (<c>sii</c>). For "next" lanes <c>countBeats</c> counts down to the change and
+/// <c>lengthBeats</c> is the upcoming run's own total length; for the current energy lane they describe the
+/// current run.
+/// </summary>
+[Serializable]
+public struct LabeledCountdown {
+    /// <summary>Phrase name or energy level; empty/null = unavailable.</summary>
+    public string? label;
+
+    public int countBeats;
+    public int lengthBeats;
+
+    /// <summary>Labeled countdown whose fields are all unavailable (-1 sentinels, empty label).</summary>
+    public static LabeledCountdown Unavailable =>
+        new LabeledCountdown { label = null, countBeats = -1, lengthBeats = -1 };
+}
+
+/// <summary>
+/// Loop state of the on-air focus from <c>/rave/onair/loop_state</c> (<c>iifiii</c>).
+/// </summary>
+[Serializable]
+public struct LoopState {
+    /// <summary>
+    /// RaveSystem tri-state: <c>1</c> = looping audio is rolling (looping and playing), <c>0</c> = not rolling,
+    /// <c>-1</c> = unavailable. Do not collapse to a bool.
+    /// </summary>
+    public int active;
+
+    /// <summary>
+    /// RaveSystem tri-state: <c>1</c> = a loop region exists on the deck (persists while paused),
+    /// <c>0</c> = no region, <c>-1</c> = unavailable. Do not collapse to a bool.
+    /// </summary>
+    public int set;
+
+    /// <summary>Loop region length in beats; fractional loops are real (a 1/2-beat loop is 0.5).</summary>
+    public float lengthBeats;
+
+    public int lengthMs;
+    public int sizeNumerator;
+    public int sizeDenominator;
+
+    /// <summary>Loop state whose fields are all unavailable (-1 sentinels).</summary>
+    public static LoopState Unavailable => new LoopState {
+        active = -1, set = -1, lengthBeats = -1f, lengthMs = -1, sizeNumerator = -1, sizeDenominator = -1,
+    };
+}
+
+/// <summary>
+/// Source-computed cyclic timing grid of the on-air focus from <c>/rave/onair/timing_grid</c> (<c>iis</c>).
+/// <c>beat</c> counts 1..16 with 1 as the One; <c>bar</c> is the 1..4 four-beat subdivision. Beat/bar can be
+/// -1 with a live <c>state</c> when no beat is placeable yet; the full unavailable shape is -1 -1 "".
+/// </summary>
+[Serializable]
+public struct TimingGrid {
+    public int beat;
+    public int bar;
+
+    /// <summary>Grid-confidence vocabulary: "locked" / "coasting" / "disputed"; empty/null = unavailable.</summary>
+    public string? state;
+
+    /// <summary>Timing grid whose fields are all unavailable (-1 sentinels, empty state).</summary>
+    public static TimingGrid Unavailable => new TimingGrid { beat = -1, bar = -1, state = null };
 }
 
 /// <summary>
@@ -94,10 +159,15 @@ public sealed class RaveOnAirSnapshot {
     public int beatAverageMs = -1;
     public float beatPulse;
     public Levels levels = Levels.Unavailable;
-    public NamedState phraseState = NamedState.Unavailable;
+    public PhraseState phraseState = PhraseState.Unavailable;
+    public LabeledCountdown nextPhraseState = LabeledCountdown.Unavailable;
     public CountdownState dropState = CountdownState.Unavailable;
     public CountdownState fillState = CountdownState.Unavailable;
-    public NamedState energyState = NamedState.Unavailable;
+    public LabeledCountdown energyState = LabeledCountdown.Unavailable;
+    public LabeledCountdown nextEnergyState = LabeledCountdown.Unavailable;
+    public LoopState loopState = LoopState.Unavailable;
+    public TimingGrid timingGrid = TimingGrid.Unavailable;
+    public int trackId = -1;
 
     /// <summary>Creates a deep copy so background OSC updates cannot mutate a returned snapshot.</summary>
     /// <remarks>
@@ -134,7 +204,7 @@ public sealed class RaveOnAirSnapshot {
         var bpmText = bpm > 0f ? bpm.ToString("0.##") : "?";
         var beatText = beat.current >= 0 ? beat.current.ToString() : "?";
         var barText = bar.current >= 0 ? bar.current.ToString() : "?";
-        var phraseText = string.IsNullOrEmpty(phraseState.current) ? "?" : phraseState.current;
+        var phraseText = string.IsNullOrEmpty(phraseState.label) ? "?" : phraseState.label;
         return $"Rave OSC bpm={bpmText} beat={beatText} bar={barText} phrase={phraseText}";
     }
 

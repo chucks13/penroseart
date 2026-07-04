@@ -9,6 +9,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class NoiseTunnel : EffectBase
 {
+    /// <summary>NoiseTunnel's driving noise flow suits Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private float n;
     private float scale;

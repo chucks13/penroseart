@@ -193,15 +193,6 @@ public partial class BeatManager
     /// <summary>Normalized offbeat pulse: 1 on the offbeat, decaying toward 0 until the next offbeat.</summary>
     private float offBeatPulse;
 
-    /// <summary>The on-air track title the current <see cref="trackOrdinal"/> reflects, or null when no track is on air.</summary>
-    private string trackOrdinalTitle;
-
-    /// <summary>
-    /// Monotonic ordinal bumped each time the on-air track title changes. Lets the integer Grid seam
-    /// (<see cref="OnAirTimingInput.TrackOrdinal"/>) observe track changes without the raw title crossing it.
-    /// </summary>
-    private int trackOrdinal;
-
     /// <summary>Derived offbeat countdowns in label order. Dashboard/test view — effects use the nullable queries.</summary>
     public int[] OffBeatsCountMs => offBeatsCountMs;
 
@@ -298,30 +289,6 @@ public partial class BeatManager
     private void DeriveBeatState()
     {
         DeriveOffBeats();
-        DeriveTrackOrdinal();
-    }
-
-    /// <summary>
-    /// Advances <see cref="trackOrdinal"/> when the on-air track title changes, so the integer Grid seam can
-    /// detect a new track. Uses the same "on air" gate as <see cref="Track"/>: an empty/cleared title is no
-    /// track and does not bump the ordinal.
-    /// </summary>
-    private void DeriveTrackOrdinal()
-    {
-        // Only a real title change advances the ordinal. A momentary blank (title -> null) does not
-        // reset the remembered title, so the SAME track resuming after a transient empty snapshot is
-        // not mistaken for a new track. While blank, TrackOrdinal reports null (no track on air).
-        var title = Track;
-        if (title == null)
-        {
-            return;
-        }
-
-        if (title != trackOrdinalTitle)
-        {
-            trackOrdinal++;
-            trackOrdinalTitle = title;
-        }
     }
 
     /// <summary>
@@ -754,10 +721,15 @@ public partial class BeatManager
     private void ClearPhraseAndLevelState()
     {
         beatData.snapshot.levels = PenroseArt.RaveOsc.Levels.Unavailable;
-        beatData.snapshot.phraseState = NamedState.Unavailable;
+        beatData.snapshot.phraseState = PhraseState.Unavailable;
+        beatData.snapshot.nextPhraseState = LabeledCountdown.Unavailable;
         beatData.snapshot.dropState = CountdownState.Unavailable;
         beatData.snapshot.fillState = CountdownState.Unavailable;
-        beatData.snapshot.energyState = NamedState.Unavailable;
+        beatData.snapshot.energyState = LabeledCountdown.Unavailable;
+        beatData.snapshot.nextEnergyState = LabeledCountdown.Unavailable;
+        beatData.snapshot.loopState = LoopState.Unavailable;
+        beatData.snapshot.timingGrid = TimingGrid.Unavailable;
+        beatData.snapshot.trackId = -1;
     }
 
     /// <summary>

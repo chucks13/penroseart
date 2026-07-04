@@ -7,6 +7,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Waterfall : ScreenEffect
 {
+    /// <summary>Waterfall's falling drops suit Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private Drop[] drops;
     private int numDrops;

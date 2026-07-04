@@ -5,6 +5,10 @@
 /// </summary>
 public class ShapeGlitch : MixerBase
 {
+    /// <summary>ShapeGlitch's stutter/glitch bursts accent Fills and suit Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private enum Mode
     {

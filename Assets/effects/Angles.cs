@@ -30,8 +30,13 @@ using UnityEngine;
 /// </remarks>
 public class Angles : EffectBase
 {
-    /// <summary>The wall's hue pattern collapses toward its own mean hue for a Fill, and blacks out then reignites through its ten orientation families for a Drop.</summary>
-    public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
+    /// <summary>
+    /// The wall's hue pattern collapses toward its own mean hue for a Fill, and blacks out then reignites through
+    /// its ten orientation families for a Drop. Its shading depth is subtle at Low energy and pronounced at High,
+    /// so it advertises as a Mid/High-energy Performer.
+    /// </summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     private float speed;
 

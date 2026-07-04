@@ -5,6 +5,10 @@
 /// </summary>
 public class RandomEffectsMixer : MixerBase
 {
+    /// <summary>RandomEffectsMixer's shifting mix accents Fills and suits Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private EffectBase[] effects;
     private int total;

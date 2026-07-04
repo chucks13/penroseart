@@ -105,14 +105,6 @@ public readonly struct CueSheet
         cueMarkOffsets.AddRange(filledCueMarkOffsets);
     }
 
-    /// <summary>
-    /// Returns whether this sheet can be reused for the supplied Phrase Window's length.
-    /// </summary>
-    public bool Matches(PhraseWindow window)
-    {
-        return PhraseLengthBeats == window.LengthBeats;
-    }
-
     /// <summary>Translates a Phrase-relative Cue Mark offset to its current absolute on-air beat.</summary>
     public int ToAbsoluteBeat(int phraseStartBeat, int cueMarkOffset)
     {

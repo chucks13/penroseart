@@ -62,11 +62,11 @@ public sealed class DirectorSyncedTailTests
     {
         director.SetNextEffect(1);
 
-        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(603, beatsUntilPhraseEnd: 6, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.CueMarkBeat, Is.EqualTo(609));
         Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
     }
 
@@ -74,11 +74,11 @@ public sealed class DirectorSyncedTailTests
     public void DirectorUsesLatestStagedEffectWhenCueWindowArrives()
     {
         director.SetNextEffect(1);
-        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(603, beatsUntilPhraseEnd: 6, phraseLengthBeats: 32);
         director.Tick(0f);
 
         director.SetNextEffect(2);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
@@ -91,11 +91,11 @@ public sealed class DirectorSyncedTailTests
     {
         director.SetNextEffect(1);
 
-        SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(603, beatsUntilPhraseEnd: 6, phraseLengthBeats: 32);
         director.Tick(0f);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
@@ -107,23 +107,23 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void TailedTransitionCompletionKeepsNextAnchorOnUpcomingTrackPhaseBoundary()
     {
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
 
         RenderTransitionPastCompletion();
-        SetTrackPhaseBeat(613, phaseActive: 0, beatsToPhraseBoundary: 12, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(613, beatsUntilPhraseEnd: 12, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0), "The tailed transition should have completed.");
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(625));
+        Assert.That(director.Status.CueMarkBeat, Is.EqualTo(625));
     }
 
     [Test]
     public void StartingTailedTransitionMarksCadenceAtCueMark()
     {
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The setup should cue a tailed transition toward beat 609.");
@@ -139,12 +139,12 @@ public sealed class DirectorSyncedTailTests
         controller.transitions[0].Init();
         director.SetNextTransition(0);
 
-        SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(608, beatsUntilPhraseEnd: 1, phraseLengthBeats: 32);
         director.Tick(0f);
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.CueMarkBeat, Is.EqualTo(609));
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
-        SetTrackPhaseBeat(610, phaseActive: 1, beatsToPhraseBoundary: 31, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(610, beatsUntilPhraseEnd: 31, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
@@ -155,11 +155,11 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void NextTransitionCanCueAfterTailedTransitionCompletes()
     {
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
         RenderTransitionPastCompletion();
 
-        SetTrackPhaseBeat(621, phaseActive: 0, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(621, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The Director should cue the next transition as soon as cadence allows after Tail completion.");
@@ -169,14 +169,14 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void DecisionMatrixFollowsCueMarkWhileTailedTransitionIsStillRendering()
     {
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
-        SetTrackPhaseBeat(610, phaseActive: 0, beatsToPhraseBoundary: 15, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(610, beatsUntilPhraseEnd: 15, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The previous transition Tail is still mechanically rendering in this test.");
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(625));
+        Assert.That(director.Status.CueMarkBeat, Is.EqualTo(625));
         Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
     }
 
@@ -185,7 +185,7 @@ public sealed class DirectorSyncedTailTests
     {
         director.SetNextEffect(1);
 
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
@@ -198,9 +198,9 @@ public sealed class DirectorSyncedTailTests
     {
         director.SetNextEffect(1);
 
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
-        SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 3, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(606, beatsUntilPhraseEnd: 3, phraseLengthBeats: 32);
         director.Tick(0f);
 
         Assert.That(switcher.Status.SourceEffectIndex, Is.EqualTo(0), "Restarting the same cue would replace the source with the previous target.");
@@ -213,20 +213,22 @@ public sealed class DirectorSyncedTailTests
     {
         director.SetNextEffect(1);
 
-        SetTrackPhaseBeat(594, phaseActive: 1, beatsToPhraseBoundary: 15, phraseLengthBeats: 32);
+        // Cue toward the current Phrase's 609 boundary (runway 4) and let it fire.
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
-        SetTrackPhaseBeat(600, phaseActive: 0, beatsToPhraseBoundary: 9, phraseLengthBeats: 64);
-        director.Tick(0f);
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609), "The pending phrase boundary Cue Mark should stay loaded while Track Phase counts down to the next Phrase.");
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Setup: the mandatory boundary cues on 609.");
+        Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
 
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
-        director.Tick(0f);
-        SetTrackPhaseBeat(606, phaseActive: 0, beatsToPhraseBoundary: 3, phraseLengthBeats: 64);
+        director.SetNextEffect(2);
+
+        // The 609 boundary fired; the feed now counts down to the next Phrase (its own length 64) starting
+        // in 2 beats via next_phrase_state. The upcoming-phrase sheet loads its first cue mark past 609.
+        SetUpcomingPhraseBeat(607, nextStartInBeats: 2, nextPhraseLengthBeats: 64);
         director.Tick(0f);
 
-        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.GreaterThan(609));
-        Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
+        Assert.That(director.Status.HasCueMark, Is.True);
+        Assert.That(director.Status.CueMarkBeat, Is.GreaterThan(609), "The upcoming Phrase's cue mark loads past the fired boundary.");
+        Assert.That((director.Status.CueMarkBeat - 1) % 16, Is.EqualTo(0), "Upcoming cue marks land on a 16-grid boundary.");
     }
 
     [Test]
@@ -237,9 +239,9 @@ public sealed class DirectorSyncedTailTests
         controller.transitions[0].Init();
         director.SetNextTransition(0);
 
-        SetTrackPhaseBeat(594, phaseActive: 1, beatsToPhraseBoundary: 15, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(594, beatsUntilPhraseEnd: 15, phraseLengthBeats: 32);
         director.Tick(0f);
-        SetTrackPhaseBeat(609, phaseActive: 1, beatsToPhraseBoundary: 64, phraseLengthBeats: 64);
+        SetTrackPhaseBeat(609, beatsUntilPhraseEnd: 64, phraseLengthBeats: 64);
 
         director.Tick(0f);
 
@@ -252,7 +254,7 @@ public sealed class DirectorSyncedTailTests
     public void DropAlignedCueCastsDropCapablePerformerWhenAvailable()
     {
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -273,7 +275,7 @@ public sealed class DirectorSyncedTailTests
         var effectDeckBeforeTick = (int[])controller.effectDeck.Clone();
         var transitionDeckBeforeTick = (int[])controller.transitionDeck.Clone();
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -287,7 +289,7 @@ public sealed class DirectorSyncedTailTests
     {
         director.SetNextEffect(1);
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -304,7 +306,7 @@ public sealed class DirectorSyncedTailTests
             new TransitionBase[] { new TailedTransition(), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 4, tailBeats: 0) },
             new[] { 0, 1 });
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -319,7 +321,7 @@ public sealed class DirectorSyncedTailTests
             new TransitionBase[] { new TailedTransition(), new EventTransition(RepertoireFlags.HandlesFill, runwayBeats: 4, tailBeats: 0) },
             new[] { 0, 1 });
         SetUpcomingFill(beatsUntilStart: 3);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -336,7 +338,7 @@ public sealed class DirectorSyncedTailTests
         director.SetNextTransition(0);
         director.SetHoldSelectedTransition(true);
         SetUpcomingDrop(beatsUntilStart: 1);
-        SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(608, beatsUntilPhraseEnd: 1, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -352,7 +354,7 @@ public sealed class DirectorSyncedTailTests
             new[] { 0, 1 });
         director.SetNextTransition(0);
         SetUpcomingDrop(beatsUntilStart: 2);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -367,7 +369,7 @@ public sealed class DirectorSyncedTailTests
             new TransitionBase[] { new EventTransition(RepertoireFlags.None, runwayBeats: 4, tailBeats: 0), new EventTransition(RepertoireFlags.HandlesDrop, runwayBeats: 1, tailBeats: 0) },
             new[] { 0, 1 });
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -379,134 +381,25 @@ public sealed class DirectorSyncedTailTests
     }
 
     [Test]
-    public void TrackPhaseDisappearanceAfterAnchorCoastsAndStillCuesOnCoastedBoundary()
-    {
-        var randomState = Random.state;
-        try
-        {
-            Random.InitState(20);
-            director.SetNextEffect(1);
-
-            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
-            director.Tick(0f);
-
-            // 598 is past the missed interior mark's late-cue window (593 + Tail 4), so the coast
-            // rolls to the next cadence landing instead of holding the mark for a late cue.
-            SetTrackPhaseUnavailableBeat(598);
-            director.Tick(0f);
-            Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
-            Assert.That(director.Status.Grid.State, Is.EqualTo(GridSyncState.Coasting));
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
-            Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
-
-            SetTrackPhaseUnavailableBeat(605);
-            director.Tick(0f);
-
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
-            Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The coasted anchor should still be a valid synced cue target.");
-            Assert.That(director.Status.NextEffectIndex, Is.EqualTo(2), "After sending the cue, the Director should stage the following move without reading Switcher lifecycle state.");
-            Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(609));
-            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609));
-        }
-        finally
-        {
-            Random.state = randomState;
-        }
-    }
-
-    [Test]
-    public void FreshTrackPhaseAfterCoastReportsReanchorInDirectorStatus()
-    {
-        var randomState = Random.state;
-        try
-        {
-            Random.InitState(20);
-
-            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
-            director.Tick(0f);
-            SetTrackPhaseUnavailableBeat(594);
-            director.Tick(0f);
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.Coast));
-
-            SetTrackPhaseBeat(600, phaseActive: 1, beatsToPhraseBoundary: 41, phraseLengthBeats: 64);
-            director.Tick(0f);
-
-            Assert.That(director.Status.TimingReanchored, Is.True);
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-            Assert.That(director.Status.Grid.State, Is.EqualTo(GridSyncState.Locked));
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(641));
-        }
-        finally
-        {
-            Random.state = randomState;
-        }
-    }
-
-    [Test]
-    public void TrackPhaseDisappearanceWithoutPriorAnchorCuesFromSyntheticPhrase()
-    {
-        SetTrackPhaseUnavailableBeat(605);
-        director.Tick(0f);
-
-        // A track that never had Track Phase no longer idles waiting for phrase data: it anchors on a
-        // fabricated rolling Phrase Window and cues from it (ADR-0008). The fabricated subset is random,
-        // so this pins only the always-true contract: a real future cue mark on a 16-grid downbeat.
-        Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Synced));
-        Assert.That(director.Status.IsSyncedMode, Is.True);
-        Assert.That(director.Status.HasGridAnchor, Is.True);
-        Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.GreaterThan(605), "The synthetic anchor targets a real future beat.");
-        Assert.That((director.Status.GridAnchorLandingBeat - 1) % 16, Is.EqualTo(0), "Synthetic cue marks land on a 16-grid downbeat.");
-    }
-
-    [Test]
-    public void SyntheticPhraseFallbackReanchorsToRealPhraseInDirector()
-    {
-        var randomState = Random.state;
-        try
-        {
-            Random.InitState(20);
-
-            SetTrackPhaseUnavailableBeat(605);
-            director.Tick(0f);
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.SyntheticPhrase));
-
-            // A phrase-bearing track loads after the beat-only stretch: the Director hands back to the real
-            // structural path and reports the reanchor (ADR-0008). The mandatory boundary is deterministic.
-            SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 3, phraseLengthBeats: 32);
-            director.Tick(0f);
-
-            Assert.That(director.Status.TimingReanchored, Is.True);
-            Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
-        }
-        finally
-        {
-            Random.state = randomState;
-        }
-    }
-
-    [Test]
     public void SameWindowBeatRewindKeepsCueSheetAndMovesCursorBack()
     {
         var randomState = Random.state;
         try
         {
             Random.InitState(20);
-            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(588, beatsUntilPhraseEnd: 53, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(593));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
 
-            SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(620, beatsUntilPhraseEnd: 21, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(641));
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(641));
 
-            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(588, beatsUntilPhraseEnd: 53, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(593));
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(int.MinValue));
         }
         finally
@@ -523,23 +416,23 @@ public sealed class DirectorSyncedTailTests
         {
             Random.InitState(20);
             director.SetNextEffect(1);
-            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(588, beatsUntilPhraseEnd: 53, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(589, beatsUntilPhraseEnd: 52, phraseLengthBeats: 64);
             director.Tick(0f);
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The setup should cue the Cue Mark on the first pass.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
 
-            SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(620, beatsUntilPhraseEnd: 21, phraseLengthBeats: 64);
             director.Tick(0f);
             director.SetNextEffect(2);
 
-            SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(589, beatsUntilPhraseEnd: 52, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(593));
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(593));
             Assert.That(director.Status.TimingSource, Is.EqualTo(TimingFrameSource.CueMark));
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The rewound loop pass should be allowed to cue the same Cue Mark again.");
             Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(593));
@@ -559,25 +452,25 @@ public sealed class DirectorSyncedTailTests
         {
             Random.InitState(20);
             director.SetNextEffect(1);
-            SetTrackPhaseBeat(588, phaseActive: 1, beatsToPhraseBoundary: 53, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(588, beatsUntilPhraseEnd: 53, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            SetTrackPhaseBeat(589, phaseActive: 1, beatsToPhraseBoundary: 52, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(589, beatsUntilPhraseEnd: 52, phraseLengthBeats: 64);
             director.Tick(0f);
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Setup: the Cue Mark cues on the first pass.");
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
 
-            SetTrackPhaseBeat(620, phaseActive: 1, beatsToPhraseBoundary: 21, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(620, beatsUntilPhraseEnd: 21, phraseLengthBeats: 64);
             director.Tick(0f);
             director.SetNextEffect(2);
 
             // The loop replays from 597 — after the fired mark, inside its late-cue window (593 +
             // Tail 4). The pass-local commit memory (593 < 597) survives this rewind, so the fired
             // mark must not be re-presented or re-fired; only a replay from before the mark re-arms it.
-            SetTrackPhaseBeat(597, phaseActive: 1, beatsToPhraseBoundary: 44, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(597, beatsUntilPhraseEnd: 44, phraseLengthBeats: 64);
             director.Tick(0f);
 
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(641), "The fired mark must not be re-presented inside its window.");
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(641), "The fired mark must not be re-presented inside its window.");
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "No new cue may fire for the already-committed mark.");
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
         }
@@ -598,17 +491,17 @@ public sealed class DirectorSyncedTailTests
             Random.InitState(20);
             director.SetNextEffect(1);
 
-            SetTrackPhaseBeat(584, phaseActive: 1, beatsToPhraseBoundary: 57, phraseLengthBeats: 64);
+            SetTrackPhaseBeat(584, beatsUntilPhraseEnd: 57, phraseLengthBeats: 64);
             director.Tick(0f);
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(staleCueMarkBeat));
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(staleCueMarkBeat));
             Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
 
-            SetTrackPhaseBeat(603, phaseActive: 1, beatsToPhraseBoundary: 6, phraseLengthBeats: 32);
+            SetTrackPhaseBeat(603, beatsUntilPhraseEnd: 6, phraseLengthBeats: 32);
             director.Tick(0f);
-            Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(currentCueMarkBeat));
+            Assert.That(director.Status.CueMarkBeat, Is.EqualTo(currentCueMarkBeat));
             Assert.That(director.Status.Decision, Is.EqualTo(DirectorDecision.WaitingForRunway));
 
-            SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+            SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
             director.Tick(0f);
 
             Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
@@ -625,7 +518,7 @@ public sealed class DirectorSyncedTailTests
     {
         const int sentCueMarkBeat = 609;
         director.SetNextEffect(1);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "The setup should send the cue-window command.");
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(sentCueMarkBeat));
@@ -635,7 +528,7 @@ public sealed class DirectorSyncedTailTests
         controller.transitions[1].Init();
         director.SetNextTransition(1);
         director.SetNextEffect(2);
-        SetTrackPhaseBeat(606, phaseActive: 1, beatsToPhraseBoundary: 35, phraseLengthBeats: 64);
+        SetTrackPhaseBeat(606, beatsUntilPhraseEnd: 35, phraseLengthBeats: 64);
         director.Tick(0f);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1), "Later Phrase evidence should only affect future cue commands.");
@@ -650,7 +543,7 @@ public sealed class DirectorSyncedTailTests
         const int stagedEffectIndex = 2;
         controller.heldEffect = heldEffectIndex;
         director.SetNextEffect(stagedEffectIndex);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -662,17 +555,16 @@ public sealed class DirectorSyncedTailTests
 
 
     [Test]
-    public void HeldEffectStillRefreshesOnAirTimingGrid()
+    public void HeldEffectStillRefreshesOnAirTiming()
     {
         controller.heldEffect = 1;
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
         Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Hold));
-        Assert.That(director.Status.HasGridAnchor, Is.True);
-        Assert.That(director.Status.Grid.Position, Is.EqualTo(13));
-        Assert.That(director.Status.GridAnchorLandingBeat, Is.EqualTo(609));
+        Assert.That(director.Status.HasCueMark, Is.True);
+        Assert.That(director.Status.CueMarkBeat, Is.EqualTo(609));
         Assert.That(director.Status.CueSheet.HasSheet, Is.True);
     }
 
@@ -709,7 +601,7 @@ public sealed class DirectorSyncedTailTests
         Assert.That(director.Status.LastCue.Outcome, Is.EqualTo(CueDecisionOutcome.None), "No decision is reported before the first terminal cue decision.");
 
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         var decision = director.Status.LastCue;
@@ -727,7 +619,7 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void OrdinarySentCueReportsStagedCastInLastCueDecision()
     {
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         var decision = director.Status.LastCue;
@@ -743,13 +635,13 @@ public sealed class DirectorSyncedTailTests
     public void DropProtectedDecisionReportsTheProtectedOnStagePerformer()
     {
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "Setup: the first Drop cue casts the Drop-capable Performer.");
         RenderTransitionPastCompletion();
 
         SetUpcomingDrop(beatsUntilStart: 4);
-        SetTrackPhaseBeat(621, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(621, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
 
         var decision = director.Status.LastCue;
@@ -763,11 +655,11 @@ public sealed class DirectorSyncedTailTests
     [Test]
     public void CadenceBlockedMarkReportsBlockedDecision()
     {
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
         director.Tick(0f);
         Assert.That(director.Status.LastChangeBeat, Is.EqualTo(609), "Setup: a cue commits the 609 mark.");
 
-        SetTrackPhaseBeat(613, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 8);
+        SetTrackPhaseBeat(613, beatsUntilPhraseEnd: 4, phraseLengthBeats: 8);
         director.Tick(0f);
 
         var decision = director.Status.LastCue;
@@ -781,7 +673,7 @@ public sealed class DirectorSyncedTailTests
     public void HeldCueReportsHeldDecisionWithoutSendingAnything()
     {
         controller.heldEffect = 1;
-        SetTrackPhaseBeat(605, phaseActive: 1, beatsToPhraseBoundary: 4, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(605, beatsUntilPhraseEnd: 4, phraseLengthBeats: 32);
 
         director.Tick(0f);
 
@@ -798,11 +690,11 @@ public sealed class DirectorSyncedTailTests
         controller.transitions[0].BindController(controller);
         controller.transitions[0].Init();
         director.SetNextTransition(0);
-        SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(608, beatsUntilPhraseEnd: 1, phraseLengthBeats: 32);
         director.Tick(0f);
         Assert.That(director.Status.LastCue.Outcome, Is.EqualTo(CueDecisionOutcome.None), "Setup: nothing may fire before the impact beat for a zero-Runway transition.");
 
-        SetTrackPhaseBeat(610, phaseActive: 1, beatsToPhraseBoundary: 31, phraseLengthBeats: 32);
+        SetTrackPhaseBeat(610, beatsUntilPhraseEnd: 31, phraseLengthBeats: 32);
         director.Tick(0f);
 
         var decision = director.Status.LastCue;
@@ -812,35 +704,37 @@ public sealed class DirectorSyncedTailTests
         Assert.That(decision.BeatsBeforeImpact, Is.EqualTo(-1), "A cue sent after its Impact Point lands as a hard cut.");
     }
 
-    private void SetTrackPhaseBeat(int beat, int phaseActive, int beatsToPhraseBoundary, int phraseLengthBeats)
+    // A present phrase_state always describes the *current* Phrase (OSC schema v2): its countBeats is the
+    // countdown to the boundary, its lengthBeats the Phrase's own length. next_phrase_state is cleared so a
+    // stale look-ahead from an earlier frame cannot leak across a tick.
+    private void SetTrackPhaseBeat(int beat, int beatsUntilPhraseEnd, int phraseLengthBeats)
     {
         controller.beatManager.beatData.snapshot.bpm = 120f;
         controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = beat, total = -1 };
         controller.beatManager.beatData.snapshot.beatInBar = ((beat - 1) % 4) + 1;
-        controller.beatManager.beatData.snapshot.phraseState = new NamedState
+        controller.beatManager.beatData.snapshot.phraseState = new PhraseState
         {
-            current = "Phrase",
-            next = "Next",
-            active = phaseActive,
-            countBeats = beatsToPhraseBoundary,
+            label = "Phrase",
+            countBeats = beatsUntilPhraseEnd,
             lengthBeats = phraseLengthBeats,
-            remaining = 1,
+            irregular = 0,
         };
+        controller.beatManager.beatData.snapshot.nextPhraseState = LabeledCountdown.Unavailable;
     }
 
-    private void SetTrackPhaseUnavailableBeat(int beat)
+    // No current Phrase, only the next one counting down to its start with its own announced length —
+    // the v2 look-ahead the CuePlanner builds an upcoming sheet from.
+    private void SetUpcomingPhraseBeat(int beat, int nextStartInBeats, int nextPhraseLengthBeats)
     {
         controller.beatManager.beatData.snapshot.bpm = 120f;
         controller.beatManager.beatData.snapshot.beat = new BeatPosition { current = beat, total = -1 };
         controller.beatManager.beatData.snapshot.beatInBar = ((beat - 1) % 4) + 1;
-        controller.beatManager.beatData.snapshot.phraseState = new NamedState
+        controller.beatManager.beatData.snapshot.phraseState = PhraseState.Unavailable;
+        controller.beatManager.beatData.snapshot.nextPhraseState = new LabeledCountdown
         {
-            current = string.Empty,
-            next = string.Empty,
-            active = -1,
-            countBeats = -1,
-            lengthBeats = -1,
-            remaining = -1,
+            label = "Next",
+            countBeats = nextStartInBeats,
+            lengthBeats = nextPhraseLengthBeats,
         };
     }
 

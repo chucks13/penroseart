@@ -7,6 +7,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class MetaBalls : ScreenEffect
 {
+    /// <summary>MetaBalls' soft blobs suit Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
     private Ball[] balls;
     private Vector2 screen;
     private int total = 8;

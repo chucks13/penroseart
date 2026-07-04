@@ -145,7 +145,7 @@ public sealed class ControllerEditor : Editor
         var cueStatus = controller.SwitcherLoadedCueStatus;
         var cueOverlay = ResolveCueTimingOverlay(controller, directorStatus, cueStatus);
 
-        DrawTimingAndCueSheet(directorStatus, cueOverlay);
+        DrawTimingAndCueSheet(controller, directorStatus, cueOverlay);
         EditorGUILayout.Space(6f);
         DrawDirectorIntent(directorStatus);
         EditorGUILayout.Space(6f);
@@ -155,7 +155,7 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.Space(6f);
         DrawSwitcherExecution(switcherStatus);
         EditorGUILayout.Space(6f);
-        DrawAdvancedTiming(directorStatus);
+        DrawAdvancedTiming(controller, directorStatus);
 
         EditorGUILayout.EndVertical();
     }
@@ -167,23 +167,24 @@ public sealed class ControllerEditor : Editor
             return CueTimingOverlay.Loaded(cueStatus);
         }
 
-        if (directorStatus.HasGridAnchor
+        if (directorStatus.HasCueMark
             && TryGetTransitionRepertoire(controller, directorStatus.NextTransitionIndex, out var repertoire))
         {
-            return CueTimingOverlay.Candidate(directorStatus.GridAnchorLandingBeat, repertoire);
+            return CueTimingOverlay.Candidate(directorStatus.CueMarkBeat, repertoire);
         }
 
         return CueTimingOverlay.None;
     }
 
-    private static void DrawTimingAndCueSheet(DirectorStatus status, CueTimingOverlay cueOverlay)
+    private static void DrawTimingAndCueSheet(Controller controller, DirectorStatus status, CueTimingOverlay cueOverlay)
     {
+        var gridCount = controller.beatManager?.Grid is { } grid ? grid.Count : -1;
         EditorGUILayout.LabelField("TIMING / CUE SHEET", EditorStyles.boldLabel);
-        DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(status.Grid.Position)}");
+        DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(gridCount)}");
         DrawRow("Timing Source", FormatTimingSource(status));
         DrawRow("Beats Until Cue", FormatBeats(status.BeatsUntilLanding));
         DrawCueTimingRows(status, cueOverlay);
-        DrawGridStrip(status.Grid.Position, cueOverlay);
+        DrawGridStrip(gridCount, cueOverlay);
         DrawCueSheet(status.CueSheet, status.CurrentBeat);
     }
 
@@ -358,7 +359,7 @@ public sealed class ControllerEditor : Editor
         DrawProgress("Transition Progress", switcherStatus.TransitionProgress);
     }
 
-    private static void DrawAdvancedTiming(DirectorStatus status)
+    private static void DrawAdvancedTiming(Controller controller, DirectorStatus status)
     {
         showAdvancedTiming = EditorGUILayout.Foldout(showAdvancedTiming, "Advanced On-Air Timing", true);
         if (!showAdvancedTiming)
@@ -366,10 +367,74 @@ public sealed class ControllerEditor : Editor
             return;
         }
 
-        DrawRow("Anchor", status.HasGridAnchor ? "locked" : "none");
-        DrawRow("Lock State", status.HasGridAnchor ? status.Grid.State.ToString() : "unlocked");
-        DrawRow("Offset", FormatBeat(status.Grid.Offset));
-        DrawRow("Irregular Phrase", status.Phrase.IsIrregular ? "yes" : "no");
+        var beatManager = controller.beatManager;
+        var grid = beatManager?.Grid;
+        DrawRow("Cue Mark", status.HasCueMark ? "locked" : "none");
+        DrawRow("Grid Confidence", grid is { } g ? g.Confidence.ToString() : "unlocked");
+        DrawRow("Grid Count", grid is { } gc ? $"{gc.Count}/{PhraseWindow.DefaultGridBeats}" : "—");
+        DrawRow("Grid Bar", grid is { } gb ? $"{gb.Bar}/4" : "—");
+        DrawRow("Phrase", FormatPhraseRow(beatManager?.Phrase));
+        DrawRow("Next Phrase", FormatNextPhraseRow(beatManager?.NextPhrase));
+        DrawRow("Irregular Phrase", beatManager?.Phrase?.irregular == true ? "yes" : "no");
+        DrawRow("Energy", FormatEnergyRow(beatManager?.Energy));
+        DrawRow("Loop", FormatLoopRow(beatManager?.Loop));
+    }
+
+    /// <summary>Current phrase as <c>label · elapsed/length</c>, from the wire-fed <see cref="BeatManager.Phrase"/>.</summary>
+    private static string FormatPhraseRow(PhraseInfo? info)
+    {
+        if (!(info is { } phrase))
+        {
+            return "—";
+        }
+
+        var span = phrase.lengthBeats is { } length && phrase.beatsUntilNext is { } untilNext
+            ? $" · {Mathf.Max(0, length - untilNext)}/{length}"
+            : string.Empty;
+        return $"{phrase.label}{span}";
+    }
+
+    /// <summary>Upcoming phrase as <c>label · in Nb · Nb long</c>, from <see cref="BeatManager.NextPhrase"/>.</summary>
+    private static string FormatNextPhraseRow(NextPhraseInfo? info)
+    {
+        if (!(info is { } next))
+        {
+            return "—";
+        }
+
+        var untilChange = next.beatsUntilChange is { } beats ? $" · in {beats}b" : string.Empty;
+        var length = next.lengthBeats is { } len ? $" · {len}b long" : string.Empty;
+        return $"{next.label}{untilChange}{length}";
+    }
+
+    /// <summary>Energy as <c>level (→ next in Nb)</c>, from <see cref="BeatManager.Energy"/>.</summary>
+    private static string FormatEnergyRow(EnergyInfo? info)
+    {
+        if (!(info is { } energy))
+        {
+            return "—";
+        }
+
+        if (energy.next is { } next)
+        {
+            var untilChange = energy.beatsUntilChange is { } beats ? $" in {beats}b" : string.Empty;
+            return $"{energy.level} (→ {next}{untilChange})";
+        }
+
+        return energy.level.ToString();
+    }
+
+    /// <summary>Loop as <c>rolling/set/off · Nb</c>, from the display-only <see cref="BeatManager.Loop"/>.</summary>
+    private static string FormatLoopRow(LoopInfo? info)
+    {
+        if (!(info is { } loop))
+        {
+            return "—";
+        }
+
+        var state = loop.looping ? "rolling" : loop.regionSet ? "set" : "off";
+        var length = loop.lengthBeats is { } beats ? $" · {beats:0.##}b" : string.Empty;
+        return $"{state}{length}";
     }
 
     private static void DrawHudLines(Controller controller)
@@ -390,7 +455,7 @@ public sealed class ControllerEditor : Editor
     {
         EditorGUILayout.BeginHorizontal();
         var previousColor = GUI.backgroundColor;
-        for (var i = 1; i <= Grid.GridBeats; i++)
+        for (var i = 1; i <= PhraseWindow.DefaultGridBeats; i++)
         {
             var role = RoleForGridSlot(i, gridPosition, cueOverlay);
             GUI.backgroundColor = ColorForRole(role, i == gridPosition, previousColor);
@@ -451,10 +516,10 @@ public sealed class ControllerEditor : Editor
 
     private static int GridSlotForBeat(int beat, int cueMarkBeat)
     {
-        var offset = (beat - cueMarkBeat) % Grid.GridBeats;
+        var offset = (beat - cueMarkBeat) % PhraseWindow.DefaultGridBeats;
         if (offset < 0)
         {
-            offset += Grid.GridBeats;
+            offset += PhraseWindow.DefaultGridBeats;
         }
 
         return offset + 1;
@@ -543,13 +608,12 @@ public sealed class ControllerEditor : Editor
 
     private static string FormatTimingSource(DirectorStatus status)
     {
-        var source = status.TimingSource.ToString();
-        return status.TimingReanchored ? $"Re-anchor {source}" : source;
+        return status.TimingSource.ToString();
     }
 
     private static string FormatGridCount(int gridPosition)
     {
-        return gridPosition > 0 ? $"{gridPosition} / {Grid.GridBeats}" : "—";
+        return gridPosition > 0 ? $"{gridPosition} / {PhraseWindow.DefaultGridBeats}" : "—";
     }
 
     private static string FormatBeat(int beat)

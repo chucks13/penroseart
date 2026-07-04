@@ -71,9 +71,16 @@ public readonly struct SyncedCueIntent
         bool preserveStagedEffect,
         int currentEffectIndex,
         int[] deck,
-        Func<int, Repertoire> repertoireForEffect)
+        Func<int, Repertoire> repertoireForEffect,
+        Repertoire energyPreference = Repertoire.None)
     {
+        // Event intent (Drop/Fill) outranks energy; energy is the preference only for an ordinary cue.
         var preferredRepertoire = PreferredRepertoireFor(eventIntent);
+        if (preferredRepertoire == Repertoire.None)
+        {
+            preferredRepertoire = energyPreference;
+        }
+
         if (preferredRepertoire != Repertoire.None && repertoireForEffect == null)
         {
             throw new ArgumentNullException(nameof(repertoireForEffect));
@@ -114,7 +121,7 @@ public readonly struct SyncedCueIntent
         PhraseEventInfo? fill,
         PhraseEventInfo? drop)
     {
-        if (!frame.HasGridAnchor)
+        if (!frame.HasCueMark)
         {
             return CueEventIntent.Ordinary;
         }

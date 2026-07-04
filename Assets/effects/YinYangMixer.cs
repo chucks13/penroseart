@@ -7,6 +7,10 @@ using UnityEngine;
 /// </summary>
 public class YinYangMixer : MixerBase
 {
+    /// <summary>YinYangMixer's paired blend suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private EffectBase[] effects;
     float yina;

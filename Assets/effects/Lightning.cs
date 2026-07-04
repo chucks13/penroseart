@@ -21,8 +21,10 @@ public class Lightning : EffectBase
     /// <summary>Lightning is a sharp beat-scaled burst. On a Fill it HOLDS a frozen bolt that hard-snaps to entirely
     /// new positions on every eighth note while strobing on the sixteenths (see <see cref="Draw"/>) — held, but
     /// jerking. On a Drop it inverts: an intensity swell, electric flicker, and a figure/ground flip where the wall
-    /// floods with the rolled colors and the bolts cut through as dark negative space (see <see cref="OnNewGrid"/>).</summary>
-    public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
+    /// floods with the rolled colors and the bolts cut through as dark negative space (see <see cref="OnNewGrid"/>);
+    /// its electric energy suits Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>Beats per bar used to derive the Drop decay length from BPM.</summary>
     private const int BeatsPerBar = 4;

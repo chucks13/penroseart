@@ -15,6 +15,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Kscope : ScreenEffect
 {
+    /// <summary>Kscope's slow kaleidoscopic imagery suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
     public class picture
     {
         public Texture2D tex;

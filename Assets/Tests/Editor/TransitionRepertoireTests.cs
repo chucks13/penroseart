@@ -143,17 +143,36 @@ public sealed class TransitionRepertoireTests
 public sealed class EffectRepertoireTests
 {
     [Test]
-    public void ConcreteEffectsExposeOnlyFillAndDropRepertoire()
+    public void ConcreteEffectsExposeOnlyKnownRepertoireFlags()
     {
+        const Repertoire known = Repertoire.HandlesFill | Repertoire.HandlesDrop
+            | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
         var factory = new Factory<EffectBase>();
         foreach (var effectType in factory.Types)
         {
             var effect = (EffectBase)System.Activator.CreateInstance(effectType);
             Assert.That(
-                effect.Repertoire & ~(Repertoire.HandlesFill | Repertoire.HandlesDrop),
+                effect.Repertoire & ~known,
                 Is.EqualTo(Repertoire.None),
                 effectType.Name);
         }
+    }
+
+    [Test]
+    public void ConcreteEffectsExposeInitialEnergyAffinityPerformersAtEachLevel()
+    {
+        var factory = new Factory<EffectBase>();
+        var declared = Repertoire.None;
+
+        foreach (var effectType in factory.Types)
+        {
+            var effect = (EffectBase)System.Activator.CreateInstance(effectType);
+            declared |= effect.Repertoire;
+        }
+
+        Assert.That(declared & Repertoire.EnergyLow, Is.Not.EqualTo(Repertoire.None), "At least one Performer should advertise a Low-energy affinity.");
+        Assert.That(declared & Repertoire.EnergyMid, Is.Not.EqualTo(Repertoire.None), "At least one Performer should advertise a Mid-energy affinity.");
+        Assert.That(declared & Repertoire.EnergyHigh, Is.Not.EqualTo(Repertoire.None), "At least one Performer should advertise a High-energy affinity.");
     }
 
     [Test]

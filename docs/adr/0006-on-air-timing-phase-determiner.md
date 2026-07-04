@@ -57,3 +57,7 @@ Every value PhaseLock holds or emits is a whole-beat integer (`offset`, `positio
 ## Amendment 2026-06-29
 
 The cyclic 16-beat "Phase" vocabulary in this ADR was renamed to "Grid" (PhaseLock→GridSync, PhaseReading→GridReading, Phase Anchor→Grid Anchor) per ADR-0009, to end the PhaseInfo/PhraseInfo collision. The determiner decision is unchanged.
+
+## Amendment 2026-07-04 — the determiner is superseded by ADR-0010
+
+GridSync (the held-offset determiner) and PhraseTracker are deleted: OSC v2 broadcasts a source-computed `timing_grid` and always-present `phrase_state`/`next_phrase_state`, so the wall reads grid and phrase truth off the wire instead of determining them (ADR-0010). This ADR's other half stands — On-Air Timing's Cue Sheet derivation still lives in the Director-owned CuePlanner, now fed by a five-integer `OnAirTimingInput` mapping `BeatManager.Phrase`/`NextPhrase` rather than the deleted `GridReading`/`PhraseTrackerReading` seam.

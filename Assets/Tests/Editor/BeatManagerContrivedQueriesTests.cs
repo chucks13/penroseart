@@ -191,7 +191,8 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyParsesClosedVocabularyOnce()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new NamedState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
+        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 8 };
 
         var energy = beatManager.Energy;
 
@@ -204,14 +205,15 @@ public sealed class BeatManagerContrivedQueriesTests
         // (16 - 4 + 0.5 intra-beat) / 16 of the same-energy run already elapsed.
         Assert.That(energy.Value.runProgress, Is.EqualTo(0.78125f).Within(0.0001f));
         Assert.That(energy.Value.runLengthBeats, Is.EqualTo(16));
-        Assert.That(energy.Value.changesRemaining, Is.EqualTo(2));
+        Assert.That(energy.Value.nextRunLengthBeats, Is.EqualTo(8));
     }
 
     [Test]
     public void EnergyParsesLabelsCaseInsensitively()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new NamedState { current = "low", next = "HIGH", active = 1, countBeats = 8, lengthBeats = 16, remaining = 1 };
+        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "low", countBeats = 8, lengthBeats = 16 };
+        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "HIGH", countBeats = 8, lengthBeats = 16 };
 
         var energy = beatManager.Energy;
 
@@ -226,16 +228,19 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyDegradesToNullOnUnrecognizedLabelNeverToAWrongTier()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new NamedState { current = "Banana", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "Banana", countBeats = 4, lengthBeats = 16 };
+        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
 
         Assert.That(beatManager.Energy, Is.Null);
     }
 
     [Test]
-    public void EnergyIsNullWhenTriStateIsUnavailable()
+    public void EnergyIsNullWhenLabelIsUnavailable()
     {
+        // Energy no longer has its own active tri-state on the wire; an empty/null label is the
+        // unavailable signal now (the label fails the closed Low/Mid/High parse).
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new NamedState { current = "High", next = "Mid", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        beatManager.beatData.snapshot.energyState = LabeledCountdown.Unavailable;
 
         Assert.That(beatManager.Energy, Is.Null);
     }
@@ -244,7 +249,8 @@ public sealed class BeatManagerContrivedQueriesTests
     public void EnergyTreatsUnknownNextLabelAsSteadyDirection()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new NamedState { current = "Mid", next = "", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
+        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "", countBeats = 4, lengthBeats = 16 };
 
         var energy = beatManager.Energy;
 
@@ -259,37 +265,32 @@ public sealed class BeatManagerContrivedQueriesTests
     public void PhrasePassesOpenVocabularyLabelsThroughAndCooksStructure()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.phraseState = new NamedState { current = "Chorus 2", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
 
         var phrase = beatManager.Phrase;
 
         Assert.That(phrase, Is.Not.Null);
         Assert.That(phrase!.Value.label, Is.EqualTo("Chorus 2"));
-        Assert.That(phrase.Value.next, Is.EqualTo("Break"));
-        Assert.That(phrase.Value.inPhrase, Is.True);
         Assert.That(phrase.Value.beatsUntilNext, Is.EqualTo(12));
         Assert.That(phrase.Value.lengthBeats, Is.EqualTo(32));
-        Assert.That(phrase.Value.remaining, Is.EqualTo(8));
+        Assert.That(phrase.Value.irregular, Is.False);
         // (32 - 12) elapsed beats plus the 0.5 intra-beat fraction, over 32.
         Assert.That(phrase.Value.progress, Is.EqualTo(0.640625f).Within(0.0001f));
     }
 
     [Test]
-    public void PhrasePreservesUpcomingTriStateForNextPhrasePlanning()
+    public void PhraseIrregularTriStateMapsToNullableBool()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.phraseState = new NamedState { current = "Break", next = "Drop", active = 0, countBeats = 9, lengthBeats = 64, remaining = 7 };
 
-        var phrase = beatManager.Phrase;
+        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 1 };
+        Assert.That(beatManager.Phrase!.Value.irregular, Is.True);
 
-        Assert.That(phrase, Is.Not.Null);
-        Assert.That(phrase!.Value.label, Is.EqualTo("Break"));
-        Assert.That(phrase.Value.next, Is.EqualTo("Drop"));
-        Assert.That(phrase.Value.inPhrase, Is.False);
-        Assert.That(phrase.Value.beatsUntilNext, Is.EqualTo(9));
-        Assert.That(phrase.Value.lengthBeats, Is.EqualTo(64));
-        Assert.That(phrase.Value.remaining, Is.EqualTo(7));
-        Assert.That(phrase.Value.progress, Is.Null);
+        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
+        Assert.That(beatManager.Phrase!.Value.irregular, Is.False);
+
+        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = -1 };
+        Assert.That(beatManager.Phrase!.Value.irregular, Is.Null);
     }
 
     [Test]
@@ -297,11 +298,95 @@ public sealed class BeatManagerContrivedQueriesTests
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.beatData.snapshot.phraseState = new NamedState { current = "", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
+        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "", countBeats = 12, lengthBeats = 32, irregular = 0 };
         Assert.That(beatManager.Phrase, Is.Null);
 
-        beatManager.beatData.snapshot.phraseState = new NamedState { current = "Drop", next = "Break", active = -1, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        beatManager.beatData.snapshot.phraseState = PhraseState.Unavailable;
         Assert.That(beatManager.Phrase, Is.Null);
+    }
+
+    // --- Next Phrase planning (separate labeled countdown from the phrase-in-progress) ---
+
+    [Test]
+    public void NextPhrasePassesLabelAndCooksCountdown()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.snapshot.nextPhraseState = new LabeledCountdown { label = "Drop", countBeats = 9, lengthBeats = 64 };
+
+        var nextPhrase = beatManager.NextPhrase;
+
+        Assert.That(nextPhrase, Is.Not.Null);
+        Assert.That(nextPhrase!.Value.label, Is.EqualTo("Drop"));
+        Assert.That(nextPhrase.Value.beatsUntilChange, Is.EqualTo(9));
+        Assert.That(nextPhrase.Value.lengthBeats, Is.EqualTo(64));
+    }
+
+    [Test]
+    public void NextPhraseIsNullWithoutALabel()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.snapshot.nextPhraseState = LabeledCountdown.Unavailable;
+
+        Assert.That(beatManager.NextPhrase, Is.Null);
+    }
+
+    // --- Loop state (tri-state gating) ---
+
+    [Test]
+    public void LoopIsNullWhenActiveTriStateIsUnavailable()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.snapshot.loopState = LoopState.Unavailable;
+
+        Assert.That(beatManager.Loop, Is.Null);
+    }
+
+    [Test]
+    public void LoopIdleButRegionSetIsRealDataNotUnavailable()
+    {
+        // active=0 (not rolling) with set=1 (a region exists) is idle-but-set: real data, not "unavailable".
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.snapshot.loopState = new LoopState { active = 0, set = 1, lengthBeats = 4f, lengthMs = 2000, sizeNumerator = 1, sizeDenominator = 4 };
+
+        var loop = beatManager.Loop;
+
+        Assert.That(loop, Is.Not.Null);
+        Assert.That(loop!.Value.looping, Is.False);
+        Assert.That(loop.Value.regionSet, Is.True);
+        Assert.That(loop.Value.lengthBeats, Is.EqualTo(4f).Within(0.0001f));
+        Assert.That(loop.Value.lengthMs, Is.EqualTo(2000));
+        Assert.That(loop.Value.sizeNumerator, Is.EqualTo(1));
+        Assert.That(loop.Value.sizeDenominator, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void LoopRollingAndRegionSetBothReadTrue()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.snapshot.loopState = new LoopState { active = 1, set = 1, lengthBeats = 8f, lengthMs = 4000, sizeNumerator = 1, sizeDenominator = 2 };
+
+        var loop = beatManager.Loop;
+
+        Assert.That(loop, Is.Not.Null);
+        Assert.That(loop!.Value.looping, Is.True);
+        Assert.That(loop.Value.regionSet, Is.True);
+    }
+
+    [Test]
+    public void LoopMapsNegativeLengthBeatsToNullInsideAValidState()
+    {
+        var beatManager = CreateLiveBeatManager();
+        beatManager.beatData.snapshot.loopState = new LoopState { active = 0, set = 0, lengthBeats = -1f, lengthMs = -1, sizeNumerator = -1, sizeDenominator = -1 };
+
+        var loop = beatManager.Loop;
+
+        Assert.That(loop, Is.Not.Null);
+        Assert.That(loop!.Value.looping, Is.False);
+        Assert.That(loop.Value.regionSet, Is.False);
+        Assert.That(loop.Value.lengthBeats, Is.Null);
+        Assert.That(loop.Value.lengthMs, Is.Null);
+        Assert.That(loop.Value.sizeNumerator, Is.Null);
+        Assert.That(loop.Value.sizeDenominator, Is.Null);
     }
 
     // --- Levels smoothing and the Color Bank ---
@@ -440,8 +525,9 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = new BeatManager();
         beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
         beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
-        beatManager.beatData.snapshot.phraseState = new NamedState { current = "Drop", next = "Break", active = 1, countBeats = 12, lengthBeats = 32, remaining = 8 };
-        beatManager.beatData.snapshot.energyState = new NamedState { current = "High", next = "Mid", active = 1, countBeats = 4, lengthBeats = 16, remaining = 2 };
+        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Drop", countBeats = 12, lengthBeats = 32, irregular = 0 };
+        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
+        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
         beatManager.beatData.snapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
 
         beatManager.Update(0f);

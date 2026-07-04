@@ -7,6 +7,10 @@ using System;
 /// </summary>
 public class Ripple : ScreenEffect
 {
+    /// <summary>Ripple can pulse a Fill and land a Drop, and suits Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private Color startColor;
     private Color endColor;

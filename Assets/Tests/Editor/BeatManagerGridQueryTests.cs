@@ -1,13 +1,13 @@
 #nullable enable
 
 using NUnit.Framework;
+using PenroseArt.RaveOsc;
 
 /// <summary>
 /// Pins the effect-facing 16-beat Grid query (<see cref="BeatManager.Grid"/> => <see cref="GridInfo"/>?).
-/// The Director is the single writer via <see cref="BeatManager.PublishGrid"/>; these tests drive that
-/// seam directly to fix the facade contract: the null rules (off the grid), the 1..16 Count, the 0..1
-/// Progress enrichment, Confidence passthrough, and that the facade never latches — it mirrors whatever was
-/// last published, so a beat rewind within a phrase self-corrects.
+/// Wire-fed from RaveSystem's source-computed <c>timing_grid</c> lane: the null rules (off the grid /
+/// no usable wire grid), the 1..16 Count, the 1..4 Bar, the 0..1 Progress enrichment, and the
+/// locked/coasting/disputed Confidence parse.
 /// </summary>
 public sealed class BeatManagerGridQueryTests
 {
@@ -25,60 +25,81 @@ public sealed class BeatManagerGridQueryTests
         return beatManager;
     }
 
-    [Test]
-    public void GridIsNullBeforeAnyPublish()
+    private static void SetGrid(BeatManager beatManager, int beat, int bar, string? state)
     {
-        var beatManager = new BeatManager();
+        beatManager.beatData.snapshot.timingGrid = new TimingGrid { beat = beat, bar = bar, state = state };
+    }
+
+    [Test]
+    public void GridIsNullWithNoTimingGridOnTheWire()
+    {
+        // Default Unavailable timing_grid (beat -1, state null): no usable grid.
+        var beatManager = CreateLiveBeatManager();
 
         Assert.That(beatManager.Grid, Is.Null);
     }
 
     [Test]
-    public void GridIsNullWhenTheDirectorPublishesNone()
+    public void GridIsNullOnTheStandaloneFloorEvenWithAWireGrid()
     {
+        // No 4-count clock (beatInBar < 1) is a mode exit: the wall is off the grid even when a stale
+        // timing_grid still rides along on the snapshot.
         var beatManager = CreateLiveBeatManager();
-        beatManager.PublishGrid(GridReading.None);
+        beatManager.beatData.snapshot.beatInBar = -1;
+        SetGrid(beatManager, beat: 5, bar: 2, state: "locked");
 
         Assert.That(beatManager.Grid, Is.Null);
     }
 
     [Test]
-    public void GridIsNullOnTheStandaloneFloorEvenWithAGridPosition()
-    {
-        // StandAloneFloor is a mode exit: the clock is gone, so there is no Grid even when a stale grid
-        // position still rides along in the reading.
-        var beatManager = CreateLiveBeatManager();
-        beatManager.PublishGrid(new GridReading(0, 5, GridSyncState.Coasting, standAloneFloor: true));
-
-        Assert.That(beatManager.Grid, Is.Null);
-    }
-
-    [Test]
-    public void GridSurfacesCountConfidenceAndProgress()
+    public void GridSurfacesCountBarConfidenceAndProgress()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.PublishGrid(new GridReading(0, 5, GridSyncState.Locked, standAloneFloor: false));
+        SetGrid(beatManager, beat: 5, bar: 2, state: "locked");
 
         var grid = beatManager.Grid;
 
         Assert.That(grid, Is.Not.Null);
-        Assert.That(grid!.Value.Confidence, Is.EqualTo(GridSyncState.Locked));
+        Assert.That(grid!.Value.Confidence, Is.EqualTo(GridConfidence.Locked));
         Assert.That(grid.Value.Count, Is.EqualTo(5));
+        Assert.That(grid.Value.Bar, Is.EqualTo(2));
         // (5 - 1 + 0.5 intra-beat) / 16
         Assert.That(grid.Value.Progress, Is.EqualTo(0.28125f).Within(0.0001f));
     }
 
     [Test]
-    public void CoastingAndContradictedAreInGridReadings()
+    public void CoastingAndDisputedParseCaseInsensitively()
     {
-        // All three GridSyncState values are on-grid readings with a valid Count; they differ only in trust.
+        // All three states are on-grid readings with a valid Count; they differ only in trust.
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.PublishGrid(new GridReading(0, 8, GridSyncState.Coasting, false));
-        Assert.That(beatManager.Grid?.Confidence, Is.EqualTo(GridSyncState.Coasting));
+        SetGrid(beatManager, 8, 2, "coasting");
+        Assert.That(beatManager.Grid?.Confidence, Is.EqualTo(GridConfidence.Coasting));
 
-        beatManager.PublishGrid(new GridReading(0, 8, GridSyncState.Contradicted, false));
-        Assert.That(beatManager.Grid?.Confidence, Is.EqualTo(GridSyncState.Contradicted));
+        SetGrid(beatManager, 8, 2, "DISPUTED");
+        Assert.That(beatManager.Grid?.Confidence, Is.EqualTo(GridConfidence.Disputed));
+    }
+
+    [Test]
+    public void GridIsNullWhenStateIsEmptyOrUnrecognized()
+    {
+        var beatManager = CreateLiveBeatManager();
+
+        SetGrid(beatManager, 5, 2, string.Empty);
+        Assert.That(beatManager.Grid, Is.Null, "An empty state is no usable grid.");
+
+        SetGrid(beatManager, 5, 2, "wobbling");
+        Assert.That(beatManager.Grid, Is.Null, "An unrecognized state never becomes a wrong confidence.");
+    }
+
+    [Test]
+    public void GridIsNullWhenBeatIsBelowOne()
+    {
+        // "-1 -1 coasting": a valid state string but no placed count reads as no grid.
+        var beatManager = CreateLiveBeatManager();
+        SetGrid(beatManager, beat: -1, bar: -1, state: "coasting");
+
+        Assert.That(beatManager.Grid, Is.Null);
     }
 
     [Test]
@@ -86,28 +107,28 @@ public sealed class BeatManagerGridQueryTests
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.PublishGrid(new GridReading(0, 1, GridSyncState.Locked, false));
+        SetGrid(beatManager, 1, 1, "locked");
         Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(1));
         Assert.That(beatManager.Grid!.Value.Progress, Is.EqualTo(0.03125f).Within(0.0001f)); // (0 + 0.5) / 16
         Assert.That(beatManager.Grid!.Value.Progress, Is.InRange(0f, 1f));
 
-        beatManager.PublishGrid(new GridReading(0, 16, GridSyncState.Locked, false));
+        SetGrid(beatManager, 16, 4, "locked");
         Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(16));
         Assert.That(beatManager.Grid!.Value.Progress, Is.EqualTo(0.96875f).Within(0.0001f)); // (15 + 0.5) / 16
         Assert.That(beatManager.Grid!.Value.Progress, Is.InRange(0f, 1f));
     }
 
     [Test]
-    public void FacadeMirrorsTheLatestPublishSoABeatRewindSelfCorrects()
+    public void GridReflectsTheLatestWireCountSoABeatRewindSelfCorrects()
     {
-        // No latching: a loop (a beat rewind within a phrase) re-publishes a lower position, and the facade
-        // reflects it immediately rather than holding the higher count.
+        // No latching: a loop (a beat rewind within a phrase) lowers the wire count and the query reflects
+        // it immediately rather than holding the higher count.
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.PublishGrid(new GridReading(0, 14, GridSyncState.Locked, false));
+        SetGrid(beatManager, 14, 4, "locked");
         Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(14));
 
-        beatManager.PublishGrid(new GridReading(0, 2, GridSyncState.Locked, false));
+        SetGrid(beatManager, 2, 1, "locked");
         Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(2));
     }
 }

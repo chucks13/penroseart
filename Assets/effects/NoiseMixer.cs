@@ -5,6 +5,10 @@
 /// </summary>
 public class NoiseMixer : MixerBase
 {
+    /// <summary>NoiseMixer's blended noise suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private EffectBase[] effects;
     private Color border;

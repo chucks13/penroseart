@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -327,6 +328,56 @@ public class Controller : Singleton<Controller>
     /// <summary>Runtime catalog of top-level effects created by <see cref="SetupEffects"/>.</summary>
     [HideInInspector]
     public EffectBase[] effects;
+
+    /// <summary>
+    /// Temporary live-tuning aid: a per-effect override of an effect's code-declared <see cref="Repertoire"/>,
+    /// keyed by effect catalog <see cref="EffectBase.Name"/> (never index — reflection catalog order is fragile).
+    /// Presence of a matching entry replaces the declared affinity; remove the entry to restore it. Expected
+    /// to be ripped out once real per-effect support lands.
+    /// </summary>
+    [Serializable]
+    public struct EffectRepertoireOverride
+    {
+        /// <summary>Catalog name (<see cref="EffectBase.Name"/>) of the effect this override targets.</summary>
+        public string effectName;
+
+        /// <summary>Affinity flags advertised in place of the effect's declared <see cref="Repertoire"/>.</summary>
+        public Repertoire flags;
+    }
+
+    /// <summary>
+    /// Temporary live-tuning overrides of effect affinities, applied by <see cref="EffectiveRepertoire"/>.
+    /// Empty by default (no behavior change); entries are added/edited at runtime via the Controller inspector.
+    /// </summary>
+    public List<EffectRepertoireOverride> effectRepertoireOverrides = new List<EffectRepertoireOverride>();
+
+    /// <summary>
+    /// The affinity the Director should treat <paramref name="effectIndex"/> as advertising: an override entry
+    /// whose <see cref="EffectRepertoireOverride.effectName"/> matches the effect's catalog
+    /// <see cref="EffectBase.Name"/> wins; otherwise the effect's code-declared <see cref="EffectBase.Repertoire"/>.
+    /// Invalid index → <see cref="Repertoire.None"/>.
+    /// </summary>
+    public Repertoire EffectiveRepertoire(int effectIndex)
+    {
+        if (effects == null || effectIndex < 0 || effectIndex >= effects.Length || effects[effectIndex] == null)
+        {
+            return Repertoire.None;
+        }
+
+        var effect = effects[effectIndex];
+        if (effectRepertoireOverrides != null)
+        {
+            foreach (var over in effectRepertoireOverrides)
+            {
+                if (over.effectName == effect.Name)
+                {
+                    return over.flags;
+                }
+            }
+        }
+
+        return effect.Repertoire;
+    }
 
     /// <summary>Runtime catalog of transitions created by <see cref="SetupTransitions"/>.</summary>
     [HideInInspector]
@@ -1190,9 +1241,9 @@ public class Controller : Singleton<Controller>
         AppendIfNotEmpty(builder, FormatNextMove(directorStatus));
         if (directorStatus.IsSyncedMode)
         {
-            AppendIfNotEmpty(builder, directorStatus.HasGridAnchor ? (directorStatus.Phrase.IsIrregular ? directorStatus.Grid.State + " (irregular)" : directorStatus.Grid.State.ToString()) : "unlocked");
+            AppendIfNotEmpty(builder, FormatGridConfidence());
             AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
-            AppendIfNotEmpty(builder, FormatGridPosition(directorStatus));
+            AppendIfNotEmpty(builder, FormatGridPosition());
             AppendIfNotEmpty(builder, FormatLanding(directorStatus));
             AppendIfNotEmpty(builder, FormatDropCue());
             AppendIfNotEmpty(builder, directorStatus.BeatsUntilCadenceReady > 0
@@ -1254,35 +1305,33 @@ public class Controller : Singleton<Controller>
 
     private static string FormatTimingSource(DirectorStatus status)
     {
-        string source;
         switch (status.TimingSource)
         {
-            case TimingFrameSource.GridFallback:
-                source = "clock-grid";
-                break;
-            case TimingFrameSource.SyntheticPhrase:
-                source = "synthetic-phrase";
-                break;
             case TimingFrameSource.CueMark:
-                source = "cue-mark";
-                break;
+                return "cue-mark";
             case TimingFrameSource.TrackPhaseBoundary:
-                source = "track-phase-boundary";
-                break;
-            case TimingFrameSource.Coast:
-                source = "coast";
-                break;
+                return "track-phase-boundary";
             default:
-                source = "unlocked";
-                break;
+                return "unlocked";
         }
-
-        return status.TimingReanchored ? $"re-anchor {source}" : source;
     }
 
-    private static string FormatGridPosition(DirectorStatus status)
+    /// <summary>Wire-fed Grid confidence for the HUD, annotated when the current Phrase is irregular.</summary>
+    private string FormatGridConfidence()
     {
-        return status.Grid.Position > 0 ? $"{status.Grid.Position}/16" : "no grid";
+        if (!(beatManager != null && beatManager.Grid is { } grid))
+        {
+            return "unlocked";
+        }
+
+        return beatManager.Phrase?.irregular == true
+            ? $"{grid.Confidence} (irregular)"
+            : grid.Confidence.ToString();
+    }
+
+    private string FormatGridPosition()
+    {
+        return beatManager != null && beatManager.Grid is { } grid ? $"{grid.Count}/16" : "no grid";
     }
 
     private static string FormatLanding(DirectorStatus status)

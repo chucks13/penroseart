@@ -27,6 +27,10 @@ We removed the CuePlanner's pre-planned upcoming sheet, its promotion at Phrase 
 
 Cue Sheet identity and ownership are unchanged: identity is still the Phrase's total beat length, planning still lives in the Director-owned CuePlanner, and the Switcher still owns cue lifecycle.
 
+## Amendment 2026-07-04 — one fresh Cue Sheet per phrase change (ADR-0010)
+
+The length-identity reuse from the 2026-07-01 amendment (`CueSheet.Matches`, the cursor reanchor) is deleted. With `next_phrase_state` always on the OSC v2 wire, the CuePlanner builds a fresh Cue Sheet on every phrase change — same-length turnover included — and the upcoming window uses the true next-phrase length instead of guessing it from the current length (ADR-0010). Ownership is unchanged: identity is still the Phrase's beat length, planning still lives in the CuePlanner, and the Switcher still owns cue lifecycle.
+
 ## Considered options
 
 - **Keep Selected Phase Boundary planning as the canonical model** — rejected because the name makes a Phrase-level cue plan sound like a Phase implementation detail, and it encourages transition timing mechanics to leak back into the Director.

@@ -13,8 +13,10 @@ using Random = UnityEngine.Random;
 /// </remarks>
 public class Tunnel : EffectBase
 {
-    /// <summary>The tunnel intensifies its rush/zoom motion for a Fill, and slams a reverse warp for a Drop.</summary>
-    public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
+    /// <summary>The tunnel intensifies its rush/zoom motion for a Fill, and slams a reverse warp for a Drop;
+    /// its driving motion suits Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private float density;

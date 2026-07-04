@@ -6,6 +6,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Noise : EffectBase
 {
+    /// <summary>Noise's texture suits Low, Mid, and High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private float n;
     private float scale;

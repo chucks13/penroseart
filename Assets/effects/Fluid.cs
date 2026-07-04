@@ -8,6 +8,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Fluid : ScreenEffect
 {
+    /// <summary>Fluid's smooth flow suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
     private float[] state1;
     private float[] state2;
     int slower = 0;

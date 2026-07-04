@@ -13,12 +13,6 @@ namespace PenroseArt.RaveOsc {
 /// Decodes the RaveSystem on-air OSC broadcast schema into a thread-safe snapshot.
 /// </summary>
 public sealed class RaveOscPacketParser : IDisposable {
-    // TRANSITIONAL: RaveSystem is renaming the wire address phase_state -> phrase_state (fixes a long-standing
-    // "phase"/"phrase" typo; the section labels it carries are a Penrose Phrase). Accept both until the new
-    // recording exists and pre-rename recordings are retired, then delete this const + its registration + the
-    // legacy half of the round-trip test.
-    private const string LegacyPhraseStateAddress = "/rave/onair/phase_state";
-
     private readonly OscDispatcher _dispatcher = new OscDispatcher();
     private readonly object _lock = new object();
     private RaveOnAirSnapshot _snapshot = new RaveOnAirSnapshot();
@@ -54,12 +48,15 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterInt("/rave/onair/beat_avg_ms", (snapshot, value) => snapshot.beatAverageMs = value);
         RegisterFloat("/rave/onair/beat_pulse", (snapshot, value) => snapshot.beatPulse = value);
         RegisterLevels("/rave/onair/levels", (snapshot, value) => snapshot.levels = value);
-        RegisterNamedState("/rave/onair/phrase_state", (snapshot, value) => snapshot.phraseState = value);
-        // TRANSITIONAL: also accept the legacy misspelled address into the same setter (see LegacyPhraseStateAddress).
-        RegisterNamedState(LegacyPhraseStateAddress, (snapshot, value) => snapshot.phraseState = value);
+        RegisterPhraseState("/rave/onair/phrase_state", (snapshot, value) => snapshot.phraseState = value);
+        RegisterLabeledCountdown("/rave/onair/next_phrase_state", (snapshot, value) => snapshot.nextPhraseState = value);
         RegisterCountdownState("/rave/onair/drop_state", (snapshot, value) => snapshot.dropState = value);
         RegisterCountdownState("/rave/onair/fill_state", (snapshot, value) => snapshot.fillState = value);
-        RegisterNamedState("/rave/onair/energy_state", (snapshot, value) => snapshot.energyState = value);
+        RegisterLabeledCountdown("/rave/onair/energy_state", (snapshot, value) => snapshot.energyState = value);
+        RegisterLabeledCountdown("/rave/onair/next_energy_state", (snapshot, value) => snapshot.nextEnergyState = value);
+        RegisterLoopState("/rave/onair/loop_state", (snapshot, value) => snapshot.loopState = value);
+        RegisterTimingGrid("/rave/onair/timing_grid", (snapshot, value) => snapshot.timingGrid = value);
+        RegisterInt("/rave/onair/track_id", (snapshot, value) => snapshot.trackId = value);
     }
 
     /// <summary>
@@ -124,7 +121,13 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     private delegate void SnapshotLevelsSetter(RaveOnAirSnapshot snapshot, Levels value);
 
-    private delegate void SnapshotNamedStateSetter(RaveOnAirSnapshot snapshot, NamedState value);
+    private delegate void SnapshotPhraseStateSetter(RaveOnAirSnapshot snapshot, PhraseState value);
+
+    private delegate void SnapshotLabeledCountdownSetter(RaveOnAirSnapshot snapshot, LabeledCountdown value);
+
+    private delegate void SnapshotLoopStateSetter(RaveOnAirSnapshot snapshot, LoopState value);
+
+    private delegate void SnapshotTimingGridSetter(RaveOnAirSnapshot snapshot, TimingGrid value);
 
     private delegate void SnapshotCountdownStateSetter(RaveOnAirSnapshot snapshot, CountdownState value);
 
@@ -186,17 +189,53 @@ public sealed class RaveOscPacketParser : IDisposable {
         });
     }
 
-    private void RegisterNamedState(string address, SnapshotNamedStateSetter setter) {
+    private void RegisterPhraseState(string address, SnapshotPhraseStateSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
-            var value = new NamedState {
-                current = ReadNextString(address, ref reader),
-                next = ReadNextString(address, ref reader),
-                // Tri-state passthrough: -1 unavailable / 0 upcoming / 1 active. A != 0 collapse here
-                // would turn "unavailable" into "active now".
-                active = ReadNextInt(address, ref reader),
+            var value = new PhraseState {
+                label = ReadNextString(address, ref reader),
                 countBeats = ReadNextInt(address, ref reader),
                 lengthBeats = ReadNextInt(address, ref reader),
-                remaining = ReadNextInt(address, ref reader),
+                // Tri-state passthrough: -1 unavailable / 0 regular / 1 irregular. A != 0 collapse here
+                // would turn "unavailable" into "irregular".
+                irregular = ReadNextInt(address, ref reader),
+            };
+            UpdateSnapshot(snapshot => setter(snapshot, value));
+        });
+    }
+
+    private void RegisterLabeledCountdown(string address, SnapshotLabeledCountdownSetter setter) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var value = new LabeledCountdown {
+                label = ReadNextString(address, ref reader),
+                countBeats = ReadNextInt(address, ref reader),
+                lengthBeats = ReadNextInt(address, ref reader),
+            };
+            UpdateSnapshot(snapshot => setter(snapshot, value));
+        });
+    }
+
+    private void RegisterLoopState(string address, SnapshotLoopStateSetter setter) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var value = new LoopState {
+                // Tri-state passthrough: -1 unavailable / 0 no / 1 yes. A != 0 collapse here
+                // would turn "unavailable" into "active now".
+                active = ReadNextInt(address, ref reader),
+                set = ReadNextInt(address, ref reader),
+                lengthBeats = ReadNextFloat(address, ref reader),
+                lengthMs = ReadNextInt(address, ref reader),
+                sizeNumerator = ReadNextInt(address, ref reader),
+                sizeDenominator = ReadNextInt(address, ref reader),
+            };
+            UpdateSnapshot(snapshot => setter(snapshot, value));
+        });
+    }
+
+    private void RegisterTimingGrid(string address, SnapshotTimingGridSetter setter) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var value = new TimingGrid {
+                beat = ReadNextInt(address, ref reader),
+                bar = ReadNextInt(address, ref reader),
+                state = ReadNextString(address, ref reader),
             };
             UpdateSnapshot(snapshot => setter(snapshot, value));
         });

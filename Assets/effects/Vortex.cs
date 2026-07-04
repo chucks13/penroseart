@@ -6,6 +6,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Vortex : EffectBase
 {
+    /// <summary>Vortex's swirling motion suits Mid/High-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
 
     private int count;
     private float speed;

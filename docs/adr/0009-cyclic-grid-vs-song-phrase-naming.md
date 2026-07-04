@@ -13,3 +13,7 @@ Out of scope — three genuinely different, correctly-named uses of "phase" that
 - **Rename `Phrase*` → `Section`** (the original plan). Rejected: drifts from the canonical Rekordbox/PSSI "phrase" the wire is converging on, and invents a third word for a concept that already has the right one.
 - **Name the cyclic family `BeatGrid`.** Rejected: "Beat Grid" is canonical upstream for the *per-beat → time* map (`BeatGridParser`); reusing it for the 16-beat cycle would re-create the same cross-register collision we are removing.
 - **`GridLock` for the determiner.** Rejected: reads as "gridlock" and loses the phase-locked-loop meaning. Chose `GridSync`.
+
+## Amendment 2026-07-04 — Grid confidence is now wire-sourced
+
+The `GridSyncState` renamed here died with GridSync (ADR-0010): grid confidence is no longer locally determined but read from the OSC v2 `timing_grid`, and a new `GridConfidence { Locked, Coasting, Disputed }` in the Rhythm layer carries the wire vocabulary for display (the old `Contradicted` value is now the wire's `Disputed`). The naming decision — cyclic "Grid" vs song-structure "Phrase" — is unchanged; only the confidence enum's home and source moved.

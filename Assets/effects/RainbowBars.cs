@@ -7,6 +7,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class RainbowBars : ScreenEffect
 {
+    /// <summary>RainbowBars' scrolling bands suit Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private float sampleTime;
 

@@ -150,6 +150,88 @@ public sealed class SyncedCueIntentTests
     }
 
     [Test]
+    public void OrdinaryCastCastsTheEnergyPreferredPerformerFoundOnTheDeck()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Ordinary,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.EnergyHigh : Repertoire.None,
+            energyPreference: Repertoire.EnergyHigh);
+
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.EnergyHigh));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
+        Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(1));
+        Assert.That(deck, Is.EqualTo(new[] { 1, 2, 0 }), "Casting must not rotate deck candidates.");
+    }
+
+    [Test]
+    public void EventIntentOutranksEnergyPreferenceWhenBothWouldCast()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Drop,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.HandlesDrop
+                : effectIndex == 0 ? Repertoire.EnergyHigh : Repertoire.None,
+            energyPreference: Repertoire.EnergyHigh);
+
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.HandlesDrop), "The Drop event outranks the energy preference.");
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(2));
+        Assert.That(intent.CastPreferredPerformer, Is.True);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void OrdinaryCastWithNoEnergyPreferenceKeepsTheStagedPerformer()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Ordinary,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            effectIndex => effectIndex == 2 ? Repertoire.EnergyHigh : Repertoire.None,
+            energyPreference: Repertoire.None);
+
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.None));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void OrdinaryCastKeepsStagedPerformerWhenNoEnergyPreferredPerformerIsAvailable()
+    {
+        var deck = new[] { 1, 2, 0 };
+
+        var intent = SyncedCueIntent.Cast(
+            CueEventIntent.Ordinary,
+            stagedEffectIndex: 1,
+            preserveStagedEffect: false,
+            currentEffectIndex: 0,
+            deck,
+            _ => Repertoire.None,
+            energyPreference: Repertoire.EnergyHigh);
+
+        Assert.That(intent.PreferredRepertoire, Is.EqualTo(Repertoire.EnergyHigh));
+        Assert.That(intent.TargetEffectIndex, Is.EqualTo(1), "No deck Performer advertises the energy level, so the staged choice stands (NoPreferredAvailable).");
+        Assert.That(intent.CastPreferredPerformer, Is.False);
+        Assert.That(intent.EffectDeckIndex, Is.EqualTo(-1));
+    }
+
+    [Test]
     public void ResolveEventIntentPrefersDropWhenFillAndDropBothAlign()
     {
         var frame = Frame(currentBeat: 605, cueMarkBeat: 609);
@@ -219,18 +301,16 @@ public sealed class SyncedCueIntentTests
         return new TimingFrame(
             new OnAirTimingInput(
                 currentBeat,
-                beatInBar: ((currentBeat - 1) % 4) + 1,
-                trackPhaseActive: 1,
-                beatsUntilPhraseBoundary: cueMarkBeat - currentBeat,
-                phraseLengthBeats: 32),
-            new GridReading(0, 1, GridSyncState.Locked, false),
-            hasGridAnchor: true,
+                beatsUntilPhraseEnd: cueMarkBeat - currentBeat,
+                phraseLengthBeats: 32,
+                nextPhraseStartInBeats: -1,
+                nextPhraseLengthBeats: -1),
+            hasCueMark: true,
             cueMarkBeat,
             hasPhraseWindow: false,
             default,
             TimingFrameSource.TrackPhaseBoundary,
-            beatRewoundToNewPass: false,
-            reanchored: false);
+            beatRewoundToNewPass: false);
     }
 
     private static PhraseEventInfo UpcomingDrop(int beatsUntilStart)

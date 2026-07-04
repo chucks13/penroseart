@@ -7,6 +7,10 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class Petals : ScreenEffect
 {
+    /// <summary>Petals' gentle bloom suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
     private Color[] colors;
     private float background;
 

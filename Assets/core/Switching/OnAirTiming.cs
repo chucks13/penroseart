@@ -6,23 +6,19 @@ public enum TimingFrameSource
     /// <summary>No usable live timing target is available.</summary>
     Unlocked,
 
-    /// <summary>The next target is inferred from the 16-beat Grid.</summary>
-    GridFallback,
-
-    /// <summary>The next target comes from a fabricated rolling Phrase Window when no Track Phase is present (beat-only fallback, ADR-0008).</summary>
-    SyntheticPhrase,
-
     /// <summary>The next target is an interior Cue Mark selected inside the current Phrase Window.</summary>
     CueMark,
 
     /// <summary>The next target is a mandatory structural Track Phase boundary.</summary>
     TrackPhaseBoundary,
-
-    /// <summary>The target is coasting from the last known Grid Anchor.</summary>
-    Coast,
 }
 
-/// <summary>The live rhythm snapshot On-Air Timing needs to interpret the current synced frame.</summary>
+/// <summary>
+/// The live rhythm snapshot On-Air Timing needs to interpret the current synced frame. A tiny integer
+/// seam (−1 sentinels) kept purely for CuePlanner testability: every field is projected from the
+/// nullable <see cref="BeatManager"/> phrase queries by <see cref="From"/>, so the wire's structure is
+/// interpreted once here rather than inside the planner.
+/// </summary>
 public readonly struct OnAirTimingInput
 {
     public static OnAirTimingInput Unavailable { get; } = new OnAirTimingInput(-1, -1, -1, -1, -1);
@@ -30,49 +26,37 @@ public readonly struct OnAirTimingInput
     /// <summary>Focused on-air absolute beat count, or -1 when unavailable.</summary>
     public readonly int Beat;
 
-    /// <summary>Focused on-air 1-based beat label inside the current bar, or -1 when unavailable.</summary>
-    public readonly int BeatInBar;
+    /// <summary>Whole beats until the current Phrase ends (its boundary), or -1 when unavailable.</summary>
+    public readonly int BeatsUntilPhraseEnd;
 
-    /// <summary>Track Phase active tri-state: 1 active, 0 inactive-but-present, -1 unavailable.</summary>
-    public readonly int TrackPhaseActive;
-
-    /// <summary>Whole beats until the active Track Phase boundary, upcoming Track Phase start, or -1 when unavailable.</summary>
-    public readonly int BeatsUntilPhraseBoundary;
-
-    /// <summary>Total length of the active or upcoming Phrase Window in beats, or -1 when unavailable.</summary>
+    /// <summary>Total length of the current Phrase in beats, or -1 when unavailable.</summary>
     public readonly int PhraseLengthBeats;
 
-    /// <summary>
-    /// Integer-pure track identity: a monotonically increasing ordinal that changes when the
-    /// on-air track title changes, or -1 when no track is on air. GridSync detects a track
-    /// change by a change in this value (the raw title stays out of the integer Grid seam).
-    /// </summary>
-    public readonly int TrackOrdinal;
+    /// <summary>Whole beats until the next Phrase starts (the current Phrase's change), or -1 when unavailable.</summary>
+    public readonly int NextPhraseStartInBeats;
 
-    /// <summary>
-    /// The Standalone/Synced mode authority carried across this seam: true while the 4-count is running
-    /// (<c>BeatInBar &gt;= 1</c>). Mirrors <see cref="BeatManager.IsSynced"/> — the one place the rule is
-    /// defined — so GridSync reads the mode floor from the authority instead of its own check (ADR-0007).
-    /// </summary>
-    public bool IsSynced => BeatInBar >= 1;
+    /// <summary>Total length of the next Phrase in beats — its own length, not the current one's — or -1 when unavailable.</summary>
+    public readonly int NextPhraseLengthBeats;
 
     public OnAirTimingInput(
         int beat,
-        int beatInBar,
-        int trackPhaseActive,
-        int beatsUntilPhraseBoundary,
+        int beatsUntilPhraseEnd,
         int phraseLengthBeats,
-        int trackOrdinal = -1)
+        int nextPhraseStartInBeats,
+        int nextPhraseLengthBeats)
     {
         Beat = beat;
-        BeatInBar = beatInBar;
-        TrackPhaseActive = trackPhaseActive;
-        BeatsUntilPhraseBoundary = beatsUntilPhraseBoundary;
+        BeatsUntilPhraseEnd = beatsUntilPhraseEnd;
         PhraseLengthBeats = phraseLengthBeats;
-        TrackOrdinal = trackOrdinal;
+        NextPhraseStartInBeats = nextPhraseStartInBeats;
+        NextPhraseLengthBeats = nextPhraseLengthBeats;
     }
 
-    /// <summary>Captures the nullable BeatManager rhythm queries without exposing raw Track Phase interpretation to callers.</summary>
+    /// <summary>
+    /// Captures the nullable BeatManager phrase queries into the integer seam, mapping each null to -1.
+    /// The current Phrase supplies the live window; the next Phrase supplies the pre-first-phrase and
+    /// counting-down window (its own announced length).
+    /// </summary>
     public static OnAirTimingInput From(BeatManager beatManager)
     {
         if (beatManager == null)
@@ -81,13 +65,13 @@ public readonly struct OnAirTimingInput
         }
 
         var phrase = beatManager.Phrase;
+        var nextPhrase = beatManager.NextPhrase;
         return new OnAirTimingInput(
             beatManager.Beat ?? -1,
-            beatManager.BeatInBar ?? -1,
-            phrase is { inPhrase: true } ? 1 : phrase is { } ? 0 : -1,
             phrase?.beatsUntilNext ?? -1,
             phrase?.lengthBeats ?? -1,
-            beatManager.TrackOrdinal ?? -1);
+            nextPhrase?.beatsUntilChange ?? -1,
+            nextPhrase?.lengthBeats ?? -1);
     }
 }
 
@@ -142,13 +126,11 @@ public readonly struct TimingFrame
 {
     public static TimingFrame Unavailable { get; } = new TimingFrame(
         OnAirTimingInput.Unavailable,
-        GridReading.None,
         false,
         -1,
         false,
         default,
         TimingFrameSource.Unlocked,
-        false,
         false,
         CueSheetStatus.Empty);
 
@@ -158,17 +140,11 @@ public readonly struct TimingFrame
     /// <summary>Current on-air beat, or -1 when unavailable.</summary>
     public readonly int CurrentBeat;
 
-    /// <summary>The Grid Sync reading for this frame.</summary>
-    public readonly GridReading Grid;
+    /// <summary>Whether this frame has a Cue Mark the Director can target.</summary>
+    public readonly bool HasCueMark;
 
-    /// <summary>Whether this frame has a Grid Anchor the Director can target.</summary>
-    public readonly bool HasGridAnchor;
-
-    /// <summary>Cue Mark where the Director should land its next Impact Point.</summary>
+    /// <summary>Cue Mark where the Director should land its next Impact Point, or -1 when unlocked.</summary>
     public readonly int CueMarkBeat;
-
-    /// <summary>Absolute beat where the current Grid Anchor lands, or -1 when unlocked.</summary>
-    public int GridAnchorLandingBeat => CueMarkBeat;
 
     /// <summary>Beats until the Cue Mark, or -1 when unlocked.</summary>
     public readonly int BeatsUntilCueMark;
@@ -188,35 +164,25 @@ public readonly struct TimingFrame
     /// <summary>True when the current beat substantially rewound into a new pass.</summary>
     public readonly bool BeatRewoundToNewPass;
 
-    /// <summary>True when this frame is continuing from the last known Grid Anchor.</summary>
-    public bool IsCoasting => Source == TimingFrameSource.Coast;
-
-    /// <summary>True when fresh structural timing replaced a coasted or weaker anchor.</summary>
-    public readonly bool Reanchored;
-
     public TimingFrame(
         OnAirTimingInput input,
-        GridReading grid,
-        bool hasGridAnchor,
+        bool hasCueMark,
         int cueMarkBeat,
         bool hasPhraseWindow,
         PhraseWindow phraseWindow,
         TimingFrameSource source,
         bool beatRewoundToNewPass,
-        bool reanchored,
         CueSheetStatus cueSheet = default)
     {
         Input = input;
         CurrentBeat = input.Beat;
-        Grid = grid;
-        HasGridAnchor = hasGridAnchor;
+        HasCueMark = hasCueMark;
         CueMarkBeat = cueMarkBeat;
-        BeatsUntilCueMark = hasGridAnchor && input.Beat >= 1 ? cueMarkBeat - input.Beat : -1;
+        BeatsUntilCueMark = hasCueMark && input.Beat >= 1 ? cueMarkBeat - input.Beat : -1;
         HasPhraseWindow = hasPhraseWindow;
         PhraseWindow = phraseWindow;
         CueSheet = cueSheet;
         Source = source;
         BeatRewoundToNewPass = beatRewoundToNewPass;
-        Reanchored = reanchored;
     }
 }

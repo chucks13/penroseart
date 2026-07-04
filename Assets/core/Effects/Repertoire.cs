@@ -15,4 +15,13 @@ public enum Repertoire
 
     /// <summary>The Performer can express or land on a Drop.</summary>
     HandlesDrop = 1 << 1,
+
+    /// <summary>The Performer suits Low-energy sections — the Director prefers casting it while energy is Low.</summary>
+    EnergyLow = 1 << 2,
+
+    /// <summary>The Performer suits Mid-energy sections — the Director prefers casting it while energy is Mid.</summary>
+    EnergyMid = 1 << 3,
+
+    /// <summary>The Performer suits High-energy sections — the Director prefers casting it while energy is High.</summary>
+    EnergyHigh = 1 << 4,
 }

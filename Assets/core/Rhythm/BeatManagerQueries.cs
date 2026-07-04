@@ -142,11 +142,11 @@ public readonly struct EnergyInfo
     /// <summary>Total length in beats of the current same-energy run. Null when the wire did not say.</summary>
     public readonly int? runLengthBeats;
 
-    /// <summary>Energy changes still ahead in this track. 0 means none left; null when the wire did not say.</summary>
-    public readonly int? changesRemaining;
+    /// <summary>Total length in beats of the upcoming same-energy run (the next run's own length). Null when the wire did not say.</summary>
+    public readonly int? nextRunLengthBeats;
 
     public EnergyInfo(EnergyLevel level, EnergyLevel? next, int? beatsUntilChange, float normalized, int direction,
-        float? runProgress, int? runLengthBeats, int? changesRemaining)
+        float? runProgress, int? runLengthBeats, int? nextRunLengthBeats)
     {
         this.level = level;
         this.next = next;
@@ -155,7 +155,7 @@ public readonly struct EnergyInfo
         this.direction = direction;
         this.runProgress = runProgress;
         this.runLengthBeats = runLengthBeats;
-        this.changesRemaining = changesRemaining;
+        this.nextRunLengthBeats = nextRunLengthBeats;
     }
 }
 
@@ -173,64 +173,148 @@ public readonly struct PhraseInfo
     /// <summary>The current phrase label as broadcast. Never null or empty for a non-null PhraseInfo.</summary>
     public readonly string label;
 
-    /// <summary>The upcoming phrase label. Null when the wire did not say.</summary>
-    public readonly string? next;
-
-    /// <summary>True while the phrase state is active now (RaveSystem tri-state 1).</summary>
-    public readonly bool inPhrase;
-
-    /// <summary>Whole beats until the active phrase boundary or upcoming phrase start. Null when the wire did not say.</summary>
+    /// <summary>Whole beats until the current phrase boundary. Null when the wire did not say.</summary>
     public readonly int? beatsUntilNext;
 
-    /// <summary>Total length of the active or upcoming phrase in beats. Null when the wire did not say.</summary>
+    /// <summary>Total length of the current phrase in beats. Null when the wire did not say.</summary>
     public readonly int? lengthBeats;
 
-    /// <summary>Remaining phrase changes in this track. 0 means none left; null when the wire did not say.</summary>
-    public readonly int? remaining;
+    /// <summary>
+    /// Whether the current phrase's length is not divisible by 16 (RaveSystem tri-state: 1 → true, 0 → false).
+    /// Null when the wire did not say (-1). Kept tri-state so "unknown" never collapses to "regular".
+    /// </summary>
+    public readonly bool? irregular;
 
-    /// <summary>Beat-smoothed progress through the current phrase in [0..1]. Null when not in a phrase or the shape is unknown.</summary>
+    /// <summary>Beat-smoothed progress through the current phrase in [0..1]. Null when the shape is unknown.</summary>
     public readonly float? progress;
 
-    public PhraseInfo(string label, string? next, bool inPhrase, int? beatsUntilNext, int? lengthBeats, int? remaining, float? progress)
+    public PhraseInfo(string label, int? beatsUntilNext, int? lengthBeats, bool? irregular, float? progress)
     {
         this.label = label;
-        this.next = next;
-        this.inPhrase = inPhrase;
         this.beatsUntilNext = beatsUntilNext;
         this.lengthBeats = lengthBeats;
-        this.remaining = remaining;
+        this.irregular = irregular;
         this.progress = progress;
     }
 }
 
 /// <summary>
+/// The upcoming Track Phrase from <c>next_phrase_state</c>: the next phrase's own label, its countdown to
+/// the change, and its own length — a window distinct from the current <see cref="PhraseInfo"/>.
+/// </summary>
+/// <remarks>
+/// Returned by <see cref="BeatManager.NextPhrase"/>; null there means no upcoming-phrase data is available
+/// right now. Labels are an open vocabulary — do not keyword-parse them as if the set were closed.
+/// </remarks>
+public readonly struct NextPhraseInfo
+{
+    /// <summary>The upcoming phrase label as broadcast. Never null or empty for a non-null NextPhraseInfo.</summary>
+    public readonly string label;
+
+    /// <summary>Whole beats until the current phrase yields to this one. Null when the wire did not say.</summary>
+    public readonly int? beatsUntilChange;
+
+    /// <summary>The upcoming phrase's own total length in beats. Null when the wire did not say.</summary>
+    public readonly int? lengthBeats;
+
+    public NextPhraseInfo(string label, int? beatsUntilChange, int? lengthBeats)
+    {
+        this.label = label;
+        this.beatsUntilChange = beatsUntilChange;
+        this.lengthBeats = lengthBeats;
+    }
+}
+
+/// <summary>
+/// Contrived Loop state from <c>loop_state</c>: whether a DJ loop is rolling and its shape. Display and
+/// telemetry only — the Director keeps cueing while looping, so this drives no cue behavior.
+/// </summary>
+/// <remarks>
+/// Returned by <see cref="BeatManager.Loop"/>; null there means loop state is unavailable right now. Both
+/// <see cref="looping"/> and <see cref="regionSet"/> come from RaveSystem tri-states, but the null gate is on
+/// <c>active &lt; 0</c> only (never <c>!= 0</c>): a set-but-idle region (active 0, set 1) is real, non-null
+/// data, so an idle region is not mistaken for unavailable.
+/// </remarks>
+public readonly struct LoopInfo
+{
+    /// <summary>True while looping audio is rolling (wire <c>active == 1</c>).</summary>
+    public readonly bool looping;
+
+    /// <summary>True while a loop region exists on the deck, even paused (wire <c>set == 1</c>).</summary>
+    public readonly bool regionSet;
+
+    /// <summary>Loop region length in beats (fractional loops are real). Null when the wire did not say.</summary>
+    public readonly float? lengthBeats;
+
+    /// <summary>Loop region length in milliseconds. Null when the wire did not say.</summary>
+    public readonly int? lengthMs;
+
+    /// <summary>Numerator of the loop size fraction (e.g. 1 of 1/2). Null when the wire did not say.</summary>
+    public readonly int? sizeNumerator;
+
+    /// <summary>Denominator of the loop size fraction (e.g. 2 of 1/2). Null when the wire did not say.</summary>
+    public readonly int? sizeDenominator;
+
+    public LoopInfo(bool looping, bool regionSet, float? lengthBeats, int? lengthMs, int? sizeNumerator, int? sizeDenominator)
+    {
+        this.looping = looping;
+        this.regionSet = regionSet;
+        this.lengthBeats = lengthBeats;
+        this.lengthMs = lengthMs;
+        this.sizeNumerator = sizeNumerator;
+        this.sizeDenominator = sizeDenominator;
+    }
+}
+
+/// <summary>
+/// How much to trust where the one sits this frame, sourced from RaveSystem's source-computed
+/// <c>timing_grid</c> confidence vocabulary. All three values are on-grid readings with a valid Count;
+/// they differ only in how much to trust the held offset (see CONTEXT.md "Grid Confidence"). Losing the
+/// clock is not a low-confidence value here — it surfaces as a null <see cref="BeatManager.Grid"/>.
+/// </summary>
+public enum GridConfidence
+{
+    /// <summary>The grid is freshly anchored and trusted.</summary>
+    Locked,
+
+    /// <summary>No fresh anchor available; the source is holding the last good offset.</summary>
+    Coasting,
+
+    /// <summary>A freshly derived offset disagreed with the held one; held pending the next clean re-latch.</summary>
+    Disputed,
+}
+
+/// <summary>
 /// The live 16-beat Grid: where the one sits within the current phrase, surfaced to effects so they
-/// can, e.g., pick a new waveform/variant on each new Grid. The structural facts come from the
-/// Director's <see cref="GridReading"/>; <see cref="BeatManager"/> adds the sub-beat <see cref="Progress"/>.
+/// can, e.g., pick a new waveform/variant on each new Grid. Wire-fed from RaveSystem's source-computed
+/// <c>timing_grid</c> lane; <see cref="BeatManager"/> adds the sub-beat <see cref="Progress"/>.
 /// </summary>
 /// <remarks>
 /// Returned by <see cref="BeatManager.Grid"/>; null there means the wall is not on the grid right now
-/// (Standalone, the clock gone, or no offset resolved yet). All three <see cref="Confidence"/> values are
-/// on-grid readings with a valid <see cref="Count"/> — they differ only in how much to trust the held
-/// offset (see CONTEXT.md "Grid Confidence"). Losing the clock is not a low-confidence value; it surfaces
-/// as a null <see cref="BeatManager.Grid"/>, not a fourth state. Formerly one letter from the
-/// phrase-window <see cref="PhraseInfo"/> twin; ADR-0009 renamed this cyclic side (PhaseInfo→GridInfo) to end the collision, keeping the phrase side.
+/// (Standalone floor, the clock gone, or no usable grid on the wire). All three <see cref="Confidence"/>
+/// values are on-grid readings with a valid <see cref="Count"/> — they differ only in how much to trust the
+/// held offset. Formerly one letter from the phrase-window <see cref="PhraseInfo"/> twin; ADR-0009 renamed
+/// this cyclic side (PhaseInfo→GridInfo) to end the collision, keeping the phrase side.
 /// </remarks>
 public readonly struct GridInfo
 {
-    /// <summary>How much to trust where the one sits this frame: Locked, Coasting, or Contradicted.</summary>
-    public readonly GridSyncState Confidence;
+    /// <summary>How much to trust where the one sits this frame: Locked, Coasting, or Disputed.</summary>
+    public readonly GridConfidence Confidence;
 
     /// <summary>Canonical Grid Count: where this frame sits on the 16-beat grid, 1..16.</summary>
     public readonly int Count;
 
+    /// <summary>Which bar of the 16-beat grid this frame sits in, 1..4.</summary>
+    public readonly int Bar;
+
     /// <summary>Position through the 16-beat Grid in [0..1], smoothed by the intra-beat fraction.</summary>
     public readonly float Progress;
 
-    public GridInfo(GridSyncState confidence, int count, float progress)
+    public GridInfo(GridConfidence confidence, int count, int bar, float progress)
     {
         Confidence = confidence;
         Count = count;
+        Bar = bar;
         Progress = progress;
     }
 }
@@ -568,13 +652,6 @@ public partial class BeatManager
         }
     }
 
-    /// <summary>
-    /// Monotonic ordinal of the on-air track, or null when nothing is on air. The value changes whenever
-    /// the track title changes, giving the integer Grid seam (<see cref="OnAirTimingInput.TrackOrdinal"/>)
-    /// a track-change signal without exposing the raw title.
-    /// </summary>
-    public int? TrackOrdinal => Track == null ? (int?)null : trackOrdinal;
-
     /// <summary>CSV of live on-air player numbers (newest first), or null when none are live.</summary>
     public string? PlayersLive
     {
@@ -604,68 +681,58 @@ public partial class BeatManager
         get
         {
             var data = beatData;
-            if (data == null || data.snapshot.energyState.active < 0)
+            if (data == null)
             {
                 return null;
             }
 
             var state = data.snapshot.energyState;
-            if (!TryParseEnergyLevel(state.current, out var level))
+            if (!TryParseEnergyLevel(state.label, out var level))
             {
                 return null;
             }
 
-            EnergyLevel? next = TryParseEnergyLevel(state.next, out var nextLevel) ? nextLevel : (EnergyLevel?)null;
+            var upcoming = data.snapshot.nextEnergyState;
+            EnergyLevel? next = TryParseEnergyLevel(upcoming.label, out var nextLevel) ? nextLevel : (EnergyLevel?)null;
             var direction = next is { } heading ? Math.Sign((int)heading - (int)level) : 0;
-            var inRun = state.active > 0;
             return new EnergyInfo(
                 level,
                 next,
                 NonNegativeOrNull(state.countBeats),
                 (int)level * 0.5f,
                 direction,
-                inRun ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null,
+                ContriveProgressOrNull(state.countBeats, state.lengthBeats),
                 NonNegativeOrNull(state.lengthBeats),
-                NonNegativeOrNull(state.remaining));
+                NonNegativeOrNull(upcoming.lengthBeats));
         }
     }
 
     /// <summary>
-    /// The Director's most recent Grid verdict, mirrored here once per frame by <see cref="PublishGrid"/>.
-    /// <see cref="GridReading.None"/> until the first publish (and whenever the Director is off the grid).
-    /// </summary>
-    private GridReading lastGrid = GridReading.None;
-
-    /// <summary>
-    /// Mirrors the Director's per-frame Grid verdict into the facade. The Director is the single writer,
-    /// calling this once at the end of <c>Director.Tick</c> — before the Switcher renders — so effects read
-    /// a fresh reading through <see cref="Grid"/> without reaching into the Switching layer.
-    /// </summary>
-    public void PublishGrid(in GridReading reading)
-    {
-        lastGrid = reading;
-    }
-
-    /// <summary>
-    /// The live 16-beat Grid, or null when the wall is not on the grid (Standalone, the clock gone, or no
-    /// offset resolved). The structural facts come from the Director's published <see cref="GridReading"/>;
-    /// <see cref="GridInfo.Progress"/> is enriched here with <see cref="IntraBeatFraction"/>, the sub-beat
-    /// clock only BeatManager holds. Read in the same frame the Director published it, so the fraction and
-    /// the published position share one <c>beatData.snapshot</c>.
+    /// The live 16-beat Grid, or null when the wall is not on the grid (Standalone floor, the clock gone, or
+    /// no usable <c>timing_grid</c> on the wire). Wire-fed from RaveSystem's source-computed <c>timing_grid</c>
+    /// lane; <see cref="GridInfo.Progress"/> is enriched here with <see cref="IntraBeatFraction"/>, the sub-beat
+    /// clock only BeatManager holds, so the fraction and the wire count share one <c>beatData.snapshot</c>.
     /// </summary>
     public GridInfo? Grid
     {
         get
         {
-            // Position 1..16 on a real grid reads on the grid (Locked/Coasting/Contradicted alike); Position -1
-            // (GridReading.None) or a Standalone floor is off the grid and reads null.
-            if (lastGrid.Position < 1 || lastGrid.StandAloneFloor)
+            // Standalone floor (no 4-count clock) is off the grid; an empty/unparseable state or a
+            // non-positive count is no usable grid on the wire. Any of these reads null, not a degraded state.
+            var data = beatData;
+            if (data == null || !IsSynced)
             {
                 return null;
             }
 
-            var progress = Mathf.Clamp01(((lastGrid.Position - 1) + IntraBeatFraction()) / 16f);
-            return new GridInfo(lastGrid.State, lastGrid.Position, progress);
+            var timingGrid = data.snapshot.timingGrid;
+            if (timingGrid.beat < 1 || !TryParseGridConfidence(timingGrid.state, out var confidence))
+            {
+                return null;
+            }
+
+            var progress = Mathf.Clamp01(((timingGrid.beat - 1) + IntraBeatFraction()) / 16f);
+            return new GridInfo(confidence, timingGrid.beat, timingGrid.bar, progress);
         }
     }
 
@@ -675,23 +742,71 @@ public partial class BeatManager
         get
         {
             var data = beatData;
-            if (data == null || data.snapshot.phraseState.active < 0 || string.IsNullOrEmpty(data.snapshot.phraseState.current))
+            if (data == null || string.IsNullOrEmpty(data.snapshot.phraseState.label))
             {
                 return null;
             }
 
             var state = data.snapshot.phraseState;
-            var inPhrase = state.active > 0;
             return new PhraseInfo(
-                state.current!,
-                string.IsNullOrEmpty(state.next) ? null : state.next,
-                inPhrase,
+                state.label!,
                 NonNegativeOrNull(state.countBeats),
                 NonNegativeOrNull(state.lengthBeats),
-                NonNegativeOrNull(state.remaining),
-                inPhrase ? ContriveProgressOrNull(state.countBeats, state.lengthBeats) : (float?)null);
+                TriStateOrNull(state.irregular),
+                ContriveProgressOrNull(state.countBeats, state.lengthBeats));
         }
     }
+
+    /// <summary>Contrived upcoming Track Phrase, or null when no upcoming-phrase data is available right now.</summary>
+    public NextPhraseInfo? NextPhrase
+    {
+        get
+        {
+            var data = beatData;
+            if (data == null || string.IsNullOrEmpty(data.snapshot.nextPhraseState.label))
+            {
+                return null;
+            }
+
+            var state = data.snapshot.nextPhraseState;
+            return new NextPhraseInfo(
+                state.label!,
+                NonNegativeOrNull(state.countBeats),
+                NonNegativeOrNull(state.lengthBeats));
+        }
+    }
+
+    /// <summary>
+    /// Contrived Loop state, or null when loop state is unavailable (wire <c>active &lt; 0</c>). Display and
+    /// telemetry only — a set-but-idle region (<c>active 0, set 1</c>) is real, non-null data.
+    /// </summary>
+    public LoopInfo? Loop
+    {
+        get
+        {
+            var data = beatData;
+            if (data == null || data.snapshot.loopState.active < 0)
+            {
+                return null;
+            }
+
+            var state = data.snapshot.loopState;
+            return new LoopInfo(
+                state.active == 1,
+                state.set == 1,
+                state.lengthBeats >= 0f ? state.lengthBeats : (float?)null,
+                NonNegativeOrNull(state.lengthMs),
+                NonNegativeOrNull(state.sizeNumerator),
+                NonNegativeOrNull(state.sizeDenominator));
+        }
+    }
+
+    /// <summary>
+    /// Focused on-air track identity, or null when nothing is on air (wire <c>-1</c>). Distinct from the
+    /// track title: RaveSystem assigns each on-air track a stable id, so this changes exactly once per
+    /// track change without keyword-parsing the title.
+    /// </summary>
+    public int? TrackId => beatData == null ? (int?)null : NonNegativeOrNull(beatData.snapshot.trackId);
 
     /// <summary>
     /// Smoothed Levels, or null when no live Levels are available. Smoothing is applied once per
@@ -936,6 +1051,17 @@ public partial class BeatManager
         return value >= 0 ? value : (int?)null;
     }
 
+    /// <summary>Maps a RaveSystem tri-state int to a nullable bool: 1 → true, 0 → false, anything else (−1) → null.</summary>
+    private static bool? TriStateOrNull(int value)
+    {
+        return value switch
+        {
+            1 => true,
+            0 => false,
+            _ => (bool?)null,
+        };
+    }
+
     /// <summary>
     /// Parses a wire energy label against the closed Low/Mid/High vocabulary, case-insensitively.
     /// An unrecognized label fails the parse rather than degrading to a wrong tier.
@@ -961,6 +1087,35 @@ public partial class BeatManager
         }
 
         level = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Parses RaveSystem's <c>timing_grid</c> state string against the closed Locked/Coasting/Disputed
+    /// vocabulary, case-insensitively. Empty or unrecognized fails the parse so an unknown state reads as
+    /// no usable grid (null) rather than a wrong confidence.
+    /// </summary>
+    private static bool TryParseGridConfidence(string? state, out GridConfidence confidence)
+    {
+        if (string.Equals(state, "locked", StringComparison.OrdinalIgnoreCase))
+        {
+            confidence = GridConfidence.Locked;
+            return true;
+        }
+
+        if (string.Equals(state, "coasting", StringComparison.OrdinalIgnoreCase))
+        {
+            confidence = GridConfidence.Coasting;
+            return true;
+        }
+
+        if (string.Equals(state, "disputed", StringComparison.OrdinalIgnoreCase))
+        {
+            confidence = GridConfidence.Disputed;
+            return true;
+        }
+
+        confidence = default;
         return false;
     }
 }

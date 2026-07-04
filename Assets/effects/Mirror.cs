@@ -7,6 +7,10 @@ using UnityEngine;
 /// </summary>
 public class Mirror : MixerBase
 {
+    /// <summary>Mirror's reflected imagery suits Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private EffectBase sourceEffect;
     private int[] mirrorList;

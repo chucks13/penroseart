@@ -16,7 +16,7 @@ public sealed class RaveOscIngestionRoundTripTests
     [Test]
     public void EveryOnAirAddressFlowsThroughToTheNullableQuerySurface()
     {
-        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/phrase_state"));
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket());
 
         Assert.That(beatManager.IsActive, Is.True);
         Assert.That(beatManager.Bpm, Is.EqualTo(128.5f).Within(0.0001f));
@@ -37,16 +37,34 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(fill!.Value.inProgress, Is.False);
         Assert.That(fill.Value.beatsUntilStart, Is.EqualTo(16));
 
+        var phrase = beatManager.Phrase;
+        Assert.That(phrase, Is.Not.Null);
+        Assert.That(phrase!.Value.label, Is.EqualTo("Drop"));
+        Assert.That(phrase.Value.irregular, Is.True);
+        Assert.That(phrase.Value.lengthBeats, Is.EqualTo(32));
+
+        var nextPhrase = beatManager.NextPhrase;
+        Assert.That(nextPhrase, Is.Not.Null);
+        Assert.That(nextPhrase!.Value.label, Is.EqualTo("Break"));
+        Assert.That(nextPhrase.Value.beatsUntilChange, Is.EqualTo(8));
+        Assert.That(nextPhrase.Value.lengthBeats, Is.EqualTo(16));
+
         var energy = beatManager.Energy;
         Assert.That(energy, Is.Not.Null);
         Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.High));
         Assert.That(energy.Value.next, Is.EqualTo(EnergyLevel.Mid));
+        Assert.That(energy.Value.nextRunLengthBeats, Is.EqualTo(64));
 
-        var phrase = beatManager.Phrase;
-        Assert.That(phrase, Is.Not.Null);
-        Assert.That(phrase!.Value.label, Is.EqualTo("Drop"));
-        Assert.That(phrase.Value.next, Is.EqualTo("Break"));
-        Assert.That(phrase.Value.inPhrase, Is.True);
+        var loop = beatManager.Loop;
+        Assert.That(loop, Is.Not.Null);
+        Assert.That(loop!.Value.looping, Is.True);
+        Assert.That(loop.Value.regionSet, Is.True);
+        Assert.That(loop.Value.lengthBeats, Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(loop.Value.lengthMs, Is.EqualTo(938));
+        Assert.That(loop.Value.sizeNumerator, Is.EqualTo(1));
+        Assert.That(loop.Value.sizeDenominator, Is.EqualTo(2));
+
+        Assert.That(beatManager.TrackId, Is.EqualTo(777001));
 
         var levels = beatManager.Levels;
         Assert.That(levels, Is.Not.Null);
@@ -56,18 +74,80 @@ public sealed class RaveOscIngestionRoundTripTests
     }
 
     [Test]
-    public void NewAndLegacyPhraseStateAddressesBothPopulateThePhraseQuery()
+    public void PhraseStateOmittedLeavesPhraseNullButSiblingsPopulated()
     {
-        var fromNew = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/phrase_state"));
-        Assert.That(fromNew.Phrase, Is.Not.Null);
-        Assert.That(fromNew.Phrase!.Value.label, Is.EqualTo("Drop"));
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/phrase_state"));
 
-        // TRANSITIONAL: the parser also accepts the legacy misspelled address. Delete this case (and the
-        // const + registration in RaveOscPacketParser) once RaveSystem ships /rave/onair/phrase_state and
-        // pre-rename recordings are retired.
-        var fromLegacy = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/phase_state"));
-        Assert.That(fromLegacy.Phrase, Is.Not.Null);
-        Assert.That(fromLegacy.Phrase!.Value.label, Is.EqualTo("Drop"));
+        Assert.That(beatManager.Phrase, Is.Null);
+        Assert.That(beatManager.NextPhrase, Is.Not.Null);
+        Assert.That(beatManager.Energy, Is.Not.Null);
+        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.TrackId, Is.Not.Null);
+    }
+
+    [Test]
+    public void NextPhraseStateOmittedLeavesNextPhraseNullButSiblingsPopulated()
+    {
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/next_phrase_state"));
+
+        Assert.That(beatManager.NextPhrase, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.Energy, Is.Not.Null);
+        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.TrackId, Is.Not.Null);
+    }
+
+    [Test]
+    public void EnergyStateOmittedLeavesEnergyNullButSiblingsPopulated()
+    {
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/energy_state"));
+
+        Assert.That(beatManager.Energy, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase, Is.Not.Null);
+        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.TrackId, Is.Not.Null);
+    }
+
+    [Test]
+    public void NextEnergyStateOmittedLeavesEnergyNextNullButEnergyAndSiblingsPopulated()
+    {
+        // next_energy_state has no dedicated query of its own; it folds into Energy.next, so omitting
+        // it should null out only that field, not the whole Energy result.
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/next_energy_state"));
+
+        var energy = beatManager.Energy;
+        Assert.That(energy, Is.Not.Null);
+        Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.High));
+        Assert.That(energy.Value.next, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase, Is.Not.Null);
+        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.TrackId, Is.Not.Null);
+    }
+
+    [Test]
+    public void LoopStateOmittedLeavesLoopNullButSiblingsPopulated()
+    {
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/loop_state"));
+
+        Assert.That(beatManager.Loop, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase, Is.Not.Null);
+        Assert.That(beatManager.Energy, Is.Not.Null);
+        Assert.That(beatManager.TrackId, Is.Not.Null);
+    }
+
+    [Test]
+    public void TrackIdOmittedLeavesTrackIdNullButSiblingsPopulated()
+    {
+        var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/track_id"));
+
+        Assert.That(beatManager.TrackId, Is.Null);
+        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase, Is.Not.Null);
+        Assert.That(beatManager.Energy, Is.Not.Null);
+        Assert.That(beatManager.Loop, Is.Not.Null);
     }
 
     /// <summary>Dispatches the packet, takes the snapshot, and feeds it into a live-sourced BeatManager.</summary>
@@ -85,31 +165,35 @@ public sealed class RaveOscIngestionRoundTripTests
     }
 
     /// <summary>
-    /// Builds one bundle carrying every registered on-air address. <paramref name="phraseStateAddress"/>
-    /// selects which spelling of the phrase-state address to write so both the new and legacy wire forms
-    /// can be exercised.
+    /// Builds one bundle carrying every registered v2 on-air address, optionally omitting exactly one
+    /// address so its per-lane "unavailable" behavior can be exercised while every sibling lane stays live.
     /// </summary>
-    private static byte[] BuildFullOnAirPacket(string phraseStateAddress)
+    private static byte[] BuildFullOnAirPacket(string? omitAddress = null)
     {
-        var buffer = new byte[2048];
+        var buffer = new byte[4096];
         var bundle = new OscBundleWriter(buffer, OscTimeTag.Immediately);
-        WriteString(ref bundle, "/rave/onair/players_live", "4,2");
-        WriteString(ref bundle, "/rave/onair/track", "Artist - Track");
-        WriteFloat(ref bundle, "/rave/onair/bpm", 128.5f);
-        WriteInt(ref bundle, "/rave/onair/beat", 64);
-        WriteInt(ref bundle, "/rave/onair/total_beats", 384);
-        WriteInt(ref bundle, "/rave/onair/bar", 16);
-        WriteInt(ref bundle, "/rave/onair/next_bar_ms", 777);
-        WriteInt(ref bundle, "/rave/onair/beat_in_bar", 3);
-        WriteFourInts(ref bundle, "/rave/onair/beats_count_ms", 100, 200, 300, 400);
-        WriteFourInts(ref bundle, "/rave/onair/on_beats", 0, 0, 1, 0);
-        WriteInt(ref bundle, "/rave/onair/beat_avg_ms", 468);
-        WriteFloat(ref bundle, "/rave/onair/beat_pulse", 0.625f);
-        WriteThreeFloats(ref bundle, "/rave/onair/levels", 0.25f, 0.5f, 0.75f);
-        WriteNamedState(ref bundle, phraseStateAddress, "Drop", "Break", 1, 12, 32, 8);
-        WriteCountdownState(ref bundle, "/rave/onair/drop_state", 1, 0, 32, 2);
-        WriteCountdownState(ref bundle, "/rave/onair/fill_state", 0, 16, 8, 1);
-        WriteNamedState(ref bundle, "/rave/onair/energy_state", "High", "Mid", 1, 4, 16, 2);
+        if (omitAddress != "/rave/onair/players_live") WriteString(ref bundle, "/rave/onair/players_live", "4,2");
+        if (omitAddress != "/rave/onair/track") WriteString(ref bundle, "/rave/onair/track", "Artist - Track");
+        if (omitAddress != "/rave/onair/bpm") WriteFloat(ref bundle, "/rave/onair/bpm", 128.5f);
+        if (omitAddress != "/rave/onair/beat") WriteInt(ref bundle, "/rave/onair/beat", 64);
+        if (omitAddress != "/rave/onair/total_beats") WriteInt(ref bundle, "/rave/onair/total_beats", 384);
+        if (omitAddress != "/rave/onair/bar") WriteInt(ref bundle, "/rave/onair/bar", 16);
+        if (omitAddress != "/rave/onair/next_bar_ms") WriteInt(ref bundle, "/rave/onair/next_bar_ms", 777);
+        if (omitAddress != "/rave/onair/beat_in_bar") WriteInt(ref bundle, "/rave/onair/beat_in_bar", 3);
+        if (omitAddress != "/rave/onair/beats_count_ms") WriteFourInts(ref bundle, "/rave/onair/beats_count_ms", 100, 200, 300, 400);
+        if (omitAddress != "/rave/onair/on_beats") WriteFourInts(ref bundle, "/rave/onair/on_beats", 0, 0, 1, 0);
+        if (omitAddress != "/rave/onair/beat_avg_ms") WriteInt(ref bundle, "/rave/onair/beat_avg_ms", 468);
+        if (omitAddress != "/rave/onair/beat_pulse") WriteFloat(ref bundle, "/rave/onair/beat_pulse", 0.625f);
+        if (omitAddress != "/rave/onair/levels") WriteThreeFloats(ref bundle, "/rave/onair/levels", 0.25f, 0.5f, 0.75f);
+        if (omitAddress != "/rave/onair/phrase_state") WritePhraseState(ref bundle, "/rave/onair/phrase_state", "Drop", 12, 32, 1);
+        if (omitAddress != "/rave/onair/next_phrase_state") WriteLabeledCountdown(ref bundle, "/rave/onair/next_phrase_state", "Break", 8, 16);
+        if (omitAddress != "/rave/onair/drop_state") WriteCountdownState(ref bundle, "/rave/onair/drop_state", 1, 0, 32, 2);
+        if (omitAddress != "/rave/onair/fill_state") WriteCountdownState(ref bundle, "/rave/onair/fill_state", 0, 16, 8, 1);
+        if (omitAddress != "/rave/onair/energy_state") WriteLabeledCountdown(ref bundle, "/rave/onair/energy_state", "High", 4, 16);
+        if (omitAddress != "/rave/onair/next_energy_state") WriteLabeledCountdown(ref bundle, "/rave/onair/next_energy_state", "Mid", 20, 64);
+        if (omitAddress != "/rave/onair/loop_state") WriteLoopState(ref bundle, "/rave/onair/loop_state", 1, 1, 0.5f, 938, 1, 2);
+        if (omitAddress != "/rave/onair/timing_grid") WriteTimingGrid(ref bundle, "/rave/onair/timing_grid", 5, 2, "locked");
+        if (omitAddress != "/rave/onair/track_id") WriteInt(ref bundle, "/rave/onair/track_id", 777001);
         var length = bundle.Finish();
         return buffer.AsSpan(0, length).ToArray();
     }
@@ -164,25 +248,74 @@ public sealed class RaveOscIngestionRoundTripTests
         bundle.EndElement(writer.Finish());
     }
 
-    private static void WriteNamedState(
+    /// <summary>Writes a <c>siii</c> phrase_state lane: label, countBeats, lengthBeats, irregular tri-state.</summary>
+    private static void WritePhraseState(
         ref OscBundleWriter bundle,
         string address,
-        string current,
-        string next,
-        int active,
+        string label,
         int countBeats,
         int lengthBeats,
-        int remaining)
+        int irregular)
     {
         var element = bundle.BeginElement();
         var writer = new OscWriter(element);
         writer.WriteAddress(address);
-        writer.WriteString(current);
-        writer.WriteString(next);
-        writer.WriteInt32(active);
+        writer.WriteString(label);
         writer.WriteInt32(countBeats);
         writer.WriteInt32(lengthBeats);
-        writer.WriteInt32(remaining);
+        writer.WriteInt32(irregular);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes a <c>sii</c> labeled-countdown lane shared by next_phrase_state/energy_state/next_energy_state.</summary>
+    private static void WriteLabeledCountdown(
+        ref OscBundleWriter bundle,
+        string address,
+        string label,
+        int countBeats,
+        int lengthBeats)
+    {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteString(label);
+        writer.WriteInt32(countBeats);
+        writer.WriteInt32(lengthBeats);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes an <c>iifiii</c> loop_state lane: active/set tri-states, lengthBeats (float), lengthMs, size fraction.</summary>
+    private static void WriteLoopState(
+        ref OscBundleWriter bundle,
+        string address,
+        int active,
+        int set,
+        float lengthBeats,
+        int lengthMs,
+        int sizeNumerator,
+        int sizeDenominator)
+    {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteInt32(active);
+        writer.WriteInt32(set);
+        writer.WriteFloat32(lengthBeats);
+        writer.WriteInt32(lengthMs);
+        writer.WriteInt32(sizeNumerator);
+        writer.WriteInt32(sizeDenominator);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes an <c>iis</c> timing_grid lane: beat, bar, grid-confidence state string.</summary>
+    private static void WriteTimingGrid(ref OscBundleWriter bundle, string address, int beat, int bar, string state)
+    {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteInt32(beat);
+        writer.WriteInt32(bar);
+        writer.WriteString(state);
         bundle.EndElement(writer.Finish());
     }
 

@@ -6,6 +6,12 @@ using UnityEngine;
 /// </summary>
 public class Flock : EffectBase
 {
+    /// <summary>
+    /// The boids' speed lifts with the beat and their motion reads live band energy, so the flock advertises
+    /// as a Mid/High-energy Performer the Director can cast when the track is driving.
+    /// </summary>
+    public override Repertoire Repertoire => Repertoire.EnergyMid | Repertoire.EnergyHigh;
+
     private Boid[] flock;
     private int total = 80;
     private const float BaseSpeedMultiplier = 1f;

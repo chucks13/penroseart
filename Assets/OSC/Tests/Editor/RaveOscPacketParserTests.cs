@@ -12,79 +12,95 @@ namespace RaveSystem.Osc.Tests {
 
 public sealed class RaveOscPacketParserTests {
     [Test]
-    public void DispatchReadsCurrentRaveOnAirLaneBundlesIntoOscShapedSnapshot() {
-        var continuousPacket = new byte[2048];
-        var continuous = new OscBundleWriter(continuousPacket, OscTimeTag.Immediately);
-        WriteFloat(ref continuous, "/rave/onair/bpm", 128.5f);
-        WriteInt(ref continuous, "/rave/onair/beat", 64);
-        WriteInt(ref continuous, "/rave/onair/bar", 16);
-        WriteInt(ref continuous, "/rave/onair/next_bar_ms", 777);
-        WriteInt(ref continuous, "/rave/onair/beat_in_bar", 3);
-        WriteFourInts(ref continuous, "/rave/onair/beats_count_ms", 100, 200, 300, 400);
-        WriteFourInts(ref continuous, "/rave/onair/on_beats", 0, 0, 1, 0);
-        WriteInt(ref continuous, "/rave/onair/beat_avg_ms", 468);
-        WriteFloat(ref continuous, "/rave/onair/beat_pulse", 0.625f);
-        WriteThreeFloats(ref continuous, "/rave/onair/levels", 0.25f, 0.5f, 0.75f);
+    public void DispatchReadsEveryV2RaveOnAirLaneIntoOscShapedSnapshot() {
+        var packet = new byte[4096];
+        var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+        WriteString(ref bundle, "/rave/onair/players_live", "4,2");
+        WriteString(ref bundle, "/rave/onair/track", "Artist - Track");
+        WriteFloat(ref bundle, "/rave/onair/bpm", 128.5f);
+        WriteInt(ref bundle, "/rave/onair/beat", 64);
+        WriteInt(ref bundle, "/rave/onair/total_beats", 384);
+        WriteInt(ref bundle, "/rave/onair/bar", 16);
+        WriteInt(ref bundle, "/rave/onair/next_bar_ms", 777);
+        WriteInt(ref bundle, "/rave/onair/beat_in_bar", 3);
+        WriteFourInts(ref bundle, "/rave/onair/beats_count_ms", 100, 200, 300, 400);
+        WriteFourInts(ref bundle, "/rave/onair/on_beats", 0, 0, 1, 0);
+        WriteInt(ref bundle, "/rave/onair/beat_avg_ms", 468);
+        WriteFloat(ref bundle, "/rave/onair/beat_pulse", 0.625f);
+        WriteThreeFloats(ref bundle, "/rave/onair/levels", 0.25f, 0.5f, 0.75f);
+        WritePhraseState(ref bundle, "/rave/onair/phrase_state", "Drop", 12, 32, 1);
+        WriteLabeledCountdown(ref bundle, "/rave/onair/next_phrase_state", "Break", 8, 16);
+        WriteCountdownState(ref bundle, "/rave/onair/drop_state", 1, 0, 32, 2);
+        WriteCountdownState(ref bundle, "/rave/onair/fill_state", 0, 16, 8, 1);
+        WriteLabeledCountdown(ref bundle, "/rave/onair/energy_state", "High", 4, 16);
+        WriteLabeledCountdown(ref bundle, "/rave/onair/next_energy_state", "Mid", 20, 64);
+        WriteLoopState(ref bundle, "/rave/onair/loop_state", 1, 1, 0.5f, 938, 1, 2);
+        WriteTimingGrid(ref bundle, "/rave/onair/timing_grid", 5, 2, "locked");
+        WriteInt(ref bundle, "/rave/onair/track_id", 777001);
 
         using var parser = new RaveOscPacketParser();
-        var continuousDispatches = parser.Dispatch(continuousPacket.AsSpan(0, continuous.Finish()));
+        var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
 
-        Assert.That(continuousDispatches, Is.EqualTo(10));
-        Assert.That(parser.TryTakeSnapshot(out var continuousSnapshot), Is.True);
-        Assert.That(continuousSnapshot.bpm, Is.EqualTo(128.5f));
-        Assert.That(continuousSnapshot.beat.current, Is.EqualTo(64));
-        Assert.That(continuousSnapshot.beat.total, Is.EqualTo(-1));
-        Assert.That(continuousSnapshot.bar.current, Is.EqualTo(16));
-        Assert.That(continuousSnapshot.bar.nextMs, Is.EqualTo(777));
-        Assert.That(continuousSnapshot.beatInBar, Is.EqualTo(3));
-        Assert.That(continuousSnapshot.beatsCountMs, Is.EqualTo(new[] { 100, 200, 300, 400 }));
-        Assert.That(continuousSnapshot.onBeats, Is.EqualTo(new[] { false, false, true, false }));
-        Assert.That(continuousSnapshot.beatAverageMs, Is.EqualTo(468));
-        Assert.That(continuousSnapshot.beatPulse, Is.EqualTo(0.625f));
-        Assert.That(continuousSnapshot.levels.low, Is.EqualTo(0.25f));
-        Assert.That(continuousSnapshot.levels.mid, Is.EqualTo(0.5f));
-        Assert.That(continuousSnapshot.levels.high, Is.EqualTo(0.75f));
-
-        var discretePacket = new byte[1024];
-        var discrete = new OscBundleWriter(discretePacket, OscTimeTag.Immediately);
-        WriteString(ref discrete, "/rave/onair/players_live", "4,2");
-        WriteString(ref discrete, "/rave/onair/track", "Artist - Track");
-        WriteInt(ref discrete, "/rave/onair/total_beats", 384);
-        WriteNamedState(ref discrete, "/rave/onair/phrase_state", "Drop", "Break", 1, 12, 32, 8);
-        WriteCountdownState(ref discrete, "/rave/onair/drop_state", 1, 0, 32, 2);
-        WriteCountdownState(ref discrete, "/rave/onair/fill_state", 0, 16, 8, 1);
-        WriteNamedState(ref discrete, "/rave/onair/energy_state", "High", "Mid", 1, 4, 16, 2);
-
-        var discreteDispatches = parser.Dispatch(discretePacket.AsSpan(0, discrete.Finish()));
-
-        Assert.That(discreteDispatches, Is.EqualTo(7));
+        // 22 registered addresses: the constructor list in RaveOscPacketParser, counted by hand.
+        Assert.That(dispatched, Is.EqualTo(22));
         Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+
         Assert.That(snapshot.playersLive, Is.EqualTo("4,2"));
         Assert.That(snapshot.track, Is.EqualTo("Artist - Track"));
+        Assert.That(snapshot.bpm, Is.EqualTo(128.5f));
         Assert.That(snapshot.beat.current, Is.EqualTo(64));
         Assert.That(snapshot.beat.total, Is.EqualTo(384));
         Assert.That(snapshot.bar.current, Is.EqualTo(16));
         Assert.That(snapshot.bar.nextMs, Is.EqualTo(777));
-        Assert.That(snapshot.phraseState.current, Is.EqualTo("Drop"));
-        Assert.That(snapshot.phraseState.next, Is.EqualTo("Break"));
-        Assert.That(snapshot.phraseState.active, Is.EqualTo(1));
+        Assert.That(snapshot.beatInBar, Is.EqualTo(3));
+        Assert.That(snapshot.beatsCountMs, Is.EqualTo(new[] { 100, 200, 300, 400 }));
+        Assert.That(snapshot.onBeats, Is.EqualTo(new[] { false, false, true, false }));
+        Assert.That(snapshot.beatAverageMs, Is.EqualTo(468));
+        Assert.That(snapshot.beatPulse, Is.EqualTo(0.625f));
+        Assert.That(snapshot.levels.low, Is.EqualTo(0.25f));
+        Assert.That(snapshot.levels.mid, Is.EqualTo(0.5f));
+        Assert.That(snapshot.levels.high, Is.EqualTo(0.75f));
+
+        Assert.That(snapshot.phraseState.label, Is.EqualTo("Drop"));
         Assert.That(snapshot.phraseState.countBeats, Is.EqualTo(12));
         Assert.That(snapshot.phraseState.lengthBeats, Is.EqualTo(32));
-        Assert.That(snapshot.phraseState.remaining, Is.EqualTo(8));
+        Assert.That(snapshot.phraseState.irregular, Is.EqualTo(1));
+
+        Assert.That(snapshot.nextPhraseState.label, Is.EqualTo("Break"));
+        Assert.That(snapshot.nextPhraseState.countBeats, Is.EqualTo(8));
+        Assert.That(snapshot.nextPhraseState.lengthBeats, Is.EqualTo(16));
+
         Assert.That(snapshot.dropState.active, Is.EqualTo(1));
         Assert.That(snapshot.dropState.countBeats, Is.EqualTo(0));
         Assert.That(snapshot.dropState.lengthBeats, Is.EqualTo(32));
         Assert.That(snapshot.dropState.remaining, Is.EqualTo(2));
+
         Assert.That(snapshot.fillState.active, Is.EqualTo(0));
         Assert.That(snapshot.fillState.countBeats, Is.EqualTo(16));
         Assert.That(snapshot.fillState.lengthBeats, Is.EqualTo(8));
         Assert.That(snapshot.fillState.remaining, Is.EqualTo(1));
-        Assert.That(snapshot.energyState.current, Is.EqualTo("High"));
-        Assert.That(snapshot.energyState.next, Is.EqualTo("Mid"));
-        Assert.That(snapshot.energyState.active, Is.EqualTo(1));
+
+        Assert.That(snapshot.energyState.label, Is.EqualTo("High"));
         Assert.That(snapshot.energyState.countBeats, Is.EqualTo(4));
         Assert.That(snapshot.energyState.lengthBeats, Is.EqualTo(16));
-        Assert.That(snapshot.energyState.remaining, Is.EqualTo(2));
+
+        Assert.That(snapshot.nextEnergyState.label, Is.EqualTo("Mid"));
+        Assert.That(snapshot.nextEnergyState.countBeats, Is.EqualTo(20));
+        Assert.That(snapshot.nextEnergyState.lengthBeats, Is.EqualTo(64));
+
+        Assert.That(snapshot.loopState.active, Is.EqualTo(1));
+        Assert.That(snapshot.loopState.set, Is.EqualTo(1));
+        Assert.That(snapshot.loopState.lengthBeats, Is.EqualTo(0.5f));
+        Assert.That(snapshot.loopState.lengthMs, Is.EqualTo(938));
+        Assert.That(snapshot.loopState.sizeNumerator, Is.EqualTo(1));
+        Assert.That(snapshot.loopState.sizeDenominator, Is.EqualTo(2));
+
+        Assert.That(snapshot.timingGrid.beat, Is.EqualTo(5));
+        Assert.That(snapshot.timingGrid.bar, Is.EqualTo(2));
+        Assert.That(snapshot.timingGrid.state, Is.EqualTo("locked"));
+
+        Assert.That(snapshot.trackId, Is.EqualTo(777001));
+
         Assert.That(parser.TryTakeSnapshot(out _), Is.False);
     }
 
@@ -106,34 +122,59 @@ public sealed class RaveOscPacketParserTests {
     }
 
     [Test]
-    public void DispatchPreservesUnavailableTriStateInsteadOfCollapsingToActive() {
-        // RaveSystem broadcasts active as a tri-state: 1 = active now, 0 = counting to the next
-        // occurrence, -1 = unavailable. A boolean collapse (!= 0) would read -1 as "active now".
+    public void DispatchPreservesUnavailableTriStatesInsteadOfCollapsingToActiveOrRegular() {
+        // RaveSystem broadcasts several fields as tri-states: 1 = yes/active, 0 = no/counting,
+        // -1 = unavailable. A boolean collapse (!= 0) would read -1 as "yes"/"active now".
         var packet = new byte[1024];
         var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
-        WriteNamedState(ref bundle, "/rave/onair/phrase_state", "", "", -1, -1, -1, -1);
+        WritePhraseState(ref bundle, "/rave/onair/phrase_state", "", -1, -1, -1);
         WriteCountdownState(ref bundle, "/rave/onair/drop_state", -1, -1, -1, -1);
         WriteCountdownState(ref bundle, "/rave/onair/fill_state", -1, -1, -1, -1);
-        WriteNamedState(ref bundle, "/rave/onair/energy_state", "", "", -1, -1, -1, -1);
+        WriteLabeledCountdown(ref bundle, "/rave/onair/energy_state", "", -1, -1);
+        WriteLoopState(ref bundle, "/rave/onair/loop_state", -1, -1, -1f, -1, -1, -1);
 
         using var parser = new RaveOscPacketParser();
         parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
 
         Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
-        Assert.That(snapshot.phraseState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.phraseState.irregular, Is.EqualTo(-1));
         Assert.That(snapshot.dropState.active, Is.EqualTo(-1));
         Assert.That(snapshot.fillState.active, Is.EqualTo(-1));
-        Assert.That(snapshot.energyState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.loopState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.loopState.set, Is.EqualTo(-1));
     }
 
     [Test]
     public void SnapshotDefaultsToUnavailableStatesBeforeAnyStatePacketArrives() {
         var snapshot = new RaveOnAirSnapshot();
 
-        Assert.That(snapshot.phraseState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.phraseState.label, Is.Null);
+        Assert.That(snapshot.phraseState.countBeats, Is.EqualTo(-1));
+        Assert.That(snapshot.phraseState.lengthBeats, Is.EqualTo(-1));
+        Assert.That(snapshot.phraseState.irregular, Is.EqualTo(-1));
+
+        Assert.That(snapshot.nextPhraseState.label, Is.Null);
+        Assert.That(snapshot.nextPhraseState.countBeats, Is.EqualTo(-1));
+        Assert.That(snapshot.nextPhraseState.lengthBeats, Is.EqualTo(-1));
+
+        Assert.That(snapshot.energyState.label, Is.Null);
+        Assert.That(snapshot.nextEnergyState.label, Is.Null);
+
         Assert.That(snapshot.dropState.active, Is.EqualTo(-1));
         Assert.That(snapshot.fillState.active, Is.EqualTo(-1));
-        Assert.That(snapshot.energyState.active, Is.EqualTo(-1));
+
+        Assert.That(snapshot.loopState.active, Is.EqualTo(-1));
+        Assert.That(snapshot.loopState.set, Is.EqualTo(-1));
+        Assert.That(snapshot.loopState.lengthBeats, Is.EqualTo(-1f));
+        Assert.That(snapshot.loopState.lengthMs, Is.EqualTo(-1));
+        Assert.That(snapshot.loopState.sizeNumerator, Is.EqualTo(-1));
+        Assert.That(snapshot.loopState.sizeDenominator, Is.EqualTo(-1));
+
+        Assert.That(snapshot.timingGrid.beat, Is.EqualTo(-1));
+        Assert.That(snapshot.timingGrid.bar, Is.EqualTo(-1));
+        Assert.That(snapshot.timingGrid.state, Is.Null);
+
+        Assert.That(snapshot.trackId, Is.EqualTo(-1));
         Assert.That(snapshot.levels.low, Is.EqualTo(-1f));
     }
 
@@ -148,6 +189,47 @@ public sealed class RaveOscPacketParserTests {
         using var parser = new RaveOscPacketParser();
 
         Assert.Throws<OscFormatException>(() => parser.Dispatch(packet.AsSpan(0, length)));
+    }
+
+    [Test]
+    public void DispatchRejectsWrongTypeForLoopStateLengthBeatsSlot() {
+        // loop_state is iifiii; the third argument (lengthBeats) must be a float32, not a string.
+        var packet = new byte[256];
+        var writer = new OscWriter(packet);
+        writer.WriteAddress("/rave/onair/loop_state");
+        writer.WriteInt32(1);
+        writer.WriteInt32(1);
+        writer.WriteString("fast");
+        writer.WriteInt32(0);
+        writer.WriteInt32(0);
+        writer.WriteInt32(0);
+
+        var length = writer.Finish();
+        using var parser = new RaveOscPacketParser();
+
+        Assert.Throws<OscFormatException>(() => parser.Dispatch(packet.AsSpan(0, length)));
+    }
+
+    [Test]
+    public void DispatchIgnoresUnrecognizedLegacyPhaseStateAddress() {
+        // v2 dropped the legacy misspelled "/rave/onair/phase_state" address; only the correctly
+        // spelled "/rave/onair/phrase_state" is registered now, so this must dispatch as unrecognized.
+        var packet = new byte[256];
+        var writer = new OscWriter(packet);
+        writer.WriteAddress("/rave/onair/phase_state");
+        writer.WriteString("Drop");
+        writer.WriteInt32(12);
+        writer.WriteInt32(32);
+        writer.WriteInt32(1);
+
+        var length = writer.Finish();
+        using var parser = new RaveOscPacketParser();
+
+        var dispatched = parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(dispatched, Is.EqualTo(0));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.False);
+        Assert.That(snapshot.phraseState.label, Is.Null);
     }
 
     private static void WriteInt(ref OscBundleWriter bundle, string address, int value) {
@@ -195,24 +277,70 @@ public sealed class RaveOscPacketParserTests {
         bundle.EndElement(writer.Finish());
     }
 
-    private static void WriteNamedState(
+    /// <summary>Writes a <c>siii</c> phrase_state lane: label, countBeats, lengthBeats, irregular tri-state.</summary>
+    private static void WritePhraseState(
         ref OscBundleWriter bundle,
         string address,
-        string current,
-        string next,
-        int active,
+        string label,
         int countBeats,
         int lengthBeats,
-        int remaining) {
+        int irregular) {
         var element = bundle.BeginElement();
         var writer = new OscWriter(element);
         writer.WriteAddress(address);
-        writer.WriteString(current);
-        writer.WriteString(next);
-        writer.WriteInt32(active);
+        writer.WriteString(label);
         writer.WriteInt32(countBeats);
         writer.WriteInt32(lengthBeats);
-        writer.WriteInt32(remaining);
+        writer.WriteInt32(irregular);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes a <c>sii</c> labeled-countdown lane shared by next_phrase_state/energy_state/next_energy_state.</summary>
+    private static void WriteLabeledCountdown(
+        ref OscBundleWriter bundle,
+        string address,
+        string label,
+        int countBeats,
+        int lengthBeats) {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteString(label);
+        writer.WriteInt32(countBeats);
+        writer.WriteInt32(lengthBeats);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes an <c>iifiii</c> loop_state lane: active/set tri-states, lengthBeats (float), lengthMs, size fraction.</summary>
+    private static void WriteLoopState(
+        ref OscBundleWriter bundle,
+        string address,
+        int active,
+        int set,
+        float lengthBeats,
+        int lengthMs,
+        int sizeNumerator,
+        int sizeDenominator) {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteInt32(active);
+        writer.WriteInt32(set);
+        writer.WriteFloat32(lengthBeats);
+        writer.WriteInt32(lengthMs);
+        writer.WriteInt32(sizeNumerator);
+        writer.WriteInt32(sizeDenominator);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes an <c>iis</c> timing_grid lane: beat, bar, grid-confidence state string.</summary>
+    private static void WriteTimingGrid(ref OscBundleWriter bundle, string address, int beat, int bar, string state) {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteInt32(beat);
+        writer.WriteInt32(bar);
+        writer.WriteString(state);
         bundle.EndElement(writer.Finish());
     }
 

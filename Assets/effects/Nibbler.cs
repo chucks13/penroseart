@@ -6,6 +6,10 @@
 /// </summary>
 public class Nibbler : EffectBase
 {
+    /// <summary>Nibbler's roaming eaters suit Low/Mid-energy sections.</summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid;
+
 
     private const int Count = 10;
     private int[] current;
