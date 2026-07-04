@@ -24,7 +24,7 @@ public abstract class EffectBase
 
     protected Penrose penrose;
     protected Penrose.TileData[] tiles;
-    public static AnimPalette APalette = new AnimPalette();
+    public static AnimPalette APalette;
 
     /// <summary>Current shared beat data from the controller's BeatManager.</summary>
     
@@ -55,13 +55,34 @@ public abstract class EffectBase
     /// </summary>
     public abstract string DebugText();
 
+    /// <summary>Loads the shared animated palette from Controller-owned palette data.</summary>
+    public static void LoadPalette(string paletteSource)
+    {
+        APalette = new AnimPalette(paletteSource);
+    }
+
+    /// <summary>Binds this plain C# effect to the live scene Controller that owns runtime setup.</summary>
+    public virtual void BindController(Controller owner)
+    {
+        if (owner == null)
+        {
+            throw new System.ArgumentNullException(nameof(owner));
+        }
+
+        controller = owner;
+    }
+
     /// <summary>
-    /// One-time setup after reflection creates the effect. Binds Controller, Penrose, tile data, and the 900-color buffer.
+    /// One-time setup after reflection creates the effect. Binds Penrose, tile data, and the 900-color buffer.
     /// </summary>
     public virtual void Init()
     {
+        if (controller == null)
+        {
+            throw new System.InvalidOperationException($"{Name} must be bound to a Controller before Init().");
+        }
+
         factory = new Factory<EffectBase>();
-        controller = Controller.Instance;
         penrose = controller.penrose;
         tiles = penrose.Tiles;
         buffer = new Color[Penrose.Total];
@@ -174,6 +195,7 @@ public abstract class EffectBase
                 continue;
             break;
         }
+        effect.BindController(controller);
         return effect;
     }
 

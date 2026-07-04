@@ -16,6 +16,7 @@ public sealed class DirectorStagingTests
         controller = controllerObject.AddComponent<Controller>();
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
+        EffectBase.LoadPalette(controller.paletteSource);
         controller.logDirectorSwitching = false;
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
@@ -23,6 +24,7 @@ public sealed class DirectorStagingTests
         controller.transitions = new TransitionBase[] { new TestTransition(), new TestTransition(), new TestTransition() };
         foreach (var transition in controller.transitions)
         {
+            transition.BindController(controller);
             transition.Init();
         }
 

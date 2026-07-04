@@ -118,14 +118,28 @@ public abstract class TransitionBase
     /// </summary>
     public virtual string DebugText() => $"{controller.effects[a].Name} ({D:0.00}) => {controller.effects[b].Name} ({v:0.00})";
 
+    /// <summary>Binds this plain C# transition to the live scene Controller that owns runtime setup.</summary>
+    public virtual void BindController(Controller owner)
+    {
+        if (owner == null)
+        {
+            throw new System.ArgumentNullException(nameof(owner));
+        }
+
+        controller = owner;
+    }
+
     /// <summary>
-    /// Called once after reflection creates the transition instance.
     /// Put reusable setup here so Blend() is safe before the transition has
     /// been selected for a real effect-to-effect transition.
     /// </summary>
     public virtual void Init()
     {
-        controller = Controller.Instance;
+        if (controller == null)
+        {
+            throw new System.InvalidOperationException($"{Name} must be bound to a Controller before Init().");
+        }
+
         buffer = new Color[Penrose.Total];
     }
 

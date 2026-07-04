@@ -452,6 +452,7 @@ public class Controller : Singleton<Controller>
         for (int i = 0; i < effects.Length; i++)
         {
             effects[i] = factory.Create(factory.Types[i]);
+            effects[i].BindController(this);
             effects[i].Init();
             //        effects[i].sortIndex = Random.Range(0, 10000);
             //        effects[i].initialIndex = i;
@@ -719,6 +720,7 @@ public class Controller : Singleton<Controller>
         for (int i = 0; i < transitions.Length; i++)
         {
             transitions[i] = factory.Create(factory.Types[i]);
+            transitions[i].BindController(this);
             transitions[i].Init();
         }
         transitionDeck = initDeck(transitions.Length);
@@ -738,6 +740,7 @@ public class Controller : Singleton<Controller>
         for (int i = 0; i < blenders.Length; i++)
         {
             blenders[i] = factory.Create(factory.Types[i]);
+            blenders[i].BindController(this);
             blenders[i].Init();
         }
 
@@ -1377,7 +1380,8 @@ public class Controller : Singleton<Controller>
         // not be initialized until this completes because EffectBase.Init()
         // caches penrose.Tiles.
         penrose = FindAnyObjectByType<Penrose>();
-        penrose.Init();
+        penrose.Init(jsonSource);
+        EffectBase.LoadPalette(paletteSource);
 
         // Seed the on-screen configuration controls from serialized fields.
         myIPText.text = GetLocalIPv4();
@@ -1409,7 +1413,7 @@ public class Controller : Singleton<Controller>
         raveOsc = gameObject.AddComponent<RaveOscReceiver>();
         drum = new drums();
         drum.RandomizeTime();
-        drum.Init();
+        drum.Init(this);
         readPixel = new PixelReceiver();
         readPixel.Init();
 
@@ -1434,7 +1438,7 @@ public class Controller : Singleton<Controller>
         StartCoroutine(Fps());
 #if ENABLE_TELNET
         // Optional debug command server. Disabled in normal builds.
-        server = new TelnetServer();
+        server = new TelnetServer { controller = this };
         server.Start();     // start telnet server
 #endif
 #if ENABLE_SERIAL
@@ -1529,7 +1533,7 @@ public class Controller : Singleton<Controller>
         // advances the shared animated palette used by most effects.
         if (Input.GetKeyDown(KeyCode.Return))
         {
-            EffectBase.APalette = new AnimPalette(); // reload the palettes
+            EffectBase.LoadPalette(paletteSource); // reload the palettes
         }
         EffectBase.APalette.Update();
 

@@ -773,10 +773,9 @@ public partial class BeatManager
                 return null;
             }
 
-            // Guard before touching EffectBase.APalette: its static initializer constructs an AnimPalette,
-            // which reads Controller.Instance — and Controller.Instance SPAWNS a Controller when none exists
-            // (and NullReferences in edit mode, where AddComponent never runs Awake).
-            if (!Application.isPlaying || !Controller.HasInstance)
+            // The animated palette is loaded by Controller startup. Outside Play Mode,
+            // or before the scene Controller has initialized palettes, Color Bank is unavailable.
+            if (!Application.isPlaying || EffectBase.APalette == null)
             {
                 return null;
             }
@@ -786,11 +785,8 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Reads the palette-mediated Color Bank value. Isolated in its own non-inlined method because
-    /// EffectBase is beforefieldinit: JIT-compiling any method that references <see cref="EffectBase.APalette"/>
-    /// may run EffectBase's static initializer immediately, bypassing the caller's runtime guards. Keeping the
-    /// reference here defers that static initialization until the guards in <see cref="LevelsPalette"/> have
-    /// actually passed.
+    /// Reads the palette-mediated Color Bank value after <see cref="LevelsPalette"/> has checked
+    /// that Play Mode is running and the Controller startup path has loaded the shared palette.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static Color? ReadLevelsPaletteColor(LevelsInfo levels)

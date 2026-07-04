@@ -5,10 +5,9 @@ using UnityEngine;
 /// No-spawn access to the live <see cref="Controller"/> from editor UI.
 /// </summary>
 /// <remarks>
-/// <see cref="Controller.Instance"/> is a singleton accessor that can create a Controller GameObject when no
-/// instance exists. Editor tooling that merely wants to observe or steer Play Mode must cross this seam instead:
-/// it first checks Play Mode and <see cref="Singleton{T}.HasInstance"/>, then reads the instance only when one is
-/// already present.
+/// Runtime code can use <see cref="Controller.Instance"/> when a live scene Controller is required.
+/// Editor tooling that merely wants to observe or steer Play Mode should cross this seam instead so it can
+/// report "not running yet" without throwing when the scene Controller has not registered.
 /// </remarks>
 internal static class LiveControllerAccess
 {
@@ -16,13 +15,7 @@ internal static class LiveControllerAccess
     public static bool TryGet(out Controller liveController)
     {
         liveController = null;
-        if (!Application.isPlaying || !Controller.HasInstance)
-        {
-            return false;
-        }
-
-        liveController = Controller.Instance;
-        return liveController != null;
+        return Application.isPlaying && Controller.TryGetInstance(out liveController);
     }
 
     /// <summary>Requests a repaint on Play Mode updates so editor windows can animate live state.</summary>

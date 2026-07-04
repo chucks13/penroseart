@@ -23,6 +23,7 @@ public sealed class SwitcherExecutionTests
         var controller = controllerObject.AddComponent<Controller>();
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
+        EffectBase.LoadPalette(controller.paletteSource);
         controller.logDirectorSwitching = false;
 
         transition = new TimedTransition();
@@ -31,7 +32,9 @@ public sealed class SwitcherExecutionTests
         var transitions = new TransitionBase[] { transition, hardCutTransition };
         controller.effects = effects;
         controller.transitions = transitions;
+        transition.BindController(controller);
         transition.Init();
+        hardCutTransition.BindController(controller);
         hardCutTransition.Init();
         switcher = new Switcher(controller, effects, transitions);
         switcher.SetInitialEffect(0, 0);

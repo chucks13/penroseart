@@ -144,27 +144,6 @@ public class Penrose : MonoBehaviour
               hideFlags = HideFlags.HideAndDontSave,
               name = "PenMaterial"
           };
-        //JsonRawData = JsonData.CreateFromJSON("rawdata.json");
-        JsonRawData = JsonUtility.FromJson<JsonData>(Controller.Instance.jsonSource);
-        /*---------------------------
-
-        var mySavedState = new MySavedState
-        {
-            Name = "someSavedState",
-            Loops =
-            {
-                { 1, 3, 5, 7, 9},
-                { 0, 2, 4, 6},
-                { 11, 22}
-            },
-
-            Background = Color.black
-        };
-
-        var jsonString = mySavedState.SaveToString();
-
-        -------------------------*/
-
     }
 
     /// <summary>
@@ -370,8 +349,10 @@ public class Penrose : MonoBehaviour
     /// <summary>
     /// Generates mesh, tile metadata, bounds, rings, and background brightness after JSON is loaded.
     /// </summary>
-    public void Init()
+    public void Init(string jsonSource)
     {
+        //JsonRawData = JsonData.CreateFromJSON("rawdata.json");
+        JsonRawData = JsonUtility.FromJson<JsonData>(jsonSource);
         //    patchLoops();
         GenerateMesh();
         GenerateTiles();

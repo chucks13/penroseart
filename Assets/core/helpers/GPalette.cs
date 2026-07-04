@@ -135,10 +135,14 @@ public class AnimPalette
 
     GPalette customPalette;
 
-    /// <summary>
-    /// Loads palette definitions from Controller.paletteSource and initializes the active palette transition state.
-    /// </summary>
+    /// <summary>Loads the built-in fallback palettes.</summary>
     public AnimPalette()
+        : this(string.Empty)
+    {
+    }
+
+    /// <summary>Loads palette definitions from Controller-owned palette source text.</summary>
+    public AnimPalette(string palettedata)
     {
         // built in palettes
         // leadables
@@ -153,9 +157,11 @@ public class AnimPalette
             LoadHexGradientFile(filelist[i]);
         }
         */
-        string palettedata = Controller.Instance.paletteSource;
-        processhex(palettedata);
-        processgradient(palettedata);
+        if (!string.IsNullOrEmpty(palettedata))
+        {
+            processhex(palettedata);
+            processgradient(palettedata);
+        }
         // if no loadable palettes, load default palettes
         if (palettes.Count == 0)
         {

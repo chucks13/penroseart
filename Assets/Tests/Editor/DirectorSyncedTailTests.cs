@@ -18,6 +18,7 @@ public sealed class DirectorSyncedTailTests
         controller = controllerObject.AddComponent<Controller>();
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
+        EffectBase.LoadPalette(controller.paletteSource);
         controller.logDirectorSwitching = false;
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
@@ -26,6 +27,7 @@ public sealed class DirectorSyncedTailTests
         controller.transitions = new TransitionBase[] { new TailedTransition(), new TailedTransition() };
         foreach (var transition in controller.transitions)
         {
+            transition.BindController(controller);
             transition.Init();
         }
 
@@ -133,6 +135,7 @@ public sealed class DirectorSyncedTailTests
     public void ZeroRunwayTailedTransitionCanCueWhenExactImpactBeatIsMissed()
     {
         controller.transitions[0] = new ZeroRunwayTailedTransition();
+        controller.transitions[0].BindController(controller);
         controller.transitions[0].Init();
         director.SetNextTransition(0);
 
@@ -230,6 +233,7 @@ public sealed class DirectorSyncedTailTests
     public void MandatoryPhraseBoundaryRemainsCueableWhenNextPhraseFrameArrivesOnTheBoundary()
     {
         controller.transitions[0] = new HardCutTransition();
+        controller.transitions[0].BindController(controller);
         controller.transitions[0].Init();
         director.SetNextTransition(0);
 
@@ -627,6 +631,7 @@ public sealed class DirectorSyncedTailTests
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(sentCueMarkBeat));
 
         controller.transitions[1] = new ZeroRunwayTailedTransition();
+        controller.transitions[1].BindController(controller);
         controller.transitions[1].Init();
         director.SetNextTransition(1);
         director.SetNextEffect(2);
@@ -790,6 +795,7 @@ public sealed class DirectorSyncedTailTests
     public void LateSentCueReportsHardCutImpactDistance()
     {
         controller.transitions[0] = new ZeroRunwayTailedTransition();
+        controller.transitions[0].BindController(controller);
         controller.transitions[0].Init();
         director.SetNextTransition(0);
         SetTrackPhaseBeat(608, phaseActive: 1, beatsToPhraseBoundary: 1, phraseLengthBeats: 32);
@@ -865,6 +871,7 @@ public sealed class DirectorSyncedTailTests
         controller.transitions = transitions;
         foreach (var transition in controller.transitions)
         {
+            transition.BindController(controller);
             transition.Init();
         }
 

@@ -23,13 +23,26 @@ public abstract class BlenderBase
     /// <summary>Catalog/display name for this blender. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
 
+    /// <summary>Binds this plain C# blender to the live scene Controller that owns runtime setup.</summary>
+    public virtual void BindController(Controller owner)
+    {
+        if (owner == null)
+        {
+            throw new System.ArgumentNullException(nameof(owner));
+        }
+
+        controller = owner;
+    }
+
     /// <summary>
-    /// Called once after reflection creates the blender instance, mirroring <see cref="TransitionBase.Init"/>.
-    /// Binds the Controller so <see cref="beatManager"/> is usable from <see cref="Blend"/>.
+    /// Called once after reflection creates the blender instance, after Controller binding.
     /// </summary>
     public virtual void Init()
     {
-        controller = Controller.Instance;
+        if (controller == null)
+        {
+            throw new System.InvalidOperationException($"{Name} must be bound to a Controller before Init().");
+        }
     }
 
     /// <summary>

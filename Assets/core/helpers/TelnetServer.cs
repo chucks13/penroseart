@@ -23,6 +23,13 @@ public class CommandRegistry
 {
     private readonly Dictionary<string, ICommand> _commands = new Dictionary<string, ICommand>();
 
+    public CommandRegistry(Controller controller)
+    {
+        Controller = controller ?? throw new ArgumentNullException(nameof(controller));
+    }
+
+    public Controller Controller { get; }
+
     /// <summary>
     /// Adds or replaces a command by name.
     /// </summary>
@@ -104,7 +111,7 @@ public class ListCommand : ICommand
 
     public string Execute(string[] args, CommandRegistry registry)
     {
-        Controller controller = Controller.Instance;
+        Controller controller = registry.Controller;
         if (args.Length > 0)
         {
             if (args[0] == "effects")
@@ -148,7 +155,7 @@ public class EffectCommand : ICommand
 
     public string Execute(string[] args, CommandRegistry registry)
     {
-        Controller controller = Controller.Instance;
+        Controller controller = registry.Controller;
         EffectBase[] effects = controller.effects;
 
         if (args.Length > 0)
@@ -178,7 +185,7 @@ public class BlenderCommand : ICommand
 
     public string Execute(string[] args, CommandRegistry registry)
     {
-        Controller controller = Controller.Instance;
+        Controller controller = registry.Controller;
         BlenderBase[] blenders = controller.blenders;
         TransitionBase[] transitions = controller.transitions;
 
@@ -223,7 +230,7 @@ public class DummyCommand : ICommand
 
     public string Execute(string[] args, CommandRegistry registry)
     {
-        Controller controller = Controller.Instance;
+        Controller controller = registry.Controller;
         if (args[0] == "on")
         {
             controller.dummyActive = true;
@@ -249,7 +256,7 @@ public class NYECommand : ICommand
 
     public string Execute(string[] args, CommandRegistry registry)
     {
-        Controller controller = Controller.Instance;
+        Controller controller = registry.Controller;
         if (args[0] == "on")
         {
             controller.NYE = true;
@@ -287,7 +294,7 @@ public class TelnetServer : MonoBehaviour
     private TcpListener listener;
     private bool isListening = false;
     private Thread listenThread;
-    CommandRegistry registry = new CommandRegistry();
+    CommandRegistry registry;
 
     private readonly System.Collections.Generic.List<TcpClient> connectedClients = new System.Collections.Generic.List<TcpClient>();
 
@@ -298,9 +305,13 @@ public class TelnetServer : MonoBehaviour
     /// </summary>
     public void Start()
     {
-        //    controller = Controller.Instance;
+        if (controller == null)
+        {
+            throw new InvalidOperationException("TelnetServer requires the live Controller before Start().");
+        }
+
         StartTelnetServer();
-        registry = new CommandRegistry();
+        registry = new CommandRegistry(controller);
         registry.Register(new HelpCommand());
         registry.Register(new EchoCommand());
         registry.Register(new ListCommand());

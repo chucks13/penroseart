@@ -70,9 +70,14 @@ public class drums
     /// Binds Controller/Penrose state, starts the UDP trigger listener on port
     /// 8500, and allocates five hit/ring state slots.
     /// </summary>
-    public void Init()
+    public void Init(Controller owner)
     {
-        controller = Controller.Instance;
+        if (owner == null)
+        {
+            throw new System.ArgumentNullException(nameof(owner));
+        }
+
+        controller = owner;
         penrose = controller.penrose;
         tiles = penrose.Tiles;
         setting = new Settings();

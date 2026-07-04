@@ -25,6 +25,7 @@ public sealed class DirectorGridPublishTests
         controller = controllerObject.AddComponent<Controller>();
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
+        EffectBase.LoadPalette(controller.paletteSource);
         controller.logDirectorSwitching = false;
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
@@ -33,6 +34,7 @@ public sealed class DirectorGridPublishTests
         controller.transitions = new TransitionBase[] { new TestTransition(), new TestTransition() };
         foreach (var transition in controller.transitions)
         {
+            transition.BindController(controller);
             transition.Init();
         }
 

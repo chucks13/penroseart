@@ -32,10 +32,9 @@ public abstract class ScreenEffect : EffectBase
     /// <summary>
     /// Builds the static tile-to-screen interpolation map used by ConvertScreenBuffer.
     /// </summary>
-    private static void InitWeights()
+    private static void InitWeights(Penrose penrose)
     {
         // get the tiles
-        var penrose = Controller.Instance.penrose;
         var tiles = penrose.Tiles;
         var bounds = penrose.Bounds;
         var min = bounds.min;
@@ -145,7 +144,7 @@ public abstract class ScreenEffect : EffectBase
             for (var y = 0; y < count; y++) neighbors[x][y] = new ScreenMap();
         }
 
-        InitWeights();
+        InitWeights(penrose);
 
         //for(var x = 0; x < buffer.Length; x++) {
         //  for(var y = 0; y < count; y++) Debug.Log(neighbors[x][y]);
