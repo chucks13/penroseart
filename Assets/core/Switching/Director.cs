@@ -600,16 +600,17 @@ public sealed class Director
             Time.time);
     }
 
-    private void CommitSentCue(int beat, SwitcherCueDirection cue, TransitionBeatPlan beatPlan)
+    private void CommitSentCue(int beat, SwitcherCueDirection cue)
     {
-        transitionStartBeat = beatPlan.StartBeat;
-        transitionLandingBeat = beatPlan.ImpactBeat;
-        cuePlanner.MarkChanged(beatPlan.ImpactBeat);
+        var loaded = switcher.LoadedCueStatus;
+        transitionStartBeat = loaded.StartBeat;
+        transitionLandingBeat = cue.CueMarkBeat;
+        cuePlanner.MarkChanged(cue.CueMarkBeat);
         cuePlanner.RecordCueIssued(beat);
         controller.currentTransition = cue.TransitionIndex;
         currentEffectIndexForSelection = cue.TargetEffectIndex;
         StageNextChoices(currentEffectIndexForSelection);
-        Trace($"SYNC_CUE_SENT beat={beat} start={beatPlan.StartBeat} impact={beatPlan.ImpactBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} runway={cue.TransitionRepertoire.RunwayBeats}");
+        Trace($"SYNC_CUE_SENT beat={beat} start={loaded.StartBeat} impact={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} runway={cue.TransitionRepertoire.RunwayBeats}");
     }
 
     private bool TryStartSyncedCue(TimingFrame frame)
@@ -669,16 +670,15 @@ public sealed class Director
             : preferredRepertoire != Repertoire.None && (repertoire.Tags & preferredRepertoire) == 0
                 ? CueCastSource.NoPreferredAvailable
                 : CueCastSource.Staged;
-        var beatPlan = TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire);
 
-        // Energy casts the effect (never the transition, never a Cue Mark): once the Impact Point is known,
+        // Energy casts the effect (never the transition, never a Cue Mark): once the Cue Mark is known,
         // prefer the level the cast Performer will actually spend its cadence stint in. Event intent (Drop/Fill)
         // still outranks it — folded in behind that inside SyncedCueIntent.Cast.
         var energyPreference = EnergyCasting.PreferredEnergyRepertoire(
-            controller.beatManager.Energy, beat, beatPlan.ImpactBeat, MinimumChangeCadenceBeats);
+            controller.beatManager.Energy, beat, frame.CueMarkBeat, MinimumChangeCadenceBeats);
         var effectivePreferredRepertoire = preferredRepertoire != Repertoire.None ? preferredRepertoire : energyPreference;
 
-        var verdict = cuePlanner.EvaluateCueTiming(beatPlan, beat, MinimumChangeCadenceBeats);
+        var verdict = cuePlanner.EvaluateCueTiming(frame.CueMarkBeat, repertoire, beat, MinimumChangeCadenceBeats);
         if (verdict == CueTimingVerdict.Wait)
         {
             return false;
@@ -689,7 +689,7 @@ public sealed class Director
             lastCueDecision = new CueDecision(
                 CueDecisionOutcome.BlockedByCadence,
                 beat,
-                beatPlan.ImpactBeat,
+                frame.CueMarkBeat,
                 eventIntent,
                 effectivePreferredRepertoire,
                 effectIndex: -1,
@@ -698,7 +698,7 @@ public sealed class Director
                 transitionIndex,
                 TransitionName(transitionIndex),
                 transitionSource);
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={beatPlan.ImpactBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
+            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={frame.CueMarkBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
             cuePlanner.RecordCueIssued(beat);
             return true;
         }
@@ -719,7 +719,7 @@ public sealed class Director
                 ? CueCastSource.NoPreferredAvailable
                 : CueCastSource.Staged;
         var cue = new SwitcherCueDirection(
-            beatPlan.ImpactBeat,
+            frame.CueMarkBeat,
             cueIntent.TargetEffectIndex,
             transitionIndex,
             repertoire);
@@ -728,7 +728,7 @@ public sealed class Director
             lastCueDecision = new CueDecision(
                 CueDecisionOutcome.Held,
                 beat,
-                beatPlan.ImpactBeat,
+                frame.CueMarkBeat,
                 eventIntent,
                 cueIntent.PreferredRepertoire,
                 cueIntent.TargetEffectIndex,
@@ -738,7 +738,7 @@ public sealed class Director
                 TransitionName(transitionIndex),
                 transitionSource);
             cuePlanner.RecordCueIssued(beat);
-            Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} start={beatPlan.StartBeat} impact={beatPlan.ImpactBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+            Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} impact={frame.CueMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
             return true;
         }
 
@@ -758,12 +758,20 @@ public sealed class Director
         }
 
         var clock = CurrentSwitcherClockSnapshot(beat);
-        switcher.UpsertLoadedCue(cue, clock);
-        CommitSentCue(beat, cue, beatPlan);
+        if (!switcher.UpsertLoadedCue(cue, clock))
+        {
+            // The Switcher alone owns commitment; a rejected offer commits nothing, so record no commit
+            // state (no cadence mark, no cue-issued memory, no Sent decision). Deck cards were already
+            // pulled above — reclaiming them on rejection is the issue-03 deck rework, not this guard.
+            Trace($"SYNC_CUE_REJECTED beat={beat} cueMark={frame.CueMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
+            return false;
+        }
+
+        CommitSentCue(beat, cue);
         lastCueDecision = new CueDecision(
             CueDecisionOutcome.Sent,
             beat,
-            beatPlan.ImpactBeat,
+            frame.CueMarkBeat,
             eventIntent,
             cueIntent.PreferredRepertoire,
             cueIntent.TargetEffectIndex,
@@ -914,7 +922,7 @@ public sealed class Director
 
     private static bool CanTransitionCueNow(TimingFrame frame, TransitionRepertoire repertoire)
     {
-        return TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire).CanCommitAt(frame.CurrentBeat);
+        return Switcher.CanCommitCue(frame.CueMarkBeat, repertoire, frame.CurrentBeat);
     }
 
     private void RunStandaloneTimerDecision()

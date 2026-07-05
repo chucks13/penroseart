@@ -204,16 +204,16 @@ public sealed class CuePlanner
     /// Mark whose landing violates the minimum change cadence blocks. Timing is decided here;
     /// casting (which Performer/Transition) stays with the Director.
     /// </summary>
-    public CueTimingVerdict EvaluateCueTiming(TransitionBeatPlan beatPlan, int beat, int minimumChangeCadenceBeats)
+    public CueTimingVerdict EvaluateCueTiming(int cueMarkBeat, TransitionRepertoire repertoire, int beat, int minimumChangeCadenceBeats)
     {
         if (lastCueBeat == beat
-            || lastChangeBeat == beatPlan.ImpactBeat
-            || !beatPlan.CanCommitAt(beat))
+            || lastChangeBeat == cueMarkBeat
+            || !Switcher.CanCommitCue(cueMarkBeat, repertoire, beat))
         {
             return CueTimingVerdict.Wait;
         }
 
-        return CanChangeAt(beatPlan.ImpactBeat, minimumChangeCadenceBeats)
+        return CanChangeAt(cueMarkBeat, minimumChangeCadenceBeats)
             ? CueTimingVerdict.Cue
             : CueTimingVerdict.BlockedByCadence;
     }

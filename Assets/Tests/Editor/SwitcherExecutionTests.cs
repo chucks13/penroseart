@@ -83,9 +83,11 @@ public sealed class SwitcherExecutionTests
             transitionIndex: 0,
             transitionRepertoire: transition.Repertoire);
 
-        switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
-        switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(7, 0.5f, 0.5f, 10.25f));
+        var acceptedOriginal = switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+        var acceptedReplacement = switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(7, 0.5f, 0.5f, 10.25f));
 
+        Assert.That(acceptedOriginal, Is.True);
+        Assert.That(acceptedReplacement, Is.True, "A replacement offered before the Lock Point is accepted.");
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
         Assert.That(switcher.LoadedCueStatus.CanUpdate, Is.True);
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(0));
@@ -105,11 +107,44 @@ public sealed class SwitcherExecutionTests
             transitionIndex: 0,
             transitionRepertoire: transition.Repertoire);
 
-        switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
-        switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10.5f));
+        var acceptedOriginal = switcher.UpsertLoadedCue(originalCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+        var acceptedReplacement = switcher.UpsertLoadedCue(replacementCue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10.5f));
 
+        Assert.That(acceptedOriginal, Is.True);
+        Assert.That(acceptedReplacement, Is.False, "Once locked, a differing offer is rejected and the cue rides.");
         Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True);
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void LoadedCueLocksByClockAdvanceAndStaysLockedThroughABackstepOffer()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+
+        // Runway 1 -> Start Beat 9, Lock Point 8. Offered on beat 6 (before the Lock Point) it loads and holds.
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(6, 0f, 0.5f, 10f));
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False);
+
+        // Advance ONLY the Switcher's own render clock to the Lock Point's wall time (Start Time 11.5s minus
+        // one 0.5s beat = 11.0s). No new offer arrives, yet the lock latches — the status reads real state.
+        switcher.RenderAtTime(11.0f, out _);
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True, "The lock latches on the Switcher's own clock, without any new offer.");
+
+        // A jitter backstep offer to a beat before the Lock Point must not reopen the one-way latch.
+        var backstep = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 0,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+        var accepted = switcher.UpsertLoadedCue(backstep, new SwitcherClockSnapshot(6, 0f, 0.5f, 11.0f));
+
+        Assert.That(accepted, Is.False, "A differing offer after lock is rejected even on a backstep beat.");
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True, "The lock is a one-way latch; a backstep cannot reopen it.");
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1), "The locked cue rides.");
     }
 
     [Test]
@@ -140,13 +175,99 @@ public sealed class SwitcherExecutionTests
             transitionRepertoire: transition.Repertoire);
 
         // Runway 1 puts the Lock Point on beat 8: a cue arriving on it is already too late.
-        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10f));
+        var accepted = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10f));
         var buffer = switcher.RenderAtTime(12f, out _);
 
+        Assert.That(accepted, Is.False, "A cue at its Lock Point is rejected outright.");
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
         Assert.That(buffer[0], Is.EqualTo(Color.red));
+    }
+
+    [Test]
+    public void UpsertAnswersAcceptedWhenCueCommitsBeforeItsLockPoint()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+
+        var accepted = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+
+        Assert.That(accepted, Is.True);
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RejectedLateOfferLeavesTheStageAndLoadedCueUntouched()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+
+        // Runway 1 -> Lock Point on beat 8: an offer on the Lock Point is rejected and nothing loads.
+        var accepted = switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10f));
+
+        Assert.That(accepted, Is.False);
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "A rejected offer leaves no loaded cue.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "A rejected offer leaves the stage untouched.");
+    }
+
+    [TestCase(12, 0)]
+    [TestCase(0, 12)]
+    [TestCase(6, 6)]
+    [TestCase(1, 11)]
+    [TestCase(11, 1)]
+    [TestCase(0, 0)]
+    public void CommitWindowClosesOneBeatBeforeTheRunwayStart(int runwayBeats, int tailBeats)
+    {
+        var repertoire = RepertoireFor(runwayBeats, tailBeats);
+        var lockPointBeat = 609 - runwayBeats - 1;
+
+        Assert.That(Switcher.CanCommitCue(609, repertoire, lockPointBeat - 1), Is.True);
+        Assert.That(Switcher.CanCommitCue(609, repertoire, lockPointBeat), Is.False, "The Lock Point itself is too late to commit.");
+        Assert.That(Switcher.CanCommitCue(609, repertoire, 609 - runwayBeats), Is.False);
+        Assert.That(Switcher.CanCommitCue(609, repertoire, 609), Is.False, "The Cue Mark is far too late to commit.");
+    }
+
+    [TestCase(12, 0)]
+    [TestCase(0, 12)]
+    [TestCase(6, 6)]
+    [TestCase(1, 11)]
+    [TestCase(11, 1)]
+    [TestCase(0, 0)]
+    public void LoadedCueStatusReportsTheProjectedRunwayAndTailBeats(int runwayBeats, int tailBeats)
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 609,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: RepertoireFor(runwayBeats, tailBeats));
+
+        // Offer well before the Lock Point and before its Start Time so the cue loads and holds.
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(609 - runwayBeats - 10, 0f, 0.5f, 0f));
+        var status = switcher.LoadedCueStatus;
+
+        Assert.That(status.StartBeat, Is.EqualTo(609 - runwayBeats));
+        Assert.That(status.CueMarkBeat, Is.EqualTo(609));
+        Assert.That(status.CompleteBeat, Is.EqualTo(609 + tailBeats));
+        Assert.That(status.LockPointBeat, Is.EqualTo(609 - runwayBeats - 1));
+    }
+
+    private static TransitionRepertoire RepertoireFor(int runwayBeats, int tailBeats)
+    {
+        return TransitionRepertoire.FromRunwayAndTail(
+            RepertoireFlags.None,
+            runwayBeats,
+            tailBeats,
+            TransitionShape.Blend,
+            TransitionIntensity.Medium,
+            defaultDurationSeconds: 4f);
     }
 
     [Test]

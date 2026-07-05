@@ -239,7 +239,7 @@ public sealed class CuePlannerTests
         Assert.That(frame.BeatRewoundToNewPass, Is.True);
         Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
         Assert.That(
-            cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 593), beat: 587, minimumChangeCadenceBeats: 16),
+            cuePlanner.EvaluateCueTiming(593, FourBeatRunwayRepertoire(), 587, 16),
             Is.EqualTo(CueTimingVerdict.Cue),
             "Cue/commit memory from the previous pass must not block the replayed mark.");
     }
@@ -268,7 +268,7 @@ public sealed class CuePlannerTests
             "The pre-rewind commit on 577 still binds cadence.");
         Assert.That(cuePlanner.CanChangeAt(593, minimumChangeCadenceBeats: 16), Is.True);
         Assert.That(
-            cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 584), beat: 580, minimumChangeCadenceBeats: 16),
+            cuePlanner.EvaluateCueTiming(584, FourBeatRunwayRepertoire(), 580, 16),
             Is.EqualTo(CueTimingVerdict.Wait),
             "The pre-rewind cue issued on 580 still binds.");
     }
@@ -300,7 +300,7 @@ public sealed class CuePlannerTests
             "The commit on 593 still binds cadence across a jitter backstep.");
         Assert.That(cuePlanner.CanChangeAt(609, minimumChangeCadenceBeats: 16), Is.True);
         Assert.That(
-            cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 584), beat: 580, minimumChangeCadenceBeats: 16),
+            cuePlanner.EvaluateCueTiming(584, FourBeatRunwayRepertoire(), 580, 16),
             Is.EqualTo(CueTimingVerdict.Wait),
             "The cue issued on 580 still binds across a jitter backstep.");
     }
@@ -397,7 +397,7 @@ public sealed class CuePlannerTests
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
 
         // Cue Mark 609, Runway 4: Start Beat 605, Lock Point 604 — beat 603 is the last commit chance.
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(609, FourBeatRunwayRepertoire(), 603, 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Cue));
     }
@@ -410,7 +410,7 @@ public sealed class CuePlannerTests
     {
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(609, FourBeatRunwayRepertoire(), beat, 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait), "A mark whose Lock Point arrived uncommitted is missed, never fired late.");
     }
@@ -421,7 +421,7 @@ public sealed class CuePlannerTests
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
         cuePlanner.MarkChanged(600);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(609, FourBeatRunwayRepertoire(), 603, 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.BlockedByCadence));
     }
@@ -432,7 +432,7 @@ public sealed class CuePlannerTests
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
         cuePlanner.MarkChanged(609);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(609, FourBeatRunwayRepertoire(), 603, 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait), "A committed Cue Mark is done, not paced.");
     }
@@ -443,7 +443,7 @@ public sealed class CuePlannerTests
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
         cuePlanner.RecordCueIssued(603);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(609, FourBeatRunwayRepertoire(), 603, 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait));
     }
@@ -458,17 +458,15 @@ public sealed class CuePlannerTests
         Assert.That(cuePlanner.CanChangeAt(609, minimumChangeCadenceBeats: 16), Is.True);
     }
 
-    private static TransitionBeatPlan FourBeatRunwayPlan(int cueMarkBeat)
+    private static TransitionRepertoire FourBeatRunwayRepertoire()
     {
-        return TransitionBeatPlan.FromCueMark(
-            cueMarkBeat,
-            TransitionRepertoire.FromRunwayAndTail(
-                Repertoire.None,
-                runwayBeats: 4,
-                tailBeats: 4,
-                TransitionShape.Dissolve,
-                TransitionIntensity.High,
-                defaultDurationSeconds: 4f));
+        return TransitionRepertoire.FromRunwayAndTail(
+            Repertoire.None,
+            runwayBeats: 4,
+            tailBeats: 4,
+            TransitionShape.Dissolve,
+            TransitionIntensity.High,
+            defaultDurationSeconds: 4f);
     }
 
     /// <summary>Inside an active Phrase, given the countdown to its boundary (the Phrase start is back-derived).</summary>
