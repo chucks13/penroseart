@@ -199,7 +199,7 @@ How much to trust where the one sits on the 16-beat Grid this frame, expressed a
 _Avoid_: describing Grid State as a five-level evidence ladder (retired); treating Coasting or Disputed as off-grid.
 
 **Loop**:
-A live repeated section of the current music, surfaced display-only as `BeatManager.Loop`. Loops are powers of four and usually preserve Grid, but they can rewind or repeat beat numbers so absolute beat progress goes stale. The Director keeps no loop-specific machinery: a loop's backward jump is one of the grid-reading moves the reducer replays on its next wake — a still-workable Loaded Cue rides it unchanged, an unworkable one recasts when the Switcher is not locked. Sheets are keyed to their Phrase announcement, so a loop within the same Phrase never re-rolls a Cue Sheet.
+A live repeated section of the current music, surfaced display-only as `BeatManager.Loop`. Loops are powers of four and usually preserve Grid, but they can rewind or repeat beat numbers so absolute beat progress goes stale. The Director keeps no loop-specific machinery: a loop's backward jump is just another grid-reading move: when it re-presents a Grid whose Cue Mark equals the Loaded Cue's, the Switcher answers "kept" and the cue rides unchanged; when it re-presents a different mark, the Switcher replaces the loaded cue if it is unlocked, or the locked cue rides. Sheets are keyed to their Phrase announcement (label and length), so a loop within the same Phrase never re-rolls a Cue Sheet.
 _Avoid_: assuming a Loop means the wall is out of phase; assuming old absolute progress remains valid after a loop rewind; modeling a loop as its own scheduler or a Director cursor.
 
 **Performer**:

@@ -264,23 +264,22 @@ public sealed class CueLogSeamTests
     }
 
     [Test]
-    public void AKeptWorkableCueEmitsCueKept()
+    public void ASameMarkReOfferEmitsCueKept()
     {
-        var offsets = CueSheet.Build(80, 600, 600).CueMarkOffsets;
-        var firstMark = 600 + offsets[0];
-        Assert.That(firstMark, Is.LessThan(680), "Setup: the Phrase carries an interior mark before its end.");
+        // Cast a cue for the Phrase-end mark 632 when its Grid [616, 632) begins, then loop the grid back onto
+        // the SAME Boundary so the SAME Cue Mark is re-offered. The Switcher answers "kept" and the Director
+        // logs CUE_KEPT.
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "Setup: the cue is loaded for the Phrase-end mark.");
 
-        FeedBeat(beat: 663, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
-        FeedBeat(beat: 664, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "Setup: the cue is loaded for the Phrase-end mark.");
-
-        FeedBeat(beat: firstMark - 17, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
-        FeedBeat(beat: firstMark - 16, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+        FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
 
         Assert.That(
-            lines.Any(l => l.Contains("CUE_KEPT") && l.Contains($"offered={firstMark}") && l.Contains("loaded=680[80/80]")),
+            lines.Any(l => l.Contains("CUE_KEPT") && l.Contains("offered=632") && l.Contains("loaded=632[32/32]")),
             Is.True,
-            "The keep-guard holding the workable loaded cue is logged as CUE_KEPT.");
+            "A same-mark re-offer the Switcher keeps is logged as CUE_KEPT.");
     }
 
     [Test]

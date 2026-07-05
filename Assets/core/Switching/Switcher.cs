@@ -201,6 +201,23 @@ public readonly struct SwitcherCueStatus
 }
 
 /// <summary>
+/// The Switcher's one answer to a cue offer, so the Director never mirrors commitment: the loaded cue was
+/// <see cref="Kept"/> unchanged (a same-Cue-Mark offer), <see cref="Loaded"/> (a fresh load or a different-mark
+/// replacement), or <see cref="Rejected"/> (too late, or a different-mark offer after the lock).
+/// </summary>
+public enum CueUpsertResult
+{
+    /// <summary>A same-Cue-Mark offer: the loaded cue rides unchanged and is never re-flavored.</summary>
+    Kept,
+
+    /// <summary>The offer was loaded — a fresh cue, or a different-mark cue replacing an unlocked one.</summary>
+    Loaded,
+
+    /// <summary>The offer was refused; the loaded cue and stage are untouched.</summary>
+    Rejected,
+}
+
+/// <summary>
 /// Mechanical stage switcher for Penrose performers.
 /// The Switcher owns Loaded Cue scheduling plus in-flight effect/transition execution,
 /// renders progress, and promotes B on completion.
@@ -290,14 +307,19 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Inserts or updates one beat-domain cue direction for fire-and-forget Switcher execution and
-    /// answers whether the offer was accepted. A cue must arrive strictly before its Lock Point (one
-    /// beat before the Runway start); an offer at or past the Lock Point, or any differing offer once
-    /// the loaded cue has locked, is rejected and leaves the loaded cue and stage untouched. Callers
-    /// therefore never mirror or guess commitment state — the Switcher alone owns it.
+    /// Inserts one beat-domain cue direction for fire-and-forget Switcher execution and answers what the
+    /// Switcher did with it. Identity on this seam is the Cue Mark alone: an offer at the <b>same</b> Cue Mark
+    /// as the loaded cue is a keep — the loaded cue rides unchanged and is never re-flavored. A different-mark
+    /// offer replaces the loaded cue when it can still commit (strictly before its Lock Point, one beat before
+    /// the Runway start) and the loaded cue is not locked; otherwise it is rejected and the loaded cue and
+    /// stage are untouched. Callers therefore never mirror or guess commitment state — the Switcher alone
+    /// owns it and answers in one call.
     /// </summary>
-    /// <returns><c>true</c> when the cue is loaded; <c>false</c> when the offer is rejected.</returns>
-    public bool UpsertLoadedCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
+    /// <returns>
+    /// <see cref="CueUpsertResult.Kept"/>, <see cref="CueUpsertResult.Loaded"/>, or
+    /// <see cref="CueUpsertResult.Rejected"/>.
+    /// </returns>
+    public CueUpsertResult UpsertLoadedCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
     {
         ValidateEffectIndex(cue.TargetEffectIndex);
         ValidateTransitionIndex(cue.TransitionIndex);
@@ -307,25 +329,30 @@ public sealed class Switcher
         if (hasLoadedCue)
         {
             LatchLockAtBeat(clock.CurrentBeat);
+
+            // Same Cue Mark: the loaded cue is already aimed here, so it rides unchanged. A keep never
+            // re-reads the fresh cast, so a cue the design says must not move cannot be re-flavored.
+            if (cue.CueMarkBeat == loadedCue.CueMarkBeat)
+            {
+                return CueUpsertResult.Kept;
+            }
+
+            // A different-mark offer after the lock is refused; the locked cue rides.
             if (loadedCueLocked)
             {
-                if (!SameCue(cue, loadedCue))
-                {
-                    Trace($"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
-                }
-
-                return false;
+                Trace($"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
+                return CueUpsertResult.Rejected;
             }
         }
 
         if (!CanCommitCue(cue.CueMarkBeat, cue.TransitionRepertoire, clock.CurrentBeat))
         {
             Trace($"SWITCHER_REJECT_LATE_CUE beat={clock.CurrentBeat} cueMark={cue.CueMarkBeat} lock={LockPointBeatFor(cue.CueMarkBeat, cue.TransitionRepertoire)} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-            return false;
+            return CueUpsertResult.Rejected;
         }
 
         LoadCue(cue, clock);
-        return true;
+        return CueUpsertResult.Loaded;
     }
 
     /// <summary>
@@ -591,24 +618,6 @@ public sealed class Switcher
                 loadedCue.TransitionRepertoire.RunwayBeats,
                 loadedCue.TransitionRepertoire.TailBeats)
             : SwitcherCueStatus.Empty;
-    }
-
-    private static bool SameCue(SwitcherCueDirection left, SwitcherCueDirection right)
-    {
-        return left.CueMarkBeat == right.CueMarkBeat
-            && left.TargetEffectIndex == right.TargetEffectIndex
-            && left.TransitionIndex == right.TransitionIndex
-            && SameRepertoire(left.TransitionRepertoire, right.TransitionRepertoire);
-    }
-
-    private static bool SameRepertoire(TransitionRepertoire left, TransitionRepertoire right)
-    {
-        return left.Tags == right.Tags
-            && left.RunwayBeats == right.RunwayBeats
-            && left.TailBeats == right.TailBeats
-            && left.Shape == right.Shape
-            && left.Intensity == right.Intensity
-            && Mathf.Approximately(left.DefaultDurationSeconds, right.DefaultDurationSeconds);
     }
 
     private void CompleteTransition()
