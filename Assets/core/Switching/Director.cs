@@ -510,6 +510,21 @@ public sealed class Director
         currentSlot.HasCueMarkAt(absoluteBeat) || nextSlot.HasCueMarkAt(absoluteBeat);
 
     /// <summary>
+    /// Whether the loaded Cue is still workable, replayed from live state on the beat wake that observes a
+    /// change (ADR-0011). Workable means the Cue's mark is still a real Cue Mark on the live sheets and still
+    /// lies ahead of the current beat — read from the sheets and BeatManager, never a stored verdict. Whether
+    /// enough runway remains to actually commit is the Switcher's to answer via accept/reject, so this holds
+    /// no opinion about commitment and never consults the lock.
+    /// </summary>
+    private bool IsLoadedCueWorkable(int beat)
+    {
+        var loaded = switcher.LoadedCueStatus;
+        return loaded.HasCue
+            && beat < loaded.CueMarkBeat
+            && HasCueMarkAt(loaded.CueMarkBeat);
+    }
+
+    /// <summary>
     /// Casts an Effect and Transition for the Cue Mark and offers the Cue to the Switcher fire-and-forget.
     /// Casting is lazy and preference-based: a Fill on this Grid or a Drop on the next makes capable
     /// Repertoire preferred, never required. Deck cards are peeked here and pulled only if the Switcher
@@ -521,6 +536,17 @@ public sealed class Director
         if (controller.TryGetHeldEffectIndex(out _))
         {
             Trace($"SYNC_CUE_HELD beat={beat} cueMark={cueMarkBeat}");
+            return;
+        }
+
+        // Replay-on-change (ADR-0011): a still-workable loaded Cue survives grid jumps and evidence changes
+        // unchanged, so it is kept rather than re-offered — re-casting would read fresh evidence and could
+        // change a Cue the design says must not move. An unworkable loaded Cue falls through to a fresh cast;
+        // whether that recast commits or the loaded Cue rides is the Switcher's accept/reject to answer, so
+        // the Director offers fire-and-forget and never pre-checks the lock.
+        if (IsLoadedCueWorkable(beat))
+        {
+            Trace($"SYNC_CUE_KEEP beat={beat} loaded={switcher.LoadedCueStatus.CueMarkBeat} cueMark={cueMarkBeat}");
             return;
         }
 
