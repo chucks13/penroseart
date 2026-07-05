@@ -15,6 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine.Networking;
 using System.Text;
+using System.IO;
 //  gameObjectToHide.GetComponent<Renderer>().enabled = false;
 
 using System.Net.NetworkInformation;
@@ -390,6 +391,10 @@ public class Controller : Singleton<Controller>
     /// <summary>Decision layer that owns sequencing cadence and stage-directed cues.</summary>
     [HideInInspector]
     public Director director;
+
+    /// <summary>Per-session operator-facing Cue Log sink; a downstream view, created in <see cref="Start"/> and closed in <see cref="OnDestroy"/>.</summary>
+    [HideInInspector]
+    public CueLog cueLog;
 
     /// <summary>Scene Penrose model and preview mesh component.</summary>
     [HideInInspector]
@@ -1356,6 +1361,12 @@ public class Controller : Singleton<Controller>
         return color;
     }
 
+    /// <summary>Unity teardown hook. Closes the per-session Cue Log so its buffered writer flushes and releases the file.</summary>
+    void OnDestroy()
+    {
+        cueLog?.Dispose();
+    }
+
     /// <summary>Writes a tagged sequencing diagnostic line to the Unity log when enabled.</summary>
     public void LogDirectorSwitching(string message)
     {
@@ -1428,10 +1439,15 @@ public class Controller : Singleton<Controller>
         }
 
         // Director owns sequencing cadence; Switcher owns only the mechanical in-flight stage state.
+        // The Cue Log is a downstream operator-facing sink (like the Observatory): its session file is created
+        // lazily on the first Cue event and closed in OnDestroy. Grid position is read live off the BeatManager.
         timer = new Timer(effectTime, false);
-        switcher = new Switcher(this, effects, transitions);
+        cueLog = CueLog.CreateForSession(
+            Path.Combine(Application.persistentDataPath, "Logs"),
+            () => beatManager != null ? beatManager.Grid : null);
+        switcher = new Switcher(this, effects, transitions, cueLog);
         switcher.SetInitialEffect(currentEffect, currentTransition);
-        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
+        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition, cueLog);
         timer.onFinished += director.OnTimerFinished;
 
         ConfigureRuntimeHud();

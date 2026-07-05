@@ -136,6 +136,7 @@ public sealed class Director
     private readonly Timer standaloneTimer;
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
+    private readonly CueLog cueLog;
 
     private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
@@ -154,22 +155,28 @@ public sealed class Director
     private CueSheetSlot nextSlot = CueSheetSlot.Empty;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
 
-    /// <summary>One held Cue Sheet plus the announcement (Phrase start and length) it was built from.</summary>
+    /// <summary>
+    /// One held Cue Sheet plus the announcement (Phrase label, start, and length) it was built from. The
+    /// label rides along for display only: keying (<see cref="BuiltFrom"/>) stays on start and length, so the
+    /// label never influences whether a sheet is re-rolled.
+    /// </summary>
     private readonly struct CueSheetSlot
     {
-        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, -1);
+        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, -1, null);
 
         public readonly bool HasSheet;
         public readonly CueSheet Sheet;
         public readonly int PhraseStartBeat;
         public readonly int PhraseLengthBeats;
+        public readonly string PhraseLabel;
 
-        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseStartBeat, int phraseLengthBeats)
+        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseStartBeat, int phraseLengthBeats, string phraseLabel)
         {
             HasSheet = hasSheet;
             Sheet = sheet;
             PhraseStartBeat = phraseStartBeat;
             PhraseLengthBeats = phraseLengthBeats;
+            PhraseLabel = phraseLabel;
         }
 
         public int PhraseEndBeat => PhraseStartBeat + PhraseLengthBeats;
@@ -229,7 +236,8 @@ public sealed class Director
         Timer standaloneTimer,
         int[] effectDeck,
         int[] transitionDeck,
-        int initialTransitionIndex)
+        int initialTransitionIndex,
+        CueLog cueLog = null)
     {
         if (controller == null)
         {
@@ -241,6 +249,7 @@ public sealed class Director
         this.standaloneTimer = standaloneTimer ?? throw new ArgumentNullException(nameof(standaloneTimer));
         this.effectDeck = effectDeck ?? throw new ArgumentNullException(nameof(effectDeck));
         this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
+        this.cueLog = cueLog;
         currentEffectIndexForSelection = switcher.CurrentEffectIndex;
         SetNextTransition(initialTransitionIndex);
         nextTransitionIsManualSelection = false;
@@ -414,18 +423,18 @@ public sealed class Director
         }
 
         // (a) No current sheet -> build from the current Phrase announcement.
-        if (!currentSlot.HasSheet && TryReadCurrentAnnouncement(beat, out var currentStart, out var currentLength))
+        if (!currentSlot.HasSheet && TryReadCurrentAnnouncement(beat, out var currentStart, out var currentLength, out var currentLabel))
         {
-            currentSlot = BuildSlot("current", "build", currentStart, currentLength);
+            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Build, currentStart, currentLength, currentLabel);
         }
 
         // (b) No next sheet, or the announcement it was built from changed -> build from the next Phrase
         //     announcement. Never duplicate the current Phrase (the wire can briefly announce it as next).
-        if (TryReadNextAnnouncement(beat, out var nextStart, out var nextLength)
+        if (TryReadNextAnnouncement(beat, out var nextStart, out var nextLength, out var nextLabel)
             && !nextSlot.BuiltFrom(nextStart, nextLength)
             && !currentSlot.BuiltFrom(nextStart, nextLength))
         {
-            nextSlot = BuildSlot("next", nextSlot.HasSheet ? "rebuild" : "build", nextStart, nextLength);
+            nextSlot = BuildSlot(CueLogSlot.Next, nextSlot.HasSheet ? CueLogBuildReason.Rebuild : CueLogBuildReason.Build, nextStart, nextLength, nextLabel);
         }
     }
 
@@ -434,15 +443,17 @@ public sealed class Director
     /// no usable one. A non-positive or non-16-multiple length is treated as no usable announcement — the
     /// builder throws on such lengths, so the reducer never hands one down.
     /// </summary>
-    private bool TryReadCurrentAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats)
+    private bool TryReadCurrentAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats, out string phraseLabel)
     {
         phraseStartBeat = -1;
         phraseLengthBeats = -1;
-        if (controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats }
+        phraseLabel = null;
+        if (controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats } phrase
             && IsUsablePhraseLength(lengthBeats))
         {
             phraseStartBeat = beat + beatsUntilNext - lengthBeats;
             phraseLengthBeats = lengthBeats;
+            phraseLabel = phrase.label;
             return true;
         }
 
@@ -450,15 +461,17 @@ public sealed class Director
     }
 
     /// <summary>Reads the next Phrase announcement into an announcement identity, or returns false when there is no usable one.</summary>
-    private bool TryReadNextAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats)
+    private bool TryReadNextAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats, out string phraseLabel)
     {
         phraseStartBeat = -1;
         phraseLengthBeats = -1;
-        if (controller.beatManager.NextPhrase is { beatsUntilChange: { } beatsUntilChange, lengthBeats: { } lengthBeats }
+        phraseLabel = null;
+        if (controller.beatManager.NextPhrase is { beatsUntilChange: { } beatsUntilChange, lengthBeats: { } lengthBeats } nextPhrase
             && IsUsablePhraseLength(lengthBeats))
         {
             phraseStartBeat = beat + beatsUntilChange;
             phraseLengthBeats = lengthBeats;
+            phraseLabel = nextPhrase.label;
             return true;
         }
 
@@ -468,11 +481,12 @@ public sealed class Director
     private static bool IsUsablePhraseLength(int lengthBeats) =>
         lengthBeats > 0 && lengthBeats % CueSheet.GridBeats == 0;
 
-    private CueSheetSlot BuildSlot(string slot, string reason, int phraseStartBeat, int phraseLengthBeats)
+    private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseStartBeat, int phraseLengthBeats, string phraseLabel)
     {
         var sheet = CueSheet.Build(phraseLengthBeats, phraseStartBeat, phraseStartBeat);
-        Trace($"SHEET_BUILT slot={slot} reason={reason} start={phraseStartBeat} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
-        return new CueSheetSlot(true, sheet, phraseStartBeat, phraseLengthBeats);
+        Trace($"SHEET_BUILT slot={(slot == CueLogSlot.Current ? "current" : "next")} reason={(reason == CueLogBuildReason.Build ? "build" : "rebuild")} start={phraseStartBeat} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
+        cueLog?.SheetBuilt(slot, reason, phraseLabel, phraseStartBeat, phraseLengthBeats, sheet.CueMarkOffsets);
+        return new CueSheetSlot(true, sheet, phraseStartBeat, phraseLengthBeats, phraseLabel);
     }
 
     /// <summary>
@@ -514,6 +528,21 @@ public sealed class Director
         currentSlot.HasCueMarkAt(absoluteBeat) || nextSlot.HasCueMarkAt(absoluteBeat);
 
     /// <summary>
+    /// Resolves the display context (Phrase label, and the Cue Mark's Phrase-relative offset and Phrase
+    /// length) for an absolute Cue Mark beat by asking the slot that carries it. For the Cue Log view only;
+    /// the label and length are read straight off the live slot, never a stored verdict.
+    /// </summary>
+    private void ResolveCueContext(int absoluteBeat, out string phraseLabel, out int phraseRelativeOffset, out int phraseLength)
+    {
+        var slot = currentSlot.HasCueMarkAt(absoluteBeat) ? currentSlot
+            : nextSlot.HasCueMarkAt(absoluteBeat) ? nextSlot
+            : CueSheetSlot.Empty;
+        phraseLabel = slot.PhraseLabel;
+        phraseRelativeOffset = absoluteBeat - slot.PhraseStartBeat;
+        phraseLength = slot.PhraseLengthBeats;
+    }
+
+    /// <summary>
     /// Whether the loaded Cue is still workable, replayed from live state on the beat wake that observes a
     /// change (ADR-0011). Workable means the Cue's mark is still a real Cue Mark on the live sheets and still
     /// lies ahead of the current beat — read from the sheets and BeatManager, never a stored verdict. Whether
@@ -550,7 +579,21 @@ public sealed class Director
         // the Director offers fire-and-forget and never pre-checks the lock.
         if (IsLoadedCueWorkable(beat))
         {
-            Trace($"SYNC_CUE_KEEP beat={beat} loaded={switcher.LoadedCueStatus.CueMarkBeat} cueMark={cueMarkBeat}");
+            var kept = switcher.LoadedCueStatus;
+            Trace($"SYNC_CUE_KEEP beat={beat} loaded={kept.CueMarkBeat} cueMark={cueMarkBeat}");
+            if (cueLog != null)
+            {
+                ResolveCueContext(kept.CueMarkBeat, out var keptLabel, out var keptOffset, out var keptLength);
+                cueLog.CueKept(
+                    keptLabel,
+                    cueMarkBeat,
+                    kept.CueMarkBeat,
+                    keptOffset,
+                    keptLength,
+                    EffectName(kept.TargetEffectIndex),
+                    TransitionName(kept.TransitionIndex));
+            }
+
             return;
         }
 
@@ -563,7 +606,23 @@ public sealed class Director
             transitionCast.Index,
             controller.transitions[transitionCast.Index].Repertoire);
 
-        if (!switcher.UpsertLoadedCue(cue, CurrentSwitcherClockSnapshot(beat)))
+        var priorLoaded = switcher.LoadedCueStatus;
+        var accepted = switcher.UpsertLoadedCue(cue, CurrentSwitcherClockSnapshot(beat));
+        if (cueLog != null)
+        {
+            ResolveCueContext(cueMarkBeat, out var castLabel, out var castOffset, out var castLength);
+            cueLog.CueCast(
+                castLabel,
+                cueMarkBeat,
+                castOffset,
+                castLength,
+                EffectName(effectCast.Index),
+                TransitionName(transitionCast.Index),
+                ToCueFlavor(preferredRepertoire),
+                accepted);
+        }
+
+        if (!accepted)
         {
             // The Switcher alone owns commitment; a rejected offer commits nothing and touches no deck.
             Trace($"SYNC_CUE_REJECTED beat={beat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)}");
@@ -586,6 +645,39 @@ public sealed class Director
         StageNextChoices(currentEffectIndexForSelection);
         var loaded = switcher.LoadedCueStatus;
         Trace($"SYNC_CUE_SENT beat={beat} start={loaded.StartBeat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)} preferred={preferredRepertoire}");
+        if (cueLog != null)
+        {
+            ResolveCueContext(loaded.CueMarkBeat, out var loadedLabel, out var loadedOffset, out var loadedLength);
+            cueLog.CueLoaded(
+                loadedLabel,
+                loaded.CueMarkBeat,
+                loadedOffset,
+                loadedLength,
+                EffectName(loaded.TargetEffectIndex),
+                TransitionName(loaded.TransitionIndex),
+                loaded.StartBeat,
+                loaded.LockPointBeat,
+                loaded.RunwayBeats,
+                loaded.TailBeats,
+                priorLoaded.HasCue ? CueLogUpsert.Replaced : CueLogUpsert.New,
+                priorLoaded.HasCue ? priorLoaded.CueMarkBeat : (int?)null);
+        }
+    }
+
+    /// <summary>Maps the preferred casting Repertoire onto the Cue Log's Fill/Drop/None flavor vocabulary.</summary>
+    private static CueFlavor ToCueFlavor(Repertoire preferredRepertoire)
+    {
+        if ((preferredRepertoire & Repertoire.HandlesFill) != 0)
+        {
+            return CueFlavor.Fill;
+        }
+
+        if ((preferredRepertoire & Repertoire.HandlesDrop) != 0)
+        {
+            return CueFlavor.Drop;
+        }
+
+        return CueFlavor.None;
     }
 
     /// <summary>
