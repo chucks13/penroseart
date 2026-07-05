@@ -143,6 +143,50 @@ public sealed class DirectorReducerTests
         Assert.That(director.Status.CurrentSheet.HasSheet, Is.False);
     }
 
+    [Test]
+    public void ASameIdentitySuccessorGetsItsOwnNextSheetInsteadOfBeingSuppressed()
+    {
+        // Two consecutive Chorus/64 phrases are two real phrases on the wire. Instances are wrap ordinals, not
+        // names: the next slot is keyed to the coming instance, so the second Chorus gets its own next sheet
+        // even though it shares the current announcement's (label, length) — the case a name comparison collapses.
+        FeedBeat(beat: 660, phraseStartBeat: 600, phraseLengthBeats: 64, phraseLabel: "Chorus",
+            nextPhraseStartBeat: 664, nextPhraseLengthBeats: 64, nextPhraseLabel: "Chorus");
+
+        Assert.That(director.Status.NextSheet.HasSheet, Is.True, "The same-identity successor gets its own next sheet, not the empty slot a name guard leaves.");
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("Chorus"));
+        Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(64));
+
+        // The wrap promotes that real sheet to current; the emptied slot refills from the fresh next (Drop).
+        FeedBeat(beat: 664, phraseStartBeat: 664, phraseLengthBeats: 64, phraseLabel: "Chorus",
+            nextPhraseStartBeat: 728, nextPhraseLengthBeats: 16, nextPhraseLabel: "Drop");
+
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("Chorus"), "The wrap promotes the real Chorus sheet built for the coming instance.");
+        Assert.That(director.Status.CurrentSheet.PhraseLengthBeats, Is.EqualTo(64));
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("Drop"), "The emptied next slot refills for the next instance.");
+    }
+
+    [Test]
+    public void AWireEchoOfCurrentAsNextBuildsOneSheetReRolledOnTheRealAnnouncement()
+    {
+        // Accepted trade-off: when the wire briefly echoes the current phrase as next, the ordinal guard builds
+        // one sheet for the coming instance even though it duplicates the current (label, length). It is
+        // deterministic and idempotent, and the recast-on-change path re-rolls it the moment the lane changes.
+        FeedBeat(beat: 604, phraseStartBeat: 600, phraseLengthBeats: 16, phraseLabel: "A",
+            nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16, nextPhraseLabel: "A");
+
+        Assert.That(director.Status.NextSheet.HasSheet, Is.True, "The echo builds one next sheet for the coming instance.");
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("A"), "The one extra build carries the echoed identity.");
+
+        // The wire now announces the real next phrase; no wrap yet (the current countdown still descends), so the
+        // sheet for the coming instance is re-rolled in place to the real announcement.
+        FeedBeat(beat: 605, phraseStartBeat: 600, phraseLengthBeats: 16, phraseLabel: "A",
+            nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16, nextPhraseLabel: "B");
+
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("B"), "The recast-on-change path re-rolls the coming instance's slot to the real announcement.");
+        Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(16));
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("A"), "The current sheet is untouched through the echo and its correction.");
+    }
+
     // ---- Once-per-beat ---------------------------------------------------------------------------
 
     [Test]

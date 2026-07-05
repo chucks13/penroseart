@@ -93,21 +93,24 @@ public static class CueLogFormat
         string outgoingLabel,
         int outgoingLength,
         string incomingLabel,
-        int incomingLength) =>
-        $"PHRASE_TURNOVER {GridPosition(grid)} out={Announcement(outgoingLabel, outgoingLength)} in={Announcement(incomingLabel, incomingLength)}";
+        int incomingLength,
+        int instance) =>
+        $"PHRASE_TURNOVER {GridPosition(grid)} out={Announcement(outgoingLabel, outgoingLength)} in={Announcement(incomingLabel, incomingLength)} instance={instance}";
 
     /// <summary>
     /// Formats a <c>NEXT_PHRASE</c> line: the next-announcement identity changed against the previous
-    /// observation. <c>replaced=none</c> renders an announcement appearing after absence.
+    /// observation. <c>replaced=none</c> renders an announcement appearing after absence. <c>instance</c> is the
+    /// wrap ordinal the announced Phrase is tracked as (the coming instance the next slot is keyed to).
     /// </summary>
     public static string NextPhrase(
         GridInfo? grid,
         string newLabel,
         int newLength,
         string replacedLabel,
-        int? replacedLength) =>
+        int? replacedLength,
+        int instance) =>
         $"NEXT_PHRASE {GridPosition(grid)} next={Announcement(newLabel, newLength)}"
-        + $" replaced={(replacedLength is { } length ? Announcement(replacedLabel, length) : "none")}";
+        + $" replaced={(replacedLength is { } length ? Announcement(replacedLabel, length) : "none")} instance={instance}";
 
     /// <summary>Formats a <c>SHEET_BUILT</c> line for a build or rebuild landing in a slot (never promotion).</summary>
     public static string SheetBuilt(
@@ -300,20 +303,20 @@ public sealed class CueLog : IDisposable
         Write(CueLogFormat.SheetBuilt(slot, reason, gridProbe(), phrase, start, length, marks));
     }
 
-    /// <summary>Records an observed phrase-lane wrap, with both sides of the boundary — logged whether or not a sheet promotes.</summary>
-    public void PhraseTurnover(string outgoingLabel, int outgoingLength, string incomingLabel, int incomingLength)
+    /// <summary>Records an observed phrase-lane wrap, with both sides of the boundary and the incoming instance ordinal — logged whether or not a sheet promotes.</summary>
+    public void PhraseTurnover(string outgoingLabel, int outgoingLength, string incomingLabel, int incomingLength, int instance)
     {
-        Write(CueLogFormat.PhraseTurnover(gridProbe(), outgoingLabel, outgoingLength, incomingLabel, incomingLength));
+        Write(CueLogFormat.PhraseTurnover(gridProbe(), outgoingLabel, outgoingLength, incomingLabel, incomingLength, instance));
     }
 
     /// <summary>
     /// Records a next-announcement identity change observed on the lane itself (including appearing after
-    /// absence, rendered <c>replaced=none</c>) — independent of the sheet build, so a build the duplicate-current
-    /// guard suppresses still logs the change.
+    /// absence, rendered <c>replaced=none</c>), tagged with the coming instance the next slot is keyed to —
+    /// independent of the sheet build, so a build suppressed downstream still logs the change.
     /// </summary>
-    public void NextPhrase(string newLabel, int newLength, string replacedLabel, int? replacedLength)
+    public void NextPhrase(string newLabel, int newLength, string replacedLabel, int? replacedLength, int instance)
     {
-        Write(CueLogFormat.NextPhrase(gridProbe(), newLabel, newLength, replacedLabel, replacedLength));
+        Write(CueLogFormat.NextPhrase(gridProbe(), newLabel, newLength, replacedLabel, replacedLength, instance));
     }
 
     /// <summary>Records a Director cast offered to the Switcher, with the accept/reject answer.</summary>
