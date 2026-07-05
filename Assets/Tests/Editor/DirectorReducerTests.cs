@@ -161,9 +161,10 @@ public sealed class DirectorReducerTests
     [Test]
     public void AnInvalidPhraseLengthIsTreatedAsNoAnnouncementAndNeverThrows()
     {
-        // 20 is not a multiple of one Grid; the pure builder throws on such lengths, so the reducer must
-        // guard it as no usable announcement rather than catch the exception as flow control.
-        Assert.That(() => FeedBeat(beat: 604, phraseStartBeat: 600, phraseLengthBeats: 20), Throws.Nothing);
+        // A non-positive length is the only "no announcement" case left: the builder now accepts any positive
+        // length, so the reducer treats 0 (an absent or zero-length lane) as nothing to build rather than a
+        // length to roll — and the pure builder, which throws on <= 0, is never reached.
+        Assert.That(() => FeedBeat(beat: 604, phraseStartBeat: 600, phraseLengthBeats: 0), Throws.Nothing);
         Assert.That(director.Status.CurrentSheet.HasSheet, Is.False);
     }
 
@@ -277,20 +278,20 @@ public sealed class DirectorReducerTests
     [Test]
     public void AnIrregularPhraseStillCarriesItsBoundaryCueWithinTheGrid()
     {
-        // 13:26 replay: Intro/40 is not a Grid multiple, so no sheet is built and no marks exist. The one rule
-        // still holds — the phrase end carries a Cue. On the Grid wake that brings the boundary within one Grid
-        // (beatsUntilNext == 16), the boundary casts from live lane values: mark at beat 640, offset [40/40].
+        // 13:26 replay: Intro/40 is irregular, but it now builds the sheet [40] — a single mandatory end mark.
+        // The cast outcome is unchanged, reached via the carried-mark path: on the Grid wake that brings the
+        // Phrase end within one Grid (beatsUntilNext == 16), the carried mark 40 casts at beat 640, offset [40/40].
         var log = WireCueLogDirector();
 
         FeedBeat(beat: 623, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
-        Assert.That(director.Status.CurrentSheet.HasSheet, Is.False, "An irregular Phrase length builds no sheet.");
+        Assert.That(director.Status.CurrentSheet.HasSheet, Is.True, "An irregular Phrase length now builds a sheet of just its end mark.");
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "The mid-Grid join casts nothing.");
 
         FeedBeat(beat: 624, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
 
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(640), "The boundary Cue is minted at the Phrase-end beat.");
         StringAssert.Contains("cue=640[40/40]", log.ToString(), "The cast carries the boundary offset and announced length.");
-        StringAssert.Contains("phrase=\"Intro\"", log.ToString(), "Display context is lane-sourced; there is no slot to read.");
+        StringAssert.Contains("phrase=\"Intro\"", log.ToString(), "Display context is the sheet slot's label.");
     }
 
     [Test]
@@ -304,14 +305,15 @@ public sealed class DirectorReducerTests
 
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(624), "The boundary Cue is minted at the Phrase-end beat.");
         StringAssert.Contains("cue=624[24/24]", log.ToString(), "The cast carries the boundary offset and announced length.");
-        StringAssert.Contains("phrase=\"Up\"", log.ToString(), "Display context is lane-sourced; there is no slot to read.");
+        StringAssert.Contains("phrase=\"Up\"", log.ToString(), "Display context is the sheet slot's label.");
     }
 
     [Test]
     public void AnIrregularBoundaryFartherThanOneGridIsNotYetCast()
     {
-        // Accepted edge: with no sheet, the boundary is offered only once it lands within one Grid. A Grid wake
-        // still more than one Grid from the boundary (Intro/40, boundary 32 beats away) casts nothing.
+        // Accepted edge: Intro/40 builds [40], but at this wake the carried mark (position 8 + one Grid == 24)
+        // coincides with no sheet mark, and the lone end mark 40 is still two Grids out. Nothing casts until the
+        // boundary lands within one Grid.
         WireCueLogDirector();
 
         FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
@@ -334,6 +336,25 @@ public sealed class DirectorReducerTests
 
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The sheet's phrase-end mark casts unchanged.");
         StringAssert.Contains("cue=632[32/32]", log.ToString(), "The regular cast carries the sheet offset and length.");
+    }
+
+    [Test]
+    public void AnIrregularPhraseEndCastsOnTheReAnchoredFinalGrid()
+    {
+        // Chorus/56 is irregular: its sheet [16, 32, 56] ends on the Phrase end, and the wire re-anchors the grid
+        // there. On the final partial Grid the phrase countdown (8) is shorter than a full-Grid extrapolation
+        // (16), so the boundary read takes the countdown and the carried mark lands on the Phrase end rather than
+        // a flat Grid out. Position 48, gridBeat 1: the cast targets beat phraseStart + 56 == 656, offset [56/56].
+        var log = WireCueLogDirector();
+
+        FeedBeat(beat: 647, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 56, phraseLabel: "Chorus");
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(new[] { 16, 32, 56 }), "Setup: Chorus/56 carries marks [16, 32, 56].");
+
+        FeedBeat(beat: 648, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 56, phraseLabel: "Chorus");
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(656), "The re-anchored final Grid casts the Phrase-end mark (phraseStart + 56).");
+        StringAssert.Contains("cue=656[56/56]", log.ToString(), "The cast targets the Phrase end via the shorter phrase countdown, not a flat Grid out.");
+        StringAssert.Contains("phrase=\"Chorus\"", log.ToString(), "Display context is the sheet slot's label.");
     }
 
     // ---- Starvation guard ------------------------------------------------------------------------
@@ -390,29 +411,30 @@ public sealed class DirectorReducerTests
     }
 
     [Test]
-    public void AStarvedPhraseWithNoSheetStillReachesTheGuard()
+    public void AStarvedLoopingPhraseStillReachesTheGuard()
     {
-        // The guard is cause-agnostic: an irregular Phrase (no sheet, no marks) whose boundary the Grid never
-        // brings within reach — the DJ looping below it — starves the wall exactly like a looped sheet. The
-        // no-sheet boundary branch offers nothing while the boundary is far, so the wake falls through to the
-        // guard, which casts one Grid out from live lane values on the fourth starved wrap.
+        // The guard is cause-agnostic: a looping Phrase whose sheet carries no mark where the held position lands
+        // starves the wall exactly like a loop below a sheet's first mark. Outro/56 builds [32, 56]; the DJ loops
+        // it so the position holds at 0, and the carried mark (position + one Grid == 16) coincides with no sheet
+        // mark, so the loop never casts. Four Grid wraps pass with no accepted cast; on the fourth the guard casts
+        // one Grid out — beatsToMark 16, offset [16/56], lane-sourced Outro — so the wall changes on the 64th beat.
         var log = WireCueLogDirector();
 
-        FeedBeat(beat: 601, gridBeat: 16, phraseStartBeat: 601, phraseLengthBeats: 90, phraseLabel: "Outro");
-        Assert.That(director.Status.CurrentSheet.HasSheet, Is.False, "Setup: an irregular Phrase length builds no sheet.");
+        FeedBeat(beat: 601, gridBeat: 16, phraseStartBeat: 601, phraseLengthBeats: 56, phraseLabel: "Outro");
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(new[] { 32, 56 }), "Setup: Outro/56 carries marks [32, 56].");
 
-        FeedBeat(beat: 602, gridBeat: 1, phraseStartBeat: 602, phraseLengthBeats: 90, phraseLabel: "Outro");    // wrap 1
-        FeedBeat(beat: 603, gridBeat: 16, phraseStartBeat: 603, phraseLengthBeats: 90, phraseLabel: "Outro");
-        FeedBeat(beat: 604, gridBeat: 1, phraseStartBeat: 604, phraseLengthBeats: 90, phraseLabel: "Outro");    // wrap 2
-        FeedBeat(beat: 605, gridBeat: 16, phraseStartBeat: 605, phraseLengthBeats: 90, phraseLabel: "Outro");
-        FeedBeat(beat: 606, gridBeat: 1, phraseStartBeat: 606, phraseLengthBeats: 90, phraseLabel: "Outro");    // wrap 3
+        FeedBeat(beat: 602, gridBeat: 1, phraseStartBeat: 602, phraseLengthBeats: 56, phraseLabel: "Outro");    // wrap 1
+        FeedBeat(beat: 603, gridBeat: 16, phraseStartBeat: 603, phraseLengthBeats: 56, phraseLabel: "Outro");
+        FeedBeat(beat: 604, gridBeat: 1, phraseStartBeat: 604, phraseLengthBeats: 56, phraseLabel: "Outro");    // wrap 2
+        FeedBeat(beat: 605, gridBeat: 16, phraseStartBeat: 605, phraseLengthBeats: 56, phraseLabel: "Outro");
+        FeedBeat(beat: 606, gridBeat: 1, phraseStartBeat: 606, phraseLengthBeats: 56, phraseLabel: "Outro");    // wrap 3
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Three starved wraps do not yet reach the guard's ceiling.");
 
-        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 607, phraseLengthBeats: 90, phraseLabel: "Outro");
-        FeedBeat(beat: 608, gridBeat: 1, phraseStartBeat: 608, phraseLengthBeats: 90, phraseLabel: "Outro");    // wrap 4
+        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 607, phraseLengthBeats: 56, phraseLabel: "Outro");
+        FeedBeat(beat: 608, gridBeat: 1, phraseStartBeat: 608, phraseLengthBeats: 56, phraseLabel: "Outro");    // wrap 4
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(624), "The guard casts one Grid out even with no sheet to read.");
-        StringAssert.Contains("cue=624[16/90]", log.ToString(), "The guard cast reads offset, length, and label off the live lane.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(624), "The guard casts one Grid out, on the 64th beat after the last change.");
+        StringAssert.Contains("cue=624[16/56]", log.ToString(), "The guard cast carries beatsToMark 16 and the live offset and length.");
         StringAssert.Contains("phrase=\"Outro\"", log.ToString(), "Display context is lane-sourced.");
     }
 

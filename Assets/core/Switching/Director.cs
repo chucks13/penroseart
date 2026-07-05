@@ -619,8 +619,8 @@ public sealed class Director
     /// <summary>
     /// Reads this wake's next_phrase_state announcement identity for the next-announcement lane, or null when
     /// the wire announced no next Phrase — an absence the lane clears, so a later announcement reads as one
-    /// appearing after absence. Raw observation of the wire, unfiltered by the usability guard the sheet build
-    /// applies, so the lane logs the change even when no sheet is built.
+    /// appearing after absence. Raw observation of the wire, logged as the announcement changes; every positive
+    /// announced length — Grid-multiple or irregular — builds a sheet, so the lane and the sheet agree.
     /// </summary>
     private PhraseAnnouncement? ReadNextAnnouncement()
     {
@@ -650,7 +650,7 @@ public sealed class Director
         phraseLengthBeats = -1;
         phraseLabel = null;
         if (controller.beatManager.Phrase is { lengthBeats: { } lengthBeats } phrase
-            && IsUsablePhraseLength(lengthBeats))
+            && lengthBeats > 0)
         {
             phraseLengthBeats = lengthBeats;
             phraseLabel = phrase.label;
@@ -666,7 +666,7 @@ public sealed class Director
         phraseLengthBeats = -1;
         phraseLabel = null;
         if (controller.beatManager.NextPhrase is { lengthBeats: { } lengthBeats } nextPhrase
-            && IsUsablePhraseLength(lengthBeats))
+            && lengthBeats > 0)
         {
             phraseLengthBeats = lengthBeats;
             phraseLabel = nextPhrase.label;
@@ -675,9 +675,6 @@ public sealed class Director
 
         return false;
     }
-
-    private static bool IsUsablePhraseLength(int lengthBeats) =>
-        lengthBeats > 0 && lengthBeats % CueSheet.GridBeats == 0;
 
     private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseLengthBeats, string phraseLabel, int instance)
     {
@@ -769,10 +766,13 @@ public sealed class Director
 
         var position = lengthBeats - beatsUntilNext;
 
-        // The next Grid Boundary, read live off the grid lane: one Grid past this Boundary, less however far
-        // into the Grid a dropped One left us (16 - (gridBeat - 1)). Both the carried-mark path and the
-        // starvation guard target it — one boundary rule, computed once.
-        var beatsToBoundary = CueSheet.GridBeats - (gridBeat - 1);
+        // The next Grid Boundary, read live and wire-first: whichever the wire says comes first — the grid
+        // lane's next One (one Grid past this Boundary, less however far into the Grid a dropped One left us,
+        // 16 - (gridBeat - 1)) or the phrase lane's next downbeat. The wire re-anchors the grid at Phrase ends,
+        // so on an irregular Phrase's final partial Grid the Boundary arrives early; taking the min reads that
+        // re-anchor instead of extrapolating a full Grid. For regular Phrases at grid wakes the two agree. Both
+        // the carried-mark path and the starvation guard target it — one boundary rule, computed once.
+        var beatsToBoundary = Math.Min(CueSheet.GridBeats - (gridBeat - 1), beatsUntilNext);
 
         // No sheet was built (an irregular Phrase whose length is not a Grid multiple carries no marks), yet the
         // one rule still holds: the Phrase end carries a Cue. When the boundary lands within this Grid
