@@ -26,3 +26,6 @@
 
 # Agent scratch: purely local, never tracked.
 /.scratch/
+
+# Claude Code personal/local settings
+.claude/settings.local.json

@@ -6,6 +6,10 @@ Follow the existing creative-coding / installation-controller shape. Do not turn
 
 Navigation/editing: Serena first — activate Serena project `penroseart` before repo navigation or edits.
 
+## Session Startup (mandatory)
+
+Load these skills via the Skill tool before any other work, every session: `unity`, `csharp`, `matt-engineering`. This is a hard gate, also injected by the SessionStart hook in `.claude/settings.json`. Do not navigate, edit, compile, or test until all three are loaded.
+
 ## Agent instruction files
 
 `AGENTS.md` is the one physical root instruction file. `CLAUDE.md` and `GEMINI.md` are symlinks to it. Edit `AGENTS.md` directly.
@@ -42,7 +46,6 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 ## Development Philosophy
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
-- Unity generates .meta files. You do not need to create them.
 - Custom property drawers and inspectors are downstream debug views; runtime code must not be preserved just to keep them fed. They follow the runtime, not the reverse, and should be changed as needed.
 
 ## Simplicity and Hard Cuts
@@ -96,6 +99,19 @@ Start with these before adding new structures:
 
 ## Unity and Asset Rules
 
+- **Never launch Unity yourself** — not the GUI, not `Unity -batchmode`, not via Unity Hub.
+  A second Unity instance fails when the project is already open in the Editor (which it
+  usually is on this machine). The repo scripts handle this.
+- To compile: `scripts/unity-compile.sh`. To test: `scripts/unity-tests.sh` (uses the
+  open-Editor test bridge when Unity is running). Read diagnostics from the log paths
+  the scripts print, not from stdout.
+- `dotnet build`, Roslyn, and IDE/LSP diagnostics are not Unity compilation. Only the
+  scripts above validate a compile.
+- **Never create or edit `.meta` files.** Unity generates them on import; a hand-made
+  `.meta` has a bogus GUID and breaks serialized references. New files you create will
+  get their `.meta` on the next Editor import — leave them without one. Only when
+  moving, renaming, or deleting an existing asset, move/rename/delete its `.meta`
+  with it.
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
 - Do not treat Unity-generated files as stable hand-authored source.
 

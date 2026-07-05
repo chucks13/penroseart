@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'HARD GATE (penroseart startup skills): before any other tool call in this session, load these three skills via the Skill tool, in order: unity, csharp, matt-engineering. Repo navigation, edits, compiles, and tests are blocked until all three are loaded. This is mandatory project policy, not a suggestion.'",
+            "statusMessage": "Injecting mandatory startup skill gate"
+          }
+        ]
+      }
+    ]
+  }
+}
