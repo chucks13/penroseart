@@ -77,6 +77,38 @@ public static class CueLogFormat
     public static string Cue(int absoluteBeat, int phraseRelativeOffset, int phraseLength) =>
         $"{absoluteBeat}[{phraseRelativeOffset}/{phraseLength}]";
 
+    /// <summary>
+    /// Renders a Phrase announcement identity: <c>"&lt;label&gt;"/&lt;length&gt;</c>, or <c>?/&lt;length&gt;</c> when
+    /// the wire carried no label — the same unknown-label convention as <see cref="Phrase"/>.
+    /// </summary>
+    public static string Announcement(string label, int length) =>
+        $"{(string.IsNullOrEmpty(label) ? "?" : Quote(label))}/{length}";
+
+    /// <summary>
+    /// Formats a <c>PHRASE_TURNOVER</c> line: one observed phrase-lane wrap, carrying grid context and both
+    /// sides of the boundary. A same-(label, length) turnover reads plainly as its own line.
+    /// </summary>
+    public static string PhraseTurnover(
+        GridInfo? grid,
+        string outgoingLabel,
+        int outgoingLength,
+        string incomingLabel,
+        int incomingLength) =>
+        $"PHRASE_TURNOVER {GridPosition(grid)} out={Announcement(outgoingLabel, outgoingLength)} in={Announcement(incomingLabel, incomingLength)}";
+
+    /// <summary>
+    /// Formats a <c>NEXT_PHRASE</c> line: the next-announcement identity changed against the previous
+    /// observation. <c>replaced=none</c> renders an announcement appearing after absence.
+    /// </summary>
+    public static string NextPhrase(
+        GridInfo? grid,
+        string newLabel,
+        int newLength,
+        string replacedLabel,
+        int? replacedLength) =>
+        $"NEXT_PHRASE {GridPosition(grid)} next={Announcement(newLabel, newLength)}"
+        + $" replaced={(replacedLength is { } length ? Announcement(replacedLabel, length) : "none")}";
+
     /// <summary>Formats a <c>SHEET_BUILT</c> line for a build or rebuild landing in a slot (never promotion).</summary>
     public static string SheetBuilt(
         CueLogSlot slot,
@@ -266,6 +298,22 @@ public sealed class CueLog : IDisposable
     public void SheetBuilt(CueLogSlot slot, CueLogBuildReason reason, string phrase, int start, int length, IReadOnlyList<int> marks)
     {
         Write(CueLogFormat.SheetBuilt(slot, reason, gridProbe(), phrase, start, length, marks));
+    }
+
+    /// <summary>Records an observed phrase-lane wrap, with both sides of the boundary — logged whether or not a sheet promotes.</summary>
+    public void PhraseTurnover(string outgoingLabel, int outgoingLength, string incomingLabel, int incomingLength)
+    {
+        Write(CueLogFormat.PhraseTurnover(gridProbe(), outgoingLabel, outgoingLength, incomingLabel, incomingLength));
+    }
+
+    /// <summary>
+    /// Records a next-announcement identity change observed on the lane itself (including appearing after
+    /// absence, rendered <c>replaced=none</c>) — independent of the sheet build, so a build the duplicate-current
+    /// guard suppresses still logs the change.
+    /// </summary>
+    public void NextPhrase(string newLabel, int newLength, string replacedLabel, int? replacedLength)
+    {
+        Write(CueLogFormat.NextPhrase(gridProbe(), newLabel, newLength, replacedLabel, replacedLength));
     }
 
     /// <summary>Records a Director cast offered to the Switcher, with the accept/reject answer.</summary>
