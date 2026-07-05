@@ -678,7 +678,7 @@ public sealed class Director
 
     private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseLengthBeats, string phraseLabel, int instance)
     {
-        var sheet = CueSheet.Build(phraseLengthBeats, 0, SheetSeed(phraseLabel, phraseLengthBeats));
+        var sheet = CueSheet.Build(phraseLengthBeats, SheetSeed(phraseLabel, phraseLengthBeats));
         var displayStart = DisplaySheetStart(slot, phraseLengthBeats);
         Trace($"SHEET_BUILT slot={(slot == CueLogSlot.Current ? "current" : "next")} reason={(reason == CueLogBuildReason.Build ? "build" : "rebuild")} start={displayStart} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
         cueLog?.SheetBuilt(slot, reason, phraseLabel, displayStart, phraseLengthBeats, sheet.CueMarkOffsets);

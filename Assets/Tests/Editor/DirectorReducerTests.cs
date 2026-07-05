@@ -341,29 +341,29 @@ public sealed class DirectorReducerTests
     [Test]
     public void AWallStarvedPastSixtyFourBeatsCastsFromTheGuard()
     {
-        // 13:55 replay: a Chorus/96 sheet (marks [48, 80, 96]) is present, but the DJ loops the Phrase below its
-        // first mark, so the live position holds at 0 and the carried mark (position + 16 == 16) never lands on a
-        // mark. Four Grid wraps pass with no accepted cast; on the fourth the guard casts one Grid out —
-        // beatsToMark 16, offset [16/96], lane-sourced Chorus — so the wall changes on the 64th beat.
+        // 13:55 replay shape: a Break/96 sheet (marks [48, 80, 96]) is present, but the DJ loops the Phrase below
+        // its first mark, so the live position holds at 0 and the carried mark (position + 16 == 16) never lands
+        // on a mark. Four Grid wraps pass with no accepted cast; on the fourth the guard casts one Grid out —
+        // beatsToMark 16, offset [16/96], lane-sourced Break — so the wall changes on the 64th beat.
         var log = WireCueLogDirector();
 
-        // Build the current sheet, then loop: phraseStart tracks the beat so the position holds at 0 (Chorus/96).
-        FeedBeat(beat: 601, gridBeat: 16, phraseStartBeat: 601, phraseLengthBeats: 96, phraseLabel: "Chorus");
-        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(new[] { 48, 80, 96 }), "Setup: Chorus/96 carries marks [48, 80, 96].");
+        // Build the current sheet, then loop: phraseStart tracks the beat so the position holds at 0 (Break/96).
+        FeedBeat(beat: 601, gridBeat: 16, phraseStartBeat: 601, phraseLengthBeats: 96, phraseLabel: "Break");
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(new[] { 48, 80, 96 }), "Setup: Break/96 carries marks [48, 80, 96].");
 
-        FeedBeat(beat: 602, gridBeat: 1, phraseStartBeat: 602, phraseLengthBeats: 96, phraseLabel: "Chorus");   // wrap 1
-        FeedBeat(beat: 603, gridBeat: 16, phraseStartBeat: 603, phraseLengthBeats: 96, phraseLabel: "Chorus");
-        FeedBeat(beat: 604, gridBeat: 1, phraseStartBeat: 604, phraseLengthBeats: 96, phraseLabel: "Chorus");   // wrap 2
-        FeedBeat(beat: 605, gridBeat: 16, phraseStartBeat: 605, phraseLengthBeats: 96, phraseLabel: "Chorus");
-        FeedBeat(beat: 606, gridBeat: 1, phraseStartBeat: 606, phraseLengthBeats: 96, phraseLabel: "Chorus");   // wrap 3
+        FeedBeat(beat: 602, gridBeat: 1, phraseStartBeat: 602, phraseLengthBeats: 96, phraseLabel: "Break");   // wrap 1
+        FeedBeat(beat: 603, gridBeat: 16, phraseStartBeat: 603, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 604, gridBeat: 1, phraseStartBeat: 604, phraseLengthBeats: 96, phraseLabel: "Break");   // wrap 2
+        FeedBeat(beat: 605, gridBeat: 16, phraseStartBeat: 605, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 606, gridBeat: 1, phraseStartBeat: 606, phraseLengthBeats: 96, phraseLabel: "Break");   // wrap 3
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Three starved wraps do not yet reach the guard's ceiling.");
 
-        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 607, phraseLengthBeats: 96, phraseLabel: "Chorus");
-        FeedBeat(beat: 608, gridBeat: 1, phraseStartBeat: 608, phraseLengthBeats: 96, phraseLabel: "Chorus");   // wrap 4
+        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 607, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 608, gridBeat: 1, phraseStartBeat: 608, phraseLengthBeats: 96, phraseLabel: "Break");   // wrap 4
 
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(624), "The guard casts one Grid out, on the 64th beat after the last change.");
         StringAssert.Contains("cue=624[16/96]", log.ToString(), "The guard cast carries beatsToMark 16 and the live offset and length.");
-        StringAssert.Contains("phrase=\"Chorus\"", log.ToString(), "Display context is lane-sourced.");
+        StringAssert.Contains("phrase=\"Break\"", log.ToString(), "Display context is lane-sourced.");
     }
 
     [Test]
@@ -415,25 +415,25 @@ public sealed class DirectorReducerTests
     [Test]
     public void ASheetProvidingAtTheGuardCeilingCastsItsOwnMarkNotTheGuard()
     {
-        // The carried mark is checked before the guard, so a legal 64-gap sheet is never overridden. Drop/96's
+        // The carried mark is checked before the guard, so a legal 64-gap sheet is never overridden. Hook/96's
         // first mark sits a full four Grids (64 beats) past the Phrase start — the maximum legal gap — and lands
         // exactly on the wake the counter reaches four. That wake is mid-Grid (a dropped One, beatsToMark 8), so
         // the sheet's mark 64 differs from the guard's would-be offer (position 56 + 16 == 72): the cast must be
         // the sheet's.
         var log = WireCueLogDirector();
 
-        FeedBeat(beat: 500, gridBeat: 16, phraseStartBeat: 500, phraseLengthBeats: 96, phraseLabel: "Drop");    // build Drop/96 [64, 96]
-        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(new[] { 64, 96 }), "Setup: Drop/96's first mark is a full 64 beats out.");
+        FeedBeat(beat: 500, gridBeat: 16, phraseStartBeat: 500, phraseLengthBeats: 96, phraseLabel: "Hook");    // build Hook/96 [64, 96]
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(new[] { 64, 96 }), "Setup: Hook/96's first mark is a full 64 beats out.");
 
-        FeedBeat(beat: 516, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Drop");     // wrap 1, position 0
-        FeedBeat(beat: 531, gridBeat: 16, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Drop");
-        FeedBeat(beat: 532, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Drop");     // wrap 2, position 16
-        FeedBeat(beat: 547, gridBeat: 16, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Drop");
-        FeedBeat(beat: 548, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Drop");     // wrap 3, position 32
+        FeedBeat(beat: 516, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 1, position 0
+        FeedBeat(beat: 531, gridBeat: 16, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");
+        FeedBeat(beat: 532, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 2, position 16
+        FeedBeat(beat: 547, gridBeat: 16, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");
+        FeedBeat(beat: 548, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 3, position 32
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Three starved wraps pass; none lands on mark 64.");
 
-        FeedBeat(beat: 563, gridBeat: 16, phraseStartBeat: 508, phraseLengthBeats: 96, phraseLabel: "Drop");
-        FeedBeat(beat: 564, gridBeat: 9, phraseStartBeat: 508, phraseLengthBeats: 96, phraseLabel: "Drop");     // wrap 4, position 56, mark 64 is 8 out
+        FeedBeat(beat: 563, gridBeat: 16, phraseStartBeat: 508, phraseLengthBeats: 96, phraseLabel: "Hook");
+        FeedBeat(beat: 564, gridBeat: 9, phraseStartBeat: 508, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 4, position 56, mark 64 is 8 out
 
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(572), "The carried mark 64 casts 8 beats out (564 + 8), not the guard's 16.");
         StringAssert.Contains("cue=572[64/96]", log.ToString(), "The sheet's own mark 64 casts, not the guard's position + 16.");
