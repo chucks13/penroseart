@@ -218,9 +218,9 @@ _Avoid_: treating the anchor as a new clock source; it is an interpretation of i
 The Director's ongoing effort to keep Performer changes aligned to the Grid Anchor. It is not a one-time startup sync — the Director keeps reading, coasting, and re-anchoring as the musical data changes.
 _Avoid_: assuming the wall is either perfectly synced or unsynced forever; grid sync is continuously maintained.
 
-**Grid Confidence**:
-How much to trust where the one sits on the 16-beat Grid this frame, expressed as the three `GridSyncState` values: **Locked** (offset freshly anchored or steadily dead-reckoned — the one is trusted), **Coasting** (no fresh anchor, e.g. Track Phase dropped out, so the last good offset is held), and **Contradicted** (a freshly derived offset disagreed with the held one, kept pending the next clean re-latch). Effects read it as `BeatManager.Grid.Confidence`; all three are *on-grid* readings with a valid Grid Count — they differ only in trust. Confidence is about the evidence for where the one is, not how good the visual looks. Losing the clock is **not** a low-confidence value — it is a Standalone Mode exit, surfaced as a null `BeatManager.Grid`, not a fourth state.
-_Avoid_: describing Grid Confidence as a five-level evidence ladder (retired); conflating it with the **Timing Frame** source/reason (which kind of target the next cue aims at — Cue Mark, Track Phase Boundary, Synthetic Phrase, Grid Fallback, Coast); treating Coasting or Contradicted as off-grid.
+**Grid State**:
+How much to trust where the one sits on the 16-beat Grid this frame, expressed as the three `GridState` values (the wire's `state`): **Locked** (offset freshly anchored or steadily dead-reckoned — the one is trusted), **Coasting** (no fresh anchor, e.g. Track Phase dropped out, so the last good offset is held), and **Disputed** (a freshly derived offset disagreed with the held one, kept pending the next clean re-latch). Effects read it as `BeatManager.Grid.State`; all three are *on-grid* readings with a valid Grid Beat — they differ only in trust. State is about the evidence for where the one is, not how good the visual looks. Losing the clock is **not** a low-trust value — it is a Standalone Mode exit, surfaced as a null `BeatManager.Grid`, not a fourth state. Wire vocabulary is law at the surface: this lane keeps RaveSystem's own `state` words; the BeatManager boundary types and validates them, never re-words them.
+_Avoid_: describing Grid State as a five-level evidence ladder (retired); conflating it with the **Timing Frame** source/reason (which kind of target the next cue aims at — Cue Mark, Track Phase Boundary, Synthetic Phrase, Grid Fallback, Coast); treating Coasting or Disputed as off-grid.
 
 **Coast**:
 Continuing on the last known Grid Anchor when Track Phase data temporarily disappears. Coasting preserves the last musical grid until fresh phrase data returns or no anchor has ever been known.
@@ -326,12 +326,12 @@ _Avoid_: calling every bar downbeat a Grid Boundary; a Grid Boundary is the 16-b
 A Grid Boundary chosen as a transition target by the current implementation. In domain language, prefer **Cue Mark** for the Phrase-level plan; the important concept is that the mark belongs to the Grid and a Transition's local Impact Point hits it.
 _Avoid_: using Selected Grid Boundary as the canonical name for Cue Sheet items; calling it an Impact Point or treating it as Transition Completion.
 
-**Grid Count**:
-The wall's 1-based count within the current Grid. A 4-beat Runway begins at count 13 so the Impact Point lands on the next Grid Boundary: `13, 14, 15, 16, X`.
+**Grid Beat**:
+The wall's 1-based grid beat within the current Grid (the wire's `beat`, 1..16). A 4-beat Runway begins at grid beat 13 so the Impact Point lands on the next Grid Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
 **`BeatManager.Grid` (`GridInfo`)**:
-The effect-facing read of the live **Grid**: a nullable `GridInfo { Confidence, Count, Progress }` (null = not on a grid). `Confidence` is the **Grid Confidence** `GridSyncState`; `Count` is the 1..16 **Grid Count**; `Progress` is the 0..1 position through the 16-beat Grid. The Director owns the `GridSync` and publishes its reading into BeatManager once per frame; effects read only this facade, never the Switching layer. `GridInfo` is deliberately named to stand clear of the phrase-window `PhraseInfo` (the **Track Phase** read); these were once the one-letter twin `PhaseInfo`/`PhraseInfo`, and renaming the cyclic side to **Grid** is what resolved that collision.
+The effect-facing read of the live **Grid**: a nullable `GridInfo { State, Beat, Progress }` (null = not on a grid). `State` is the **Grid State** `GridState`; `Beat` is the 1..16 **Grid Beat**; `Progress` is the 0..1 position through the 16-beat Grid. The Director owns the `GridSync` and publishes its reading into BeatManager once per frame; effects read only this facade, never the Switching layer. `GridInfo` is deliberately named to stand clear of the phrase-window `PhraseInfo` (the **Track Phase** read); these were once the one-letter twin `PhaseInfo`/`PhraseInfo`, and renaming the cyclic side to **Grid** is what resolved that collision.
 _Avoid_: reaching into `Director`/`GridSync` from an effect; treating a null `Grid` as an error rather than "not on a grid right now".
 
 **Fill**:

@@ -268,11 +268,11 @@ public readonly struct LoopInfo
 
 /// <summary>
 /// How much to trust where the one sits this frame, sourced from RaveSystem's source-computed
-/// <c>timing_grid</c> confidence vocabulary. All three values are on-grid readings with a valid Count;
-/// they differ only in how much to trust the held offset (see CONTEXT.md "Grid Confidence"). Losing the
+/// <c>timing_grid</c> state vocabulary. All three values are on-grid readings with a valid grid beat;
+/// they differ only in how much to trust the held offset (see CONTEXT.md "Grid State"). Losing the
 /// clock is not a low-confidence value here — it surfaces as a null <see cref="BeatManager.Grid"/>.
 /// </summary>
-public enum GridConfidence
+public enum GridState
 {
     /// <summary>The grid is freshly anchored and trusted.</summary>
     Locked,
@@ -291,18 +291,18 @@ public enum GridConfidence
 /// </summary>
 /// <remarks>
 /// Returned by <see cref="BeatManager.Grid"/>; null there means the wall is not on the grid right now
-/// (Standalone floor, the clock gone, or no usable grid on the wire). All three <see cref="Confidence"/>
-/// values are on-grid readings with a valid <see cref="Count"/> — they differ only in how much to trust the
+/// (Standalone floor, the clock gone, or no usable grid on the wire). All three <see cref="State"/>
+/// values are on-grid readings with a valid <see cref="Beat"/> — they differ only in how much to trust the
 /// held offset. Formerly one letter from the phrase-window <see cref="PhraseInfo"/> twin; ADR-0009 renamed
 /// this cyclic side (PhaseInfo→GridInfo) to end the collision, keeping the phrase side.
 /// </remarks>
 public readonly struct GridInfo
 {
     /// <summary>How much to trust where the one sits this frame: Locked, Coasting, or Disputed.</summary>
-    public readonly GridConfidence Confidence;
+    public readonly GridState State;
 
-    /// <summary>Canonical Grid Count: where this frame sits on the 16-beat grid, 1..16.</summary>
-    public readonly int Count;
+    /// <summary>Canonical grid beat (wire <c>beat</c>): where this frame sits on the 16-beat grid, 1..16.</summary>
+    public readonly int Beat;
 
     /// <summary>Which bar of the 16-beat grid this frame sits in, 1..4.</summary>
     public readonly int Bar;
@@ -310,10 +310,10 @@ public readonly struct GridInfo
     /// <summary>Position through the 16-beat Grid in [0..1], smoothed by the intra-beat fraction.</summary>
     public readonly float Progress;
 
-    public GridInfo(GridConfidence confidence, int count, int bar, float progress)
+    public GridInfo(GridState state, int beat, int bar, float progress)
     {
-        Confidence = confidence;
-        Count = count;
+        State = state;
+        Beat = beat;
         Bar = bar;
         Progress = progress;
     }
@@ -711,7 +711,7 @@ public partial class BeatManager
     /// The live 16-beat Grid, or null when the wall is not on the grid (Standalone floor, the clock gone, or
     /// no usable <c>timing_grid</c> on the wire). Wire-fed from RaveSystem's source-computed <c>timing_grid</c>
     /// lane; <see cref="GridInfo.Progress"/> is enriched here with <see cref="IntraBeatFraction"/>, the sub-beat
-    /// clock only BeatManager holds, so the fraction and the wire count share one <c>beatData.snapshot</c>.
+    /// clock only BeatManager holds, so the fraction and the wire beat share one <c>beatData.snapshot</c>.
     /// </summary>
     public GridInfo? Grid
     {
@@ -726,13 +726,13 @@ public partial class BeatManager
             }
 
             var timingGrid = data.snapshot.timingGrid;
-            if (timingGrid.beat < 1 || !TryParseGridConfidence(timingGrid.state, out var confidence))
+            if (timingGrid.beat < 1 || !TryParseGridState(timingGrid.state, out var gridState))
             {
                 return null;
             }
 
             var progress = Mathf.Clamp01(((timingGrid.beat - 1) + IntraBeatFraction()) / 16f);
-            return new GridInfo(confidence, timingGrid.beat, timingGrid.bar, progress);
+            return new GridInfo(gridState, timingGrid.beat, timingGrid.bar, progress);
         }
     }
 
@@ -1093,29 +1093,29 @@ public partial class BeatManager
     /// <summary>
     /// Parses RaveSystem's <c>timing_grid</c> state string against the closed Locked/Coasting/Disputed
     /// vocabulary, case-insensitively. Empty or unrecognized fails the parse so an unknown state reads as
-    /// no usable grid (null) rather than a wrong confidence.
+    /// no usable grid (null) rather than a wrong state.
     /// </summary>
-    private static bool TryParseGridConfidence(string? state, out GridConfidence confidence)
+    private static bool TryParseGridState(string? state, out GridState gridState)
     {
         if (string.Equals(state, "locked", StringComparison.OrdinalIgnoreCase))
         {
-            confidence = GridConfidence.Locked;
+            gridState = GridState.Locked;
             return true;
         }
 
         if (string.Equals(state, "coasting", StringComparison.OrdinalIgnoreCase))
         {
-            confidence = GridConfidence.Coasting;
+            gridState = GridState.Coasting;
             return true;
         }
 
         if (string.Equals(state, "disputed", StringComparison.OrdinalIgnoreCase))
         {
-            confidence = GridConfidence.Disputed;
+            gridState = GridState.Disputed;
             return true;
         }
 
-        confidence = default;
+        gridState = default;
         return false;
     }
 }

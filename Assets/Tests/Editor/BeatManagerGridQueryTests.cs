@@ -52,7 +52,7 @@ public sealed class BeatManagerGridQueryTests
     }
 
     [Test]
-    public void GridSurfacesCountBarConfidenceAndProgress()
+    public void GridSurfacesBeatBarStateAndProgress()
     {
         var beatManager = CreateLiveBeatManager();
         SetGrid(beatManager, beat: 5, bar: 2, state: "locked");
@@ -60,8 +60,8 @@ public sealed class BeatManagerGridQueryTests
         var grid = beatManager.Grid;
 
         Assert.That(grid, Is.Not.Null);
-        Assert.That(grid!.Value.Confidence, Is.EqualTo(GridConfidence.Locked));
-        Assert.That(grid.Value.Count, Is.EqualTo(5));
+        Assert.That(grid!.Value.State, Is.EqualTo(GridState.Locked));
+        Assert.That(grid.Value.Beat, Is.EqualTo(5));
         Assert.That(grid.Value.Bar, Is.EqualTo(2));
         // (5 - 1 + 0.5 intra-beat) / 16
         Assert.That(grid.Value.Progress, Is.EqualTo(0.28125f).Within(0.0001f));
@@ -70,14 +70,14 @@ public sealed class BeatManagerGridQueryTests
     [Test]
     public void CoastingAndDisputedParseCaseInsensitively()
     {
-        // All three states are on-grid readings with a valid Count; they differ only in trust.
+        // All three states are on-grid readings with a valid grid beat; they differ only in trust.
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 8, 2, "coasting");
-        Assert.That(beatManager.Grid?.Confidence, Is.EqualTo(GridConfidence.Coasting));
+        Assert.That(beatManager.Grid?.State, Is.EqualTo(GridState.Coasting));
 
         SetGrid(beatManager, 8, 2, "DISPUTED");
-        Assert.That(beatManager.Grid?.Confidence, Is.EqualTo(GridConfidence.Disputed));
+        Assert.That(beatManager.Grid?.State, Is.EqualTo(GridState.Disputed));
     }
 
     [Test]
@@ -89,13 +89,13 @@ public sealed class BeatManagerGridQueryTests
         Assert.That(beatManager.Grid, Is.Null, "An empty state is no usable grid.");
 
         SetGrid(beatManager, 5, 2, "wobbling");
-        Assert.That(beatManager.Grid, Is.Null, "An unrecognized state never becomes a wrong confidence.");
+        Assert.That(beatManager.Grid, Is.Null, "An unrecognized state never becomes a wrong state.");
     }
 
     [Test]
     public void GridIsNullWhenBeatIsBelowOne()
     {
-        // "-1 -1 coasting": a valid state string but no placed count reads as no grid.
+        // "-1 -1 coasting": a valid state string but no placed beat reads as no grid.
         var beatManager = CreateLiveBeatManager();
         SetGrid(beatManager, beat: -1, bar: -1, state: "coasting");
 
@@ -103,32 +103,32 @@ public sealed class BeatManagerGridQueryTests
     }
 
     [Test]
-    public void CountStaysWithinTheSixteenBeatGridAndProgressWithinUnit()
+    public void BeatStaysWithinTheSixteenBeatGridAndProgressWithinUnit()
     {
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 1, 1, "locked");
-        Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(1));
+        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(1));
         Assert.That(beatManager.Grid!.Value.Progress, Is.EqualTo(0.03125f).Within(0.0001f)); // (0 + 0.5) / 16
         Assert.That(beatManager.Grid!.Value.Progress, Is.InRange(0f, 1f));
 
         SetGrid(beatManager, 16, 4, "locked");
-        Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(16));
+        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(16));
         Assert.That(beatManager.Grid!.Value.Progress, Is.EqualTo(0.96875f).Within(0.0001f)); // (15 + 0.5) / 16
         Assert.That(beatManager.Grid!.Value.Progress, Is.InRange(0f, 1f));
     }
 
     [Test]
-    public void GridReflectsTheLatestWireCountSoABeatRewindSelfCorrects()
+    public void GridReflectsTheLatestWireBeatSoABeatRewindSelfCorrects()
     {
-        // No latching: a loop (a beat rewind within a phrase) lowers the wire count and the query reflects
-        // it immediately rather than holding the higher count.
+        // No latching: a loop (a beat rewind within a phrase) lowers the wire beat and the query reflects
+        // it immediately rather than holding the higher beat.
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 14, 4, "locked");
-        Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(14));
+        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(14));
 
         SetGrid(beatManager, 2, 1, "locked");
-        Assert.That(beatManager.Grid!.Value.Count, Is.EqualTo(2));
+        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(2));
     }
 }
