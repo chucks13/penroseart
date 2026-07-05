@@ -367,6 +367,29 @@ public sealed class DirectorReducerTests
     }
 
     [Test]
+    public void AStarvationGuardCastFromAMidGridWakeStillLandsOnTheGridBoundary()
+    {
+        // Same starved loop as above, but the fourth wake is a dropped One (the grid lane lands on 9, not 1).
+        // The guard targets the same live beatsToBoundary the carried path does — 16 - (9 - 1) = 8 — so its
+        // cast lands on the true Grid Boundary (608 + 8 = 616), never a flat Grid past a mid-Grid wake.
+        var log = WireCueLogDirector();
+
+        FeedBeat(beat: 601, gridBeat: 16, phraseStartBeat: 601, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 602, gridBeat: 1, phraseStartBeat: 602, phraseLengthBeats: 96, phraseLabel: "Break");   // wake 1
+        FeedBeat(beat: 603, gridBeat: 16, phraseStartBeat: 603, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 604, gridBeat: 1, phraseStartBeat: 604, phraseLengthBeats: 96, phraseLabel: "Break");   // wake 2
+        FeedBeat(beat: 605, gridBeat: 16, phraseStartBeat: 605, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 606, gridBeat: 1, phraseStartBeat: 606, phraseLengthBeats: 96, phraseLabel: "Break");   // wake 3
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Three starved wakes do not yet reach the guard's ceiling.");
+
+        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 607, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 608, gridBeat: 9, phraseStartBeat: 608, phraseLengthBeats: 96, phraseLabel: "Break");   // wake 4, dropped One
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(616), "The guard casts at the true next Boundary (608 + 8), not a flat Grid out.");
+        StringAssert.Contains("cue=616[8/96]", log.ToString(), "The guard cast carries the live beatsToBoundary and offset.");
+    }
+
+    [Test]
     public void AStarvedPhraseWithNoSheetStillReachesTheGuard()
     {
         // The guard is cause-agnostic: an irregular Phrase (no sheet, no marks) whose boundary the Grid never
