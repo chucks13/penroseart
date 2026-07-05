@@ -101,10 +101,4 @@ public readonly struct CueSheet
             return state;
         }
     }
-
-    /// <summary>Translates a Phrase-relative Cue Mark offset to its current absolute on-air beat.</summary>
-    public int ToAbsoluteBeat(int phraseStartBeat, int cueMarkOffset)
-    {
-        return phraseStartBeat + cueMarkOffset;
-    }
 }
