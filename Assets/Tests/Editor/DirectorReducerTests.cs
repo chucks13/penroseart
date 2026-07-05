@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
@@ -246,6 +247,70 @@ public sealed class DirectorReducerTests
         FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32);
 
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
+    }
+
+    // ---- Irregular-phrase boundary Cue ------------------------------------------------------------
+
+    [Test]
+    public void AnIrregularPhraseStillCarriesItsBoundaryCueWithinTheGrid()
+    {
+        // 13:26 replay: Intro/40 is not a Grid multiple, so no sheet is built and no marks exist. The one rule
+        // still holds — the phrase end carries a Cue. On the Grid wake that brings the boundary within one Grid
+        // (beatsUntilNext == 16), the boundary casts from live lane values: mark at beat 640, offset [40/40].
+        var log = WireCueLogDirector();
+
+        FeedBeat(beat: 623, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
+        Assert.That(director.Status.CurrentSheet.HasSheet, Is.False, "An irregular Phrase length builds no sheet.");
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "The mid-Grid join casts nothing.");
+
+        FeedBeat(beat: 624, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(640), "The boundary Cue is minted at the Phrase-end beat.");
+        StringAssert.Contains("cue=640[40/40]", log.ToString(), "The cast carries the boundary offset and announced length.");
+        StringAssert.Contains("phrase=\"Intro\"", log.ToString(), "Display context is lane-sourced; there is no slot to read.");
+    }
+
+    [Test]
+    public void AShortIrregularPhraseCarriesItsBoundaryCue()
+    {
+        // Up/24, the other 13:26 shape: boundary at beat 624, cast on the Grid wake at 608 (beatsUntilNext == 16).
+        var log = WireCueLogDirector();
+
+        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 24, phraseLabel: "Up");
+        FeedBeat(beat: 608, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 24, phraseLabel: "Up");
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(624), "The boundary Cue is minted at the Phrase-end beat.");
+        StringAssert.Contains("cue=624[24/24]", log.ToString(), "The cast carries the boundary offset and announced length.");
+        StringAssert.Contains("phrase=\"Up\"", log.ToString(), "Display context is lane-sourced; there is no slot to read.");
+    }
+
+    [Test]
+    public void AnIrregularBoundaryFartherThanOneGridIsNotYetCast()
+    {
+        // Accepted edge: with no sheet, the boundary is offered only once it lands within one Grid. A Grid wake
+        // still more than one Grid from the boundary (Intro/40, boundary 32 beats away) casts nothing.
+        WireCueLogDirector();
+
+        FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
+        FeedBeat(beat: 608, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 40, phraseLabel: "Intro");
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "A boundary more than one Grid away is not yet cast.");
+    }
+
+    [Test]
+    public void ARegularPhraseStillCastsFromItsSheetNotTheBoundaryBranch()
+    {
+        // Regular phrases have sheets by cast time, so the no-sheet boundary branch is unreachable for them: the
+        // 32-beat Phrase still casts its sheet's mandatory end mark exactly as before, with slot-sourced context.
+        var log = WireCueLogDirector();
+
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        Assert.That(director.Status.CurrentSheet.HasSheet, Is.True, "A regular Phrase length builds a sheet.");
+
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The sheet's phrase-end mark casts unchanged.");
+        StringAssert.Contains("cue=632[32/32]", log.ToString(), "The regular cast carries the sheet offset and length.");
     }
 
     // ---- Lazy, preference-based casting -----------------------------------------------------------
@@ -659,6 +724,28 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.EqualTo(hadCueBefore), "A track-count jump casts nothing; only a new Grid casts.");
         Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBefore), "A track-count jump rotates no deck.");
         Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckBefore));
+    }
+
+    // Builds a fresh Switcher+Director pipeline whose Director owns a Cue Log writing to the returned buffer, so
+    // a test can read the frozen CUE_CAST grammar (offset/length and lane-sourced phrase) the Switcher seam does
+    // not expose. gridProbe is null (grid=off), which the asserted cue= and phrase= tokens do not depend on.
+    private StringWriter WireCueLogDirector()
+    {
+        var log = new StringWriter();
+        var cueLog = new CueLog(() => log, () => null, ownsWriter: false);
+        switcher = new Switcher(controller, controller.effects, controller.transitions);
+        switcher.SetInitialEffect(0, controller.currentTransition);
+        controller.switcher = switcher;
+        director = new Director(
+            controller,
+            switcher,
+            controller.timer,
+            new[] { 0, 1, 2, 3 },
+            new[] { 0, 1, 2 },
+            controller.currentTransition,
+            cueLog);
+        controller.director = director;
+        return log;
     }
 
     // Builds a fresh Switcher+Director pipeline, feeds a next-Grid Drop scenario carrying the given energy-lane
