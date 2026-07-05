@@ -31,6 +31,10 @@ Cue Sheet identity and ownership are unchanged: identity is still the Phrase's t
 
 The length-identity reuse from the 2026-07-01 amendment (`CueSheet.Matches`, the cursor reanchor) is deleted. With `next_phrase_state` always on the OSC v2 wire, the CuePlanner builds a fresh Cue Sheet on every phrase change — same-length turnover included — and the upcoming window uses the true next-phrase length instead of guessing it from the current length (ADR-0010). Ownership is unchanged: identity is still the Phrase's beat length, planning still lives in the CuePlanner, and the Switcher still owns cue lifecycle.
 
+## Amendment 2026-07-05 — planning machinery superseded by ADR-0011
+
+The CuePlanner and its lifecycle amendments above (2026-07-01's one-live-sheet rules, 2026-07-04's rebuild-per-phrase-change) are superseded by the wire-change Director: two announcement-keyed Cue Sheet slots (current and next) repaired on every beat, marks empty until Cast at Grid entry, and no pass-local consumption memory — the Director records no decisions. This ADR's ownership split is what survives and still governs: the Cue Sheet is a Phrase timing plan holding no Effect/Transition choices, the Director casts one Cue at a time and sends it fire-and-forget, and the Switcher alone owns Loaded → Locked → Executing.
+
 ## Considered options
 
 - **Keep Selected Phase Boundary planning as the canonical model** — rejected because the name makes a Phrase-level cue plan sound like a Phase implementation detail, and it encourages transition timing mechanics to leak back into the Director.

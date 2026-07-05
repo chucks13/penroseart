@@ -1,5 +1,7 @@
 # On-Air Timing is a Phase determiner; PhaseLock holds the one and Phrase wins the grid
 
+_Superseded: the determiner half by ADR-0010 (2026-07-04), the CuePlanner half by ADR-0011 (2026-07-05)._
+
 `OnAirTiming.cs` tangles a universal job — determining Phase, "where is the one" on the 16-beat grid — with a Director job: Cue Sheet planning (`CueSheetPlans`, `CueSheetCursor`, and pass-local cue memory round-tripped through the Director every frame). We split them. On-Air Timing becomes a **pure Phase determiner** exposed as two deep modules: a reusable **PhaseLock** core that answers where the one is, and a **PhraseTracker** that rides on it for song structure. Cue Sheet planning moves out to a Director-owned **CuePlanner** (relocating the derivation ADR-0005 placed in On-Air Timing). The full operational design lives in the companion doc `docs/architecture-reviews/on-air-timing-redesign-2026-06-24.html`; this ADR records the decisions and why.
 
 ## Status
@@ -61,3 +63,7 @@ The cyclic 16-beat "Phase" vocabulary in this ADR was renamed to "Grid" (PhaseLo
 ## Amendment 2026-07-04 — the determiner is superseded by ADR-0010
 
 GridSync (the held-offset determiner) and PhraseTracker are deleted: OSC v2 broadcasts a source-computed `timing_grid` and always-present `phrase_state`/`next_phrase_state`, so the wall reads grid and phrase truth off the wire instead of determining them (ADR-0010). This ADR's other half stands — On-Air Timing's Cue Sheet derivation still lives in the Director-owned CuePlanner, now fed by a five-integer `OnAirTimingInput` mapping `BeatManager.Phrase`/`NextPhrase` rather than the deleted `GridReading`/`PhraseTrackerReading` seam.
+
+## Amendment 2026-07-05 — the remaining half is superseded by ADR-0011
+
+The Director-owned CuePlanner and its planning machinery (window derivation, cue cursor, cadence gate, pass-local cue memory) are deleted by ADR-0011: sheet building becomes a pure constraint-based function inside the wire-change Director, and the change cadence becomes a sheet-construction rule. Nothing of this ADR remains active; it is kept for the record of why the determiner and planner existed.

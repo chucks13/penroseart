@@ -17,3 +17,7 @@ Effect *rendering* already chooses between Standalone behavior (self-running whe
 ## Amendment 2026-06-19
 
 We refined the Switcher consequence from Director-supplied progress/completion to fire-and-forget execution: the Director still owns musical timing and start decisions, but the Mechanical Switcher owns transition progress, Tail completion, B promotion, and last-command-wins replacement after `StartTransition`. We also clarified the Transition timing contract as non-negative Runway/Tail with `Runway + Tail <= 12`, including zero/zero hard cuts. This keeps the original Director/Switcher split while removing the shallow completion/progress seam that let mechanical execution leak into musical planning.
+
+## Amendment 2026-07-05 — cadence details updated by ADR-0011
+
+The split this ADR made is unchanged and remains the governing shape. Two Synced Mode details are superseded: the Director now wakes once per new beat rather than being "polled every frame", and it reads musical truth only from BeatManager, never incoming OSC directly. The 16-beat minimum between Performer changes survives as a Cue Sheet construction constraint (minimum Cue Mark gap) rather than a runtime cadence check.
