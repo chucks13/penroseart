@@ -31,11 +31,18 @@ public readonly struct TransitionBeatPlan
     }
 
     /// <summary>
-    /// Whether this beat can start the plan: any beat from Runway start through completion.
-    /// A start after the Runway begins is late; the Switcher backdates its progress from the Cue Mark.
+    /// Beat the plan locks: one beat before the Runway start. From the Lock Point on, the loaded cue
+    /// fires as-is; the Director's last chance to commit or change it is the beat before.
     /// </summary>
-    public bool IsCueBeat(int beat)
+    public int LockPointBeat => StartBeat - 1;
+
+    /// <summary>
+    /// Whether a cue for this plan can still commit on this beat: strictly before the Lock Point.
+    /// A later commit does not cue at all — the Switcher never starts a transition behind its plan,
+    /// so progress always runs forward from the Start Beat (no backdating, no accidental hard cut).
+    /// </summary>
+    public bool CanCommitAt(int beat)
     {
-        return beat >= StartBeat && beat <= CompleteBeat;
+        return beat < LockPointBeat;
     }
 }

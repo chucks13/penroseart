@@ -121,8 +121,8 @@ public sealed class SwitcherExecutionTests
             transitionIndex: 1,
             transitionRepertoire: hardCutTransition.Repertoire);
 
-        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(9, 0f, 0.5f, 10f));
-        var buffer = switcher.RenderAtTime(10.5f, out _);
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10f));
+        var buffer = switcher.RenderAtTime(11f, out _);
 
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1));
@@ -131,26 +131,22 @@ public sealed class SwitcherExecutionTests
     }
 
     [Test]
-    public void LoadedCueStartsAndBackdatesWhenExactStartBeatWasMissed()
+    public void CueArrivingAtOrPastItsLockPointIsRejected()
     {
-        var tailedRepertoire = TransitionRepertoire.FromRunwayAndTail(
-            RepertoireFlags.None,
-            runwayBeats: 1,
-            tailBeats: 3,
-            TransitionShape.Blend,
-            TransitionIntensity.Medium,
-            defaultDurationSeconds: 4f);
         var cue = new SwitcherCueDirection(
             cueMarkBeat: 10,
             targetEffectIndex: 1,
             transitionIndex: 0,
-            transitionRepertoire: tailedRepertoire);
+            transitionRepertoire: transition.Repertoire);
 
-        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(10, 0f, 0.5f, 12f));
-        switcher.RenderAtTime(12f, out _);
+        // Runway 1 puts the Lock Point on beat 8: a cue arriving on it is already too late.
+        switcher.UpsertLoadedCue(cue, new SwitcherClockSnapshot(8, 0f, 0.5f, 10f));
+        var buffer = switcher.RenderAtTime(12f, out _);
 
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
-        Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0.25f).Within(0.001f));
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
+        Assert.That(buffer[0], Is.EqualTo(Color.red));
     }
 
     [Test]

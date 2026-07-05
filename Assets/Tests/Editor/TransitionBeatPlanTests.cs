@@ -23,17 +23,16 @@ public sealed class TransitionBeatPlanTests
     [TestCase(1, 11)]
     [TestCase(11, 1)]
     [TestCase(0, 0)]
-    public void CueWindowSpansStartThroughComplete(int runwayBeats, int tailBeats)
+    public void CommitWindowClosesAtTheLockPoint(int runwayBeats, int tailBeats)
     {
         var plan = TransitionBeatPlan.FromCueMark(609, TransitionRepertoireFor(runwayBeats, tailBeats));
-        var firstCueBeat = 609 - runwayBeats;
-        var lastCueBeat = 609 + tailBeats;
+        var lockPointBeat = 609 - runwayBeats - 1;
 
-        Assert.That(plan.IsCueBeat(firstCueBeat - 1), Is.False);
-        Assert.That(plan.IsCueBeat(firstCueBeat), Is.True);
-        Assert.That(plan.IsCueBeat(609), Is.True, "The Impact Point is always inside the cue window.");
-        Assert.That(plan.IsCueBeat(lastCueBeat), Is.True);
-        Assert.That(plan.IsCueBeat(lastCueBeat + 1), Is.False);
+        Assert.That(plan.LockPointBeat, Is.EqualTo(lockPointBeat));
+        Assert.That(plan.CanCommitAt(lockPointBeat - 1), Is.True);
+        Assert.That(plan.CanCommitAt(lockPointBeat), Is.False, "The Lock Point itself is too late to commit.");
+        Assert.That(plan.CanCommitAt(plan.StartBeat), Is.False);
+        Assert.That(plan.CanCommitAt(609), Is.False, "The Impact Point is far too late to commit.");
     }
 
     private static TransitionRepertoire TransitionRepertoireFor(int runwayBeats, int tailBeats)
