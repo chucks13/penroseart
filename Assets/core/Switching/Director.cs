@@ -153,6 +153,11 @@ public sealed class Director
         (previous, current) => previous is { } beat && beat >= 1 && current < beat,
         clearOnAbsence: false);
 
+    // Any upward roll of the countdown is a turnover, deliberately unguarded: a DJ looping a section rolls
+    // the countdown back up mid-phrase, and the wall treats that as the boundary it looks like on the wire.
+    // Phantom instances during loops are accepted cosmetics — sheets self-heal on the announcement check and
+    // the starvation guard floors any stillness — so no monotonicity or near-boundary guard belongs here
+    // (live evidence: the 2026-07-05 session logs, where a looped 16-beat section sawtoothed the countdown).
     private readonly LaneMemory<PhraseLaneObservation> phraseLane = new LaneMemory<PhraseLaneObservation>(
         (previous, current) => previous is { } last && current.BeatsUntilNext > last.BeatsUntilNext,
         clearOnAbsence: true);

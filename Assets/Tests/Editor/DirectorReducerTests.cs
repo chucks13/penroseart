@@ -136,6 +136,29 @@ public sealed class DirectorReducerTests
     }
 
     [Test]
+    public void AnUpwardCountdownRollMidPhraseIsATurnoverByDesign()
+    {
+        // The phrase lane fires on any upward roll of the countdown, with no monotonicity or near-boundary
+        // guard: a DJ looping a section rolls the countdown back up mid-phrase, and that roll IS a turnover —
+        // the instance increments and a PHRASE_TURNOVER logs with identical sides. This pins the accepted
+        // phantom-instance cosmetic (live evidence: 2026-07-05 session logs) so a future "fix" cannot silently
+        // add the wobble-suppression guard the design deliberately omits.
+        var log = WireCueLogDirector();
+
+        // Mid-phrase in a Chorus/96: countdown 86, far from any boundary.
+        FeedBeat(beat: 610, phraseStartBeat: 600, phraseLengthBeats: 96, gridBeat: 11, phraseLabel: "Chorus");
+        Assert.That(log.ToString(), Does.Not.Contain("PHRASE_TURNOVER"), "Setup: no turnover before the roll.");
+
+        // The DJ jumps the loop back: two beats later the countdown reads higher (86 -> 100).
+        FeedBeat(beat: 612, phraseStartBeat: 616, phraseLengthBeats: 96, gridBeat: 13, phraseLabel: "Chorus");
+
+        Assert.That(
+            log.ToString(),
+            Does.Contain("PHRASE_TURNOVER").And.Contain("out=\"Chorus\"/96 in=\"Chorus\"/96 instance=1"),
+            "An upward countdown roll mid-phrase fires a turnover with identical sides — the accepted phantom instance.");
+    }
+
+    [Test]
     public void AnInvalidPhraseLengthIsTreatedAsNoAnnouncementAndNeverThrows()
     {
         // 20 is not a multiple of one Grid; the pure builder throws on such lengths, so the reducer must
