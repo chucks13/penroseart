@@ -172,15 +172,18 @@ public sealed class Director
     // that share an identity apart.
     private int phraseInstance;
 
-    // Consecutive Grid wraps observed with no accepted cast — a counted wake in the same shape as
-    // phraseInstance, incremented at the Grid wake, never read from a beat. It resets to zero on any accepted
-    // Cue offer (the wall is committed to change) and with reducer memory.
-    private int wrapsSinceCast;
+    // Consecutive Grid-lane wakes with no accepted cast — a counted wake in the same shape as
+    // phraseInstance, incremented at the Grid wake, never read from a beat. Any backward grid move is a wake
+    // (a true 16-to-1 wrap, a dropped One, a DJ scrub), deliberately: four starved cast opportunities in a row
+    // mean a starved wall whatever caused the wakes, so under heavy scrubbing the guard may fire earlier than
+    // 64 real beats — accepted; backsteps can only bring the floor forward, never delay it. It resets to zero
+    // on any accepted Cue offer (the wall is committed to change) and with reducer memory.
+    private int starvedWakes;
 
     // The sheet builder's own law is a Cue Mark at least every four Grids; the guard restates that ceiling in
     // live time. The count resets at the accepted offer and the wall changes one Grid later, so the wakes at
     // +16/+32/+48/+64 read 1/2/3/4 — the fourth stands 48 beats past the last change and targets the 64th beat.
-    private const int StarvationWrapCeiling = 4;
+    private const int StarvationWakeCeiling = 4;
 
     private CueSheetSlot currentSlot = CueSheetSlot.Empty;
     private CueSheetSlot nextSlot = CueSheetSlot.Empty;
@@ -753,9 +756,9 @@ public sealed class Director
             return;
         }
 
-        // A wrap the wall has not yet answered: count it. Any accepted offer below resets the count, so it holds
-        // the consecutive starved wraps the starvation guard reads.
-        wrapsSinceCast++;
+        // A wake the wall has not yet answered: count it. Any accepted offer below resets the count, so it holds
+        // the consecutive starved wakes the starvation guard reads.
+        starvedWakes++;
 
         // The Phrase, read live: its position in the Phrase is length - beatsUntilNext. Both the carried-mark
         // path and the no-sheet boundary path need it, so it is read once here.
@@ -798,12 +801,12 @@ public sealed class Director
 
         // Starvation guard, last in the cast path: the sheet's carried mark (above) and the music's boundary
         // (the no-sheet branch) both get first refusal, so this fires only when neither offered this wake. When
-        // the starved wraps reach the ceiling the one rule still holds in live time — offer a Cue one Grid out
+        // the starved wakes reach the ceiling the one rule still holds in live time — offer a Cue one Grid out
         // from live lane values (beatsToMark one Grid, offset position + one Grid, display context off the
         // phrase lane), so the wall never freezes past four Grids. A rejected offer leaves the count and the
         // guard retries next wake; a legal 64-gap sheet's own carried mark arrives at this same wake and is
         // taken above, so a sheet that provides is never overridden.
-        if (wrapsSinceCast >= StarvationWrapCeiling)
+        if (starvedWakes >= StarvationWakeCeiling)
         {
             OfferCue(position + CueSheet.GridBeats, CueSheet.GridBeats, phrase.label, lengthBeats);
         }
@@ -857,7 +860,7 @@ public sealed class Director
         // over. A rejected offer leaves it, and the guard retries next wake.
         if (answer == CueUpsertResult.Kept || answer == CueUpsertResult.Loaded)
         {
-            wrapsSinceCast = 0;
+            starvedWakes = 0;
         }
 
         if (answer == CueUpsertResult.Kept)
@@ -1045,7 +1048,7 @@ public sealed class Director
         phraseLane.Forget();
         nextAnnouncementLane.Forget();
         phraseInstance = 0;
-        wrapsSinceCast = 0;
+        starvedWakes = 0;
     }
 
     private DirectorStatus BuildStatus()
