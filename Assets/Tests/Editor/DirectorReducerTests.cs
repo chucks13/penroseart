@@ -83,7 +83,6 @@ public sealed class DirectorReducerTests
 
         var sheet = director.Status.CurrentSheet;
         Assert.That(sheet.HasSheet, Is.True);
-        Assert.That(sheet.PhraseStartBeat, Is.EqualTo(600));
         Assert.That(sheet.PhraseLengthBeats, Is.EqualTo(32));
         Assert.That(sheet.CueMarkOffsets, Does.Contain(32), "The mandatory final Cue Mark always sits on the Phrase end.");
     }
@@ -98,7 +97,7 @@ public sealed class DirectorReducerTests
         // sheet: it is keyed to the announcement it was built from and only rebuilds when absent.
         FeedBeat(beat: 605, phraseStartBeat: 599, phraseLengthBeats: 32);
 
-        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(600), "The current sheet rides its original announcement.");
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("Phrase"), "The current sheet rides its original announcement.");
         Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(builtOffsets), "Wobble on an unchanged announcement never re-rolls a sheet.");
     }
 
@@ -106,7 +105,7 @@ public sealed class DirectorReducerTests
     public void AChangedNextAnnouncementRebuildsTheNextSheetWhileAnUnchangedOneDoesNot()
     {
         FeedBeat(beat: 604, phraseStartBeat: 600, phraseLengthBeats: 32, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 32);
-        Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(632));
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("Next"));
         Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32));
         var firstNextOffsets = (int[])director.Status.NextSheet.CueMarkOffsets.Clone();
 
@@ -125,14 +124,14 @@ public sealed class DirectorReducerTests
         // Labels rotate as the wire would across a real boundary: the Phrase announced as next ("B") becomes
         // the current Phrase after turnover, and a fresh next ("C") is announced.
         FeedBeat(beat: 610, phraseStartBeat: 600, phraseLengthBeats: 16, nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16, phraseLabel: "A", nextPhraseLabel: "B");
-        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(600), "Setup: current sheet is the 600 Phrase.");
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("A"), "Setup: current sheet is the A Phrase.");
 
         // Beat 616 is the current Phrase's end (its countdown wraps): the next sheet becomes current and the
         // emptied slot refills.
         FeedBeat(beat: 616, phraseStartBeat: 616, phraseLengthBeats: 16, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 16, phraseLabel: "B", nextPhraseLabel: "C");
 
-        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(616), "Turnover promotes next to current.");
-        Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(632), "The emptied next slot refills by the same check.");
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("B"), "Turnover promotes next (B) to current.");
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("C"), "The emptied next slot refills (C) by the same check.");
     }
 
     [Test]
@@ -538,7 +537,6 @@ public sealed class DirectorReducerTests
         // never change. Identity is the announced (label, length), so the wobble re-rolls nothing.
         FeedBeat(beat: 100, phraseStartBeat: 96, phraseLengthBeats: 32, nextPhraseStartBeat: 129, nextPhraseLengthBeats: 32);
         var builtOffsets = (int[])director.Status.NextSheet.CueMarkOffsets.Clone();
-        var builtStart = director.Status.NextSheet.PhraseStartBeat;
         Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32), "Setup: next built from the 32-beat announcement.");
 
         var flipFlop = new[] { 130, 129, 130, 129, 130, 129 };
@@ -546,7 +544,7 @@ public sealed class DirectorReducerTests
         {
             FeedBeat(beat: 101 + i, phraseStartBeat: 96, phraseLengthBeats: 32, nextPhraseStartBeat: flipFlop[i], nextPhraseLengthBeats: 32);
             Assert.That(director.Status.NextSheet.CueMarkOffsets, Is.EqualTo(builtOffsets), "A skewing countdown on an unchanged announcement never re-rolls the next sheet.");
-            Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(builtStart), "The next sheet rides its captured anchor through the wobble.");
+            Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("Next"), "The next sheet rides its announced identity through the wobble.");
         }
     }
 
@@ -557,7 +555,7 @@ public sealed class DirectorReducerTests
         // (label, length) change rebuilds the next sheet only; the current sheet and any loaded cue are
         // untouched (no Grid begins during the flap, so nothing is offered).
         FeedBeat(beat: 604, gridBeat: 6, phraseStartBeat: 600, phraseLengthBeats: 64, nextPhraseStartBeat: 664, nextPhraseLengthBeats: 32, nextPhraseLabel: "Chorus");
-        var currentStart = director.Status.CurrentSheet.PhraseStartBeat;
+        var currentOffsets = (int[])director.Status.CurrentSheet.CueMarkOffsets.Clone();
         Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32), "Setup: next announced as the 32-beat Chorus.");
 
         // Park an unlocked loaded cue directly in the Switcher; the flap must not touch it.
@@ -572,7 +570,7 @@ public sealed class DirectorReducerTests
         FeedBeat(beat: 606, gridBeat: 8, phraseStartBeat: 600, phraseLengthBeats: 64, nextPhraseStartBeat: 664, nextPhraseLengthBeats: 32, nextPhraseLabel: "Chorus");
         Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32), "The flap back rebuilds next to the 32-beat Chorus.");
 
-        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(currentStart), "The flap never disturbs the current sheet.");
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(currentOffsets), "The flap never disturbs the current sheet.");
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(900), "The flap never disturbs the loaded cue.");
         Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBefore), "The flap rotates no deck.");
     }
@@ -584,15 +582,39 @@ public sealed class DirectorReducerTests
         // countdown reaches its boundary on beat 616 — the beat it "would hit 0" is beat 1 of the next Phrase —
         // so the next sheet shifts to current and the emptied slot refills.
         FeedBeat(beat: 610, phraseStartBeat: 600, phraseLengthBeats: 16, nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16, phraseLabel: "A", nextPhraseLabel: "B");
-        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(600), "Setup: current is the 600 Phrase.");
-        Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(616), "Setup: next is the 616 Phrase.");
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("A"), "Setup: current is the A Phrase.");
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("B"), "Setup: next is the B Phrase.");
 
         FeedBeat(beat: 616, phraseStartBeat: 616, phraseLengthBeats: 16, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 16, phraseLabel: "B", nextPhraseLabel: "C");
 
-        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(616), "The wrap promotes next to current with no end-beat arithmetic.");
-        Assert.That(director.Status.CurrentSheet.PhraseEndBeat, Is.EqualTo(632), "The promoted sheet's final Cue Mark is the next Phrase's first beat.");
-        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Does.Contain(16), "The mandatory final Cue Mark sits on the Phrase end.");
-        Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(632), "The emptied next slot refills by the same check.");
+        Assert.That(director.Status.CurrentSheet.PhraseLabel, Is.EqualTo("B"), "The wrap promotes next to current with no end-beat arithmetic.");
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Does.Contain(16), "The mandatory final Cue Mark sits on the Phrase end (offset == length).");
+        Assert.That(director.Status.NextSheet.PhraseLabel, Is.EqualTo("C"), "The emptied next slot refills by the same check.");
+    }
+
+    [Test]
+    public void ATrackCountJumpWithStableLanesChangesNothing()
+    {
+        // The Director watches the five lanes and does no timing of its own: a jump in the track's own beat
+        // count, with every watched lane holding (same Grid count, same phrase and next announcements, same
+        // countdowns), is not an event. Nothing rebuilds, promotes, or casts.
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 64);
+        var currentOffsets = (int[])director.Status.CurrentSheet.CueMarkOffsets.Clone();
+        var nextOffsets = (int[])director.Status.NextSheet.CueMarkOffsets.Clone();
+        var effectDeckBefore = (int[])controller.effectDeck.Clone();
+        var transitionDeckBefore = (int[])controller.transitionDeck.Clone();
+        var hadCueBefore = switcher.LoadedCueStatus.HasCue;
+
+        // snapshot.beat leaps 616 -> 700, but a compensating phraseStart keeps every derived lane identical:
+        // Grid count 1, phrase countdown 16 (length 32), next countdown 16 (length 64), same labels. A second
+        // clock reading the track count would project a spurious phrase wrap here and re-roll the next sheet.
+        FeedBeat(beat: 700, gridBeat: 1, phraseStartBeat: 684, phraseLengthBeats: 32, nextPhraseStartBeat: 716, nextPhraseLengthBeats: 64);
+
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Is.EqualTo(currentOffsets), "A track-count jump with stable lanes never re-rolls or promotes the current sheet.");
+        Assert.That(director.Status.NextSheet.CueMarkOffsets, Is.EqualTo(nextOffsets), "A track-count jump with stable lanes never re-rolls the next sheet.");
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.EqualTo(hadCueBefore), "A track-count jump casts nothing; only a new Grid casts.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBefore), "A track-count jump rotates no deck.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckBefore));
     }
 
     // Builds a fresh Switcher+Director pipeline, feeds a next-Grid Drop scenario carrying the given energy-lane

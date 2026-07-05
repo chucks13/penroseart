@@ -19,7 +19,6 @@ using UnityEngine;
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
 {
-    private static readonly Color CurrentBeatColor = new Color(1f, 0.9f, 0.35f);
     private static readonly Color CueMarkColor = new Color(0.25f, 0.95f, 1f);
 
     private static bool showDirectorObservatory = false;
@@ -99,11 +98,11 @@ public sealed class ControllerEditor : Editor
     private static void DrawCueSheets(DirectorStatus status)
     {
         EditorGUILayout.LabelField("CUE SHEETS", EditorStyles.boldLabel);
-        DrawCueSheet("Current", status.CurrentSheet, status.CurrentBeat);
-        DrawCueSheet("Next", status.NextSheet, status.CurrentBeat);
+        DrawCueSheet("Current", status.CurrentSheet);
+        DrawCueSheet("Next", status.NextSheet);
     }
 
-    private static void DrawCueSheet(string label, CueSheetView cueSheet, int currentBeat)
+    private static void DrawCueSheet(string label, CueSheetView cueSheet)
     {
         if (!cueSheet.HasSheet)
         {
@@ -111,7 +110,10 @@ public sealed class ControllerEditor : Editor
             return;
         }
 
-        DrawRow(label, $"{FormatBeat(cueSheet.PhraseStartBeat)} → {FormatBeat(cueSheet.PhraseEndBeat)} · {cueSheet.PhraseLengthBeats}b");
+        var identity = string.IsNullOrEmpty(cueSheet.PhraseLabel)
+            ? $"{cueSheet.PhraseLengthBeats}b"
+            : $"\"{cueSheet.PhraseLabel}\" · {cueSheet.PhraseLengthBeats}b";
+        DrawRow(label, identity);
 
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.PrefixLabel("Cue Marks");
@@ -119,8 +121,7 @@ public sealed class ControllerEditor : Editor
         var offsets = cueSheet.CueMarkOffsets ?? System.Array.Empty<int>();
         foreach (var offset in offsets)
         {
-            var absoluteBeat = cueSheet.PhraseStartBeat + offset;
-            GUI.backgroundColor = absoluteBeat == currentBeat ? CurrentBeatColor : CueMarkColor;
+            GUI.backgroundColor = CueMarkColor;
             GUILayout.Label(FormatCueSheetOffset(offset, cueSheet.PhraseLengthBeats), EditorStyles.miniButton, GUILayout.MinWidth(44f));
         }
 
