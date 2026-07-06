@@ -85,6 +85,47 @@ public sealed class CueLogFormatTests
     }
 
     [Test]
+    public void PhraseTurnoverLineHasTheAgreedShape()
+    {
+        Assert.That(
+            CueLogFormat.PhraseTurnover(GridAt13, outgoingLabel: "Chorus", outgoingLength: 64, incomingLabel: "Drop", incomingLength: 16),
+            Is.EqualTo("PHRASE_TURNOVER grid=13/16 bar=4 out=\"Chorus\"/64 in=\"Drop\"/16"));
+    }
+
+    [Test]
+    public void PhraseTurnoverMakesASameAnnouncementWrapPlainlyVisible()
+    {
+        // The two-Chorus case: a wrap between two Chorus/64 phrases is its own line, both sides identical.
+        Assert.That(
+            CueLogFormat.PhraseTurnover(GridAt1, outgoingLabel: "Chorus", outgoingLength: 64, incomingLabel: "Chorus", incomingLength: 64),
+            Is.EqualTo("PHRASE_TURNOVER grid=1/16 bar=1 out=\"Chorus\"/64 in=\"Chorus\"/64"));
+    }
+
+    [Test]
+    public void NextPhraseLineHasTheAgreedShapeForAReplacement()
+    {
+        Assert.That(
+            CueLogFormat.NextPhrase(GridAt1, newLabel: "Drop", newLength: 16, replacedLabel: "Chorus", replacedLength: 64),
+            Is.EqualTo("NEXT_PHRASE grid=1/16 bar=1 next=\"Drop\"/16 replaced=\"Chorus\"/64"));
+    }
+
+    [Test]
+    public void NextPhraseRendersReplacedNoneWhenAppearingAfterAbsence()
+    {
+        Assert.That(
+            CueLogFormat.NextPhrase(GridAt1, newLabel: "Chorus", newLength: 64, replacedLabel: null, replacedLength: null),
+            Is.EqualTo("NEXT_PHRASE grid=1/16 bar=1 next=\"Chorus\"/64 replaced=none"));
+    }
+
+    [Test]
+    public void AnnouncementRendersUnknownLabelAsQuestionMark()
+    {
+        // House style: a missing label collapses to ? (never empty quotes), like Phrase(null) => phrase=?.
+        Assert.That(CueLogFormat.Announcement(null, 64), Is.EqualTo("?/64"));
+        Assert.That(CueLogFormat.Announcement(string.Empty, 64), Is.EqualTo("?/64"));
+    }
+
+    [Test]
     public void GridPositionRendersOffWhenOffTheGrid()
     {
         var line = CueLogFormat.CueCast(grid: null, "chorus", 632, 32, 64, "RingsOfFire", "Sweep", CueFlavor.None, accepted: true);
@@ -304,11 +345,40 @@ public sealed class CueLogSeamTests
         Assert.That(lockLines.Single(), Does.Contain($"lockedAt={loaded.LockPointBeat} via=beat"));
     }
 
+    [Test]
+    public void TheTwoChorusPhraseShapeLogsBothLanesAsFirstClassEvents()
+    {
+        // The 12:44 session shape the frozen five missed: two consecutive Chorus/64 phrases, then a Drop. The
+        // second Chorus is announced as next (a NEXT_PHRASE), the two Choruses wrap into each other (a
+        // PHRASE_TURNOVER whose sides are identical), and the Drop is then announced (another NEXT_PHRASE).
+        FeedBeat(beat: 660, phraseStartBeat: 600, phraseLengthBeats: 64, phraseLabel: "Chorus",
+            nextPhraseStartBeat: 664, nextPhraseLengthBeats: 64, nextPhraseLabel: "Chorus");
+        FeedBeat(beat: 664, phraseStartBeat: 664, phraseLengthBeats: 64, phraseLabel: "Chorus",
+            nextPhraseStartBeat: 728, nextPhraseLengthBeats: 16, nextPhraseLabel: "Drop");
+
+        Assert.That(
+            lines.Any(l => l.Contains("NEXT_PHRASE") && l.Contains("next=\"Chorus\"/64 replaced=none")),
+            Is.True,
+            "The second Chorus announced as next is a NEXT_PHRASE, even though its sheet build is the duplicate-current guard's to suppress.");
+        Assert.That(
+            lines.Any(l => l.Contains("PHRASE_TURNOVER") && l.Contains("out=\"Chorus\"/64 in=\"Chorus\"/64")),
+            Is.True,
+            "The wrap between the two Choruses is a PHRASE_TURNOVER, plainly visible with identical sides.");
+        Assert.That(
+            lines.Any(l => l.Contains("NEXT_PHRASE") && l.Contains("next=\"Drop\"/16 replaced=\"Chorus\"/64")),
+            Is.True,
+            "The Drop announced as next is a NEXT_PHRASE replacing the Chorus.");
+    }
+
     private void FeedBeat(
         int beat,
         int phraseStartBeat,
         int phraseLengthBeats,
-        int gridBeat = -1)
+        int gridBeat = -1,
+        int? nextPhraseStartBeat = null,
+        int? nextPhraseLengthBeats = null,
+        string phraseLabel = "Phrase",
+        string nextPhraseLabel = "Next")
     {
         var snapshot = controller.beatManager.beatData.snapshot;
         snapshot.bpm = 120f;
@@ -319,12 +389,14 @@ public sealed class CueLogSeamTests
             : TimingGrid.Unavailable;
         snapshot.phraseState = new PhraseState
         {
-            label = "Phrase",
+            label = phraseLabel,
             countBeats = phraseStartBeat + phraseLengthBeats - beat,
             lengthBeats = phraseLengthBeats,
             irregular = 0,
         };
-        snapshot.nextPhraseState = LabeledCountdown.Unavailable;
+        snapshot.nextPhraseState = nextPhraseStartBeat is { } nextStart && nextPhraseLengthBeats is { } nextLength
+            ? new LabeledCountdown { label = nextPhraseLabel, countBeats = nextStart - beat, lengthBeats = nextLength }
+            : LabeledCountdown.Unavailable;
         snapshot.dropState = CountdownState.Unavailable;
         snapshot.fillState = CountdownState.Unavailable;
         snapshot.energyState = LabeledCountdown.Unavailable;

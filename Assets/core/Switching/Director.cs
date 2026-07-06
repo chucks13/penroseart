@@ -144,16 +144,22 @@ public sealed class Director
     private bool nextEffectIsManualSelection;
     private bool nextTransitionIsManualSelection;
 
-    // Lane-observation memory — the only clocks the reducer keeps, both lane readings and never the track's
-    // absolute beat. lastGridBeat is the previous 16-count so a new Grid is read as the count moving backwards
-    // (a wrap), never as equality with 1; a repeated observation of the same count is not a new Grid. A cast
-    // wakes on this count changing, not on BeatManager.Beat.
-    private int lastGridBeat = -1;
+    // Lane-observation memory — the only clocks the reducer keeps, all lane readings and never the track's
+    // absolute beat. Each lane owns its own change rule (grid count wrapping backwards, phrase countdown rolling
+    // upward, next-announcement identity changing) and reports whether that change fired this wake; the reducer
+    // wakes its cast and turnover on these, never on BeatManager.Beat. Observation only — it feeds wrap
+    // detection and the Cue Log, and never invents a decision the sheet-repair and cast paths do not already make.
+    private readonly LaneMemory<int> gridLane = new LaneMemory<int>(
+        (previous, current) => previous is { } beat && beat >= 1 && current < beat,
+        clearOnAbsence: false);
 
-    // Phrase-lane turnover memory. The phrase_state countdown counts down toward its boundary; the observed
-    // count jumping back up is the wrap (turnover), the same shape as lastGridBeat. -1 means the lane has not
-    // been observed yet. No projection from elapsed track beats decides the turnover.
-    private int lastPhraseBeatsUntilNext = -1;
+    private readonly LaneMemory<PhraseLaneObservation> phraseLane = new LaneMemory<PhraseLaneObservation>(
+        (previous, current) => previous is { } last && current.BeatsUntilNext > last.BeatsUntilNext,
+        clearOnAbsence: true);
+
+    private readonly LaneMemory<PhraseAnnouncement> nextAnnouncementLane = new LaneMemory<PhraseAnnouncement>(
+        (previous, current) => !(previous is { } last) || !last.Equals(current),
+        clearOnAbsence: true);
 
     private CueSheetSlot currentSlot = CueSheetSlot.Empty;
     private CueSheetSlot nextSlot = CueSheetSlot.Empty;
@@ -228,6 +234,102 @@ public sealed class Director
         public static Cast Staged(int index) => new Cast(index, -1);
 
         public static Cast FromDeck(int index, int deckIndex) => new Cast(index, deckIndex);
+    }
+
+    /// <summary>
+    /// One watched wire lane's observation memory: the last reading, and whether the lane's own change fired
+    /// this wake. Instantiated once per lane (grid, phrase, next-announcement) with that lane's change rule, so
+    /// the observe/compare/remember pattern lives exactly once. Observation only — it feeds wrap detection and
+    /// the Cue Log and never decides anything the reducer does not already decide. A lane whose reading is
+    /// absent this wake either clears its memory (<paramref name="clearOnAbsence"/> true, so a later reading reads
+    /// as "appeared after absence") or leaves it untouched.
+    /// </summary>
+    private sealed class LaneMemory<T>
+        where T : struct
+    {
+        private readonly Func<T?, T, bool> fired;
+        private readonly bool clearOnAbsence;
+        private T? last;
+
+        public LaneMemory(Func<T?, T, bool> fired, bool clearOnAbsence)
+        {
+            this.fired = fired;
+            this.clearOnAbsence = clearOnAbsence;
+        }
+
+        /// <summary>
+        /// Observes this wake's reading, reporting whether the lane's change fired together with the previous and
+        /// current readings (the two sides of a wrap or identity change), then remembers the reading per the
+        /// lane's absence rule.
+        /// </summary>
+        public LaneChange<T> Observe(T? current)
+        {
+            var previous = last;
+            var didFire = current is { } value && fired(previous, value);
+            if (current.HasValue || clearOnAbsence)
+            {
+                last = current;
+            }
+
+            return new LaneChange<T>(didFire, previous, current);
+        }
+
+        /// <summary>Forgets the last reading so the lane rejoins mid-stream without a spurious wrap or change.</summary>
+        public void Forget() => last = null;
+    }
+
+    /// <summary>One lane observation's outcome: whether the change fired, and the readings on either side of it.</summary>
+    private readonly struct LaneChange<T>
+        where T : struct
+    {
+        public LaneChange(bool fired, T? previous, T? current)
+        {
+            Fired = fired;
+            Previous = previous;
+            Current = current;
+        }
+
+        public readonly bool Fired;
+        public readonly T? Previous;
+        public readonly T? Current;
+    }
+
+    /// <summary>
+    /// One phrase_state reading the phrase lane watches: the announcement (label, length) alongside the
+    /// countdown whose upward roll is the wrap. The countdown drives wrap detection; the label and length are
+    /// carried so a PHRASE_TURNOVER can name both sides of the boundary.
+    /// </summary>
+    private readonly struct PhraseLaneObservation
+    {
+        public PhraseLaneObservation(string label, int length, int beatsUntilNext)
+        {
+            Label = label;
+            Length = length;
+            BeatsUntilNext = beatsUntilNext;
+        }
+
+        public readonly string Label;
+        public readonly int Length;
+        public readonly int BeatsUntilNext;
+    }
+
+    /// <summary>A Phrase announcement identity — the (label, length) the next-announcement lane compares by value.</summary>
+    private readonly struct PhraseAnnouncement : IEquatable<PhraseAnnouncement>
+    {
+        public PhraseAnnouncement(string label, int length)
+        {
+            Label = label;
+            Length = length;
+        }
+
+        public readonly string Label;
+        public readonly int Length;
+
+        public bool Equals(PhraseAnnouncement other) => Length == other.Length && Label == other.Label;
+
+        public override bool Equals(object obj) => obj is PhraseAnnouncement other && Equals(other);
+
+        public override int GetHashCode() => unchecked(((Label?.GetHashCode() ?? 0) * 397) ^ Length);
     }
 
     public Director(
@@ -409,15 +511,27 @@ public sealed class Director
     /// </summary>
     private void RepairSheets()
     {
-        var phrase = controller.beatManager.Phrase;
-        var wrapped = IsObservedPhraseWrap(phrase);
-        RememberPhraseLane(phrase);
-
-        // Observed phrase wrap (turnover): the announced next Phrase is now current, so the next sheet shifts
-        // to current and the emptied slot refills below.
-        if (wrapped)
+        // Phrase lane: an upward roll of the countdown is the turnover. Log both sides and shift the next sheet
+        // into current (the emptied slot refills below) — logged on every observed wrap, whether or not a sheet
+        // is present to promote.
+        var phraseChange = phraseLane.Observe(ReadPhraseObservation());
+        if (phraseChange.Fired)
         {
+            var outgoing = phraseChange.Previous.Value;
+            var incoming = phraseChange.Current.Value;
+            cueLog?.PhraseTurnover(outgoing.Label, outgoing.Length, incoming.Label, incoming.Length);
             PromoteNextToCurrent();
+        }
+
+        // Next-announcement lane: log an identity change straight off the wire, independent of the sheet build
+        // below. A build the duplicate-current guard suppresses still records its announcement change here, and
+        // an announcement appearing after absence logs replaced=none.
+        var nextChange = nextAnnouncementLane.Observe(ReadNextAnnouncement());
+        if (nextChange.Fired)
+        {
+            var incoming = nextChange.Current.Value;
+            var replaced = nextChange.Previous;
+            cueLog?.NextPhrase(incoming.Label, incoming.Length, replaced?.Label, replaced?.Length);
         }
 
         var hasCurrent = TryReadCurrentAnnouncement(out var currentLength, out var currentLabel);
@@ -447,27 +561,29 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Whether the phrase_state countdown was observed to wrap on this wake: the count read back up from its
-    /// previous observation. There is no zero — the beat a countdown "would hit 0" is beat 1 of the next Phrase
-    /// — so the count reading higher than last time is the turnover, decided by observation alone.
+    /// Reads this wake's phrase_state into the phrase lane's observation, or null when the wire carried no
+    /// countdown. The countdown drives wrap detection (its upward roll is the turnover — there is no zero, so
+    /// the beat a countdown "would hit 0" is beat 1 of the next Phrase); the label and length ride along so a
+    /// PHRASE_TURNOVER can name both sides.
     /// </summary>
-    private bool IsObservedPhraseWrap(PhraseInfo? phrase)
+    private PhraseLaneObservation? ReadPhraseObservation()
     {
-        if (lastPhraseBeatsUntilNext < 0 || !(phrase is { beatsUntilNext: { } beatsUntilNext }))
-        {
-            return false;
-        }
-
-        // The countdown counts down toward its boundary; the observed count jumping back up is the wrap into
-        // the next Phrase — the same shape as a Grid count moving backwards, decided by observation, not
-        // projected from elapsed track beats.
-        return beatsUntilNext > lastPhraseBeatsUntilNext;
+        return controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext } phrase
+            ? new PhraseLaneObservation(phrase.label, phrase.lengthBeats ?? -1, beatsUntilNext)
+            : (PhraseLaneObservation?)null;
     }
 
-    /// <summary>Records this wake's phrase_state countdown so the next wake can watch it for a wrap.</summary>
-    private void RememberPhraseLane(PhraseInfo? phrase)
+    /// <summary>
+    /// Reads this wake's next_phrase_state announcement identity for the next-announcement lane, or null when
+    /// the wire announced no next Phrase — an absence the lane clears, so a later announcement reads as one
+    /// appearing after absence. Raw observation of the wire, unfiltered by the usability guard the sheet build
+    /// applies, so the lane logs the change even when no sheet is built.
+    /// </summary>
+    private PhraseAnnouncement? ReadNextAnnouncement()
     {
-        lastPhraseBeatsUntilNext = phrase is { beatsUntilNext: { } bun } ? bun : -1;
+        return controller.beatManager.NextPhrase is { } nextPhrase
+            ? new PhraseAnnouncement(nextPhrase.label, nextPhrase.lengthBeats ?? -1)
+            : (PhraseAnnouncement?)null;
     }
 
     /// <summary>Shifts the next sheet into the current slot and empties the next slot (the observed turnover).</summary>
@@ -580,21 +696,19 @@ public sealed class Director
     /// </summary>
     private void CastOnNewGrid()
     {
-        // No grid lane this wake: nothing to evaluate, so no cast. A real Synced-Mode exit is a mode boundary
-        // that resets grid memory (ADR-0007); this method never special-cases it.
+        // No grid lane this wake: nothing to evaluate, so no cast, and the grid lane keeps its last reading
+        // untouched. A real Synced-Mode exit is a mode boundary that resets grid memory (ADR-0007); this method
+        // never special-cases it.
         if (!(controller.beatManager.Grid is { } grid))
         {
             return;
         }
 
-        var gridBeat = grid.Beat;
-        var previousGridBeat = lastGridBeat;
-        lastGridBeat = gridBeat;
-
         // A new Grid is the 16-count moving backwards (a wrap); a dropped packet that skips the One still trips
         // the wrap. Equality is a repeated observation of the same Grid, a forward move is mid-Grid, and no
-        // prior count is the first reading joining mid-Grid — none of these casts.
-        if (previousGridBeat < 1 || gridBeat >= previousGridBeat)
+        // prior count is the first reading joining mid-Grid — the grid lane fires on none of these.
+        var gridBeat = grid.Beat;
+        if (!gridLane.Observe(gridBeat).Fired)
         {
             return;
         }
@@ -845,8 +959,9 @@ public sealed class Director
     {
         currentSlot = CueSheetSlot.Empty;
         nextSlot = CueSheetSlot.Empty;
-        lastGridBeat = -1;
-        lastPhraseBeatsUntilNext = -1;
+        gridLane.Forget();
+        phraseLane.Forget();
+        nextAnnouncementLane.Forget();
     }
 
     private DirectorStatus BuildStatus()
