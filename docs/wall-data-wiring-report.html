@@ -49,7 +49,7 @@ flowchart LR
   MESH --> LAYOUT["penrose_layout.txt<br/>THE PATTERN — never changes"]
   TILES --> LAYOUT
   WIRES --> W1["wiring_original.txt<br/>old wall: 1 chain × 1800"]
-  WIRES -. re-mapped .-> W2["wiring_6out.txt<br/>new art: 6 outputs × 300"]
+  WIRES -. re-mapped .-> W2["wiring_6x5.txt<br/>new art: 6 outputs × 300"]
   COLOR --> DEAD["deleted — runtime never read it"]
   classDef dead fill:#450a0a,stroke:#ef4444,color:#fca5a5;
   classDef edit fill:#064e3b,stroke:#10b981,color:#a7f3d0;
@@ -70,7 +70,7 @@ flowchart LR
         <div class="grid md:grid-cols-2 gap-4 text-sm">
           <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 space-y-2">
             <p class="text-xs uppercase tracking-wider text-slate-500">In the Unity project</p>
-            <p class="font-mono text-slate-200">Assets/StreamingAssets/<br/>&nbsp;&nbsp;penrose_layout.txt<br/>&nbsp;&nbsp;<span class="text-emerald-300">wiring_6out.txt</span><br/>&nbsp;&nbsp;wiring_original.txt</p>
+            <p class="font-mono text-slate-200">Assets/StreamingAssets/<br/>&nbsp;&nbsp;penrose_layout.txt<br/>&nbsp;&nbsp;<span class="text-emerald-300">wiring_6x5.txt</span><br/>&nbsp;&nbsp;wiring_original.txt</p>
             <p class="text-slate-400">Edit → click back into Unity → press Play.</p>
           </div>
           <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 space-y-2">
@@ -93,11 +93,11 @@ flowchart LR
 
 <span class="cmt">// Select the wiring diagram for this art piece: define exactly one.</span>
 <span class="cmt">// Wiring files are hand-editable text in Assets/StreamingAssets (wiring_*.txt).</span>
-<span class="kw">#define</span> WIRING_6OUT
+<span class="kw">#define</span> WIRING_6X5
 <span class="cmt">//#define WIRING_ORIGINAL</span></pre>
         <p class="text-sm text-slate-300 max-w-3xl">
           On startup the log prints which files loaded:
-          <span class="font-mono text-xs text-slate-400 block mt-2">[Controller] Layout: penrose_layout.txt; wiring: wiring_6out.txt (1800 LEDs).</span>
+          <span class="font-mono text-xs text-slate-400 block mt-2">[Controller] Layout: penrose_layout.txt; wiring: wiring_6x5.txt (1800 LEDs).</span>
         </p>
       </section>
 
@@ -147,7 +147,7 @@ flowchart LR
         <h2 class="text-xl font-serif text-slate-50">5 · The edit loop when the hardware arrives</h2>
         <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside max-w-3xl">
           <li>Wire the strings; write down, per output, which half-tile each LED hits in chain order.</li>
-          <li>Open <span class="font-mono text-emerald-300">wiring_6out.txt</span> in any editor; replace the numbers in the matching <span class="font-mono">leds</span> array.</li>
+          <li>Open <span class="font-mono text-emerald-300">wiring_6x5.txt</span> in any editor; replace the numbers in the matching <span class="font-mono">leds</span> array.</li>
           <li>Restart the app (or re-focus Unity and press Play). Check the startup log line.</li>
           <li>Wrong tile lighting up? Swap the numbers, restart. That's the whole loop.</li>
         </ol>
@@ -169,7 +169,7 @@ flowchart LR
         <div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
           <pre class="mermaid">
 flowchart LR
-  F["wiring_6out.txt<br/>(StreamingAssets)"] --> P["WiringData.ParseToWireMap<br/>strip // · flatten · validate permutation"]
+  F["wiring_6x5.txt<br/>(StreamingAssets)"] --> P["WiringData.ParseToWireMap<br/>strip // · flatten · validate permutation"]
   P --> M["Controller.wires<br/>int[1800]"]
   L["penrose_layout.txt"] --> LP["LayoutData.Parse"] --> PEN["Penrose<br/>mesh · tiles · shapes"]
   PEN --> FX["effects write Color[900]"]

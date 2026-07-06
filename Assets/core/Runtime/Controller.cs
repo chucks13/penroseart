@@ -3,7 +3,7 @@
 
 // Select the wiring diagram for this art piece: define exactly one.
 // Wiring files are hand-editable text in Assets/StreamingAssets (wiring_*.txt).
-#define WIRING_6OUT
+#define WIRING_6X5
 //#define WIRING_ORIGINAL
 
 using System;
@@ -292,14 +292,14 @@ public class Controller : Singleton<Controller>
     /// </summary>
     private const string LayoutFile = "penrose_layout.txt";
 
-#if WIRING_6OUT
+#if WIRING_6X5
     /// <summary>Wiring data file in StreamingAssets, selected by the WIRING_* define at the top of this file.</summary>
-    private const string WiringFile = "wiring_6out.txt";
+    private const string WiringFile = "wiring_6x5.txt";
 #elif WIRING_ORIGINAL
     /// <summary>Wiring data file in StreamingAssets, selected by the WIRING_* define at the top of this file.</summary>
     private const string WiringFile = "wiring_original.txt";
 #else
-#error Define WIRING_6OUT or WIRING_ORIGINAL at the top of Controller.cs to select the art piece's wiring.
+#error Define WIRING_6X5 or WIRING_ORIGINAL at the top of Controller.cs to select the art piece's wiring.
 #endif
 
     /// <summary>Flattened wire map from <see cref="WiringFile"/>: physical LED <c>i</c> displays tile <c>wires[i] / 2</c>.</summary>
