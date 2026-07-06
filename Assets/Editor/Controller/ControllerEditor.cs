@@ -11,9 +11,10 @@ using UnityEngine;
 /// a separate scene object.
 /// </remarks>
 /// <remarks>
-/// Reduced to the Director reducer's real state (ADR-0011): the two Cue Sheets, the staged move, the Switcher's
-/// loaded cue, and the wire-fed timing lanes. The decision-memory and candidate-window views are gone with the
-/// planning machinery; the richer Observatory is rebuilt on this real state in a later step.
+/// The Observatory renders from the Director reducer's real state only (ADR-0011): the two Cue Sheets with their
+/// coming Cue Marks, the cast for the coming mark (the Switcher's loaded cue), the Switcher's execution stage, and
+/// the wire-fed timing lanes. It is a downstream debug view — it owns its own preview math and reads no decision
+/// memory, because the reducer records no verdicts to read.
 /// </remarks>
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
@@ -165,7 +166,7 @@ public sealed class ControllerEditor : Editor
 
     private static void DrawAdvancedTiming(Controller controller, DirectorStatus status)
     {
-        showAdvancedTiming = EditorGUILayout.Foldout(showAdvancedTiming, "Advanced On-Air Timing", true);
+        showAdvancedTiming = EditorGUILayout.Foldout(showAdvancedTiming, "Advanced Wire Timing", true);
         if (!showAdvancedTiming)
         {
             return;

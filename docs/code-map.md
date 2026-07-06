@@ -23,19 +23,10 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Rhythm/BeatManager.cs` | Shared live/simulated rhythm state and beat-reactive helper functions. |
 | `Assets/core/Rhythm/BeatManagerQueries.cs` | Contrived rhythm-query layer (ADR-0002): the nullable `PhraseEventInfo`/`EnergyInfo`/`GridInfo`/`LevelsInfo` shapes and the `BeatManager` queries that build them. |
 | `Assets/core/IO/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
-| `Assets/core/Switching/Director.cs` | Decision layer for Standalone/Synced/Hold sequencing, staged choices, cues, and status. |
-| `Assets/core/Switching/CuePlanner.cs` | Director-owned cue planner: interprets one rhythm snapshot into the `TimingFrame` and answers the per-beat cue timing verdict (`EvaluateCueTiming`: wait/cue/blocked-on-cadence), owning Cue Sheet derivation, the Cue Mark cursor, pass-local cue/change-cadence memory, beat-rewind handling, and Grid Anchor coasting (relocated from On-Air Timing, ADR-0006). |
-| `Assets/core/Switching/OnAirTiming.cs` | Synced Mode timing data contract: the `OnAirTimingInput`, `TimingFrame`, and `TimingFrameSource` structs the Director composes. No longer a seam class — cue planning moved to `CuePlanner` (ADR-0006). |
-| `Assets/core/Switching/GridSync.cs` | Stateful 16-beat Grid determiner: holds the offset and resolves the per-frame `GridReading` (where "the one" sits) with Locked/Coasting/Contradicted confidence. |
-| `Assets/core/Switching/Grid.cs` | 16-beat Grid arithmetic in one place: offset-for-phrase-start and per-frame position math, used by `GridSync`. |
-| `Assets/core/Switching/PhraseTracker.cs` | Phrase-layer reader riding on the `GridReading`: places the frame inside the live Phrase and projects one phrase of look-ahead. Stateless pure mapping; owns no re-anchoring. |
-| `Assets/core/Switching/PhraseWindow.cs` | Derives phrase spans and grid boundaries from Track Phase countdown/length data. |
-| `Assets/core/Switching/CueSheet.cs` | Selects relative Cue Marks inside a Phrase while keeping the final phrase boundary mandatory and reusing same-length plans. |
-| `Assets/core/Switching/ChangeCadence.cs` | Minimum-change cadence rule shared by timing, cue, and status decisions. |
-| `Assets/core/Switching/SyncedCueIntent.cs` | Casting half of a Synced cue: classifies Fill/Drop event timing into ordinary/Fill/Drop Cue Intent and picks the target Performer (staged or read-only deck find); the fire/wait verdict lives on `CuePlanner`. |
-| `Assets/core/Switching/Deck.cs` | The rotating card deck behind effect and transition casting: rotate-to-back pulls, draw-window random draws, and read-only preferred finds pulled at the cue commit point. |
-| `Assets/core/Transitions/TransitionBeatPlan.cs` | Converts Cue Mark plus Transition Runway/Tail into start/impact/completion beats. |
-| `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime, Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
+| `Assets/core/Switching/Director.cs` | Wire-change reducer (ADR-0011) for Standalone/Synced/Hold sequencing: holds two Cue Sheets repaired by invariant on each new-beat wake, casts a Cue lazily and preference-based when a Grid carrying a Cue Mark begins, and hands it to the Switcher fire-and-forget. Records no decision memory. Plus staged choices and read-only status. |
+| `Assets/core/Switching/CueSheet.cs` | Builds a Cue Sheet: an index of Cue Marks over an announced phrase length, marks on Grid Boundaries, gaps of one to four Grids, phrase end always marked; layout is an announcement-seeded random roll. |
+| `Assets/core/Switching/Deck.cs` | The rotating card deck behind effect and transition casting: rotate-to-back pulls, draw-window random draws, and read-only preferred finds pulled only on Switcher acceptance. |
+| `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime and sole owner of cue commitment (one beat-domain lock, private runway/tail/lock math; loading a cue returns accepted-or-not), Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
 | `Assets/core/Rhythm/Waveform.cs` | Runtime waveform kernel for beat-synced brightness envelopes. |
 | `Assets/core/Rhythm/WaveformPool.cs` | Shared waveform pool codec and runtime load path for `StreamingAssets/penrose_waveforms.txt`. |

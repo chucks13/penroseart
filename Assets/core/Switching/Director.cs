@@ -407,12 +407,16 @@ public sealed class Director
         {
             currentSlot = nextSlot;
             nextSlot = CueSheetSlot.Empty;
+            if (currentSlot.HasSheet)
+            {
+                Trace($"SHEET_PROMOTED start={currentSlot.PhraseStartBeat} length={currentSlot.PhraseLengthBeats}");
+            }
         }
 
         // (a) No current sheet -> build from the current Phrase announcement.
         if (!currentSlot.HasSheet && TryReadCurrentAnnouncement(beat, out var currentStart, out var currentLength))
         {
-            currentSlot = BuildSlot(currentStart, currentLength);
+            currentSlot = BuildSlot("current", "build", currentStart, currentLength);
         }
 
         // (b) No next sheet, or the announcement it was built from changed -> build from the next Phrase
@@ -421,7 +425,7 @@ public sealed class Director
             && !nextSlot.BuiltFrom(nextStart, nextLength)
             && !currentSlot.BuiltFrom(nextStart, nextLength))
         {
-            nextSlot = BuildSlot(nextStart, nextLength);
+            nextSlot = BuildSlot("next", nextSlot.HasSheet ? "rebuild" : "build", nextStart, nextLength);
         }
     }
 
@@ -464,10 +468,10 @@ public sealed class Director
     private static bool IsUsablePhraseLength(int lengthBeats) =>
         lengthBeats > 0 && lengthBeats % CueSheet.GridBeats == 0;
 
-    private CueSheetSlot BuildSlot(int phraseStartBeat, int phraseLengthBeats)
+    private CueSheetSlot BuildSlot(string slot, string reason, int phraseStartBeat, int phraseLengthBeats)
     {
         var sheet = CueSheet.Build(phraseLengthBeats, phraseStartBeat, phraseStartBeat);
-        Trace($"SHEET_BUILT start={phraseStartBeat} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
+        Trace($"SHEET_BUILT slot={slot} reason={reason} start={phraseStartBeat} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
         return new CueSheetSlot(true, sheet, phraseStartBeat, phraseLengthBeats);
     }
 
