@@ -313,6 +313,60 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1), "A later staged Effect never re-aims a loaded cue; it waits for the next mark.");
     }
 
+    [Test]
+    public void DirectorCuesOnlyTheLatestOfSeveralStagedEffectsAtTheMark()
+    {
+        // Sibling to DirectorCuesTheLatestStagedEffectAtTheNextCommittableMark, covering the repeated-staging
+        // half of the contract: several manual stagings land before the mark, and only the LAST is cast.
+        // Staging overwrites the pending choice each time; it never queues earlier stagings.
+        director.SetNextEffect(1);
+        director.SetNextEffect(2);
+        director.SetNextEffect(3);
+
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(3), "The latest staged Performer is the one cued at the mark; earlier stagings are overwritten, not queued.");
+    }
+
+    [Test]
+    public void StagingADifferentEffectWhileACueIsLoadedLeavesThatCueUntouched()
+    {
+        // Criterion 1's loaded-cue-untouched half, asserted through the keep-guard rather than an early return:
+        // a cue is loaded, the operator stages a different Effect, and then a new Grid actually begins (a wrap)
+        // so OfferCue runs — yet the staged choice must not re-aim the loaded cue. A Phrase long enough to carry
+        // an interior Cue Mark as well as the mandatory Phrase-end mark lets the wrap re-present an earlier Grid
+        // Boundary while the later cue is still loaded and workable.
+        var offsets = CueSheet.Build(80, 600, 600).CueMarkOffsets;
+        var firstMark = 600 + offsets[0];
+        Assert.That(firstMark, Is.LessThan(680), "Setup: the Phrase carries an interior mark before its end.");
+
+        // Cast toward the Phrase-end mark 680 when its Grid [664, 680) begins.
+        FeedBeat(beat: 663, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
+        FeedBeat(beat: 664, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "Setup: the cue is loaded for the Phrase-end mark.");
+
+        var markWhileLoaded = switcher.LoadedCueStatus.CueMarkBeat;
+        var targetWhileLoaded = switcher.LoadedCueStatus.TargetEffectIndex;
+        var transitionWhileLoaded = switcher.LoadedCueStatus.TransitionIndex;
+        var effectDeckWhileLoaded = (int[])controller.effectDeck.Clone();
+        var transitionDeckWhileLoaded = (int[])controller.transitionDeck.Clone();
+
+        // Stage a different Effect, then wrap onto the earlier interior mark so OfferCue runs. The loaded cue is
+        // still workable (its mark is on the sheet and ahead), so the keep-guard holds it — the staged choice
+        // waits for the next mark and re-aims nothing.
+        var stagedEffect = targetWhileLoaded == 3 ? 2 : 3;
+        director.SetNextEffect(stagedEffect);
+        FeedBeat(beat: firstMark - 17, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
+        FeedBeat(beat: firstMark - 16, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(markWhileLoaded), "Staging over a loaded cue never moves its mark.");
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "Staging over a loaded cue never re-aims its target.");
+        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(transitionWhileLoaded), "Staging over a loaded cue never re-aims its transition.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "Staging over a loaded cue pulls no effect deck card.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded), "Staging over a loaded cue pulls no transition deck card.");
+    }
+
     // ---- Deck discipline --------------------------------------------------------------------------
 
     [Test]
