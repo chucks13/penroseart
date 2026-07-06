@@ -229,6 +229,74 @@ public sealed class DirectorReducerTests
     }
 
     [Test]
+    public void APreferenceWithNoCapablePerformerStillCastsANonCapableOne()
+    {
+        // The preference is a lean, never a filter: with no Drop-capable Performer reachable in the deck, a Drop
+        // still casts — with a non-capable Performer — rather than casting nothing or collapsing variety onto the
+        // few capable cards. effects[2] is the only Drop-capable Performer, so a deck without it has none.
+        var effectDeckWithoutDropCapable = new[] { 0, 1, 3 };
+        director = new Director(
+            controller,
+            switcher,
+            controller.timer,
+            effectDeckWithoutDropCapable,
+            controller.transitionDeck,
+            controller.currentTransition);
+        controller.director = director;
+
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        // Cue Mark 632; a Drop starting on beat 632 lands on the front of the next Grid [632, 648).
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32, dropBeatsUntilStart: 16);
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True, "The cast still happens with no capable Performer available.");
+        Assert.That(
+            controller.EffectiveRepertoire(switcher.LoadedCueStatus.TargetEffectIndex) & Repertoire.HandlesDrop,
+            Is.EqualTo(Repertoire.None),
+            "A non-capable Performer is cast; the preference never filters casting down to capable cards only.");
+    }
+
+    [Test]
+    public void EnergyOnTheWireNeverDivertsTheCast()
+    {
+        // Energy is a Performer/Transition input read from BeatManager, never a Director casting input (ADR-0011).
+        // The same Drop casts the same Drop-capable Performer whether the energy lane reads far-off or imminent,
+        // observed at the Switcher handoff — the reducer consults it for nothing.
+        var underLowEnergy = CastDropTargetWithEnergy(energyBeatsUntilChange: 64);
+        var underHighEnergy = CastDropTargetWithEnergy(energyBeatsUntilChange: 1);
+
+        Assert.That(underLowEnergy, Is.EqualTo(2), "The Drop preference casts the Drop-capable Performer.");
+        Assert.That(underHighEnergy, Is.EqualTo(underLowEnergy), "Changing only the energy lane never changes the cast.");
+    }
+
+    [Test]
+    public void AFillLandingExactlyOnTheCueMarkIsOffThisGridAndAddsNoPreference()
+    {
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+
+        // Fill start = 616 + 16 = 632 = the Cue Mark. The Fill window is [beat, cueMark), exclusive at the mark,
+        // so a Fill on the mark belongs to the next Grid, not this one: no Fill preference flavors the cast, and
+        // the staged (non-Fill) Transition 0 is cast unflavored rather than the Fill-capable Transition 2.
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32, fillBeatsUntilStart: 16);
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(0), "A Fill on the mark is off this Grid; the cast is unflavored.");
+    }
+
+    [Test]
+    public void ADropLandingPastTheNextGridWindowIsExcludedAndAddsNoPreference()
+    {
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+
+        // Drop start = 616 + 32 = 648 = cueMark + 16 = the exclusive far edge of the next-Grid window [632, 648).
+        // A Drop there lands on the Grid after next, so it does not flavor this Cue: the staged (non-Drop)
+        // Transition 0 is cast, not the Drop-capable Transition 1 a real next-Grid Drop would prefer.
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32, dropBeatsUntilStart: 32);
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True);
+        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(0), "A Drop past the next-Grid window adds no preference; the cast is unflavored.");
+    }
+
+    [Test]
     public void DirectorCuesTheLatestStagedEffectAtTheNextCommittableMark()
     {
         // Contract preserved by name: a manually staged Effect is cast at the next Cue Mark and never re-aims
@@ -305,6 +373,29 @@ public sealed class DirectorReducerTests
         Assert.That(director.Status.CurrentSheet.HasSheet, Is.False, "Sheet memory does not cross a Standalone gap.");
     }
 
+    // Builds a fresh Switcher+Director pipeline, feeds a next-Grid Drop scenario carrying the given energy-lane
+    // value, and returns the Performer index cast at the Switcher handoff. Fresh decks each call keep the two
+    // runs independent so the only difference between them is the energy value.
+    private int CastDropTargetWithEnergy(int energyBeatsUntilChange)
+    {
+        switcher = new Switcher(controller, controller.effects, controller.transitions);
+        switcher.SetInitialEffect(0, controller.currentTransition);
+        controller.switcher = switcher;
+        director = new Director(
+            controller,
+            switcher,
+            controller.timer,
+            new[] { 0, 1, 2, 3 },
+            new[] { 0, 1, 2 },
+            controller.currentTransition);
+        controller.director = director;
+
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32, energyBeatsUntilChange: energyBeatsUntilChange);
+        // Cue Mark 632; a Drop starting on beat 632 lands on the front of the next Grid [632, 648).
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32, dropBeatsUntilStart: 16, energyBeatsUntilChange: energyBeatsUntilChange);
+        return switcher.LoadedCueStatus.TargetEffectIndex;
+    }
+
     // ---- Snapshot helpers -------------------------------------------------------------------------
 
     // Feeds one synced BeatManager frame and ticks the Director once. gridBeat < 1 leaves the wall off the
@@ -317,7 +408,8 @@ public sealed class DirectorReducerTests
         int? nextPhraseStartBeat = null,
         int? nextPhraseLengthBeats = null,
         int? dropBeatsUntilStart = null,
-        int? fillBeatsUntilStart = null)
+        int? fillBeatsUntilStart = null,
+        int? energyBeatsUntilChange = null)
     {
         var snapshot = controller.beatManager.beatData.snapshot;
         snapshot.bpm = 120f;
@@ -342,6 +434,11 @@ public sealed class DirectorReducerTests
         snapshot.fillState = fillBeatsUntilStart is { } fillStart
             ? new CountdownState { active = 0, countBeats = fillStart, lengthBeats = 8, remaining = 1 }
             : CountdownState.Unavailable;
+        // An energy lane the reducer must never consult for casting (ADR-0011): present so tests can prove the
+        // cast outcome is invariant to it, not because the Director reads it.
+        snapshot.energyState = energyBeatsUntilChange is { } energyChange
+            ? new LabeledCountdown { label = "Energy", countBeats = energyChange, lengthBeats = 16 }
+            : LabeledCountdown.Unavailable;
         controller.beatManager.beatData.snapshot = snapshot;
         director.Tick(0f);
     }
