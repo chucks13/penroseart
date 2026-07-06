@@ -511,6 +511,12 @@ public sealed class DirectorSyncedTailTests
             director.Tick(0f);
             director.SetNextEffect(2);
 
+            // Forward play fires the 593 transition and clears the loaded cue before the DJ loops back:
+            // the single lock is beat-domain, so an offer past the mark's Lock Point would otherwise find
+            // the consumed cue still loaded and locked and refuse the replacement. Rendering it to
+            // completion mirrors the real clock, where beats and wall time advance together.
+            RenderTransitionPastCompletion();
+
             // The loop replays from 597 — after the committed mark. The pass-local commit memory
             // (593 < 597) survives this rewind, so the committed mark must not be re-presented or
             // re-committed; only a replay from before the mark re-arms it. The replay's own commit
@@ -521,6 +527,36 @@ public sealed class DirectorSyncedTailTests
             Assert.That(director.Status.CueMarkBeat, Is.EqualTo(641), "The committed mark must not be re-presented inside its window.");
             Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(641), "Any cue committed on the replay aims at the next mark, never the consumed one.");
             Assert.That(director.Status.LastChangeBeat, Is.EqualTo(641));
+        }
+        finally
+        {
+            Random.state = randomState;
+        }
+    }
+
+    [Test]
+    public void ARejectedCueOfferRecordsNoCommitInTheDirector()
+    {
+        var randomState = Random.state;
+        try
+        {
+            Random.InitState(20);
+            director.SetNextEffect(1);
+            SetTrackPhaseBeat(586, beatsUntilPhraseEnd: 55, phraseLengthBeats: 64);
+            director.Tick(0f);
+            Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1), "Setup: the 593 Cue Mark commits.");
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593));
+
+            // The 593 cue is never fired here. Replaying to a beat past its Lock Point (588) latches the lock,
+            // so when the Director casts toward the next mark the Switcher rejects the differing offer. The
+            // Director must record no commit: the locked cue rides and cadence memory stays on 593.
+            director.SetNextEffect(2);
+            SetTrackPhaseBeat(597, beatsUntilPhraseEnd: 44, phraseLengthBeats: 64);
+            director.Tick(0f);
+
+            Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(593), "The locked cue rides; the rejected offer changed nothing.");
+            Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1));
+            Assert.That(director.Status.LastChangeBeat, Is.EqualTo(593), "A rejected offer records no commit — cadence stays on 593.");
         }
         finally
         {
@@ -569,10 +605,19 @@ public sealed class DirectorSyncedTailTests
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1), "The setup should commit the cue toward 609.");
         Assert.That(director.Status.TransitionLandingBeat, Is.EqualTo(sentCueMarkBeat));
 
-        // Reach the Lock Point in wall time (beat 604 = 0.5s past the beat-603 commit at 120 BPM)
-        // without reaching the Start Beat (beat 605 = 1s).
+        // Render partway (beat 604 = 0.5s past the beat-603 commit at 120 BPM) without reaching the
+        // Start Beat (beat 605 = 1s). The single lock is beat-domain: by its Lock Point (beat 604) the
+        // loaded cue refuses a differing offer, which is how it rides through the changes below.
         RenderTransitionAt(0.6f);
-        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True, "Setup: the loaded cue locks at its Lock Point.");
+        var lockProbe = new SwitcherCueDirection(
+            cueMarkBeat: sentCueMarkBeat,
+            targetEffectIndex: 0,
+            transitionIndex: 0,
+            transitionRepertoire: controller.transitions[0].Repertoire);
+        Assert.That(
+            switcher.UpsertLoadedCue(lockProbe, new SwitcherClockSnapshot(604, 0f, 0.5f, 0.6f)),
+            Is.False,
+            "Setup: at its Lock Point the loaded cue is locked and refuses a differing offer.");
 
         controller.transitions[1] = new ZeroRunwayTailedTransition();
         controller.transitions[1].BindController(controller);

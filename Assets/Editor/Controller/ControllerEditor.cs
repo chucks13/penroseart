@@ -91,15 +91,20 @@ public sealed class ControllerEditor : Editor
 
         public static CueTimingOverlay Candidate(int cueMarkBeat, TransitionRepertoire repertoire)
         {
-            var beatPlan = TransitionBeatPlan.FromCueMark(cueMarkBeat, repertoire);
+            // Preview-only window math for an unloaded candidate: this debug view owns its own projection so
+            // the Switcher can keep runway/tail/lock arithmetic private. The loaded cue's real window arrives
+            // through SwitcherCueStatus (see Loaded above).
+            var startBeat = cueMarkBeat - repertoire.RunwayBeats;
+            var lockPointBeat = startBeat - 1;
+            var completeBeat = cueMarkBeat + repertoire.TailBeats;
             return new CueTimingOverlay(
                 true,
                 false,
                 false,
                 cueMarkBeat,
-                beatPlan.StartBeat - 1,
-                beatPlan.StartBeat,
-                beatPlan.CompleteBeat,
+                lockPointBeat,
+                startBeat,
+                completeBeat,
                 repertoire.RunwayBeats,
                 repertoire.TailBeats);
         }
