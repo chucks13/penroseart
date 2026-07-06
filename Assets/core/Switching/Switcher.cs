@@ -211,6 +211,7 @@ public sealed class Switcher
     private readonly Controller controller;
     private readonly EffectBase[] effects;
     private readonly TransitionBase[] transitions;
+    private readonly CueLog cueLog;
 
     private int currentEffectIndex = -1;
     private int currentTransitionIndex = -1;
@@ -245,7 +246,7 @@ public sealed class Switcher
     /// <summary>Current read-only Loaded Cue lifecycle snapshot.</summary>
     public SwitcherCueStatus LoadedCueStatus => BuildLoadedCueStatus();
 
-    public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
+    public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions, CueLog cueLog = null)
     {
         if (controller == null)
         {
@@ -255,6 +256,7 @@ public sealed class Switcher
         this.controller = controller;
         this.effects = effects ?? throw new ArgumentNullException(nameof(effects));
         this.transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
+        this.cueLog = cueLog;
     }
 
     /// <summary>
@@ -370,19 +372,31 @@ public sealed class Switcher
     /// <summary>Latches the lock once a beat at or past the Lock Point is observed; never unlatches.</summary>
     private void LatchLockAtBeat(int beat)
     {
-        if (hasLoadedCue && beat >= loadedCueLockPointBeat)
+        if (hasLoadedCue && !loadedCueLocked && beat >= loadedCueLockPointBeat)
         {
             loadedCueLocked = true;
+            NotifyLocked(CueLockVia.Beat);
         }
     }
 
     /// <summary>Latches the lock once the render clock's wall time reaches the Lock Point; never unlatches.</summary>
     private void LatchLockAtTime(float nowSeconds)
     {
-        if (hasLoadedCue && nowSeconds >= LoadedCueLockTime)
+        if (hasLoadedCue && !loadedCueLocked && nowSeconds >= LoadedCueLockTime)
         {
             loadedCueLocked = true;
+            NotifyLocked(CueLockVia.Render);
         }
+    }
+
+    /// <summary>
+    /// Raises the minimal lock notification the Cue Log sink joins with its remembered display context.
+    /// Fires exactly once per loaded cue — the false→true latch guard above admits only the first crossing —
+    /// and carries no Phrase or name context, which the Switcher does not hold.
+    /// </summary>
+    private void NotifyLocked(CueLockVia via)
+    {
+        cueLog?.CueLocked(loadedCue.CueMarkBeat, loadedCueLockPointBeat, via);
     }
 
     /// <summary>
