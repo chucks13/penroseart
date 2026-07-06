@@ -30,9 +30,9 @@ public readonly struct CueSheet
     }
 
     /// <summary>
-    /// Builds a Cue Sheet as a pure function of one Phrase announcement: its beat length, its offset
-    /// (absolute start position), and a creative seed. This is the ADR-0011 canonical builder — an index
-    /// of empty Cue Marks over the Phrase, with no Effect or Transition choice and no notion of "now".
+    /// Builds a Cue Sheet as a pure function of one Phrase announcement: its beat length and a creative
+    /// seed. This is the ADR-0011 canonical builder — an index of empty Cue Marks over the Phrase, with
+    /// no Effect or Transition choice and no notion of "now".
     ///
     /// The constraints hold by construction: every mark sits on a Grid Boundary (a multiple of
     /// <see cref="GridBeats"/>), consecutive gaps — including the run-in from the Phrase start to the first
@@ -41,16 +41,15 @@ public readonly struct CueSheet
     /// downstream re-checks it.
     ///
     /// Layout within those bounds is a random roll keyed to (<paramref name="phraseLengthBeats"/>,
-    /// <paramref name="phraseOffsetBeats"/>, <paramref name="seed"/>): the same announcement always rolls
-    /// the identical sheet, so an announcement-keyed rebuild elsewhere can never re-roll it by accident,
-    /// and only a changed announcement produces a different layout. Energy-weighted Cue Mark density is a
-    /// named future knob and is deliberately not implemented here.
+    /// <paramref name="seed"/>): the same announcement always rolls the identical sheet, so an
+    /// announcement-keyed rebuild elsewhere can never re-roll it by accident, and only a changed
+    /// announcement produces a different layout. Energy-weighted Cue Mark density is a named future knob
+    /// and is deliberately not implemented here.
     /// </summary>
     /// <param name="phraseLengthBeats">Announced Phrase length in beats; must be a positive multiple of one Grid.</param>
-    /// <param name="phraseOffsetBeats">The Phrase's offset (its absolute start beat); a roll dimension only, never geometry.</param>
     /// <param name="seed">Creative seed selecting one layout within the constraints.</param>
     /// <exception cref="ArgumentOutOfRangeException">The Phrase length is not a positive multiple of one Grid.</exception>
-    public static CueSheet Build(int phraseLengthBeats, int phraseOffsetBeats, int seed)
+    public static CueSheet Build(int phraseLengthBeats, int seed)
     {
         if (phraseLengthBeats <= 0 || phraseLengthBeats % GridBeats != 0)
         {
@@ -62,7 +61,7 @@ public readonly struct CueSheet
 
         // A monotonic roll from the Phrase start: each gap is one to four Grids, so both the minimum
         // and maximum cadence hold by construction and the walk lands exactly on the Phrase end.
-        var rollState = SeedRoll(phraseLengthBeats, phraseOffsetBeats, seed);
+        var rollState = SeedRoll(phraseLengthBeats, seed);
         var cueMarkOffsets = new List<int>();
         var markOffset = 0;
         while (markOffset < phraseLengthBeats)
@@ -77,14 +76,13 @@ public readonly struct CueSheet
         return new CueSheet(phraseLengthBeats, cueMarkOffsets.ToArray());
     }
 
-    /// <summary>Folds the three announcement dimensions into a non-zero deterministic roll state (FNV-1a).</summary>
-    private static uint SeedRoll(int phraseLengthBeats, int phraseOffsetBeats, int seed)
+    /// <summary>Folds the two announcement dimensions into a non-zero deterministic roll state (FNV-1a).</summary>
+    private static uint SeedRoll(int phraseLengthBeats, int seed)
     {
         unchecked
         {
             var state = 2166136261u;
             state = (state ^ (uint)phraseLengthBeats) * 16777619u;
-            state = (state ^ (uint)phraseOffsetBeats) * 16777619u;
             state = (state ^ (uint)seed) * 16777619u;
             return state == 0u ? 0x9E3779B9u : state;
         }
@@ -100,11 +98,5 @@ public readonly struct CueSheet
             state ^= state << 5;
             return state;
         }
-    }
-
-    /// <summary>Translates a Phrase-relative Cue Mark offset to its current absolute on-air beat.</summary>
-    public int ToAbsoluteBeat(int phraseStartBeat, int cueMarkOffset)
-    {
-        return phraseStartBeat + cueMarkOffset;
     }
 }

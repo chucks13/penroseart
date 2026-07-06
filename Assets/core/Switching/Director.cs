@@ -153,6 +153,11 @@ public sealed class Director
         (previous, current) => previous is { } beat && beat >= 1 && current < beat,
         clearOnAbsence: false);
 
+    // Any upward roll of the countdown is a turnover, deliberately unguarded: a DJ looping a section rolls
+    // the countdown back up mid-phrase, and the wall treats that as the boundary it looks like on the wire.
+    // Phantom instances during loops are accepted cosmetics — sheets self-heal on the announcement check and
+    // the starvation guard floors any stillness — so no monotonicity or near-boundary guard belongs here
+    // (live evidence: the 2026-07-05 session logs, where a looped 16-beat section sawtoothed the countdown).
     private readonly LaneMemory<PhraseLaneObservation> phraseLane = new LaneMemory<PhraseLaneObservation>(
         (previous, current) => previous is { } last && current.BeatsUntilNext > last.BeatsUntilNext,
         clearOnAbsence: true);
@@ -166,6 +171,19 @@ public sealed class Director
     // (phraseInstance + 1) instead of to the announcement's (label, length), which cannot tell two real phrases
     // that share an identity apart.
     private int phraseInstance;
+
+    // Consecutive Grid-lane wakes with no accepted cast — a counted wake in the same shape as
+    // phraseInstance, incremented at the Grid wake, never read from a beat. Any backward grid move is a wake
+    // (a true 16-to-1 wrap, a dropped One, a DJ scrub), deliberately: four starved cast opportunities in a row
+    // mean a starved wall whatever caused the wakes, so under heavy scrubbing the guard may fire earlier than
+    // 64 real beats — accepted; backsteps can only bring the floor forward, never delay it. It resets to zero
+    // on any accepted Cue offer (the wall is committed to change) and with reducer memory.
+    private int starvedWakes;
+
+    // The sheet builder's own law is a Cue Mark at least every four Grids; the guard restates that ceiling in
+    // live time. The count resets at the accepted offer and the wall changes one Grid later, so the wakes at
+    // +16/+32/+48/+64 read 1/2/3/4 — the fourth stands 48 beats past the last change and targets the 64th beat.
+    private const int StarvationWakeCeiling = 4;
 
     private CueSheetSlot currentSlot = CueSheetSlot.Empty;
     private CueSheetSlot nextSlot = CueSheetSlot.Empty;
@@ -663,7 +681,7 @@ public sealed class Director
 
     private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseLengthBeats, string phraseLabel, int instance)
     {
-        var sheet = CueSheet.Build(phraseLengthBeats, 0, SheetSeed(phraseLabel, phraseLengthBeats));
+        var sheet = CueSheet.Build(phraseLengthBeats, SheetSeed(phraseLabel, phraseLengthBeats));
         var displayStart = DisplaySheetStart(slot, phraseLengthBeats);
         Trace($"SHEET_BUILT slot={(slot == CueLogSlot.Current ? "current" : "next")} reason={(reason == CueLogBuildReason.Build ? "build" : "rebuild")} start={displayStart} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
         cueLog?.SheetBuilt(slot, reason, phraseLabel, displayStart, phraseLengthBeats, sheet.CueMarkOffsets);
@@ -738,6 +756,10 @@ public sealed class Director
             return;
         }
 
+        // A wake the wall has not yet answered: count it. Any accepted offer below resets the count, so it holds
+        // the consecutive starved wakes the starvation guard reads.
+        starvedWakes++;
+
         // The Phrase, read live: its position in the Phrase is length - beatsUntilNext. Both the carried-mark
         // path and the no-sheet boundary path need it, so it is read once here.
         if (!(controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats } phrase))
@@ -747,35 +769,51 @@ public sealed class Director
 
         var position = lengthBeats - beatsUntilNext;
 
+        // The next Grid Boundary, read live off the grid lane: one Grid past this Boundary, less however far
+        // into the Grid a dropped One left us (16 - (gridBeat - 1)). Both the carried-mark path and the
+        // starvation guard target it — one boundary rule, computed once.
+        var beatsToBoundary = CueSheet.GridBeats - (gridBeat - 1);
+
         // No sheet was built (an irregular Phrase whose length is not a Grid multiple carries no marks), yet the
         // one rule still holds: the Phrase end carries a Cue. When the boundary lands within this Grid
         // (beatsUntilNext <= one Grid), offer it straight from live lane values — beatsToMark is the countdown
         // itself, the Phrase-relative offset is the announced length (position + countdown), and display context
         // is the lane's own label and length since there is no slot to read. Everything downstream is the same
-        // OfferCue seam; a boundary the Grid never brings within one Grid is simply missed, and a short runway is
-        // the Switcher's call to reject.
+        // OfferCue seam; a boundary the Grid never brings within one Grid falls through to the starvation guard
+        // below, and a short runway is the Switcher's call to reject.
         if (!currentSlot.HasSheet)
         {
             if (beatsUntilNext <= CueSheet.GridBeats)
             {
                 OfferCue(position + beatsUntilNext, beatsUntilNext, phrase.label, lengthBeats);
+                return;
             }
-
-            return;
         }
-
-        // The carried Cue Mark, read live: beatsToMark is one Grid past this Boundary, less however far into
-        // the Grid a dropped One left us (16 - (gridBeat - 1)); the mark sits that far ahead of the beat's
-        // position in the Phrase. It lives in the current sheet. beatsToMark is also what the Switcher seam
-        // mints its one absolute beat from, in OfferCue, as clock beat + beats-to-mark.
-        var beatsToMark = CueSheet.GridBeats - (gridBeat - 1);
-        var carriedMarkOffset = position + beatsToMark;
-        if (!currentSlot.HasCueMarkAtOffset(carriedMarkOffset))
+        else
         {
-            return;
+            // The carried Cue Mark, read live: the mark sits one Boundary ahead of the beat's position in the
+            // Phrase, and it lives in the current sheet. beatsToBoundary is also what the Switcher seam mints
+            // its one absolute beat from, in OfferCue, as clock beat + beats-to-mark.
+            var carriedMarkOffset = position + beatsToBoundary;
+            if (currentSlot.HasCueMarkAtOffset(carriedMarkOffset))
+            {
+                OfferCue(carriedMarkOffset, beatsToBoundary, currentSlot.PhraseLabel, currentSlot.PhraseLengthBeats);
+                return;
+            }
         }
 
-        OfferCue(carriedMarkOffset, beatsToMark, currentSlot.PhraseLabel, currentSlot.PhraseLengthBeats);
+        // Starvation guard, last in the cast path: the sheet's carried mark (above) and the music's boundary
+        // (the no-sheet branch) both get first refusal, so this fires only when neither offered this wake. When
+        // the starved wakes reach the ceiling the one rule still holds in live time — offer a Cue at the next
+        // Grid Boundary from live lane values (the same beatsToBoundary the carried path targets, display
+        // context off the phrase lane), so the wall never freezes past four Grids and a guard cast lands on a
+        // true Boundary even from a mid-Grid wake. A rejected offer (including a short mid-Grid runway) leaves
+        // the count and the guard retries next wake; a legal 64-gap sheet's own carried mark arrives at this
+        // same wake and is taken above, so a sheet that provides is never overridden.
+        if (starvedWakes >= StarvationWakeCeiling)
+        {
+            OfferCue(position + beatsToBoundary, beatsToBoundary, phrase.label, lengthBeats);
+        }
     }
 
     /// <summary>
@@ -821,6 +859,13 @@ public sealed class Director
         // keep, the very cue that rides — a display read, never a decision: the Switcher's answer decides.
         var priorLoaded = switcher.LoadedCueStatus;
         var answer = switcher.UpsertLoadedCue(cue, CurrentSwitcherClockSnapshot(seamBeat));
+
+        // Any accepted offer — from any cast path — commits the wall to change, so the starvation count starts
+        // over. A rejected offer leaves it, and the guard retries next wake.
+        if (answer == CueUpsertResult.Kept || answer == CueUpsertResult.Loaded)
+        {
+            starvedWakes = 0;
+        }
 
         if (answer == CueUpsertResult.Kept)
         {
@@ -1007,6 +1052,7 @@ public sealed class Director
         phraseLane.Forget();
         nextAnnouncementLane.Forget();
         phraseInstance = 0;
+        starvedWakes = 0;
     }
 
     private DirectorStatus BuildStatus()

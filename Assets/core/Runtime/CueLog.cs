@@ -333,7 +333,10 @@ public sealed class CueLog : IDisposable
         Write(CueLogFormat.CueCast(gridProbe(), phrase, cueMarkBeat, phraseRelativeOffset, phraseLength, effectName, transitionName, flavor, accepted));
     }
 
-    /// <summary>Records the keep-guard holding a workable loaded cue when a new Grid carries a mark.</summary>
+    /// <summary>
+    /// Records the Switcher keeping the same-mark loaded cue — its answer to an offer at the Cue Mark
+    /// already loaded; the cue rides unchanged.
+    /// </summary>
     public void CueKept(
         string phrase,
         int offeredCueMarkBeat,
