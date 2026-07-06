@@ -35,7 +35,7 @@ The runtime works on `UnityEngine.Color[]` buffers sized to `Penrose.Total == 90
 - **ScreenEffects**: Render into a rectangular virtual screen and map that image onto the irregular Penrose tile layout through precomputed interpolation weights.
 - **Mixers/Wrappers**: Inherit from `MixerBase`, own child effects, and combine or transform child buffers.
 - **Transitions**: Inherit from `TransitionBase` and blend between two effect buffers by effect index.
-- **Penrose.cs**: Holds the physical model, tile metadata, JSON data, mesh generation, and buffer-to-mesh color mapping.
+- **Penrose.cs**: Holds the physical model, tile metadata, layout data, mesh generation, and buffer-to-mesh color mapping. Layout comes from `Assets/StreamingAssets/penrose_layout.txt` (the pattern; fixed), wiring from `Assets/StreamingAssets/wiring_*.txt` (per art piece); both are `//`-commented text files parsed by `Assets/core/Runtime/WallData.cs`; the wiring file is selected by the `WIRING_*` define at the top of `Controller.cs` and read from StreamingAssets at startup (hand-editable next to a built player).
 
 ### 4. Palette System (GPalette / AnimPalette)
 
@@ -47,7 +47,7 @@ A shared color-management and animation system.
 
 ### 5. Input and Output
 
-- **Primary output**: USB serial via `SerialOut`, using `sendSerialFrame()` to expand the 900 logical Penrose tiles through `penrose.JsonRawData.wires` into the physical LED order.
+- **Primary output**: USB serial via `SerialOut`, using `sendSerialFrame()` to expand the 900 logical Penrose tiles through the Controller's wire map (flattened from the selected `Assets/StreamingAssets/wiring_*.txt` file) into the physical LED order.
 - **Serial runtime support**: Standalone API compatibility is `.NET Standard 2.1`; desktop `System.IO.Ports` support is supplied by platform-specific plugin assets under `Assets/Plugins/System.IO.Ports/` for macOS, Windows, and Linux x64.
 - **Fallback/legacy output**: ACN/E1.31 UDP code remains present in `sendUDPFrame()` / `sendACN()` and is used only when serial is not compiled in.
 - **Control/input paths**: OSC (`OSCReader`), optional PixelReceiver blending, drum overlays, keyboard shortcuts, and optional telnet/debug paths.

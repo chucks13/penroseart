@@ -259,7 +259,7 @@ public class Kscope : ScreenEffect
     public override void OnStart()
     {
         base.OnStart();
-        mirrorList = Random.Range(0, 2) == 0 ? penrose.JsonRawData.shapes.mirror2 : penrose.JsonRawData.shapes.mirror10;
+        mirrorList = Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10;
         fixCenterLineInit();
 
         int colorCount = colorTex.Count;

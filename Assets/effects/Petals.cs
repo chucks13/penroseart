@@ -55,17 +55,17 @@ public class Petals : ScreenEffect
         }
         for (int shapeIdx = 0; shapeIdx < 3; shapeIdx++)
         {
-            int[] shape = penrose.JsonRawData.shapes.loops;
+            int[] shape = penrose.Layout.shapes.loops;
             switch (shapeIdx)
             {
                 case 0:
-                    shape = penrose.JsonRawData.shapes.loops;
+                    shape = penrose.Layout.shapes.loops;
                     break;
                 case 1:
-                    shape = penrose.JsonRawData.shapes.starballs;
+                    shape = penrose.Layout.shapes.starballs;
                     break;
                 case 2:
-                    shape = penrose.JsonRawData.shapes.stars;
+                    shape = penrose.Layout.shapes.stars;
                     break;
             }
             for (int i = 0; i < shape[0]; i++)

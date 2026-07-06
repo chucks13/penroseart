@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Wall data split &amp; wiring guide — penroseart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      pre.code { background: #020617; border: 1px solid #1e293b; border-radius: 0.5rem; padding: 1rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.5; }
+      .cmt { color: #64748b; }
+      .lit { color: #6ee7b7; }
+      .kw  { color: #a5b4fc; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-200 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-2">
+        <h1 class="text-3xl font-serif text-slate-50">Penrose Wall — data split &amp; wiring guide</h1>
+        <p class="text-sm text-slate-400">penroseart · 2026-07-05 · for the person holding the soldering iron and a text editor</p>
+        <div class="flex gap-4 text-xs text-slate-400 pt-2">
+          <span><span class="inline-block w-3 h-3 bg-slate-800 border border-slate-500 align-middle mr-1"></span>module / file</span>
+          <span><span class="inline-block w-8 border-t border-dashed border-slate-400 align-middle mr-1"></span>seam</span>
+          <span><span class="inline-block w-3 h-3 bg-emerald-900 border border-emerald-500 align-middle mr-1"></span>the file you will edit</span>
+          <span><span class="inline-block w-3 h-3 bg-red-900 border border-red-500 align-middle mr-1"></span>deleted / dead</span>
+        </div>
+      </header>
+
+      <!-- ================================================================ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-50">1 · What got split, and why</h2>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          One 244&nbsp;KB single-line JSON blob (<span class="font-mono">rawdata.json</span>) used to carry four unrelated things.
+          They change at different rates, so they now live in separate documented text files. The pattern never changes;
+          the wiring changes every time the hardware does. That is the seam.
+        </p>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <pre class="mermaid">
+flowchart LR
+  RAW["rawdata.json<br/>(one blob, undocumented)"]
+  RAW --> MESH["Mesh<br/>10800 floats"]
+  RAW --> TILES["tiles + neighbors<br/>900 entries"]
+  RAW --> WIRES["wires<br/>1800 ints"]
+  RAW --> COLOR["per-tile color<br/>#8080ff …"]
+  MESH --> LAYOUT["penrose_layout.txt<br/>THE PATTERN — never changes"]
+  TILES --> LAYOUT
+  WIRES --> W1["wiring_original.txt<br/>old wall: 1 chain × 1800"]
+  WIRES -. re-mapped .-> W2["wiring_6out.txt<br/>new art: 6 outputs × 300"]
+  COLOR --> DEAD["deleted — runtime never read it"]
+  classDef dead fill:#450a0a,stroke:#ef4444,color:#fca5a5;
+  classDef edit fill:#064e3b,stroke:#10b981,color:#a7f3d0;
+  class DEAD dead
+  class W2,W1 edit
+          </pre>
+        </div>
+        <ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">
+          <li><span class="font-mono text-slate-100">penrose_layout.txt</span> — mesh geometry (Unity preview only), tile types/sections, neighbor graph, decorative shapes. <b>Nobody edits this.</b></li>
+          <li><span class="font-mono text-emerald-300">wiring_*.txt</span> — physical LED addressing, one file per art piece. <b>This is the file you edit.</b></li>
+          <li>Old <span class="font-mono">rawdata.json</span> / <span class="font-mono">rawdata1.json</span> / <span class="font-mono">newdata.txt</span> remain on disk for reference only. Nothing reads them.</li>
+        </ul>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-50">2 · Where the files live</h2>
+        <div class="grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">In the Unity project</p>
+            <p class="font-mono text-slate-200">Assets/StreamingAssets/<br/>&nbsp;&nbsp;penrose_layout.txt<br/>&nbsp;&nbsp;<span class="text-emerald-300">wiring_6out.txt</span><br/>&nbsp;&nbsp;wiring_original.txt</p>
+            <p class="text-slate-400">Edit → click back into Unity → press Play.</p>
+          </div>
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Next to a built player (no Unity needed)</p>
+            <p class="font-mono text-slate-200">Windows: &lt;exe folder&gt;/penrose_simulator_Data/StreamingAssets/</p>
+            <p class="font-mono text-slate-200">macOS: penrose_simulator.app/Contents/Resources/Data/StreamingAssets/</p>
+            <p class="text-slate-400">Edit → restart the app. No rebuild, ever.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-50">3 · How the app picks a wiring — the <span class="font-mono">#define</span></h2>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          Top of <span class="font-mono">Assets/core/Runtime/Controller.cs</span>, right next to the existing
+          <span class="font-mono">ENABLE_SERIAL</span>. Define exactly one. Neither defined = compile error, not a wrong wall.
+        </p>
+        <pre class="code"><span class="kw">#define</span> ENABLE_SERIAL
+
+<span class="cmt">// Select the wiring diagram for this art piece: define exactly one.</span>
+<span class="cmt">// Wiring files are hand-editable text in Assets/StreamingAssets (wiring_*.txt).</span>
+<span class="kw">#define</span> WIRING_6OUT
+<span class="cmt">//#define WIRING_ORIGINAL</span></pre>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          On startup the log prints which files loaded:
+          <span class="font-mono text-xs text-slate-400 block mt-2">[Controller] Layout: penrose_layout.txt; wiring: wiring_6out.txt (1800 LEDs).</span>
+        </p>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-50">4 · The wiring file format — what you actually edit</h2>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          <span class="font-mono">//</span> lines are comments; the rest is JSON. One <span class="font-mono">{"leds":[…]}</span> entry per
+          physical output string, in output order. Each number is the <b>half-tile index</b> (0–1799) that LED displays,
+          listed in <b>daisy-chain order along the wire</b> — first number = first LED on the string.
+        </p>
+        <pre class="code"><span class="cmt">// =============================================================================
+// Penrose Wall - WIRING: new art piece (6 outputs x 300 LEDs)
+// … (header documents everything below) …
+// =============================================================================</span>
+{
+"outputs":[
+{"leds":[<span class="lit">1455,1496,1497,1495,1453,</span> … <span class="lit">,1,0</span>]},   <span class="cmt">← output 0, 300 entries</span>
+{"leds":[<span class="lit">1552,1556,1553,</span> … ]},               <span class="cmt">← output 1</span>
+ …
+{"leds":[ … <span class="lit">,301,300</span>]}                       <span class="cmt">← output 5</span>
+]
+}</pre>
+
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-6">
+          <p class="text-xs uppercase tracking-wider text-slate-500 mb-4">How one number becomes light</p>
+          <div class="flex flex-wrap items-center gap-3 text-sm font-mono">
+            <div class="border border-slate-500 bg-slate-800 rounded px-3 py-2">LED #7 on output 0</div>
+            <span class="text-slate-500">reads entry 7 →</span>
+            <div class="border border-emerald-500 bg-emerald-900 rounded px-3 py-2">1493</div>
+            <span class="text-slate-500">÷ 2 →</span>
+            <div class="border border-slate-500 bg-slate-800 rounded px-3 py-2">tile 746</div>
+            <span class="text-slate-500">→ that LED shows tile 746's color</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-4">Two LEDs per tile (one per triangle): half-tile indexes 2k and 2k+1 both belong to tile k. Even = triangle A, odd = triangle B.</p>
+        </div>
+
+        <ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">
+          <li>All outputs together must use every number 0–1799 <b>exactly once</b> — it's a permutation.</li>
+          <li>Output count and lengths are free: 6×300 today; 4×450 tomorrow would parse fine.</li>
+          <li>Global LED index (what the S2 Mini boards claim in their handshake) = position after flattening the outputs in order: output <i>j</i> of 300 owns globals <i>j</i>·300 … <i>j</i>·300+299.</li>
+        </ul>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-50">5 · The edit loop when the hardware arrives</h2>
+        <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside max-w-3xl">
+          <li>Wire the strings; write down, per output, which half-tile each LED hits in chain order.</li>
+          <li>Open <span class="font-mono text-emerald-300">wiring_6out.txt</span> in any editor; replace the numbers in the matching <span class="font-mono">leds</span> array.</li>
+          <li>Restart the app (or re-focus Unity and press Play). Check the startup log line.</li>
+          <li>Wrong tile lighting up? Swap the numbers, restart. That's the whole loop.</li>
+        </ol>
+        <div class="rounded-lg border border-amber-700 bg-amber-950/50 p-4 text-sm text-amber-200">
+          <p class="font-semibold mb-1">Mistakes fail loud at startup — the wall never scrambles silently.</p>
+          <ul class="list-disc list-inside space-y-1 text-amber-200/90 font-mono text-xs">
+            <li>"Wiring LED index 1493 appears more than once."</li>
+            <li>"Wiring LED index 1800 is outside 0..1799."</li>
+            <li>"Wiring file has no outputs." / "Wiring file contains an empty output."</li>
+            <li>Bad JSON (missing comma/bracket) → parse exception naming the file.</li>
+          </ul>
+          <p class="text-xs mt-2 text-amber-300/80">A duplicate always implies a missing number somewhere else — fix both ends.</p>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="space-y-6">
+        <h2 class="text-xl font-serif text-slate-50">6 · Data flow — file to photons</h2>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <pre class="mermaid">
+flowchart LR
+  F["wiring_6out.txt<br/>(StreamingAssets)"] --> P["WiringData.ParseToWireMap<br/>strip // · flatten · validate permutation"]
+  P --> M["Controller.wires<br/>int[1800]"]
+  L["penrose_layout.txt"] --> LP["LayoutData.Parse"] --> PEN["Penrose<br/>mesh · tiles · shapes"]
+  PEN --> FX["effects write Color[900]"]
+  FX --> S["sendSerialFrame<br/>LED i = buffer[wires[i]/2]"]
+  M --> S
+  S --> HW["SerialOut → S2 Mini boards<br/>each claims a [start,count) slice"]
+  classDef edit fill:#064e3b,stroke:#10b981,color:#a7f3d0;
+  classDef deep fill:#0f172a,stroke:#94a3b8,color:#e2e8f0,stroke-width:2px;
+  class F edit
+  class S,P deep
+          </pre>
+        </div>
+        <p class="text-sm text-slate-300 max-w-3xl">
+          The contracts live in <span class="font-mono">Assets/core/Runtime/WallData.cs</span> — deep module, small interface:
+          two parse functions in, validated data out. Effects and the serial path never see files; the wiring file never sees Unity.
+        </p>
+      </section>
+
+      <footer class="text-xs text-slate-500 border-t border-slate-800 pt-4">
+        Sources: Controller.cs (defines, ReadWallDataFile, sendSerialFrame) · WallData.cs (parsers, validation) ·
+        Assets/StreamingAssets/wiring_*.txt headers · S2_MINI_PROTOCOL.md (board handshake).
+      </footer>
+    </main>
+  </body>
+</html>

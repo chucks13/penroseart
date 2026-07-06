@@ -163,7 +163,8 @@ Switcher-rendered Effect or Transition buffer
 | Area | Main files | Responsibility |
 | --- | --- | --- |
 | Runtime hub | `Assets/core/Runtime/Controller.cs` | Unity host for catalogs, lifecycle, input routing, output routing, overlays, preview update, and the per-frame call order. |
-| Geometry/model | `Assets/core/Runtime/Penrose.cs` | JSON data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
+| Geometry/model | `Assets/core/Runtime/Penrose.cs` | Layout data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
+| Wall data files | `Assets/core/Runtime/WallData.cs` | `LayoutData`/`WiringData` contracts for the `Assets/StreamingAssets/` text files; layout is fixed, wiring is selected per art piece on the Controller. |
 | Sequencing decision | `Assets/core/Switching/Director.cs` | Wire-change reducer (ADR-0011): Standalone/Synced/Hold decision layer, two Cue Sheets repaired by invariant each new-beat wake, lazy preference-based casting, staged choices, and fire-and-forget cue handoff. Holds no decision memory. |
 | Cue Sheets | `Assets/core/Switching/CueSheet.cs` | Index of Cue Marks over an announced phrase length: marks on Grid Boundaries, gaps of one to four Grids, phrase end always marked; layout is an announcement-seeded random roll. Grid and Phrase truth themselves come from the wire via `BeatManager`. |
 | Cue/casting | `Assets/core/Switching/Deck.cs`, `Assets/core/Effects/Repertoire.cs` | Rotating card decks and Effect/Transition Repertoire behind lazy, preference-based casting when a Grid carrying a Cue Mark begins; cards are pulled only on Switcher acceptance. |

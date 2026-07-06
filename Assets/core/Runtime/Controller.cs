@@ -1,6 +1,11 @@
 ﻿﻿
 #define ENABLE_SERIAL
 
+// Select the wiring diagram for this art piece: define exactly one.
+// Wiring files are hand-editable text in Assets/StreamingAssets (wiring_*.txt).
+#define WIRING_6OUT
+//#define WIRING_ORIGINAL
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -281,8 +286,24 @@ public class Controller : Singleton<Controller>
     /// <summary>Serialized palette definitions consumed by <see cref="AnimPalette"/>.</summary>
     public string paletteSource;
 
-    /// <summary>Serialized Penrose geometry/wiring JSON consumed by <see cref="Penrose"/>.</summary>
-    public string jsonSource;
+    /// <summary>
+    /// Layout data file in StreamingAssets: the 900-tile Penrose pattern.
+    /// Fixed for the life of the project; parsed by <see cref="LayoutData.Parse"/> and consumed by <see cref="Penrose"/>.
+    /// </summary>
+    private const string LayoutFile = "penrose_layout.txt";
+
+#if WIRING_6OUT
+    /// <summary>Wiring data file in StreamingAssets, selected by the WIRING_* define at the top of this file.</summary>
+    private const string WiringFile = "wiring_6out.txt";
+#elif WIRING_ORIGINAL
+    /// <summary>Wiring data file in StreamingAssets, selected by the WIRING_* define at the top of this file.</summary>
+    private const string WiringFile = "wiring_original.txt";
+#else
+#error Define WIRING_6OUT or WIRING_ORIGINAL at the top of Controller.cs to select the art piece's wiring.
+#endif
+
+    /// <summary>Flattened wire map from <see cref="WiringFile"/>: physical LED <c>i</c> displays tile <c>wires[i] / 2</c>.</summary>
+    private int[] wires;
 
     /// <summary>Drum/ring overlay system drawn after the main effect/transition.</summary>
     public drums drum;
@@ -715,7 +736,6 @@ public class Controller : Singleton<Controller>
         int ptr1;
         // build uf the frame data
         ptr2 = 0;
-        int[] wires = penrose.JsonRawData.wires;
         int size = wires.Length;
         byte level = brightness;
         if (!displayOn)
@@ -748,8 +768,7 @@ public class Controller : Singleton<Controller>
         byte level = brightness;
         if (!displayOn) level = 0;
 
-        // Map the 900 animation tiles to the 1800 physical LEDs
-        int[] wires = penrose.JsonRawData.wires;
+        // Map the 900 animation tiles to the physical LEDs through the wire map
         if (serialOutputBuffer.Length != wires.Length)
         {
             serialOutputBuffer = new Color[wires.Length];
@@ -1381,18 +1400,33 @@ public class Controller : Singleton<Controller>
     /// <summary>
     /// Unity startup hook. Initializes the scene model, runtime catalogs, input systems, overlays, timer, and active hardware output.
     /// </summary>
+    /// <summary>
+    /// Reads a wall data file (layout or wiring) from StreamingAssets, where it stays
+    /// hand-editable next to a built player — fix a wiring mistake by editing the text
+    /// file and restarting the app; no Unity, no rebuild.
+    /// </summary>
+    private static string ReadWallDataFile(string fileName)
+    {
+        string path = Application.streamingAssetsPath + "/" + fileName;
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"[Controller] Wall data file missing: {path}", path);
+        return File.ReadAllText(path);
+    }
+
     void Start()
     {
         // Unity/application setup.
         Application.targetFrameRate = 60;
         OSCtimer = 0;
 
-        // The Penrose scene object owns JSON-derived geometry, tile metadata,
+        // The Penrose scene object owns layout-derived geometry, tile metadata,
         // bounds, mesh generation, and the preview color buffer. Effects must
         // not be initialized until this completes because EffectBase.Init()
         // caches penrose.Tiles.
         penrose = FindAnyObjectByType<Penrose>();
-        penrose.Init(jsonSource);
+        penrose.Init(LayoutData.Parse(ReadWallDataFile(LayoutFile)));
+        wires = WiringData.ParseToWireMap(ReadWallDataFile(WiringFile));
+        Debug.Log($"[Controller] Layout: {LayoutFile}; wiring: {WiringFile} ({wires.Length} LEDs).");
         EffectBase.LoadPalette(paletteSource);
 
         // Seed the on-screen configuration controls from serialized fields.

@@ -1,0 +1,173 @@
+using System;
+using System.IO;
+using System.Text;
+using UnityEngine;
+
+/// <summary>
+/// Data contracts for the Penrose Wall's data files under <c>Assets/StreamingAssets/</c>.
+///
+/// The wall's data is split by rate of change:
+/// <list type="bullet">
+/// <item><see cref="LayoutData"/> — <c>penrose_layout.txt</c>: the 900-tile Penrose pattern
+/// (preview mesh, tile topology, decorative shapes). Fixed for the life of the project.</item>
+/// <item><see cref="WiringData"/> — <c>wiring_*.txt</c>: physical LED addressing for one
+/// art piece. Each build of the wall gets its own wiring file; the Controller selects one
+/// via the <c>WIRING_*</c> define at the top of <c>Controller.cs</c> and reads it from
+/// StreamingAssets at startup, so wiring mistakes are fixed by editing the text file and
+/// restarting — no Unity, no rebuild.</item>
+/// </list>
+///
+/// Both files are hand-documentable text: lines starting with <c>//</c> are comments, the
+/// rest is a JSON body parsed with <see cref="JsonUtility"/>. Field names in these classes
+/// are the JSON contract — do not rename them without regenerating the data files.
+/// </summary>
+internal static class WallDataText
+{
+    /// <summary>
+    /// Strips <c>//</c> comment lines from a wall data file, returning the bare JSON body.
+    /// Only whole-line comments are supported (leading whitespace allowed).
+    /// </summary>
+    public static string StripComments(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        using var reader = new StringReader(text);
+        string line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (line.TrimStart().StartsWith("//", StringComparison.Ordinal)) continue;
+            sb.Append(line).Append('\n');
+        }
+        return sb.ToString();
+    }
+}
+
+/// <summary>
+/// The Penrose pattern itself, loaded from <c>Assets/StreamingAssets/penrose_layout.txt</c>:
+/// preview mesh geometry, tile topology, and decorative shape lists.
+/// Independent of any physical wiring — see <see cref="WiringData"/> for that.
+/// </summary>
+[Serializable]
+public class LayoutData
+{
+    /// <summary>One adjacency entry: which edge of this tile (<see cref="type"/> 2..5) touches which tile.</summary>
+    [Serializable]
+    public class Neighbor
+    {
+        public int type;
+        public int tileIdx;
+    }
+
+    /// <summary>Source topology for one Penrose tile: rhombus kind, build section, and adjacency.</summary>
+    [Serializable]
+    public class Tile
+    {
+        public int type;            // 0 = thin rhombus, 1 = fat rhombus
+        public int section;         // 0..17 physical build segment
+        public Neighbor[] neighbors;
+    }
+
+    /// <summary>
+    /// Named decorative index lists over the 900 tiles, each packed as
+    /// [count, pointer×count, then per shape: (length, tileIdx×length)].
+    /// Consumed by shape-tracing effects (TileShapes, ShapeGlitch, Petals, Mirror, …).
+    /// </summary>
+    [Serializable]
+    public class ShapeList
+    {
+        public int[] loops;
+        public int[] stars;
+        public int[] lines0;
+        public int[] lines1;
+        public int[] lines2;
+        public int[] lines3;
+        public int[] lines4;
+        public int[] lotusballs;
+        public int[] starballs;
+        public int[] mirror2;
+        public int[] mirror10;
+    }
+
+    /// <summary>10800 floats = 1800 triangles × 3 vertices × (x,y); tile k owns triangles 2k and 2k+1. Preview mesh only.</summary>
+    public float[] Mesh;
+
+    /// <summary>900 tiles in tile-index order.</summary>
+    public Tile[] tiles;
+
+    /// <summary>Decorative shape index lists.</summary>
+    public ShapeList shapes;
+
+    /// <summary>
+    /// Parses a layout file (comment-stripped JSON) and validates its basic shape.
+    /// Throws <see cref="InvalidDataException"/> on malformed data so a bad file fails loud at startup.
+    /// </summary>
+    public static LayoutData Parse(string text)
+    {
+        var layout = JsonUtility.FromJson<LayoutData>(WallDataText.StripComments(text));
+        if (layout?.Mesh == null || layout.tiles == null || layout.shapes == null)
+            throw new InvalidDataException("Layout file is missing Mesh, tiles, or shapes.");
+        if (layout.tiles.Length != Penrose.Total)
+            throw new InvalidDataException($"Layout file has {layout.tiles.Length} tiles; expected {Penrose.Total}.");
+        if (layout.Mesh.Length != Penrose.Total * 2 * 6)
+            throw new InvalidDataException($"Layout file has {layout.Mesh.Length} mesh floats; expected {Penrose.Total * 2 * 6}.");
+        return layout;
+    }
+}
+
+/// <summary>
+/// Physical LED addressing for one art piece, loaded from an <c>Assets/StreamingAssets/wiring_*.txt</c> file.
+/// Each output is one daisy-chained LED string; each entry is the half-tile index (0..1799)
+/// that LED displays (tile = value / 2 — two LEDs per tile, one per triangle).
+/// The flattened outputs define the global LED index space the S2 Mini boards address
+/// (see <c>Assets/core/Hardware/S2_MINI_PROTOCOL.md</c>).
+/// </summary>
+[Serializable]
+public class WiringData
+{
+    /// <summary>One physical LED string, in daisy-chain order.</summary>
+    [Serializable]
+    public class Output
+    {
+        public int[] leds;
+    }
+
+    /// <summary>The physical LED strings, in output order.</summary>
+    public Output[] outputs;
+
+    /// <summary>
+    /// Parses a wiring file and flattens its outputs into one wire map:
+    /// physical LED <c>i</c> (global index) displays tile <c>map[i] / 2</c>.
+    /// Validates that all outputs together form a permutation of 0..total−1, so a
+    /// mis-authored wiring file fails loud at startup instead of scrambling the wall.
+    /// </summary>
+    public static int[] ParseToWireMap(string text)
+    {
+        var wiring = JsonUtility.FromJson<WiringData>(WallDataText.StripComments(text));
+        if (wiring?.outputs == null || wiring.outputs.Length == 0)
+            throw new InvalidDataException("Wiring file has no outputs.");
+
+        int total = 0;
+        foreach (var output in wiring.outputs)
+        {
+            if (output?.leds == null || output.leds.Length == 0)
+                throw new InvalidDataException("Wiring file contains an empty output.");
+            total += output.leds.Length;
+        }
+
+        var map = new int[total];
+        var seen = new bool[total];
+        int i = 0;
+        foreach (var output in wiring.outputs)
+        {
+            foreach (var led in output.leds)
+            {
+                if (led < 0 || led >= total)
+                    throw new InvalidDataException($"Wiring LED index {led} is outside 0..{total - 1}.");
+                if (seen[led])
+                    throw new InvalidDataException($"Wiring LED index {led} appears more than once.");
+                seen[led] = true;
+                map[i++] = led;
+            }
+        }
+        return map;
+    }
+}

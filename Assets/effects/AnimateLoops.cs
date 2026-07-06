@@ -41,17 +41,17 @@ public class AnimateLoops : EffectBase
     public override void OnStart()
     {
         base.OnStart();
-        shape = penrose.JsonRawData.shapes.loops;
+        shape = penrose.Layout.shapes.loops;
         distortionMode = Random.Range(1, 3);
         shapeName = "loops";
         /*        switch (Random.Range(0, 2))
                 {
                     case 0:
-                        shape = penrose.JsonRawData.shapes.loops;
+                        shape = penrose.Layout.shapes.loops;
                         shapeName = "loops";
                         break;
                     case 1:
-                        shape = penrose.JsonRawData.shapes.stars;
+                        shape = penrose.Layout.shapes.stars;
                         shapeName = "stars";
                         break;
                 }

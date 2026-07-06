@@ -4,92 +4,8 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 using System.IO;
 
-/*
-[System.Serializable]
-public class SavedState
-{
-	public string Name;
-	public string SaveToString() { return JsonUtility.ToJson(this); }
-}
-
-[System.Serializable]
-public class MySavedState : SavedState
-{
-	public int[][]Loops;
-	public Color Background;
-}
-*/
-
 /// <summary>
-/// Deserialized Penrose geometry, shape, and wiring data loaded from StreamingAssets JSON.
-/// </summary>
-[System.Serializable]
-public class JsonData
-{
-    /// <summary>
-    /// JSON shape-neighbor entry describing a neighboring tile and edge color.
-    /// </summary>
-    [System.Serializable]
-    public class neighbor
-    {
-        public int type;
-        public int tileIdx;
-    }
-
-    /// <summary>
-    /// JSON tile entry containing the source topology for one Penrose tile.
-    /// </summary>
-    [System.Serializable]
-    public class tile
-    {
-        //        public int[] triangles;    // triangle indexes
-        public int type;            // 0 or 1 for thin or fat
-        public int section;
-        public neighbor[] neighbors;
-    };
-
-    /// <summary>
-    /// Packed named shape collections loaded from Penrose JSON.
-    /// </summary>
-    [System.Serializable]
-    public class shapelist
-    {
-        public int[] loops;
-        public int[] stars;
-        public int[] lines0;
-        public int[] lines1;
-        public int[] lines2;
-        public int[] lines3;
-        public int[] lines4;
-        public int[] lotusballs;
-        public int[] starballs;
-        public int[] mirror2;
-        public int[] mirror10;
-    };
-
-    // [count,pointers[count],(length,tiles[length])
-    // raw data
-    public float[] Mesh;
-    public tile[] tiles;            // 900 of these
-    public int[] wires;             // 1800 of these, wiring order for rendering
-    public shapelist shapes;
-
-    /// <summary>
-    /// Loads and deserializes a Penrose JSON data file from StreamingAssets.
-    /// </summary>
-    public static JsonData CreateFromJSON(string fileName)
-    {
-        var sr = new StreamReader(Application.streamingAssetsPath + "/" + fileName);
-        var fileContents = sr.ReadToEnd();
-        sr.Close();
-        return JsonUtility.FromJson<JsonData>(fileContents);
-    }
-
-
-}
-
-/// <summary>
-/// Unity component that owns the Penrose tile model, generated preview mesh, JSON metadata, and 900-color runtime buffer.
+/// Unity component that owns the Penrose tile model, generated preview mesh, layout metadata, and 900-color runtime buffer.
 /// </summary>
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
@@ -110,7 +26,9 @@ public class Penrose : MonoBehaviour
 
     public TileData[] tiles;
 
-    public JsonData JsonRawData = new JsonData();
+    /// <summary>The Penrose pattern data (mesh, tiles, shapes) assigned by <see cref="Init"/>. Runtime-only; not serialized.</summary>
+    [NonSerialized]
+    public LayoutData Layout;
 
 
     public Bounds bounds;
@@ -198,11 +116,11 @@ public class Penrose : MonoBehaviour
         Vector3 reflect = new Vector3(1, -1, 1);
 
         // grab the geometry
-        for (int n = 0; n < JsonRawData.Mesh.Length; n += 6)
+        for (int n = 0; n < Layout.Mesh.Length; n += 6)
         {
-            var a = new Vector3(JsonRawData.Mesh[j++] * scale, JsonRawData.Mesh[j++] * scale, 0f);
-            var b = new Vector3(JsonRawData.Mesh[j++] * scale, JsonRawData.Mesh[j++] * scale, 0f);
-            var c = new Vector3(JsonRawData.Mesh[j++] * scale, JsonRawData.Mesh[j++] * scale, 0f);
+            var a = new Vector3(Layout.Mesh[j++] * scale, Layout.Mesh[j++] * scale, 0f);
+            var b = new Vector3(Layout.Mesh[j++] * scale, Layout.Mesh[j++] * scale, 0f);
+            var c = new Vector3(Layout.Mesh[j++] * scale, Layout.Mesh[j++] * scale, 0f);
 
             var ab = b - a;
             var ac = c - a;
@@ -275,22 +193,22 @@ public class Penrose : MonoBehaviour
             ix2 += 6;
             var t = new TileData
             {
-                neighbors = new neighbor[JsonRawData.tiles[i].neighbors.Length],
-                type = JsonRawData.tiles[i].type,
+                neighbors = new neighbor[Layout.tiles[i].neighbors.Length],
+                type = Layout.tiles[i].type,
                 position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f) },
                 center = { x = cent.x * FullScale, y = cent.y * FullScale },
-                section = JsonRawData.tiles[i].section,
+                section = Layout.tiles[i].section,
                 tileangle = segangle,
                 ring = -3,                   // undefined
                 radius = (float)rad,
                 angle = (float)Math.Atan2(cent.y, cent.x) * Mathf.Rad2Deg
             };
 
-            for (var j = 0; j < JsonRawData.tiles[i].neighbors.Length; j++)
+            for (var j = 0; j < Layout.tiles[i].neighbors.Length; j++)
             {
                 t.neighbors[j] = new neighbor();
-                t.neighbors[j].type = JsonRawData.tiles[i].neighbors[j].type;
-                t.neighbors[j].tileIdx = JsonRawData.tiles[i].neighbors[j].tileIdx;
+                t.neighbors[j].type = Layout.tiles[i].neighbors[j].type;
+                t.neighbors[j].tileIdx = Layout.tiles[i].neighbors[j].tileIdx;
             }
             //            t.neighbors[j] = RawData.Tiles[idx++];
             tiles[i] = t;
@@ -337,23 +255,12 @@ public class Penrose : MonoBehaviour
         //    Debug.Log(bounds.size);
     }
 
-    /*
-  // there is a bug in the json data
-  private void patchLoops()
-    {
-        int shapeidx = JsonRawData.shapes.loops[3];          // broken one here
-        int countidx = JsonRawData.shapes.loops[shapeidx];
-        int count = JsonRawData.shapes.loops[countidx];
-    }
-    */
     /// <summary>
-    /// Generates mesh, tile metadata, bounds, rings, and background brightness after JSON is loaded.
+    /// Adopts the parsed layout, then generates mesh, tile metadata, bounds, rings, and background brightness.
     /// </summary>
-    public void Init(string jsonSource)
+    public void Init(LayoutData layout)
     {
-        //JsonRawData = JsonData.CreateFromJSON("rawdata.json");
-        JsonRawData = JsonUtility.FromJson<JsonData>(jsonSource);
-        //    patchLoops();
+        Layout = layout;
         GenerateMesh();
         GenerateTiles();
         GenerateBounds();

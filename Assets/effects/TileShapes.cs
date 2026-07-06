@@ -48,31 +48,31 @@ public class TileShapes : EffectBase
         switch (Random.Range(0, 9))
         {
             case 0:
-                shape = penrose.JsonRawData.shapes.lines0;
+                shape = penrose.Layout.shapes.lines0;
                 break;
             case 1:
-                shape = penrose.JsonRawData.shapes.lines1;
+                shape = penrose.Layout.shapes.lines1;
                 break;
             case 2:
-                shape = penrose.JsonRawData.shapes.lines2;
+                shape = penrose.Layout.shapes.lines2;
                 break;
             case 3:
-                shape = penrose.JsonRawData.shapes.lines3;
+                shape = penrose.Layout.shapes.lines3;
                 break;
             case 4:
-                shape = penrose.JsonRawData.shapes.lines4;
+                shape = penrose.Layout.shapes.lines4;
                 break;
             case 5:
-                shape = penrose.JsonRawData.shapes.loops;
+                shape = penrose.Layout.shapes.loops;
                 break;
             case 6:
-                shape = penrose.JsonRawData.shapes.lotusballs;
+                shape = penrose.Layout.shapes.lotusballs;
                 break;
             case 7:
-                shape = penrose.JsonRawData.shapes.starballs;
+                shape = penrose.Layout.shapes.starballs;
                 break;
             case 8:
-                shape = penrose.JsonRawData.shapes.stars;
+                shape = penrose.Layout.shapes.stars;
                 break;
         }
 

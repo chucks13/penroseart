@@ -93,7 +93,7 @@ child.Draw();
 
 ## Packed Penrose shape arrays
 
-Several effects use packed shape lists from `penrose.JsonRawData.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, and `kscope`.
+Several effects use packed shape lists from `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, and `kscope`.
 
 The common format is:
 

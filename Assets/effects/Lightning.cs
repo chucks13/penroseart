@@ -293,7 +293,7 @@ public class Lightning : EffectBase
     private void GenerateBolt()
     {
         // this selects the center star tiles
-        int[] shape = penrose.JsonRawData.shapes.stars;
+        int[] shape = penrose.Layout.shapes.stars;
         int list = shape[1];
         int start = list + 1;
         int end = start + shape[list];
