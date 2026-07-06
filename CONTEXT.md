@@ -159,8 +159,8 @@ The two intentional personalities for rhythm-aware behavior. The dividing line i
 _Avoid_: deciding mode from transport connectivity or tempo instead of the running 4-count; multiple consumers each re-deriving the mode; effects that freeze, glitch, or go dark when the clock is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase (clock still running) as Standalone Mode.
 
 **Director**:
-The decision layer that owns *what* plays on the wall and which Phrase Cue Mark a stage-directed move should land on. It chooses the Cue Mark, destination Performer, and Transition from On-Air Timing, Repertoire, staged choices, and live song structure, then sends that cue direction to the Switcher fire-and-forget.
-_Avoid_: "choreographer" (the earlier name, retired); giving the timer its own independent ownership of "when"; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
+The decision layer that owns *what* plays on the wall. Its whole job in Synced Mode: keep the current and next Phrases' Cue Sheets in existence, Cast the Cue when a Grid carrying a Cue Mark begins, and hand that Cue to the Switcher fire-and-forget. It wakes only on a new beat, reads musical truth only from BeatManager, and holds no state beyond its Cue Sheets.
+_Avoid_: "choreographer" (the earlier name, retired); per-frame decision loops; reading OSC directly instead of BeatManager; mirroring Switcher state or remembering past decisions; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
 
 **On-Air Timing**:
 The Synced Mode timing interpretation: it reads the current on-air rhythm facts, especially live beat and Track Phase, and resolves where *the one* sits — the Grid reading — alongside the live Phrase reading. It is a pure Grid/Phrase determiner; the Director composes those readings into the Timing Frame and owns Cue Sheet planning, Beat Rewind correction, Coast, and Re-anchor (relocated to the Director by ADR-0006).
@@ -171,12 +171,16 @@ The Director-facing snapshot of one Synced Mode timing moment: current beat, Gri
 _Avoid_: treating it as raw OSC data, a persistent schedule, or transition progress; it is one interpreted frame of on-air musical structure.
 
 **Cue Sheet**:
-A simple per-Phrase list of scheduled Cues generated from the Phrase's total beat length: divide the Phrase into Grids, choose some interior Grid starts, and always include the final phrase boundary. Its identity is the total Phrase length, not phrase name or absolute start/end beat, so an upcoming Cue Sheet can be reused when the announced length is unchanged.
+A per-Phrase index of Cue Marks generated once from the Phrase's announced beat length: marks sit on Grid Boundaries, consecutive marks (and the run-in to the first) are at least 16 and at most 64 beats apart, and the final phrase boundary always carries one. Layout within those constraints is a creative roll — random today, energy-weighted later. Marks are empty: no Effect or Transition is chosen until Cast.
 _Avoid_: putting Effect or Transition choices in the Cue Sheet; treating it as a queue of loaded Cues; rerolling just because same-length phrase timing shifted.
 
 **Cue Mark**:
 A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; marks include selected 16-beat Grid Boundaries and the mandatory final phrase boundary. Fill/Drop state does not create or move Cue Marks; it only informs which Effect and Transition the Director should cast for an existing Cue Mark.
 _Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Grid Boundary when speaking about the Phrase plan.
+
+**Cast**:
+Choosing the Effect and Transition for a Cue Mark's Cue. Casting happens lazily — when the Grid that loads the Cue begins, not when the Cue Sheet is built — so it reads the freshest wire truth. A Fill on this Grid or a Drop on the next Grid makes Fill/Drop-capable Repertoire *preferred*, never mandatory; a mandate would collapse variety onto the same few capable Performers.
+_Avoid_: casting at Cue Sheet build time; consulting energy or other wire lanes when casting (Performers and Transitions read those themselves); treating the Fill/Drop preference as a hard filter.
 
 **Loaded Cue**:
 The Switcher-held stage-directed Cue for the next Cue Mark: which destination Performer, which Transition, and which musical mark the move should hit. It is mutable only inside the Switcher before its Lock Point; the Director sends cue directions fire-and-forget and does not inspect Loaded Cue state.
@@ -271,8 +275,8 @@ How forcefully a Transition reads as a musical move: Subtle, Medium, or High. In
 _Avoid_: treating Intensity as brightness or audio level; it describes the visual force of the Transition itself.
 
 **Impact Point**:
-A Transition-local progress point where that Transition's main visual hit happens. The Switcher aligns the Impact Point to the Armed Cue's Cue Mark, but the Impact Point is not itself Grid or Phrase structure; it only describes where the Transition should be in its own A-to-B motion when it hits its mark.
-_Avoid_: treating Impact Point as a phrase boundary, Cue Mark, Grid Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
+A Transition-local progress point where that Transition's main visual hit happens — authoring vocabulary for transition designers, not a runtime concept. The Switcher's private Runway/Tail math makes the hit land on the Cue Mark; the runtime knows only Cue Marks, Runway, and Tail.
+_Avoid_: naming any runtime type, field, or parameter after the Impact Point; treating it as a phrase boundary, Cue Mark, Grid Boundary, or Transition Completion; assuming every Transition's main hit happens at progress 1.
 
 **Transition Duration**:
 The full length of an A-to-B Transition from start to Completion, measured in beats. Duration is derived from Runway plus Tail; both parts are non-negative, the total must not exceed 12 beats, and zero duration is a hard cut.
@@ -311,7 +315,7 @@ The current musical section span described by Track Phase. It starts and ends at
 _Avoid_: treating a Phrase Window as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase Window.
 
 **Grid** (a.k.a. **16-Beat Grid**):
-A fixed 4-bar / 16-beat timing unit inside a Phrase Window. The wall uses Grid Boundaries as its minimum switching cadence; a Phrase Window can contain several Grids, and the Director may choose some interior Grid Boundaries rather than switching at every one. "Grid" here is the wall's own cyclic 16-beat unit — *not* RaveSystem's **Beat Grid** (the analyzed per-beat → time map), which the wall does not use under this name.
+A fixed 4-bar / 16-beat timing unit inside a Phrase Window; a new Grid begins when the 16-count wraps back to the One. The wall uses Grid Boundaries as its minimum switching cadence; a Phrase Window can contain several Grids, and the Director may choose some interior Grid Boundaries rather than switching at every one. "Grid" here is the wall's own cyclic 16-beat unit — *not* RaveSystem's **Beat Grid** (the analyzed per-beat → time map), which the wall does not use under this name.
 _Avoid_: using "grid" when the whole Phrase Window is meant; assuming every Grid Boundary must trigger a transition; conflating the wall's Grid with RaveSystem's per-beat Beat Grid.
 
 **Grid Boundary**:

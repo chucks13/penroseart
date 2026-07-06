@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Director gap analysis — penroseart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .chip { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.15rem 0.55rem; border-radius: 9999px; font-weight: 600; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-3">
+        <h1 class="font-serif text-3xl text-slate-50">Director gap analysis</h1>
+        <p class="text-sm text-slate-400 font-mono">penroseart · master @ c3176c07 (OSC schema v2) · 2026-07-04 · rev 2 (2026-07-05, clarified model)</p>
+        <p class="text-slate-300 max-w-3xl">Intended model: the Director is a <em>watcher</em>. It watches the <span class="font-mono text-emerald-300">timing_grid</span> plus the current <em>and</em> next phrase — either can change at any time. Phrase change → rebuild the Cue Sheet immediately (cheap, because sheets carry marks only). Entering Synced Mode may mean building two sheets at once; steady state builds one at a time. Per cue it casts effect + transition from Repertoire and what's coming up, sends to the Switcher, and keeps re-directing until the Switcher says <em>locked</em> — the only word the Switcher ever says back. No phrase data → cue off the timing grid. No timing grid → Standalone Mode. One rung, not fallbacks-for-fallbacks.</p>
+        <div class="flex flex-wrap gap-2 pt-1">
+          <span class="chip bg-emerald-900/60 text-emerald-300 border border-emerald-700">matches</span>
+          <span class="chip bg-amber-900/50 text-amber-300 border border-amber-700">partial</span>
+          <span class="chip bg-red-900/50 text-red-300 border border-red-700">gap</span>
+          <span class="chip bg-slate-800 text-slate-300 border border-slate-600">cleanup</span>
+        </div>
+      </header>
+
+      <!-- ============ SCORECARD ============ -->
+      <section id="scorecard" class="space-y-4">
+        <h2 class="font-serif text-2xl text-slate-100">Scorecard — intended rule vs what's in the code</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+              <tr><th class="text-left px-4 py-2">Intended rule</th><th class="text-left px-4 py-2">Current implementation</th><th class="px-4 py-2">Verdict</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800 bg-slate-900/40">
+              <tr><td class="px-4 py-2">Watch current <em>and</em> next phrase; rebuild the sheet immediately on any change (two sheets at Synced entry, then one at a time)</td><td class="px-4 py-2">One live sheet; next-phrase data consumed only as the last-priority branch; rebuild happens at phrase turnover, not on the announcement</td><td class="px-4 py-2 text-center"><span class="chip bg-red-900/50 text-red-300">gap</span></td></tr>
+              <tr><td class="px-4 py-2">Divide phrase by the 16-beat grid; place cues randomly on it</td><td class="px-4 py-2"><span class="font-mono text-xs">CueSheet.Build</span>: grid = 16, uniform random count over eligible interior boundaries, drawn without replacement</td><td class="px-4 py-2 text-center"><span class="chip bg-emerald-900/60 text-emerald-300">matches</span></td></tr>
+              <tr><td class="px-4 py-2">Always a cue at the end of the phrase</td><td class="px-4 py-2">Mandatory final mark at <span class="font-mono text-xs">window.LengthBeats</span> (CueSheet.cs:70)</td><td class="px-4 py-2 text-center"><span class="chip bg-emerald-900/60 text-emerald-300">matches</span></td></tr>
+              <tr><td class="px-4 py-2">Never more than 64 beats without a transition</td><td class="px-4 py-2"><span class="font-mono text-xs">FillLongCueMarkGaps</span>, <span class="font-mono text-xs">MaximumCueMarkGapBeats = 64</span></td><td class="px-4 py-2 text-center"><span class="chip bg-emerald-900/60 text-emerald-300">matches</span></td></tr>
+              <tr><td class="px-4 py-2">Sheet holds marks only — no effect/transition at build, so rebuilds stay cheap</td><td class="px-4 py-2">Sheet stores relative beat offsets only; all casting happens at the cue commit point</td><td class="px-4 py-2 text-center"><span class="chip bg-emerald-900/60 text-emerald-300">matches</span></td></tr>
+              <tr><td class="px-4 py-2">Per cue: check upcoming drop/fill, cast effect + transition by Repertoire, send to Switcher</td><td class="px-4 py-2"><span class="font-mono text-xs">TryStartSyncedCue</span>: Drop / DropApproaching / Fill intent, drop-protect, energy bias, deck pulls only at commit</td><td class="px-4 py-2 text-center"><span class="chip bg-emerald-900/60 text-emerald-300">matches</span></td></tr>
+              <tr><td class="px-4 py-2">Keep watching; Director can change the loaded cue until lock</td><td class="px-4 py-2">Director sends <em>once per mark</em> and never looks back; Switcher's replace-before-lock interface is latent, unexercised</td><td class="px-4 py-2 text-center"><span class="chip bg-red-900/50 text-red-300">gap</span></td></tr>
+              <tr><td class="px-4 py-2">Switcher locks one beat before kickoff, then fires no matter what</td><td class="px-4 py-2">Lock at <span class="font-mono text-xs">StartBeat − 1</span>; locked cue ignores conflicting updates; fires from <span class="font-mono text-xs">RenderAtTime</span></td><td class="px-4 py-2 text-center"><span class="chip bg-emerald-900/60 text-emerald-300">matches</span></td></tr>
+              <tr><td class="px-4 py-2">Execution is start-beat + timer: fire on <span class="font-mono">StartBeat = CueMark − Runway</span>, run Runway + Tail; commit before lock; never backdate</td><td class="px-4 py-2">Cue window accepts commits from StartBeat all the way through CompleteBeat; late commits backdate progress — zero-tail transitions complete instantly (the live hard-cut bug)</td><td class="px-4 py-2 text-center"><span class="chip bg-red-900/50 text-red-300">gap</span></td></tr>
+              <tr><td class="px-4 py-2">No phrase data → cue off the <span class="font-mono">timing_grid</span>; no grid → Standalone</td><td class="px-4 py-2">No grid rung exists: no-phrase yields Unlocked frames and zero cues; the Director never reads the <span class="font-mono text-xs">Grid</span> query at all</td><td class="px-4 py-2 text-center"><span class="chip bg-red-900/50 text-red-300">gap</span></td></tr>
+              <tr><td class="px-4 py-2">Switcher says locked-or-not to the Director; nothing else, to nobody else</td><td class="px-4 py-2">Fire-and-forget execution matches; but the Switcher publishes wide status structs consumed by HUD/inspector beyond the Director</td><td class="px-4 py-2 text-center"><span class="chip bg-amber-900/50 text-amber-300">partial</span></td></tr>
+              <tr><td class="px-4 py-2">One standard seam for effects/transitions to pull BeatManager data + advertise Repertoire</td><td class="px-4 py-2">Repertoire flags exist and are uniform; data pulls are hand-rolled per effect, and the EffectBase convenience wrappers are unused by every effect</td><td class="px-4 py-2 text-center"><span class="chip bg-red-900/50 text-red-300">gap</span></td></tr>
+              <tr><td class="px-4 py-2">Effects/transitions express fills and drops</td><td class="px-4 py-2">10/26 effects declare HandlesFill, 5/26 HandlesDrop; transitions: 3 tagged HandlesDrop (casting bias only), 0 fill</td><td class="px-4 py-2 text-center"><span class="chip bg-amber-900/50 text-amber-300">partial</span></td></tr>
+              <tr><td class="px-4 py-2">Old simulation-era / duplicate code removed</td><td class="px-4 py-2">No beat simulator remains; a dead reference folder and four dead symbols do. TouchOSC path stays — it's the hardware brightness control</td><td class="px-4 py-2 text-center"><span class="chip bg-slate-800 text-slate-300">cleanup</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-slate-400 text-sm">Net: placement, casting, and lock mechanics already match. The gaps share one theme — <strong class="text-slate-200">the Director decides once and stops watching</strong>: it doesn't watch the next phrase (<a href="#build-trigger" class="text-indigo-400 underline">sheets</a>), doesn't watch the loaded cue (<a href="#watch-until-lock" class="text-indigo-400 underline">until lock</a>), and doesn't watch the timing grid (<a href="#grid-rung" class="text-indigo-400 underline">no-phrase rung</a>).</p>
+      </section>
+
+      <!-- ============ PIPELINE ============ -->
+      <section id="pipeline" class="space-y-4">
+        <h2 class="font-serif text-2xl text-slate-100">The pipeline as built</h2>
+        <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          <pre class="mermaid">
+flowchart LR
+  wire["UDP :7000<br/>/rave/onair/*"] --> parser["RaveOscPacketParser"]
+  parser --> recv["RaveOscReceiver"]
+  recv --> bm["BeatManager<br/>nullable queries"]
+  bm -- "5-field OnAirTimingInput" --> planner["CuePlanner<br/>one live CueSheet + cursor"]
+  planner -- "TimingFrame (CueMarkBeat)" --> dir["Director<br/>casts at commit"]
+  bm -. "Fill / Drop / Energy" .-> dir
+  bm gridEdge@-. "Grid (timing_grid) — unread by Director" .-> dir
+  dir -- "SwitcherCueDirection" --> sw["Switcher<br/>load → lock → fire"]
+  sw --> buf["900-tile buffer"]
+
+  classDef module fill:#1e293b,stroke:#64748b,color:#e2e8f0;
+  classDef deep fill:#052e2b,stroke:#10b981,stroke-width:3px,color:#d1fae5;
+  classDef gridEdgeStyle stroke:#dc2626,stroke-width:2px,stroke-dasharray:6\,4;
+  class wire,parser,recv,bm module;
+  class planner,dir,sw deep;
+  class buf module;
+  class gridEdge gridEdgeStyle;
+          </pre>
+        </div>
+        <ul class="text-sm text-slate-300 space-y-1">
+          <li><span class="text-slate-500 font-mono text-xs">Controller.cs:1573-1651</span> — per frame: <span class="font-mono text-xs">raveOsc.ApplyTo → beatManager.Update → director.Tick → switcher.RenderAtTime</span>.</li>
+          <li>The planning seam is deliberately narrow: <span class="font-mono text-xs">OnAirTimingInput</span> carries only Beat, BeatsUntilPhraseEnd, PhraseLengthBeats, NextPhraseStartInBeats, NextPhraseLengthBeats (<span class="font-mono text-xs">OnAirTiming.cs:22-75</span>). The intended model adds one more input: the <span class="font-mono text-xs">timing_grid</span> (currently HUD-only, <span class="font-mono text-xs">Controller.cs:1322-1334</span>).</li>
+          <li>Only three <span class="font-mono text-xs">TimingFrameSource</span> values remain: Unlocked, CueMark, TrackPhaseBoundary. Synthetic phrase, coast, and grid fallback were all deleted in the v2 adoption (<span class="font-mono text-xs">CuePlanner.cs:16-25</span>) — correctly, per the clarified model; the one rung that should exist is the timing grid.</li>
+        </ul>
+      </section>
+
+      <!-- ============ CANDIDATES ============ -->
+      <section id="candidates" class="space-y-12">
+
+        <!-- Card 1: watch both phrases -->
+        <article id="build-trigger" class="rounded-xl border border-red-900/60 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">Watch both phrases; rebuild sheets the moment either changes</h3>
+            <span class="chip bg-red-900/50 text-red-300 border border-red-700">gap</span>
+            <span class="chip bg-slate-800 text-slate-400">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">Assets/core/Switching/CuePlanner.cs · CueSheet.cs · PhraseWindow.cs</p>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h4 class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Now — demand-driven, next phrase is branch 5 of 5</h4>
+              <ol class="text-sm space-y-1.5 text-slate-300 list-decimal list-inside">
+                <li>Beat &lt; 1 → Unlocked</li>
+                <li>Held-open mandatory boundary</li>
+                <li class="text-emerald-300">Live phrase window → build/reuse sheet</li>
+                <li>Held sheet still covering its window</li>
+                <li class="text-red-300">Next phrase → build ahead <span class="text-slate-500">(only reached when 3–4 fail)</span></li>
+              </ol>
+              <p class="text-xs text-slate-500 mt-3">While a live phrase serves branch 3, the announced next phrase is ignored. The fresh sheet appears at the turnover beat. Commit <span class="font-mono">a455b80b</span> deleted the second-sheet lifecycle.</p>
+            </div>
+            <div class="rounded-lg border border-emerald-700 bg-slate-950/60 p-4">
+              <h4 class="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-300">Intended — the Director watches</h4>
+              <ul class="text-sm space-y-1.5 text-slate-300">
+                <li>· Watch <span class="font-mono text-xs">phrase_state</span> <em>and</em> <span class="font-mono text-xs">next_phrase_state</span> — either can change at any time</li>
+                <li>· Any change → rebuild that sheet as fast as possible</li>
+                <li>· Entering Synced from Standalone → build both sheets at once</li>
+                <li>· Steady state → one build at a time</li>
+              </ul>
+              <p class="text-xs text-slate-500 mt-3">Rebuilds are cheap <em>by design</em>: sheets carry marks only, never casting. That's the whole reason effects/transitions aren't assigned at build time.</p>
+            </div>
+          </div>
+          <p class="text-sm text-slate-300"><span class="text-red-300 font-semibold">Problem:</span> the planner resolves sheet identity per beat instead of watching the two phrase signals; a mid-phrase change to the announcement isn't noticed until turnover, and there's no two-sheet state to promote from.</p>
+          <p class="text-sm text-slate-300"><span class="text-emerald-300 font-semibold">Solution:</span> hold current + announced sheets keyed on their phrase identity; rebuild eagerly on any change in either signal; promote announced → current at turnover. <span class="font-mono text-xs">CueSheet.Build</span> stays untouched.</p>
+          <ul class="text-sm text-slate-300 grid md:grid-cols-3 gap-1">
+            <li>· Sheet identity = phrase event</li>
+            <li>· DJ changes land before turnover</li>
+            <li>· Branch-5 fallback deleted</li>
+          </ul>
+        </article>
+
+        <!-- Card 2: watch until lock -->
+        <article id="watch-until-lock" class="rounded-xl border border-red-900/60 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">The Director stops directing after it sends</h3>
+            <span class="chip bg-red-900/50 text-red-300 border border-red-700">gap</span>
+            <span class="chip bg-slate-800 text-slate-400">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">Assets/core/Switching/Director.cs:617-790 · CuePlanner.cs:241-246 · Switcher.cs:293-311</p>
+          <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 overflow-x-auto">
+            <svg viewBox="0 0 860 170" class="w-full min-w-[640px]" font-family="ui-monospace, monospace">
+              <line x1="30" y1="90" x2="830" y2="90" stroke="#475569" stroke-width="2"/>
+              <g stroke="#475569">
+                <line x1="80" y1="84" x2="80" y2="96"/><line x1="180" y1="84" x2="180" y2="96"/>
+                <line x1="280" y1="84" x2="280" y2="96"/><line x1="380" y1="84" x2="380" y2="96"/>
+                <line x1="480" y1="84" x2="480" y2="96"/><line x1="580" y1="84" x2="580" y2="96"/>
+                <line x1="680" y1="84" x2="680" y2="96"/><line x1="780" y1="84" x2="780" y2="96"/>
+              </g>
+              <circle cx="180" cy="90" r="6" fill="#6366f1"/>
+              <text x="180" y="120" text-anchor="middle" fill="#a5b4fc" font-size="12">cue sent</text>
+              <text x="180" y="136" text-anchor="middle" fill="#64748b" font-size="10">UpsertLoadedCue</text>
+              <line x1="480" y1="55" x2="480" y2="125" stroke="#f59e0b" stroke-width="2"/>
+              <text x="480" y="45" text-anchor="middle" fill="#fbbf24" font-size="12">lock = StartBeat − 1</text>
+              <circle cx="580" cy="90" r="6" fill="#10b981"/>
+              <text x="580" y="120" text-anchor="middle" fill="#6ee7b7" font-size="12">runway start</text>
+              <circle cx="780" cy="90" r="7" fill="#ef4444"/>
+              <text x="780" y="120" text-anchor="middle" fill="#fca5a5" font-size="12">Cue Mark / impact</text>
+              <rect x="180" y="62" width="300" height="16" rx="8" fill="#dc2626" fill-opacity="0.25" stroke="#dc2626" stroke-dasharray="5 4"/>
+              <text x="330" y="74" text-anchor="middle" fill="#fda4af" font-size="11">intended re-direct window — currently nobody watches it</text>
+            </svg>
+          </div>
+          <p class="text-sm text-slate-300"><span class="text-red-300 font-semibold">Problem:</span> after <span class="font-mono text-xs">CommitSentCue</span>, consumed-mark memory makes every later beat for that mark return <span class="font-mono text-xs">Wait</span>, and the cursor advances past it — the Director never re-reads Fill/Drop/Energy for the loaded cue. If the DJ changes the song between send and lock, the cue fires stale.</p>
+          <p class="text-sm text-slate-300"><span class="text-emerald-300 font-semibold">Solution:</span> each synced beat, while the Switcher answers <em>not locked</em> and the loaded mark is unchanged, re-run event intent + casting off the timing grid and what's coming up; upsert only when the decision differs. The Switcher side already exists and is idle: the replace-unlocked branch and <span class="font-mono text-xs">SameCue</span> (Switcher.cs:515-531) were built for exactly this.</p>
+          <ul class="text-sm text-slate-300 grid md:grid-cols-3 gap-1">
+            <li>· Live event stays live</li>
+            <li>· Latent Switcher interface earns its keep</li>
+            <li>· Lock stays the single point of no return</li>
+          </ul>
+        </article>
+
+        <!-- Card 2b: hard-cut addendum -->
+        <article id="hard-cut" class="rounded-xl border border-red-900/60 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">Addendum: the live hard cut is late-commit backdating — not a rogue Director</h3>
+            <span class="chip bg-red-900/50 text-red-300 border border-red-700">gap</span>
+            <span class="chip bg-slate-800 text-slate-400">confirmed live symptom</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">Switcher.cs:349-374,432,546-551 · TransitionBeatPlan.cs:37-40 · CuePlanner.cs:113-160,239-251 · Director.cs:571-585,792-824</p>
+          <p class="text-sm text-slate-300"><span class="text-emerald-300 font-semibold">Ruled out:</span> the Director never mutates transition timing (no transition analog of the effect overrides exists), and no saved <span class="font-mono text-xs">TransitionSettings</span> asset is 0/0 — saved runway/tail: Fade 4/0, DirectionalWipe 5/0, IndexWipe 4/0, Iris 1/4, Noise 4/1, Fizzle 4/1, RGBFade 5/1. The explicit zero-duration cut branch is unreachable with current data.</p>
+          <p class="text-sm text-slate-300"><span class="text-red-300 font-semibold">Mechanism:</span> the Switcher anchors the timer to the <em>musical</em> start (<span class="font-mono text-xs">StartBeat = CueMark − Runway</span>), but the cue window accepts commits from StartBeat through CompleteBeat. Commit on the impact beat and the start is already Runway beats in the past — progress backdates to <span class="font-mono text-xs">Runway/(Runway+Tail)</span> on the first frame. For a zero-tail transition that is <strong>1.0: a real transition "ran," the wall showed a hard cut</strong>. The strongest intermittent trigger: the planner holds a mark open past impact sized by the <em>staged</em> transition's tail, then the deck commits a <em>different, zero-tail</em> transition. Drop cues without drop-protect land it on the drop beat — the most visible moment.</p>
+          <div class="rounded-lg border border-emerald-700 bg-slate-950/60 p-4 space-y-2 text-sm text-slate-300">
+            <h4 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">The intended execution model (clarified 2026-07-05)</h4>
+            <p>The Cue Mark is planning vocabulary only — it names where impact lands, and the runway/tail split decides whether the move is front-loaded or back-loaded around it. Execution never works "off the cue mark":</p>
+            <ul class="space-y-1 font-mono text-xs">
+              <li>StartBeat = CueMark − RunwayBeats</li>
+              <li>duration = (RunwayBeats + TailBeats) × avg-beat-ms</li>
+              <li>fire ON the start beat · lock one beat before · timer runs · done</li>
+            </ul>
+            <p>One rule makes it true: <strong>a cue must commit before its lock point.</strong> Too late for the selected transition's runway → it does not cue (next mark, or a shorter-runway transition; fail plainly). That deletes the late-commit window, the backdating math, and the planner's late-cue-window plumbing — the accreted tolerance for skipped OSC beat frames that a watching Director no longer needs.</p>
+          </div>
+          <ul class="text-sm text-slate-300 grid md:grid-cols-3 gap-1">
+            <li>· Hard cuts become impossible by construction</li>
+            <li>· Switcher shrinks to load → lock → timer → fire</li>
+            <li>· Rides along with watch-until-lock</li>
+          </ul>
+        </article>
+
+        <!-- Card 3: grid rung -->
+        <article id="grid-rung" class="rounded-xl border border-red-900/60 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">No phrase → cue off the timing grid (the one rung that should exist)</h3>
+            <span class="chip bg-red-900/50 text-red-300 border border-red-700">gap</span>
+            <span class="chip bg-slate-800 text-slate-400">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">CuePlanner.cs · OnAirTiming.cs:22-75 · BeatManagerQueries.cs (Grid) · RaveOscSnapshot.cs (timing_grid, iis)</p>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <h4 class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Now</h4>
+              <ul class="text-sm space-y-1.5 text-slate-300">
+                <li>· No phrase data → Unlocked frames → <span class="text-red-300">zero cues for the whole track</span></li>
+                <li>· <span class="font-mono text-xs">timing_grid</span> arrives on the wire (beat 1–16 = the One, bar, locked/coasting/disputed) but the Director/planner never reads it — HUD only</li>
+              </ul>
+            </div>
+            <div class="rounded-lg border border-emerald-700 bg-slate-950/60 p-4">
+              <h4 class="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-300">Intended ladder — three rungs, no more</h4>
+              <ol class="text-sm space-y-1.5 text-slate-300 list-decimal list-inside">
+                <li>Phrase data → Cue Sheets (the real model)</li>
+                <li>No phrase → cue on the <span class="font-mono text-xs">timing_grid</span> One</li>
+                <li>No grid → Standalone Mode</li>
+              </ol>
+            </div>
+          </div>
+          <p class="text-sm text-slate-300"><span class="text-emerald-300 font-semibold">Solution:</span> add <span class="font-mono text-xs">timing_grid</span> to <span class="font-mono text-xs">OnAirTimingInput</span>; when both phrase queries are null, target the grid's next One on the 16-beat cadence. No synthetic phrases, no coasting, no fabricated windows — the grid is real wire data, and the grid is what the Director should be watching anyway.</p>
+          <p class="text-sm text-amber-200/90 bg-amber-950/40 border border-amber-800 rounded-md px-3 py-2">One deliberate decision rides along: "no timing grid → Standalone" makes <span class="font-mono text-xs">timing_grid</span> presence the Synced/Standalone authority. Today the authority is <span class="font-mono text-xs">beat_in_bar ≥ 1</span> (ADR-0007). If the grid becomes the gate, amend ADR-0007 explicitly rather than letting two authorities coexist.</p>
+        </article>
+
+        <!-- Card 4: matches -->
+        <article id="what-matches" class="rounded-xl border border-emerald-900/70 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">What already matches the model — don't rebuild it</h3>
+            <span class="chip bg-emerald-900/60 text-emerald-300 border border-emerald-700">matches</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">CueSheet.cs · Director.cs:629-790 · Switcher.cs:364-447 · Deck.cs</p>
+          <div class="grid md:grid-cols-2 gap-4 text-sm text-slate-300">
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 space-y-2">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">Cue placement (CueSheet.Build)</h4>
+              <ul class="space-y-1">
+                <li>· 16-beat grid (<span class="font-mono text-xs">DefaultGridBeats = 16</span>)</li>
+                <li>· Random interior count, uniform over [0, N] inclusive, drawn without replacement</li>
+                <li>· Mandatory final mark at phrase end — always</li>
+                <li>· Gaps &gt; 64 beats filled at previous + 64</li>
+                <li>· Marks are timing only — the deliberate cheap-rebuild design</li>
+              </ul>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 space-y-2">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">Cue commit + lock (Director / Switcher)</h4>
+              <ul class="space-y-1">
+                <li>· Casting happens at the commit point, per synced beat</li>
+                <li>· Reads live <span class="font-mono text-xs">Fill</span>/<span class="font-mono text-xs">Drop</span>: Drop, DropApproaching, Fill intents; drop-protect keeps a HandlesDrop performer on stage</li>
+                <li>· Energy biases casting, always behind event intent</li>
+                <li>· Deck cards pulled only when a cue is actually sent</li>
+                <li>· Lock = one beat before runway start; locked = immutable; fires unconditionally</li>
+              </ul>
+            </div>
+          </div>
+          <p class="text-sm text-slate-300">These modules are deep: small interfaces (<span class="font-mono text-xs">Plan → TimingFrame</span>, <span class="font-mono text-xs">UpsertLoadedCue</span>) hiding real behavior. The intended model lands as a re-wiring of triggers, not a rewrite.</p>
+        </article>
+
+        <!-- Card 5: switcher seam -->
+        <article id="switcher-seam" class="rounded-xl border border-amber-800/70 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">Shrink the Switcher's answer to one word: locked</h3>
+            <span class="chip bg-amber-900/50 text-amber-300 border border-amber-700">partial</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">Switcher.cs:200,580-591 · Controller.cs (HUD) · Assets/Editor/ControllerEditor.cs:336</p>
+          <p class="text-sm text-slate-300"><span class="text-amber-300 font-semibold">Problem:</span> execution is already fire-and-forget (the Director never polls Loaded/Started lifecycle — good). But the Switcher's interface is wider than the model wants: <span class="font-mono text-xs">SwitcherStatus</span> and <span class="font-mono text-xs">SwitcherCueStatus</span> publish source/target/progress/cue detail consumed by the HUD and inspector, and <span class="font-mono text-xs">CanUpdate</span> is read only by the editor panel. The intended contract: the Director asks <em>locked?</em>; nobody else asks the Switcher anything.</p>
+          <p class="text-sm text-slate-300"><span class="text-emerald-300 font-semibold">Solution:</span> the runtime seam becomes <span class="font-mono text-xs">UpsertLoadedCue / AbortLoadedCue / Render + IsLocked</span>. Observability moves behind the Director's own status (the observatory already reads the Director's last Cue Decision, 847bf9ed) — inspectors follow the runtime, never the reverse, per the repo's own rule. Interface shrinks; implementation absorbs the status plumbing.</p>
+          <ul class="text-sm text-slate-300 grid md:grid-cols-3 gap-1">
+            <li>· One caller, one question</li>
+            <li>· Locality: cue truth lives in the Director</li>
+            <li>· Pairs with watch-until-lock</li>
+          </ul>
+        </article>
+
+        <!-- Card 6: beat-data seam -->
+        <article id="beat-seam" class="rounded-xl border border-red-900/60 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">One seam for effects/transitions to pull beat data</h3>
+            <span class="chip bg-red-900/50 text-red-300 border border-red-700">gap</span>
+            <span class="chip bg-slate-800 text-slate-400">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">Assets/core/Effects/EffectBase.cs · Assets/core/Rhythm/BeatManagerQueries.cs · Assets/effects/**</p>
+          <p class="text-sm text-slate-300"><span class="text-red-300 font-semibold">Problem:</span> effects evolved alongside the OSC stack, so each pulls BeatManager data its own way — direct <span class="font-mono text-xs">GetBeatBrightness(variant, max, min, enable)</span> calls with hand-swapped min/max for inverted pulses, ad-hoc query mixes — while the existing <span class="font-mono text-xs">EffectBase.BeatBrightness()/BeatTime()</span> wrappers sit unused by <em>every</em> effect (too rigid: fixed max, hardcoded time base). Same plumbing, duplicated ~26 times in slightly different shapes. Transitions are about to join in as they gain fill/drop behavior — without a seam, they'll duplicate it again.</p>
+          <p class="text-sm text-slate-300"><span class="text-emerald-300 font-semibold">Solution:</span> audit the real pull patterns across the 26 effects (there are only a few genuine shapes), replace the dead rigid wrappers with helpers that cover those shapes, and keep the contract two-sided: <span class="font-mono text-xs">Repertoire</span> advertises <em>what</em> an effect/transition supports; the shared seam is <em>how</em> it pulls; the effect alone decides how to use it. Deduplicate plumbing, not creative decisions.</p>
+          <ul class="text-sm text-slate-300 grid md:grid-cols-3 gap-1">
+            <li>· Leverage: one interface, 26+ call sites</li>
+            <li>· Transitions inherit the seam for free</li>
+            <li>· Delete the unused wrappers</li>
+          </ul>
+          <p class="text-sm text-amber-200/90 bg-amber-950/40 border border-amber-800 rounded-md px-3 py-2">Needs its own audit pass first: this review counted the duplication but did not catalog every effect's pull pattern. Design the helpers from that catalog, not from speculation.</p>
+        </article>
+
+        <!-- Card 7: repertoire coverage -->
+        <article id="repertoire" class="rounded-xl border border-amber-800/70 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">Repertoire coverage — the acknowledged gap, quantified</h3>
+            <span class="chip bg-amber-900/50 text-amber-300 border border-amber-700">partial</span>
+          </div>
+          <p class="font-mono text-sm text-slate-400">Assets/core/Effects/Repertoire.cs · Assets/effects/** · Assets/transitions/**</p>
+          <div class="grid md:grid-cols-3 gap-4 text-center">
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <p class="text-3xl font-mono text-emerald-300">10<span class="text-slate-500 text-xl">/26</span></p>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mt-1">effects HandlesFill</p>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <p class="text-3xl font-mono text-amber-300">5<span class="text-slate-500 text-xl">/26</span></p>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mt-1">effects HandlesDrop</p>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4">
+              <p class="text-3xl font-mono text-red-300">0<span class="text-slate-500 text-xl">/7</span></p>
+              <p class="text-xs uppercase tracking-wider text-slate-400 mt-1">transitions with fill/drop behavior</p>
+            </div>
+          </div>
+          <ul class="text-sm text-slate-300 space-y-1">
+            <li>· The 5 drop performers are exactly the fill∩drop set: CrystalGrowth, Angles, Tunnel, Ripple, Lightning. No effect declares Drop without Fill.</li>
+            <li>· Transitions: 3 of 7 (Fizzle, Iris, Noise) carry a <span class="font-mono text-xs">HandlesDrop</span> tag — but that only biases casting; no transition <em>expresses</em> a fill or drop yet. 0 carry HandlesFill.</li>
+            <li>· All 26 effects declare energy suitability (Low/Mid/High flags), so <span class="font-mono text-xs">EnergyCasting</span> already has full coverage to bias with.</li>
+            <li>· With only 5 drop performers, drop-protect + preferred-cast will cycle a narrow pool on drop-heavy sets. Expanding HandlesDrop coverage is the highest-leverage repertoire work — easier once the <a href="#beat-seam" class="text-indigo-400 underline">shared beat-data seam</a> exists.</li>
+          </ul>
+        </article>
+
+        <!-- Card 8: cleanup -->
+        <article id="cleanup" class="rounded-xl border border-slate-700 bg-slate-900/50 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <h3 class="font-serif text-xl text-slate-50">Cleanup inventory — what's actually legacy</h3>
+            <span class="chip bg-slate-800 text-slate-300 border border-slate-600">cleanup</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 text-sm text-slate-300">
+            <div class="rounded-lg border border-emerald-800 bg-slate-950/60 p-4 space-y-2">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">Delete now — zero risk</h4>
+              <ul class="space-y-1 font-mono text-xs">
+                <li>Assets/core/Reference/ — both files are #if false ("nova" Controller copy + legacy Transition base)</li>
+                <li>PhraseWindow.HasSameTimingIdentity — zero references</li>
+                <li>TimingFrame.BeatsUntilCueMark — assigned, never read</li>
+                <li>TransitionRepertoire.HasTail, .ImpactPoint — unreferenced accessors</li>
+              </ul>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 space-y-2">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Keep — supported until replaced</h4>
+              <ul class="space-y-1">
+                <li><span class="font-mono text-xs">OSC.cs + OSCReader.cs</span> — the TouchOSC control surface on its own port; it's the live hardware-brightness control (plus effect buttons, drums, camera). Stays until a replacement path exists. Its <span class="font-mono text-xs">/beat</span> branch is an empty no-op and could be trimmed independently.</li>
+                <li><span class="font-mono text-xs">Switcher.SameCue</span> / replace-unlocked branch — dead today, but it's the implementation surface for <a href="#watch-until-lock" class="text-indigo-400 underline">watch-until-lock</a>. Don't delete; exercise.</li>
+              </ul>
+            </div>
+            <div class="rounded-lg border border-amber-800 bg-slate-950/60 p-4 space-y-2">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-amber-300">Needs a decision</h4>
+              <ul class="space-y-1">
+                <li><span class="font-mono text-xs">PREP_CAPTURE</span> remnants in Controller — on/off minute scheduling + he.net web POST, dead in normal builds; removable if the capture flag is retired.</li>
+              </ul>
+            </div>
+            <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 space-y-2">
+              <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Not legacy — verified live</h4>
+              <ul class="space-y-1">
+                <li>No local beat simulator exists anywhere; the only timing source is <span class="font-mono text-xs">RaveOscReceiver → BeatManager</span>.</li>
+                <li>Standalone timer path (<span class="font-mono text-xs">TickStandaloneMode</span>) — intentional no-OSC mode, ADR-0007.</li>
+                <li><span class="font-mono text-xs">IsSynced</span> vs <span class="font-mono text-xs">IsLiveSource</span> — mode authority vs connectivity diagnostics; both load-bearing (authority may move to the timing grid — see <a href="#grid-rung" class="text-indigo-400 underline">the grid rung</a>).</li>
+                <li>drums.cs, camera overlay, telnet blender selection — live/conditional inputs, not remnants.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <!-- ============ TOP RECOMMENDATION ============ -->
+      <section id="top-recommendation" class="rounded-xl border-2 border-indigo-700 bg-gradient-to-br from-slate-900 to-indigo-950/40 p-8 space-y-3">
+        <h2 class="font-serif text-2xl text-slate-100">Top recommendation</h2>
+        <p class="text-slate-200">The three red gaps are one defect: <strong>the Director decides once and stops watching.</strong> Fix it as one watch loop, in this order — <a href="#watch-until-lock" class="text-indigo-300 underline font-semibold">re-direct the loaded cue until the Switcher says locked</a> (the Switcher half is built and idle; touches one seam) — and with it the <a href="#hard-cut" class="text-indigo-300 underline font-semibold">commit-before-lock rule</a> that kills the live hard-cut bug — then <a href="#build-trigger" class="text-indigo-300 underline font-semibold">watch both phrase signals and rebuild sheets eagerly</a>, then <a href="#grid-rung" class="text-indigo-300 underline font-semibold">add the timing-grid rung</a> for phrase-less tracks. <a href="#beat-seam" class="text-indigo-300 underline font-semibold">The shared beat-data seam</a> is the parallel track — it unblocks the repertoire coverage work that gives the watching Director something to cast.</p>
+      </section>
+
+      <footer class="text-xs text-slate-600 pb-8">
+        Sources: Assets/core/Switching/{Director, CuePlanner, CueSheet, PhraseWindow, OnAirTiming, SyncedCueIntent, Switcher, Deck, ChangeCadence, EnergyCasting}.cs · Assets/OSC/Rave/RaveOscSnapshot.cs · Assets/core/Rhythm/BeatManagerQueries.cs · Controller.cs. Verified against master @ c3176c07 on 2026-07-04; rev 2 incorporates Hunter's clarified model (grid rung, two-phrase watch, locked-only Switcher seam, TouchOSC retained, shared beat-data seam), 2026-07-05 · rev 3 adds the hard-cut addendum (late-commit backdating) and the start-beat execution model, 2026-07-05.
+      </footer>
+    </main>
+  </body>
+</html>

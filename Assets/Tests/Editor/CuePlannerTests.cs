@@ -85,7 +85,7 @@ public sealed class CuePlannerTests
     }
 
     [Test]
-    public void NewPhraseFrameAtMandatoryBoundaryKeepsPreviousCueMarkCueable()
+    public void NewPhraseFrameArrivingExactlyOnTheMissedBoundaryPlansTheNewPhrase()
     {
         var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
 
@@ -93,12 +93,15 @@ public sealed class CuePlannerTests
             TrackPhaseInput(beat: 594, beatsUntilPhraseEnd: 15, phraseLengthBeats: 32),
             minimumChangeCadenceBeats: 16);
 
+        // Beat 609 is at/past the 609 boundary's Lock Point for any runway: the mark is missed for
+        // good. The frame on the boundary rebuilds the new Phrase's sheet (609..673), whose first
+        // selected interior mark lands on the 16-grid at 625.
         var frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 609, beatsUntilPhraseEnd: 64, phraseLengthBeats: 64),
             minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(609));
-        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(625));
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.CueMark));
     }
 
     [Test]
@@ -230,13 +233,13 @@ public sealed class CuePlannerTests
         cuePlanner.RecordCueIssued(589);
         cuePlanner.MarkChanged(593);
         var frame = cuePlanner.Plan(
-            TrackPhaseInput(beat: 589, beatsUntilPhraseEnd: 52, phraseLengthBeats: 64),
+            TrackPhaseInput(beat: 587, beatsUntilPhraseEnd: 54, phraseLengthBeats: 64),
             minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.BeatRewoundToNewPass, Is.True);
         Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
         Assert.That(
-            cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 593), beat: 589, minimumChangeCadenceBeats: 16),
+            cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 593), beat: 587, minimumChangeCadenceBeats: 16),
             Is.EqualTo(CueTimingVerdict.Cue),
             "Cue/commit memory from the previous pass must not block the replayed mark.");
     }
@@ -303,7 +306,7 @@ public sealed class CuePlannerTests
     }
 
     [Test]
-    public void MissedUnconsumedCueMarkStaysCueableInsideTheLateCueWindow()
+    public void MissedUnconsumedCueMarkIsSkippedOncePassed()
     {
         var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
 
@@ -314,16 +317,14 @@ public sealed class CuePlannerTests
 
         frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 594, beatsUntilPhraseEnd: 47, phraseLengthBeats: 64),
-            minimumChangeCadenceBeats: 16,
-            lateCueWindowBeats: 4);
+            minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(593),
-            "An unconsumed Cue Mark stays the target while a late cue can still complete inside the window.");
-        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(-1));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(641),
+            "A mark that passed uncommitted is skipped, never held open or fired late.");
     }
 
     [Test]
-    public void MissedMandatoryBoundaryStaysCueableAcrossPhraseTurnoverInsideTheLateCueWindow()
+    public void PhraseTurnoverSkipsTheMissedBoundaryAndPlansTheNewPhrase()
     {
         var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
 
@@ -333,17 +334,15 @@ public sealed class CuePlannerTests
 
         var frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 610, beatsUntilPhraseEnd: 31, phraseLengthBeats: 32),
-            minimumChangeCadenceBeats: 16,
-            lateCueWindowBeats: 8);
+            minimumChangeCadenceBeats: 16);
 
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(609),
-            "The missed boundary Cue Mark stays cueable across the turnover while a Tail can still complete.");
-        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.TrackPhaseBoundary));
-        Assert.That(frame.BeatsUntilCueMark, Is.EqualTo(-1));
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(625),
+            "A boundary that passed uncommitted is gone; the new Phrase Window plans its own marks.");
+        Assert.That(frame.Source, Is.EqualTo(TimingFrameSource.CueMark));
     }
 
     [Test]
-    public void LoopRewindIntoAFiredCueMarksLateWindowDoesNotRepresentIt()
+    public void LoopRewindIntoAFiredCueMarkDoesNotRepresentIt()
     {
         var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
 
@@ -358,34 +357,15 @@ public sealed class CuePlannerTests
             TrackPhaseInput(beat: 620, beatsUntilPhraseEnd: 21, phraseLengthBeats: 64),
             minimumChangeCadenceBeats: 16);
 
-        // The loop replays from 594 — inside the fired mark's late window. The pass-local commit memory
+        // The loop replays from 594 — just past the fired mark. The pass-local commit memory
         // (593 < 594) survives the rewind, so the fired mark must not come back.
         frame = cuePlanner.Plan(
             TrackPhaseInput(beat: 594, beatsUntilPhraseEnd: 47, phraseLengthBeats: 64),
-            minimumChangeCadenceBeats: 16,
-            lateCueWindowBeats: 8);
+            minimumChangeCadenceBeats: 16);
 
         Assert.That(frame.BeatRewoundToNewPass, Is.True);
         Assert.That(cuePlanner.CanChangeAt(608, minimumChangeCadenceBeats: 16), Is.False, "The commit memory survives a rewind to after the fired mark.");
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(641), "The fired mark must not be re-presented inside its late window.");
-    }
-
-    [Test]
-    public void MissedCueMarkPastItsLateWindowIsSkipped()
-    {
-        var cuePlanner = new CuePlanner(SelectFirstInteriorBoundary());
-
-        var frame = cuePlanner.Plan(
-            TrackPhaseInput(beat: 588, beatsUntilPhraseEnd: 53, phraseLengthBeats: 64),
-            minimumChangeCadenceBeats: 16);
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(593));
-
-        frame = cuePlanner.Plan(
-            TrackPhaseInput(beat: 602, beatsUntilPhraseEnd: 39, phraseLengthBeats: 64),
-            minimumChangeCadenceBeats: 16,
-            lateCueWindowBeats: 8);
-
-        Assert.That(frame.CueMarkBeat, Is.EqualTo(641), "A mark whose cue window has fully closed is skipped, not held.");
+        Assert.That(frame.CueMarkBeat, Is.EqualTo(641), "The fired mark must not be re-presented after it passed.");
     }
 
     [Test]
@@ -412,52 +392,36 @@ public sealed class CuePlannerTests
     // RecordCueIssued/MarkChanged like the Director.
 
     [Test]
-    public void EvaluateCueTimingWaitsBeforeRunway()
+    public void EvaluateCueTimingCuesBeforeTheLockPoint()
     {
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 604, minimumChangeCadenceBeats: 16);
-
-        Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait));
-    }
-
-    [Test]
-    public void EvaluateCueTimingCuesInsideRunway()
-    {
-        var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
-
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 605, minimumChangeCadenceBeats: 16);
+        // Cue Mark 609, Runway 4: Start Beat 605, Lock Point 604 — beat 603 is the last commit chance.
+        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Cue));
     }
 
-    [Test]
-    public void EvaluateCueTimingCuesLateInsideTailWhenImpactWasMissed()
+    [TestCase(604, TestName = "EvaluateCueTimingWaitsAtTheLockPoint")]
+    [TestCase(605, TestName = "EvaluateCueTimingWaitsAtTheRunwayStart")]
+    [TestCase(611, TestName = "EvaluateCueTimingWaitsInsideTheTail")]
+    [TestCase(614, TestName = "EvaluateCueTimingWaitsPastCompleteBeat")]
+    public void EvaluateCueTimingWaitsFromTheLockPointOn(int beat)
     {
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 611, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat, minimumChangeCadenceBeats: 16);
 
-        Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Cue));
+        Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait), "A mark whose Lock Point arrived uncommitted is missed, never fired late.");
     }
 
     [Test]
-    public void EvaluateCueTimingWaitsPastCompleteBeat()
-    {
-        var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
-
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 614, minimumChangeCadenceBeats: 16);
-
-        Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait));
-    }
-
-    [Test]
-    public void EvaluateCueTimingBlocksCadenceInsideRunway()
+    public void EvaluateCueTimingBlocksCadenceBeforeTheLockPoint()
     {
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
         cuePlanner.MarkChanged(600);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 605, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.BlockedByCadence));
     }
@@ -468,7 +432,7 @@ public sealed class CuePlannerTests
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
         cuePlanner.MarkChanged(609);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 611, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait), "A committed Cue Mark is done, not paced.");
     }
@@ -477,9 +441,9 @@ public sealed class CuePlannerTests
     public void EvaluateCueTimingWaitsWhenBeatAlreadyIssuedCue()
     {
         var cuePlanner = new CuePlanner((minInclusive, _) => minInclusive);
-        cuePlanner.RecordCueIssued(605);
+        cuePlanner.RecordCueIssued(603);
 
-        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 605, minimumChangeCadenceBeats: 16);
+        var verdict = cuePlanner.EvaluateCueTiming(FourBeatRunwayPlan(cueMarkBeat: 609), beat: 603, minimumChangeCadenceBeats: 16);
 
         Assert.That(verdict, Is.EqualTo(CueTimingVerdict.Wait));
     }

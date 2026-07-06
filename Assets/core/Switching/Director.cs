@@ -564,25 +564,11 @@ public sealed class Director
         TryStartSyncedCue(timingFrame);
     }
 
-    /// <summary>
-    /// Tail of the staged Next Transition — the late-cue window the planner holds an unconsumed
-    /// Cue Mark open for, since a cue there can still start backdated and complete.
-    /// </summary>
-    private int StagedTransitionTailBeats()
-    {
-        return IsValidTransitionIndex(nextTransitionIndex)
-            ? controller.transitions[nextTransitionIndex].Repertoire.TailBeats
-            : 0;
-    }
-
     private void RefreshTimingFrame()
     {
         var previousLandingBeat = timingFrame.CueMarkBeat;
         var input = OnAirTimingInput.From(controller.beatManager);
-        timingFrame = cuePlanner.Plan(
-            input,
-            MinimumChangeCadenceBeats,
-            StagedTransitionTailBeats());
+        timingFrame = cuePlanner.Plan(input, MinimumChangeCadenceBeats);
 
         if (timingFrame.HasCueMark && timingFrame.CueMarkBeat != previousLandingBeat)
         {
@@ -928,7 +914,7 @@ public sealed class Director
 
     private static bool CanTransitionCueNow(TimingFrame frame, TransitionRepertoire repertoire)
     {
-        return TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire).IsCueBeat(frame.CurrentBeat);
+        return TransitionBeatPlan.FromCueMark(frame.CueMarkBeat, repertoire).CanCommitAt(frame.CurrentBeat);
     }
 
     private void RunStandaloneTimerDecision()

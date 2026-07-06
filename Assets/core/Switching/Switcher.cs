@@ -289,6 +289,9 @@ public sealed class Switcher
 
     /// <summary>
     /// Inserts or updates one beat-domain cue direction for fire-and-forget Switcher execution.
+    /// A cue must arrive strictly before its Lock Point (one beat before the Runway start); a
+    /// later cue is rejected outright, so a transition never starts behind its beat plan and
+    /// progress never backdates.
     /// </summary>
     public void UpsertLoadedCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
     {
@@ -306,8 +309,14 @@ public sealed class Switcher
             return;
         }
 
-        LoadCue(cue, clock);
-        StartLoadedCueIfDue(clock.NowSeconds);
+        var beatPlan = TransitionBeatPlan.FromCueMark(cue.CueMarkBeat, cue.TransitionRepertoire);
+        if (!beatPlan.CanCommitAt(clock.CurrentBeat))
+        {
+            Trace($"SWITCHER_REJECT_LATE_CUE beat={clock.CurrentBeat} cueMark={cue.CueMarkBeat} lock={beatPlan.LockPointBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+            return;
+        }
+
+        LoadCue(cue, beatPlan, clock);
     }
 
     /// <summary>
@@ -402,15 +411,15 @@ public sealed class Switcher
         return (Color[])effect.buffer.Clone();
     }
 
-    private void LoadCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
+    private void LoadCue(SwitcherCueDirection cue, TransitionBeatPlan beatPlan, SwitcherClockSnapshot clock)
     {
         loadedCue = cue;
-        loadedCueBeatPlan = TransitionBeatPlan.FromCueMark(cue.CueMarkBeat, cue.TransitionRepertoire);
-        loadedCueLockPointBeat = loadedCueBeatPlan.StartBeat - 1;
+        loadedCueBeatPlan = beatPlan;
+        loadedCueLockPointBeat = beatPlan.LockPointBeat;
         loadedCueLockTime = TimeAtBeat(clock, loadedCueLockPointBeat);
         loadedCueStartTime = TimeAtBeat(clock, loadedCueBeatPlan.StartBeat);
         loadedCueSecondsPerBeat = clock.SecondsPerBeat;
-        loadedCueLocked = clock.CurrentBeat >= loadedCueLockPointBeat;
+        loadedCueLocked = false;
         hasLoadedCue = true;
         Trace($"SWITCHER_LOAD_CUE cueMark={cue.CueMarkBeat} lock={loadedCueLockPointBeat} start={loadedCueBeatPlan.StartBeat} startTime={loadedCueStartTime:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
     }

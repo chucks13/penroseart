@@ -110,43 +110,10 @@ public sealed class CuePlanner
                 && PhraseWindow.TryFromStartAndLength(phraseStartBeat, sheet.PhraseLengthBeats, out phraseWindow);
         }
 
-        public bool TryKeepUnconsumedMandatoryBoundaryAt(
-            int beat,
-            int? consumedCueMarkBeat,
-            int lateCueWindowBeats,
-            out int cueMarkBeat,
-            out PhraseWindow phraseWindow)
-        {
-            cueMarkBeat = -1;
-            phraseWindow = default;
-            if (!HasSheet
-                || IsConsumedThroughPhraseEnd(consumedCueMarkBeat)
-                || !PhraseWindow.TryFromStartAndLength(phraseStartBeat, sheet.PhraseLengthBeats, out phraseWindow))
-            {
-                return false;
-            }
-
-            AdvanceTo(beat, consumedCueMarkBeat, lateCueWindowBeats);
-            var currentCueMark = CurrentCueMarkOr(-1);
-            // Keep the mark only when the cursor's mark is the phrase end and this beat is at that mark
-            // or late inside its cue window — an unconsumed mandatory boundary can still cue while a
-            // Tail can complete there. AdvanceTo is monotone and idempotent, so advancing here costs
-            // nothing when the keep declines.
-            if (currentCueMark != PhraseEndBeat
-                || beat < PhraseEndBeat
-                || beat > PhraseEndBeat + lateCueWindowBeats)
-            {
-                return false;
-            }
-
-            cueMarkBeat = currentCueMark;
-            return true;
-        }
-
-        public void AdvanceTo(int beat, int? consumedCueMarkBeat, int lateCueWindowBeats = 0)
+        public void AdvanceTo(int beat, int? consumedCueMarkBeat)
         {
             var cueMarkOffsets = CueMarkOffsets;
-            while (index < cueMarkOffsets.Length - 1 && CueMarkAt(index) + lateCueWindowBeats < beat)
+            while (index < cueMarkOffsets.Length - 1 && CueMarkAt(index) < beat)
             {
                 index++;
             }
@@ -232,15 +199,16 @@ public sealed class CuePlanner
 
     /// <summary>
     /// The per-beat cue timing verdict, answered from the planner's own pass-local memory: a beat
-    /// that already issued a cue waits, an already-committed Cue Mark waits, a beat outside the
-    /// Transition's cue window waits, and a Mark whose landing violates the minimum change cadence
-    /// blocks. Timing is decided here; casting (which Performer/Transition) stays with the Director.
+    /// that already issued a cue waits, an already-committed Cue Mark waits, a beat at or past the
+    /// plan's Lock Point waits (too late to commit — the mark is missed, never fired late), and a
+    /// Mark whose landing violates the minimum change cadence blocks. Timing is decided here;
+    /// casting (which Performer/Transition) stays with the Director.
     /// </summary>
     public CueTimingVerdict EvaluateCueTiming(TransitionBeatPlan beatPlan, int beat, int minimumChangeCadenceBeats)
     {
         if (lastCueBeat == beat
             || lastChangeBeat == beatPlan.ImpactBeat
-            || !beatPlan.IsCueBeat(beat))
+            || !beatPlan.CanCommitAt(beat))
         {
             return CueTimingVerdict.Wait;
         }
@@ -268,13 +236,9 @@ public sealed class CuePlanner
     /// memory (no Director round-trip): it reads its own remembered cue/change beats, clears the stale
     /// ones when the beat rewound into a new pass, and remembers the corrected values for the next call.
     /// </summary>
-    /// <param name="lateCueWindowBeats">Beats past an unconsumed Cue Mark during which it stays the
-    /// frame's target — the staged transition's Tail, where a late cue can still start backdated and
-    /// complete. Zero skips a missed mark immediately.</param>
     public TimingFrame Plan(
         OnAirTimingInput input,
-        int minimumChangeCadenceBeats,
-        int lateCueWindowBeats = 0)
+        int minimumChangeCadenceBeats)
     {
         if (minimumChangeCadenceBeats <= 0)
         {
@@ -310,21 +274,6 @@ public sealed class CuePlanner
 
         var consumedCueMarkBeat = ConsumedCueMarkBeat;
 
-        // A pending unconsumed mandatory boundary outlives its Phrase reading: it stays the target
-        // through its late-cue window even after Track Phase has moved to the next Phrase Window.
-        if (cueSheet.TryKeepUnconsumedMandatoryBoundaryAt(
-            input.Beat,
-            consumedCueMarkBeat,
-            lateCueWindowBeats,
-            out var keptCueMarkBeat,
-            out var keptWindow))
-        {
-            return BuildAnchoredFrame(
-                input,
-                new ResolvedTimingTarget(TimingFrameSource.TrackPhaseBoundary, keptCueMarkBeat, true, keptWindow),
-                beatRewoundToNewPass);
-        }
-
         // The live Phrase Window: plan interior cues and the mandatory boundary against it.
         if (PhraseWindow.TryFromTrackPhase(
                 input.Beat,
@@ -334,7 +283,7 @@ public sealed class CuePlanner
         {
             return BuildAnchoredFrame(
                 input,
-                ResolveFromWindow(liveWindow, input.Beat, beatRewoundToNewPass, consumedCueMarkBeat, minimumChangeCadenceBeats, lateCueWindowBeats),
+                ResolveFromWindow(liveWindow, input.Beat, beatRewoundToNewPass, consumedCueMarkBeat, minimumChangeCadenceBeats),
                 beatRewoundToNewPass);
         }
 
@@ -344,7 +293,7 @@ public sealed class CuePlanner
         {
             return BuildAnchoredFrame(
                 input,
-                ResolveFromWindow(activeWindow, input.Beat, beatRewoundToNewPass, consumedCueMarkBeat, minimumChangeCadenceBeats, lateCueWindowBeats),
+                ResolveFromWindow(activeWindow, input.Beat, beatRewoundToNewPass, consumedCueMarkBeat, minimumChangeCadenceBeats),
                 beatRewoundToNewPass);
         }
 
@@ -359,7 +308,7 @@ public sealed class CuePlanner
         {
             return BuildAnchoredFrame(
                 input,
-                ResolveFromWindow(upcomingWindow, input.Beat, beatRewoundToNewPass, consumedCueMarkBeat, minimumChangeCadenceBeats, lateCueWindowBeats),
+                ResolveFromWindow(upcomingWindow, input.Beat, beatRewoundToNewPass, consumedCueMarkBeat, minimumChangeCadenceBeats),
                 beatRewoundToNewPass);
         }
 
@@ -409,8 +358,7 @@ public sealed class CuePlanner
         int beat,
         bool beatRewoundToNewPass,
         int? consumedCueMarkBeat,
-        int minimumChangeCadenceBeats,
-        int lateCueWindowBeats)
+        int minimumChangeCadenceBeats)
     {
         if (!cueSheet.CoversWindow(window))
         {
@@ -426,7 +374,7 @@ public sealed class CuePlanner
             cueSheet.RewindCursor();
         }
 
-        cueSheet.AdvanceTo(beat, consumedCueMarkBeat, lateCueWindowBeats);
+        cueSheet.AdvanceTo(beat, consumedCueMarkBeat);
         var cueMarkBeat = cueSheet.CurrentCueMarkOr(window.EndBeat);
         var source = cueMarkBeat == cueSheet.PhraseEndBeat
             ? TimingFrameSource.TrackPhaseBoundary
