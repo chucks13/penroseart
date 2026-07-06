@@ -183,7 +183,7 @@ public sealed class ControllerEditor : Editor
 
     private static void DrawTimingAndCueSheet(Controller controller, DirectorStatus status, CueTimingOverlay cueOverlay)
     {
-        var gridCount = controller.beatManager?.Grid is { } grid ? grid.Count : -1;
+        var gridCount = controller.beatManager?.Grid is { } grid ? grid.Beat : -1;
         EditorGUILayout.LabelField("TIMING / CUE SHEET", EditorStyles.boldLabel);
         DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(gridCount)}");
         DrawRow("Timing Source", FormatTimingSource(status));
@@ -375,8 +375,8 @@ public sealed class ControllerEditor : Editor
         var beatManager = controller.beatManager;
         var grid = beatManager?.Grid;
         DrawRow("Cue Mark", status.HasCueMark ? "locked" : "none");
-        DrawRow("Grid Confidence", grid is { } g ? g.Confidence.ToString() : "unlocked");
-        DrawRow("Grid Count", grid is { } gc ? $"{gc.Count}/{PhraseWindow.DefaultGridBeats}" : "—");
+        DrawRow("Grid State", grid is { } g ? g.State.ToString() : "unlocked");
+        DrawRow("Grid Beat", grid is { } gc ? $"{gc.Beat}/{PhraseWindow.DefaultGridBeats}" : "—");
         DrawRow("Grid Bar", grid is { } gb ? $"{gb.Bar}/4" : "—");
         DrawRow("Phrase", FormatPhraseRow(beatManager?.Phrase));
         DrawRow("Next Phrase", FormatNextPhraseRow(beatManager?.NextPhrase));

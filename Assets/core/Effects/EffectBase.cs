@@ -39,7 +39,7 @@ public abstract class EffectBase
     public int beatVariant;
 
     /// <summary>Last frame's 16-beat Grid Count (1..16), so the wrap onto a new Grid can be edge-detected for <see cref="OnNewGrid"/>. 0 = off the grid last frame.</summary>
-    protected int lastGridCount;
+    protected int lastGridBeat;
 
     /// <summary>Catalog/display name for this effect. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
@@ -108,7 +108,7 @@ public abstract class EffectBase
     }
 
     /// <summary>
-    /// Edge-detects the downbeat of each new 16-beat Grid (Count wraps to 1) and fires <see cref="OnNewGrid"/>
+    /// Edge-detects the downbeat of each new 16-beat Grid (grid beat wraps to 1) and fires <see cref="OnNewGrid"/>
     /// once, gated on a Locked reading so a Coasting/Disputed grid does not trigger. Driven from
     /// <see cref="UpdateTime"/>, so it runs once per active frame just before Draw. <see cref="BeatManager.Grid"/>
     /// is null off the beat clock, so this never fires in Standalone. Note: effects nested inside a mixer only
@@ -121,12 +121,12 @@ public abstract class EffectBase
         // yet — e.g. a lightweight test double, or any frame before Init(). No beat context is the same as
         // "off the beat clock": Grid is absent, so this no-ops exactly as it does in Standalone.
         var grid = controller?.beatManager?.Grid;
-        int count = grid?.Count ?? 0;
-        if (count == 1 && lastGridCount != 1 && grid?.Confidence == GridConfidence.Locked)
+        int beat = grid?.Beat ?? 0;
+        if (beat == 1 && lastGridBeat != 1 && grid?.State == GridState.Locked)
         {
             OnNewGrid();
         }
-        lastGridCount = count;
+        lastGridBeat = beat;
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public abstract class EffectBase
         beatEnable = true;
         beatVariant = beatManager.GetRandomVariant();
         // Arm the Grid edge to the current Grid so activating on a downbeat does not fire OnNewGrid immediately.
-        lastGridCount = beatManager.Grid?.Count ?? 0;
+        lastGridBeat = beatManager.Grid?.Beat ?? 0;
     }
 
     /// <summary>

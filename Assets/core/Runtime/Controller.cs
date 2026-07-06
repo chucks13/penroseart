@@ -1241,7 +1241,7 @@ public class Controller : Singleton<Controller>
         AppendIfNotEmpty(builder, FormatNextMove(directorStatus));
         if (directorStatus.IsSyncedMode)
         {
-            AppendIfNotEmpty(builder, FormatGridConfidence());
+            AppendIfNotEmpty(builder, FormatGridState());
             AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
             AppendIfNotEmpty(builder, FormatGridPosition());
             AppendIfNotEmpty(builder, FormatLanding(directorStatus));
@@ -1316,8 +1316,8 @@ public class Controller : Singleton<Controller>
         }
     }
 
-    /// <summary>Wire-fed Grid confidence for the HUD, annotated when the current Phrase is irregular.</summary>
-    private string FormatGridConfidence()
+    /// <summary>Wire-fed Grid state for the HUD, annotated when the current Phrase is irregular.</summary>
+    private string FormatGridState()
     {
         if (!(beatManager != null && beatManager.Grid is { } grid))
         {
@@ -1325,13 +1325,13 @@ public class Controller : Singleton<Controller>
         }
 
         return beatManager.Phrase?.irregular == true
-            ? $"{grid.Confidence} (irregular)"
-            : grid.Confidence.ToString();
+            ? $"{grid.State} (irregular)"
+            : grid.State.ToString();
     }
 
     private string FormatGridPosition()
     {
-        return beatManager != null && beatManager.Grid is { } grid ? $"{grid.Count}/16" : "no grid";
+        return beatManager != null && beatManager.Grid is { } grid ? $"{grid.Beat}/16" : "no grid";
     }
 
     private static string FormatLanding(DirectorStatus status)
