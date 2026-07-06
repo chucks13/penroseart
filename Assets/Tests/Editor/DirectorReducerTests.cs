@@ -373,6 +373,116 @@ public sealed class DirectorReducerTests
         Assert.That(director.Status.CurrentSheet.HasSheet, Is.False, "Sheet memory does not cross a Standalone gap.");
     }
 
+    // ---- Replay on change -------------------------------------------------------------------------
+
+    [Test]
+    public void AStillWorkableLoadedCueSurvivesAGridLoopUnchanged()
+    {
+        // A Phrase long enough to guarantee an interior Cue Mark as well as the mandatory Phrase-end mark, so
+        // the loop below can re-present a real earlier Grid Boundary. The Director seeds the sheet from the
+        // Phrase start, so the pure builder reproduces its exact marks here.
+        var offsets = CueSheet.Build(80, 600, 600).CueMarkOffsets;
+        var firstMark = 600 + offsets[0];
+        Assert.That(firstMark, Is.LessThan(680), "Setup: the Phrase carries an interior mark before its end.");
+
+        // Cast toward the Phrase-end mark 680 when its Grid [664, 680) begins.
+        FeedBeat(beat: 663, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
+        FeedBeat(beat: 664, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "Setup: the cue is loaded for the Phrase-end mark.");
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False, "Setup: the loaded cue is still unlocked.");
+
+        var effectDeckWhileLoaded = (int[])controller.effectDeck.Clone();
+        var transitionDeckWhileLoaded = (int[])controller.transitionDeck.Clone();
+        var targetWhileLoaded = switcher.LoadedCueStatus.TargetEffectIndex;
+
+        // The set loops backward to the earlier Grid carrying the interior mark: the 16-count wraps again onto
+        // a real, different Cue Mark. The loaded cue is still workable (its mark is on the sheet and ahead), so
+        // the Director keeps it rather than re-aiming at the earlier mark.
+        FeedBeat(beat: firstMark - 17, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
+        FeedBeat(beat: firstMark - 16, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "A still-workable loaded cue survives the grid loop unchanged.");
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "The kept cue's target is untouched.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "Keeping a workable cue rotates no effect deck card.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded), "Keeping a workable cue rotates no transition deck card.");
+    }
+
+    [Test]
+    public void AStillWorkableLoadedCueSurvivesAMovedDropUnchanged()
+    {
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "Setup: a cue is loaded for the mark 632.");
+
+        var effectDeckWhileLoaded = (int[])controller.effectDeck.Clone();
+        var transitionDeckWhileLoaded = (int[])controller.transitionDeck.Clone();
+        var targetWhileLoaded = switcher.LoadedCueStatus.TargetEffectIndex;
+        var transitionWhileLoaded = switcher.LoadedCueStatus.TransitionIndex;
+
+        // A Drop is now announced landing on the next Grid — the Fill/Drop evidence has changed — but the loaded
+        // cue's mark is still real and ahead, so the cue survives the evidence change unchanged and never picks
+        // up the late Drop preference.
+        FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32, dropBeatsUntilStart: 15);
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The workable cue's mark is unchanged by the moved Drop.");
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "The cue is not re-flavored toward a Drop-capable Performer.");
+        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(transitionWhileLoaded), "The cue is not re-flavored toward a Drop-capable Transition.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "An evidence change on a workable cue rotates no deck.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded));
+    }
+
+    [Test]
+    public void AnUnworkableUnlockedLoadedCueIsRecastWhenANewGridBegins()
+    {
+        // Load an unlocked cue aimed off the live sheets: its mark 700 is not a Cue Mark on any Director sheet,
+        // so the cue is unworkable, but it is loaded before its Lock Point and so is not locked.
+        var repertoire = controller.transitions[0].Repertoire;
+        switcher.UpsertLoadedCue(
+            new SwitcherCueDirection(700, targetEffectIndex: 1, transitionIndex: 0, repertoire),
+            new SwitcherClockSnapshot(currentBeat: 660, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True, "Setup: an off-sheet cue is loaded.");
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False, "Setup: the off-sheet cue is unlocked.");
+
+        var effectDeckBefore = (int[])controller.effectDeck.Clone();
+
+        // A new Grid carrying the real Cue Mark 632 begins. The loaded cue is unworkable, so the Director does
+        // not keep it: the recast lands via the normal offer path and, being unlocked, the Switcher accepts.
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The unworkable unlocked cue is recast toward the new Grid's mark.");
+        Assert.That(controller.effectDeck, Is.Not.EqualTo(effectDeckBefore), "The accepted recast rotates the deck like any cast.");
+    }
+
+    [Test]
+    public void ALockedLoadedCueRidesThroughALateDrop()
+    {
+        // Lock a cue directly by re-offering it at its Lock Point (its start time stays in the future of the
+        // frozen editor clock, so it never fires). The mark 700 is off the live sheets, so the Director will
+        // not keep it — it offers a recast — but the locked cue must ride and no drop-protection path may fire.
+        var repertoire = controller.transitions[0].Repertoire;
+        switcher.UpsertLoadedCue(
+            new SwitcherCueDirection(700, targetEffectIndex: 1, transitionIndex: 0, repertoire),
+            new SwitcherClockSnapshot(currentBeat: 690, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+        switcher.UpsertLoadedCue(
+            new SwitcherCueDirection(700, targetEffectIndex: 1, transitionIndex: 0, repertoire),
+            new SwitcherClockSnapshot(currentBeat: 695, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 12f));
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.True, "Setup: the cue is locked at its Lock Point.");
+
+        var effectDeckBefore = (int[])controller.effectDeck.Clone();
+        var transitionDeckBefore = (int[])controller.transitionDeck.Clone();
+
+        // A new Grid begins carrying mark 632 with a Drop announced onto the next Grid — a Drop too late to
+        // commit cleanly. The Director offers a Drop-flavored recast fire-and-forget; the locked cue rejects it.
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32, dropBeatsUntilStart: 16);
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(700), "The locked cue rides through the late Drop.");
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1), "No drop-protection path re-flavors the locked cue.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBefore), "A rejected recast pulls no effect deck card.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckBefore), "A rejected recast pulls no transition deck card.");
+    }
+
     // Builds a fresh Switcher+Director pipeline, feeds a next-Grid Drop scenario carrying the given energy-lane
     // value, and returns the Performer index cast at the Switcher handoff. Fresh decks each call keep the two
     // runs independent so the only difference between them is the energy value.
