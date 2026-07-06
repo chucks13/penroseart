@@ -738,23 +738,44 @@ public sealed class Director
             return;
         }
 
-        // The carried Cue Mark, read live: beatsToMark is one Grid past this Boundary, less however far into
-        // the Grid a dropped One left us (16 - (gridBeat - 1)); the mark sits that far ahead of the beat's
-        // position (length - beatsUntilNext) in the Phrase. It lives in the current sheet. beatsToMark is also
-        // what the Switcher seam mints its one absolute beat from, in OfferCue, as clock beat + beats-to-mark.
-        if (!(controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats }))
+        // The Phrase, read live: its position in the Phrase is length - beatsUntilNext. Both the carried-mark
+        // path and the no-sheet boundary path need it, so it is read once here.
+        if (!(controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats } phrase))
         {
             return;
         }
 
+        var position = lengthBeats - beatsUntilNext;
+
+        // No sheet was built (an irregular Phrase whose length is not a Grid multiple carries no marks), yet the
+        // one rule still holds: the Phrase end carries a Cue. When the boundary lands within this Grid
+        // (beatsUntilNext <= one Grid), offer it straight from live lane values — beatsToMark is the countdown
+        // itself, the Phrase-relative offset is the announced length (position + countdown), and display context
+        // is the lane's own label and length since there is no slot to read. Everything downstream is the same
+        // OfferCue seam; a boundary the Grid never brings within one Grid is simply missed, and a short runway is
+        // the Switcher's call to reject.
+        if (!currentSlot.HasSheet)
+        {
+            if (beatsUntilNext <= CueSheet.GridBeats)
+            {
+                OfferCue(position + beatsUntilNext, beatsUntilNext, phrase.label, lengthBeats);
+            }
+
+            return;
+        }
+
+        // The carried Cue Mark, read live: beatsToMark is one Grid past this Boundary, less however far into
+        // the Grid a dropped One left us (16 - (gridBeat - 1)); the mark sits that far ahead of the beat's
+        // position in the Phrase. It lives in the current sheet. beatsToMark is also what the Switcher seam
+        // mints its one absolute beat from, in OfferCue, as clock beat + beats-to-mark.
         var beatsToMark = CueSheet.GridBeats - (gridBeat - 1);
-        var carriedMarkOffset = (lengthBeats - beatsUntilNext) + beatsToMark;
+        var carriedMarkOffset = position + beatsToMark;
         if (!currentSlot.HasCueMarkAtOffset(carriedMarkOffset))
         {
             return;
         }
 
-        OfferCue(carriedMarkOffset, beatsToMark);
+        OfferCue(carriedMarkOffset, beatsToMark, currentSlot.PhraseLabel, currentSlot.PhraseLengthBeats);
     }
 
     /// <summary>
@@ -765,7 +786,7 @@ public sealed class Director
     /// the loaded cue unchanged, a <see cref="CueUpsertResult.Rejected"/> offer touches nothing, and only a
     /// <see cref="CueUpsertResult.Loaded"/> answer pulls the peeked deck cards and re-stages.
     /// </summary>
-    private void OfferCue(int carriedMarkOffset, int beatsToMark)
+    private void OfferCue(int carriedMarkOffset, int beatsToMark, string phraseLabel, int phraseLength)
     {
         // The one absolute beat a Cue needs is minted here, at the Switcher seam: the live clock beat plus the
         // beats-to-mark. No usable beat means no handoff — the Synced-but-no-beat edge the mode gate covers.
@@ -792,11 +813,9 @@ public sealed class Director
             transitionCast.Index,
             controller.transitions[transitionCast.Index].Repertoire);
 
-        // Display context for the frozen log grammars: the carried mark lives in the current sheet, so its
-        // label, length, and Phrase-relative offset come straight off that slot and the offset just computed —
-        // never a stored verdict.
-        var phraseLabel = currentSlot.PhraseLabel;
-        var phraseLength = currentSlot.PhraseLengthBeats;
+        // Display context for the frozen log grammars comes from the caller: a carried mark reads it off the
+        // current sheet slot, a no-sheet boundary reads it off the live phrase lane. The Phrase-relative offset
+        // is the one just computed. Neither is a stored verdict — the Switcher's answer alone decides commitment.
 
         // The loaded-cue view captured before the offer names the displaced cue (for the Cue Log) and, on a
         // keep, the very cue that rides — a display read, never a decision: the Switcher's answer decides.
