@@ -20,6 +20,9 @@ using UnityEngine;
 public sealed class ControllerEditor : Editor
 {
     private static readonly Color CueMarkColor = new Color(0.25f, 0.95f, 1f);
+    private static readonly Color LiveBeatColor = new Color(1f, 0.9f, 0.35f);
+    private static readonly Color PassedMarkColor = new Color(0.42f, 0.42f, 0.42f);
+    private static readonly Color UpcomingMarkColor = new Color(0.18f, 0.5f, 0.55f);
 
     private static bool showDirectorObservatory = false;
     private static bool showAdvancedTiming = false;
@@ -69,10 +72,15 @@ public sealed class ControllerEditor : Editor
         var directorStatus = controller.DirectorStatus;
         var switcherStatus = controller.SwitcherStatus;
         var cueStatus = controller.SwitcherLoadedCueStatus;
+        var elapsed = ElapsedPhraseBeats(controller.beatManager?.Phrase);
 
         DrawDirectorIntent(controller, directorStatus);
         EditorGUILayout.Space(6f);
-        DrawCueSheets(directorStatus);
+        DrawGridStrip(controller, directorStatus, elapsed);
+        EditorGUILayout.Space(6f);
+        DrawCueSheets(directorStatus, elapsed);
+        EditorGUILayout.Space(6f);
+        DrawBeatsUntilCue(controller, directorStatus, elapsed);
         EditorGUILayout.Space(6f);
         DrawLoadedCue(controller, directorStatus, cueStatus);
         EditorGUILayout.Space(6f);
@@ -95,14 +103,52 @@ public sealed class ControllerEditor : Editor
         DrawRow("Hold Selected Transition", status.HoldSelectedTransition ? "On" : "Off");
     }
 
-    private static void DrawCueSheets(DirectorStatus status)
+    /// <summary>
+    /// A 16-slot strip of the live Grid, one slot per beat, with the live beat lit and the current
+    /// Phrase's Cue Marks overlaid where they fall inside the visible window.
+    /// </summary>
+    /// <remarks>
+    /// A Cue Mark at Phrase offset O sits <c>O - elapsed</c> beats from the live beat, so it lands on
+    /// grid slot <c>liveBeat + (O - elapsed)</c>. The overlay anchors to the live grid slot only — no
+    /// absolute Phrase-start beat (fddb1882) — and never wraps modulo 16, so an irregular Phrase that
+    /// runs past a 16-beat multiple never paints a mark where it does not belong. Marks outside 1..16
+    /// are simply not shown; nothing is synthesized for unloaded cues.
+    /// </remarks>
+    private static void DrawGridStrip(Controller controller, DirectorStatus status, int? elapsed)
     {
-        EditorGUILayout.LabelField("CUE SHEETS", EditorStyles.boldLabel);
-        DrawCueSheet("Current", status.CurrentSheet);
-        DrawCueSheet("Next", status.NextSheet);
+        EditorGUILayout.LabelField("GRID", EditorStyles.boldLabel);
+
+        var grid = controller.beatManager?.Grid;
+        var liveBeat = grid is { } g ? g.Beat : -1;
+        var cueSlots = CueMarkGridSlots(status.CurrentSheet, liveBeat, elapsed);
+
+        EditorGUILayout.BeginHorizontal();
+        var previousColor = GUI.backgroundColor;
+        for (var slot = 1; slot <= CueSheet.GridBeats; slot++)
+        {
+            GUI.backgroundColor = slot == liveBeat
+                ? LiveBeatColor
+                : cueSlots.Contains(slot) ? CueMarkColor : previousColor;
+            GUILayout.Label(slot.ToString(), EditorStyles.miniButton, GUILayout.MinWidth(28f));
+        }
+
+        GUI.backgroundColor = previousColor;
+        EditorGUILayout.EndHorizontal();
     }
 
-    private static void DrawCueSheet(string label, CueSheetView cueSheet)
+    private static void DrawCueSheets(DirectorStatus status, int? elapsed)
+    {
+        EditorGUILayout.LabelField("CUE SHEETS", EditorStyles.boldLabel);
+        DrawCueSheet("Current", status.CurrentSheet, elapsed);
+        DrawCueSheet("Next", status.NextSheet, null);
+    }
+
+    /// <summary>
+    /// Draws a sheet's identity line and its Cue Mark row. When <paramref name="elapsed"/> is known
+    /// (the Current sheet), each mark is colored passed / next / upcoming against the elapsed Phrase
+    /// beat; the Next sheet passes null and every mark stays neutral, since it has no live position yet.
+    /// </summary>
+    private static void DrawCueSheet(string label, CueSheetView cueSheet, int? elapsed)
     {
         if (!cueSheet.HasSheet)
         {
@@ -119,14 +165,41 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.PrefixLabel("Cue Marks");
         var previousColor = GUI.backgroundColor;
         var offsets = cueSheet.CueMarkOffsets ?? System.Array.Empty<int>();
-        foreach (var offset in offsets)
+        var nextIndex = NextCueMarkIndex(offsets, elapsed);
+        for (var i = 0; i < offsets.Length; i++)
         {
-            GUI.backgroundColor = CueMarkColor;
-            GUILayout.Label(FormatCueSheetOffset(offset, cueSheet.PhraseLengthBeats), EditorStyles.miniButton, GUILayout.MinWidth(44f));
+            GUI.backgroundColor = CueMarkStateColor(i, nextIndex, elapsed.HasValue);
+            GUILayout.Label(FormatCueSheetOffset(offsets[i], cueSheet.PhraseLengthBeats), EditorStyles.miniButton, GUILayout.MinWidth(44f));
         }
 
         GUI.backgroundColor = previousColor;
         EditorGUILayout.EndHorizontal();
+    }
+
+    /// <summary>
+    /// Countdown to the next Cue Mark (its offset minus the elapsed Phrase beat) and the beats left in
+    /// the Phrase. Says so plainly when no upcoming mark or Phrase position is known rather than showing
+    /// a stale number.
+    /// </summary>
+    private static void DrawBeatsUntilCue(Controller controller, DirectorStatus status, int? elapsed)
+    {
+        EditorGUILayout.LabelField("BEATS UNTIL CUE", EditorStyles.boldLabel);
+
+        var sheet = status.CurrentSheet;
+        var offsets = sheet.HasSheet ? sheet.CueMarkOffsets ?? System.Array.Empty<int>() : System.Array.Empty<int>();
+        var nextIndex = NextCueMarkIndex(offsets, elapsed);
+        if (nextIndex >= 0 && elapsed is { } now)
+        {
+            var mark = FormatCueSheetOffset(offsets[nextIndex], sheet.PhraseLengthBeats);
+            DrawRow("Next Cue", $"{mark} · {offsets[nextIndex] - now}b");
+        }
+        else
+        {
+            DrawRow("Next Cue", "no upcoming cue");
+        }
+
+        var phrase = controller.beatManager?.Phrase;
+        DrawRow("Phrase Remaining", phrase is { beatsUntilNext: { } left } ? $"{left}b" : "—");
     }
 
     private static void DrawLoadedCue(Controller controller, DirectorStatus directorStatus, SwitcherCueStatus cueStatus)
@@ -193,10 +266,82 @@ public sealed class ControllerEditor : Editor
             return "—";
         }
 
-        var span = phrase.lengthBeats is { } length && phrase.beatsUntilNext is { } untilNext
-            ? $" · {Mathf.Max(0, length - untilNext)}/{length}"
+        var span = ElapsedPhraseBeats(info) is { } elapsed && phrase.lengthBeats is { } length
+            ? $" · {elapsed}/{length}"
             : string.Empty;
         return $"{phrase.label}{span}";
+    }
+
+    /// <summary>
+    /// Beats elapsed into the current Phrase: <c>lengthBeats - beatsUntilNext</c>, clamped at zero.
+    /// Null when the wire gave no length or boundary. This is the one place the Observatory turns Phrase
+    /// timing into an elapsed position; the Grid Strip overlay, Cue Mark states, and the beats-until-cue
+    /// countdown all read from it.
+    /// </summary>
+    private static int? ElapsedPhraseBeats(PhraseInfo? info)
+    {
+        return info is { lengthBeats: { } length, beatsUntilNext: { } untilNext }
+            ? Mathf.Max(0, length - untilNext)
+            : (int?)null;
+    }
+
+    /// <summary>
+    /// Index of the next Cue Mark: the first offset at or after the elapsed Phrase beat (offsets are
+    /// phrase-relative, ascending). A mark exactly at the elapsed beat counts as next (0 beats away), not
+    /// passed. Returns -1 when there is no sheet, elapsed is unknown, or every mark is already passed.
+    /// </summary>
+    private static int NextCueMarkIndex(int[] offsets, int? elapsed)
+    {
+        if (offsets == null || !(elapsed is { } now))
+        {
+            return -1;
+        }
+
+        for (var i = 0; i < offsets.Length; i++)
+        {
+            if (offsets[i] >= now)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>Passed / next / upcoming color for a Cue Mark; neutral when there is no elapsed Phrase position.</summary>
+    private static Color CueMarkStateColor(int index, int nextIndex, bool hasElapsed)
+    {
+        if (!hasElapsed || index == nextIndex)
+        {
+            return CueMarkColor;
+        }
+
+        return nextIndex < 0 || index < nextIndex ? PassedMarkColor : UpcomingMarkColor;
+    }
+
+    /// <summary>
+    /// Grid slots (1..16) holding a current-Phrase Cue Mark this frame, mapped phrase-relative to the live
+    /// beat as <c>liveBeat + (offset - elapsed)</c>. Empty when the position or sheet is unknown; marks that
+    /// land outside the visible window are dropped, never wrapped.
+    /// </summary>
+    private static System.Collections.Generic.HashSet<int> CueMarkGridSlots(CueSheetView sheet, int liveBeat, int? elapsed)
+    {
+        var slots = new System.Collections.Generic.HashSet<int>();
+        if (!sheet.HasSheet || liveBeat < 1 || !(elapsed is { } now))
+        {
+            return slots;
+        }
+
+        foreach (var offset in sheet.CueMarkOffsets ?? System.Array.Empty<int>())
+        {
+            var slot = liveBeat + (offset - now);
+            if (slot >= 1 && slot <= CueSheet.GridBeats)
+            {
+                slots.Add(slot);
+            }
+        }
+
+        return slots;
     }
 
     /// <summary>Upcoming phrase as <c>label · in Nb · Nb long</c>, from <see cref="BeatManager.NextPhrase"/>.</summary>
