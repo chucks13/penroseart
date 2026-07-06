@@ -88,10 +88,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Common-time beats per bar, matching BeatManager's beat-slot model — used to size the Drop flash in bars.</summary>
     private const int BeatsPerBar = 4;
 
-    /// <summary>Bars the Drop flash is drawn out over: a dramatic onset eased back to normal across this many bars.</summary>
-    private const float DropFlashBars = 2f;
+    /// <summary>Bars the Drop sparkle is drawn out over: full machine-gun at the hit, fading back to normal growth across this many bars.</summary>
+    private const float DropFadeBars = 2f;
 
-    /// <summary>Flash length in seconds when no tempo is on the wire to size it in bars (a Drop without a usable BPM).</summary>
+    /// <summary>Sparkle length in seconds when no tempo is on the wire to size it in bars (a Drop without a usable BPM).</summary>
     private const float DropFlashFallbackSeconds = 3.2f;
 
     /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP FLASH readout.</summary>
@@ -118,18 +118,22 @@ public class CrystalGrowth : EffectBase
     /// <summary>Per-second decay of the Standalone spread surge, so each synthetic downbeat is a lunge, not a sustained sprint.</summary>
     private const float SelfPulseDecayPerSec = 2.5f;
 
-    /// <summary>Extra spread multiplier added on each sixteenth's on-phase during a fill — the front lunges in stutters.</summary>
-    private const float FillRatchetSpread = 4f;
+    /// <summary>Extra spread multiplier added on each sixteenth's on-phase during a Drop — the front lunges in stutters.</summary>
+    private const float DropRatchetSpread = 4f;
 
-    /// <summary>How far the whole field is knocked toward black on a fill sixteenth's off-phase — the hard strobe depth.</summary>
-    private const float FillStrobeDepth = 0.9f;
+    /// <summary>How far the whole field is knocked toward black on a Drop sixteenth's off-phase — the hard strobe depth.</summary>
+    private const float DropStrobeDepth = 0.9f;
 
-    /// <summary>Seeds planted on each sixteenth onset during a fill. Fixed — seeds hit full from the first 16th, only the strobe/lunge build.</summary>
-    private const int FillSeedBurst = 12;
+    /// <summary>Seeds planted on each sixteenth onset during a Drop, so the wall machine-guns for the whole drop window.</summary>
+    private const int DropSeedBurst = 12;
 
-    /// <summary>Fraction of the fill spent ramping the strobe/lunge up to full; the rest plays full-drastic. Fill progress is
-    /// normalized, so this makes the build's wall-clock length scale with the fill — short fills snap in, long fills lead in.</summary>
-    private const float FillBuildFraction = 0.3f;
+    /// <summary>How far the base spread is reined in at full Fill — the crystal visibly tenses and compresses going
+    /// into the phrase change. 0.65 means growth drops to 35% of normal speed at the fill's peak.</summary>
+    private const float FillHoldback = 0.65f;
+
+    /// <summary>Luminance swell across the whole grown crystal at full Fill, so the hold-back reads as charging
+    /// up rather than stalling. Tune on the FILL readout.</summary>
+    private const float FillSwell = 0.35f;
 
     /// <summary>Per-tile front heat in [0..1]; the bright moving band. Decays toward 0, but a grown tile still renders at <see cref="CrystalFloor"/> (keyed on <see cref="gen"/>), so charge is only the bright part above the floor.</summary>
     private float[] charge;
@@ -287,8 +291,8 @@ public class CrystalGrowth : EffectBase
         string levels = energyNow < 0f
             ? "Levels: n/a"
             : $"Energy: {energyNow:0.00}{(energyNow < KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > KickThreshold ? "ON" : "--")}";
-        string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (16th ratchet)" : "";
-        string dropReadout = dropFlash > 0f ? $"\nDROP FLASH {dropFlash:0.00}" : "";
+        string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (hold-back + swell)" : "";
+        string dropReadout = dropFlash > 0f ? $"\nDROP SPARKLE {dropFlash:0.00}" : "";
         return $"Crystal Growth\nMode: {mode}\nLayer: {generation}\n{levels}{fillReadout}{dropReadout}";
     }
 
@@ -307,32 +311,33 @@ public class CrystalGrowth : EffectBase
         // of chasing a beat nobody can hear. 'activity' is 1 (full coupling) when no Levels are available.
         float activity = ReadLevels();
 
-        // The fill is the short transition that leads into the next phrase. It carries a small, fast-attack
-        // build: the strobe/lunge ramp 0→full over the first FillBuildFraction of the fill, then hold
-        // full-drastic for the rest, gated to a hard sixteenth ratchet (1 on each 16th, 0 between) so the wall
-        // stutters, then snap back as the new phrase (and its palette) arrives. Because Fill.progress is
-        // normalized to the fill's length, the build's wall-clock length scales with it — short fills snap in,
-        // long fills lead in. Seeding hits full from the first 16th; only the strobe/lunge ride fillAmount.
+        // The fill is the short transition that leads into the next phrase — and it does not always land on a
+        // drop, so its gesture must build tension AND resolve cleanly on its own. The hold-back reins the base
+        // spread in as the fill builds while the swell charges the crystal's glow, then both snap back the
+        // moment the fill ends — into the Drop sparkle when one lands, or back to normal growth when not.
+        // Because Fill.progress is normalized to the fill's length, the arc scales with it — short fills snap,
+        // long fills lean in.
         PhraseEventInfo? fillInfo = beatManager.Fill;
         bool inFill = fillInfo is { inProgress: true };
         float progress = inFill ? (fillInfo.Value.progress ?? 1f) : 0f;
-        float fillAmount = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / FillBuildFraction));
+        float fillAmount = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress));
         float ratchet = beatManager.GateOf(Subdivision.Sixteenth) ?? 0f;
         fillActive = inFill;
         fillLevel = fillAmount;
 
         SeedThisFrame(dt);
-        SeedFillRatchet(inFill, ratchet);
         TriggerDropFlash(dt);
+        SeedDropRatchet(ratchet);
 
         // The beat surges how far the front lunges this frame. Synced rides the live Pulse; Standalone falls
         // back to the self-driven surge. The surge is scaled by 'activity' so the front stops lunging to an
-        // inaudible beat during a quiet break. During a fill, each sixteenth on-phase adds a hard extra lunge,
-        // and during a Drop flash a strong one-shot surge washes the fresh layer across the whole wall.
+        // inaudible beat during a quiet break. A fill reins the whole thing in (tension); a Drop washes the
+        // fresh layer across the wall and machine-gun lunges on every sixteenth for the drop's whole window.
         float pulse = (beatManager.Pulse ?? selfPulse) * activity;
         float spread = spreadPerSec
             * (1f + (beatSurge * pulse))
-            * (1f + (FillRatchetSpread * fillAmount * ratchet))
+            * Mathf.Lerp(1f, 1f - FillHoldback, fillAmount)
+            * (1f + (DropRatchetSpread * dropFlash * ratchet))
             * (1f + (DropFlashSpread * dropFlash));
 
         // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
@@ -366,11 +371,12 @@ public class CrystalGrowth : EffectBase
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
         float bright = BeatBrightness(Mathf.Lerp(1f, 0.8f, activity));
 
-        // Hard fill strobe: on a fill, every sixteenth's off-phase knocks the whole field toward black, deepening
-        // with fillAmount as the short build attacks, so the wall flashes on each 16th. Applied to the final
-        // color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to 1 (no
-        // strobe) whenever there is no fill.
-        float strobe = 1f - (fillAmount * (1f - ratchet) * FillStrobeDepth);
+        // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
+        // the wall flashes on each 16th for the drop's whole window (easing out with the release). Applied to
+        // the final color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to
+        // 1 (no strobe) outside a Drop. The Fill instead swells the glow while the hold-back compresses growth.
+        float strobe = 1f - (dropFlash * (1f - ratchet) * DropStrobeDepth);
+        float swell = 1f + (FillSwell * fillAmount);
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -395,7 +401,7 @@ public class CrystalGrowth : EffectBase
             // rides the sweeping leading edge — a bright colored wavefront crossing the wall — and trails back to
             // normal behind it, all in the tile's own palette color (never toward white). Collapses to ×1 off a flash.
             float factor = Mathf.Max(Mathf.Sqrt(c) * bright, CrystalFloor) * (1f + DropFlashBrightness * dropFlash * c);
-            buffer[i] = col * (factor * strobe);
+            buffer[i] = col * (factor * strobe * swell);
         }
     }
 
@@ -593,17 +599,17 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// The fill's drastic seeding: on each rising edge of the sixteenth ratchet during a fill, plant a fixed
-    /// <see cref="FillSeedBurst"/> of fresh fronts so the wall machine-guns through the transition. Full-drastic
-    /// from the first sixteenth — no build. Edge-detected off the hard gate so exactly one burst lands per
-    /// sixteenth, not one per frame. No-op outside a fill and in Standalone (ratchet is 0 there).
+    /// The Drop's sparkle seeding: on each rising edge of the sixteenth ratchet while the Drop envelope is hot,
+    /// plant a fixed <see cref="DropSeedBurst"/> of fresh fronts so the wall machine-guns for the drop's whole
+    /// window. Edge-detected off the hard gate so exactly one burst lands per sixteenth, not one per frame.
+    /// No-op outside a Drop and in Standalone (ratchet is 0 there).
     /// </summary>
-    private void SeedFillRatchet(bool inFill, float ratchet)
+    private void SeedDropRatchet(float ratchet)
     {
         bool on = ratchet > 0.5f;
-        if (on && !lastSixteenthOn && inFill)
+        if (on && !lastSixteenthOn && dropFlash > 0.5f)
         {
-            PlantSeeds(FillSeedBurst);
+            PlantSeeds(DropSeedBurst);
         }
 
         lastSixteenthOn = on;
@@ -651,12 +657,12 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Fires the Drop flash on the rising edge of <see cref="BeatManager.Drop"/> in-progress — the drop's beat one.
-    /// Opens a fresh generation seeded in one unison hue (which the spread surge then washes across the whole wall),
-    /// and arms the drawn-out wavefront-brightness envelope. The envelope snaps to 1 at onset and eases back to 0 over
-    /// <see cref="DropFlashBars"/> bars (sized from the live tempo, or <see cref="DropFlashFallbackSeconds"/> when no
-    /// usable BPM is on the wire), so the change is dramatic at the start and drawn out across a couple of bars.
-    /// Edge-detected so it lands exactly once per drop.
+    /// Drives the Drop sparkle envelope. On the rising edge of <see cref="BeatManager.Drop"/> in-progress — the
+    /// drop's beat one — it opens a fresh generation seeded in one unison hue (which the spread surge then washes
+    /// across the whole wall) and snaps the envelope to 1. The envelope then eases back to 0 over
+    /// <see cref="DropFadeBars"/> bars (sized from the live tempo, or <see cref="DropFlashFallbackSeconds"/> when
+    /// no usable BPM is on the wire), so the sparkle is ferocious at the hit and fades back to normal growth even
+    /// while the drop plays on. Edge-detected so it lands exactly once per drop.
     /// </summary>
     private void TriggerDropFlash(float dt)
     {
@@ -669,14 +675,14 @@ public class CrystalGrowth : EffectBase
             PlantUnisonSeeds(DropFlashSeeds);
 
             dropFlashSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-                ? 60f / bpm * BeatsPerBar * DropFlashBars
+                ? 60f / bpm * BeatsPerBar * DropFadeBars
                 : DropFlashFallbackSeconds;
             dropFlashElapsed = 0f;
             dropFlash = 1f;
         }
         else if (dropFlash > 0f)
         {
-            // Ease the flash back to 0 across the window. SmoothStep holds near full briefly, then fades — a
+            // Ease the sparkle back to 0 across the window. SmoothStep holds near full briefly, then fades — a
             // drawn-out release rather than a linear ramp.
             dropFlashElapsed += dt;
             float u = dropFlashSeconds > 0f ? Mathf.Clamp01(dropFlashElapsed / dropFlashSeconds) : 1f;
