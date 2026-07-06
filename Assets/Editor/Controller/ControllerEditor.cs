@@ -10,14 +10,16 @@ using UnityEngine;
 /// read-only Director, Cue Sheet, Loaded Cue, and Switcher execution panel stay live without moving Director onto
 /// a separate scene object.
 /// </remarks>
+/// <remarks>
+/// Reduced to the Director reducer's real state (ADR-0011): the two Cue Sheets, the staged move, the Switcher's
+/// loaded cue, and the wire-fed timing lanes. The decision-memory and candidate-window views are gone with the
+/// planning machinery; the richer Observatory is rebuilt on this real state in a later step.
+/// </remarks>
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
 {
     private static readonly Color CurrentBeatColor = new Color(1f, 0.9f, 0.35f);
     private static readonly Color CueMarkColor = new Color(0.25f, 0.95f, 1f);
-    private static readonly Color LockPointColor = new Color(1f, 0.55f, 0.2f);
-    private static readonly Color RunwayColor = new Color(1f, 0.35f, 0.85f);
-    private static readonly Color TailColor = new Color(0.25f, 0.8f, 0.45f);
 
     private static bool showDirectorObservatory = false;
     private static bool showAdvancedTiming = false;
@@ -37,87 +39,6 @@ public sealed class ControllerEditor : Editor
     public override bool RequiresConstantRepaint()
     {
         return Application.isPlaying;
-    }
-
-    private readonly struct CueTimingOverlay
-    {
-        public static CueTimingOverlay None { get; } = new CueTimingOverlay(false, false, false, -1, -1, -1, -1, 0, 0);
-
-        public readonly bool HasCue;
-        public readonly bool IsLoaded;
-        public readonly bool IsLocked;
-        public readonly int CueMarkBeat;
-        public readonly int LockPointBeat;
-        public readonly int StartBeat;
-        public readonly int CompleteBeat;
-        public readonly int RunwayBeats;
-        public readonly int TailBeats;
-
-        private CueTimingOverlay(
-            bool hasCue,
-            bool isLoaded,
-            bool isLocked,
-            int cueMarkBeat,
-            int lockPointBeat,
-            int startBeat,
-            int completeBeat,
-            int runwayBeats,
-            int tailBeats)
-        {
-            HasCue = hasCue;
-            IsLoaded = isLoaded;
-            IsLocked = isLocked;
-            CueMarkBeat = cueMarkBeat;
-            LockPointBeat = lockPointBeat;
-            StartBeat = startBeat;
-            CompleteBeat = completeBeat;
-            RunwayBeats = runwayBeats;
-            TailBeats = tailBeats;
-        }
-
-        public static CueTimingOverlay Loaded(SwitcherCueStatus status)
-        {
-            return new CueTimingOverlay(
-                true,
-                true,
-                status.IsLocked,
-                status.CueMarkBeat,
-                status.LockPointBeat,
-                status.StartBeat,
-                status.CompleteBeat,
-                status.RunwayBeats,
-                status.TailBeats);
-        }
-
-        public static CueTimingOverlay Candidate(int cueMarkBeat, TransitionRepertoire repertoire)
-        {
-            // Preview-only window math for an unloaded candidate: this debug view owns its own projection so
-            // the Switcher can keep runway/tail/lock arithmetic private. The loaded cue's real window arrives
-            // through SwitcherCueStatus (see Loaded above).
-            var startBeat = cueMarkBeat - repertoire.RunwayBeats;
-            var lockPointBeat = startBeat - 1;
-            var completeBeat = cueMarkBeat + repertoire.TailBeats;
-            return new CueTimingOverlay(
-                true,
-                false,
-                false,
-                cueMarkBeat,
-                lockPointBeat,
-                startBeat,
-                completeBeat,
-                repertoire.RunwayBeats,
-                repertoire.TailBeats);
-        }
-    }
-
-    private enum GridSlotRole
-    {
-        None,
-        Current,
-        CueMark,
-        LockPoint,
-        Runway,
-        Tail,
     }
 
     private static void DrawRuntimeDebug(Controller controller)
@@ -148,13 +69,10 @@ public sealed class ControllerEditor : Editor
         var directorStatus = controller.DirectorStatus;
         var switcherStatus = controller.SwitcherStatus;
         var cueStatus = controller.SwitcherLoadedCueStatus;
-        var cueOverlay = ResolveCueTimingOverlay(controller, directorStatus, cueStatus);
 
-        DrawTimingAndCueSheet(controller, directorStatus, cueOverlay);
+        DrawDirectorIntent(controller, directorStatus);
         EditorGUILayout.Space(6f);
-        DrawDirectorIntent(directorStatus);
-        EditorGUILayout.Space(6f);
-        DrawLastCueDecision(directorStatus);
+        DrawCueSheets(directorStatus);
         EditorGUILayout.Space(6f);
         DrawLoadedCue(controller, directorStatus, cueStatus);
         EditorGUILayout.Space(6f);
@@ -165,167 +83,48 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.EndVertical();
     }
 
-    private static CueTimingOverlay ResolveCueTimingOverlay(Controller controller, DirectorStatus directorStatus, SwitcherCueStatus cueStatus)
-    {
-        if (cueStatus.HasCue)
-        {
-            return CueTimingOverlay.Loaded(cueStatus);
-        }
-
-        if (directorStatus.HasCueMark
-            && TryGetTransitionRepertoire(controller, directorStatus.NextTransitionIndex, out var repertoire))
-        {
-            return CueTimingOverlay.Candidate(directorStatus.CueMarkBeat, repertoire);
-        }
-
-        return CueTimingOverlay.None;
-    }
-
-    private static void DrawTimingAndCueSheet(Controller controller, DirectorStatus status, CueTimingOverlay cueOverlay)
+    private static void DrawDirectorIntent(Controller controller, DirectorStatus status)
     {
         var gridCount = controller.beatManager?.Grid is { } grid ? grid.Beat : -1;
-        EditorGUILayout.LabelField("TIMING / CUE SHEET", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("DIRECTOR", EditorStyles.boldLabel);
+        DrawRow("Mode", status.Mode.ToString());
         DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(gridCount)}");
-        DrawRow("Timing Source", FormatTimingSource(status));
-        DrawRow("Beats Until Cue", FormatBeats(status.BeatsUntilLanding));
-        DrawCueTimingRows(status, cueOverlay);
-        DrawGridStrip(gridCount, cueOverlay);
-        DrawCueSheet(status.CueSheet, status.CurrentBeat);
+        DrawRow("Staged Effect", FormatIndexedName(status.NextEffectIndex, status.NextEffectName));
+        DrawRow("Staged Transition", FormatIndexedName(status.NextTransitionIndex, status.NextTransitionName));
+        DrawRow("Hold Selected Effect", status.HoldSelectedEffect ? "On" : "Off");
+        DrawRow("Hold Selected Transition", status.HoldSelectedTransition ? "On" : "Off");
     }
 
-    private static void DrawCueTimingRows(DirectorStatus status, CueTimingOverlay cueOverlay)
+    private static void DrawCueSheets(DirectorStatus status)
     {
-        if (!cueOverlay.HasCue)
-        {
-            DrawRow("Cue Timing", "—");
-            return;
-        }
-
-        var source = cueOverlay.IsLoaded ? "Loaded Cue" : "Candidate Cue";
-        DrawRow(source, $"Cue Mark {FormatBeat(cueOverlay.CueMarkBeat)} ({FormatBeatDelta(status.CurrentBeat, cueOverlay.CueMarkBeat)})");
-        DrawRow("Lock / Fire", $"Lock {FormatBeat(cueOverlay.LockPointBeat)} ({FormatBeatDelta(status.CurrentBeat, cueOverlay.LockPointBeat)}) · Fire {FormatBeat(cueOverlay.StartBeat)} ({FormatBeatDelta(status.CurrentBeat, cueOverlay.StartBeat)})");
-        DrawRow("Runway / Tail", $"{cueOverlay.RunwayBeats}b / {cueOverlay.TailBeats}b");
+        EditorGUILayout.LabelField("CUE SHEETS", EditorStyles.boldLabel);
+        DrawCueSheet("Current", status.CurrentSheet, status.CurrentBeat);
+        DrawCueSheet("Next", status.NextSheet, status.CurrentBeat);
     }
 
-    private static void DrawCueSheet(CueSheetStatus cueSheet, int currentBeat)
+    private static void DrawCueSheet(string label, CueSheetView cueSheet, int currentBeat)
     {
         if (!cueSheet.HasSheet)
         {
-            DrawRow("Cue Sheet", "—");
+            DrawRow(label, "—");
             return;
         }
 
-        DrawRow("Phrase", $"{FormatBeat(cueSheet.PhraseStartBeat)} → {FormatBeat(cueSheet.PhraseEndBeat)} · {cueSheet.PhraseLengthBeats}b");
-        DrawRow("Current Cue Mark", $"{FormatBeat(cueSheet.CurrentCueMarkBeat)} ({FormatBeatDelta(currentBeat, cueSheet.CurrentCueMarkBeat)})");
+        DrawRow(label, $"{FormatBeat(cueSheet.PhraseStartBeat)} → {FormatBeat(cueSheet.PhraseEndBeat)} · {cueSheet.PhraseLengthBeats}b");
 
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.PrefixLabel("Cue Marks");
         var previousColor = GUI.backgroundColor;
         var offsets = cueSheet.CueMarkOffsets ?? System.Array.Empty<int>();
-        for (var i = 0; i < offsets.Length; i++)
+        foreach (var offset in offsets)
         {
-            var offset = offsets[i];
             var absoluteBeat = cueSheet.PhraseStartBeat + offset;
-            GUI.backgroundColor = i == cueSheet.CurrentCueMarkIndex
-                ? CueMarkColor
-                : absoluteBeat == currentBeat
-                    ? CurrentBeatColor
-                    : previousColor;
+            GUI.backgroundColor = absoluteBeat == currentBeat ? CurrentBeatColor : CueMarkColor;
             GUILayout.Label(FormatCueSheetOffset(offset, cueSheet.PhraseLengthBeats), EditorStyles.miniButton, GUILayout.MinWidth(44f));
         }
 
         GUI.backgroundColor = previousColor;
         EditorGUILayout.EndHorizontal();
-    }
-
-    private static void DrawDirectorIntent(DirectorStatus status)
-    {
-        EditorGUILayout.LabelField("DIRECTOR INTENT", EditorStyles.boldLabel);
-        DrawRow("Mode", status.Mode.ToString());
-        DrawRow("Decision", status.Decision.ToString());
-        DrawRow("Staged Effect", FormatIndexedName(status.NextEffectIndex, status.NextEffectName));
-        DrawRow("Staged Transition", FormatIndexedName(status.NextTransitionIndex, status.NextTransitionName));
-        DrawRow("Hold Selected Effect", status.HoldSelectedEffect ? "On" : "Off");
-        DrawRow("Hold Selected Transition", status.HoldSelectedTransition ? "On" : "Off");
-        DrawRow("Last Change", FormatBeat(status.LastChangeBeat));
-        DrawRow("Last Sent Cue Mark", FormatBeat(status.TransitionLandingBeat));
-        DrawRow("Cadence Ready In", FormatBeats(status.BeatsUntilCadenceReady));
-    }
-
-    private static void DrawLastCueDecision(DirectorStatus status)
-    {
-        EditorGUILayout.LabelField("LAST CUE DECISION", EditorStyles.boldLabel);
-        var decision = status.LastCue;
-        if (decision.Outcome == CueDecisionOutcome.None)
-        {
-            DrawRow("Outcome", "—");
-            return;
-        }
-
-        DrawRow("Outcome", $"{FormatCueOutcome(decision.Outcome)} @ beat {decision.Beat}");
-        DrawRow("Cue Event", FormatCueEvent(decision));
-        DrawRow("Impact", FormatCueImpact(decision));
-        if (decision.EffectIndex >= 0)
-        {
-            DrawRow(
-                decision.Outcome == CueDecisionOutcome.DropProtected ? "Protected Effect" : "Cast Effect",
-                FormatIndexedName(decision.EffectIndex, decision.EffectName) + FormatCastSource(decision.EffectSource, decision.PreferredRepertoire));
-        }
-
-        if (decision.TransitionIndex >= 0)
-        {
-            DrawRow(
-                "Cast Transition",
-                FormatIndexedName(decision.TransitionIndex, decision.TransitionName) + FormatCastSource(decision.TransitionSource, decision.PreferredRepertoire));
-        }
-    }
-
-    private static string FormatCueOutcome(CueDecisionOutcome outcome)
-    {
-        switch (outcome)
-        {
-            case CueDecisionOutcome.Sent: return "Sent";
-            case CueDecisionOutcome.Held: return "Held (nothing sent)";
-            case CueDecisionOutcome.BlockedByCadence: return "Blocked by cadence";
-            case CueDecisionOutcome.DropProtected: return "Drop protected (no cue)";
-            default: return outcome.ToString();
-        }
-    }
-
-    private static string FormatCueEvent(CueDecision decision)
-    {
-        return decision.PreferredRepertoire == Repertoire.None
-            ? decision.EventIntent.ToString()
-            : $"{decision.EventIntent} (wants {decision.PreferredRepertoire})";
-    }
-
-    private static string FormatCueImpact(CueDecision decision)
-    {
-        if (decision.Outcome != CueDecisionOutcome.Sent && decision.Outcome != CueDecisionOutcome.Held)
-        {
-            return $"beat {decision.ImpactBeat}";
-        }
-
-        var beatsBeforeImpact = decision.BeatsBeforeImpact;
-        if (beatsBeforeImpact > 0)
-        {
-            return $"beat {decision.ImpactBeat} — sent {beatsBeforeImpact}b before impact";
-        }
-
-        return beatsBeforeImpact == 0
-            ? $"beat {decision.ImpactBeat} — sent on impact (hard cut)"
-            : $"beat {decision.ImpactBeat} — sent {-beatsBeforeImpact}b after impact (hard cut)";
-    }
-
-    private static string FormatCastSource(CueCastSource source, Repertoire preferredRepertoire)
-    {
-        switch (source)
-        {
-            case CueCastSource.Staged: return " (staged)";
-            case CueCastSource.DeckFind: return " (deck find)";
-            case CueCastSource.NoPreferredAvailable: return $" (no {preferredRepertoire} candidate)";
-            default: return string.Empty;
-        }
     }
 
     private static void DrawLoadedCue(Controller controller, DirectorStatus directorStatus, SwitcherCueStatus cueStatus)
@@ -374,9 +173,8 @@ public sealed class ControllerEditor : Editor
 
         var beatManager = controller.beatManager;
         var grid = beatManager?.Grid;
-        DrawRow("Cue Mark", status.HasCueMark ? "locked" : "none");
         DrawRow("Grid State", grid is { } g ? g.State.ToString() : "unlocked");
-        DrawRow("Grid Beat", grid is { } gc ? $"{gc.Beat}/{PhraseWindow.DefaultGridBeats}" : "—");
+        DrawRow("Grid Beat", grid is { } gc ? $"{gc.Beat}/{CueSheet.GridBeats}" : "—");
         DrawRow("Grid Bar", grid is { } gb ? $"{gb.Bar}/4" : "—");
         DrawRow("Phrase", FormatPhraseRow(beatManager?.Phrase));
         DrawRow("Next Phrase", FormatNextPhraseRow(beatManager?.NextPhrase));
@@ -456,109 +254,6 @@ public sealed class ControllerEditor : Editor
         }
     }
 
-    private static void DrawGridStrip(int gridPosition, CueTimingOverlay cueOverlay)
-    {
-        EditorGUILayout.BeginHorizontal();
-        var previousColor = GUI.backgroundColor;
-        for (var i = 1; i <= PhraseWindow.DefaultGridBeats; i++)
-        {
-            var role = RoleForGridSlot(i, gridPosition, cueOverlay);
-            GUI.backgroundColor = ColorForRole(role, i == gridPosition, previousColor);
-            GUILayout.Label(FormatGridSlotLabel(i, gridPosition, role), EditorStyles.miniButton, GUILayout.MinWidth(28f));
-        }
-
-        GUI.backgroundColor = previousColor;
-        EditorGUILayout.EndHorizontal();
-    }
-
-    private static GridSlotRole RoleForGridSlot(int slot, int gridPosition, CueTimingOverlay cueOverlay)
-    {
-        if (!cueOverlay.HasCue)
-        {
-            return slot == gridPosition ? GridSlotRole.Current : slot == 1 ? GridSlotRole.CueMark : GridSlotRole.None;
-        }
-
-        if (GridSlotForBeat(cueOverlay.CueMarkBeat, cueOverlay.CueMarkBeat) == slot)
-        {
-            return GridSlotRole.CueMark;
-        }
-
-        if (GridSlotForBeat(cueOverlay.LockPointBeat, cueOverlay.CueMarkBeat) == slot)
-        {
-            return GridSlotRole.LockPoint;
-        }
-
-        if (SlotContainsBeatRange(slot, cueOverlay.StartBeat, cueOverlay.CueMarkBeat - 1, cueOverlay.CueMarkBeat))
-        {
-            return GridSlotRole.Runway;
-        }
-
-        if (SlotContainsBeatRange(slot, cueOverlay.CueMarkBeat + 1, cueOverlay.CompleteBeat, cueOverlay.CueMarkBeat))
-        {
-            return GridSlotRole.Tail;
-        }
-
-        return slot == gridPosition ? GridSlotRole.Current : GridSlotRole.None;
-    }
-
-    private static bool SlotContainsBeatRange(int slot, int startBeat, int endBeat, int cueMarkBeat)
-    {
-        if (startBeat > endBeat)
-        {
-            return false;
-        }
-
-        for (var beat = startBeat; beat <= endBeat; beat++)
-        {
-            if (GridSlotForBeat(beat, cueMarkBeat) == slot)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static int GridSlotForBeat(int beat, int cueMarkBeat)
-    {
-        var offset = (beat - cueMarkBeat) % PhraseWindow.DefaultGridBeats;
-        if (offset < 0)
-        {
-            offset += PhraseWindow.DefaultGridBeats;
-        }
-
-        return offset + 1;
-    }
-
-    private static Color ColorForRole(GridSlotRole role, bool isCurrent, Color fallback)
-    {
-        // The current beat always wins: it must stay trackable on top of any cue role color
-        // (runway / tail / lock point / cue mark), which would otherwise paint over it.
-        if (isCurrent)
-        {
-            return CurrentBeatColor;
-        }
-
-        switch (role)
-        {
-            case GridSlotRole.CueMark:
-                return CueMarkColor;
-            case GridSlotRole.LockPoint:
-                return LockPointColor;
-            case GridSlotRole.Runway:
-                return RunwayColor;
-            case GridSlotRole.Tail:
-                return TailColor;
-            default:
-                return fallback;
-        }
-    }
-
-    private static string FormatGridSlotLabel(int slot, int gridPosition, GridSlotRole role)
-    {
-        return role == GridSlotRole.LockPoint ? "L" : slot == 1 ? "X" : slot.ToString();
-    }
-
     private static void DrawProgress(string label, float value)
     {
         var rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
@@ -577,18 +272,6 @@ public sealed class ControllerEditor : Editor
         {
             EditorGUILayout.TextField(label, string.IsNullOrWhiteSpace(value) ? "—" : value);
         }
-    }
-
-    private static bool TryGetTransitionRepertoire(Controller controller, int index, out TransitionRepertoire repertoire)
-    {
-        if (controller.transitions != null && index >= 0 && index < controller.transitions.Length && controller.transitions[index] != null)
-        {
-            repertoire = controller.transitions[index].Repertoire;
-            return true;
-        }
-
-        repertoire = default;
-        return false;
     }
 
     private static string FormatIndexedName(int index, string name)
@@ -611,24 +294,14 @@ public sealed class ControllerEditor : Editor
             : string.Empty;
     }
 
-    private static string FormatTimingSource(DirectorStatus status)
-    {
-        return status.TimingSource.ToString();
-    }
-
     private static string FormatGridCount(int gridPosition)
     {
-        return gridPosition > 0 ? $"{gridPosition} / {PhraseWindow.DefaultGridBeats}" : "—";
+        return gridPosition > 0 ? $"{gridPosition} / {CueSheet.GridBeats}" : "—";
     }
 
     private static string FormatBeat(int beat)
     {
         return beat >= 0 && beat != int.MinValue ? beat.ToString() : "—";
-    }
-
-    private static string FormatBeats(int beats)
-    {
-        return beats >= 0 ? $"{beats}b" : "—";
     }
 
     private static string FormatBeatDelta(int currentBeat, int targetBeat)

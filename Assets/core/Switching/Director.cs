@@ -10,154 +10,47 @@ public enum DirectorMode
     Hold
 }
 
-/// <summary>Current scheduling reason reported by the Director for observability.</summary>
-public enum DirectorDecision
-{
-    NotReady,
-    StandaloneTimer,
-    WaitingForGrid,
-    WaitingForRunway,
-    WaitingForCadence,
-    CueingTransition,
-    Hold
-}
-
 /// <summary>
-/// Read-only snapshot of Director sequencing state for the HUD and Unity Inspector.
+/// Read-only snapshot of one Director-held Cue Sheet slot, for the Observatory and Unity Inspector.
+/// A Cue Sheet is an index of empty Cue Marks over one Phrase; this exposes it as real state, not a
+/// remembered verdict.
 /// </summary>
-/// <summary>Terminal outcome of the Director's most recent Synced cue decision.</summary>
-public enum CueDecisionOutcome
+public readonly struct CueSheetView
 {
-    /// <summary>No Synced cue decision has been reached yet.</summary>
-    None,
+    /// <summary>The empty view reported for a slot holding no sheet.</summary>
+    public static CueSheetView Empty { get; } = new CueSheetView(false, -1, -1, -1, Array.Empty<int>());
 
-    /// <summary>The cue was sent to the Switcher.</summary>
-    Sent,
+    /// <summary>Whether this slot currently holds a sheet.</summary>
+    public readonly bool HasSheet;
 
-    /// <summary>The cue cleared timing but a held effect suppressed it; nothing was sent.</summary>
-    Held,
+    /// <summary>Absolute beat the sheet's Phrase starts on.</summary>
+    public readonly int PhraseStartBeat;
 
-    /// <summary>The Cue Mark fell inside the minimum change cadence; the mark was skipped.</summary>
-    BlockedByCadence,
+    /// <summary>Absolute beat the sheet's Phrase ends on (its mandatory final Cue Mark).</summary>
+    public readonly int PhraseEndBeat;
 
-    /// <summary>
-    /// A Drop coincided with the Cue Mark while a Drop-capable Performer was already on stage, so the
-    /// Director issued no cue and left that Performer to play the Drop itself (drop-protect).
-    /// </summary>
-    DropProtected
-}
+    /// <summary>Total Phrase length in beats.</summary>
+    public readonly int PhraseLengthBeats;
 
-/// <summary>Where a cast choice came from when the Director committed a cue.</summary>
-public enum CueCastSource
-{
-    /// <summary>No cast was made for this decision.</summary>
-    None,
+    /// <summary>Phrase-relative Cue Mark offsets for display.</summary>
+    public readonly int[] CueMarkOffsets;
 
-    /// <summary>The staged choice was used.</summary>
-    Staged,
-
-    /// <summary>A read-only deck find matched the preferred Repertoire and was pulled at the commit point.</summary>
-    DeckFind,
-
-    /// <summary>The event asked for a Repertoire no candidate could satisfy; the staged choice stood in.</summary>
-    NoPreferredAvailable
-}
-
-/// <summary>
-/// Read-only record of the Director's most recent terminal Synced cue decision: what the musical
-/// event asked for, what timing answered, and — when a cast happened — which Performer and
-/// Transition were chosen and where they came from. Surfaced through
-/// <see cref="DirectorStatus.LastCue"/> so the observatory can answer "why did the wall just do that".
-/// </summary>
-public readonly struct CueDecision
-{
-    /// <summary>The empty decision reported before any Synced cue decision is reached.</summary>
-    public static CueDecision None { get; } = new CueDecision(
-        CueDecisionOutcome.None,
-        beat: -1,
-        impactBeat: -1,
-        CueEventIntent.Ordinary,
-        Repertoire.None,
-        effectIndex: -1,
-        effectName: string.Empty,
-        CueCastSource.None,
-        transitionIndex: -1,
-        transitionName: string.Empty,
-        CueCastSource.None);
-
-    public readonly CueDecisionOutcome Outcome;
-
-    /// <summary>Beat the decision was made on.</summary>
-    public readonly int Beat;
-
-    /// <summary>Impact Point the decision aimed at (the Cue Mark), or -1 when none applied.</summary>
-    public readonly int ImpactBeat;
-
-    /// <summary>Musical event meaning the cue was classified as.</summary>
-    public readonly CueEventIntent EventIntent;
-
-    /// <summary>Repertoire the event asked the Director to cast, or None for an ordinary cue.</summary>
-    public readonly Repertoire PreferredRepertoire;
-
-    /// <summary>
-    /// Effect the decision settled on: the cast target for Sent/Held, the protected on-stage
-    /// Performer for DropProtected, or -1 when no effect was involved.
-    /// </summary>
-    public readonly int EffectIndex;
-    public readonly string EffectName;
-    public readonly CueCastSource EffectSource;
-
-    /// <summary>Transition the decision selected, or -1 when none was selected.</summary>
-    public readonly int TransitionIndex;
-    public readonly string TransitionName;
-    public readonly CueCastSource TransitionSource;
-
-    /// <summary>
-    /// Beats between the decision and its Impact Point. Zero or negative means the transition starts
-    /// with no Runway left — the move lands as a hard cut.
-    /// </summary>
-    public int BeatsBeforeImpact => ImpactBeat - Beat;
-
-    public CueDecision(
-        CueDecisionOutcome outcome,
-        int beat,
-        int impactBeat,
-        CueEventIntent eventIntent,
-        Repertoire preferredRepertoire,
-        int effectIndex,
-        string effectName,
-        CueCastSource effectSource,
-        int transitionIndex,
-        string transitionName,
-        CueCastSource transitionSource)
+    public CueSheetView(bool hasSheet, int phraseStartBeat, int phraseEndBeat, int phraseLengthBeats, int[] cueMarkOffsets)
     {
-        Outcome = outcome;
-        Beat = beat;
-        ImpactBeat = impactBeat;
-        EventIntent = eventIntent;
-        PreferredRepertoire = preferredRepertoire;
-        EffectIndex = effectIndex;
-        EffectName = effectName ?? string.Empty;
-        EffectSource = effectSource;
-        TransitionIndex = transitionIndex;
-        TransitionName = transitionName ?? string.Empty;
-        TransitionSource = transitionSource;
+        HasSheet = hasSheet;
+        PhraseStartBeat = phraseStartBeat;
+        PhraseEndBeat = phraseEndBeat;
+        PhraseLengthBeats = phraseLengthBeats;
+        CueMarkOffsets = cueMarkOffsets ?? Array.Empty<int>();
     }
 }
 
+/// <summary>Read-only snapshot of the Director reducer's real state for the HUD and Unity Inspector.</summary>
 public readonly struct DirectorStatus
 {
     public static DirectorStatus NotReady { get; } = new DirectorStatus(
         DirectorMode.NotReady,
-        DirectorDecision.NotReady,
         false,
-        false,
-        TimingFrameSource.Unlocked,
-        -1,
-        -1,
-        -1,
-        -1,
-        -1,
         -1,
         -1,
         string.Empty,
@@ -165,94 +58,84 @@ public readonly struct DirectorStatus
         string.Empty,
         false,
         false,
-        CueSheetStatus.Empty,
-        CueDecision.None);
+        CueSheetView.Empty,
+        CueSheetView.Empty);
 
+    /// <summary>Which operating mode the Director is in this frame.</summary>
     public readonly DirectorMode Mode;
-    public readonly DirectorDecision Decision;
-    public readonly bool IsSyncedMode;
-    public readonly bool HasCueMark;
-    /// <summary>Source of the current On-Air Timing target.</summary>
-    public readonly TimingFrameSource TimingSource;
-    /// <summary>Absolute beat the current Cue Mark lands on, or -1 when unlocked.</summary>
-    public readonly int CueMarkBeat;
-    public readonly int LastChangeBeat;
-    public readonly int TransitionLandingBeat;
-    public readonly int BeatsUntilLanding;
-    public readonly int BeatsUntilCadenceReady;
-    public readonly int NextEffectIndex;
-    public readonly string NextEffectName;
-    public readonly int NextTransitionIndex;
-    public readonly string NextTransitionName;
-    public readonly bool HoldSelectedEffect;
-    public readonly bool HoldSelectedTransition;
-    /// <summary>Current Cue Sheet snapshot from On-Air Timing.</summary>
-    public readonly CueSheetStatus CueSheet;
 
-    /// <summary>The Director's most recent terminal Synced cue decision.</summary>
-    public readonly CueDecision LastCue;
+    /// <summary>True when the wall is in Synced Mode (the reducer is live).</summary>
+    public readonly bool IsSyncedMode;
+
+    /// <summary>Current live beat observed by the Director, or -1 outside Synced Mode.</summary>
+    public readonly int CurrentBeat;
+
+    /// <summary>Staged effect index for the next cast, or -1 when nothing is staged.</summary>
+    public readonly int NextEffectIndex;
+
+    /// <summary>Display name of the staged effect, or empty when nothing is staged.</summary>
+    public readonly string NextEffectName;
+
+    /// <summary>Staged transition index for the next cast, or -1 before the Director is ready.</summary>
+    public readonly int NextTransitionIndex;
+
+    /// <summary>Display name of the staged transition, or empty before the Director is ready.</summary>
+    public readonly string NextTransitionName;
+
+    /// <summary>Whether the staged Effect is kept after each completed move.</summary>
+    public readonly bool HoldSelectedEffect;
+
+    /// <summary>Whether the staged Transition is kept after each completed move.</summary>
+    public readonly bool HoldSelectedTransition;
+
+    /// <summary>The current Phrase's Cue Sheet.</summary>
+    public readonly CueSheetView CurrentSheet;
+
+    /// <summary>The next Phrase's Cue Sheet, built ahead from the announcement.</summary>
+    public readonly CueSheetView NextSheet;
 
     public DirectorStatus(
         DirectorMode mode,
-        DirectorDecision decision,
         bool isSyncedMode,
-        bool hasCueMark,
-        TimingFrameSource timingSource,
-        int cueMarkBeat,
-        int lastChangeBeat,
-        int transitionLandingBeat,
         int currentBeat,
-        int beatsUntilLanding,
-        int beatsUntilCadenceReady,
         int nextEffectIndex,
         string nextEffectName,
         int nextTransitionIndex,
         string nextTransitionName,
         bool holdSelectedEffect,
         bool holdSelectedTransition,
-        CueSheetStatus cueSheet,
-        CueDecision lastCue)
+        CueSheetView currentSheet,
+        CueSheetView nextSheet)
     {
         Mode = mode;
-        Decision = decision;
         IsSyncedMode = isSyncedMode;
-        HasCueMark = hasCueMark;
-        TimingSource = timingSource;
-        CueMarkBeat = cueMarkBeat;
-        LastChangeBeat = lastChangeBeat;
-        TransitionLandingBeat = transitionLandingBeat;
         CurrentBeat = currentBeat;
-        BeatsUntilLanding = beatsUntilLanding;
-        BeatsUntilCadenceReady = beatsUntilCadenceReady;
         NextEffectIndex = nextEffectIndex;
         NextEffectName = nextEffectName ?? string.Empty;
         NextTransitionIndex = nextTransitionIndex;
         NextTransitionName = nextTransitionName ?? string.Empty;
         HoldSelectedEffect = holdSelectedEffect;
         HoldSelectedTransition = holdSelectedTransition;
-        CueSheet = cueSheet;
-        LastCue = lastCue;
+        CurrentSheet = currentSheet;
+        NextSheet = nextSheet;
     }
-
-    /// <summary>Current live beat observed by the Director, or -1 outside Synced Mode.</summary>
-    public readonly int CurrentBeat;
 }
 
 /// <summary>
-/// Decides what plays and when it changes.
-/// The Director reads available musical timing, reads Performer repertoire, and directs the Switcher.
+/// Decides what plays and when it changes, as a wire-change reducer (ADR-0011). In Synced Mode the
+/// Director wakes once per new beat and does three things only: repair its two Cue Sheets by invariant,
+/// Cast a Cue when a Grid carrying a Cue Mark begins, and hand that Cue to the Switcher fire-and-forget.
+/// It reads musical truth only from <see cref="BeatManager"/>, never OSC directly, keeps no decision
+/// memory, and never mirrors commitment — the Switcher alone owns that and answers accepted-or-not.
 /// </summary>
 [Serializable]
 public sealed class Director
 {
-    private const int MinimumChangeCadenceBeats = 16;
-
     private readonly Controller controller;
     private readonly Switcher switcher;
     private readonly Timer standaloneTimer;
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
-    private readonly CuePlanner cuePlanner = new CuePlanner();
 
     private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
@@ -261,54 +144,116 @@ public sealed class Director
     private bool holdSelectedTransition;
     private bool nextEffectIsManualSelection;
     private bool nextTransitionIsManualSelection;
-    private int lastSyncedBeat = -1;
-    private int transitionStartBeat = -1;
-    private int transitionLandingBeat = -1;
-    private TimingFrame timingFrame = TimingFrame.Unavailable;
-    private int lastTrackId = -1;
-    private DirectorMode lastLoggedMode = DirectorMode.NotReady;
-    private int lastLoggedSyncedBeat = -1;
-    private int lastDropProtectedBeat = -1;
-    private CueDecision lastCueDecision = CueDecision.None;
 
-    private readonly struct TransitionCueSelection
+    // Reducer wake memory. lastWakeBeat gates decisions to once per new beat; lastGridBeat is the previous
+    // 16-count so a new Grid is read as the count moving backwards (a wrap), never as equality with 1.
+    private int lastWakeBeat = -1;
+    private int lastGridBeat = -1;
+
+    private CueSheetSlot currentSlot = CueSheetSlot.Empty;
+    private CueSheetSlot nextSlot = CueSheetSlot.Empty;
+    private DirectorMode lastLoggedMode = DirectorMode.NotReady;
+
+    /// <summary>One held Cue Sheet plus the announcement (Phrase start and length) it was built from.</summary>
+    private readonly struct CueSheetSlot
     {
-        private TransitionCueSelection(
-            int transitionIndex,
-            TransitionRepertoire repertoire,
-            int deckIndex)
+        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, -1);
+
+        public readonly bool HasSheet;
+        public readonly CueSheet Sheet;
+        public readonly int PhraseStartBeat;
+        public readonly int PhraseLengthBeats;
+
+        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseStartBeat, int phraseLengthBeats)
         {
-            TransitionIndex = transitionIndex;
-            Repertoire = repertoire;
+            HasSheet = hasSheet;
+            Sheet = sheet;
+            PhraseStartBeat = phraseStartBeat;
+            PhraseLengthBeats = phraseLengthBeats;
+        }
+
+        public int PhraseEndBeat => PhraseStartBeat + PhraseLengthBeats;
+
+        /// <summary>
+        /// Whether this slot was built from exactly this announcement (start and length). Keying to the
+        /// announcement — not to a re-derived beat — is what makes timing wobble unable to re-roll a sheet.
+        /// </summary>
+        public bool BuiltFrom(int phraseStartBeat, int phraseLengthBeats) =>
+            HasSheet && PhraseStartBeat == phraseStartBeat && PhraseLengthBeats == phraseLengthBeats;
+
+        /// <summary>Whether the sheet carries a Cue Mark on exactly this absolute beat.</summary>
+        public bool HasCueMarkAt(int absoluteBeat)
+        {
+            if (!HasSheet || Sheet.CueMarkOffsets == null)
+            {
+                return false;
+            }
+
+            var targetOffset = absoluteBeat - PhraseStartBeat;
+            foreach (var offset in Sheet.CueMarkOffsets)
+            {
+                if (offset == targetOffset)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public CueSheetView ToView() => HasSheet
+            ? new CueSheetView(true, PhraseStartBeat, PhraseEndBeat, PhraseLengthBeats, (int[])Sheet.CueMarkOffsets.Clone())
+            : CueSheetView.Empty;
+    }
+
+    /// <summary>One cast choice: the catalog index and, when it came from a deck peek, the deck position to pull on acceptance.</summary>
+    private readonly struct Cast
+    {
+        private Cast(int index, int deckIndex)
+        {
+            Index = index;
             DeckIndex = deckIndex;
         }
 
-        public readonly int TransitionIndex;
-        public readonly TransitionRepertoire Repertoire;
+        public readonly int Index;
         public readonly int DeckIndex;
 
-        public static TransitionCueSelection Staged(int transitionIndex, TransitionRepertoire repertoire)
-        {
-            return new TransitionCueSelection(transitionIndex, repertoire, deckIndex: -1);
-        }
+        public static Cast Staged(int index) => new Cast(index, -1);
 
-        public static TransitionCueSelection DeckCandidate(int transitionIndex, TransitionRepertoire repertoire, int deckIndex)
-        {
-            return new TransitionCueSelection(transitionIndex, repertoire, deckIndex);
-        }
+        public static Cast FromDeck(int index, int deckIndex) => new Cast(index, deckIndex);
     }
 
-    /// <summary>Whether the Director currently has a Cue Mark to aim at.</summary>
-    public bool HasCueMark => timingFrame.HasCueMark;
+    public Director(
+        Controller controller,
+        Switcher switcher,
+        Timer standaloneTimer,
+        int[] effectDeck,
+        int[] transitionDeck,
+        int initialTransitionIndex)
+    {
+        if (controller == null)
+        {
+            throw new ArgumentNullException(nameof(controller));
+        }
+
+        this.controller = controller;
+        this.switcher = switcher ?? throw new ArgumentNullException(nameof(switcher));
+        this.standaloneTimer = standaloneTimer ?? throw new ArgumentNullException(nameof(standaloneTimer));
+        this.effectDeck = effectDeck ?? throw new ArgumentNullException(nameof(effectDeck));
+        this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
+        currentEffectIndexForSelection = switcher.CurrentEffectIndex;
+        SetNextTransition(initialTransitionIndex);
+        nextTransitionIsManualSelection = false;
+        StageNextEffect(currentEffectIndexForSelection);
+    }
 
     /// <summary>
     /// Whether the wall is in Synced Mode: a usable beat clock is running. Reads the single mode authority
-    /// (<see cref="BeatManager.IsSynced"/>), not OSC transport liveness — OSC connected but idle (sentinels,
-    /// no track playing) is Standalone, not Synced (ADR-0007).
+    /// (<see cref="BeatManager.IsSynced"/>), not OSC transport liveness (ADR-0007).
     /// </summary>
     public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsSynced;
 
-    /// <summary>Current read-only sequencing snapshot for runtime HUDs and inspector diagnostics.</summary>
+    /// <summary>Current read-only reducer snapshot for runtime HUDs and inspector diagnostics.</summary>
     public DirectorStatus Status => IsReady ? BuildStatus() : DirectorStatus.NotReady;
 
     private bool IsReady =>
@@ -366,38 +311,13 @@ public sealed class Director
         Trace($"NEXT_TRANSITION_HOLD_SET hold={holdSelectedTransition} nextTransition={FormatTransition(nextTransitionIndex)}");
     }
 
-    public Director(
-        Controller controller,
-        Switcher switcher,
-        Timer standaloneTimer,
-        int[] effectDeck,
-        int[] transitionDeck,
-        int initialTransitionIndex)
-    {
-        if (controller == null)
-        {
-            throw new ArgumentNullException(nameof(controller));
-        }
-
-        this.controller = controller;
-        this.switcher = switcher ?? throw new ArgumentNullException(nameof(switcher));
-        this.standaloneTimer = standaloneTimer ?? throw new ArgumentNullException(nameof(standaloneTimer));
-        this.effectDeck = effectDeck ?? throw new ArgumentNullException(nameof(effectDeck));
-        this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
-        currentEffectIndexForSelection = switcher.CurrentEffectIndex;
-        SetNextTransition(initialTransitionIndex);
-        nextTransitionIsManualSelection = false;
-        StageNextEffect(currentEffectIndexForSelection);
-    }
-
-    /// <summary>Advances the Director's current cadence clock or live musical scheduling.</summary>
+    /// <summary>Advances the Director's Standalone cadence clock or, in Synced Mode, the beat-driven reducer.</summary>
     public void Tick(float deltaTime)
     {
         LogModeIfChanged();
 
-        // Synced Mode needs both the mode authority and a running absolute beat to sequence on structure.
-        // If the clock is gone (Standalone) — or a frame of Synced Mode arrives without a usable Beat —
-        // fall through to Standalone sequencing rather than freezing on a dead return (ADR-0007).
+        // Synced Mode needs both the mode authority and a running absolute beat. If the clock is gone —
+        // or a frame of Synced Mode arrives without a usable Beat — fall through to Standalone (ADR-0007).
         if (IsSyncedMode && controller.beatManager.Beat is { } beat)
         {
             TickSyncedMode(beat);
@@ -408,24 +328,19 @@ public sealed class Director
         }
     }
 
-    /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence.</summary>
+    /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence and reducer memory.</summary>
     public void ShowNow(int effectIndex, float durationSeconds)
     {
         Trace($"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
         switcher.ShowNow(effectIndex);
         currentEffectIndexForSelection = effectIndex;
-        cuePlanner.Reset();
-        timingFrame = TimingFrame.Unavailable;
-        lastCueDecision = CueDecision.None;
-        MarkChangedOnCurrentBeat();
+        ResetReducerMemory();
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
         StageNextChoices();
     }
 
-    /// <summary>
-    /// Applies Hold as an inspection freeze. Hold suspends rotation by keeping the held effect on stage.
-    /// </summary>
+    /// <summary>Applies Hold as an inspection freeze: keeps the held effect on stage, suspending rotation.</summary>
     public void ApplyHold()
     {
         if (!controller.TryGetHeldEffectIndex(out var heldEffectIndex))
@@ -456,139 +371,274 @@ public sealed class Director
         RunStandaloneTimerDecision();
     }
 
-    private DirectorStatus BuildStatus()
-    {
-        var isSynced = IsSyncedMode;
-        var isHeld = controller.TryGetHeldEffectIndex(out _);
-        var currentBeat = isSynced && controller.beatManager.Beat is { } beat ? beat : -1;
-        var beatsUntilLanding = timingFrame.HasCueMark && currentBeat >= 0 ? timingFrame.CueMarkBeat - currentBeat : -1;
-        var runwayBeats = NextTransitionRepertoire.RunwayBeats;
-        var beatsUntilCadenceReady = GetBeatsUntilCadenceReady(currentBeat);
-
-        var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
-        var decision = ResolveDecision(isHeld, isSynced, beatsUntilLanding, beatsUntilCadenceReady, runwayBeats);
-
-        return new DirectorStatus(
-            mode,
-            decision,
-            isSynced,
-            timingFrame.HasCueMark,
-            timingFrame.Source,
-            timingFrame.CueMarkBeat,
-            cuePlanner.LastChangeBeat,
-            transitionLandingBeat,
-            currentBeat,
-            beatsUntilLanding,
-            beatsUntilCadenceReady,
-            nextEffectIndex,
-            EffectName(nextEffectIndex),
-            nextTransitionIndex,
-            TransitionName(nextTransitionIndex),
-            holdSelectedEffect,
-            holdSelectedTransition,
-            timingFrame.CueSheet,
-            lastCueDecision);
-    }
-
-    private DirectorDecision ResolveDecision(
-        bool isHeld,
-        bool isSynced,
-        int beatsUntilLanding,
-        int beatsUntilCadenceReady,
-        int runwayBeats)
-    {
-        if (isHeld)
-        {
-            return DirectorDecision.Hold;
-        }
-
-        if (!isSynced)
-        {
-            return DirectorDecision.StandaloneTimer;
-        }
-
-        if (!timingFrame.HasCueMark)
-        {
-            return DirectorDecision.WaitingForGrid;
-        }
-
-        if (beatsUntilCadenceReady > 0)
-        {
-            return DirectorDecision.WaitingForCadence;
-        }
-
-        var inCueWindow = runwayBeats == 0
-            ? beatsUntilLanding == 0
-            : beatsUntilLanding is >= 1 && beatsUntilLanding <= runwayBeats;
-        return inCueWindow ? DirectorDecision.CueingTransition : DirectorDecision.WaitingForRunway;
-    }
-
-    private int GetBeatsUntilCadenceReady(int currentBeat)
-    {
-        if (currentBeat < 0 || cuePlanner.LastChangeBeat == int.MinValue)
-        {
-            return 0;
-        }
-
-        var cadenceReadyBeat = cuePlanner.LastChangeBeat + MinimumChangeCadenceBeats;
-        // Match the cue path: cadence belongs to the selected Cue Mark, not the
-        // current beat. A tailed transition can complete while the next Cue Mark
-        // is already valid.
-        var cueMarkSatisfiesCadence = timingFrame.HasCueMark && timingFrame.CueMarkBeat >= cadenceReadyBeat;
-        return cueMarkSatisfiesCadence ? 0 : Math.Max(0, cadenceReadyBeat - currentBeat);
-    }
-
     private void TickStandaloneMode(float deltaTime)
     {
-        timingFrame = TimingFrame.Unavailable;
-        cuePlanner.Reset();
-        // The mode boundary owns cue teardown: a beat-domain cue loaded while Synced carries a Unity-time
-        // start and would fire into a dead clock, so abort any Switcher-held cue (even a locked one) on
-        // entering Standalone. Fire-and-forget and idempotent, so the every-frame call is fine (ADR-0007).
+        // The mode boundary owns cue teardown and reducer reset: a beat-domain cue loaded while Synced carries
+        // a Unity-time start and would fire into a dead clock, so abort any Switcher-held cue (even a locked
+        // one). Sheet and Grid memory must not cross a Standalone gap either. Idempotent every-frame (ADR-0007).
         switcher.AbortLoadedCue();
+        ResetReducerMemory();
         standaloneTimer.Update(deltaTime);
     }
 
     private void TickSyncedMode(int beat)
     {
-        ResetCuePlannerOnTrackChange();
+        // One wake per new beat: nothing in the decision path runs per frame.
+        if (beat == lastWakeBeat)
+        {
+            return;
+        }
 
-        var previousSyncedBeat = lastSyncedBeat;
-        lastSyncedBeat = beat;
-
-        RefreshTimingFrame();
-
-        LogBeatRewindIfNeeded(previousSyncedBeat, beat, timingFrame.BeatRewoundToNewPass);
-        LogSyncedBeatIfNeeded(beat);
-
-        TryStartSyncedCue(timingFrame);
+        lastWakeBeat = beat;
+        RepairSheets(beat);
+        CastOnNewGrid(beat);
     }
 
-    private void RefreshTimingFrame()
+    /// <summary>
+    /// Repairs the two Cue Sheet slots by invariant on every wake. Startup, OSC dropout, a missed
+    /// announcement, and normal turnover are all the same checks — there is no cold-join case. Sheets are
+    /// keyed to the announcement they were built from, so timing wobble on an unchanged announcement never
+    /// re-rolls a sheet; only a changed announcement can.
+    /// </summary>
+    private void RepairSheets(int beat)
     {
-        var previousLandingBeat = timingFrame.CueMarkBeat;
-        var input = OnAirTimingInput.From(controller.beatManager);
-        timingFrame = cuePlanner.Plan(input, MinimumChangeCadenceBeats);
-
-        if (timingFrame.HasCueMark && timingFrame.CueMarkBeat != previousLandingBeat)
+        // Turnover: the current Phrase has ended, so the next sheet becomes current and its slot empties.
+        if (currentSlot.HasSheet && beat >= currentSlot.PhraseEndBeat)
         {
-            Trace($"ANCHOR_SET beat={timingFrame.CurrentBeat} input={FormatTimingInput()} target={FormatTimingSource(timingFrame.Source)} landing={timingFrame.CueMarkBeat} previousLanding={FormatBeat(previousLandingBeat)}");
+            currentSlot = nextSlot;
+            nextSlot = CueSheetSlot.Empty;
+        }
+
+        // (a) No current sheet -> build from the current Phrase announcement.
+        if (!currentSlot.HasSheet && TryReadCurrentAnnouncement(beat, out var currentStart, out var currentLength))
+        {
+            currentSlot = BuildSlot(currentStart, currentLength);
+        }
+
+        // (b) No next sheet, or the announcement it was built from changed -> build from the next Phrase
+        //     announcement. Never duplicate the current Phrase (the wire can briefly announce it as next).
+        if (TryReadNextAnnouncement(beat, out var nextStart, out var nextLength)
+            && !nextSlot.BuiltFrom(nextStart, nextLength)
+            && !currentSlot.BuiltFrom(nextStart, nextLength))
+        {
+            nextSlot = BuildSlot(nextStart, nextLength);
         }
     }
 
     /// <summary>
-    /// Resets the cue planner when the on-air track identity changes. RaveSystem assigns each track a
-    /// stable id, so a change means the beat counter restarted on a new song; stale cadence memory must
-    /// not cross tracks whose counters do not rewind (replaces GridSync's track-change reset).
+    /// Reads the current Phrase announcement into an announcement identity, or returns false when there is
+    /// no usable one. A non-positive or non-16-multiple length is treated as no usable announcement — the
+    /// builder throws on such lengths, so the reducer never hands one down.
     /// </summary>
-    private void ResetCuePlannerOnTrackChange()
+    private bool TryReadCurrentAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats)
     {
-        var trackId = controller.beatManager.TrackId ?? -1;
-        if (trackId != lastTrackId)
+        phraseStartBeat = -1;
+        phraseLengthBeats = -1;
+        if (controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats }
+            && IsUsablePhraseLength(lengthBeats))
         {
-            cuePlanner.Reset();
-            lastTrackId = trackId;
+            phraseStartBeat = beat + beatsUntilNext - lengthBeats;
+            phraseLengthBeats = lengthBeats;
+            return true;
         }
+
+        return false;
+    }
+
+    /// <summary>Reads the next Phrase announcement into an announcement identity, or returns false when there is no usable one.</summary>
+    private bool TryReadNextAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats)
+    {
+        phraseStartBeat = -1;
+        phraseLengthBeats = -1;
+        if (controller.beatManager.NextPhrase is { beatsUntilChange: { } beatsUntilChange, lengthBeats: { } lengthBeats }
+            && IsUsablePhraseLength(lengthBeats))
+        {
+            phraseStartBeat = beat + beatsUntilChange;
+            phraseLengthBeats = lengthBeats;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsUsablePhraseLength(int lengthBeats) =>
+        lengthBeats > 0 && lengthBeats % CueSheet.GridBeats == 0;
+
+    private CueSheetSlot BuildSlot(int phraseStartBeat, int phraseLengthBeats)
+    {
+        var sheet = CueSheet.Build(phraseLengthBeats, phraseStartBeat, phraseStartBeat);
+        Trace($"SHEET_BUILT start={phraseStartBeat} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
+        return new CueSheetSlot(true, sheet, phraseStartBeat, phraseLengthBeats);
+    }
+
+    /// <summary>
+    /// Casts and hands off a Cue when a new Grid carrying a Cue Mark begins. A new Grid is the 16-count
+    /// moving backwards (a wrap); a dropped packet that skips the One still trips the wrap, so no Grid is
+    /// missed, and the first reading joins mid-Grid without casting.
+    /// </summary>
+    private void CastOnNewGrid(int beat)
+    {
+        if (!(controller.beatManager.Grid is { } grid))
+        {
+            // Off the grid: no new-Grid event, and no stale count to compare against next wake.
+            lastGridBeat = -1;
+            return;
+        }
+
+        var gridBeat = grid.Beat;
+        var previousGridBeat = lastGridBeat;
+        lastGridBeat = gridBeat;
+
+        if (previousGridBeat < 0 || gridBeat >= previousGridBeat)
+        {
+            return;
+        }
+
+        // The Grid that just began runs from its Boundary to the next; a Cue Mark it carries sits on that
+        // next Boundary — the beat a transition started this Grid would land on.
+        var gridStartBeat = beat - (gridBeat - 1);
+        var carriedCueMarkBeat = gridStartBeat + CueSheet.GridBeats;
+        if (!HasCueMarkAt(carriedCueMarkBeat))
+        {
+            return;
+        }
+
+        OfferCue(beat, carriedCueMarkBeat);
+    }
+
+    private bool HasCueMarkAt(int absoluteBeat) =>
+        currentSlot.HasCueMarkAt(absoluteBeat) || nextSlot.HasCueMarkAt(absoluteBeat);
+
+    /// <summary>
+    /// Casts an Effect and Transition for the Cue Mark and offers the Cue to the Switcher fire-and-forget.
+    /// Casting is lazy and preference-based: a Fill on this Grid or a Drop on the next makes capable
+    /// Repertoire preferred, never required. Deck cards are peeked here and pulled only if the Switcher
+    /// accepts; a rejected offer burns nothing.
+    /// </summary>
+    private void OfferCue(int beat, int cueMarkBeat)
+    {
+        // A held Effect suspends rotation: offer no cue and leave the held Performer on stage.
+        if (controller.TryGetHeldEffectIndex(out _))
+        {
+            Trace($"SYNC_CUE_HELD beat={beat} cueMark={cueMarkBeat}");
+            return;
+        }
+
+        var preferredRepertoire = PreferredRepertoireForGrid(beat, cueMarkBeat);
+        var effectCast = CastEffect(preferredRepertoire);
+        var transitionCast = CastTransition(preferredRepertoire);
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat,
+            effectCast.Index,
+            transitionCast.Index,
+            controller.transitions[transitionCast.Index].Repertoire);
+
+        if (!switcher.UpsertLoadedCue(cue, CurrentSwitcherClockSnapshot(beat)))
+        {
+            // The Switcher alone owns commitment; a rejected offer commits nothing and touches no deck.
+            Trace($"SYNC_CUE_REJECTED beat={beat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)}");
+            return;
+        }
+
+        // Accepted: pull the peeked deck cards now, at the commit point, then re-stage fresh choices.
+        if (effectCast.DeckIndex >= 0)
+        {
+            Deck.PullAt(effectDeck, effectCast.DeckIndex);
+        }
+
+        if (transitionCast.DeckIndex >= 0)
+        {
+            Deck.PullAt(transitionDeck, transitionCast.DeckIndex);
+        }
+
+        controller.currentTransition = transitionCast.Index;
+        currentEffectIndexForSelection = effectCast.Index;
+        StageNextChoices(currentEffectIndexForSelection);
+        var loaded = switcher.LoadedCueStatus;
+        Trace($"SYNC_CUE_SENT beat={beat} start={loaded.StartBeat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)} preferred={preferredRepertoire}");
+    }
+
+    /// <summary>
+    /// The Repertoire a Cue on this Grid prefers: HandlesFill when a Fill lands on this Grid, HandlesDrop
+    /// when a Drop lands on the next Grid, else None. A preference, never a mandate.
+    /// </summary>
+    private Repertoire PreferredRepertoireForGrid(int beat, int cueMarkBeat)
+    {
+        // "This Grid" is [beat, cueMarkBeat) — the Grid whose Boundary is the Cue Mark; "next Grid" is
+        // [cueMarkBeat, cueMarkBeat + 16), which the Drop lands on the front of.
+        if (EventStartsWithin(controller.beatManager.Fill, beat, beat, cueMarkBeat))
+        {
+            return Repertoire.HandlesFill;
+        }
+
+        if (EventStartsWithin(controller.beatManager.Drop, beat, cueMarkBeat, cueMarkBeat + CueSheet.GridBeats))
+        {
+            return Repertoire.HandlesDrop;
+        }
+
+        return Repertoire.None;
+    }
+
+    private static bool EventStartsWithin(PhraseEventInfo? eventInfo, int beat, int windowStartBeat, int windowEndExclusiveBeat)
+    {
+        if (eventInfo is { beatsUntilStart: { } beatsUntilStart })
+        {
+            var startBeat = beat + beatsUntilStart;
+            return startBeat >= windowStartBeat && startBeat < windowEndExclusiveBeat;
+        }
+
+        return false;
+    }
+
+    private Cast CastEffect(Repertoire preferredRepertoire)
+    {
+        var stagedIndex = nextEffectIndex;
+
+        // Manual staging and Hold pin the Effect; with no preference there is nothing to cast toward.
+        if (holdSelectedEffect || nextEffectIsManualSelection || preferredRepertoire == Repertoire.None)
+        {
+            return Cast.Staged(stagedIndex);
+        }
+
+        if ((controller.EffectiveRepertoire(stagedIndex) & preferredRepertoire) != 0)
+        {
+            return Cast.Staged(stagedIndex);
+        }
+
+        if (Deck.TryFindPreferred(
+                effectDeck,
+                candidateIndex => (controller.EffectiveRepertoire(candidateIndex) & preferredRepertoire) != 0,
+                out var deckIndex))
+        {
+            return Cast.FromDeck(effectDeck[deckIndex], deckIndex);
+        }
+
+        return Cast.Staged(stagedIndex);
+    }
+
+    private Cast CastTransition(Repertoire preferredRepertoire)
+    {
+        var stagedIndex = nextTransitionIndex;
+
+        if (holdSelectedTransition || nextTransitionIsManualSelection || preferredRepertoire == Repertoire.None)
+        {
+            return Cast.Staged(stagedIndex);
+        }
+
+        if ((controller.transitions[stagedIndex].Repertoire.Tags & preferredRepertoire) != 0)
+        {
+            return Cast.Staged(stagedIndex);
+        }
+
+        if (Deck.TryFindPreferred(
+                transitionDeck,
+                candidateIndex => (controller.transitions[candidateIndex].Repertoire.Tags & preferredRepertoire) != 0,
+                out var deckIndex))
+        {
+            return Cast.FromDeck(transitionDeck[deckIndex], deckIndex);
+        }
+
+        return Cast.Staged(stagedIndex);
     }
 
     private SwitcherClockSnapshot CurrentSwitcherClockSnapshot(int beat)
@@ -600,221 +650,38 @@ public sealed class Director
             Time.time);
     }
 
-    private void CommitSentCue(int beat, SwitcherCueDirection cue)
+    private float CurrentSecondsPerBeat()
     {
-        var loaded = switcher.LoadedCueStatus;
-        transitionStartBeat = loaded.StartBeat;
-        transitionLandingBeat = cue.CueMarkBeat;
-        cuePlanner.MarkChanged(cue.CueMarkBeat);
-        cuePlanner.RecordCueIssued(beat);
-        controller.currentTransition = cue.TransitionIndex;
-        currentEffectIndexForSelection = cue.TargetEffectIndex;
-        StageNextChoices(currentEffectIndexForSelection);
-        Trace($"SYNC_CUE_SENT beat={beat} start={loaded.StartBeat} impact={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} runway={cue.TransitionRepertoire.RunwayBeats}");
+        return controller.beatManager.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
     }
 
-    private bool TryStartSyncedCue(TimingFrame frame)
+    private void ResetReducerMemory()
     {
-        if (!frame.HasCueMark)
-        {
-            return false;
-        }
-
-        var beat = frame.CurrentBeat;
-        var eventIntent = SyncedCueIntent.ResolveEventIntent(
-            frame,
-            controller.beatManager.Fill,
-            controller.beatManager.Drop);
-
-        // Drop guard (drop-protect, half A): when a Drop coincides with this Cue Mark and the on-air
-        // Performer already expresses Drops, issue NO cue. A transition landing on the drop would step on
-        // the effect's own slam, and the effect reads beatManager.Drop itself — so the most dramatic drop
-        // is to leave the capable Performer on stage. Bails before any deck pull/consume; the Cue Mark is
-        // not stranded because the cursor advances once the beat passes the mark and a phrase boundary
-        // promotes off live Track Phase, not off cue consumption. (Cast-ahead, half B, runs the Grid
-        // before via CueEventIntent.DropApproaching, so a Drop-capable Performer is usually already here.)
-        if (eventIntent == CueEventIntent.Drop
-            && IsValidEffectIndex(currentEffectIndexForSelection)
-            && (controller.EffectiveRepertoire(currentEffectIndexForSelection) & Repertoire.HandlesDrop) != 0)
-        {
-            lastCueDecision = new CueDecision(
-                CueDecisionOutcome.DropProtected,
-                beat,
-                frame.CueMarkBeat,
-                eventIntent,
-                Repertoire.HandlesDrop,
-                currentEffectIndexForSelection,
-                EffectName(currentEffectIndexForSelection),
-                CueCastSource.None,
-                transitionIndex: -1,
-                transitionName: string.Empty,
-                CueCastSource.None);
-            if (beat != lastDropProtectedBeat)
-            {
-                Trace($"SYNC_CUE_DROP_PROTECTED beat={beat} cueMark={frame.CueMarkBeat} current={FormatEffect(currentEffectIndexForSelection)}");
-                lastDropProtectedBeat = beat;
-            }
-
-            return false;
-        }
-
-        var transitionSelection = SelectTransitionForEventIntent(frame, eventIntent);
-        var transitionIndex = transitionSelection.TransitionIndex;
-        var stagedEffectIndex = nextEffectIndex;
-        ValidateTransitionIndex(transitionIndex);
-        ValidateEffectIndex(stagedEffectIndex);
-        var repertoire = transitionSelection.Repertoire;
-        var preferredRepertoire = SyncedCueIntent.PreferredRepertoireFor(eventIntent);
-        var transitionSource = transitionSelection.DeckIndex >= 0
-            ? CueCastSource.DeckFind
-            : preferredRepertoire != Repertoire.None && (repertoire.Tags & preferredRepertoire) == 0
-                ? CueCastSource.NoPreferredAvailable
-                : CueCastSource.Staged;
-
-        // Energy casts the effect (never the transition, never a Cue Mark): once the Cue Mark is known,
-        // prefer the level the cast Performer will actually spend its cadence stint in. Event intent (Drop/Fill)
-        // still outranks it — folded in behind that inside SyncedCueIntent.Cast.
-        var energyPreference = EnergyCasting.PreferredEnergyRepertoire(
-            controller.beatManager.Energy, beat, frame.CueMarkBeat, MinimumChangeCadenceBeats);
-        var effectivePreferredRepertoire = preferredRepertoire != Repertoire.None ? preferredRepertoire : energyPreference;
-
-        var verdict = cuePlanner.EvaluateCueTiming(frame.CueMarkBeat, repertoire, beat, MinimumChangeCadenceBeats);
-        if (verdict == CueTimingVerdict.Wait)
-        {
-            return false;
-        }
-
-        if (verdict == CueTimingVerdict.BlockedByCadence)
-        {
-            lastCueDecision = new CueDecision(
-                CueDecisionOutcome.BlockedByCadence,
-                beat,
-                frame.CueMarkBeat,
-                eventIntent,
-                effectivePreferredRepertoire,
-                effectIndex: -1,
-                effectName: string.Empty,
-                CueCastSource.None,
-                transitionIndex,
-                TransitionName(transitionIndex),
-                transitionSource);
-            Trace($"SYNC_CUE_BLOCKED_CADENCE beat={beat} cueMark={frame.CueMarkBeat} runway={repertoire.RunwayBeats} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
-            cuePlanner.RecordCueIssued(beat);
-            return true;
-        }
-
-        var cueIntent = SyncedCueIntent.Cast(
-            eventIntent,
-            stagedEffectIndex,
-            preserveStagedEffect: holdSelectedEffect || nextEffectIsManualSelection,
-            currentEffectIndex: currentEffectIndexForSelection,
-            deck: effectDeck,
-            repertoireForEffect: effectIndex => controller.EffectiveRepertoire(effectIndex),
-            energyPreference: energyPreference);
-
-        ValidateEffectIndex(cueIntent.TargetEffectIndex);
-        var effectSource = cueIntent.EffectDeckIndex >= 0
-            ? CueCastSource.DeckFind
-            : cueIntent.PreferredRepertoire != Repertoire.None && !cueIntent.CastPreferredPerformer
-                ? CueCastSource.NoPreferredAvailable
-                : CueCastSource.Staged;
-        var cue = new SwitcherCueDirection(
-            frame.CueMarkBeat,
-            cueIntent.TargetEffectIndex,
-            transitionIndex,
-            repertoire);
-        if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
-        {
-            lastCueDecision = new CueDecision(
-                CueDecisionOutcome.Held,
-                beat,
-                frame.CueMarkBeat,
-                eventIntent,
-                cueIntent.PreferredRepertoire,
-                cueIntent.TargetEffectIndex,
-                EffectName(cueIntent.TargetEffectIndex),
-                effectSource,
-                transitionIndex,
-                TransitionName(transitionIndex),
-                transitionSource);
-            cuePlanner.RecordCueIssued(beat);
-            Trace($"SYNC_CUE_HELD beat={beat} held={FormatEffect(heldEffectIndex)} impact={frame.CueMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
-            return true;
-        }
-
-        // Deck candidates rotate only when a cue is actually sent (the Cue Intent contract): the
-        // event-cast cards found above are pulled here, at the commit point, so the fresh choices
-        // staged in CommitSentCue cannot redraw them — and a Wait, cadence block, or Hold leaves
-        // the decks untouched.
-        if (transitionSelection.DeckIndex >= 0)
-        {
-            Deck.PullAt(transitionDeck, transitionSelection.DeckIndex);
-            Trace($"NEXT_TRANSITION_EVENT_STAGED nextTransition={FormatTransition(transitionIndex)} preferred={preferredRepertoire}");
-        }
-
-        if (cueIntent.EffectDeckIndex >= 0)
-        {
-            Deck.PullAt(effectDeck, cueIntent.EffectDeckIndex);
-        }
-
-        var clock = CurrentSwitcherClockSnapshot(beat);
-        if (!switcher.UpsertLoadedCue(cue, clock))
-        {
-            // The Switcher alone owns commitment; a rejected offer commits nothing, so record no commit
-            // state (no cadence mark, no cue-issued memory, no Sent decision). Deck cards were already
-            // pulled above — reclaiming them on rejection is the issue-03 deck rework, not this guard.
-            Trace($"SYNC_CUE_REJECTED beat={beat} cueMark={frame.CueMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(cueIntent.TargetEffectIndex)}");
-            return false;
-        }
-
-        CommitSentCue(beat, cue);
-        lastCueDecision = new CueDecision(
-            CueDecisionOutcome.Sent,
-            beat,
-            frame.CueMarkBeat,
-            eventIntent,
-            cueIntent.PreferredRepertoire,
-            cueIntent.TargetEffectIndex,
-            EffectName(cueIntent.TargetEffectIndex),
-            effectSource,
-            transitionIndex,
-            TransitionName(transitionIndex),
-            transitionSource);
-        return true;
+        currentSlot = CueSheetSlot.Empty;
+        nextSlot = CueSheetSlot.Empty;
+        lastWakeBeat = -1;
+        lastGridBeat = -1;
     }
 
-    private TransitionCueSelection SelectTransitionForEventIntent(TimingFrame frame, CueEventIntent eventIntent)
+    private DirectorStatus BuildStatus()
     {
-        var preferredRepertoire = SyncedCueIntent.PreferredRepertoireFor(eventIntent);
-        var stagedTransitionIndex = nextTransitionIndex;
-        var stagedRepertoire = controller.transitions[stagedTransitionIndex].Repertoire;
-        if (holdSelectedTransition || nextTransitionIsManualSelection || preferredRepertoire == Repertoire.None)
-        {
-            return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
-        }
+        var isSynced = IsSyncedMode;
+        var isHeld = controller.TryGetHeldEffectIndex(out _);
+        var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
+        var currentBeat = isSynced && controller.beatManager.Beat is { } beat ? beat : -1;
 
-        if ((stagedRepertoire.Tags & preferredRepertoire) != 0
-            && CanTransitionCueNow(frame, stagedRepertoire))
-        {
-            return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
-        }
-
-        if (Deck.TryFindPreferred(
-            transitionDeck,
-            candidateIndex =>
-            {
-                var candidateRepertoire = controller.transitions[candidateIndex].Repertoire;
-                return (candidateRepertoire.Tags & preferredRepertoire) != 0
-                    && CanTransitionCueNow(frame, candidateRepertoire);
-            },
-            out var deckIndex))
-        {
-            var preferredTransitionIndex = transitionDeck[deckIndex];
-            var preferredTransitionRepertoire = controller.transitions[preferredTransitionIndex].Repertoire;
-            return TransitionCueSelection.DeckCandidate(preferredTransitionIndex, preferredTransitionRepertoire, deckIndex);
-        }
-
-        return TransitionCueSelection.Staged(stagedTransitionIndex, stagedRepertoire);
+        return new DirectorStatus(
+            mode,
+            isSynced,
+            currentBeat,
+            nextEffectIndex,
+            EffectName(nextEffectIndex),
+            nextTransitionIndex,
+            TransitionName(nextTransitionIndex),
+            holdSelectedEffect,
+            holdSelectedTransition,
+            currentSlot.ToView(),
+            nextSlot.ToView());
     }
 
     private void LogModeIfChanged()
@@ -832,97 +699,6 @@ public sealed class Director
 
         Trace($"MODE {lastLoggedMode}->{mode} live={controller.beatManager.IsLiveSource} beat={FormatNullableBeat(controller.beatManager.Beat)}");
         lastLoggedMode = mode;
-    }
-
-    private void LogBeatRewindIfNeeded(int previousBeat, int beat, bool beatRewoundToNewPass)
-    {
-        if (!beatRewoundToNewPass)
-        {
-            return;
-        }
-
-        Trace($"BEAT_REWIND previousBeat={previousBeat} currentBeat={beat} input={FormatTimingInput()} anchor={FormatBeat(timingFrame.CueMarkBeat)} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
-    }
-
-    private void LogSyncedBeatIfNeeded(int beat)
-    {
-        if (beat == lastLoggedSyncedBeat)
-        {
-            return;
-        }
-
-        var beatsUntilLanding = timingFrame.HasCueMark ? timingFrame.CueMarkBeat - beat : -1;
-        var canChangeAtLanding = timingFrame.HasCueMark && CanChangeAtBeat(timingFrame.CueMarkBeat);
-        Trace($"SYNC_BEAT beat={beat} input={FormatTimingInput()} source={FormatTimingSource(timingFrame.Source)} anchor={FormatBeat(timingFrame.CueMarkBeat)} until={FormatBeat(beatsUntilLanding)} canChangeAtLanding={canChangeAtLanding} transitionStart={FormatBeat(transitionStartBeat)} transitionLanding={FormatBeat(transitionLandingBeat)} lastChange={FormatBeat(cuePlanner.LastChangeBeat)}");
-        lastLoggedSyncedBeat = beat;
-    }
-
-    private TransitionRepertoire NextTransitionRepertoire =>
-        nextTransitionIndex >= 0 && nextTransitionIndex < controller.transitions.Length
-            ? controller.transitions[nextTransitionIndex].Repertoire
-            : TransitionRepertoire.Default;
-
-    private float CurrentSecondsPerBeat()
-    {
-        return controller.beatManager.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
-    }
-
-    private bool CanChangeAtBeat(int beat)
-    {
-        return cuePlanner.CanChangeAt(beat, MinimumChangeCadenceBeats);
-    }
-
-    private void Trace(string message)
-    {
-        controller.LogDirectorSwitching($"Director {message}");
-    }
-
-    private string FormatEffect(int effectIndex)
-    {
-        return effectIndex >= 0 && effectIndex < controller.effects.Length
-            ? $"{effectIndex}:{controller.effects[effectIndex].Name}"
-            : $"{effectIndex}:<none>";
-    }
-
-    private string FormatTransition(int transitionIndex)
-    {
-        return transitionIndex >= 0 && transitionIndex < controller.transitions.Length
-            ? $"{transitionIndex}:{controller.transitions[transitionIndex].Name}"
-            : $"{transitionIndex}:<none>";
-    }
-
-    private string FormatTimingInput()
-    {
-        var input = timingFrame.Input;
-        return $"beat={input.Beat},phaseCount={FormatBeat(input.BeatsUntilPhraseEnd)},phaseLength={FormatBeat(input.PhraseLengthBeats)},nextStart={FormatBeat(input.NextPhraseStartInBeats)},nextLength={FormatBeat(input.NextPhraseLengthBeats)}";
-    }
-
-    private static string FormatTimingSource(TimingFrameSource source)
-    {
-        switch (source)
-        {
-            case TimingFrameSource.CueMark:
-                return "cue-mark";
-            case TimingFrameSource.TrackPhaseBoundary:
-                return "track-phase-boundary";
-            default:
-                return "unlocked";
-        }
-    }
-
-    private static string FormatBeat(int beat)
-    {
-        return beat >= 0 && beat != int.MinValue ? beat.ToString() : "none";
-    }
-
-    private static string FormatNullableBeat(int? beat)
-    {
-        return beat is { } value ? value.ToString() : "none";
-    }
-
-    private static bool CanTransitionCueNow(TimingFrame frame, TransitionRepertoire repertoire)
-    {
-        return Switcher.CanCommitCue(frame.CueMarkBeat, repertoire, frame.CurrentBeat);
     }
 
     private void RunStandaloneTimerDecision()
@@ -1041,17 +817,27 @@ public sealed class Director
         return IsValidTransitionIndex(transitionIndex) ? controller.transitions[transitionIndex].Name : string.Empty;
     }
 
-    private void MarkChangedOnCurrentBeat()
+    private void Trace(string message)
     {
-        // A non-null Beat already implies the mode authority is Synced (Beat gates on IsActive => IsSynced),
-        // so the running beat is the only gate needed here — IsLiveSource is connectivity, never mode (ADR-0007).
-        if (controller.beatManager.Beat is { } beat)
-        {
-            cuePlanner.MarkChanged(beat);
-        }
+        controller.LogDirectorSwitching($"Director {message}");
     }
 
-    
+    private string FormatEffect(int effectIndex)
+    {
+        return effectIndex >= 0 && effectIndex < controller.effects.Length
+            ? $"{effectIndex}:{controller.effects[effectIndex].Name}"
+            : $"{effectIndex}:<none>";
+    }
 
-    
+    private string FormatTransition(int transitionIndex)
+    {
+        return transitionIndex >= 0 && transitionIndex < controller.transitions.Length
+            ? $"{transitionIndex}:{controller.transitions[transitionIndex].Name}"
+            : $"{transitionIndex}:<none>";
+    }
+
+    private static string FormatNullableBeat(int? beat)
+    {
+        return beat is { } value ? value.ToString() : "none";
+    }
 }

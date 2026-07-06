@@ -71,7 +71,6 @@ public sealed class DirectorStagingTests
 
         Assert.That(() => status = controller.DirectorStatus, Throws.Nothing);
         Assert.That(status.Mode, Is.EqualTo(DirectorMode.NotReady));
-        Assert.That(status.Decision, Is.EqualTo(DirectorDecision.NotReady));
     }
 
     [Test]

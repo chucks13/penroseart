@@ -1242,17 +1242,8 @@ public class Controller : Singleton<Controller>
         if (directorStatus.IsSyncedMode)
         {
             AppendIfNotEmpty(builder, FormatGridState());
-            AppendIfNotEmpty(builder, FormatTimingSource(directorStatus));
             AppendIfNotEmpty(builder, FormatGridPosition());
-            AppendIfNotEmpty(builder, FormatLanding(directorStatus));
             AppendIfNotEmpty(builder, FormatDropCue());
-            AppendIfNotEmpty(builder, directorStatus.BeatsUntilCadenceReady > 0
-                ? $"cadence +{directorStatus.BeatsUntilCadenceReady}b"
-                : "cadence ready");
-        }
-        else if (directorStatus.Mode == DirectorMode.Standalone)
-        {
-            AppendIfNotEmpty(builder, FormatDecision(directorStatus.Decision));
         }
         else if (directorStatus.Mode == DirectorMode.Hold)
         {
@@ -1303,19 +1294,6 @@ public class Controller : Singleton<Controller>
         return $"next {nextEffect} via {nextTransition}";
     }
 
-    private static string FormatTimingSource(DirectorStatus status)
-    {
-        switch (status.TimingSource)
-        {
-            case TimingFrameSource.CueMark:
-                return "cue-mark";
-            case TimingFrameSource.TrackPhaseBoundary:
-                return "track-phase-boundary";
-            default:
-                return "unlocked";
-        }
-    }
-
     /// <summary>Wire-fed Grid state for the HUD, annotated when the current Phrase is irregular.</summary>
     private string FormatGridState()
     {
@@ -1332,32 +1310,6 @@ public class Controller : Singleton<Controller>
     private string FormatGridPosition()
     {
         return beatManager != null && beatManager.Grid is { } grid ? $"{grid.Beat}/16" : "no grid";
-    }
-
-    private static string FormatLanding(DirectorStatus status)
-    {
-        return status.BeatsUntilLanding >= 0 ? $"landing +{status.BeatsUntilLanding}b" : FormatDecision(status.Decision);
-    }
-
-    private static string FormatDecision(DirectorDecision decision)
-    {
-        switch (decision)
-        {
-            case DirectorDecision.StandaloneTimer:
-                return "timer";
-            case DirectorDecision.WaitingForGrid:
-                return "waiting grid";
-            case DirectorDecision.WaitingForRunway:
-                return "waiting runway";
-            case DirectorDecision.WaitingForCadence:
-                return "waiting cadence";
-            case DirectorDecision.CueingTransition:
-                return "cueing";
-            case DirectorDecision.Hold:
-                return "hold";
-            default:
-                return "not ready";
-        }
     }
 
     private string FormatDropCue()
