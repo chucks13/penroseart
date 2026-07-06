@@ -68,9 +68,9 @@ Synced Mode is active when live OSC data is present. Grid and Phrase truth come 
 
 On each wake the Director:
 
-- **repairs two Cue Sheets by invariant** (`RepairSheets`): it holds exactly a current and a next `CueSheet`, built from the current and next Phrase announcements read from `BeatManager`. No current sheet builds from the current announcement; a missing next sheet, or one whose announcement changed, rebuilds from the next announcement; phrase turnover promotes next to current and refills the emptied slot. Timing wobble cannot re-roll a sheet — only a changed announcement can;
+- **repairs two Cue Sheets by invariant** (`RepairSheets`): it holds exactly a current and a next `CueSheet`, keyed to the announced **label and length** read from `BeatManager` — nothing else. It watches the phrase_state lane by expectation: the expected countdown wrap is the turnover (next promotes to current and the emptied slot refills), and an unexpected label/length change rebuilds only the affected sheet. A sheet captures its absolute anchor once, at build or shift, so timing wobble on an unchanged announcement is absorbed against that anchor and cannot re-roll a sheet — only a changed announcement can;
 - **casts a Cue lazily** (`CastOnNewGrid`) when a Grid carrying a Cue Mark begins, reading the freshest wire truth. A Fill on this Grid or a Drop on the next Grid makes capable Repertoire *preferred*, never required; energy and every other wire lane are Performer/Transition inputs read from `BeatManager` by the Performers themselves, not Director casting inputs;
-- **re-checks a loaded Cue** (`IsLoadedCueWorkable`) when the grid reading jumps or the Fill/Drop evidence changes: if the cast is still workable, keep it; if not and the Switcher is not locked, recast; if locked, it rides.
+- **offers the Cue fire-and-forget** to the Switcher (`UpsertLoadedCue`) and acts on its one answer. The Director makes no keep/recast decision of its own: identity on the seam is the Cue Mark alone, so a same-mark offer the Switcher answers *kept* rides the loaded cue unchanged, a *rejected* offer touches nothing, and only a *loaded* answer pulls the peeked deck cards and re-stages.
 
 The Director records no verdicts and holds no decision memory. It hands each Cue to the Switcher fire-and-forget and never mirrors commitment state; the Switcher alone owns commitment.
 
@@ -125,7 +125,7 @@ Transitions blend two effect indexes:
 - `V`: progress from `0` to `1`;
 - `D`: remaining progress, `1 - V`.
 
-Standalone/manual paths can still call `Switcher.StartTransition(...)` explicitly. Synced cue handoff uses `Switcher.UpsertLoadedCue(...)`: the Switcher holds one Loaded Cue, derives its Transition-specific Lock Point from Runway, ignores conflicting updates after lock, starts due cues from `RenderAtTime(...)`, and promotes the destination Effect after the Transition completes. If an explicit transition is issued while one is still rendering, the Switcher replaces the mechanical move using the previous destination as the new source.
+Standalone/manual paths can still call `Switcher.StartTransition(...)` explicitly. Synced cue handoff uses `Switcher.UpsertLoadedCue(...)`, whose identity is the Cue Mark alone: an offer at the same Cue Mark is a **keep** (the loaded cue rides unchanged and is never re-flavored), a different-mark offer replaces the loaded cue when it can still commit and is not locked, and otherwise the offer is rejected. The Switcher answers in one call — kept, loaded, or rejected — so the Director never mirrors commitment. The Switcher holds one Loaded Cue, derives its Transition-specific Lock Point from Runway, starts due cues from `RenderAtTime(...)`, and promotes the destination Effect after the Transition completes. If an explicit transition is issued while one is still rendering, the Switcher replaces the mechanical move using the previous destination as the new source.
 
 ## Deck selection and staging
 

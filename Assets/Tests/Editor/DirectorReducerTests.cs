@@ -122,11 +122,14 @@ public sealed class DirectorReducerTests
     [Test]
     public void PhraseTurnoverPromotesTheNextSheetToCurrent()
     {
-        FeedBeat(beat: 610, phraseStartBeat: 600, phraseLengthBeats: 16, nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16);
+        // Labels rotate as the wire would across a real boundary: the Phrase announced as next ("B") becomes
+        // the current Phrase after turnover, and a fresh next ("C") is announced.
+        FeedBeat(beat: 610, phraseStartBeat: 600, phraseLengthBeats: 16, nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16, phraseLabel: "A", nextPhraseLabel: "B");
         Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(600), "Setup: current sheet is the 600 Phrase.");
 
-        // Beat 616 is the current Phrase's end: the next sheet becomes current and the emptied slot refills.
-        FeedBeat(beat: 616, phraseStartBeat: 616, phraseLengthBeats: 16, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 16);
+        // Beat 616 is the current Phrase's end (its countdown wraps): the next sheet becomes current and the
+        // emptied slot refills.
+        FeedBeat(beat: 616, phraseStartBeat: 616, phraseLengthBeats: 16, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 16, phraseLabel: "B", nextPhraseLabel: "C");
 
         Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(616), "Turnover promotes next to current.");
         Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(632), "The emptied next slot refills by the same check.");
@@ -332,19 +335,12 @@ public sealed class DirectorReducerTests
     [Test]
     public void StagingADifferentEffectWhileACueIsLoadedLeavesThatCueUntouched()
     {
-        // Criterion 1's loaded-cue-untouched half, asserted through the keep-guard rather than an early return:
-        // a cue is loaded, the operator stages a different Effect, and then a new Grid actually begins (a wrap)
-        // so OfferCue runs — yet the staged choice must not re-aim the loaded cue. A Phrase long enough to carry
-        // an interior Cue Mark as well as the mandatory Phrase-end mark lets the wrap re-present an earlier Grid
-        // Boundary while the later cue is still loaded and workable.
-        var offsets = CueSheet.Build(80, 600, 600).CueMarkOffsets;
-        var firstMark = 600 + offsets[0];
-        Assert.That(firstMark, Is.LessThan(680), "Setup: the Phrase carries an interior mark before its end.");
-
-        // Cast toward the Phrase-end mark 680 when its Grid [664, 680) begins.
-        FeedBeat(beat: 663, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
-        FeedBeat(beat: 664, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "Setup: the cue is loaded for the Phrase-end mark.");
+        // Manually staged choices never re-aim a loaded cue; they wait for the next Cue Mark. A cue is loaded,
+        // the operator stages a different Effect, and the Grid loops back onto the SAME Cue Mark — a keep, so
+        // the staged choice does not take and the loaded cue is untouched.
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "Setup: the cue is loaded for the mark 632.");
 
         var markWhileLoaded = switcher.LoadedCueStatus.CueMarkBeat;
         var targetWhileLoaded = switcher.LoadedCueStatus.TargetEffectIndex;
@@ -352,19 +348,18 @@ public sealed class DirectorReducerTests
         var effectDeckWhileLoaded = (int[])controller.effectDeck.Clone();
         var transitionDeckWhileLoaded = (int[])controller.transitionDeck.Clone();
 
-        // Stage a different Effect, then wrap onto the earlier interior mark so OfferCue runs. The loaded cue is
-        // still workable (its mark is on the sheet and ahead), so the keep-guard holds it — the staged choice
-        // waits for the next mark and re-aims nothing.
+        // Stage a different Effect, step forward off the Grid Boundary, then loop back onto it so OfferCue runs
+        // at the SAME Cue Mark 632. The Switcher answers "kept" — the staged choice waits for the next mark.
         var stagedEffect = targetWhileLoaded == 3 ? 2 : 3;
         director.SetNextEffect(stagedEffect);
-        FeedBeat(beat: firstMark - 17, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
-        FeedBeat(beat: firstMark - 16, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+        FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(markWhileLoaded), "Staging over a loaded cue never moves its mark.");
-        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "Staging over a loaded cue never re-aims its target.");
-        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(transitionWhileLoaded), "Staging over a loaded cue never re-aims its transition.");
-        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "Staging over a loaded cue pulls no effect deck card.");
-        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded), "Staging over a loaded cue pulls no transition deck card.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(markWhileLoaded), "A same-mark keep never moves the loaded cue's mark.");
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "Staging over a kept cue never re-aims its target.");
+        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(transitionWhileLoaded), "Staging over a kept cue never re-aims its transition.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "A kept cue pulls no effect deck card.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded), "A kept cue pulls no transition deck card.");
     }
 
     // ---- Deck discipline --------------------------------------------------------------------------
@@ -430,39 +425,35 @@ public sealed class DirectorReducerTests
     // ---- Replay on change -------------------------------------------------------------------------
 
     [Test]
-    public void AStillWorkableLoadedCueSurvivesAGridLoopUnchanged()
+    public void ASameMarkReOfferKeepsTheLoadedCueUnchanged()
     {
-        // A Phrase long enough to guarantee an interior Cue Mark as well as the mandatory Phrase-end mark, so
-        // the loop below can re-present a real earlier Grid Boundary. The Director seeds the sheet from the
-        // Phrase start, so the pure builder reproduces its exact marks here.
-        var offsets = CueSheet.Build(80, 600, 600).CueMarkOffsets;
-        var firstMark = 600 + offsets[0];
-        Assert.That(firstMark, Is.LessThan(680), "Setup: the Phrase carries an interior mark before its end.");
-
-        // Cast toward the Phrase-end mark 680 when its Grid [664, 680) begins.
-        FeedBeat(beat: 663, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
-        FeedBeat(beat: 664, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "Setup: the cue is loaded for the Phrase-end mark.");
+        // A grid loop that re-presents the SAME Grid Boundary re-offers the SAME Cue Mark. Identity on the
+        // Switcher seam is the Cue Mark alone, so the loaded cue rides unchanged and is never re-flavored — the
+        // Director makes no keep decision of its own; the Switcher's answer is the decision.
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "Setup: a cue is loaded for the mark 632.");
         Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False, "Setup: the loaded cue is still unlocked.");
 
         var effectDeckWhileLoaded = (int[])controller.effectDeck.Clone();
         var transitionDeckWhileLoaded = (int[])controller.transitionDeck.Clone();
         var targetWhileLoaded = switcher.LoadedCueStatus.TargetEffectIndex;
+        var transitionWhileLoaded = switcher.LoadedCueStatus.TransitionIndex;
 
-        // The set loops backward to the earlier Grid carrying the interior mark: the 16-count wraps again onto
-        // a real, different Cue Mark. The loaded cue is still workable (its mark is on the sheet and ahead), so
-        // the Director keeps it rather than re-aiming at the earlier mark.
-        FeedBeat(beat: firstMark - 17, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 80);
-        FeedBeat(beat: firstMark - 16, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 80);
+        // Step forward off the Grid Boundary, then loop back onto it: the 16-count wraps again onto the SAME
+        // Cue Mark 632, so the offer is a keep.
+        FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32);
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(680), "A still-workable loaded cue survives the grid loop unchanged.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "A same-mark re-offer keeps the loaded cue.");
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "The kept cue's target is untouched.");
-        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "Keeping a workable cue rotates no effect deck card.");
-        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded), "Keeping a workable cue rotates no transition deck card.");
+        Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(transitionWhileLoaded), "The kept cue's transition is untouched.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "Keeping a cue rotates no effect deck card.");
+        Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded), "Keeping a cue rotates no transition deck card.");
     }
 
     [Test]
-    public void AStillWorkableLoadedCueSurvivesAMovedDropUnchanged()
+    public void AMovedDropWithoutANewGridNeverReOffersTheLoadedCue()
     {
         FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
         FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
@@ -473,47 +464,47 @@ public sealed class DirectorReducerTests
         var targetWhileLoaded = switcher.LoadedCueStatus.TargetEffectIndex;
         var transitionWhileLoaded = switcher.LoadedCueStatus.TransitionIndex;
 
-        // A Drop is now announced landing on the next Grid — the Fill/Drop evidence has changed — but the loaded
-        // cue's mark is still real and ahead, so the cue survives the evidence change unchanged and never picks
-        // up the late Drop preference.
+        // A Drop is now announced landing on the next Grid, but the grid moves forward (no new Grid begins), so
+        // nothing is offered: casting reads the fresh Fill/Drop evidence only when a Grid begins. The loaded cue
+        // never picks up the late Drop preference.
         FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32, dropBeatsUntilStart: 15);
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The workable cue's mark is unchanged by the moved Drop.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The loaded cue's mark is unchanged by the moved Drop.");
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(targetWhileLoaded), "The cue is not re-flavored toward a Drop-capable Performer.");
         Assert.That(switcher.LoadedCueStatus.TransitionIndex, Is.EqualTo(transitionWhileLoaded), "The cue is not re-flavored toward a Drop-capable Transition.");
-        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "An evidence change on a workable cue rotates no deck.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckWhileLoaded), "A forward grid move rotates no deck.");
         Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckWhileLoaded));
     }
 
     [Test]
-    public void AnUnworkableUnlockedLoadedCueIsRecastWhenANewGridBegins()
+    public void ADifferentMarkOfferReplacesAnUnlockedLoadedCueWhenANewGridBegins()
     {
-        // Load an unlocked cue aimed off the live sheets: its mark 700 is not a Cue Mark on any Director sheet,
-        // so the cue is unworkable, but it is loaded before its Lock Point and so is not locked.
+        // Load an unlocked cue aimed at a mark 700 that no new Grid will carry. It is loaded before its Lock
+        // Point and so is not locked.
         var repertoire = controller.transitions[0].Repertoire;
         switcher.UpsertLoadedCue(
             new SwitcherCueDirection(700, targetEffectIndex: 1, transitionIndex: 0, repertoire),
             new SwitcherClockSnapshot(currentBeat: 660, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
-        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True, "Setup: an off-sheet cue is loaded.");
-        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False, "Setup: the off-sheet cue is unlocked.");
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True, "Setup: a cue is loaded for the mark 700.");
+        Assert.That(switcher.LoadedCueStatus.IsLocked, Is.False, "Setup: the loaded cue is unlocked.");
 
         var effectDeckBefore = (int[])controller.effectDeck.Clone();
 
-        // A new Grid carrying the real Cue Mark 632 begins. The loaded cue is unworkable, so the Director does
-        // not keep it: the recast lands via the normal offer path and, being unlocked, the Switcher accepts.
+        // A new Grid carrying the Cue Mark 632 begins — a different-mark offer. The loaded cue is unlocked, so
+        // the Switcher replaces it, and the accepted load rotates the deck.
         FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
         FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 600, phraseLengthBeats: 32);
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The unworkable unlocked cue is recast toward the new Grid's mark.");
-        Assert.That(controller.effectDeck, Is.Not.EqualTo(effectDeckBefore), "The accepted recast rotates the deck like any cast.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "A different-mark offer replaces the unlocked loaded cue.");
+        Assert.That(controller.effectDeck, Is.Not.EqualTo(effectDeckBefore), "The accepted load rotates the deck like any cast.");
     }
 
     [Test]
     public void ALockedLoadedCueRidesThroughALateDrop()
     {
         // Lock a cue directly by re-offering it at its Lock Point (its start time stays in the future of the
-        // frozen editor clock, so it never fires). The mark 700 is off the live sheets, so the Director will
-        // not keep it — it offers a recast — but the locked cue must ride and no drop-protection path may fire.
+        // frozen editor clock, so it never fires). A new Grid then offers a different-mark, Drop-flavored recast;
+        // the locked cue must ride and no drop-protection path may fire.
         var repertoire = controller.transitions[0].Repertoire;
         switcher.UpsertLoadedCue(
             new SwitcherCueDirection(700, targetEffectIndex: 1, transitionIndex: 0, repertoire),
@@ -535,6 +526,73 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(1), "No drop-protection path re-flavors the locked cue.");
         Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBefore), "A rejected recast pulls no effect deck card.");
         Assert.That(controller.transitionDeck, Is.EqualTo(transitionDeckBefore), "A rejected recast pulls no transition deck card.");
+    }
+
+    // ---- Expectation lanes --------------------------------------------------------------------------
+
+    [Test]
+    public void ASkewingNextCountdownWithAStableAnnouncementNeverReRollsTheNextSheet()
+    {
+        // The 10:29 storm replay: the wire's beat and its next-phrase countdown skew by a snapshot, so the
+        // derived next start flip-flops between adjacent beats (129<->130) while the announced label and length
+        // never change. Identity is the announced (label, length), so the wobble re-rolls nothing.
+        FeedBeat(beat: 100, phraseStartBeat: 96, phraseLengthBeats: 32, nextPhraseStartBeat: 129, nextPhraseLengthBeats: 32);
+        var builtOffsets = (int[])director.Status.NextSheet.CueMarkOffsets.Clone();
+        var builtStart = director.Status.NextSheet.PhraseStartBeat;
+        Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32), "Setup: next built from the 32-beat announcement.");
+
+        var flipFlop = new[] { 130, 129, 130, 129, 130, 129 };
+        for (var i = 0; i < flipFlop.Length; i++)
+        {
+            FeedBeat(beat: 101 + i, phraseStartBeat: 96, phraseLengthBeats: 32, nextPhraseStartBeat: flipFlop[i], nextPhraseLengthBeats: 32);
+            Assert.That(director.Status.NextSheet.CueMarkOffsets, Is.EqualTo(builtOffsets), "A skewing countdown on an unchanged announcement never re-rolls the next sheet.");
+            Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(builtStart), "The next sheet rides its captured anchor through the wobble.");
+        }
+    }
+
+    [Test]
+    public void AFlappingNextAnnouncementRebuildsOnlyTheNextSlot()
+    {
+        // The 10:32:32 deck-switch flap: next_phrase_state alternates between two real announcements. Each real
+        // (label, length) change rebuilds the next sheet only; the current sheet and any loaded cue are
+        // untouched (no Grid begins during the flap, so nothing is offered).
+        FeedBeat(beat: 604, gridBeat: 6, phraseStartBeat: 600, phraseLengthBeats: 64, nextPhraseStartBeat: 664, nextPhraseLengthBeats: 32, nextPhraseLabel: "Chorus");
+        var currentStart = director.Status.CurrentSheet.PhraseStartBeat;
+        Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32), "Setup: next announced as the 32-beat Chorus.");
+
+        // Park an unlocked loaded cue directly in the Switcher; the flap must not touch it.
+        switcher.UpsertLoadedCue(
+            new SwitcherCueDirection(900, targetEffectIndex: 1, transitionIndex: 0, controller.transitions[0].Repertoire),
+            new SwitcherClockSnapshot(currentBeat: 604, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+        var effectDeckBefore = (int[])controller.effectDeck.Clone();
+
+        // Flap next to the 16-beat "Up", then back to the 32-beat "Chorus". Grid advances forward, so no cast.
+        FeedBeat(beat: 605, gridBeat: 7, phraseStartBeat: 600, phraseLengthBeats: 64, nextPhraseStartBeat: 664, nextPhraseLengthBeats: 16, nextPhraseLabel: "Up");
+        Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(16), "The first flap rebuilds next to the 16-beat Up.");
+        FeedBeat(beat: 606, gridBeat: 8, phraseStartBeat: 600, phraseLengthBeats: 64, nextPhraseStartBeat: 664, nextPhraseLengthBeats: 32, nextPhraseLabel: "Chorus");
+        Assert.That(director.Status.NextSheet.PhraseLengthBeats, Is.EqualTo(32), "The flap back rebuilds next to the 32-beat Chorus.");
+
+        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(currentStart), "The flap never disturbs the current sheet.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(900), "The flap never disturbs the loaded cue.");
+        Assert.That(controller.effectDeck, Is.EqualTo(effectDeckBefore), "The flap rotates no deck.");
+    }
+
+    [Test]
+    public void TurnoverOnTheExpectedWrapCarriesThePhraseEndMarkAsTheNextPhrasesFirstBeat()
+    {
+        // Turnover is the expected phrase_state countdown wrap, not an end-beat comparison. The current
+        // countdown reaches its boundary on beat 616 — the beat it "would hit 0" is beat 1 of the next Phrase —
+        // so the next sheet shifts to current and the emptied slot refills.
+        FeedBeat(beat: 610, phraseStartBeat: 600, phraseLengthBeats: 16, nextPhraseStartBeat: 616, nextPhraseLengthBeats: 16, phraseLabel: "A", nextPhraseLabel: "B");
+        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(600), "Setup: current is the 600 Phrase.");
+        Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(616), "Setup: next is the 616 Phrase.");
+
+        FeedBeat(beat: 616, phraseStartBeat: 616, phraseLengthBeats: 16, nextPhraseStartBeat: 632, nextPhraseLengthBeats: 16, phraseLabel: "B", nextPhraseLabel: "C");
+
+        Assert.That(director.Status.CurrentSheet.PhraseStartBeat, Is.EqualTo(616), "The wrap promotes next to current with no end-beat arithmetic.");
+        Assert.That(director.Status.CurrentSheet.PhraseEndBeat, Is.EqualTo(632), "The promoted sheet's final Cue Mark is the next Phrase's first beat.");
+        Assert.That(director.Status.CurrentSheet.CueMarkOffsets, Does.Contain(16), "The mandatory final Cue Mark sits on the Phrase end.");
+        Assert.That(director.Status.NextSheet.PhraseStartBeat, Is.EqualTo(632), "The emptied next slot refills by the same check.");
     }
 
     // Builds a fresh Switcher+Director pipeline, feeds a next-Grid Drop scenario carrying the given energy-lane
@@ -573,7 +631,9 @@ public sealed class DirectorReducerTests
         int? nextPhraseLengthBeats = null,
         int? dropBeatsUntilStart = null,
         int? fillBeatsUntilStart = null,
-        int? energyBeatsUntilChange = null)
+        int? energyBeatsUntilChange = null,
+        string phraseLabel = "Phrase",
+        string nextPhraseLabel = "Next")
     {
         var snapshot = controller.beatManager.beatData.snapshot;
         snapshot.bpm = 120f;
@@ -584,13 +644,13 @@ public sealed class DirectorReducerTests
             : TimingGrid.Unavailable;
         snapshot.phraseState = new PhraseState
         {
-            label = "Phrase",
+            label = phraseLabel,
             countBeats = phraseStartBeat + phraseLengthBeats - beat,
             lengthBeats = phraseLengthBeats,
             irregular = 0,
         };
         snapshot.nextPhraseState = nextPhraseStartBeat is { } nextStart && nextPhraseLengthBeats is { } nextLength
-            ? new LabeledCountdown { label = "Next", countBeats = nextStart - beat, lengthBeats = nextLength }
+            ? new LabeledCountdown { label = nextPhraseLabel, countBeats = nextStart - beat, lengthBeats = nextLength }
             : LabeledCountdown.Unavailable;
         snapshot.dropState = dropBeatsUntilStart is { } dropStart
             ? new CountdownState { active = 0, countBeats = dropStart, lengthBeats = 16, remaining = 1 }

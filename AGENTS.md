@@ -8,8 +8,6 @@ Navigation/editing: Serena first — activate Serena project `penroseart` before
 
 ## Agent instruction files
 
-This repo no longer uses a DOX `AGENTS.md` hierarchy. Do not recreate child `AGENTS.md` files or a DOX checker/gate unless Hunter explicitly asks for DOX again.
-
 `AGENTS.md` is the one physical root instruction file. `CLAUDE.md` and `GEMINI.md` are symlinks to it. Edit `AGENTS.md` directly.
 
 ## Agent skills
@@ -44,8 +42,27 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 ## Development Philosophy
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
-- When the user asks to replace a source of truth or data model, make the existing core system reflect the new model and update its real consumers. Do not import new runtime data into a side snapshot while leaving the application on the old model unless the user asks for a staged migration.
+- Unity generates .meta files. You do not need to create them.
 - Custom property drawers and inspectors are downstream debug views; runtime code must not be preserved just to keep them fed. They follow the runtime, not the reverse, and should be changed as needed.
+
+## Simplicity and Hard Cuts
+
+- Default to the **smallest change that achieves the goal**. Plain code over clever code.
+- Do not create side-chain implementations of existing system features. Before creating
+  anything new, verify it doesn't already exist or that an existing system could be
+  modified to suit. Only after that verification, and after surfacing the reasoning,
+  create something new.
+- Add structure (abstraction, module, interface, manager) only when it concentrates
+  duplicated rules, scattered changes, or caller-visible complexity that already exists.
+  No speculative abstractions or seams — one adapter is speculation, two are evidence.
+- Make **hard cuts**: when a pattern, name, signature, or structure changes, change it
+  everywhere in one pass and delete the old form. **Best pattern, in the best place, once.**
+- This is a personal installation with no installed base. Do not add backwards-compatibility
+  shims, dual code paths, or parallel `*Legacy`/`*V2` types unless explicitly asked. Do not
+  keep old implementations "just in case" — **git history is the safety net.**
+- Treat "this is low-risk / minimal change / let's keep both for now" as a **smell** when it
+  means preserving a second copy of anything. Prefer the decisive refactor that leaves
+  exactly one canonical form.
 
 ## Core Files and Systems
 
@@ -80,10 +97,6 @@ Start with these before adding new structures:
 ## Unity and Asset Rules
 
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
-- Preserve `Assets/**/*.meta` files and GUIDs when moving, renaming, or adding Unity assets.
-- Most project-authored core/effect runtime code lives in Unity's generated `Assembly-CSharp` assembly and mostly global namespace. `Assets/OSC/` is the current exception with dedicated `.asmdef` files. Do not add new assembly boundaries or namespaces as cleanup unless requested.
-- Important runtime data is serialized in `Assets/Scenes/SampleScene.unity`, including `Controller.jsonSource` and `Controller.paletteSource`. Treat scene data changes as behavior changes.
-- `Assets/TextMesh Pro/` resources and generated Unity settings may be Unity/import-owned. Do not revert, delete, or reorganize them without confirming ownership.
 - Do not treat Unity-generated files as stable hand-authored source.
 
 ## Serial, Output, and Cross-Platform Rules
