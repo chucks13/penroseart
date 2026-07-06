@@ -88,33 +88,34 @@ public sealed class CueLogFormatTests
     public void PhraseTurnoverLineHasTheAgreedShape()
     {
         Assert.That(
-            CueLogFormat.PhraseTurnover(GridAt13, outgoingLabel: "Chorus", outgoingLength: 64, incomingLabel: "Drop", incomingLength: 16),
-            Is.EqualTo("PHRASE_TURNOVER grid=13/16 bar=4 out=\"Chorus\"/64 in=\"Drop\"/16"));
+            CueLogFormat.PhraseTurnover(GridAt13, outgoingLabel: "Chorus", outgoingLength: 64, incomingLabel: "Drop", incomingLength: 16, instance: 5),
+            Is.EqualTo("PHRASE_TURNOVER grid=13/16 bar=4 out=\"Chorus\"/64 in=\"Drop\"/16 instance=5"));
     }
 
     [Test]
     public void PhraseTurnoverMakesASameAnnouncementWrapPlainlyVisible()
     {
-        // The two-Chorus case: a wrap between two Chorus/64 phrases is its own line, both sides identical.
+        // The two-Chorus case: a wrap between two Chorus/64 phrases is its own line, both sides identical, and
+        // the instance ordinal distinguishes the two real phrases a name comparison would collapse.
         Assert.That(
-            CueLogFormat.PhraseTurnover(GridAt1, outgoingLabel: "Chorus", outgoingLength: 64, incomingLabel: "Chorus", incomingLength: 64),
-            Is.EqualTo("PHRASE_TURNOVER grid=1/16 bar=1 out=\"Chorus\"/64 in=\"Chorus\"/64"));
+            CueLogFormat.PhraseTurnover(GridAt1, outgoingLabel: "Chorus", outgoingLength: 64, incomingLabel: "Chorus", incomingLength: 64, instance: 2),
+            Is.EqualTo("PHRASE_TURNOVER grid=1/16 bar=1 out=\"Chorus\"/64 in=\"Chorus\"/64 instance=2"));
     }
 
     [Test]
     public void NextPhraseLineHasTheAgreedShapeForAReplacement()
     {
         Assert.That(
-            CueLogFormat.NextPhrase(GridAt1, newLabel: "Drop", newLength: 16, replacedLabel: "Chorus", replacedLength: 64),
-            Is.EqualTo("NEXT_PHRASE grid=1/16 bar=1 next=\"Drop\"/16 replaced=\"Chorus\"/64"));
+            CueLogFormat.NextPhrase(GridAt1, newLabel: "Drop", newLength: 16, replacedLabel: "Chorus", replacedLength: 64, instance: 6),
+            Is.EqualTo("NEXT_PHRASE grid=1/16 bar=1 next=\"Drop\"/16 replaced=\"Chorus\"/64 instance=6"));
     }
 
     [Test]
     public void NextPhraseRendersReplacedNoneWhenAppearingAfterAbsence()
     {
         Assert.That(
-            CueLogFormat.NextPhrase(GridAt1, newLabel: "Chorus", newLength: 64, replacedLabel: null, replacedLength: null),
-            Is.EqualTo("NEXT_PHRASE grid=1/16 bar=1 next=\"Chorus\"/64 replaced=none"));
+            CueLogFormat.NextPhrase(GridAt1, newLabel: "Chorus", newLength: 64, replacedLabel: null, replacedLength: null, instance: 1),
+            Is.EqualTo("NEXT_PHRASE grid=1/16 bar=1 next=\"Chorus\"/64 replaced=none instance=1"));
     }
 
     [Test]
@@ -349,25 +350,37 @@ public sealed class CueLogSeamTests
     public void TheTwoChorusPhraseShapeLogsBothLanesAsFirstClassEvents()
     {
         // The 12:44 session shape the frozen five missed: two consecutive Chorus/64 phrases, then a Drop. The
-        // second Chorus is announced as next (a NEXT_PHRASE), the two Choruses wrap into each other (a
-        // PHRASE_TURNOVER whose sides are identical), and the Drop is then announced (another NEXT_PHRASE).
+        // second Chorus is announced as next (a NEXT_PHRASE for instance 1), the two Choruses wrap into each
+        // other (a PHRASE_TURNOVER into instance 1 whose sides are identical), and the Drop is then announced
+        // (a NEXT_PHRASE for instance 2). Instance ordinals distinguish the two real Choruses.
         FeedBeat(beat: 660, phraseStartBeat: 600, phraseLengthBeats: 64, phraseLabel: "Chorus",
             nextPhraseStartBeat: 664, nextPhraseLengthBeats: 64, nextPhraseLabel: "Chorus");
         FeedBeat(beat: 664, phraseStartBeat: 664, phraseLengthBeats: 64, phraseLabel: "Chorus",
             nextPhraseStartBeat: 728, nextPhraseLengthBeats: 16, nextPhraseLabel: "Drop");
 
         Assert.That(
-            lines.Any(l => l.Contains("NEXT_PHRASE") && l.Contains("next=\"Chorus\"/64 replaced=none")),
+            lines.Any(l => l.Contains("NEXT_PHRASE") && l.Contains("next=\"Chorus\"/64 replaced=none instance=1")),
             Is.True,
-            "The second Chorus announced as next is a NEXT_PHRASE, even though its sheet build is the duplicate-current guard's to suppress.");
+            "The second Chorus announced as next is a NEXT_PHRASE for instance 1.");
         Assert.That(
-            lines.Any(l => l.Contains("PHRASE_TURNOVER") && l.Contains("out=\"Chorus\"/64 in=\"Chorus\"/64")),
+            lines.Any(l => l.Contains("PHRASE_TURNOVER") && l.Contains("out=\"Chorus\"/64 in=\"Chorus\"/64 instance=1")),
             Is.True,
-            "The wrap between the two Choruses is a PHRASE_TURNOVER, plainly visible with identical sides.");
+            "The wrap between the two Choruses is a PHRASE_TURNOVER into instance 1, plainly visible with identical sides.");
         Assert.That(
-            lines.Any(l => l.Contains("NEXT_PHRASE") && l.Contains("next=\"Drop\"/16 replaced=\"Chorus\"/64")),
+            lines.Any(l => l.Contains("NEXT_PHRASE") && l.Contains("next=\"Drop\"/16 replaced=\"Chorus\"/64 instance=2")),
             Is.True,
-            "The Drop announced as next is a NEXT_PHRASE replacing the Chorus.");
+            "The Drop announced as next is a NEXT_PHRASE replacing the Chorus, for instance 2.");
+
+        // The second Chorus gets its own next sheet (built for instance 1) that promotes at the wrap, so the
+        // only slot=current build is the startup build of the first Chorus — no heal rebuild after the wrap.
+        Assert.That(
+            lines.Count(l => l.Contains("SHEET_BUILT slot=current reason=build")),
+            Is.EqualTo(1),
+            "Instance ordinals promote a real next sheet at the wrap, so there is no slot=current reason=build heal line.");
+        Assert.That(
+            lines.Any(l => l.Contains("SHEET_BUILT slot=next reason=build") && l.Contains("phrase=\"Chorus\" ") && l.Contains("length=64")),
+            Is.True,
+            "The second Chorus is built as a real next sheet the duplicate-current guard used to suppress.");
     }
 
     private void FeedBeat(

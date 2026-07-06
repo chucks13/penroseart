@@ -161,6 +161,12 @@ public sealed class Director
         (previous, current) => !(previous is { } last) || !last.Equals(current),
         clearOnAbsence: true);
 
+    // The current Phrase instance as a wrap ordinal — incremented each time the phrase lane's wrap fires, never
+    // from a beat. It counts observed Phrase boundaries, so the next slot can be keyed to the coming instance
+    // (phraseInstance + 1) instead of to the announcement's (label, length), which cannot tell two real phrases
+    // that share an identity apart.
+    private int phraseInstance;
+
     private CueSheetSlot currentSlot = CueSheetSlot.Empty;
     private CueSheetSlot nextSlot = CueSheetSlot.Empty;
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
@@ -173,27 +179,39 @@ public sealed class Director
     /// </summary>
     private readonly struct CueSheetSlot
     {
-        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, null);
+        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, null, -1);
 
         public readonly bool HasSheet;
         public readonly CueSheet Sheet;
         public readonly int PhraseLengthBeats;
         public readonly string PhraseLabel;
 
-        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseLengthBeats, string phraseLabel)
+        /// <summary>
+        /// The Phrase instance (wrap ordinal) this sheet was built for. Instances distinguish two real phrases
+        /// that share a (label, length) — the discriminator a name comparison cannot see — so this, not the
+        /// announcement, is what the next-slot guard keys on.
+        /// </summary>
+        public readonly int Instance;
+
+        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseLengthBeats, string phraseLabel, int instance)
         {
             HasSheet = hasSheet;
             Sheet = sheet;
             PhraseLengthBeats = phraseLengthBeats;
             PhraseLabel = phraseLabel;
+            Instance = instance;
         }
 
         /// <summary>
-        /// Whether this slot was built from exactly this announcement (label and length). Keying to the
-        /// announced values — not to a re-derived beat — is what makes timing wobble unable to re-roll a sheet.
+        /// Whether this slot holds a sheet built from exactly this announcement (label and length). The seed is
+        /// derived from these values, so this identifies a re-roll target; it no longer decides whether to build
+        /// (the instance stamp does), only whether an existing instance's slot must recast on a changed announcement.
         /// </summary>
         public bool BuiltFrom(string phraseLabel, int phraseLengthBeats) =>
             HasSheet && PhraseLabel == phraseLabel && PhraseLengthBeats == phraseLengthBeats;
+
+        /// <summary>Whether this slot holds the sheet built for exactly this Phrase instance (wrap ordinal).</summary>
+        public bool IsForInstance(int instance) => HasSheet && Instance == instance;
 
         /// <summary>Whether the sheet carries a Cue Mark at exactly this Phrase-relative offset.</summary>
         public bool HasCueMarkAtOffset(int offset)
@@ -511,52 +529,59 @@ public sealed class Director
     /// </summary>
     private void RepairSheets()
     {
-        // Phrase lane: an upward roll of the countdown is the turnover. Log both sides and shift the next sheet
-        // into current (the emptied slot refills below) — logged on every observed wrap, whether or not a sheet
-        // is present to promote.
+        // Phrase lane: an upward roll of the countdown is the turnover. It advances the instance ordinal (a
+        // counted boundary, never a beat), logs both sides tagged with the incoming instance, and shifts the
+        // next sheet into current (the emptied slot refills below) — logged on every observed wrap, whether or
+        // not a sheet is present to promote.
         var phraseChange = phraseLane.Observe(ReadPhraseObservation());
         if (phraseChange.Fired)
         {
+            phraseInstance++;
             var outgoing = phraseChange.Previous.Value;
             var incoming = phraseChange.Current.Value;
-            cueLog?.PhraseTurnover(outgoing.Label, outgoing.Length, incoming.Label, incoming.Length);
+            cueLog?.PhraseTurnover(outgoing.Label, outgoing.Length, incoming.Label, incoming.Length, phraseInstance);
             PromoteNextToCurrent();
         }
 
-        // Next-announcement lane: log an identity change straight off the wire, independent of the sheet build
-        // below. A build the duplicate-current guard suppresses still records its announcement change here, and
-        // an announcement appearing after absence logs replaced=none.
+        // Next-announcement lane: log an identity change straight off the wire, tagged with the coming instance
+        // (phraseInstance + 1) the next slot is keyed to, independent of the sheet build below. A build the
+        // guard suppresses still records its announcement change here, and one appearing after absence logs
+        // replaced=none.
         var nextChange = nextAnnouncementLane.Observe(ReadNextAnnouncement());
         if (nextChange.Fired)
         {
             var incoming = nextChange.Current.Value;
             var replaced = nextChange.Previous;
-            cueLog?.NextPhrase(incoming.Label, incoming.Length, replaced?.Label, replaced?.Length);
+            cueLog?.NextPhrase(incoming.Label, incoming.Length, replaced?.Label, replaced?.Length, phraseInstance + 1);
         }
 
         var hasCurrent = TryReadCurrentAnnouncement(out var currentLength, out var currentLabel);
 
         // The current sheet must match the wire's current announcement on every wake: keep it when its
         // (label, length) still match; rebuild when they do not. Identity ignores position, so wobble can
-        // never fire this — and a stale promotion (a flapped next sheet shifted in) heals here immediately.
+        // never fire this — and a genuine discontinuity (a promotion whose sheet does not match the new current
+        // announcement) heals here immediately.
         if (currentSlot.HasSheet && hasCurrent && !currentSlot.BuiltFrom(currentLabel, currentLength))
         {
-            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Rebuild, currentLength, currentLabel);
+            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Rebuild, currentLength, currentLabel, phraseInstance);
         }
 
         // (a) No current sheet -> build from the current Phrase announcement.
         if (!currentSlot.HasSheet && hasCurrent)
         {
-            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Build, currentLength, currentLabel);
+            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Build, currentLength, currentLabel, phraseInstance);
         }
 
-        // (b) No next sheet, or the announced (label, length) it was built from changed -> build from the next
-        //     Phrase announcement. Never duplicate the current Phrase (the wire can briefly announce it as next).
+        // (b) Ordinal guard: the next slot is keyed to the coming instance, not to the announcement. Build when
+        //     no sheet exists for that instance; recast in place when one does but its announced (label, length)
+        //     changed. A same-(label, length) successor is a different instance, so it builds its own sheet
+        //     instead of being suppressed as a duplicate of the current Phrase.
+        var comingInstance = phraseInstance + 1;
         if (TryReadNextAnnouncement(out var nextLength, out var nextLabel)
-            && !nextSlot.BuiltFrom(nextLabel, nextLength)
-            && !currentSlot.BuiltFrom(nextLabel, nextLength))
+            && (!nextSlot.IsForInstance(comingInstance) || !nextSlot.BuiltFrom(nextLabel, nextLength)))
         {
-            nextSlot = BuildSlot(CueLogSlot.Next, nextSlot.HasSheet ? CueLogBuildReason.Rebuild : CueLogBuildReason.Build, nextLength, nextLabel);
+            var reason = nextSlot.IsForInstance(comingInstance) ? CueLogBuildReason.Rebuild : CueLogBuildReason.Build;
+            nextSlot = BuildSlot(CueLogSlot.Next, reason, nextLength, nextLabel, comingInstance);
         }
     }
 
@@ -636,13 +661,13 @@ public sealed class Director
     private static bool IsUsablePhraseLength(int lengthBeats) =>
         lengthBeats > 0 && lengthBeats % CueSheet.GridBeats == 0;
 
-    private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseLengthBeats, string phraseLabel)
+    private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseLengthBeats, string phraseLabel, int instance)
     {
         var sheet = CueSheet.Build(phraseLengthBeats, 0, SheetSeed(phraseLabel, phraseLengthBeats));
         var displayStart = DisplaySheetStart(slot, phraseLengthBeats);
         Trace($"SHEET_BUILT slot={(slot == CueLogSlot.Current ? "current" : "next")} reason={(reason == CueLogBuildReason.Build ? "build" : "rebuild")} start={displayStart} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
         cueLog?.SheetBuilt(slot, reason, phraseLabel, displayStart, phraseLengthBeats, sheet.CueMarkOffsets);
-        return new CueSheetSlot(true, sheet, phraseLengthBeats, phraseLabel);
+        return new CueSheetSlot(true, sheet, phraseLengthBeats, phraseLabel, instance);
     }
 
     /// <summary>
@@ -962,6 +987,7 @@ public sealed class Director
         gridLane.Forget();
         phraseLane.Forget();
         nextAnnouncementLane.Forget();
+        phraseInstance = 0;
     }
 
     private DirectorStatus BuildStatus()
