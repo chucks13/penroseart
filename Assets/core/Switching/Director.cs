@@ -18,29 +18,25 @@ public enum DirectorMode
 public readonly struct CueSheetView
 {
     /// <summary>The empty view reported for a slot holding no sheet.</summary>
-    public static CueSheetView Empty { get; } = new CueSheetView(false, -1, -1, -1, Array.Empty<int>());
+    public static CueSheetView Empty { get; } = new CueSheetView(false, -1, string.Empty, Array.Empty<int>());
 
     /// <summary>Whether this slot currently holds a sheet.</summary>
     public readonly bool HasSheet;
 
-    /// <summary>Absolute beat the sheet's Phrase starts on.</summary>
-    public readonly int PhraseStartBeat;
-
-    /// <summary>Absolute beat the sheet's Phrase ends on (its mandatory final Cue Mark).</summary>
-    public readonly int PhraseEndBeat;
-
     /// <summary>Total Phrase length in beats.</summary>
     public readonly int PhraseLengthBeats;
+
+    /// <summary>Announced Phrase label — the sheet's identity, together with its length.</summary>
+    public readonly string PhraseLabel;
 
     /// <summary>Phrase-relative Cue Mark offsets for display.</summary>
     public readonly int[] CueMarkOffsets;
 
-    public CueSheetView(bool hasSheet, int phraseStartBeat, int phraseEndBeat, int phraseLengthBeats, int[] cueMarkOffsets)
+    public CueSheetView(bool hasSheet, int phraseLengthBeats, string phraseLabel, int[] cueMarkOffsets)
     {
         HasSheet = hasSheet;
-        PhraseStartBeat = phraseStartBeat;
-        PhraseEndBeat = phraseEndBeat;
         PhraseLengthBeats = phraseLengthBeats;
+        PhraseLabel = phraseLabel ?? string.Empty;
         CueMarkOffsets = cueMarkOffsets ?? Array.Empty<int>();
     }
 }
@@ -122,11 +118,13 @@ public readonly struct DirectorStatus
 }
 
 /// <summary>
-/// Decides what plays and when it changes, as a wire-change reducer (ADR-0011). In Synced Mode the
-/// Director wakes once per new beat and does three things only: repair its two Cue Sheets by invariant,
-/// Cast a Cue when a Grid carrying a Cue Mark begins, and hand that Cue to the Switcher fire-and-forget.
-/// It reads musical truth only from <see cref="BeatManager"/>, never OSC directly, keeps no decision
-/// memory, and never mirrors commitment — the Switcher alone owns that and answers accepted-or-not.
+/// Decides what plays and when it changes, as a wire-change reducer (ADR-0011). In Synced Mode the Director
+/// watches only the five lanes (timing_grid, phrase_state, next_phrase_state, fill_state, drop_state) and does
+/// no timing of its own: it repairs its two Cue Sheets by invariant, Casts a Cue when a Grid carrying a Cue
+/// Mark begins, and hands that Cue to the Switcher fire-and-forget. It reads musical truth only from
+/// <see cref="BeatManager"/>, never OSC directly, holds no absolute beat (sheets are Phrase-relative; the one
+/// absolute beat a Cue needs is minted at the Switcher seam), keeps no decision memory, and never mirrors
+/// commitment — the Switcher alone owns that and answers accepted-or-not.
 /// </summary>
 [Serializable]
 public sealed class Director
@@ -146,15 +144,15 @@ public sealed class Director
     private bool nextEffectIsManualSelection;
     private bool nextTransitionIsManualSelection;
 
-    // Reducer wake memory. lastWakeBeat gates decisions to once per new beat; lastGridBeat is the previous
-    // 16-count so a new Grid is read as the count moving backwards (a wrap), never as equality with 1.
-    private int lastWakeBeat = -1;
+    // Lane-observation memory — the only clocks the reducer keeps, both lane readings and never the track's
+    // absolute beat. lastGridBeat is the previous 16-count so a new Grid is read as the count moving backwards
+    // (a wrap), never as equality with 1; a repeated observation of the same count is not a new Grid. A cast
+    // wakes on this count changing, not on BeatManager.Beat.
     private int lastGridBeat = -1;
 
-    // Phrase-lane expectation memory. Each wake the phrase_state lane's countdown should advance one toward
-    // its boundary; the beat the countdown "would hit 0" is beat 1 of the next Phrase (there is no zero), so
-    // a wrap is the expected turnover. -1 means the lane has not been observed yet.
-    private int lastPhraseObservedBeat = -1;
+    // Phrase-lane turnover memory. The phrase_state countdown counts down toward its boundary; the observed
+    // count jumping back up is the wrap (turnover), the same shape as lastGridBeat. -1 means the lane has not
+    // been observed yet. No projection from elapsed track beats decides the turnover.
     private int lastPhraseBeatsUntilNext = -1;
 
     private CueSheetSlot currentSlot = CueSheetSlot.Empty;
@@ -163,31 +161,26 @@ public sealed class Director
 
     /// <summary>
     /// One held Cue Sheet plus the announcement (Phrase label and length) it was built from. Identity
-    /// (<see cref="BuiltFrom"/>) is the announced label and length, nothing else: the absolute anchor is
-    /// captured once at build or shift and translates the sheet's Phrase-relative marks to absolute beats for
-    /// the Switcher — it is mark-placement arithmetic, never identity, so position wobble on an unchanged
-    /// announcement can never re-roll the sheet.
+    /// (<see cref="BuiltFrom"/>) is the announced label and length, nothing else: the sheet holds only
+    /// Phrase-relative Cue Mark offsets, no absolute anchor, so position wobble on an unchanged announcement
+    /// can never re-roll the sheet. The one absolute beat a Cue needs is minted at the Switcher seam, never here.
     /// </summary>
     private readonly struct CueSheetSlot
     {
-        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, -1, null);
+        public static CueSheetSlot Empty { get; } = new CueSheetSlot(false, default, -1, null);
 
         public readonly bool HasSheet;
         public readonly CueSheet Sheet;
-        public readonly int PhraseStartBeat;
         public readonly int PhraseLengthBeats;
         public readonly string PhraseLabel;
 
-        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseStartBeat, int phraseLengthBeats, string phraseLabel)
+        public CueSheetSlot(bool hasSheet, CueSheet sheet, int phraseLengthBeats, string phraseLabel)
         {
             HasSheet = hasSheet;
             Sheet = sheet;
-            PhraseStartBeat = phraseStartBeat;
             PhraseLengthBeats = phraseLengthBeats;
             PhraseLabel = phraseLabel;
         }
-
-        public int PhraseEndBeat => PhraseStartBeat + PhraseLengthBeats;
 
         /// <summary>
         /// Whether this slot was built from exactly this announcement (label and length). Keying to the
@@ -196,18 +189,17 @@ public sealed class Director
         public bool BuiltFrom(string phraseLabel, int phraseLengthBeats) =>
             HasSheet && PhraseLabel == phraseLabel && PhraseLengthBeats == phraseLengthBeats;
 
-        /// <summary>Whether the sheet carries a Cue Mark on exactly this absolute beat.</summary>
-        public bool HasCueMarkAt(int absoluteBeat)
+        /// <summary>Whether the sheet carries a Cue Mark at exactly this Phrase-relative offset.</summary>
+        public bool HasCueMarkAtOffset(int offset)
         {
             if (!HasSheet || Sheet.CueMarkOffsets == null)
             {
                 return false;
             }
 
-            var targetOffset = absoluteBeat - PhraseStartBeat;
-            foreach (var offset in Sheet.CueMarkOffsets)
+            foreach (var markOffset in Sheet.CueMarkOffsets)
             {
-                if (offset == targetOffset)
+                if (markOffset == offset)
                 {
                     return true;
                 }
@@ -217,7 +209,7 @@ public sealed class Director
         }
 
         public CueSheetView ToView() => HasSheet
-            ? new CueSheetView(true, PhraseStartBeat, PhraseEndBeat, PhraseLengthBeats, (int[])Sheet.CueMarkOffsets.Clone())
+            ? new CueSheetView(true, PhraseLengthBeats, PhraseLabel, (int[])Sheet.CueMarkOffsets.Clone())
             : CueSheetView.Empty;
     }
 
@@ -333,11 +325,11 @@ public sealed class Director
     {
         LogModeIfChanged();
 
-        // Synced Mode needs both the mode authority and a running absolute beat. If the clock is gone —
-        // or a frame of Synced Mode arrives without a usable Beat — fall through to Standalone (ADR-0007).
-        if (IsSyncedMode && controller.beatManager.Beat is { } beat)
+        // The mode authority alone owns the Synced/Standalone fallthrough (ADR-0007). The reducer reads only
+        // the five lanes from here; the one absolute beat a cast needs is minted later, at the Switcher seam.
+        if (IsSyncedMode)
         {
-            TickSyncedMode(beat);
+            TickSyncedMode();
         }
         else
         {
@@ -398,96 +390,94 @@ public sealed class Director
         standaloneTimer.Update(deltaTime);
     }
 
-    private void TickSyncedMode(int beat)
+    private void TickSyncedMode()
     {
-        // One wake per new beat: nothing in the decision path runs per frame.
-        if (beat == lastWakeBeat)
-        {
-            return;
-        }
-
-        lastWakeBeat = beat;
-        RepairSheets(beat);
-        CastOnNewGrid(beat);
+        // Two lane-driven, idempotent steps. Repair watches the phrase lanes by expectation; Cast watches the
+        // Grid count. Neither keeps a beat gate: a repeated observation of the same lane values is not an event,
+        // so a frame that changes no watched lane changes nothing.
+        RepairSheets();
+        CastOnNewGrid();
     }
 
     /// <summary>
     /// Repairs the two Cue Sheet slots by invariant on every wake, watching the phrase_state lane by
-    /// expectation. Turnover is the expected countdown wrap — the beat a countdown "would hit 0" is beat 1 of
-    /// the next Phrase — so no end-beat arithmetic decides it; the next sheet shifts to current and the emptied
+    /// observation. Turnover is the observed countdown wrap — the count jumping back up into the next Phrase —
+    /// so no end-beat or elapsed-track arithmetic decides it; the next sheet shifts to current and the emptied
     /// slot refills. Sheets are keyed to the announced label and length, so timing wobble on an unchanged
     /// announcement never re-rolls a sheet; only a changed announcement can. Startup, OSC dropout, a missed
     /// announcement, and normal turnover are all the same checks — there is no cold-join case.
     /// </summary>
-    private void RepairSheets(int beat)
+    private void RepairSheets()
     {
-        var wrapped = IsExpectedPhraseWrap(beat);
-        RememberPhraseLane(beat, controller.beatManager.Phrase);
+        var phrase = controller.beatManager.Phrase;
+        var wrapped = IsObservedPhraseWrap(phrase);
+        RememberPhraseLane(phrase);
 
-        // Expected phrase wrap (turnover): the announced next Phrase is now current, so the next sheet shifts
+        // Observed phrase wrap (turnover): the announced next Phrase is now current, so the next sheet shifts
         // to current and the emptied slot refills below.
         if (wrapped)
         {
             PromoteNextToCurrent();
         }
 
-        var hasCurrent = TryReadCurrentAnnouncement(beat, out var currentStart, out var currentLength, out var currentLabel);
+        var hasCurrent = TryReadCurrentAnnouncement(out var currentLength, out var currentLabel);
 
         // The current sheet must match the wire's current announcement on every wake: keep it when its
         // (label, length) still match; rebuild when they do not. Identity ignores position, so wobble can
         // never fire this — and a stale promotion (a flapped next sheet shifted in) heals here immediately.
         if (currentSlot.HasSheet && hasCurrent && !currentSlot.BuiltFrom(currentLabel, currentLength))
         {
-            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Rebuild, currentStart, currentLength, currentLabel);
+            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Rebuild, currentLength, currentLabel);
         }
 
         // (a) No current sheet -> build from the current Phrase announcement.
         if (!currentSlot.HasSheet && hasCurrent)
         {
-            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Build, currentStart, currentLength, currentLabel);
+            currentSlot = BuildSlot(CueLogSlot.Current, CueLogBuildReason.Build, currentLength, currentLabel);
         }
 
         // (b) No next sheet, or the announced (label, length) it was built from changed -> build from the next
         //     Phrase announcement. Never duplicate the current Phrase (the wire can briefly announce it as next).
-        if (TryReadNextAnnouncement(beat, out var nextStart, out var nextLength, out var nextLabel)
+        if (TryReadNextAnnouncement(out var nextLength, out var nextLabel)
             && !nextSlot.BuiltFrom(nextLabel, nextLength)
             && !currentSlot.BuiltFrom(nextLabel, nextLength))
         {
-            nextSlot = BuildSlot(CueLogSlot.Next, nextSlot.HasSheet ? CueLogBuildReason.Rebuild : CueLogBuildReason.Build, nextStart, nextLength, nextLabel);
+            nextSlot = BuildSlot(CueLogSlot.Next, nextSlot.HasSheet ? CueLogBuildReason.Rebuild : CueLogBuildReason.Build, nextLength, nextLabel);
         }
     }
 
     /// <summary>
-    /// Whether the phrase_state countdown was expected to wrap on this wake: projecting the last observed
-    /// beats-until-next forward by the beats elapsed reaches or passes the boundary. There is no zero — the
-    /// beat the countdown "would hit 0" is beat 1 of the next Phrase — so a wrap is the expected turnover.
+    /// Whether the phrase_state countdown was observed to wrap on this wake: the count read back up from its
+    /// previous observation. There is no zero — the beat a countdown "would hit 0" is beat 1 of the next Phrase
+    /// — so the count reading higher than last time is the turnover, decided by observation alone.
     /// </summary>
-    private bool IsExpectedPhraseWrap(int beat)
+    private bool IsObservedPhraseWrap(PhraseInfo? phrase)
     {
-        if (lastPhraseObservedBeat < 0 || lastPhraseBeatsUntilNext < 0)
+        if (lastPhraseBeatsUntilNext < 0 || !(phrase is { beatsUntilNext: { } beatsUntilNext }))
         {
             return false;
         }
 
-        var predicted = lastPhraseBeatsUntilNext - (beat - lastPhraseObservedBeat);
-        return predicted <= 0;
+        // The countdown counts down toward its boundary; the observed count jumping back up is the wrap into
+        // the next Phrase — the same shape as a Grid count moving backwards, decided by observation, not
+        // projected from elapsed track beats.
+        return beatsUntilNext > lastPhraseBeatsUntilNext;
     }
 
-    /// <summary>Records this wake's phrase_state observation so the next wake can watch it by expectation.</summary>
-    private void RememberPhraseLane(int beat, PhraseInfo? phrase)
+    /// <summary>Records this wake's phrase_state countdown so the next wake can watch it for a wrap.</summary>
+    private void RememberPhraseLane(PhraseInfo? phrase)
     {
-        lastPhraseObservedBeat = beat;
         lastPhraseBeatsUntilNext = phrase is { beatsUntilNext: { } bun } ? bun : -1;
     }
 
-    /// <summary>Shifts the next sheet into the current slot and empties the next slot (the expected turnover).</summary>
+    /// <summary>Shifts the next sheet into the current slot and empties the next slot (the observed turnover).</summary>
     private void PromoteNextToCurrent()
     {
         currentSlot = nextSlot;
         nextSlot = CueSheetSlot.Empty;
         if (currentSlot.HasSheet)
         {
-            Trace($"SHEET_PROMOTED start={currentSlot.PhraseStartBeat} length={currentSlot.PhraseLengthBeats}");
+            Trace($"SHEET_PROMOTED phrase=\"{currentSlot.PhraseLabel}\" length={currentSlot.PhraseLengthBeats}");
         }
     }
 
@@ -496,15 +486,13 @@ public sealed class Director
     /// no usable one. A non-positive or non-16-multiple length is treated as no usable announcement — the
     /// builder throws on such lengths, so the reducer never hands one down.
     /// </summary>
-    private bool TryReadCurrentAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats, out string phraseLabel)
+    private bool TryReadCurrentAnnouncement(out int phraseLengthBeats, out string phraseLabel)
     {
-        phraseStartBeat = -1;
         phraseLengthBeats = -1;
         phraseLabel = null;
-        if (controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats } phrase
+        if (controller.beatManager.Phrase is { lengthBeats: { } lengthBeats } phrase
             && IsUsablePhraseLength(lengthBeats))
         {
-            phraseStartBeat = beat + beatsUntilNext - lengthBeats;
             phraseLengthBeats = lengthBeats;
             phraseLabel = phrase.label;
             return true;
@@ -514,15 +502,13 @@ public sealed class Director
     }
 
     /// <summary>Reads the next Phrase announcement into an announcement identity, or returns false when there is no usable one.</summary>
-    private bool TryReadNextAnnouncement(int beat, out int phraseStartBeat, out int phraseLengthBeats, out string phraseLabel)
+    private bool TryReadNextAnnouncement(out int phraseLengthBeats, out string phraseLabel)
     {
-        phraseStartBeat = -1;
         phraseLengthBeats = -1;
         phraseLabel = null;
-        if (controller.beatManager.NextPhrase is { beatsUntilChange: { } beatsUntilChange, lengthBeats: { } lengthBeats } nextPhrase
+        if (controller.beatManager.NextPhrase is { lengthBeats: { } lengthBeats } nextPhrase
             && IsUsablePhraseLength(lengthBeats))
         {
-            phraseStartBeat = beat + beatsUntilChange;
             phraseLengthBeats = lengthBeats;
             phraseLabel = nextPhrase.label;
             return true;
@@ -534,12 +520,57 @@ public sealed class Director
     private static bool IsUsablePhraseLength(int lengthBeats) =>
         lengthBeats > 0 && lengthBeats % CueSheet.GridBeats == 0;
 
-    private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseStartBeat, int phraseLengthBeats, string phraseLabel)
+    private CueSheetSlot BuildSlot(CueLogSlot slot, CueLogBuildReason reason, int phraseLengthBeats, string phraseLabel)
     {
-        var sheet = CueSheet.Build(phraseLengthBeats, phraseStartBeat, phraseStartBeat);
-        Trace($"SHEET_BUILT slot={(slot == CueLogSlot.Current ? "current" : "next")} reason={(reason == CueLogBuildReason.Build ? "build" : "rebuild")} start={phraseStartBeat} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
-        cueLog?.SheetBuilt(slot, reason, phraseLabel, phraseStartBeat, phraseLengthBeats, sheet.CueMarkOffsets);
-        return new CueSheetSlot(true, sheet, phraseStartBeat, phraseLengthBeats, phraseLabel);
+        var sheet = CueSheet.Build(phraseLengthBeats, 0, SheetSeed(phraseLabel, phraseLengthBeats));
+        var displayStart = DisplaySheetStart(slot, phraseLengthBeats);
+        Trace($"SHEET_BUILT slot={(slot == CueLogSlot.Current ? "current" : "next")} reason={(reason == CueLogBuildReason.Build ? "build" : "rebuild")} start={displayStart} length={phraseLengthBeats} marks=[{string.Join(",", sheet.CueMarkOffsets)}]");
+        cueLog?.SheetBuilt(slot, reason, phraseLabel, displayStart, phraseLengthBeats, sheet.CueMarkOffsets);
+        return new CueSheetSlot(true, sheet, phraseLengthBeats, phraseLabel);
+    }
+
+    /// <summary>
+    /// FNV-1a seed derived from the announcement itself (label and length), so a sheet's random roll is
+    /// deterministic per announcement without any absolute anchor: two Phrases sharing a label and length roll
+    /// the same sheet, and timing wobble — which changes neither — can never re-roll it.
+    /// </summary>
+    private static int SheetSeed(string phraseLabel, int phraseLengthBeats)
+    {
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var c in phraseLabel ?? string.Empty)
+            {
+                hash = (hash ^ c) * 16777619u;
+            }
+
+            hash = (hash ^ (uint)phraseLengthBeats) * 16777619u;
+            return (int)hash;
+        }
+    }
+
+    /// <summary>
+    /// Derives the sheet's absolute Phrase-start beat for the frozen log and trace grammars from live lane
+    /// values at log time — a display derivation like the Observatory, never a decision input or stored anchor.
+    /// -1 when the wire has no usable beat or countdown right now.
+    /// </summary>
+    private int DisplaySheetStart(CueLogSlot slot, int phraseLengthBeats)
+    {
+        if (!(controller.beatManager.Beat is { } beat))
+        {
+            return -1;
+        }
+
+        if (slot == CueLogSlot.Current)
+        {
+            return controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext }
+                ? beat + beatsUntilNext - phraseLengthBeats
+                : -1;
+        }
+
+        return controller.beatManager.NextPhrase is { beatsUntilChange: { } beatsUntilChange }
+            ? beat + beatsUntilChange
+            : -1;
     }
 
     /// <summary>
@@ -547,7 +578,7 @@ public sealed class Director
     /// moving backwards (a wrap); a dropped packet that skips the One still trips the wrap, so no Grid is
     /// missed, and the first reading joins mid-Grid without casting.
     /// </summary>
-    private void CastOnNewGrid(int beat)
+    private void CastOnNewGrid()
     {
         // No grid lane this wake: nothing to evaluate, so no cast. A real Synced-Mode exit is a mode boundary
         // that resets grid memory (ADR-0007); this method never special-cases it.
@@ -560,39 +591,31 @@ public sealed class Director
         var previousGridBeat = lastGridBeat;
         lastGridBeat = gridBeat;
 
-        if (previousGridBeat < 0 || gridBeat >= previousGridBeat)
+        // A new Grid is the 16-count moving backwards (a wrap); a dropped packet that skips the One still trips
+        // the wrap. Equality is a repeated observation of the same Grid, a forward move is mid-Grid, and no
+        // prior count is the first reading joining mid-Grid — none of these casts.
+        if (previousGridBeat < 1 || gridBeat >= previousGridBeat)
         {
             return;
         }
 
-        // The Grid that just began runs from its Boundary to the next; a Cue Mark it carries sits on that
-        // next Boundary — the beat a transition started this Grid would land on.
-        var gridStartBeat = beat - (gridBeat - 1);
-        var carriedCueMarkBeat = gridStartBeat + CueSheet.GridBeats;
-        if (!HasCueMarkAt(carriedCueMarkBeat))
+        // The carried Cue Mark, read live: beatsToMark is one Grid past this Boundary, less however far into
+        // the Grid a dropped One left us (16 - (gridBeat - 1)); the mark sits that far ahead of the beat's
+        // position (length - beatsUntilNext) in the Phrase. It lives in the current sheet. beatsToMark is also
+        // what the Switcher seam mints its one absolute beat from, in OfferCue, as clock beat + beats-to-mark.
+        if (!(controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats }))
         {
             return;
         }
 
-        OfferCue(beat, carriedCueMarkBeat);
-    }
+        var beatsToMark = CueSheet.GridBeats - (gridBeat - 1);
+        var carriedMarkOffset = (lengthBeats - beatsUntilNext) + beatsToMark;
+        if (!currentSlot.HasCueMarkAtOffset(carriedMarkOffset))
+        {
+            return;
+        }
 
-    private bool HasCueMarkAt(int absoluteBeat) =>
-        currentSlot.HasCueMarkAt(absoluteBeat) || nextSlot.HasCueMarkAt(absoluteBeat);
-
-    /// <summary>
-    /// Resolves the display context (Phrase label, and the Cue Mark's Phrase-relative offset and Phrase
-    /// length) for an absolute Cue Mark beat by asking the slot that carries it. For the Cue Log view only;
-    /// the label and length are read straight off the live slot, never a stored verdict.
-    /// </summary>
-    private void ResolveCueContext(int absoluteBeat, out string phraseLabel, out int phraseRelativeOffset, out int phraseLength)
-    {
-        var slot = currentSlot.HasCueMarkAt(absoluteBeat) ? currentSlot
-            : nextSlot.HasCueMarkAt(absoluteBeat) ? nextSlot
-            : CueSheetSlot.Empty;
-        phraseLabel = slot.PhraseLabel;
-        phraseRelativeOffset = absoluteBeat - slot.PhraseStartBeat;
-        phraseLength = slot.PhraseLengthBeats;
+        OfferCue(carriedMarkOffset, beatsToMark);
     }
 
     /// <summary>
@@ -603,16 +626,25 @@ public sealed class Director
     /// the loaded cue unchanged, a <see cref="CueUpsertResult.Rejected"/> offer touches nothing, and only a
     /// <see cref="CueUpsertResult.Loaded"/> answer pulls the peeked deck cards and re-stages.
     /// </summary>
-    private void OfferCue(int beat, int cueMarkBeat)
+    private void OfferCue(int carriedMarkOffset, int beatsToMark)
     {
-        // A held Effect suspends rotation: offer no cue and leave the held Performer on stage.
-        if (controller.TryGetHeldEffectIndex(out _))
+        // The one absolute beat a Cue needs is minted here, at the Switcher seam: the live clock beat plus the
+        // beats-to-mark. No usable beat means no handoff — the Synced-but-no-beat edge the mode gate covers.
+        if (!(controller.beatManager.Beat is { } seamBeat))
         {
-            Trace($"SYNC_CUE_HELD beat={beat} cueMark={cueMarkBeat}");
             return;
         }
 
-        var preferredRepertoire = PreferredRepertoireForGrid(beat, cueMarkBeat);
+        var cueMarkBeat = seamBeat + beatsToMark;
+
+        // A held Effect suspends rotation: offer no cue and leave the held Performer on stage.
+        if (controller.TryGetHeldEffectIndex(out _))
+        {
+            Trace($"SYNC_CUE_HELD beat={seamBeat} cueMark={cueMarkBeat}");
+            return;
+        }
+
+        var preferredRepertoire = PreferredRepertoireForGrid(beatsToMark);
         var effectCast = CastEffect(preferredRepertoire);
         var transitionCast = CastTransition(preferredRepertoire);
         var cue = new SwitcherCueDirection(
@@ -621,49 +653,47 @@ public sealed class Director
             transitionCast.Index,
             controller.transitions[transitionCast.Index].Repertoire);
 
+        // Display context for the frozen log grammars: the carried mark lives in the current sheet, so its
+        // label, length, and Phrase-relative offset come straight off that slot and the offset just computed —
+        // never a stored verdict.
+        var phraseLabel = currentSlot.PhraseLabel;
+        var phraseLength = currentSlot.PhraseLengthBeats;
+
         // The loaded-cue view captured before the offer names the displaced cue (for the Cue Log) and, on a
         // keep, the very cue that rides — a display read, never a decision: the Switcher's answer decides.
         var priorLoaded = switcher.LoadedCueStatus;
-        var answer = switcher.UpsertLoadedCue(cue, CurrentSwitcherClockSnapshot(beat));
+        var answer = switcher.UpsertLoadedCue(cue, CurrentSwitcherClockSnapshot(seamBeat));
 
         if (answer == CueUpsertResult.Kept)
         {
-            Trace($"SYNC_CUE_KEEP beat={beat} loaded={priorLoaded.CueMarkBeat} cueMark={cueMarkBeat}");
-            if (cueLog != null)
-            {
-                ResolveCueContext(priorLoaded.CueMarkBeat, out var keptLabel, out var keptOffset, out var keptLength);
-                cueLog.CueKept(
-                    keptLabel,
-                    cueMarkBeat,
-                    priorLoaded.CueMarkBeat,
-                    keptOffset,
-                    keptLength,
-                    EffectName(priorLoaded.TargetEffectIndex),
-                    TransitionName(priorLoaded.TransitionIndex));
-            }
-
+            // A same-mark keep: the loaded mark equals the offered mark, so its display context is this cast's.
+            Trace($"SYNC_CUE_KEEP beat={seamBeat} loaded={priorLoaded.CueMarkBeat} cueMark={cueMarkBeat}");
+            cueLog?.CueKept(
+                phraseLabel,
+                cueMarkBeat,
+                priorLoaded.CueMarkBeat,
+                carriedMarkOffset,
+                phraseLength,
+                EffectName(priorLoaded.TargetEffectIndex),
+                TransitionName(priorLoaded.TransitionIndex));
             return;
         }
 
         var accepted = answer == CueUpsertResult.Loaded;
-        if (cueLog != null)
-        {
-            ResolveCueContext(cueMarkBeat, out var castLabel, out var castOffset, out var castLength);
-            cueLog.CueCast(
-                castLabel,
-                cueMarkBeat,
-                castOffset,
-                castLength,
-                EffectName(effectCast.Index),
-                TransitionName(transitionCast.Index),
-                ToCueFlavor(preferredRepertoire),
-                accepted);
-        }
+        cueLog?.CueCast(
+            phraseLabel,
+            cueMarkBeat,
+            carriedMarkOffset,
+            phraseLength,
+            EffectName(effectCast.Index),
+            TransitionName(transitionCast.Index),
+            ToCueFlavor(preferredRepertoire),
+            accepted);
 
         if (!accepted)
         {
             // The Switcher alone owns commitment; a rejected offer commits nothing and touches no deck.
-            Trace($"SYNC_CUE_REJECTED beat={beat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)}");
+            Trace($"SYNC_CUE_REJECTED beat={seamBeat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)}");
             return;
         }
 
@@ -682,24 +712,20 @@ public sealed class Director
         currentEffectIndexForSelection = effectCast.Index;
         StageNextChoices(currentEffectIndexForSelection);
         var loaded = switcher.LoadedCueStatus;
-        Trace($"SYNC_CUE_SENT beat={beat} start={loaded.StartBeat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)} preferred={preferredRepertoire}");
-        if (cueLog != null)
-        {
-            ResolveCueContext(loaded.CueMarkBeat, out var loadedLabel, out var loadedOffset, out var loadedLength);
-            cueLog.CueLoaded(
-                loadedLabel,
-                loaded.CueMarkBeat,
-                loadedOffset,
-                loadedLength,
-                EffectName(loaded.TargetEffectIndex),
-                TransitionName(loaded.TransitionIndex),
-                loaded.StartBeat,
-                loaded.LockPointBeat,
-                loaded.RunwayBeats,
-                loaded.TailBeats,
-                priorLoaded.HasCue ? CueLogUpsert.Replaced : CueLogUpsert.New,
-                priorLoaded.HasCue ? priorLoaded.CueMarkBeat : (int?)null);
-        }
+        Trace($"SYNC_CUE_SENT beat={seamBeat} start={loaded.StartBeat} cueMark={cueMarkBeat} transition={FormatTransition(transitionCast.Index)} target={FormatEffect(effectCast.Index)} preferred={preferredRepertoire}");
+        cueLog?.CueLoaded(
+            phraseLabel,
+            loaded.CueMarkBeat,
+            carriedMarkOffset,
+            phraseLength,
+            EffectName(loaded.TargetEffectIndex),
+            TransitionName(loaded.TransitionIndex),
+            loaded.StartBeat,
+            loaded.LockPointBeat,
+            loaded.RunwayBeats,
+            loaded.TailBeats,
+            priorLoaded.HasCue ? CueLogUpsert.Replaced : CueLogUpsert.New,
+            priorLoaded.HasCue ? priorLoaded.CueMarkBeat : (int?)null);
     }
 
     /// <summary>Maps the preferred casting Repertoire onto the Cue Log's Fill/Drop/None flavor vocabulary.</summary>
@@ -722,16 +748,17 @@ public sealed class Director
     /// The Repertoire a Cue on this Grid prefers: HandlesFill when a Fill lands on this Grid, HandlesDrop
     /// when a Drop lands on the next Grid, else None. A preference, never a mandate.
     /// </summary>
-    private Repertoire PreferredRepertoireForGrid(int beat, int cueMarkBeat)
+    private Repertoire PreferredRepertoireForGrid(int beatsToMark)
     {
-        // "This Grid" is [beat, cueMarkBeat) — the Grid whose Boundary is the Cue Mark; "next Grid" is
-        // [cueMarkBeat, cueMarkBeat + 16), which the Drop lands on the front of.
-        if (EventStartsWithin(controller.beatManager.Fill, beat, beat, cueMarkBeat))
+        // Windows in beats-from-now: "this Grid" is [0, beatsToMark) — the Grid whose Boundary is the Cue Mark;
+        // "next Grid" is [beatsToMark, beatsToMark + 16), which the Drop lands on the front of. Read from the
+        // Fill/Drop lanes' own countdowns, never an absolute beat.
+        if (EventStartsWithin(controller.beatManager.Fill, 0, beatsToMark))
         {
             return Repertoire.HandlesFill;
         }
 
-        if (EventStartsWithin(controller.beatManager.Drop, beat, cueMarkBeat, cueMarkBeat + CueSheet.GridBeats))
+        if (EventStartsWithin(controller.beatManager.Drop, beatsToMark, beatsToMark + CueSheet.GridBeats))
         {
             return Repertoire.HandlesDrop;
         }
@@ -739,12 +766,11 @@ public sealed class Director
         return Repertoire.None;
     }
 
-    private static bool EventStartsWithin(PhraseEventInfo? eventInfo, int beat, int windowStartBeat, int windowEndExclusiveBeat)
+    private static bool EventStartsWithin(PhraseEventInfo? eventInfo, int windowStartBeatsFromNow, int windowEndExclusiveBeatsFromNow)
     {
         if (eventInfo is { beatsUntilStart: { } beatsUntilStart })
         {
-            var startBeat = beat + beatsUntilStart;
-            return startBeat >= windowStartBeat && startBeat < windowEndExclusiveBeat;
+            return beatsUntilStart >= windowStartBeatsFromNow && beatsUntilStart < windowEndExclusiveBeatsFromNow;
         }
 
         return false;
@@ -819,9 +845,7 @@ public sealed class Director
     {
         currentSlot = CueSheetSlot.Empty;
         nextSlot = CueSheetSlot.Empty;
-        lastWakeBeat = -1;
         lastGridBeat = -1;
-        lastPhraseObservedBeat = -1;
         lastPhraseBeatsUntilNext = -1;
     }
 
