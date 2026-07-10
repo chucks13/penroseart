@@ -132,8 +132,8 @@ The standard rhythmic signal: a value in `[0..1]` that peaks on the quarter-note
 _Avoid_: equating it with the raw OSC scalar; the runtime regenerates a shaped pulse locally.
 
 **Bar Phase**:
-The normalized position within the current measure (0 on the downbeat, 1 at the next downbeat). The clock every Waveform is evaluated against. Derived from the live beat timing and kept locked to the DJ.
-_Avoid_: "beat phase" when the whole measure is meant.
+The normalized position within the current measure (0 on the downbeat, 1 at the next downbeat). The clock every Waveform is evaluated against — the Waveform Synthesizer's **internal** clock, derived from the live beat timing and kept locked to the DJ. It is not a Data Surface offering: effects pull evaluated waveforms, never the clock itself.
+_Avoid_: "beat phase" when the whole measure is meant; offering Bar Phase (or its intra-beat feedstock) on the Data Surface.
 
 **Bar** (a.k.a. **Measure**):
 Four beats — "4-on-the-floor." The unit the Director's changes align to. The whole rhythmic structure runs on **powers of four**: 4 beats to a Bar, and Phrase lengths are multiples of four Bars (16, 32, 64 beats). A Bar boundary falls every 4 beats, but the Director changes no more often than every 4 Bars (16 beats).
