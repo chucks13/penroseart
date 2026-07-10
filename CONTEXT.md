@@ -120,6 +120,10 @@ The hand-vetted collection of Presets that random selection draws from, so a ran
 The wall-wide override that pins every effect to a single Pool Preset, so the whole installation pulses to one chosen rhythm instead of each effect rolling its own. Its released state is **Auto**: each effect picks its own variant as it starts. Engaging the lock fixes future effect starts *and* retargets the effect already on screen, so the change is immediate; releasing it returns the wall to Auto. Surfaced two-way in the Beat Manager dashboard's Waveform selector.
 _Avoid_: conflating the lock (wall-wide, persists across effect changes) with an effect's own per-instance variant choice.
 
+**Waveform Pattern** (future):
+A choreographed routine assembled from single-bar Waveforms placed in sequence — bars composed into a multi-bar dance routine. Today Waveforms are single-bar only and the Pool holds individual bars; Patterns are the planned next step.
+_Avoid_: treating today's single-bar Waveform as the final form; using "pattern" for one bar's hump sequence.
+
 **Visual Tool** (the waveform "designer" web app):
 A standalone browser sketchpad for *seeing* what a Waveform's notation looks like before committing it. Purely a visualizer/design aid — it is not the authoring pipeline and the runtime does not depend on it or its exported JSON.
 
@@ -210,6 +214,10 @@ _Avoid_: "dancer" (the early metaphor); using "Performer" when you specifically 
 What a Performer advertises it can do, so the Director can cast it knowingly: handles Fills, handles Drops, or neither. Repertoire says what event moments a Performer can support; it does not say what BeatManager data the Performer reads while rendering. The Director always decides, and Repertoire only tells it which options exist.
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
+**Mixer**:
+An Effect that combines multiple child Effects so more than one plays on screen at once. To everything outside it — Director, Switcher, casting — a Mixer is just another Effect: it declares its own Repertoire and owns what its children see and do.
+_Avoid_: special-casing Mixers in casting or switching; letting child effects speak for themselves past the Mixer.
+
 **A-to-B Transition**:
 A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Grid Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
 _Avoid_: treating every Transition as if its only goal is to complete on a Cue Mark; treating transition progress, completion, or busy state as music-structure evidence.
@@ -276,6 +284,7 @@ _Avoid_: treating a Phrase as a transition, a visual effect, or a clock source; 
 
 **Grid** (a.k.a. **16-Beat Grid**):
 A fixed 4-bar / 16-beat timing unit inside a Phrase; a new Grid begins when the 16-count wraps back to the One. The wall uses Grid Boundaries as its minimum switching cadence; a Phrase can contain several Grids, and the Director may choose some interior Grid Boundaries rather than switching at every one. "Grid" here is the wall's own cyclic 16-beat unit — *not* RaveSystem's **Beat Grid** (the analyzed per-beat → time map), which the wall does not use under this name.
+The Grid is the wall's main timing source: Phrase events (Fills, Drops) may drift off Grid, but the wall always follows the Grid.
 _Avoid_: using "grid" when the whole Phrase is meant; assuming every Grid Boundary must trigger a transition; conflating the wall's Grid with RaveSystem's per-beat Beat Grid.
 
 **Grid Boundary**:
@@ -295,10 +304,10 @@ The effect-facing read of the live **Grid**: a nullable `GridInfo { State, Beat,
 _Avoid_: reaching into `Director` from an effect; treating a null `Grid` as an error rather than "not on a grid right now".
 
 **Fill**:
-A Fill is the musical event described by BeatManager's Fill state. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). The Director only uses Fill state to cast Effects and Transitions whose Repertoire says they support Fill for the relevant Cue. The selected Effect or Transition owns how it renders the Fill from BeatManager data.
+A one-to-four-beat musical section at the end of a Phrase, described by BeatManager's Fill state. A Phrase's end usually lines up with a Grid Boundary, but not always. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). The Director only uses Fill state to cast Effects and Transitions whose Repertoire says they support Fill for the relevant Cue. The selected Effect or Transition owns how it renders the Fill from BeatManager data.
 
 **Drop**:
-The climactic section boundary of a track. Same two-sided visibility as a Fill: a countdown to it, then progress through it. Unlike a Fill, a Drop **can change who is on stage**. The Director decides the move: it has the on-screen effect enter a drop-state in place when that effect's Repertoire can, or it swaps Performers. Either way the move must land *on* the drop — the anticipation side (scheduling the change beats ahead so it completes exactly on the boundary) is the valuable half, and the reason a Drop transition is timed more tightly than an ordinary phrase-boundary one.
+The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. Same two-sided visibility as a Fill: a countdown to it, then progress through it. Unlike a Fill, a Drop **can change who is on stage**. The Director decides the move: it has the on-screen effect enter a drop-state in place when that effect's Repertoire can, or it swaps Performers. Either way the move must land *on* the drop — the anticipation side (scheduling the change beats ahead so it completes exactly on the boundary) is the valuable half, and the reason a Drop transition is timed more tightly than an ordinary phrase-boundary one.
 
 **Phrase Event View** (`PhraseEventView`):
 The canonical display model of a phrase event (a **Fill** or a **Drop**): its status chip, meter fill, one-line readout, and a Now/Soon/Idle state, all derived from the phrase-event query in one place so every surface — the Beat Manager dashboard today, any telnet/OSC/debug readout later — presents a Fill or Drop the same way. It is the presentation counterpart of the Fill/Drop *data*: what a phrase event **is** stays separate from how it **reads**.
