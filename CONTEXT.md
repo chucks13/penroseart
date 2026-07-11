@@ -232,8 +232,8 @@ What a Performer advertises it can do, so the Director can cast it knowingly: ha
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **Mixer**:
-An Effect that combines multiple child Effects so more than one plays on screen at once. To everything outside it — Director, Switcher, casting — a Mixer is just another Effect: it declares its own Repertoire and owns what its children see and do.
-_Avoid_: special-casing Mixers in casting or switching; letting child effects speak for themselves past the Mixer.
+An Effect that combines multiple child Effects so more than one plays on screen at once. To everything outside it — Director, Switcher, casting — a Mixer is just another Effect: it declares its own Repertoire and owns its children — what Effects they are, their lifecycle, what they hold, and how their output is displayed. Each child individually owns what it does: it reads the Data Surface like any other consumer, and reacts exactly as it would playing alone.
+_Avoid_: special-casing Mixers in casting or switching; letting child effects speak for themselves past the Mixer; a Mixer gating what its children may read ("owns what its children see" — retired agent assumption; the mixer owns what children hold, never their sight).
 
 **A-to-B Transition**:
 A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Grid Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
