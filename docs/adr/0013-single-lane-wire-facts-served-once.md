@@ -10,6 +10,12 @@ on-beat offerings" and "Pulse, off-beat, and subdivision offerings", 2026-07-10)
 is served — arrival is what earns a fact its place, and no lane is dropped for having no
 current consumer. Unused lanes are inventory for future effects, not junk.
 
+*Scope (Hunter, 2026-07-10):* the floor covers the musical `/rave/onair` lanes. The
+deprecated `/rave/system/*` transport metadata is not served. The exclusion costs nothing
+because absence is already first-class on the surface: any value that isn't there is
+`null`, and effects supply their own defaults. The wire schema itself is defined by
+`docs/osc-client-contract.md` (a synced copy owned by RaveSystem — never edited here).
+
 **The ceiling: every datum is served exactly once.** The test: a value is **contrived**
 when it is built from more than a single piece of wire data — a wire value plus anything
 else (another lane, local state, time). A member that re-serves one wire value under a
