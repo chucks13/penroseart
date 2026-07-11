@@ -23,7 +23,7 @@ Provides the shared rhythm state for effects and the Director. It can run from t
 
 - **BeatData**: Shared BPM/current-beat/timing state plus raw Rave on-air values for Fill, Drop, Energy, Track Phase, Levels, and Pulse.
 - **Nullable queries**: `BeatManagerQueries` exposes ready-to-use rhythm values where `null` means not available right now.
-- **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, subdivisions, and syncopation. The current code and docs disagree on the numbering of variants 4/5/6; confirm intended behavior before changing it.
+- **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, finer durations, and syncopation. The current code and docs disagree on the numbering of variants 4/5/6; confirm intended behavior before changing it.
 - **Rhythmic Logic**: Uses an x^4 decay curve to create sharp visual kicks without making off-beat visuals too dark.
 - **Propagation**: Mixers can pass rhythm to children, let children choose independently, or suppress child pulsing.
 
@@ -92,19 +92,23 @@ A Tuning Window mode where the selected Effect or Transition remains the Directo
 _Avoid_: confusing this with Held Effect; Hold Selected keeps the Director/Switcher path running, while Held Effect freezes rotation around one on-wall Effect.
 
 **Waveform**:
-A one-bar rhythmic brightness envelope built by **merging humps end-to-end in time** — each hump occupies its own time slot and has a width (subdivision) and a height (amplitude). Humps are never summed or layered on top of each other. Values are **unipolar `[0..1]`**: 1 at a peak (on the beat), 0 in the troughs between beats. It is an envelope, never a bipolar audio wave — there is no negative half and 0 is the trough, not a midpoint.
+A one-bar rhythmic brightness envelope built by **merging humps end-to-end in time** — each hump occupies its own time slot and has a width (Duration) and a height (Amplitude). Humps are never summed or layered on top of each other. Values are **unipolar `[0..1]`**: 1 at a peak (on the beat), 0 in the troughs between beats. It is an envelope, never a bipolar audio wave — there is no negative half and 0 is the trough, not a midpoint.
 _Avoid_: "adding waves together" (they are concatenated in time, not summed); "true wave" / "−1 to 1" (it is unipolar); "signal", "curve".
 
 **Hump**:
-The single unit a Waveform is built from: one rise-and-fall occupying its own time slot, peaking once and returning to 0. A Waveform is an ordered run of Humps merged end-to-end. Each Hump carries a width (its subdivision / note value) and a height (its Amplitude).
+The single unit a Waveform is built from: one rise-and-fall occupying its own time slot, peaking once and returning to 0. A Waveform is an ordered run of Humps merged end-to-end. Each Hump carries a width (its Duration / note value) and a height (its Amplitude).
 _Avoid_: "cycle", "wave", "pulse" for the unit — those name the whole signal, not the piece.
 
 **Amplitude**:
 The height of a single Hump, authored as a single digit `0–8` mapping linearly to `[0..1]` via digit ÷ 8 (`8` = full height, peak reaches 1; the ÷8 gives nine clean eighth-steps that land exactly on 1.0). One digit per Hump, read straight across in order, so the amplitude string sits directly beneath the sequence string as a stacked, equal-length pair. `0` makes the Hump silent — flat at 0 for its whole slot — which is how a beat is *skipped* (e.g. "measure start" = `8000`, "alternating beats" = `8080`). There is no separate gate; Amplitude `0` is the gate.
 
-**Subdivision** (a.k.a. note value, the Hump's width):
-How much bar-time one Hump occupies, named by musical note value rather than a count. The authored range is `W` whole (the full bar), `H` half (2 beats), `Q` quarter (1 beat), `E` eighth (½ beat), `S` sixteenth (¼ beat). One token per Hump; the tokens of a Waveform, read left to right, are its widths. The sixteenth is the fastest allowed — finer rates are deliberately excluded (both musically unneeded and a full-wall flicker hazard).
-_Avoid_: "frequency" or "subdivisions-per-beat counts" — widths are note values, and a value slower than a quarter (whole/half) is one Hump spanning several beats, which a per-beat count cannot express.
+**Duration** (a.k.a. note value, the Hump's width):
+How much musical time a note occupies, named by note value rather than a count. One shared ladder serves both sides of the musical vocabulary: a Hump's width **occupies** a Duration, and a notation pulse or gate **runs every** Duration. The authored range is `W` whole (the full bar), `H` half (2 beats), `Q` quarter (1 beat), `E` eighth (½ beat), `S` sixteenth (¼ beat). One token per Hump; the tokens of a Waveform, read left to right, are its widths. The sixteenth is the fastest allowed — finer rates are deliberately excluded (both musically unneeded and a full-wall flicker hazard).
+_Avoid_: the retired name "Subdivision" (renamed Duration everywhere, glossary and code alike); "frequency" or per-beat counts — these are note values, and a value slower than a quarter (whole/half) spans several beats, which a per-beat count cannot express.
+
+**Duration Pulse / Duration Gate**:
+The idealized-clock members of the pulse family: signals derived from the Bar Phase clock that run every **Duration** — "pulse me every eighth." A Duration Pulse peaks on each onset and decays smoothly to 0 across its cycle; a Duration Gate is its square on-off sibling, open for the first part of each cycle (strobes, ratchets). Deliberately distinct from the other three pulse offerings: the wire's `beat_pulse` (the sender's own analyzed hit), the Offbeat pulse (contrived from measured beat-time midpoints), and Waveforms (authored dance moves). Four offerings, four purposes — all valid options for effects.
+_Avoid_: folding these into Waveforms (a Duration Pulse is parametric and instant, not an authored shape); the retired name "subdivision pulses/gates"; treating the four pulse offerings as duplicates of one datum.
 
 **Waveform Synthesizer**:
 The always-running runtime service effects pull from. The live pulse keeps a Bar Phase clock turning; given any Waveform spec, the synthesizer evaluates it against the current Bar Phase and hands back a brightness in `[0..1]` on demand. Effects do not own the clock — they own (or request) a Waveform and ask for its value *now*. The Waveform spec is the request; it can be typed inline in effect code, named as a Preset, or chosen at random.
@@ -144,12 +148,12 @@ The first beat of a Bar — the downbeat. **Every Director change lands on the o
 _Avoid_: zero-based or off-by-one counting; landing a change mid-bar; conflating the musical count with the 0..1 Bar Phase value.
 
 **Offbeat** (a.k.a. **Half-Step**):
-A Beat Pulse shifted by half a beat so it peaks on the "&". Expressed as a Waveform carrying a **Phase Offset** of half a beat; the same shaping (width, amplitude, rounding) then applies as for any Waveform.
-_Avoid_: confusing "half-step" with its pitch-theory meaning (a semitone). Here it is strictly the half-beat rhythmic position, the "&" between beats.
+The moment exactly midway between two beats — the "&". Four beats to a Bar means four offbeats. They matter for the same reason the counts do: different aspects of the music land on different beats, and some land directly in the middle — off the main beat. The wire carries nothing about the "&", so everything offbeat is contrived. The Data Surface mirrors the on-beat cluster exactly: **Off Beat** (is the current offbeat's gate open — the same current-slot semantics as On Beat) and **Next Off Beat** (ms until the next "&" — the mirror of Next Beat). Pulsing on the offbeat as a Waveform is a Beat Pulse carrying a **Phase Offset** of half a beat; the usual shaping then applies.
+_Avoid_: confusing "half-step" with its pitch-theory meaning (a semitone); the nearest-upcoming gate pick (retired for On Beat — both gates answer "am I on the moment" with current-slot semantics, one definition, not two); defining the offbeat as a Waveform — the position is the concept, the Waveform is one expression of it.
 
 **On the Beat** (`OnBeat`):
 Landing on the count — on the 1, 2, 3, or 4. The wire reports this per count as four gates; a count's gate is open for the first quarter of the beat interval. The Data Surface serves one contrived convenience, **On Beat**: is the *current* count's gate open right now. Watching specific counts (the 2 and the 4 for the snare) reads the wire's four gates directly.
-_Avoid_: the nearest-upcoming-count pick (retired — it reads false at the instant a beat lands); confusing On Beat (a gate) with the Beat Pulse (a continuous wave).
+_Avoid_: the nearest-upcoming-count pick (retired for indirection — the current count is already named, so its gate is read directly; the earlier "reads false when a beat lands" justification was retracted against wire evidence); confusing On Beat (a gate) with the Beat Pulse (a continuous wave).
 
 **Next Beat** (`NextBeatMs`):
 The live countdown to the next beat hit, whatever its count — the soonest of the wire's four per-count countdowns, running to zero on the hit and resetting. Not the beat's *length*: the average beat interval (`beat_avg_ms`, ≈ 60000 ÷ BPM) says how long a beat is; Next Beat says when the next one lands.

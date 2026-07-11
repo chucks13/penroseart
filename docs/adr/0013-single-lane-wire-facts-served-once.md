@@ -12,6 +12,11 @@ the many-spellings drift at the rule level: named offerings in the concept group
 contrived by definition, and consumers wanting per-label detail read the wire's arrays
 directly.
 
+The rule has a floor as well as a ceiling: **everything arriving over the wire stays
+served.** Every lane the wire carries is on the raw wire view — arrival is what earns a
+fact its place, and no lane is dropped for having no current consumer (unused lanes are
+inventory for future effects, not junk). "Served once" means once, never zero.
+
 ## Considered Options
 
 - Per-fact convenience wrappers (`Bpm` alongside the wire's `bpm`) — rejected: they
