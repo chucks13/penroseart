@@ -146,6 +146,7 @@ Start with these before adding new structures:
 - Triage state is recorded as a `Status:` line using the canonical strings in `docs/agents/triage-labels.md`.
 - This is a single-context repo: use `CONTEXT.md` and `docs/adr/` for domain vocabulary and decisions; see `docs/agents/domain.md`.
 - ADR style follows `memory:penroseart-adr-conventions`.
+- **Document what you touch:** any symbol you touch or create gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). See `docs/adr/0014-document-what-you-touch.md`.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.
 
 ## Project-wide Boundaries
