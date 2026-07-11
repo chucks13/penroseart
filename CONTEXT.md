@@ -343,15 +343,18 @@ _Avoid_: giving one Span offerings another lacks; inventing a new span-like conc
 
 **Edge**:
 The one-frame fact that a musical moment just happened: a Span started or ended, a labeled state changed, a new Grid began, a rhythm gate opened. The hub owns Edges — it runs continuously across effect swaps, so it genuinely witnesses each onset — and serves them as polled, frame-coherent reads: true during exactly the frame the hub observed the moment, identical for every reader that frame. An Edge carries no payload; the state read beside it answers "to what".
-_Avoid_: effects hand-rolling private edge latches from level-like reads; push-style event subscriptions; putting payload on an Edge.
+_Avoid_: effects hand-rolling private edge latches for moments the hub already serves (effect-defined moments — e.g. a kick threshold an effect picks for itself on Levels — are legitimately effect-side); push-style event subscriptions; putting payload on an Edge; "level-like reads" for state polling (collides with Levels, the audio bands — say state reads).
 
 **Stock Envelope**:
 A ready-made curve the hub serves over any Span, in two shapes: **Build** (rises across its window) and **Decay** (peaks at the Span's start and falls). Anchored at the Span's start; duration is set in beats and defaults to the Span's own length. Stock means the curve's character is fixed — an effect wanting a different response hand-rolls from state and Edges, which stays fully free.
 _Avoid_: naming envelopes after artistic gestures (slam, flash, swell — those are what effects do with them); treating Stock Envelopes as the only sanctioned response to a Span.
 
 **Levels**:
-The live low/mid/high audio band magnitudes, normalized — each band carries its own rhythm. Delivered smoothed (tunable): flicker (unintentional jitter) is the enemy; strobing (intentional rhythm) is the point.
+The live low/mid/high audio band triple — each band normalized 0..1 to the track's own maxima by the sender, each carrying its own rhythm. Served in three forms of the same triple, and effects pick by temperament: **Normalized** (the wire fact, untouched), **Smoothed** (attack/release-followed), **Peak** (current peak with tempo-based fall-off). One triple shape everywhere, carrying its own readings (average energy, strongest band, spectral centroid, band dominance); the forms are available all together or not at all. The readings double as the source vocabulary for the Color Bank's knobs.
+_Avoid_: "flicker is the enemy" (retired as a data-delivery rationale — the wire runs at frame rate and effects handle whatever arrives; distinct from the standing Duration safety limit on authored full-wall strobing, which this retirement does not touch); treating Levels as loudness or mixer meters (track-relative by contract); serving a band value in any spelling outside the three forms.
 
 **Color Bank**:
-The set of beat-synced colors contrived from the Levels for effects to pull from — or ignore. Three forms: raw RGB (bands as channel brightness, black to bright — rhythm as brightness), hue/saturation (rhythm as color change), and palette-mediated (bands choose positions within the active palette, keeping the wall's look cohesive).
-_Avoid_: treating the Bank as mandatory; bypassing the palette system without meaning to.
+Three parameterized color mappings carried by the Levels triple — RGB, HSV, and palette-mediated (the caller hands in the palette) — working on any form, so an effect colors with its chosen temperament: peak color snaps, smoothed color glides, normalized color mirrors the wire. Every component of a color model is driven by a source knob picked from the shared readings vocabulary (a band, a reading, or a constant); with no knobs turned, the classic wirings answer — low/mid/high onto RGB, centroid/dominance/strongest onto HSV, centroid choosing the palette position with the strongest band as brightness.
+_Avoid_: treating the Bank as mandatory; baking a wiring the knobs should choose; the Bank fetching a palette on its own; calling the mappings "forms" (form is a Levels word — Normalized/Smoothed/Peak).
+
+

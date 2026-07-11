@@ -65,6 +65,19 @@ brightness), hue/saturation (rhythm as color change), palette-mediated (cohesive
 active GPalette). Wall-wide use of raw levels can reproduce the flicker hazard that made
 ADR-0001 exclude 32nd notes; the smoothing floor is the corresponding safeguard.
 
+### Amendment (2026-07-11, Hunter, beat-data-interface ticket 07)
+
+This section is superseded; the rest of the ADR stands. The smoothing floor is
+**retracted**: the flicker hazard was this ADR's inference by analogy with ADR-0001's
+32nd-note exclusion, never an observed fact — the wire updates at ~60 Hz and the app
+renders at 60 fps, so effects handle whatever arrives. Levels now serve **three forms of
+one triple** — Normalized (the raw wire fact, per ADR-0013's floor), Smoothed (this ADR's
+smoothing, keeping its attack/release knobs), Peak (tempo-based fall-off, fixed policy) —
+and the Color Bank's three fixed forms became **parameterized mappings** (RGB/HSV/palette)
+whose component sources are effect-chosen knobs, defaulting to this section's wirings.
+The palette is caller-supplied; BeatManager's reach into `EffectBase.APalette` is deleted.
+Details: beat-data-interface ticket 07 and CONTEXT.md (Levels, Color Bank).
+
 ## One home, thin accessors, full unification
 Queries live on `BeatManager` only. `EffectBase` and `TransitionBase` each carry a
 one-line `beatManager` accessor (TransitionBase gains it; previously transitions had no
