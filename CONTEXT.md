@@ -23,7 +23,7 @@ Provides the shared rhythm state for effects and the Director. It can run from t
 
 - **BeatData**: Shared BPM/current-beat/timing state plus raw Rave on-air values for Fill, Drop, Energy, Track Phase, Levels, and Pulse.
 - **Nullable queries**: `BeatManagerQueries` exposes ready-to-use rhythm values where `null` means not available right now.
-- **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, finer durations, and syncopation. The current code and docs disagree on the numbering of variants 4/5/6; confirm intended behavior before changing it.
+- **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, finer durations, and syncopation, drawn from the Waveform Pool. Pool order is the single numbering truth (the old hardcoded switch whose numbering once disagreed with docs is gone; historical notes on that live in `docs/investigation/`).
 - **Rhythmic Logic**: Uses an x^4 decay curve to create sharp visual kicks without making off-beat visuals too dark.
 - **Propagation**: Mixers can pass rhythm to children, let children choose independently, or suppress child pulsing.
 
@@ -111,7 +111,8 @@ The idealized-clock members of the pulse family: signals derived from the Bar Ph
 _Avoid_: folding these into Waveforms (a Duration Pulse is parametric and instant, not an authored shape); the retired name "subdivision pulses/gates"; treating the four pulse offerings as duplicates of one datum.
 
 **Waveform Synthesizer**:
-The always-running runtime service effects pull from. The live pulse keeps a Bar Phase clock turning; given any Waveform spec, the synthesizer evaluates it against the current Bar Phase and hands back a brightness in `[0..1]` on demand. Effects do not own the clock — they own (or request) a Waveform and ask for its value *now*. The Waveform spec is the request; it can be typed inline in effect code, named as a Preset, or chosen at random.
+The always-running runtime service effects pull from. The live pulse keeps a Bar Phase clock turning; given any Waveform, the synthesizer evaluates it against the current Bar Phase and hands back a brightness in `[0..1]` on demand — nullable: with no clock running there is no bar position, so the evaluation reads null and each consumer chooses its own Standalone response. Effects do not own the clock — they hold a Waveform value (drawn at random by Energy, requested by Preset name, or typed inline) and ask for its value *now*. Evaluation is the synthesizer's one primitive; brightness and time seasoning live effect-side.
+_Avoid_: index addressing in any form (a Pool position may change at any time; names are the stable handle); a second evaluation spelling on the provider.
 
 **Preset**:
 A named, saved Waveform spec — a convenience handle for a `sequence + amplitude + rounding + offset` bundle so it can be referred to by name instead of retyping the notation. Presets are *optional* for any single lookup: the synthesizer works on any spec, inline or named. The plain Beat Pulse (`QQQQ` / `8888`) is the canonical default.
@@ -124,9 +125,9 @@ The hand-vetted collection of Presets that random selection draws from, so a ran
 The wall-wide override that pins every effect to a single Pool Preset, so the whole installation pulses to one chosen rhythm instead of each effect rolling its own. Its released state is **Auto**: each effect picks its own variant as it starts. Engaging the lock fixes future effect starts *and* retargets the effect already on screen, so the change is immediate; releasing it returns the wall to Auto. Surfaced two-way in the Beat Manager dashboard's Waveform selector.
 _Avoid_: conflating the lock (wall-wide, persists across effect changes) with an effect's own per-instance variant choice.
 
-**Waveform Pattern** (future):
-A choreographed routine assembled from single-bar Waveforms placed in sequence — bars composed into a multi-bar dance routine. Today Waveforms are single-bar only and the Pool holds individual bars; Patterns are the planned next step.
-_Avoid_: treating today's single-bar Waveform as the final form; using "pattern" for one bar's hump sequence.
+**Routine**:
+A 16-beat choreography — exactly one Grid — assembled from single-bar Waveforms: an energy-level sequence (e.g. Low, Low, High, Mid) whose slots are filled by random draws from the Pool at each level. The arrival of the formerly-planned "Waveform Pattern": fixed Grid length, composed by Energy. Its surface (sequence sources, lifecycle, lock interplay) is designed in its own effort.
+_Avoid_: "Waveform Pattern" (retired name); any Routine length other than one Grid; using "pattern" for one bar's hump sequence; treating a Routine as a new evaluation model (it composes the same Waveforms the synthesizer already evaluates).
 
 **Visual Tool** (the waveform "designer" web app):
 A standalone browser sketchpad for *seeing* what a Waveform's notation looks like before committing it. Purely a visualizer/design aid — it is not the authoring pipeline and the runtime does not depend on it or its exported JSON.
@@ -334,8 +335,8 @@ The shared text vocabulary for the nullable beat/count values of the rhythm quer
 _Avoid_: re-deriving the "—"-for-null formatting per row; treating "—" as an error rather than the ordinary absent state.
 
 **Energy**:
-The track's current intensity as a closed three-step vocabulary — Low, Mid, High — with the next level and a beat countdown to the change. Direction (rising/falling/steady) follows from comparing current and next; "rising, change in 8 beats" is the build-up signal. A steady run of one level, with its known length and countdown, is a **Span** (the Energy run).
-_Avoid_: treating Energy labels as open text; confusing Energy (phrase-level intensity) with Levels (instantaneous audio bands).
+Intensity on one closed three-step ladder — Low, Mid, High — the shared vocabulary wherever intensity is spoken, whatever the subject. The **track's** Energy is a wire fact: the current level, the next level, and a beat countdown to the change. Direction (rising/falling/steady) follows from comparing current and next; "rising, change in 8 beats" is the build-up signal. A steady run of one level, with its known length and countdown, is a **Span** (the Energy run). A **Waveform's** Energy is derived from its shape — how many peaks it has and how tightly they pack — computed from the notation itself, never authored or stored, so it can never disagree with the shape and covers every Waveform, Pool or inline. It exists so selection can draw dance steps by intensity.
+_Avoid_: treating Energy labels as open text; confusing Energy (phrase-level intensity) with Levels (instantaneous audio bands); "Medium" (the middle tier is **Mid**); storing a Waveform's Energy in the Pool file or a per-entry label (it is a pure function of the notation); per-subject ladders or extra tiers.
 
 **Span**:
 Anything musical with an inside — a start, an extent, an end: a Fill, a Drop, a Loop, a Phrase (whatever name it carries, Intro through Outro), a Grid, an Energy run. Every Span makes the same uniform offering: its state, its started/ended **Edges**, and its **Stock Envelopes** — no per-concept exceptions.
@@ -347,7 +348,7 @@ _Avoid_: effects hand-rolling private edge latches for moments the hub already s
 
 **Stock Envelope**:
 A ready-made curve the hub serves over any Span, in two shapes: **Build** (rises across its window) and **Decay** (peaks at the Span's start and falls). Anchored at the Span's start; duration is set in beats and defaults to the Span's own length. Stock means the curve's character is fixed — an effect wanting a different response hand-rolls from state and Edges, which stays fully free.
-_Avoid_: naming envelopes after artistic gestures (slam, flash, swell — those are what effects do with them); treating Stock Envelopes as the only sanctioned response to a Span.
+_Avoid_: naming envelopes after artistic gestures (slam, flash, swell — those are what effects do with them); treating Stock Envelopes as the only sanctioned response to a Span; stretching "envelopes rest at 0" to every envelope-shaped read — it is a Stock Envelope rule, true because an idle Span's zero is musically honest ("the build hasn't built"), whereas the Waveform evaluation is clock-dependent and reads null with no clock (no bar, no position — consumers choose their own Standalone default).
 
 **Levels**:
 The live low/mid/high audio band triple — each band normalized 0..1 to the track's own maxima by the sender, each carrying its own rhythm. Served in three forms of the same triple, and effects pick by temperament: **Normalized** (the wire fact, untouched), **Smoothed** (attack/release-followed), **Peak** (current peak with tempo-based fall-off). One triple shape everywhere, carrying its own readings (average energy, strongest band, spectral centroid, band dominance); the forms are available all together or not at all. The readings double as the source vocabulary for the Color Bank's knobs.
