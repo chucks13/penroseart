@@ -334,8 +334,20 @@ The shared text vocabulary for the nullable beat/count values of the rhythm quer
 _Avoid_: re-deriving the "—"-for-null formatting per row; treating "—" as an error rather than the ordinary absent state.
 
 **Energy**:
-The track's current intensity as a closed three-step vocabulary — Low, Mid, High — with the next level and a beat countdown to the change. Direction (rising/falling/steady) follows from comparing current and next; "rising, change in 8 beats" is the build-up signal.
+The track's current intensity as a closed three-step vocabulary — Low, Mid, High — with the next level and a beat countdown to the change. Direction (rising/falling/steady) follows from comparing current and next; "rising, change in 8 beats" is the build-up signal. A steady run of one level, with its known length and countdown, is a **Span** (the Energy run).
 _Avoid_: treating Energy labels as open text; confusing Energy (phrase-level intensity) with Levels (instantaneous audio bands).
+
+**Span**:
+Anything musical with an inside — a start, an extent, an end: a Fill, a Drop, a Loop, a Phrase (whatever name it carries, Intro through Outro), a Grid, an Energy run. Every Span makes the same uniform offering: its state, its started/ended **Edges**, and its **Stock Envelopes** — no per-concept exceptions.
+_Avoid_: giving one Span offerings another lacks; inventing a new span-like concept instead of asking whether the thing is simply a Span.
+
+**Edge**:
+The one-frame fact that a musical moment just happened: a Span started or ended, a labeled state changed, a new Grid began, a rhythm gate opened. The hub owns Edges — it runs continuously across effect swaps, so it genuinely witnesses each onset — and serves them as polled, frame-coherent reads: true during exactly the frame the hub observed the moment, identical for every reader that frame. An Edge carries no payload; the state read beside it answers "to what".
+_Avoid_: effects hand-rolling private edge latches from level-like reads; push-style event subscriptions; putting payload on an Edge.
+
+**Stock Envelope**:
+A ready-made curve the hub serves over any Span, in two shapes: **Build** (rises across its window) and **Decay** (peaks at the Span's start and falls). Anchored at the Span's start; duration is set in beats and defaults to the Span's own length. Stock means the curve's character is fixed — an effect wanting a different response hand-rolls from state and Edges, which stays fully free.
+_Avoid_: naming envelopes after artistic gestures (slam, flash, swell — those are what effects do with them); treating Stock Envelopes as the only sanctioned response to a Span.
 
 **Levels**:
 The live low/mid/high audio band magnitudes, normalized — each band carries its own rhythm. Delivered smoothed (tunable): flicker (unintentional jitter) is the enemy; strobing (intentional rhythm) is the point.
