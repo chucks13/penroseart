@@ -45,5 +45,6 @@ fact survives — as ordinary members of their concept groups, not a distinct ra
 ## Consequences
 
 - This ADR supplies the tests, not the verdicts: whether any particular member survives,
-  merges, or is cut is decided per cluster with Hunter, recorded in the effort's tickets
-  with original names and locations for git recoverability.
+  merges, or is cut was decided per cluster with Hunter during the beat-data-interface
+  effort. Every cut is a proven duplicate spelling of data that still lives, and is
+  recoverable from git history on the effort branch by its original member name.

@@ -133,8 +133,8 @@ _Avoid_: "Waveform Pattern" (retired name); any Routine length other than one Gr
 A standalone browser sketchpad for *seeing* what a Waveform's notation looks like before committing it. Purely a visualizer/design aid — it is not the authoring pipeline and the runtime does not depend on it or its exported JSON.
 
 **Beat Pulse**:
-The standard rhythmic signal: a value in `[0..1]` that peaks on the quarter-note beat and falls back before the next. It is the default/canonical Waveform — the one all others are generated from.
-_Avoid_: equating it with the raw OSC scalar; the runtime regenerates a shaped pulse locally.
+The standard rhythmic signal: a value in `[0..1]` that peaks on the quarter-note beat and falls back before the next. It is the default/canonical Waveform — the plain every-beat Preset (`QQQQ` / `8888`).
+_Avoid_: equating it with the raw OSC scalar; the runtime regenerates a shaped pulse locally; "the one all others are generated from" (retired mental model — Pool Waveforms are authored, not derived from the Beat Pulse).
 
 **Bar Phase**:
 The normalized position within the current measure (0 on the downbeat, 1 at the next downbeat). The clock every Waveform is evaluated against — owned and turned by the Waveform Synthesizer, derived from the live beat timing and kept locked to the DJ — and offered on the Data Surface like everything else, along with **Beat Fraction**, its sub-beat half (position within the current beat, 0..1). Consumers are never constrained: an effect wanting raw musical position reads the clock instead of hand-rolling a private metronome from wire facts.
@@ -316,9 +316,9 @@ _Avoid_: using Selected Grid Boundary as the canonical name for Cue Sheet items;
 The wall's 1-based grid beat within the current Grid (the wire's `beat`, 1..16). A 4-beat Runway begins at grid beat 13 so the Impact Point lands on the next Grid Boundary: `13, 14, 15, 16, X`.
 _Avoid_: zero-based beat-zero language; using millisecond timing when beat counts are available.
 
-**`BeatManager.Grid` (`GridInfo`)**:
-The effect-facing read of the live **Grid**: a nullable `GridInfo { State, Beat, Progress }` (null = not on a grid). `State` is the **Grid State** `GridState`; `Beat` is the 1..16 **Grid Beat**; `Progress` is the 0..1 position through the 16-beat Grid. The Grid reading is decoded from the wire by RaveSystem OSC and boundaried into BeatManager; effects read only this facade, never the Switching layer or the Director. `GridInfo` is deliberately named to stand clear of the phrase-side `PhraseInfo` (the **Track Phase** read); these were once the one-letter twin `PhaseInfo`/`PhraseInfo`, and renaming the cyclic side to **Grid** is what resolved that collision.
-_Avoid_: reaching into `Director` from an effect; treating a null `Grid` as an error rather than "not on a grid right now".
+**`BeatManager.Grid`** (the Grid doorway):
+The effect-facing read of the live **Grid** — an always-present doorway whose facts are nullable inside. The facts (the **Grid State**, the 1..16 **Grid Beat**, the bar within the cycle, the 0..1 progress) read null together when the wire places no grid — a Standalone read, not an error — while the doorway's signals stay readable: the wrap **Edge** (the 16-count returning to the One) and the Build/Decay **Stock Envelopes**. Decoded from the wire by RaveSystem OSC and boundaried into BeatManager; effects read only this doorway, never the Switching layer or the Director. The cyclic side is deliberately named **Grid** to stand clear of the phrase-side **Track Phase** read; they were once one-letter twins, and the rename is what resolved that collision.
+_Avoid_: reaching into `Director` from an effect; treating null grid facts as an error rather than "not on a grid right now"; a nullable doorway (retired shape — the doorway stays present so its Edges and Envelopes outlive the facts).
 
 **Fill**:
 A one-to-four-beat musical section at the end of a Phrase, described by BeatManager's Fill state. A Phrase's end usually lines up with a Grid Boundary, but not always. Two visible sides: *upcoming* (a beat countdown to its start) and *in progress* (position through it). The Director only uses Fill state to cast Effects and Transitions whose Repertoire says they support Fill for the relevant Cue. The selected Effect or Transition owns how it renders the Fill from BeatManager data.

@@ -17,3 +17,15 @@ Entering Standalone resets the cue planner and clears the Switcher's loaded cue.
 ## Rejected: a mode enum with an entry/exit event
 
 Exposing `SourceMode { Standalone, Synced }` and raising an event on change — to host entry/exit work — was considered. A single `bool` plus reaching `TickStandaloneMode` fixes both the freeze and the cue teardown with one consumer of the boundary. The enum-and-event earns its keep only when a second consumer needs the transition; until then it is speculation.
+
+### Amendment (2026-07-11, Hunter, beat-data-interface effort)
+
+`IsSynced` is the flag's **only** spelling. The `IsActive` alias — this ADR's
+consolidation bridge (`=> IsSynced`) — is retired: an exact alias is a duplicate
+spelling, and the Data Surface serves every datum exactly once (ADR-0013). The public
+`IsLiveSource` member is retired too: connectivity never earns a Data Surface offering.
+The transport-liveness timeout survives as the private mechanism that clears wire state
+when packets stop — which is what turns `IsSynced` false — and debug views mirror
+internals downstream instead of keeping a public member alive (ADR-0016). Everything
+else here stands: the running 4-count is the one mode authority, owned by BeatManager,
+read by every consumer.

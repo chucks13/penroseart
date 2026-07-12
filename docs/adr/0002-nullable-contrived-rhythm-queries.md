@@ -76,7 +76,7 @@ smoothing, keeping its attack/release knobs), Peak (tempo-based fall-off, fixed 
 and the Color Bank's three fixed forms became **parameterized mappings** (RGB/HSV/palette)
 whose component sources are effect-chosen knobs, defaulting to this section's wirings.
 The palette is caller-supplied; BeatManager's reach into `EffectBase.APalette` is deleted.
-Details: beat-data-interface ticket 07 and CONTEXT.md (Levels, Color Bank).
+Details: CONTEXT.md (Levels, Color Bank).
 
 ## One home, thin accessors, full unification
 Queries live on `BeatManager` only. `EffectBase` and `TransitionBase` each carry a
@@ -118,3 +118,27 @@ effects to the wire shape.
   the structs encode today's contract and may evolve with it.
 - `BeatData` remains Inspector-visible and sentinel-based, as the raw foldout of the
   single unified BeatManager dashboard drawer (one drawer for raw and contrived values).
+
+### Amendment (2026-07-11, Hunter, beat-data-interface effort)
+
+Three further sections are superseded by the BeatManager Data Surface redesign. The core
+contract of this ADR stands and is generalized application-wide by ADR-0012: `null` is
+the ordinary spelling of "not available," sentinels never cross the surface, and every
+consumer owns its Standalone response.
+
+- **"Fill and Drop share one two-phase shape"**: `PhraseEventInfo?` is replaced by the
+  uniform span view — every Span (Fill, Drop, Phrase, Grid, Loop, Energy run) serves the
+  same shape: nullable facts, Started/Ended Edges, Build/Decay Stock Envelopes
+  (ADR-0015). The anticipation side survives as next-occurrence countdowns served beside
+  each Span; the Energy and Track Phase structs (`EnergyInfo?`, `PhaseInfo?`) reshape
+  into the Energy and Phrase doorway views the same way.
+- **"One home, thin accessors"**: musical data lives on two sibling read-only surfaces —
+  BeatManager (the Data Surface, organized as concept doorways) and the Waveform
+  Synthesizer (its own root, the base `synth` property beside `beatManager`) — both
+  under ADR-0012. Effects and transitions are treated the exact same: both bases carry
+  both accessors and the same held-Waveform convenience.
+- **"Raw values flow through the same seam" / Consequences**: raw facts still flow
+  through the surface (that ruling stands, hardened by ADR-0013), but the public mutable
+  `beatData` field goes private and is no longer anyone's Inspector contract — dashboards
+  mirror the core downstream (ADR-0016), never read transport state through a public
+  field.

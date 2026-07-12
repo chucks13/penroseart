@@ -24,3 +24,23 @@ A malformed spec (widths not summing to a bar, mismatched string lengths) is log
 - Call sites barely change: `BeatManager.GetBeatBrightness(...)` keeps its shape and swaps internals; `GetRandomVariant` becomes "draw a Waveform from the Pool." The ~18 effect call sites are untouched.
 - Random selection by song energy/direction (OSC `energy_state`) is now a natural extension point on `GetRandomVariant`, but is deferred — the incoming OSC data isn't finalized.
 - The visualization is bound to the synthesizer's `Evaluate`, so the drawer plot cannot drift from runtime behavior.
+
+### Amendment (2026-07-11, Hunter, beat-data-interface effort)
+
+The first two Consequences bullets are superseded — call sites do change, because a
+better shape exists and preserving the old one was never the point. The synthesizer is
+its own readable surface beside BeatManager (the base `synth` property beside
+`beatManager`) offering **one evaluation primitive**: the envelope of a given Waveform at
+the current Bar Phase, nullable when no clock runs. The provider-side conveniences
+`GetBeatBrightness`/`GetBeatTime` are retired; brightness and time seasoning live
+effect-side as the canonical base helpers, closing over the effect's held Waveform —
+seasoning belongs to the only layer that knows it, and one primitive instead of three
+spellings deepens the module. The deferred energy extension arrived as the Energy-set
+draw (`Random(params Energy[])`): a Waveform's Energy is derived from its notation
+(max of density tier and gap tier), never authored or stored. **Index addressing is
+retired in every form** — effects hold Waveform *values*, acquired by draw, by Preset
+name, or inline; a Pool position may change at any time. Everything else in this ADR
+stands: the notation model, the Pool file, malformation handling, and the sixteenth
+safety limit (re-affirmed on its own merits as an authored full-wall strobe hazard).
+Vocabulary: CONTEXT.md (Waveform Synthesizer, Energy, Waveform Hold); contracts:
+ADR-0012, ADR-0013, ADR-0015, ADR-0016.
