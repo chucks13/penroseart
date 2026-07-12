@@ -17,13 +17,9 @@ using UnityEngine;
 /// reaches into <see cref="BeatManager"/>; it edits the file, and the runtime re-reads the file on load.
 /// </para>
 /// <para>
-/// Each row is held as a <see cref="Draft"/> of <b>raw editable strings</b>, deliberately NOT a parsed
-/// <see cref="Waveform"/>. A half-typed sequence or amplitude would otherwise trip <see cref="Waveform.Parse"/>
-/// — which logs on every length/width defect — on every keystroke. The fields that feed the <c>humps</c> array
-/// (sequence, amplitude) commit through <see cref="EditorGUI.DelayedTextField"/>, so a re-parse (and any log) only
-/// fires on an intentional commit (Enter / focus loss). <see cref="Waveform.rounding"/> and
-/// <see cref="Waveform.offset"/> are read live by <see cref="Waveform.Evaluate"/> — they are not baked into the
-/// humps — so the sliders poke them straight onto the cached preview with no re-parse and no log noise at all.
+/// Each row is held as a <see cref="Draft"/> of raw editable fields plus an immutable parsed preview. The raw fields
+/// remain the source of truth while editing; whenever their values change, the cached <see cref="Waveform"/> is
+/// replaced with a freshly parsed value representing the complete current Draft.
 /// </para>
 /// <para>
 /// The list ORDER is load-bearing: the legacy <c>int beatVariant</c> currency indexes it and
@@ -55,11 +51,10 @@ public sealed class WaveformPoolEditor : EditorWindow
         public float rounding;
         public float offset;
 
-        /// <summary>The last committed parse of <see cref="sequence"/>/<see cref="amplitude"/>, what the plot draws.</summary>
+        /// <summary>The immutable parsed value for the current Draft fields, which the plot draws.</summary>
         public Waveform preview;
 
-        /// <summary>Re-parses the humps from the current sequence/amplitude. Call only on a committed seq/amp edit
-        /// (this is the one place <see cref="Waveform.Parse"/> may log a malformation), not on every repaint.</summary>
+        /// <summary>Replaces <see cref="preview"/> after the Draft's sequence or amplitude changes.</summary>
         public void RebuildPreview()
         {
             preview = Waveform.Parse(sequence, amplitude, rounding, offset);
@@ -280,6 +275,7 @@ public sealed class WaveformPoolEditor : EditorWindow
         }
     }
 
+    /// <summary>Draws the selected Draft fields and its immutable parsed preview.</summary>
     private void DrawEditor()
     {
         using (new EditorGUILayout.VerticalScope())
@@ -311,8 +307,7 @@ public sealed class WaveformPoolEditor : EditorWindow
                 SetDirty(true);
             }
 
-            // Rounding/offset are pure Evaluate parameters — set them straight onto the cached preview struct so the
-            // plot updates live without a re-parse (and therefore without any log), even mid-drag.
+            // Rounding/offset are part of the immutable preview value, so replace it when either Draft field changes.
             EditorGUI.BeginChangeCheck();
             var newRounding = EditorGUILayout.Slider(
                 new GUIContent("Rounding", "0 sharp triangle → ~0.5 cosine dome → 1 flat top. Trough always 0."),
@@ -324,8 +319,7 @@ public sealed class WaveformPoolEditor : EditorWindow
             {
                 d.rounding = newRounding;
                 d.offset = newOffset;
-                d.preview.rounding = newRounding;
-                d.preview.offset = newOffset;
+                d.preview = Waveform.Parse(d.sequence, d.amplitude, newRounding, newOffset);
                 SetDirty(true);
             }
 

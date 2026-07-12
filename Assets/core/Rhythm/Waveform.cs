@@ -5,6 +5,10 @@ using UnityEngine;
 /// </summary>
 /// <remarks>
 /// <para>
+/// A Waveform is an immutable value. Acquire a new value through <see cref="Parse(string,string,float,float)"/>;
+/// nothing edits a Waveform in place after parsing constructs it.
+/// </para>
+/// <para>
 /// A Waveform is the data-driven replacement for the old hardcoded <c>beatVariant</c> integers. It
 /// describes <em>any</em> one-bar rhythm with four parts:
 /// </para>
@@ -43,7 +47,7 @@ using UnityEngine;
 /// self-corrects on the next downbeat. Nothing silently falls back to the plain pulse.
 /// </para>
 /// </remarks>
-public struct Waveform
+public readonly struct Waveform
 {
     /// <summary>Beats in one bar. The notation is defined in 4/4, so a bar is four quarter-note beats.</summary>
     public const int BeatsPerBar = 4;
@@ -63,37 +67,65 @@ public struct Waveform
     private const float FlatTopMaxFraction = 0.85f;
 
     /// <summary>The raw sequence string (note-value tokens), kept verbatim for display and canonical rewrite.</summary>
-    public string sequence;
+    public readonly string sequence;
 
     /// <summary>The raw amplitude string (digits 0–8), kept verbatim for display and canonical rewrite.</summary>
-    public string amplitude;
+    public readonly string amplitude;
 
     /// <summary>Peak shape, 0 (sharp triangle) → cosine dome → flat top. Clamped to [0..1] when shaping.</summary>
-    public float rounding;
+    public readonly float rounding;
 
     /// <summary>Phase shift in beats. 0 leaves the Waveform on the beat; 0.5 lands it on the offbeat "&".</summary>
-    public float offset;
+    public readonly float offset;
 
     /// <summary>Parsed Hump slots laid end-to-end across the bar. Built by <see cref="Parse(string,string,float,float)"/>.</summary>
-    private Hump[] humps;
+    private readonly Hump[] humps;
 
     /// <summary>True when parsing found a defect (length mismatch, bad token, widths not summing to a bar).</summary>
-    private bool malformed;
+    private readonly bool malformed;
 
     /// <summary>Whether this Waveform parsed with a logged defect. It still evaluates safely against one bounded bar.</summary>
     public bool IsMalformed => malformed;
 
+    /// <summary>Creates one fully parsed immutable Waveform value.</summary>
+    /// <param name="sequence">Raw note-value tokens retained for display and canonical rewrite.</param>
+    /// <param name="amplitude">Raw amplitude digits retained for display and canonical rewrite.</param>
+    /// <param name="rounding">Peak shape scalar.</param>
+    /// <param name="offset">Phase shift in beats.</param>
+    /// <param name="humps">Parsed Hump slots laid end-to-end across the bar.</param>
+    /// <param name="malformed">Whether parsing found and logged a defect.</param>
+    private Waveform(string sequence, string amplitude, float rounding, float offset, Hump[] humps, bool malformed)
+    {
+        this.sequence = sequence;
+        this.amplitude = amplitude;
+        this.rounding = rounding;
+        this.offset = offset;
+        this.humps = humps;
+        this.malformed = malformed;
+    }
+
     /// <summary>A single Hump's time slot in bar-fraction units, plus its normalized height.</summary>
-    private struct Hump
+    private readonly struct Hump
     {
         /// <summary>Slot start as a fraction of the bar, in [0..1). The beat is at this instant.</summary>
-        public float start;
+        public readonly float start;
 
         /// <summary>Slot width as a fraction of the bar (quarter = 0.25, eighth = 0.125, …).</summary>
-        public float width;
+        public readonly float width;
 
         /// <summary>Hump height in [0..1] (amplitude digit ÷ 8). 0 = silent Hump = skipped beat.</summary>
-        public float amp;
+        public readonly float amp;
+
+        /// <summary>Creates one immutable parsed Hump slot.</summary>
+        /// <param name="start">Slot start as a fraction of the bar.</param>
+        /// <param name="width">Slot width as a fraction of the bar.</param>
+        /// <param name="amp">Normalized Hump height.</param>
+        public Hump(float start, float width, float amp)
+        {
+            this.start = start;
+            this.width = width;
+            this.amp = amp;
+        }
 
         /// <summary>
         /// Whether this Hump sounds: nonzero Amplitude, a real time slot, and a start inside the
@@ -125,24 +157,16 @@ public struct Waveform
     /// <param name="offset">Phase shift in beats.</param>
     public static Waveform Parse(string sequence, string amplitude, float rounding, float offset)
     {
-        var wf = new Waveform
-        {
-            sequence = sequence ?? "",
-            amplitude = amplitude ?? "",
-            rounding = rounding,
-            offset = offset,
-            malformed = false,
-        };
-
-        var seq = wf.sequence;
-        var amp = wf.amplitude;
+        var seq = sequence ?? "";
+        var amp = amplitude ?? "";
+        var malformed = false;
 
         // Amplitude is read 1:1 against the sequence. A length mismatch is a defect we log and tolerate:
         // a missing digit reads as silent (0), an extra digit is ignored. We do not pad or truncate the
         // stored strings — the raw spec is preserved for canonical rewrite.
         if (seq.Length != amp.Length)
         {
-            wf.malformed = true;
+            malformed = true;
             Debug.LogWarning($"[Waveform] sequence/amplitude length mismatch ({seq.Length} vs {amp.Length}) " +
                              $"in \"{seq}\" / \"{amp}\" — missing digits read as silent.");
         }
@@ -155,18 +179,16 @@ public struct Waveform
             if (widthBeats <= 0f)
             {
                 // Unknown token: log, give it zero width so it occupies no time, and keep parsing the rest.
-                wf.malformed = true;
+                malformed = true;
                 Debug.LogWarning($"[Waveform] unknown sequence token '{seq[i]}' in \"{seq}\" — expected one of W H Q E S.");
-                humps[i] = new Hump { start = cursorBeats / BeatsPerBar, width = 0f, amp = 0f };
+                humps[i] = new Hump(cursorBeats / BeatsPerBar, 0f, 0f);
                 continue;
             }
 
-            humps[i] = new Hump
-            {
-                start = cursorBeats / BeatsPerBar,
-                width = widthBeats / BeatsPerBar,
-                amp = AmplitudeAt(amp, i),
-            };
+            humps[i] = new Hump(
+                cursorBeats / BeatsPerBar,
+                widthBeats / BeatsPerBar,
+                AmplitudeAt(amp, i));
             cursorBeats += widthBeats;
         }
 
@@ -175,13 +197,12 @@ public struct Waveform
         // bar simply never reaches its trailing Humps.
         if (!Mathf.Approximately(cursorBeats, BeatsPerBar))
         {
-            wf.malformed = true;
+            malformed = true;
             Debug.LogWarning($"[Waveform] widths sum to {cursorBeats} beats, expected {BeatsPerBar} " +
                              $"in \"{seq}\" — evaluated against one bounded bar regardless.");
         }
 
-        wf.humps = humps;
-        return wf;
+        return new Waveform(seq, amp, rounding, offset, humps, malformed);
     }
 
     /// <summary>
