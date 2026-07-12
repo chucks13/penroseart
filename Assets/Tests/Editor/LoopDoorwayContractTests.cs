@@ -1,73 +1,20 @@
-// Contract tests for preserving every valid loop_state wire fact at the Loop doorway.
+// Contract tests for the Loop doorway's flat, nullable mirror of the loop_state wire lane.
 
 #nullable enable
 
-using System.Reflection;
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
 
 /// <summary>
-/// Pins the Loop doorway's region-versus-rolling contract from ADR-0013 using hand-worked wire
-/// examples: valid region facts survive idle playback, unavailable facts remain null, and a
-/// rolling span carries its measured length anchor.
+/// Pins the Loop doorway's flat wire-mirror contract with hand-worked lane values: rolling and set
+/// are independent facts, idle regions retain their measurements, and sentinels translate to null
+/// without derived span semantics.
 /// </summary>
 public sealed class LoopDoorwayContractTests
 {
-    /// <summary>An idle set region serves measured and nominal facts without claiming a rolling span.</summary>
+    /// <summary>A rolling, set lane serves every translated wire fact directly on the flat view.</summary>
     [Test]
-    public void IdleSetLoopServesRegionFactsWithoutRollingSpan()
-    {
-        var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
-        {
-            active = 0,
-            set = 1,
-            lengthBeats = 0.5f,
-            lengthMs = 234,
-            sizeNumerator = 1,
-            sizeDenominator = 2
-        };
-
-        beatManager.Update(0f);
-
-        var loop = beatManager.Loop;
-        Assert.That(loop.RegionSet, Is.True);
-        Assert.That(loop.Region, Is.Not.Null);
-        Assert.That(loop.Region!.Value.LengthBeats, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(loop.Region.Value.LengthMs, Is.EqualTo(234));
-        Assert.That(loop.Region.Value.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(loop.Span.Current, Is.Null);
-        Assert.That(loop.Span.Started, Is.False);
-        Assert.That(loop.Span.Ended, Is.False);
-    }
-
-    /// <summary>The complete all-sentinel lane serves neither a region nor a region-set answer.</summary>
-    [Test]
-    public void UnavailableLoopServesNoRegionOrRegionSet()
-    {
-        var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
-        {
-            active = -1,
-            set = -1,
-            lengthBeats = -1f,
-            lengthMs = -1,
-            sizeNumerator = -1,
-            sizeDenominator = -1
-        };
-
-        beatManager.Update(0f);
-
-        Assert.That(beatManager.Loop.Region, Is.Null);
-        Assert.That(beatManager.Loop.RegionSet, Is.Null);
-        Assert.That(beatManager.Loop.Span.Current, Is.Null);
-    }
-
-    /// <summary>A rolling loop serves both region and span facts, with measured beats as the span anchor.</summary>
-    [Test]
-    public void ActiveLoopServesRegionAndSpanWithMeasuredLengthAnchor()
+    public void RollingSetLoopServesAllFacts()
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
@@ -84,16 +31,83 @@ public sealed class LoopDoorwayContractTests
         beatManager.Update(0f);
 
         var loop = beatManager.Loop;
-        Assert.That(loop.Region, Is.Not.Null);
-        Assert.That(loop.Region!.Value.LengthBeats, Is.EqualTo(4f).Within(0.0001f));
-        Assert.That(loop.Region.Value.LengthMs, Is.EqualTo(1875));
-        Assert.That(loop.Region.Value.NominalSizeBeats, Is.EqualTo(4f).Within(0.0001f));
-        Assert.That(loop.Span.Current, Is.Not.Null);
-        Assert.That(loop.Span.Current!.Value.LengthBeats, Is.EqualTo(4f).Within(0.0001f));
+        Assert.That(loop.Rolling, Is.True);
+        Assert.That(loop.RegionSet, Is.True);
+        Assert.That(loop.LengthBeats, Is.EqualTo(4f).Within(0.0001f));
+        Assert.That(loop.LengthMs, Is.EqualTo(1875));
+        Assert.That(loop.NominalSizeBeats, Is.EqualTo(4f).Within(0.0001f));
+    }
 
-        var lengthAnchor = typeof(SpanView<LoopFacts>).GetField(
-            "lengthBeats", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(lengthAnchor, Is.Not.Null);
-        Assert.That(lengthAnchor!.GetValue(loop.Span), Is.EqualTo(4f).Within(0.0001f));
+    /// <summary>An idle, set lane preserves its measured and nominal region facts per ADR-0013.</summary>
+    [Test]
+    public void IdleSetLoopPreservesLengthsAndNominalSize()
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.WireSnapshot.loopState = new LoopState
+        {
+            active = 0,
+            set = 1,
+            lengthBeats = 0.5f,
+            lengthMs = 234,
+            sizeNumerator = 1,
+            sizeDenominator = 2
+        };
+
+        beatManager.Update(0f);
+
+        var loop = beatManager.Loop;
+        Assert.That(loop.Rolling, Is.False);
+        Assert.That(loop.RegionSet, Is.True);
+        Assert.That(loop.LengthBeats, Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(loop.LengthMs, Is.EqualTo(234));
+        Assert.That(loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
+    }
+
+    /// <summary>The complete all-sentinel lane translates every flat Loop fact to null.</summary>
+    [Test]
+    public void AllSentinelLoopServesAllNull()
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.WireSnapshot.loopState = new LoopState
+        {
+            active = -1,
+            set = -1,
+            lengthBeats = -1f,
+            lengthMs = -1,
+            sizeNumerator = -1,
+            sizeDenominator = -1
+        };
+
+        beatManager.Update(0f);
+
+        var loop = beatManager.Loop;
+        Assert.That(loop.Rolling, Is.Null);
+        Assert.That(loop.RegionSet, Is.Null);
+        Assert.That(loop.LengthBeats, Is.Null);
+        Assert.That(loop.LengthMs, Is.Null);
+        Assert.That(loop.NominalSizeBeats, Is.Null);
+    }
+
+    /// <summary>A zero measured beat length remains the wire's real zero rather than becoming null.</summary>
+    [Test]
+    public void ZeroLengthBeatsRemainsZero()
+    {
+        var beatManager = new BeatManager();
+        beatManager.SetLiveBeatSource(true);
+        beatManager.WireSnapshot.loopState = new LoopState
+        {
+            active = 0,
+            set = 0,
+            lengthBeats = 0f,
+            lengthMs = 0,
+            sizeNumerator = 0,
+            sizeDenominator = 0
+        };
+
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.Loop.LengthBeats, Is.EqualTo(0f));
     }
 }

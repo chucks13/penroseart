@@ -404,9 +404,9 @@ public sealed class BeatManagerSpanDoorwayTests
 
     // ---- Loop ---------------------------------------------------------------------------------
 
-    /// <summary>The contract's rolling-loop example: span facts serve, with the nominal size from the fraction.</summary>
+    /// <summary>The contract's rolling-loop bytes serve every fact directly on the flat Loop view.</summary>
     [Test]
-    public void LoopRollingServesSpanFactsFromRealBytes()
+    public void LoopRollingServesFlatFactsFromRealBytes()
     {
         var beatManager = new BeatManager();
         FeedWire(beatManager, (ref OscBundleWriter bundle) =>
@@ -414,24 +414,25 @@ public sealed class BeatManagerSpanDoorwayTests
         beatManager.Update(0f);
 
         var loop = beatManager.Loop;
-        Assert.That(loop.Span.Current, Is.Not.Null);
-        Assert.That(loop.Span.Current!.Value.LengthBeats, Is.EqualTo(4.0f).Within(0.0001f));
-        Assert.That(loop.Span.Current!.Value.LengthMs, Is.EqualTo(1875));
-        Assert.That(loop.Span.Current!.Value.NominalSizeBeats, Is.EqualTo(4.0f).Within(0.0001f));
+        Assert.That(loop.Rolling, Is.True);
+        Assert.That(loop.LengthBeats, Is.EqualTo(4.0f).Within(0.0001f));
+        Assert.That(loop.LengthMs, Is.EqualTo(1875));
+        Assert.That(loop.NominalSizeBeats, Is.EqualTo(4.0f).Within(0.0001f));
         Assert.That(loop.RegionSet, Is.True);
     }
 
-    /// <summary>Active and set answer different questions: a paused player's set region is real data outside the span.</summary>
+    /// <summary>Rolling and set stay independent: an idle player's set region and lengths remain real facts.</summary>
     [Test]
-    public void LoopSetButIdleRegionReadsRegionSetWithoutASpan()
+    public void LoopSetButIdlePreservesFlatRegionFacts()
     {
         var beatManager = new BeatManager();
         FeedWire(beatManager, (ref OscBundleWriter bundle) =>
             OnAirOscWriter.WriteLoopState(ref bundle, "/rave/onair/loop_state", 0, 1, 4.0f, 1875, 4, 1));
         beatManager.Update(0f);
 
-        Assert.That(beatManager.Loop.Span.Current, Is.Null, "nothing is rolling");
+        Assert.That(beatManager.Loop.Rolling, Is.False, "nothing is rolling");
         Assert.That(beatManager.Loop.RegionSet, Is.True, "the region persists while paused");
+        Assert.That(beatManager.Loop.LengthBeats, Is.EqualTo(4f).Within(0.0001f));
     }
 
     /// <summary>Fractional loops are real (a 1/2-beat loop is 0.5), and a 0/0 fraction is no nominal size, never a zero-beat loop.</summary>
@@ -443,17 +444,17 @@ public sealed class BeatManagerSpanDoorwayTests
         beatManager.WireSnapshot.loopState = new LoopState
         { active = 1, set = 1, lengthBeats = 0.5f, lengthMs = 234, sizeNumerator = 1, sizeDenominator = 2 };
         beatManager.Update(0f);
-        Assert.That(beatManager.Loop.Span.Current!.Value.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
 
         beatManager.WireSnapshot.loopState = new LoopState
         { active = 1, set = 1, lengthBeats = 0.5f, lengthMs = 234, sizeNumerator = 0, sizeDenominator = 0 };
         beatManager.Update(0f);
-        Assert.That(beatManager.Loop.Span.Current!.Value.NominalSizeBeats, Is.Null);
+        Assert.That(beatManager.Loop.NominalSizeBeats, Is.Null);
     }
 
-    /// <summary>No region (0 0 0.0 0 0 0) is a real "no" while the all-sentinel shape is null, and the span edges witness engage/release.</summary>
+    /// <summary>No region and rolling transitions remain direct facts, while the all-sentinel lane reads null.</summary>
     [Test]
-    public void LoopDistinguishesNoRegionFromUnavailableAndEdgesWitnessRolling()
+    public void LoopDistinguishesNoRegionAndRollingStatesFromUnavailable()
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
@@ -461,22 +462,22 @@ public sealed class BeatManagerSpanDoorwayTests
         { active = 0, set = 0, lengthBeats = 0f, lengthMs = 0, sizeNumerator = 0, sizeDenominator = 0 };
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.RegionSet, Is.False, "the wire's real answer: no region");
-        Assert.That(beatManager.Loop.Span.Current, Is.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.False);
 
         beatManager.WireSnapshot.loopState = new LoopState
         { active = 1, set = 1, lengthBeats = 4f, lengthMs = 1875, sizeNumerator = 4, sizeDenominator = 1 };
         beatManager.Update(0f);
-        Assert.That(beatManager.Loop.Span.Started, Is.True, "idle → rolling is the witnessed engage");
+        Assert.That(beatManager.Loop.Rolling, Is.True);
 
         beatManager.WireSnapshot.loopState = new LoopState
         { active = 0, set = 1, lengthBeats = 4f, lengthMs = 1875, sizeNumerator = 4, sizeDenominator = 1 };
         beatManager.Update(0f);
-        Assert.That(beatManager.Loop.Span.Ended, Is.True, "rolling → idle is the witnessed release");
+        Assert.That(beatManager.Loop.Rolling, Is.False);
 
         beatManager.WireSnapshot.loopState = LoopState.Unavailable;
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.RegionSet, Is.Null, "the all-sentinel shape is unavailable, not a no");
-        Assert.That(beatManager.Loop.Span.Current, Is.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.Null);
     }
 
     // ---- Grid ---------------------------------------------------------------------------------
