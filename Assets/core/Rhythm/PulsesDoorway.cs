@@ -39,7 +39,8 @@ public readonly struct PulsesView
     /// </summary>
     public float? Every(Duration duration)
     {
-        return synced ? DurationClock.Pulse(DurationClock.Phase(barPhase, duration)) : (float?)null;
+        var phase = synced ? DurationClock.Phase(barPhase, duration) : null;
+        return phase is { } value ? DurationClock.Pulse(value) : null;
     }
 
     /// <summary>
@@ -48,7 +49,8 @@ public readonly struct PulsesView
     /// </summary>
     public bool? GateEvery(Duration duration, float duty = 0.25f)
     {
-        return synced ? DurationClock.Phase(barPhase, duration) < duty : (bool?)null;
+        var phase = synced ? DurationClock.Phase(barPhase, duration) : null;
+        return phase is { } value ? value < duty : null;
     }
 
     /// <summary>
@@ -85,8 +87,8 @@ internal static class DurationClock
     /// <summary>Beats per bar in the wall's common-time model — the whole note spans the measure.</summary>
     private const float BeatsPerBar = 4f;
 
-    /// <summary>A rung's cycle period in beats.</summary>
-    internal static float PeriodBeats(Duration duration)
+    /// <summary>A valid rung's cycle period in beats; null when <paramref name="duration"/> is outside the ladder.</summary>
+    internal static float? PeriodBeats(Duration duration)
     {
         return duration switch
         {
@@ -95,18 +97,23 @@ internal static class DurationClock
             Duration.Quarter => 1f,
             Duration.Eighth => 0.5f,
             Duration.Sixteenth => 0.25f,
-            _ => 1f,
+            _ => null,
         };
     }
 
     /// <summary>
-    /// Phase within one Duration cycle in [0..1): 0 at each onset, approaching 1 just before the
-    /// next — every rung reads the same bar-locked clock.
+    /// Phase within one valid Duration cycle in [0..1): 0 at each onset, approaching 1 just before
+    /// the next — every rung reads the same bar-locked clock. Null outside the Duration ladder.
     /// </summary>
-    internal static float Phase(float barPhase, Duration duration)
+    internal static float? Phase(float barPhase, Duration duration)
     {
+        if (PeriodBeats(duration) is not { } periodBeats)
+        {
+            return null;
+        }
+
         var beatsIntoBar = barPhase * BeatsPerBar;
-        return Mathf.Repeat(beatsIntoBar / PeriodBeats(duration), 1f);
+        return Mathf.Repeat(beatsIntoBar / periodBeats, 1f);
     }
 
     /// <summary>

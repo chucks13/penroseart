@@ -63,6 +63,55 @@ public sealed class BeatManagerLevelsDoorwayTests
     }
 
     /// <summary>
+    /// Repeated live samples follow the documented exponential attack and release trajectories,
+    /// applying the corresponding time constant independently on every frame.
+    /// </summary>
+    [Test]
+    public void SmoothedFollowsAttackAndReleaseAcrossMultipleFrames()
+    {
+        const float frameSeconds = 0.1f;
+        const float attackSeconds = 0.1f;
+        const float releaseSeconds = 0.2f;
+        const float lowStep = 0f;
+        const float highStep = 1f;
+        var attackAlpha = 1f - Mathf.Exp(-frameSeconds / attackSeconds);
+        var releaseAlpha = 1f - Mathf.Exp(-frameSeconds / releaseSeconds);
+        var attackFrameOne = lowStep + ((highStep - lowStep) * attackAlpha);
+        var attackFrameTwo = attackFrameOne + ((highStep - attackFrameOne) * attackAlpha);
+        var releaseFrameOne = attackFrameTwo + ((lowStep - attackFrameTwo) * releaseAlpha);
+        var releaseFrameTwo = releaseFrameOne + ((lowStep - releaseFrameOne) * releaseAlpha);
+
+        var beatManager = new BeatManager
+        {
+            levelsAttackSeconds = attackSeconds,
+            levelsReleaseSeconds = releaseSeconds,
+        };
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+            OnAirOscWriter.WriteLevels(ref bundle, lowStep, lowStep, lowStep));
+        beatManager.Update(0f);
+
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+            OnAirOscWriter.WriteLevels(ref bundle, highStep, highStep, highStep));
+        beatManager.Update(frameSeconds);
+        Assert.That(beatManager.Levels!.Value.Smoothed.Low, Is.EqualTo(attackFrameOne).Within(0.0001f));
+
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+            OnAirOscWriter.WriteLevels(ref bundle, highStep, highStep, highStep));
+        beatManager.Update(frameSeconds * 2f);
+        Assert.That(beatManager.Levels!.Value.Smoothed.Low, Is.EqualTo(attackFrameTwo).Within(0.0001f));
+
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+            OnAirOscWriter.WriteLevels(ref bundle, lowStep, lowStep, lowStep));
+        beatManager.Update(frameSeconds * 3f);
+        Assert.That(beatManager.Levels!.Value.Smoothed.Low, Is.EqualTo(releaseFrameOne).Within(0.0001f));
+
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+            OnAirOscWriter.WriteLevels(ref bundle, lowStep, lowStep, lowStep));
+        beatManager.Update(frameSeconds * 4f);
+        Assert.That(beatManager.Levels!.Value.Smoothed.Low, Is.EqualTo(releaseFrameTwo).Within(0.0001f));
+    }
+
+    /// <summary>
     /// Lane loss drops the shaping state: the doorway reads null, and the next live samples snap
     /// in fresh — no release glide and no drain from the stale spike.
     /// </summary>

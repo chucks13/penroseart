@@ -42,9 +42,15 @@ public readonly struct LevelSource
         Constant,
     }
 
+    /// <summary>The band or derived reading this knob selects, or Constant for a pinned component.</summary>
     private readonly Selector selector;
+
+    /// <summary>The pinned component value used only when <see cref="selector"/> selects Constant.</summary>
     private readonly float constant;
 
+    /// <summary>Builds one Color Bank knob from either a triple selector or a pinned value.</summary>
+    /// <param name="selector">The triple reading to use, or Constant to use <paramref name="constant"/>.</param>
+    /// <param name="constant">The pinned component value; ignored for band and derived-reading selectors.</param>
     private LevelSource(Selector selector, float constant)
     {
         this.selector = selector;

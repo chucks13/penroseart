@@ -29,7 +29,8 @@ using UnityEngine;
 /// <para>
 /// The Waveform Hold (<see cref="Hold"/> / <see cref="ReleaseToAuto"/>) is the synthesizer's one
 /// inbound knob — control sitting apart from the data reads, actuated by editor surfaces
-/// (ADR-0016). While engaged it pins every draw to the held value.
+/// (ADR-0016). While engaged it pins every draw and every evaluation of a non-null Waveform
+/// argument to the held value; null still means the consumer holds no rhythm.
 /// </para>
 /// <para>
 /// The owner steps the surface once per hub update via <see cref="Update"/>, after BeatManager's
@@ -160,10 +161,11 @@ public sealed class WaveformSynth
     // ── Evaluation — the one primitive ──────────────────────────────────────
 
     /// <summary>
-    /// The envelope of the given Waveform at the current Bar Phase, 0..1. Null with no clock — no
-    /// bar position exists, and each consumer chooses its own Standalone response (a fact-read,
-    /// not a rest-at-0 envelope). A null Waveform — a consumer holding no rhythm — reads null.
-    /// Brightness and time seasoning are effect-side.
+    /// The envelope of the given Waveform at the current Bar Phase, 0..1. While the Waveform Hold
+    /// is engaged, a non-null argument evaluates as the held value. Null with no clock — no bar
+    /// position exists, and each consumer chooses its own Standalone response (a fact-read, not a
+    /// rest-at-0 envelope). A null Waveform — a consumer holding no rhythm — still reads null; the
+    /// Hold never invents one. Brightness and time seasoning are effect-side.
     /// </summary>
     /// <param name="waveform">The held Waveform value, or null for "holds no rhythm".</param>
     public float? Evaluate(Waveform? waveform)
@@ -173,15 +175,21 @@ public sealed class WaveformSynth
             return null;
         }
 
+        if (held is { } heldValue)
+        {
+            value = heldValue;
+        }
+
         return clockSource.Clock.BarPhase is { } barPhase ? value.Evaluate(barPhase) : (float?)null;
     }
 
     /// <summary>
     /// Edge: one of this Waveform's humps landed this frame — fires on any shape's actual onsets
-    /// (audible hump starts, Phase Offset applied). Never null: with no clock, no prior
-    /// observation, or a null Waveform it rests at false. A single-frame truth: true during
-    /// exactly the frame whose observation window crossed an onset (per-count wire gates remain
-    /// for count-specific wants).
+    /// (audible hump starts, Phase Offset applied). While the Waveform Hold is engaged, a non-null
+    /// argument reads the held value's onsets. Never null: with no clock, no prior observation, or
+    /// a null Waveform it rests at false; the Hold never invents a rhythm. A single-frame truth:
+    /// true during exactly the frame whose observation window crossed an onset (per-count wire
+    /// gates remain for count-specific wants).
     /// </summary>
     /// <remarks>
     /// The window is the Bar Phase step between the last two <see cref="Update"/> calls —
@@ -193,8 +201,17 @@ public sealed class WaveformSynth
     /// <param name="waveform">The held Waveform value, or null for "holds no rhythm".</param>
     public bool Hit(Waveform? waveform)
     {
-        return waveform is { } value
-            && previousPhase is { } from
+        if (waveform is not { } value)
+        {
+            return false;
+        }
+
+        if (held is { } heldValue)
+        {
+            value = heldValue;
+        }
+
+        return previousPhase is { } from
             && currentPhase is { } to
             && value.HasAudibleOnsetBetween(from, to);
     }
@@ -202,8 +219,9 @@ public sealed class WaveformSynth
     /// <summary>
     /// The shortest spacing between the Waveform's audible peaks, in ms at the current tempo —
     /// the yardstick effects scale visuals with, and the measurement the Energy classifier also
-    /// consumes (<see cref="Waveform.Energy"/>). Null with no tempo or a null Waveform; 0 for a
-    /// silent Waveform, per the kernel's convention.
+    /// consumes (<see cref="Waveform.Energy"/>). While the Waveform Hold is engaged, a non-null
+    /// argument measures the held value. Null with no tempo or a null Waveform — the Hold never
+    /// invents a rhythm; 0 for a silent Waveform, per the kernel's convention.
     /// </summary>
     /// <param name="waveform">The held Waveform value, or null for "holds no rhythm".</param>
     public float? ShortestPeakSpacingMs(Waveform? waveform)
@@ -211,6 +229,11 @@ public sealed class WaveformSynth
         if (waveform is not { } value)
         {
             return null;
+        }
+
+        if (held is { } heldValue)
+        {
+            value = heldValue;
         }
 
         return clockSource.Clock.BeatAverageMs is { } beatAverageMs
@@ -221,12 +244,13 @@ public sealed class WaveformSynth
     // ── The frame step ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Steps the synthesizer's observation of the Bar Phase clock — the owner calls this once per
-    /// hub update, after BeatManager's own update and ahead of effect Draw. The step from the
-    /// previous observation to this one is the window the <see cref="Hit"/> edge reads, so the
-    /// edge is frame-coherent across every reader.
+    /// Steps the synthesizer's observation of the Bar Phase clock. This owner-only operation is
+    /// internal so consumers cannot advance the window; the runtime owner calls it once per hub
+    /// update, after BeatManager's own update and ahead of effect Draw. The step from the previous
+    /// observation to this one is the window the <see cref="Hit"/> edge reads, so the edge is
+    /// frame-coherent across every reader.
     /// </summary>
-    public void Update()
+    internal void Update()
     {
         previousPhase = currentPhase;
         currentPhase = clockSource.Clock.BarPhase;
@@ -235,9 +259,10 @@ public sealed class WaveformSynth
     // ── Inbound knob — control, not data (ADR-0016) ─────────────────────────
 
     /// <summary>
-    /// The Waveform Hold: pin the whole wall to one Waveform value to examine it. Every draw
-    /// returns the held value while engaged — retargeting is immediate on the next draw. An
-    /// inspection affordance the runtime owns and editor surfaces actuate.
+    /// The Waveform Hold: pin the whole wall to one Waveform value to examine it. Every draw and
+    /// every evaluation of a non-null Waveform argument uses the held value while engaged;
+    /// retargeting is immediate. Null evaluation arguments still mean the consumer holds no
+    /// rhythm. An inspection affordance the runtime owns and editor surfaces actuate.
     /// </summary>
     /// <param name="waveform">The Waveform value to hold — a value, never a Pool position.</param>
     public void Hold(Waveform waveform)
@@ -245,7 +270,10 @@ public sealed class WaveformSynth
         held = waveform;
     }
 
-    /// <summary>Release the Waveform Hold; every effect acquires its own Waveform again (Auto).</summary>
+    /// <summary>
+    /// Release the Waveform Hold; every effect acquires and evaluates its own Waveform again
+    /// (Auto).
+    /// </summary>
     public void ReleaseToAuto()
     {
         held = null;

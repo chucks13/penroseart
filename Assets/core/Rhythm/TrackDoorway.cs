@@ -105,6 +105,6 @@ public partial class BeatManager
             }
         }
 
-        return players;
+        return players.AsReadOnly();
     }
 }

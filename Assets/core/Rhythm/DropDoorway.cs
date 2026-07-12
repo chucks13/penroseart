@@ -45,6 +45,18 @@ internal readonly struct CountdownSpanCapture
     /// <summary>Edge: the event ended this frame — including the lane vanishing outright.</summary>
     internal readonly bool Ended;
 
+    /// <summary>Collects one translated countdown lane and its witnessed span edges.</summary>
+    /// <param name="beatsRemaining">Beats left in the running event, including the current beat.</param>
+    /// <param name="spanLengthBeats">Total length of the running event.</param>
+    /// <param name="nextInBeats">Beats until the upcoming event begins.</param>
+    /// <param name="nextLengthBeats">Total length of the upcoming event.</param>
+    /// <param name="remainingOnTrack">Occurrences whose event marker has not yet passed.</param>
+    /// <param name="inside">Whether the wire reports the event running now.</param>
+    /// <param name="progress">Position through the running event.</param>
+    /// <param name="elapsedBeats">Sub-beat-smoothed beats since the running event began.</param>
+    /// <param name="windowBeats">Default Stock Envelope window supplied by the running event.</param>
+    /// <param name="started">Whether this capture witnessed the event begin.</param>
+    /// <param name="ended">Whether this capture witnessed the event end or disappear.</param>
     internal CountdownSpanCapture(int? beatsRemaining, int? spanLengthBeats, int? nextInBeats,
         int? nextLengthBeats, int? remainingOnTrack, bool inside, float? progress, float? elapsedBeats,
         float? windowBeats, bool started, bool ended)

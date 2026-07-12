@@ -1,3 +1,5 @@
+// Shared test helper for writing real /rave/onair OSC lanes into bundles.
+
 #nullable enable
 
 using RaveSystem.Osc;

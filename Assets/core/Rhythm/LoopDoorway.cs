@@ -1,13 +1,13 @@
-// The Loop doorway: the focus deck's rolling loop as a Span (beat-data spec).
+// The Loop doorway: the focus deck's set region and rolling loop Span (beat-data spec).
 
 #nullable enable
 
 /// <summary>
 /// The focus deck's loop, one Data Surface doorway. Focus-only wire truth: if several live
-/// players loop, only the focus player's loop appears here. The Span is the <em>rolling</em> loop
-/// — audio actually cycling — while <see cref="RegionSet"/> answers the separate question "does a
-/// loop region exist" (a paused player can hold a set region with nothing rolling). Facts are
-/// nullable; the span's edges are never null.
+/// players loop, only the focus player's loop appears here. <see cref="Region"/> describes the set
+/// region whether idle or rolling, <see cref="Span"/> is the <em>rolling</em> loop — audio actually
+/// cycling — and <see cref="RegionSet"/> answers whether a region exists. Facts are nullable; the
+/// span's edges are never null.
 /// </summary>
 public readonly struct LoopView
 {
@@ -19,20 +19,28 @@ public readonly struct LoopView
     public SpanView<LoopFacts> Span { get; }
 
     /// <summary>
+    /// The set region's measured and nominal facts, whether the region is idle or rolling. Null
+    /// when the lane is unavailable or none of its region facts are valid. <see cref="RegionSet"/>
+    /// answers whether a region exists; <see cref="Span"/> answers whether it is rolling.
+    /// </summary>
+    public LoopFacts? Region { get; }
+
+    /// <summary>
     /// A loop region exists on the focus deck (it can persist while playback is paused). Answers
     /// a different question than the Span: rolling and set are independent wire truths.
     /// </summary>
     public bool? RegionSet { get; }
 
     /// <summary>Built only by the hub's per-update capture, with sentinels already translated and edges evaluated.</summary>
-    internal LoopView(SpanView<LoopFacts> span, bool? regionSet)
+    internal LoopView(SpanView<LoopFacts> span, LoopFacts? region, bool? regionSet)
     {
         Span = span;
+        Region = region;
         RegionSet = regionSet;
     }
 }
 
-/// <summary>Facts while a loop rolls. Fractional loops are real (a 1/2-beat loop is 0.5).</summary>
+/// <summary>Facts describing a loop region. Fractional loops are real (a 1/2-beat loop is 0.5).</summary>
 public readonly struct LoopFacts
 {
     /// <summary>Measured region length in beats; 0 is the wire's real answer "no measurable region".</summary>
@@ -75,8 +83,8 @@ public partial class BeatManager
     /// Captures the Loop doorway from the settled transport state. The span is inside exactly
     /// while the wire reports looping audio rolling (<c>active == 1</c>); an unavailable lane
     /// (<c>active == -1</c>, the contract's complete all-sentinel shape) serves nothing. The
-    /// region flag translates its own tri-state, so a set-but-idle region (<c>active 0, set 1</c>)
-    /// reads as real data outside the span.
+    /// region flag and facts remain available outside the span, so a set-but-idle region
+    /// (<c>active 0, set 1</c>) keeps all valid wire facts.
     /// </summary>
     private LoopView CaptureLoop()
     {
@@ -86,18 +94,22 @@ public partial class BeatManager
         var ended = Edges.SpanEnded(previousLoopInside, inside);
         previousLoopInside = state.active >= 0 ? inside : (bool?)null;
 
-        var facts = inside
-            ? new LoopFacts(
-                state.lengthBeats >= 0f ? state.lengthBeats : (float?)null,
-                NonNegativeOrNull(state.lengthMs),
-                NominalSizeOrNull(state.sizeNumerator, state.sizeDenominator))
-            : (LoopFacts?)null;
+        var lengthBeats = state.lengthBeats >= 0f ? state.lengthBeats : (float?)null;
+        var lengthMs = NonNegativeOrNull(state.lengthMs);
+        var nominalSizeBeats = NominalSizeOrNull(state.sizeNumerator, state.sizeDenominator);
+        var translatedFacts = new LoopFacts(lengthBeats, lengthMs, nominalSizeBeats);
+        var region = state.active >= 0
+            && (lengthBeats.HasValue || lengthMs.HasValue || nominalSizeBeats.HasValue)
+                ? translatedFacts
+                : (LoopFacts?)null;
+        var spanFacts = inside ? translatedFacts : (LoopFacts?)null;
 
         // No elapsed anchor: the wire reports no position within the loop cycle, so Progress and
-        // the envelopes stay at their resting state whatever the loop's length.
-        var span = new SpanView<LoopFacts>(facts, progress: null, started, ended,
-            elapsedBeats: null, lengthBeats: null);
-        return new LoopView(span, TriStateOrNull(state.set));
+        // the envelopes rest until an elapsed anchor exists. The measured length is still the
+        // span's length anchor while rolling.
+        var span = new SpanView<LoopFacts>(spanFacts, progress: null, started, ended,
+            elapsedBeats: null, lengthBeats: inside ? lengthBeats : null);
+        return new LoopView(span, region, TriStateOrNull(state.set));
     }
 
     /// <summary>

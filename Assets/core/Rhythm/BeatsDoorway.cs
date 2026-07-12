@@ -32,6 +32,13 @@ internal readonly struct GateLanes
     /// <summary>Label-ordered gate-opening edges, evaluated once at capture.</summary>
     private readonly bool[]? opened;
 
+    /// <summary>Captures the complete label-ordered gate state for one hub frame.</summary>
+    /// <param name="synced">Whether the wall had a live four-count when this frame was captured.</param>
+    /// <param name="currentCount">The running 1..4 count, or -1 when no count applies.</param>
+    /// <param name="countdownsMs">Milliseconds until each labeled count lands; -1 marks an unavailable lane.</param>
+    /// <param name="gates">Whether each labeled count is inside its landing window.</param>
+    /// <param name="currentOpened">Whether the running count's lane opened on this capture.</param>
+    /// <param name="opened">Whether each labeled lane opened on this capture.</param>
     private GateLanes(bool synced, int currentCount, int[] countdownsMs, bool[] gates,
         bool currentOpened, bool[] opened)
     {

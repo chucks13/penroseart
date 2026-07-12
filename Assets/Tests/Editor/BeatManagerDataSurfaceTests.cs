@@ -1,3 +1,5 @@
+// Seam-1 tests for the BeatManager Data Surface: wire snapshot state in, doorway reads out.
+
 #nullable enable
 
 using NUnit.Framework;

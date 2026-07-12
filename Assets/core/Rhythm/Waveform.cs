@@ -30,8 +30,8 @@ using UnityEngine;
 /// <para>
 /// <b>This type is the pure kernel of the Waveform Synthesizer.</b> <see cref="Evaluate"/> turns
 /// notation into a brightness for a given Bar Phase and has no dependency on Unity time, OSC, or the
-/// Pool — the live clock is passed in. The "always-running service" half of the synthesizer (owning the
-/// Bar Phase clock) lives in <c>BeatManager</c>, which wraps this kernel. The Editor property drawer
+/// Pool — the live clock is passed in. The running service half is the <see cref="WaveformSynth"/>
+/// surface, its own root beside <see cref="BeatManager"/>, which consumes the hub's Clock doorway. The Editor property drawer
 /// plots the very same <see cref="Evaluate"/>, so the visualization can never drift from runtime
 /// behavior. The model and notation are documented in full in <c>docs/waveform-system.md</c>; the term
 /// definitions live in <c>CONTEXT.md</c>.

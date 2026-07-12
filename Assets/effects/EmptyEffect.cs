@@ -68,16 +68,16 @@ public class EmptyEffect : EffectBase
     /// Waveform variant; delete it when you write your own effect.
     /// </summary>
     /// <remarks>
-    /// The base hook hides the Grid bookkeeping — you just react. The live <see cref="BeatManager.GridQuery"/> is a
-    /// nullable <see cref="GridInfo"/> you can still read directly in <see cref="Draw"/> for more than the
-    /// downbeat edge:
+    /// The base hook hides the Grid bookkeeping — you just react. The live <see cref="BeatManager.Grid"/>
+    /// doorway remains present, while its nullable <see cref="GridView.Current"/> facts can be read directly
+    /// in <see cref="Draw"/> for more than the downbeat edge:
     /// <list type="bullet">
-    /// <item><description><see cref="GridInfo.Progress"/> — position 0..1 through the 16 beats, e.g.
-    ///   <c>var sweep = beatManager.Grid?.Progress ?? 0f;</c> for something that sweeps and resets each Grid.</description></item>
-    /// <item><description><see cref="GridInfo.State"/> — how much to trust the lock; the base hook already
+    /// <item><description><see cref="GridFacts.Progress"/> — position 0..1 through the 16 beats, e.g.
+    ///   <c>var sweep = beatManager.Grid.Current?.Progress ?? 0f;</c> for something that sweeps and resets each Grid.</description></item>
+    /// <item><description><see cref="GridFacts.State"/> — how much to trust the lock; the base hook already
     ///   gates on Locked, so this fires only on a Grid the Director trusts.</description></item>
     /// </list>
-    /// A null Grid means the wall is off the grid (Standalone Mode, or the beat clock dropped out), so the hook
+    /// Null Current facts mean the wall is off the grid (Standalone Mode, or the beat clock dropped out), so the hook
     /// simply never fires there and resumes cleanly when the grid returns.
     /// </remarks>
     protected override void OnNewGrid()
