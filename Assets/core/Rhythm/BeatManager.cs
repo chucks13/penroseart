@@ -98,12 +98,15 @@ public class BeatData
 }
 
 /// <summary>
-/// Shared beat helper for effects that want to pulse brightness, time, or one-shot events from Rave OSC beat data.
+/// The musical-data hub and its read-only Data Surface — the single gateway for asking what the
+/// music is doing. Raw wire facts and contrived values are captured into concept doorways with
+/// provenance hidden; consumers can read but cannot write through the surface.
 /// </summary>
 /// <remarks>
-/// Controller owns one BeatManager and calls <see cref="Update"/> once per frame.
-/// Effects usually receive a random beat variant from <see cref="EffectBase.OnStart"/>
-/// and pass that variant into the helper methods below.
+/// Controller owns one BeatManager, the RaveSystem adapter applies snapshots through
+/// <see cref="SetLiveBeatSource(RaveOnAirSnapshot)"/>, and <see cref="Update"/> captures every
+/// doorway once ahead of effect drawing. Legacy rhythm helpers coexist during the expand phase
+/// and retire in the beat-data contract cut.
 /// </remarks>
 [Serializable]
 public partial class BeatManager
@@ -151,8 +154,7 @@ public partial class BeatManager
     /// </summary>
     internal void FeedWireSnapshot(RaveOnAirSnapshot snapshot)
     {
-        SetLiveBeatSource(true);
-        beatData.CopyFrom(snapshot);
+        SetLiveBeatSource(snapshot);
     }
 
     /// <summary>
@@ -365,6 +367,17 @@ public partial class BeatManager
         Debug.Log(live
             ? "[BeatManager] Beat source -> LIVE RaveSystem OSC (UDP 7000 broadcasting)."
             : "[BeatManager] Beat source -> NONE; RaveSystem OSC is not broadcasting (Standalone, no beat).");
+    }
+
+    /// <summary>
+    /// Applies one live wire snapshot through the Data Surface ingress. The manager owns a deep
+    /// copy, so later transport writes cannot change the frame captured by <see cref="Update"/>.
+    /// </summary>
+    /// <param name="snapshot">The latest complete RaveSystem on-air snapshot.</param>
+    public void SetLiveBeatSource(RaveOnAirSnapshot snapshot)
+    {
+        SetLiveBeatSource(true);
+        beatData.CopyFrom(snapshot);
     }
 
     /// <summary>

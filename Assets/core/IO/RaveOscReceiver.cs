@@ -113,13 +113,13 @@ public sealed class RaveOscReceiver : MonoBehaviour
         var broadcasting = IsBroadcasting;
         LogLivenessTransitionDiagnostics(broadcasting);
 
-        beatManager.SetLiveBeatSource(broadcasting);
         if (!broadcasting || !hasSnapshot)
         {
+            beatManager.SetLiveBeatSource(broadcasting);
             return;
         }
 
-        beatManager.beatData.CopyFrom(latest);
+        beatManager.SetLiveBeatSource(latest);
     }
 
     /// <summary>Returns true while the last recognized Rave OSC value is within the liveness grace window.</summary>

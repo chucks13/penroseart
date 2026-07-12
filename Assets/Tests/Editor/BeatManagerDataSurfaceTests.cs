@@ -522,7 +522,33 @@ public sealed class BeatManagerDataSurfaceTests
 
     // ---- Fixtures -----------------------------------------------------------------------------
 
+    /// <summary>The prototyped snapshot ingress owns its wire state before the frame is captured.</summary>
+    [Test]
+    public void SetLiveBeatSourceCopiesSnapshotBeforeCapturingDoorways()
+    {
+        var source = new RaveOnAirSnapshot
+        {
+            bpm = 120f,
+            beatInBar = 2,
+            beatAverageMs = 500,
+            beatsCountMs = new[] { 1500, 0, 500, 1000 },
+            onBeats = new[] { false, true, false, false },
+        };
+        var beatManager = new BeatManager();
+
+        beatManager.SetLiveBeatSource(source);
+        source.bpm = 90f;
+        source.beatsCountMs[1] = 999;
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsSynced, Is.True);
+        Assert.That(beatManager.Clock.Bpm, Is.EqualTo(120f).Within(0.0001f));
+        Assert.That(beatManager.Beats.MsUntil(2), Is.EqualTo(0f));
+        Assert.That(beatManager.Beats.Gate(2), Is.True);
+    }
+
     /// <summary>Builds a live-sourced manager carrying a usable 120 BPM clock and the supplied beat lanes.</summary>
+
     private static BeatManager CreateLiveClock(int beatInBar, int[] beatsCountMs, bool[] onBeats)
     {
         var beatManager = new BeatManager();
