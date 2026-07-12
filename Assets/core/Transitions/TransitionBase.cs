@@ -23,6 +23,9 @@ public abstract class TransitionBase
     /// </summary>
     public BeatManager beatManager => controller.beatManager;
 
+    /// <summary>The live Waveform Synthesizer owned by the bound Controller.</summary>
+    public WaveformSynth synth => controller.synth;
+
     /// <summary>Catalog/display name for this transition. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
 

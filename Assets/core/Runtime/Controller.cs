@@ -314,6 +314,9 @@ public class Controller : Singleton<Controller>
     /// <summary>Global beat clock and beat-reactive helper system.</summary>
     public BeatManager beatManager = new BeatManager();
 
+    /// <summary>The one Waveform Synthesizer bound to this Controller's live BeatManager.</summary>
+    public WaveformSynth synth { get; private set; }
+
     // ---------------------------------------------------------------------
     // UI and scene references
     // ---------------------------------------------------------------------
@@ -515,6 +518,19 @@ public class Controller : Singleton<Controller>
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>Captures one BeatManager frame, then advances the owned synth over that captured clock.</summary>
+    internal void UpdateRhythm(float timeSeconds)
+    {
+        beatManager.Update(timeSeconds);
+        synth.Update();
+    }
+
+    /// <summary>Constructs the Controller-owned Waveform Synthesizer before any Performer lifecycle runs.</summary>
+    internal void InitializeSynth()
+    {
+        synth = new WaveformSynth(beatManager);
     }
 
     /// <summary>
@@ -1443,6 +1459,10 @@ public class Controller : Singleton<Controller>
         destIP.onEndEdit.AddListener(destIPEndEditCallback);
         onToggle.onValueChanged.AddListener(displayOnChange);
 
+        // Build the rhythm service before Performer catalogs because Effect and Transition
+        // Init/OnStart may read both live roots.
+        InitializeSynth();
+
         // Build runtime catalogs. These are plain C# objects, not scene objects.
         // Effects are also started here because the first frame needs an active
         // currentEffect before the timer state machine begins.
@@ -1572,7 +1592,7 @@ public class Controller : Singleton<Controller>
 #endif
         if (raveOsc != null)
             raveOsc.ApplyTo(beatManager);
-        beatManager.Update();
+        UpdateRhythm(Time.time);
 
         // Director reads the freshly-applied beat state: live OSC drives Synced Mode,
         // while no live source leaves Standalone Mode on its independent timer path.

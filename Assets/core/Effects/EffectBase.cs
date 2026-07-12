@@ -30,6 +30,9 @@ public abstract class EffectBase
     
     /// <summary>Shared beat helper used for rhythmic effect behavior.</summary>
     public BeatManager beatManager => controller.beatManager;
+
+    /// <summary>The live Waveform Synthesizer owned by the bound Controller.</summary>
+    public WaveformSynth synth => controller.synth;
     /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
     public bool IsBeatActive => controller.beatManager.IsActive;
 
@@ -37,9 +40,6 @@ public abstract class EffectBase
     public bool beatEnable = true;
     /// <summary>Rhythmic personality selected during OnStart().</summary>
     public int beatVariant;
-
-    /// <summary>Last frame's 16-beat Grid Count (1..16), so the wrap onto a new Grid can be edge-detected for <see cref="OnNewGrid"/>. 0 = off the grid last frame.</summary>
-    protected int lastGridBeat;
 
     /// <summary>Catalog/display name for this effect. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
@@ -104,34 +104,15 @@ public abstract class EffectBase
     {
         effectDelta = Time.deltaTime;
         effectTime += effectDelta;
-        DetectNewGrid();
-    }
-
-    /// <summary>
-    /// Edge-detects the downbeat of each new 16-beat Grid (grid beat wraps to 1) and fires <see cref="OnNewGrid"/>
-    /// once, gated on a Locked reading so a Coasting/Disputed grid does not trigger. Driven from
-    /// <see cref="UpdateTime"/>, so it runs once per active frame just before Draw. <see cref="BeatManager.GridQuery"/>
-    /// is null off the beat clock, so this never fires in Standalone. Note: effects nested inside a mixer only
-    /// receive this if the mixer forwards <see cref="UpdateTime"/> to them.
-    /// </summary>
-    private void DetectNewGrid()
-    {
-        // Null-safe on the whole beat context, not just Grid: UpdateTime() runs on every active frame
-        // (and on effects a mixer forwards to), but a Performer may have no controller/BeatManager bound
-        // yet — e.g. a lightweight test double, or any frame before Init(). No beat context is the same as
-        // "off the beat clock": Grid is absent, so this no-ops exactly as it does in Standalone.
-        var grid = controller?.beatManager?.GridQuery;
-        int beat = grid?.Beat ?? 0;
-        if (beat == 1 && lastGridBeat != 1 && grid?.State == GridState.Locked)
+        if (controller != null && beatManager.Grid.Wrapped)
         {
             OnNewGrid();
         }
-        lastGridBeat = beat;
     }
 
     /// <summary>
-    /// Called once on the downbeat of each new 16-beat Grid the Director has Locked. Default does nothing;
-    /// effects override to re-roll their look, switch palette, pick a new Waveform variant, and the like.
+    /// Called exactly when the hub's <see cref="GridView.Wrapped"/> Edge is true. The base performs no response;
+    /// concrete Effects may override this evidence-backed hook or read the Edge directly.
     /// </summary>
     protected virtual void OnNewGrid() { }
 
@@ -142,8 +123,6 @@ public abstract class EffectBase
     {
         beatEnable = true;
         beatVariant = beatManager.GetRandomVariant();
-        // Arm the Grid edge to the current Grid so activating on a downbeat does not fire OnNewGrid immediately.
-        lastGridBeat = beatManager.GridQuery?.Beat ?? 0;
     }
 
     /// <summary>
