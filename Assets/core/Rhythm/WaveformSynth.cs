@@ -115,45 +115,6 @@ public sealed class WaveformSynth
     }
 
     /// <summary>
-    /// Rolls a four-slot Routine whose bars each draw within the requested Energy set; no levels
-    /// means the whole Pool. All four draws resolve immediately and bypass the Waveform Hold, so
-    /// releasing the Hold reveals the Routine's genuine values.
-    /// </summary>
-    /// <param name="levels">The Energy levels each slot draws within; empty for the whole Pool.</param>
-    public Routine RandomRoutine(params Energy[] levels)
-    {
-        var routine = new Routine(
-            RoutineSlot.Draw(levels),
-            RoutineSlot.Draw(levels),
-            RoutineSlot.Draw(levels),
-            RoutineSlot.Draw(levels));
-        Reroll(routine);
-        return routine;
-    }
-
-    /// <summary>
-    /// Redraws every draw slot in the given Routine immediately, bypassing the Waveform Hold;
-    /// author-pinned slots remain untouched. Always callable, independent of Grid placement.
-    /// </summary>
-    /// <param name="routine">The holder-owned Routine whose draw caches should be replaced.</param>
-    public void Reroll(Routine routine)
-    {
-        if (routine == null)
-        {
-            throw new ArgumentNullException(nameof(routine));
-        }
-
-        for (var i = 0; i < Routine.SlotCount; i++)
-        {
-            var slot = routine.SlotAt(i);
-            if (slot.IsDraw)
-            {
-                routine.SetResolvedDraw(i, DrawUnheld(slot.Levels));
-            }
-        }
-    }
-
-    /// <summary>
     /// By Preset name. Null when no Pool entry carries the name — the consumer picks its default.
     /// While the Waveform Hold is engaged a known name reads the held value (the Hold pins the
     /// whole wall); a miss still reads null — the Hold never invents a Pool entry.
@@ -200,61 +161,6 @@ public sealed class WaveformSynth
         }
 
         return clockSource.Clock.BarPhase is { } barPhase ? value.Evaluate(barPhase) : (float?)null;
-    }
-
-    /// <summary>
-    /// The Routine's envelope at the current placed Grid position. The one-based Grid bar selects
-    /// one of four slots and the fraction within that bar evaluates its Waveform. Null when the
-    /// Routine is null, no Grid is present, or the Grid carries the partial unplaced shape. Grid
-    /// State is served trust data, never an evaluation gate.
-    /// </summary>
-    /// <remarks>
-    /// Each Routine remembers its own last placed Grid progress, so sparse reads still witness a
-    /// backward step. When <see cref="Routine.RefreshOnWrap"/> is enabled, that edge performs one
-    /// genuine reroll before evaluation; repeated reads at the same position do not reroll again.
-    /// The Waveform Hold reaches through both draw and pinned slots only at evaluation, leaving
-    /// draw caches genuine and ready for <see cref="ReleaseToAuto"/>.
-    /// </remarks>
-    /// <param name="routine">The holder-owned Routine, or null when the consumer holds none.</param>
-    public float? Evaluate(Routine? routine)
-    {
-        if (routine == null
-            || clockSource.Grid.Current is not { } facts
-            || facts.Bar is not { } bar
-            || facts.Progress is not { } progress
-            || bar < 1
-            || bar > Routine.SlotCount)
-        {
-            return null;
-        }
-
-        var wrapped = Edges.Wrapped(routine.LastObservedGridProgress, progress);
-        routine.LastObservedGridProgress = progress;
-        if (wrapped && routine.RefreshOnWrap)
-        {
-            Reroll(routine);
-        }
-
-        var slotIndex = bar - 1;
-        var slot = routine.SlotAt(slotIndex);
-        Waveform value;
-        if (slot.IsDraw)
-        {
-            value = routine.ResolvedDrawAt(slotIndex) ?? DrawUnheld(slot.Levels);
-            routine.SetResolvedDraw(slotIndex, value);
-        }
-        else
-        {
-            value = slot.PinnedWaveform;
-        }
-
-        if (held is { } heldValue)
-        {
-            value = heldValue;
-        }
-
-        var barFraction = Mathf.Repeat(progress * (float)Routine.SlotCount, 1f);
-        return value.Evaluate(barFraction);
     }
 
     /// <summary>
@@ -313,6 +219,102 @@ public sealed class WaveformSynth
         return clockSource.Clock.BeatAverageMs is { } beatAverageMs
             ? value.ShortestNonZeroPeakSpacing() * Waveform.BeatsPerBar * beatAverageMs
             : (float?)null;
+    }
+
+    // ── Routines (ticket 19) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Rolls a four-slot Routine whose bars each draw within the requested Energy set; no levels
+    /// means the whole Pool. All four draws resolve immediately and bypass the Waveform Hold, so
+    /// releasing the Hold reveals the Routine's genuine values.
+    /// </summary>
+    /// <param name="levels">The Energy levels each slot draws within; empty for the whole Pool.</param>
+    public Routine RandomRoutine(params Energy[] levels)
+    {
+        var routine = new Routine(
+            RoutineSlot.Draw(levels),
+            RoutineSlot.Draw(levels),
+            RoutineSlot.Draw(levels),
+            RoutineSlot.Draw(levels));
+        Reroll(routine);
+        return routine;
+    }
+
+    /// <summary>
+    /// Redraws every draw slot in the given Routine immediately, bypassing the Waveform Hold;
+    /// author-pinned slots remain untouched. Always callable, independent of Grid placement.
+    /// </summary>
+    /// <param name="routine">The holder-owned Routine whose draw caches should be replaced.</param>
+    public void Reroll(Routine routine)
+    {
+        if (routine == null)
+        {
+            throw new ArgumentNullException(nameof(routine));
+        }
+
+        for (var i = 0; i < Routine.SlotCount; i++)
+        {
+            var slot = routine.SlotAt(i);
+            if (slot.IsDraw)
+            {
+                routine.SetResolvedDraw(i, DrawUnheld(slot.Levels));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The Routine's envelope at the current placed Grid position. The one-based Grid bar selects
+    /// one of four slots and the fraction within that bar evaluates its Waveform. Null when the
+    /// Routine is null, no Grid is present, or the Grid carries the partial unplaced shape. Grid
+    /// State is served trust data, never an evaluation gate.
+    /// </summary>
+    /// <remarks>
+    /// Each Routine remembers its own last placed Grid progress, so sparse reads still witness a
+    /// backward step. When <see cref="Routine.RefreshOnWrap"/> is enabled, that edge performs one
+    /// genuine reroll before evaluation; repeated reads at the same position do not reroll again.
+    /// The Waveform Hold reaches through both draw and pinned slots only at evaluation, leaving
+    /// draw caches genuine and ready for <see cref="ReleaseToAuto"/>.
+    /// </remarks>
+    /// <param name="routine">The holder-owned Routine, or null when the consumer holds none.</param>
+    public float? Evaluate(Routine? routine)
+    {
+        if (routine == null
+            || clockSource.Grid.Current is not { } facts
+            || facts.Bar is not { } bar
+            || facts.Progress is not { } progress
+            || bar < 1
+            || bar > Routine.SlotCount)
+        {
+            return null;
+        }
+
+        var wrapped = Edges.Wrapped(routine.LastObservedGridProgress, progress);
+        routine.LastObservedGridProgress = progress;
+        if (wrapped && routine.RefreshOnWrap)
+        {
+            Reroll(routine);
+        }
+
+        var slotIndex = bar - 1;
+        var slot = routine.SlotAt(slotIndex);
+        Waveform value;
+        if (slot.IsDraw)
+        {
+            value = routine.ResolvedDrawAt(slotIndex) ?? DrawUnheld(slot.Levels);
+            routine.SetResolvedDraw(slotIndex, value);
+        }
+        else
+        {
+            value = slot.PinnedWaveform;
+        }
+
+        if (held is { } heldValue)
+        {
+            value = heldValue;
+        }
+
+        var barFraction = Mathf.Repeat(progress * (float)Routine.SlotCount, 1f);
+        return value.Evaluate(barFraction);
     }
 
     // ── The frame step ───────────────────────────────────────────────────────
