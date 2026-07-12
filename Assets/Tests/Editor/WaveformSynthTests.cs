@@ -194,7 +194,7 @@ public sealed class WaveformSynthTests
         beatManager.Update(0f);
         var synth = new WaveformSynth(beatManager, SeedEntries());
 
-        Assert.That(synth.Evaluate(null), Is.Null);
+        Assert.That(synth.Evaluate((Waveform?)null), Is.Null);
     }
 
     // ---- Peak spacing (feature parity — effects scale visuals with it) --------------------------
@@ -385,7 +385,7 @@ public sealed class WaveformSynthTests
         var (_, synth) = CreateSteppedSynth(1.2f, 1.3f);
         synth.Hold(Waveform.Parse("QQQQ", "8888"));
 
-        Assert.That(synth.Evaluate(null), Is.Null);
+        Assert.That(synth.Evaluate((Waveform?)null), Is.Null);
         Assert.That(synth.Hit(null), Is.False);
         Assert.That(synth.ShortestPeakSpacingMs(null), Is.Null);
     }

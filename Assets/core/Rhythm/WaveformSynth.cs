@@ -9,8 +9,9 @@ using UnityEngine;
 /// <summary>
 /// The wall's own instrument — the always-running Waveform Synthesizer, its own surface root
 /// beside BeatManager's Data Surface: BeatManager answers "what is the music doing", this surface
-/// answers "play my rhythm". Readable by any holder of the reference; it consumes the Bar Phase
-/// clock internally through the hub's Clock doorway.
+/// answers "play my rhythm". It acquires and evaluates both one-bar Waveforms and four-bar
+/// Routines. Readable by any holder of the reference; it consumes the Bar Phase and Grid clocks
+/// internally through the hub's doorways.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -110,28 +111,46 @@ public sealed class WaveformSynth
             return heldValue;
         }
 
-        if (levels == null || levels.Length == 0)
+        return DrawUnheld(levels);
+    }
+
+    /// <summary>
+    /// Rolls a four-slot Routine whose bars each draw within the requested Energy set; no levels
+    /// means the whole Pool. All four draws resolve immediately and bypass the Waveform Hold, so
+    /// releasing the Hold reveals the Routine's genuine values.
+    /// </summary>
+    /// <param name="levels">The Energy levels each slot draws within; empty for the whole Pool.</param>
+    public Routine RandomRoutine(params Energy[] levels)
+    {
+        var routine = new Routine(
+            RoutineSlot.Draw(levels),
+            RoutineSlot.Draw(levels),
+            RoutineSlot.Draw(levels),
+            RoutineSlot.Draw(levels));
+        Reroll(routine);
+        return routine;
+    }
+
+    /// <summary>
+    /// Redraws every draw slot in the given Routine immediately, bypassing the Waveform Hold;
+    /// author-pinned slots remain untouched. Always callable, independent of Grid placement.
+    /// </summary>
+    /// <param name="routine">The holder-owned Routine whose draw caches should be replaced.</param>
+    public void Reroll(Routine routine)
+    {
+        if (routine == null)
         {
-            return DrawWholePool();
+            throw new ArgumentNullException(nameof(routine));
         }
 
-        var matches = new List<int>(entries.Length);
-        for (var i = 0; i < entries.Length; i++)
+        for (var i = 0; i < Routine.SlotCount; i++)
         {
-            if (Array.IndexOf(levels, entries[i].waveform.Energy) >= 0)
+            var slot = routine.SlotAt(i);
+            if (slot.IsDraw)
             {
-                matches.Add(i);
+                routine.SetResolvedDraw(i, DrawUnheld(slot.Levels));
             }
         }
-
-        if (matches.Count == 0)
-        {
-            Debug.LogWarning($"[WaveformSynth] no Pool entry matches the requested Energy set " +
-                             $"({string.Join(", ", levels)}) — drawing from the whole Pool.");
-            return DrawWholePool();
-        }
-
-        return entries[matches[UnityEngine.Random.Range(0, matches.Count)]].waveform;
     }
 
     /// <summary>
@@ -181,6 +200,61 @@ public sealed class WaveformSynth
         }
 
         return clockSource.Clock.BarPhase is { } barPhase ? value.Evaluate(barPhase) : (float?)null;
+    }
+
+    /// <summary>
+    /// The Routine's envelope at the current placed Grid position. The one-based Grid bar selects
+    /// one of four slots and the fraction within that bar evaluates its Waveform. Null when the
+    /// Routine is null, no Grid is present, or the Grid carries the partial unplaced shape. Grid
+    /// State is served trust data, never an evaluation gate.
+    /// </summary>
+    /// <remarks>
+    /// Each Routine remembers its own last placed Grid progress, so sparse reads still witness a
+    /// backward step. When <see cref="Routine.RefreshOnWrap"/> is enabled, that edge performs one
+    /// genuine reroll before evaluation; repeated reads at the same position do not reroll again.
+    /// The Waveform Hold reaches through both draw and pinned slots only at evaluation, leaving
+    /// draw caches genuine and ready for <see cref="ReleaseToAuto"/>.
+    /// </remarks>
+    /// <param name="routine">The holder-owned Routine, or null when the consumer holds none.</param>
+    public float? Evaluate(Routine? routine)
+    {
+        if (routine == null
+            || clockSource.Grid.Current is not { } facts
+            || facts.Bar is not { } bar
+            || facts.Progress is not { } progress
+            || bar < 1
+            || bar > Routine.SlotCount)
+        {
+            return null;
+        }
+
+        var wrapped = Edges.Wrapped(routine.LastObservedGridProgress, progress);
+        routine.LastObservedGridProgress = progress;
+        if (wrapped && routine.RefreshOnWrap)
+        {
+            Reroll(routine);
+        }
+
+        var slotIndex = bar - 1;
+        var slot = routine.SlotAt(slotIndex);
+        Waveform value;
+        if (slot.IsDraw)
+        {
+            value = routine.ResolvedDrawAt(slotIndex) ?? DrawUnheld(slot.Levels);
+            routine.SetResolvedDraw(slotIndex, value);
+        }
+        else
+        {
+            value = slot.PinnedWaveform;
+        }
+
+        if (held is { } heldValue)
+        {
+            value = heldValue;
+        }
+
+        var barFraction = Mathf.Repeat(progress * (float)Routine.SlotCount, 1f);
+        return value.Evaluate(barFraction);
     }
 
     /// <summary>
@@ -283,5 +357,35 @@ public sealed class WaveformSynth
     private Waveform DrawWholePool()
     {
         return entries[UnityEngine.Random.Range(0, entries.Length)].waveform;
+    }
+
+    /// <summary>
+    /// Draws within an Energy set without consulting the Waveform Hold. Empty sets use the whole
+    /// Pool; unmatched sets log the same warning as <see cref="Random"/> and fall back likewise.
+    /// </summary>
+    private Waveform DrawUnheld(Energy[] levels)
+    {
+        if (levels == null || levels.Length == 0)
+        {
+            return DrawWholePool();
+        }
+
+        var matches = new List<int>(entries.Length);
+        for (var i = 0; i < entries.Length; i++)
+        {
+            if (Array.IndexOf(levels, entries[i].waveform.Energy) >= 0)
+            {
+                matches.Add(i);
+            }
+        }
+
+        if (matches.Count == 0)
+        {
+            Debug.LogWarning($"[WaveformSynth] no Pool entry matches the requested Energy set " +
+                             $"({string.Join(", ", levels)}) — drawing from the whole Pool.");
+            return DrawWholePool();
+        }
+
+        return entries[matches[UnityEngine.Random.Range(0, matches.Count)]].waveform;
     }
 }
