@@ -23,9 +23,9 @@ Provides the shared rhythm state for effects and the Director. It can run from t
 
 - **BeatData**: Shared BPM/current-beat/timing state plus raw Rave on-air values for Fill, Drop, Energy, Track Phase, Levels, and Pulse.
 - **Nullable queries**: `BeatManagerQueries` exposes ready-to-use rhythm values where `null` means not available right now.
-- **Variants**: Supports rhythmic personalities such as every beat, alternating beats, measure start, finer durations, and syncopation, drawn from the Waveform Pool. Pool order is the single numbering truth (the old hardcoded switch whose numbering once disagreed with docs is gone; historical notes on that live in `docs/investigation/`).
+- **Waveforms**: Current production still uses index-addressed Variant fields and base helpers. The accepted replacement contract moves Effects and Transitions to immutable Waveform values they acquire from WaveformSynth; ADR-0017 records that target ownership boundary.
 - **Rhythmic Logic**: Uses an x^4 decay curve to create sharp visual kicks without making off-beat visuals too dark.
-- **Propagation**: Mixers can pass rhythm to children, let children choose independently, or suppress child pulsing.
+- **Mixer internals**: A Mixer is one Effect publicly. Existing Mixers privately configure and combine children in different ways; those choices are local artistic implementation, not generic propagation modes promised by the runtime.
 
 ### 3. Buffer and Effect System
 
@@ -168,7 +168,7 @@ A per-waveform scalar in `[0..1]` controlling hump shape. At 0 the peak is sharp
 _Avoid_: "smoothing", "easing" (overloaded); treating it as a true low-pass filter.
 
 **Contrived Value**:
-A ready-to-use value BeatManager builds from raw broadcast state — gated, normalized, smoothed, beat-synced, or otherwise shaped for effects. The counterpart of a **Raw Value**, which BeatManager passes through unchanged (BPM, track name, beat-in-bar, beat pulse). The test: a value is contrived when it is built from **more than a single piece of wire data** — a wire value plus anything else (another lane, local state, time). A member that re-serves one wire value unchanged is not contrived — it is a duplication, and a single-lane fact lives exactly once, in its concept's home. Translating wire sentinels to `null` is serving, not contriving. Both kinds are pulled through the same nullable queries on BeatManager: `null` is a valid, expected state meaning "this value isn't there right now" — a track may have no upcoming drop, the wire may not carry levels — and every consumer chooses its own Standalone response for that missing value. Raw transport (`BeatData`, the OSC wire) keeps `-1` sentinels internally; `null` is the public face of "not available." Shared signals are contrived once on BeatManager; per-effect seasoning (variant, enable, minimum brightness) stays on the effect side, which is the only place that knows it.
+A ready-to-use value BeatManager builds from raw broadcast state — gated, normalized, smoothed, beat-synced, or otherwise shaped for effects. The counterpart of a **Raw Value**, which BeatManager passes through unchanged (BPM, track name, beat-in-bar, beat pulse). The test: a value is contrived when it is built from **more than a single piece of wire data** — a wire value plus anything else (another lane, local state, time). A member that re-serves one wire value unchanged is not contrived — it is a duplication, and a single-lane fact lives exactly once, in its concept's home. Translating wire sentinels to `null` is serving, not contriving. Both kinds are pulled through the same nullable queries on BeatManager: `null` is a valid, expected state meaning "this value isn't there right now" — a track may have no upcoming drop, the wire may not carry levels — and every consumer chooses its own Standalone response for that missing value. Raw transport (`BeatData`, the OSC wire) keeps `-1` sentinels internally; `null` is the public face of "not available." Shared signals are contrived once on BeatManager; each Performer owns any further mapping, fallback, state, and response because only the Performer knows the art it is making.
 _Avoid_: "cooked" (retired term); effects reading `BeatData` directly — raw values flow through BeatManager queries too; sentinel values crossing into effect math; treating `null` as an error instead of an ordinary musical state.
 
 **Data Surface**:
@@ -232,8 +232,8 @@ What a Performer advertises it can do, so the Director can cast it knowingly: ha
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **Mixer**:
-An Effect that combines multiple child Effects so more than one plays on screen at once. To everything outside it — Director, Switcher, casting — a Mixer is just another Effect: it declares its own Repertoire and owns its children — what Effects they are, their lifecycle, what they hold, and how their output is displayed. Each child individually owns what it does: it reads the Data Surface like any other consumer, and reacts exactly as it would playing alone.
-_Avoid_: special-casing Mixers in casting or switching; letting child effects speak for themselves past the Mixer; a Mixer gating what its children may read ("owns what its children see" — retired agent assumption; the mixer owns what children hold, never their sight).
+An Effect that combines child Effects. To everything outside it a Mixer is one ordinary Effect; how it selects, configures, suppresses, synchronizes, or combines its children is the Mixer's private artistic implementation, not a system-wide child contract.
+_Avoid_: special-casing Mixers in casting or switching; letting child effects speak for themselves past the Mixer; prescribing suppress/unison/passive behavior for every Mixer; exposing a generic child-control policy merely to standardize private composition.
 
 **A-to-B Transition**:
 A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Grid Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.
@@ -339,8 +339,8 @@ Intensity on one closed three-step ladder — Low, Mid, High — the shared voca
 _Avoid_: treating Energy labels as open text; confusing Energy (phrase-level intensity) with Levels (instantaneous audio bands); "Medium" (the middle tier is **Mid**); storing a Waveform's Energy in the Pool file or a per-entry label (it is a pure function of the notation); per-subject ladders or extra tiers.
 
 **Span**:
-Anything musical with an inside — a start, an extent, an end: a Fill, a Drop, a Loop, a Phrase (whatever name it carries, Intro through Outro), a Grid, an Energy run. Every Span makes the same uniform offering: its state, its started/ended **Edges**, and its **Stock Envelopes** — no per-concept exceptions.
-_Avoid_: giving one Span offerings another lacks; inventing a new span-like concept instead of asking whether the thing is simply a Span.
+Anything musical with an inside — a start, an extent, an end: a Fill, a Drop, a Phrase (whatever name it carries, Intro through Outro), a Grid, or an Energy run. Every Span makes the same uniform offering: its state, started/ended **Edges**, and **Stock Envelopes**. Loop is playback state with flat facts, not a Span.
+_Avoid_: giving one Span offerings another lacks; dressing Loop with progress, Edges, or envelopes; inventing a new span-like concept instead of asking whether the thing is simply a Span.
 
 **Edge**:
 The one-frame fact that a musical moment just happened: a Span started or ended, a labeled state changed, a new Grid began, a rhythm gate opened. The hub owns Edges — it runs continuously across effect swaps, so it genuinely witnesses each onset — and serves them as polled, frame-coherent reads: true during exactly the frame the hub observed the moment, identical for every reader that frame. An Edge carries no payload; the state read beside it answers "to what".

@@ -127,16 +127,18 @@ the ordinary spelling of "not available," sentinels never cross the surface, and
 consumer owns its Standalone response.
 
 - **"Fill and Drop share one two-phase shape"**: `PhraseEventInfo?` is replaced by the
-  uniform span view — every Span (Fill, Drop, Phrase, Grid, Loop, Energy run) serves the
-  same shape: nullable facts, Started/Ended Edges, Build/Decay Stock Envelopes
-  (ADR-0015). The anticipation side survives as next-occurrence countdowns served beside
-  each Span; the Energy and Track Phase structs (`EnergyInfo?`, `PhaseInfo?`) reshape
-  into the Energy and Phrase doorway views the same way.
+  uniform span view — every genuine Span (Fill, Drop, Phrase, Grid, Energy run) serves
+  the same shape: nullable facts, Started/Ended Edges, Build/Decay Stock Envelopes
+  (ADR-0015). Loop is flat playback state outside the Span family: no progress, Edges,
+  or Stock Envelopes. The anticipation side survives as next-occurrence countdowns
+  served beside each Span; the Energy and Track Phase structs (`EnergyInfo?`,
+  `PhaseInfo?`) reshape into the Energy and Phrase doorway views the same way.
 - **"One home, thin accessors"**: musical data lives on two sibling read-only surfaces —
-  BeatManager (the Data Surface, organized as concept doorways) and the Waveform
-  Synthesizer (its own root, the base `synth` property beside `beatManager`) — both
-  under ADR-0012. Effects and transitions are treated the exact same: both bases carry
-  both accessors and the same held-Waveform convenience.
+  BeatManager (the Data Surface, organized as concept doorways) and WaveformSynth (its
+  own root, the base `synth` property beside `beatManager`) — both under ADR-0012.
+  Effects and transitions receive the same two live roots, but neither base holds a
+  Waveform or Routine or owns automatic acquisition, replacement, or response policy;
+  concrete Performers own those artistic decisions under ADR-0017.
 - **"Raw values flow through the same seam" / Consequences**: raw facts still flow
   through the surface (that ruling stands, hardened by ADR-0013), but the public mutable
   `beatData` field goes private and is no longer anyone's Inspector contract — dashboards
