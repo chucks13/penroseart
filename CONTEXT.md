@@ -137,7 +137,7 @@ The standard rhythmic signal: a value in `[0..1]` that peaks on the quarter-note
 _Avoid_: equating it with the raw OSC scalar; the runtime regenerates a shaped pulse locally; "the one all others are generated from" (retired mental model — Pool Waveforms are authored, not derived from the Beat Pulse).
 
 **Bar Phase**:
-The normalized position within the current measure (0 on the downbeat, 1 at the next downbeat). The clock every Waveform is evaluated against — owned and turned by the Waveform Synthesizer, derived from the live beat timing and kept locked to the DJ — and offered on the Data Surface like everything else, along with **Beat Fraction**, its sub-beat half (position within the current beat, 0..1). Consumers are never constrained: an effect wanting raw musical position reads the clock instead of hand-rolling a private metronome from wire facts.
+The normalized position within the current measure (0 on the downbeat, 1 at the next downbeat). The clock every Waveform is evaluated against — owned and turned by BeatManager, derived from the live beat timing and kept locked to the DJ — and offered on the Data Surface like everything else, along with **Beat Fraction**, its sub-beat half (position within the current beat, 0..1). Consumers are never constrained: an effect wanting raw musical position reads the clock instead of hand-rolling a private metronome from wire facts.
 _Avoid_: "beat phase" when the whole measure is meant; walling the clock off as synthesizer-private; per-effect hand-rolled metronomes.
 
 **Bar** (a.k.a. **Measure**):
