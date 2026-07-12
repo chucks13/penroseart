@@ -105,13 +105,21 @@ Start with these before adding new structures:
 - To compile: `scripts/unity-compile.sh`. To test: `scripts/unity-tests.sh` (uses the
   open-Editor test bridge when Unity is running). Read diagnostics from the log paths
   the scripts print, not from stdout.
+- **Delegated workers must never run the Unity scripts or launch Unity.** Read-only and
+  workspace-write sandboxes block Unity Licensing Client state and local IPC outside
+  the repo, causing a 75-second licensing failure and misleading package/compiler errors.
+  Workers may run pure .NET checks and inspect Unity logs; the unsandboxed coordinator
+  owns Unity compile/test validation. The scripts enforce this with a host-access probe,
+  supervise the Unity process they start, and stop only their owned processes on failure.
 - `dotnet build`, Roslyn, and IDE/LSP diagnostics are not Unity compilation. Only the
   scripts above validate a compile.
-- **Never create or edit `.meta` files.** Unity generates them on import; a hand-made
-  `.meta` has a bogus GUID and breaks serialized references. New files you create will
-  get their `.meta` on the next Editor import — leave them without one. Only when
-  moving, renaming, or deleting an existing asset, move/rename/delete its `.meta`
-  with it.
+- **`.meta` files are Unity-generated, source-controlled identity files.** Never
+  hand-create, copy, or hand-edit one. For a new asset, create only the asset and let
+  Unity generate its `.meta` during import; then commit both. When moving, renaming,
+  or deleting an existing asset, perform the same operation on its `.meta` so the GUID
+  remains stable. Never omit an existing `.meta` from Git: losing or regenerating it
+  changes the GUID and can break serialized references. Files outside Unity asset
+  locations, such as repo scripts and documentation, do not need `.meta` files.
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
 - Do not treat Unity-generated files as stable hand-authored source.
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$repo_root/scripts/unity-run.sh"
 
 # Resolve the Unity editor binary. The default tracks the project's own editor version from
 # ProjectSettings/ProjectVersion.txt (Unity's source of truth), so editor upgrades don't require
@@ -19,18 +20,10 @@ platform="${UNITY_TEST_PLATFORM:-EditMode}"
 filter="${UNITY_TEST_FILTER:-}"
 assembly_names="${UNITY_TEST_ASSEMBLY_NAMES:-}"
 timeout_seconds="${UNITY_EDITOR_TEST_TIMEOUT:-45}"
+license_timeout="${UNITY_LICENSE_TIMEOUT:-30}"
+process_timeout="${UNITY_TEST_PROCESS_TIMEOUT:-900}"
 status_file="${UNITY_TEST_STATUS:-${results_file%.xml}.status}"
-lock_file="$repo_root/Temp/UnityLockfile"
 request_dir="$repo_root/Temp/PenroseUnityTestBridge/requests"
-
-editor_has_project_open() {
-  [ -f "$lock_file" ] || return 1
-  if command -v lsof >/dev/null 2>&1; then
-    lsof "$lock_file" >/dev/null 2>&1
-  else
-    return 0
-  fi
-}
 
 print_results() {
   python3 - "$results_file" <<'PY'
@@ -104,8 +97,12 @@ run_batchmode() {
     args+=(-assemblyNames "$assembly_names")
   fi
 
+  unity_require_batchmode_host_access "$repo_root" || return 1
+
   set +e
-  "$unity_bin" "${args[@]}"
+  unity_run_supervised \
+    "$unity_bin" "$log_file" "$license_timeout" "$process_timeout" \
+    "${args[@]}"
   local status=$?
   set -e
   return "$status"
@@ -114,7 +111,7 @@ run_batchmode() {
 rm -f "$results_file" "$log_file" "$status_file"
 
 status=0
-if editor_has_project_open; then
+if unity_editor_has_project_open "$repo_root"; then
   run_in_open_editor || status=$?
 else
   run_batchmode || status=$?
@@ -126,7 +123,7 @@ printf 'Unity test results: %s\n' "$results_file"
 if [ ! -f "$results_file" ]; then
   printf 'Unity did not write a test results file. Recent relevant log lines:\n' >&2
   if [ -f "$log_file" ]; then
-    grep -nE 'error CS|Test run|Passed|Failed|Exception|RaveSystem\.Osc|PenroseUnityTestBridge' "$log_file" 2>/dev/null | tail -80 >&2 || true
+    grep -nE 'Licensing|readonly database|error CS|Test run|Passed|Failed|Exception|RaveSystem\.Osc|PenroseUnityTestBridge' "$log_file" 2>/dev/null | tail -80 >&2 || true
   fi
   [ -f "$status_file" ] && cat "$status_file" >&2
   exit "${status:-1}"
