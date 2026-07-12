@@ -254,8 +254,8 @@ public partial class BeatManager
     /// Advances the per-frame derived beat state from a supplied clock value.
     /// </summary>
     /// <remarks>
-    /// The explicit time overload keeps the Levels attack/release smoothing testable without relying on
-    /// Unity frame timing.
+    /// The explicit time overload keeps the Levels shaping (the attack/release follower and the
+    /// Peak drain) testable without relying on Unity frame timing.
     /// </remarks>
     public void Update(float timeSeconds)
     {
@@ -274,10 +274,10 @@ public partial class BeatManager
             ClearToNoBeat();
         }
 
-        // Derivation and smoothing run after beatData has settled for this frame so the contrived
-        // queries never lag the transport by a frame or smooth from stale data across a source switch.
+        // Derivation and shaping run after beatData has settled for this frame so the contrived
+        // queries never lag the transport by a frame or shape from stale data across a source switch.
         DeriveBeatState();
-        UpdateLevelsSmoothing(timeSeconds);
+        UpdateLevelsShaping(timeSeconds);
 
         // The Data Surface doorway views are captured last, once the transport and every derived
         // value have settled, so all readers this frame — effects, transitions, the Director,
@@ -305,6 +305,7 @@ public partial class BeatManager
         Energy = CaptureEnergy();
         Loop = CaptureLoop();
         Grid = CaptureGrid();
+        Levels = CaptureLevels();
     }
 
     // ---- Shared span capture math -------------------------------------------------------------

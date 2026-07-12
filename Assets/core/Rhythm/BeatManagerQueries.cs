@@ -359,25 +359,6 @@ public readonly struct LevelsInfo
 public partial class BeatManager
 {
     /// <summary>
-    /// Attack time-constant in seconds for rising Levels. Small = bands jump up almost instantly,
-    /// keeping strobes punchy.
-    /// </summary>
-    public float levelsAttackSeconds = 0.02f;
-
-    /// <summary>
-    /// Release time-constant in seconds for falling Levels. Larger than attack so bands decay smoothly
-    /// instead of flickering — flicker is the enemy, strobing is the point. Tune on the wall.
-    /// </summary>
-    public float levelsReleaseSeconds = 0.15f;
-
-    private float smoothedLow;
-    private float smoothedMid;
-    private float smoothedHigh;
-    private bool hasSmoothedLevels;
-    private float lastSmoothingTime;
-    private bool hasSmoothingClock;
-
-    /// <summary>
     /// The Waveform envelope for a Pool variant at the current Bar Phase, or null when no beat clock
     /// is running. This is the primitive under every beat-synced brightness/time derivation.
     /// </summary>
@@ -927,55 +908,6 @@ public partial class BeatManager
         var strongest = Mathf.Max(low, Mathf.Max(mid, high));
         var color = palette.read(centroid);
         return new Color(color.r * strongest, color.g * strongest, color.b * strongest, color.a);
-    }
-
-    /// <summary>
-    /// Advances the Levels attack/release smoothing for this frame. Called from <see cref="Update(float)"/>
-    /// after <see cref="beatData"/> has settled, for both live OSC and Standalone (no beat).
-    /// </summary>
-    private void UpdateLevelsSmoothing(float timeSeconds)
-    {
-        var deltaSeconds = hasSmoothingClock ? Mathf.Max(0f, timeSeconds - lastSmoothingTime) : 0f;
-        lastSmoothingTime = timeSeconds;
-        hasSmoothingClock = true;
-
-        var raw = beatData?.snapshot.levels ?? PenroseArt.RaveOsc.Levels.Unavailable;
-        if (raw.low < 0f || raw.mid < 0f || raw.high < 0f)
-        {
-            // Unavailable: drop the smoothing state entirely so the next live sample snaps in fresh
-            // instead of releasing from stale values.
-            hasSmoothedLevels = false;
-            return;
-        }
-
-        if (!hasSmoothedLevels)
-        {
-            smoothedLow = Mathf.Clamp01(raw.low);
-            smoothedMid = Mathf.Clamp01(raw.mid);
-            smoothedHigh = Mathf.Clamp01(raw.high);
-            hasSmoothedLevels = true;
-            return;
-        }
-
-        smoothedLow = SmoothTowards(smoothedLow, Mathf.Clamp01(raw.low), deltaSeconds);
-        smoothedMid = SmoothTowards(smoothedMid, Mathf.Clamp01(raw.mid), deltaSeconds);
-        smoothedHigh = SmoothTowards(smoothedHigh, Mathf.Clamp01(raw.high), deltaSeconds);
-    }
-
-    /// <summary>
-    /// Exponentially smooths one band towards its target, fast on the way up (attack) and slower on the
-    /// way down (release).
-    /// </summary>
-    private float SmoothTowards(float current, float target, float deltaSeconds)
-    {
-        var timeConstant = target > current ? levelsAttackSeconds : levelsReleaseSeconds;
-        if (timeConstant <= 0f)
-        {
-            return target;
-        }
-
-        var alpha = 1f - Mathf.Exp(-deltaSeconds / timeConstant);
-        return current + ((target - current) * alpha);
     }
 
     /// <summary>How many beats out the anticipation ramp starts rising. 32 beats = 8 bars at 4/4.</summary>

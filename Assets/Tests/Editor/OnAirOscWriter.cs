@@ -54,6 +54,12 @@ internal static class OnAirOscWriter
         bundle.EndElement(writer.Finish());
     }
 
+    /// <summary>Writes the <c>fff</c> <c>/rave/onair/levels</c> lane: low/mid/high band energy (-1 sentinels when unavailable).</summary>
+    internal static void WriteLevels(ref OscBundleWriter bundle, float low, float mid, float high)
+    {
+        WriteThreeFloats(ref bundle, "/rave/onair/levels", low, mid, high);
+    }
+
     /// <summary>Writes a single-string lane (players_live, track).</summary>
     internal static void WriteString(ref OscBundleWriter bundle, string address, string value)
     {
