@@ -43,4 +43,27 @@ internal static class Edges
     {
         return !EqualityComparer<T>.Default.Equals(previous, current);
     }
+
+    /// <summary>
+    /// A Span's onset: the hub observed known-outside → inside, or — for Spans that are also
+    /// labeled states (Phrase, Energy run) — a new identity during continuous presence, which is
+    /// one span ending and another beginning on the same frame. First observation of an
+    /// already-running span (null → inside: sync starting mid-drop) is NOT an onset — the music
+    /// crossed that boundary unobserved, and firing here would recreate the mid-event false-flash
+    /// bug this hub exists to kill (ADR-0015). Mid-event activation reads <c>Current</c> instead.
+    /// </summary>
+    internal static bool SpanStarted(bool? previousInside, bool currentInside, bool identityChanged = false)
+    {
+        return currentInside && (previousInside == false || (previousInside == true && identityChanged));
+    }
+
+    /// <summary>
+    /// A Span's close: it was inside and now is not — including the facts vanishing outright
+    /// (signals outlive facts: the Ended edge fires the frame they go) — or its identity changed
+    /// during continuous presence (a back-to-back boundary ends the old span as it starts the new).
+    /// </summary>
+    internal static bool SpanEnded(bool? previousInside, bool currentInside, bool identityChanged = false)
+    {
+        return previousInside == true && (!currentInside || identityChanged);
+    }
 }

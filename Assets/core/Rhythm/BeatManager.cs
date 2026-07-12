@@ -299,6 +299,50 @@ public partial class BeatManager
         Beats = CaptureBeats();
         OffBeats = CaptureOffBeats();
         Pulses = CapturePulses();
+        Phrase = CapturePhrase();
+        Drop = CaptureDrop();
+        Fill = CaptureFill();
+        Energy = CaptureEnergy();
+        Loop = CaptureLoop();
+        Grid = CaptureGrid();
+    }
+
+    // ---- Shared span capture math -------------------------------------------------------------
+    // One spelling of the elapsed-position rules every Span doorway anchors on (Progress and the
+    // Stock Envelopes), so the doorways can never disagree about where "inside a span" sits.
+
+    /// <summary>
+    /// Beats elapsed since a span's start, from the wire's beats-remaining count (which includes
+    /// the current beat: a length-N span counts N on its first beat) and total length, smoothed
+    /// by the shared intra-beat clock so span-anchored motion sweeps instead of stepping once per
+    /// beat. Null when the wire's shape cannot anchor a position (either side unavailable, or an
+    /// incoherent count) — sentinels never become math.
+    /// </summary>
+    private float? ElapsedInSpan(int countBeats, int lengthBeats)
+    {
+        if (lengthBeats <= 0 || countBeats < 0 || countBeats > lengthBeats)
+        {
+            return null;
+        }
+
+        return (lengthBeats - countBeats) + IntraBeatFraction();
+    }
+
+    /// <summary>0..1 position through a span of the given length, from the shared elapsed anchor.</summary>
+    private static float? ProgressOverLength(float? elapsedBeats, int lengthBeats)
+    {
+        if (elapsedBeats is not { } elapsed || lengthBeats <= 0)
+        {
+            return null;
+        }
+
+        return Mathf.Clamp01(elapsed / lengthBeats);
+    }
+
+    /// <summary>A wire length in beats as an envelope window: positive lengths pass, sentinels and degenerate zero read null.</summary>
+    private static float? LengthOrNull(int lengthBeats)
+    {
+        return lengthBeats > 0 ? lengthBeats : (float?)null;
     }
 
     /// <summary>
