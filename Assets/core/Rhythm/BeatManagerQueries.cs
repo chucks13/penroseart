@@ -54,7 +54,7 @@ public enum Subdivision
 
 /// <summary>
 /// Contrived phrase-event state shared by Fill and Drop: an event effects can anticipate before it
-/// starts and ride while it plays. <see cref="BeatManager.Fill"/> and <see cref="BeatManager.Drop"/>
+/// starts and ride while it plays. <see cref="BeatManager.FillQuery"/> and <see cref="BeatManager.DropQuery"/>
 /// each return their own instance of this shape.
 /// </summary>
 /// <remarks>
@@ -116,7 +116,7 @@ public readonly struct PhraseEventInfo
 /// <see cref="EnergyLevel"/> vocabulary, with where it is heading next.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Energy"/>; null there means Energy is unavailable or the wire
+/// Returned by <see cref="BeatManager.EnergyQuery"/>; null there means Energy is unavailable or the wire
 /// label was not in the Low/Mid/High vocabulary (an unrecognized label never becomes a wrong enum).
 /// </remarks>
 public readonly struct EnergyInfo
@@ -164,9 +164,9 @@ public readonly struct EnergyInfo
 /// structure contrived into usable numbers.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Phrase"/>; null there means no phrase data is available right now.
+/// Returned by <see cref="BeatManager.PhraseQuery"/>; null there means no phrase data is available right now.
 /// Labels are an open vocabulary ("Drop", "Break", "Chorus 2") — do not keyword-parse them as if the
-/// set were closed; that is what <see cref="BeatManager.Energy"/> is for.
+/// set were closed; that is what <see cref="BeatManager.EnergyQuery"/> is for.
 /// </remarks>
 public readonly struct PhraseInfo
 {
@@ -230,7 +230,7 @@ public readonly struct NextPhraseInfo
 /// telemetry only — the Director keeps cueing while looping, so this drives no cue behavior.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Loop"/>; null there means loop state is unavailable right now. Both
+/// Returned by <see cref="BeatManager.LoopQuery"/>; null there means loop state is unavailable right now. Both
 /// <see cref="looping"/> and <see cref="regionSet"/> come from RaveSystem tri-states, but the null gate is on
 /// <c>active &lt; 0</c> only (never <c>!= 0</c>): a set-but-idle region (active 0, set 1) is real, non-null
 /// data, so an idle region is not mistaken for unavailable.
@@ -270,7 +270,7 @@ public readonly struct LoopInfo
 /// How much to trust where the one sits this frame, sourced from RaveSystem's source-computed
 /// <c>timing_grid</c> state vocabulary. All three values are on-grid readings with a valid grid beat;
 /// they differ only in how much to trust the held offset (see CONTEXT.md "Grid State"). Losing the
-/// clock is not a low-confidence value here — it surfaces as a null <see cref="BeatManager.Grid"/>.
+/// clock is not a low-confidence value here — it surfaces as a null <see cref="BeatManager.GridQuery"/>.
 /// </summary>
 public enum GridState
 {
@@ -290,7 +290,7 @@ public enum GridState
 /// <c>timing_grid</c> lane; <see cref="BeatManager"/> adds the sub-beat <see cref="Progress"/>.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Grid"/>; null there means the wall is not on the grid right now
+/// Returned by <see cref="BeatManager.GridQuery"/>; null there means the wall is not on the grid right now
 /// (Standalone floor, the clock gone, or no usable grid on the wire). All three <see cref="State"/>
 /// values are on-grid readings with a valid <see cref="Beat"/> — they differ only in how much to trust the
 /// held offset. Formerly one letter from the phrase-window <see cref="PhraseInfo"/> twin; ADR-0009 renamed
@@ -667,16 +667,19 @@ public partial class BeatManager
     }
 
     /// <summary>Contrived Fill event, or null when no Fill data is available right now.</summary>
-    public PhraseEventInfo? Fill => beatData != null ? ContrivePhraseEvent(beatData.snapshot.fillState) : null;
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Fill</c>); retires in ticket 26 in favor of the Fill doorway.</remarks>
+    public PhraseEventInfo? FillQuery => beatData != null ? ContrivePhraseEvent(beatData.snapshot.fillState) : null;
 
     /// <summary>Contrived Drop event, or null when no Drop data is available right now.</summary>
-    public PhraseEventInfo? Drop => beatData != null ? ContrivePhraseEvent(beatData.snapshot.dropState) : null;
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Drop</c>); retires in ticket 26 in favor of the Drop doorway.</remarks>
+    public PhraseEventInfo? DropQuery => beatData != null ? ContrivePhraseEvent(beatData.snapshot.dropState) : null;
 
     /// <summary>
     /// Contrived phrase Energy, or null when Energy is unavailable or the wire label is outside the
     /// Low/Mid/High vocabulary.
     /// </summary>
-    public EnergyInfo? Energy
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Energy</c>); retires in ticket 26 in favor of the Energy doorway.</remarks>
+    public EnergyInfo? EnergyQuery
     {
         get
         {
@@ -713,7 +716,8 @@ public partial class BeatManager
     /// lane; <see cref="GridInfo.Progress"/> is enriched here with <see cref="IntraBeatFraction"/>, the sub-beat
     /// clock only BeatManager holds, so the fraction and the wire beat share one <c>beatData.snapshot</c>.
     /// </summary>
-    public GridInfo? Grid
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Grid</c>); retires in ticket 26 in favor of the Grid doorway.</remarks>
+    public GridInfo? GridQuery
     {
         get
         {
@@ -737,7 +741,8 @@ public partial class BeatManager
     }
 
     /// <summary>Contrived Track Phrase, or null when no phrase data is available right now.</summary>
-    public PhraseInfo? Phrase
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Phrase</c>); retires in ticket 26 in favor of the Phrase doorway.</remarks>
+    public PhraseInfo? PhraseQuery
     {
         get
         {
@@ -780,7 +785,8 @@ public partial class BeatManager
     /// Contrived Loop state, or null when loop state is unavailable (wire <c>active &lt; 0</c>). Display and
     /// telemetry only — a set-but-idle region (<c>active 0, set 1</c>) is real, non-null data.
     /// </summary>
-    public LoopInfo? Loop
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Loop</c>); retires in ticket 26 in favor of the Loop doorway.</remarks>
+    public LoopInfo? LoopQuery
     {
         get
         {

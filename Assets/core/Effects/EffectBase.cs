@@ -110,7 +110,7 @@ public abstract class EffectBase
     /// <summary>
     /// Edge-detects the downbeat of each new 16-beat Grid (grid beat wraps to 1) and fires <see cref="OnNewGrid"/>
     /// once, gated on a Locked reading so a Coasting/Disputed grid does not trigger. Driven from
-    /// <see cref="UpdateTime"/>, so it runs once per active frame just before Draw. <see cref="BeatManager.Grid"/>
+    /// <see cref="UpdateTime"/>, so it runs once per active frame just before Draw. <see cref="BeatManager.GridQuery"/>
     /// is null off the beat clock, so this never fires in Standalone. Note: effects nested inside a mixer only
     /// receive this if the mixer forwards <see cref="UpdateTime"/> to them.
     /// </summary>
@@ -120,7 +120,7 @@ public abstract class EffectBase
         // (and on effects a mixer forwards to), but a Performer may have no controller/BeatManager bound
         // yet — e.g. a lightweight test double, or any frame before Init(). No beat context is the same as
         // "off the beat clock": Grid is absent, so this no-ops exactly as it does in Standalone.
-        var grid = controller?.beatManager?.Grid;
+        var grid = controller?.beatManager?.GridQuery;
         int beat = grid?.Beat ?? 0;
         if (beat == 1 && lastGridBeat != 1 && grid?.State == GridState.Locked)
         {
@@ -143,7 +143,7 @@ public abstract class EffectBase
         beatEnable = true;
         beatVariant = beatManager.GetRandomVariant();
         // Arm the Grid edge to the current Grid so activating on a downbeat does not fire OnNewGrid immediately.
-        lastGridBeat = beatManager.Grid?.Beat ?? 0;
+        lastGridBeat = beatManager.GridQuery?.Beat ?? 0;
     }
 
     /// <summary>

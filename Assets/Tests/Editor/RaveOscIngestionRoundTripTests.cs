@@ -28,17 +28,17 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.TrackText, Is.EqualTo("Artist - Track"));
         Assert.That(beatManager.PlayersLive, Is.EqualTo("4,2"));
 
-        var drop = beatManager.Drop;
+        var drop = beatManager.DropQuery;
         Assert.That(drop, Is.Not.Null);
         Assert.That(drop!.Value.inProgress, Is.True);
         Assert.That(drop.Value.remaining, Is.EqualTo(2));
 
-        var fill = beatManager.Fill;
+        var fill = beatManager.FillQuery;
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.inProgress, Is.False);
         Assert.That(fill.Value.beatsUntilStart, Is.EqualTo(16));
 
-        var phrase = beatManager.Phrase;
+        var phrase = beatManager.PhraseQuery;
         Assert.That(phrase, Is.Not.Null);
         Assert.That(phrase!.Value.label, Is.EqualTo("Drop"));
         Assert.That(phrase.Value.irregular, Is.True);
@@ -50,13 +50,13 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(nextPhrase.Value.beatsUntilChange, Is.EqualTo(8));
         Assert.That(nextPhrase.Value.lengthBeats, Is.EqualTo(16));
 
-        var energy = beatManager.Energy;
+        var energy = beatManager.EnergyQuery;
         Assert.That(energy, Is.Not.Null);
         Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.High));
         Assert.That(energy.Value.next, Is.EqualTo(EnergyLevel.Mid));
         Assert.That(energy.Value.nextRunLengthBeats, Is.EqualTo(64));
 
-        var loop = beatManager.Loop;
+        var loop = beatManager.LoopQuery;
         Assert.That(loop, Is.Not.Null);
         Assert.That(loop!.Value.looping, Is.True);
         Assert.That(loop.Value.regionSet, Is.True);
@@ -79,10 +79,10 @@ public sealed class RaveOscIngestionRoundTripTests
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/phrase_state"));
 
-        Assert.That(beatManager.Phrase, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Null);
         Assert.That(beatManager.NextPhrase, Is.Not.Null);
-        Assert.That(beatManager.Energy, Is.Not.Null);
-        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Not.Null);
+        Assert.That(beatManager.LoopQuery, Is.Not.Null);
         Assert.That(beatManager.TrackId, Is.Not.Null);
     }
 
@@ -92,9 +92,9 @@ public sealed class RaveOscIngestionRoundTripTests
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/next_phrase_state"));
 
         Assert.That(beatManager.NextPhrase, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Not.Null);
-        Assert.That(beatManager.Energy, Is.Not.Null);
-        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Not.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Not.Null);
+        Assert.That(beatManager.LoopQuery, Is.Not.Null);
         Assert.That(beatManager.TrackId, Is.Not.Null);
     }
 
@@ -103,10 +103,10 @@ public sealed class RaveOscIngestionRoundTripTests
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/energy_state"));
 
-        Assert.That(beatManager.Energy, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Not.Null);
         Assert.That(beatManager.NextPhrase, Is.Not.Null);
-        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.LoopQuery, Is.Not.Null);
         Assert.That(beatManager.TrackId, Is.Not.Null);
     }
 
@@ -117,13 +117,13 @@ public sealed class RaveOscIngestionRoundTripTests
         // it should null out only that field, not the whole Energy result.
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/next_energy_state"));
 
-        var energy = beatManager.Energy;
+        var energy = beatManager.EnergyQuery;
         Assert.That(energy, Is.Not.Null);
         Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.High));
         Assert.That(energy.Value.next, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Not.Null);
         Assert.That(beatManager.NextPhrase, Is.Not.Null);
-        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.LoopQuery, Is.Not.Null);
         Assert.That(beatManager.TrackId, Is.Not.Null);
     }
 
@@ -132,10 +132,10 @@ public sealed class RaveOscIngestionRoundTripTests
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/loop_state"));
 
-        Assert.That(beatManager.Loop, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.LoopQuery, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Not.Null);
         Assert.That(beatManager.NextPhrase, Is.Not.Null);
-        Assert.That(beatManager.Energy, Is.Not.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Not.Null);
         Assert.That(beatManager.TrackId, Is.Not.Null);
     }
 
@@ -145,10 +145,10 @@ public sealed class RaveOscIngestionRoundTripTests
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/track_id"));
 
         Assert.That(beatManager.TrackId, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Not.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Not.Null);
         Assert.That(beatManager.NextPhrase, Is.Not.Null);
-        Assert.That(beatManager.Energy, Is.Not.Null);
-        Assert.That(beatManager.Loop, Is.Not.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Not.Null);
+        Assert.That(beatManager.LoopQuery, Is.Not.Null);
     }
 
     /// <summary>Dispatches the packet, takes the snapshot, and feeds it into a live-sourced BeatManager.</summary>

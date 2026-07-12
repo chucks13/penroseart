@@ -611,7 +611,7 @@ public sealed class Director
     /// </summary>
     private PhraseLaneObservation? ReadPhraseObservation()
     {
-        return controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext } phrase
+        return controller.beatManager.PhraseQuery is { beatsUntilNext: { } beatsUntilNext } phrase
             ? new PhraseLaneObservation(phrase.label, phrase.lengthBeats ?? -1, beatsUntilNext)
             : (PhraseLaneObservation?)null;
     }
@@ -649,7 +649,7 @@ public sealed class Director
     {
         phraseLengthBeats = -1;
         phraseLabel = null;
-        if (controller.beatManager.Phrase is { lengthBeats: { } lengthBeats } phrase
+        if (controller.beatManager.PhraseQuery is { lengthBeats: { } lengthBeats } phrase
             && lengthBeats > 0)
         {
             phraseLengthBeats = lengthBeats;
@@ -719,7 +719,7 @@ public sealed class Director
 
         if (slot == CueLogSlot.Current)
         {
-            return controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext }
+            return controller.beatManager.PhraseQuery is { beatsUntilNext: { } beatsUntilNext }
                 ? beat + beatsUntilNext - phraseLengthBeats
                 : -1;
         }
@@ -739,7 +739,7 @@ public sealed class Director
         // No grid lane this wake: nothing to evaluate, so no cast, and the grid lane keeps its last reading
         // untouched. A real Synced-Mode exit is a mode boundary that resets grid memory (ADR-0007); this method
         // never special-cases it.
-        if (!(controller.beatManager.Grid is { } grid))
+        if (!(controller.beatManager.GridQuery is { } grid))
         {
             return;
         }
@@ -759,7 +759,7 @@ public sealed class Director
 
         // The Phrase, read live: its position in the Phrase is length - beatsUntilNext. Both the carried-mark
         // path and the no-sheet boundary path need it, so it is read once here.
-        if (!(controller.beatManager.Phrase is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats } phrase))
+        if (!(controller.beatManager.PhraseQuery is { beatsUntilNext: { } beatsUntilNext, lengthBeats: { } lengthBeats } phrase))
         {
             return;
         }
@@ -956,12 +956,12 @@ public sealed class Director
         // Windows in beats-from-now: "this Grid" is [0, beatsToMark) — the Grid whose Boundary is the Cue Mark;
         // "next Grid" is [beatsToMark, beatsToMark + 16), which the Drop lands on the front of. Read from the
         // Fill/Drop lanes' own countdowns, never an absolute beat.
-        if (EventStartsWithin(controller.beatManager.Fill, 0, beatsToMark))
+        if (EventStartsWithin(controller.beatManager.FillQuery, 0, beatsToMark))
         {
             return Repertoire.HandlesFill;
         }
 
-        if (EventStartsWithin(controller.beatManager.Drop, beatsToMark, beatsToMark + CueSheet.GridBeats))
+        if (EventStartsWithin(controller.beatManager.DropQuery, beatsToMark, beatsToMark + CueSheet.GridBeats))
         {
             return Repertoire.HandlesDrop;
         }

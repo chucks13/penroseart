@@ -58,7 +58,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.fillState = CountdownState.Unavailable;
 
-        Assert.That(beatManager.Fill, Is.Null);
+        Assert.That(beatManager.FillQuery, Is.Null);
     }
 
     [Test]
@@ -66,10 +66,10 @@ public sealed class BeatManagerContrivedQueriesTests
     {
         var beatManager = new BeatManager();
 
-        Assert.That(beatManager.Fill, Is.Null);
-        Assert.That(beatManager.Drop, Is.Null);
-        Assert.That(beatManager.Energy, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Null);
+        Assert.That(beatManager.FillQuery, Is.Null);
+        Assert.That(beatManager.DropQuery, Is.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Null);
         Assert.That(beatManager.Levels, Is.Null);
     }
 
@@ -80,7 +80,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 };
 
-        var fill = beatManager.Fill;
+        var fill = beatManager.FillQuery;
 
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.inProgress, Is.False);
@@ -101,7 +101,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.fillState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 1 };
 
-        var fill = beatManager.Fill;
+        var fill = beatManager.FillQuery;
 
         // 2 of 8 beats elapsed plus the 0.5 intra-beat fraction from the shared beat clock.
         Assert.That(fill, Is.Not.Null);
@@ -120,7 +120,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = -1 };
 
-        var fill = beatManager.Fill;
+        var fill = beatManager.FillQuery;
 
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.beatsUntilStart, Is.Null);
@@ -139,7 +139,7 @@ public sealed class BeatManagerContrivedQueriesTests
         // still available (active 0), no known next start, zero occurrences left.
         beatManager.WireSnapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = 0 };
 
-        var fill = beatManager.Fill;
+        var fill = beatManager.FillQuery;
 
         Assert.That(fill, Is.Not.Null);
         Assert.That(fill!.Value.inProgress, Is.False);
@@ -155,10 +155,10 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
 
         beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = BeatManager.AnticipationWindowBeats + 1, lengthBeats = 16, remaining = 1 };
-        Assert.That(beatManager.Drop!.Value.anticipation, Is.Null);
+        Assert.That(beatManager.DropQuery!.Value.anticipation, Is.Null);
 
         beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = 0, lengthBeats = 16, remaining = 1 };
-        Assert.That(beatManager.Drop!.Value.anticipation, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(beatManager.DropQuery!.Value.anticipation, Is.EqualTo(1f).Within(0.0001f));
     }
 
     /// <summary>msUntilStart is null when the average beat interval is unavailable, while beatsUntilStart still serves.</summary>
@@ -169,7 +169,7 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.beatAverageMs = -1;
         beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 16, remaining = 1 };
 
-        var drop = beatManager.Drop;
+        var drop = beatManager.DropQuery;
 
         Assert.That(drop, Is.Not.Null);
         Assert.That(drop!.Value.beatsUntilStart, Is.EqualTo(16));
@@ -183,7 +183,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.dropState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 2 };
 
-        var drop = beatManager.Drop;
+        var drop = beatManager.DropQuery;
 
         Assert.That(drop, Is.Not.Null);
         Assert.That(drop!.Value.inProgress, Is.True);
@@ -203,7 +203,7 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
         beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 8 };
 
-        var energy = beatManager.Energy;
+        var energy = beatManager.EnergyQuery;
 
         Assert.That(energy, Is.Not.Null);
         Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.High));
@@ -225,7 +225,7 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "low", countBeats = 8, lengthBeats = 16 };
         beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "HIGH", countBeats = 8, lengthBeats = 16 };
 
-        var energy = beatManager.Energy;
+        var energy = beatManager.EnergyQuery;
 
         Assert.That(energy, Is.Not.Null);
         Assert.That(energy!.Value.level, Is.EqualTo(EnergyLevel.Low));
@@ -242,7 +242,7 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "Banana", countBeats = 4, lengthBeats = 16 };
         beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
 
-        Assert.That(beatManager.Energy, Is.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Null);
     }
 
     /// <summary>An empty/unavailable energy label reads as null Energy — the label is the availability signal.</summary>
@@ -254,7 +254,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.energyState = LabeledCountdown.Unavailable;
 
-        Assert.That(beatManager.Energy, Is.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Null);
     }
 
     /// <summary>An unknown next-energy label serves next = null with a steady (0) direction.</summary>
@@ -265,7 +265,7 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
         beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "", countBeats = 4, lengthBeats = 16 };
 
-        var energy = beatManager.Energy;
+        var energy = beatManager.EnergyQuery;
 
         Assert.That(energy, Is.Not.Null);
         Assert.That(energy!.Value.next, Is.Null);
@@ -281,7 +281,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
 
-        var phrase = beatManager.Phrase;
+        var phrase = beatManager.PhraseQuery;
 
         Assert.That(phrase, Is.Not.Null);
         Assert.That(phrase!.Value.label, Is.EqualTo("Chorus 2"));
@@ -299,13 +299,13 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
 
         beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 1 };
-        Assert.That(beatManager.Phrase!.Value.irregular, Is.True);
+        Assert.That(beatManager.PhraseQuery!.Value.irregular, Is.True);
 
         beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
-        Assert.That(beatManager.Phrase!.Value.irregular, Is.False);
+        Assert.That(beatManager.PhraseQuery!.Value.irregular, Is.False);
 
         beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = -1 };
-        Assert.That(beatManager.Phrase!.Value.irregular, Is.Null);
+        Assert.That(beatManager.PhraseQuery!.Value.irregular, Is.Null);
     }
 
     /// <summary>A phrase with no label — empty or the full unavailable shape — reads as null Phrase.</summary>
@@ -315,10 +315,10 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
 
         beatManager.WireSnapshot.phraseState = new PhraseState { label = "", countBeats = 12, lengthBeats = 32, irregular = 0 };
-        Assert.That(beatManager.Phrase, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Null);
 
         beatManager.WireSnapshot.phraseState = PhraseState.Unavailable;
-        Assert.That(beatManager.Phrase, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Null);
     }
 
     // --- Next Phrase planning (separate labeled countdown from the phrase-in-progress) ---
@@ -357,7 +357,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.loopState = LoopState.Unavailable;
 
-        Assert.That(beatManager.Loop, Is.Null);
+        Assert.That(beatManager.LoopQuery, Is.Null);
     }
 
     /// <summary>An idle-but-set loop region (active 0, set 1) is real non-null data with its full shape served.</summary>
@@ -368,7 +368,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.loopState = new LoopState { active = 0, set = 1, lengthBeats = 4f, lengthMs = 2000, sizeNumerator = 1, sizeDenominator = 4 };
 
-        var loop = beatManager.Loop;
+        var loop = beatManager.LoopQuery;
 
         Assert.That(loop, Is.Not.Null);
         Assert.That(loop!.Value.looping, Is.False);
@@ -386,7 +386,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.loopState = new LoopState { active = 1, set = 1, lengthBeats = 8f, lengthMs = 4000, sizeNumerator = 1, sizeDenominator = 2 };
 
-        var loop = beatManager.Loop;
+        var loop = beatManager.LoopQuery;
 
         Assert.That(loop, Is.Not.Null);
         Assert.That(loop!.Value.looping, Is.True);
@@ -400,7 +400,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.WireSnapshot.loopState = new LoopState { active = 0, set = 0, lengthBeats = -1f, lengthMs = -1, sizeNumerator = -1, sizeDenominator = -1 };
 
-        var loop = beatManager.Loop;
+        var loop = beatManager.LoopQuery;
 
         Assert.That(loop, Is.Not.Null);
         Assert.That(loop!.Value.looping, Is.False);
@@ -564,10 +564,10 @@ public sealed class BeatManagerContrivedQueriesTests
 
         Assert.That(beatManager.IsActive, Is.False);
         Assert.That(beatManager.Envelope(0), Is.Null);
-        Assert.That(beatManager.Fill, Is.Null);
-        Assert.That(beatManager.Drop, Is.Null);
-        Assert.That(beatManager.Phrase, Is.Null);
-        Assert.That(beatManager.Energy, Is.Null);
+        Assert.That(beatManager.FillQuery, Is.Null);
+        Assert.That(beatManager.DropQuery, Is.Null);
+        Assert.That(beatManager.PhraseQuery, Is.Null);
+        Assert.That(beatManager.EnergyQuery, Is.Null);
         Assert.That(beatManager.Levels, Is.Null);
     }
 

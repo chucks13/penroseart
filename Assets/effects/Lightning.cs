@@ -147,7 +147,7 @@ public class Lightning : EffectBase
     protected override void OnNewGrid()
     {
         Reroll();
-        if (beatManager.Drop is { inProgress: true } && !dropFlashed)
+        if (beatManager.DropQuery is { inProgress: true } && !dropFlashed)
         {
             TriggerDrop();
             dropFlashed = true;
@@ -171,7 +171,7 @@ public class Lightning : EffectBase
     /// </summary>
     private void UpdateDropSlam()
     {
-        if (beatManager.Drop is not { inProgress: true })
+        if (beatManager.DropQuery is not { inProgress: true })
         {
             dropFlashed = false;
         }
@@ -231,7 +231,7 @@ public class Lightning : EffectBase
     /// </summary>
     private void UpdateHeldBolt()
     {
-        heldActive = beatManager.Fill is { inProgress: true };
+        heldActive = beatManager.FillQuery is { inProgress: true };
         if (heldActive)
         {
             bool open = GateOpen(beatManager.GateOf(Subdivision.Eighth));

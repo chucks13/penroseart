@@ -8,9 +8,9 @@ using UnityEngine;
 /// <remarks>
 /// FILL: a soft-edged wavefront sweeps across the tiles, ordered by each tile's hue distance from the
 /// wall's own mean hue (closest first), collapsing their hue toward that mean. The front position is
-/// driven by <see cref="BeatManager.Fill"/> progress (so it always finishes by the Fill's end regardless of
+/// driven by <see cref="BeatManager.FillQuery"/> progress (so it always finishes by the Fill's end regardless of
 /// how many beats the Fill lasts), eased with a fast attack/slow release envelope, given a light pre-Fill
-/// primer from <see cref="BeatManager.Fill"/> anticipation, and kicked forward once per beat so the sweep
+/// primer from <see cref="BeatManager.FillQuery"/> anticipation, and kicked forward once per beat so the sweep
 /// visibly lurches on the beat instead of gliding smoothly.
 ///
 /// DROP: on the first Grid downbeat inside a Drop the whole wall slams to near-black, then reignites as a
@@ -21,7 +21,7 @@ using UnityEngine;
 ///
 /// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
-/// Its depth scales with musical <see cref="BeatManager.Energy"/> — subtle in low-energy sections, more
+/// Its depth scales with musical <see cref="BeatManager.EnergyQuery"/> — subtle in low-energy sections, more
 /// pronounced in high-energy ones. This is pure geometry plus a nullable Energy read, so it renders steady
 /// at a fixed mid depth in Standalone (no beat clock) rather than going flat.
 ///
@@ -88,7 +88,7 @@ public class Angles : EffectBase
     /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Tune on the readout.</summary>
     private const float ShadeDepthHigh = 0.4f;
 
-    /// <summary>Energy level assumed in Standalone (no beat clock, so <see cref="BeatManager.Energy"/> is null): 0.5 = Mid, a steady moderate shading depth. Tune on the readout.</summary>
+    /// <summary>Energy level assumed in Standalone (no beat clock, so <see cref="BeatManager.EnergyQuery"/> is null): 0.5 = Mid, a steady moderate shading depth. Tune on the readout.</summary>
     private const float StandaloneEnergy = 0.5f;
 
     /// <summary>Smoothing rate (per second) easing the shading depth between energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the readout.</summary>
@@ -241,7 +241,7 @@ public class Angles : EffectBase
     protected override void OnNewGrid()
     {
         Reroll();
-        if (beatManager.Drop is { inProgress: true } && !dropFlashed)
+        if (beatManager.DropQuery is { inProgress: true } && !dropFlashed)
         {
             TriggerDrop();
             dropFlashed = true;
@@ -275,7 +275,7 @@ public class Angles : EffectBase
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        PhraseEventInfo? fill = beatManager.Fill;
+        PhraseEventInfo? fill = beatManager.FillQuery;
         bool filling = fill is { inProgress: true };
         float anticipation = !filling ? Mathf.Clamp01(fill?.anticipation ?? 0f) : 0f;
         float primer = Mathf.Pow(anticipation, AnticipationCurvePower) * AnticipationPrimerCap;
@@ -302,7 +302,7 @@ public class Angles : EffectBase
     /// </summary>
     private float UpdateDropCascade()
     {
-        if (beatManager.Drop is not { inProgress: true })
+        if (beatManager.DropQuery is not { inProgress: true })
         {
             dropFlashed = false;
         }
@@ -328,7 +328,7 @@ public class Angles : EffectBase
     /// </summary>
     private float UpdateShadeDepth()
     {
-        float energyTarget = beatManager.Energy is { } energy ? energy.normalized : StandaloneEnergy;
+        float energyTarget = beatManager.EnergyQuery is { } energy ? energy.normalized : StandaloneEnergy;
         smoothedEnergy = SmoothToward(smoothedEnergy, energyTarget, EnergySmoothing, effectDelta);
         return Mathf.Lerp(ShadeDepthLow, ShadeDepthHigh, smoothedEnergy);
     }

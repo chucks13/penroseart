@@ -193,7 +193,7 @@ public class Julia : EffectBase
     protected override void OnNewGrid()
     {
         Reroll();
-        if (beatManager.Drop is { inProgress: true } && !dropFlashed)
+        if (beatManager.DropQuery is { inProgress: true } && !dropFlashed)
         {
             TriggerDrop();
             dropFlashed = true;
@@ -221,7 +221,7 @@ public class Julia : EffectBase
     /// </summary>
     private void UpdateDropSlam()
     {
-        if (beatManager.Drop is not { inProgress: true })
+        if (beatManager.DropQuery is not { inProgress: true })
         {
             dropFlashed = false;
         }
@@ -284,7 +284,7 @@ public class Julia : EffectBase
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        PhraseEventInfo? fill = beatManager.Fill;
+        PhraseEventInfo? fill = beatManager.FillQuery;
         var fillTarget = fill is { inProgress: true } ? Mathf.Clamp01(fill.Value.progress ?? 0f) : 0f;
         var fillRate = fillTarget > fillEnv ? FillAttack : FillRelease;
         fillEnv = Mathf.Lerp(fillEnv, fillTarget, 1f - Mathf.Exp(-fillRate * effectDelta));

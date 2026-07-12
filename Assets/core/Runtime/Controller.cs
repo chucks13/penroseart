@@ -1321,24 +1321,24 @@ public class Controller : Singleton<Controller>
     /// <summary>Wire-fed Grid state for the HUD, annotated when the current Phrase is irregular.</summary>
     private string FormatGridState()
     {
-        if (!(beatManager != null && beatManager.Grid is { } grid))
+        if (!(beatManager != null && beatManager.GridQuery is { } grid))
         {
             return "unlocked";
         }
 
-        return beatManager.Phrase?.irregular == true
+        return beatManager.PhraseQuery?.irregular == true
             ? $"{grid.State} (irregular)"
             : grid.State.ToString();
     }
 
     private string FormatGridPosition()
     {
-        return beatManager != null && beatManager.Grid is { } grid ? $"{grid.Beat}/16" : "no grid";
+        return beatManager != null && beatManager.GridQuery is { } grid ? $"{grid.Beat}/16" : "no grid";
     }
 
     private string FormatDropCue()
     {
-        var drop = beatManager.Drop;
+        var drop = beatManager.DropQuery;
         if (drop is { inProgress: true })
         {
             return "Drop now";
@@ -1478,7 +1478,7 @@ public class Controller : Singleton<Controller>
         timer = new Timer(effectTime, false);
         cueLog = CueLog.CreateForSession(
             Path.Combine(Application.persistentDataPath, "Logs"),
-            () => beatManager != null ? beatManager.Grid : null);
+            () => beatManager != null ? beatManager.GridQuery : null);
         switcher = new Switcher(this, effects, transitions, cueLog);
         switcher.SetInitialEffect(currentEffect, currentTransition);
         director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition, cueLog);

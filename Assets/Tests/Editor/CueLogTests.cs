@@ -260,7 +260,7 @@ public sealed class CueLogSeamTests
         controller.timer = new Timer(controller.effectTime, false);
 
         lines = new List<string>();
-        controller.cueLog = new CueLog(() => new LineCapture(lines), () => controller.beatManager.Grid, ownsWriter: false);
+        controller.cueLog = new CueLog(() => new LineCapture(lines), () => controller.beatManager.GridQuery, ownsWriter: false);
 
         switcher = new Switcher(controller, controller.effects, controller.transitions, controller.cueLog);
         switcher.SetInitialEffect(0, controller.currentTransition);

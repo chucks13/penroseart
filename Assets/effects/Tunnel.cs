@@ -7,7 +7,7 @@ using Random = UnityEngine.Random;
 /// </summary>
 /// <remarks>
 /// FILL: the tunnel rushes (scroll accelerates) and zooms (radial bands tighten) as the Fill builds,
-/// both eased off a smoothed <see cref="BeatManager.Fill"/> progress so they ramp in and release cleanly.
+/// both eased off a smoothed <see cref="BeatManager.FillQuery"/> progress so they ramp in and release cleanly.
 /// DROP: on the first Grid downbeat inside a Drop the tunnel slams once — a hard reverse warp (scroll lunges
 /// inward, the opposite of the Fill's forward build) plus a deep zoom — then decays over ~2 bars.
 /// </remarks>
@@ -113,7 +113,7 @@ public class Tunnel : EffectBase
     protected override void OnNewGrid()
     {
         Reroll();
-        if (beatManager.Drop is { inProgress: true } && !dropFlashed)
+        if (beatManager.DropQuery is { inProgress: true } && !dropFlashed)
         {
             TriggerDrop();
             dropFlashed = true;
@@ -160,7 +160,7 @@ public class Tunnel : EffectBase
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        PhraseEventInfo? fill = beatManager.Fill;
+        PhraseEventInfo? fill = beatManager.FillQuery;
         float fillTarget = fill is { inProgress: true } ? Mathf.Clamp01(fill.Value.progress ?? 0f) : 0f;
         float fillRate = fillTarget > fillEnv ? FillAttack : FillRelease;
         fillEnv = SmoothToward(fillEnv, fillTarget, fillRate, effectDelta);
@@ -174,7 +174,7 @@ public class Tunnel : EffectBase
     /// </summary>
     private void UpdateDropSlam()
     {
-        if (beatManager.Drop is not { inProgress: true })
+        if (beatManager.DropQuery is not { inProgress: true })
         {
             dropFlashed = false;
         }

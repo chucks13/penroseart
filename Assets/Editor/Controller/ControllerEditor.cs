@@ -72,7 +72,7 @@ public sealed class ControllerEditor : Editor
         var directorStatus = controller.DirectorStatus;
         var switcherStatus = controller.SwitcherStatus;
         var cueStatus = controller.SwitcherLoadedCueStatus;
-        var elapsed = ElapsedPhraseBeats(controller.beatManager?.Phrase);
+        var elapsed = ElapsedPhraseBeats(controller.beatManager?.PhraseQuery);
 
         DrawDirectorIntent(controller, directorStatus);
         EditorGUILayout.Space(6f);
@@ -93,7 +93,7 @@ public sealed class ControllerEditor : Editor
 
     private static void DrawDirectorIntent(Controller controller, DirectorStatus status)
     {
-        var gridCount = controller.beatManager?.Grid is { } grid ? grid.Beat : -1;
+        var gridCount = controller.beatManager?.GridQuery is { } grid ? grid.Beat : -1;
         EditorGUILayout.LabelField("DIRECTOR", EditorStyles.boldLabel);
         DrawRow("Mode", status.Mode.ToString());
         DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(gridCount)}");
@@ -118,7 +118,7 @@ public sealed class ControllerEditor : Editor
     {
         EditorGUILayout.LabelField("GRID", EditorStyles.boldLabel);
 
-        var grid = controller.beatManager?.Grid;
+        var grid = controller.beatManager?.GridQuery;
         var liveBeat = grid is { } g ? g.Beat : -1;
         var cueSlots = CueMarkGridSlots(status.CurrentSheet, liveBeat, elapsed);
 
@@ -198,7 +198,7 @@ public sealed class ControllerEditor : Editor
             DrawRow("Next Cue", "no upcoming cue");
         }
 
-        var phrase = controller.beatManager?.Phrase;
+        var phrase = controller.beatManager?.PhraseQuery;
         DrawRow("Phrase Remaining", phrase is { beatsUntilNext: { } left } ? $"{left}b" : "—");
     }
 
@@ -247,18 +247,18 @@ public sealed class ControllerEditor : Editor
         }
 
         var beatManager = controller.beatManager;
-        var grid = beatManager?.Grid;
+        var grid = beatManager?.GridQuery;
         DrawRow("Grid State", grid is { } g ? g.State.ToString() : "unlocked");
         DrawRow("Grid Beat", grid is { } gc ? $"{gc.Beat}/{CueSheet.GridBeats}" : "—");
         DrawRow("Grid Bar", grid is { } gb ? $"{gb.Bar}/4" : "—");
-        DrawRow("Phrase", FormatPhraseRow(beatManager?.Phrase));
+        DrawRow("Phrase", FormatPhraseRow(beatManager?.PhraseQuery));
         DrawRow("Next Phrase", FormatNextPhraseRow(beatManager?.NextPhrase));
-        DrawRow("Irregular Phrase", beatManager?.Phrase?.irregular == true ? "yes" : "no");
-        DrawRow("Energy", FormatEnergyRow(beatManager?.Energy));
-        DrawRow("Loop", FormatLoopRow(beatManager?.Loop));
+        DrawRow("Irregular Phrase", beatManager?.PhraseQuery?.irregular == true ? "yes" : "no");
+        DrawRow("Energy", FormatEnergyRow(beatManager?.EnergyQuery));
+        DrawRow("Loop", FormatLoopRow(beatManager?.LoopQuery));
     }
 
-    /// <summary>Current phrase as <c>label · elapsed/length</c>, from the wire-fed <see cref="BeatManager.Phrase"/>.</summary>
+    /// <summary>Current phrase as <c>label · elapsed/length</c>, from the wire-fed <see cref="BeatManager.PhraseQuery"/>.</summary>
     private static string FormatPhraseRow(PhraseInfo? info)
     {
         if (!(info is { } phrase))
@@ -357,7 +357,7 @@ public sealed class ControllerEditor : Editor
         return $"{next.label}{untilChange}{length}";
     }
 
-    /// <summary>Energy as <c>level (→ next in Nb)</c>, from <see cref="BeatManager.Energy"/>.</summary>
+    /// <summary>Energy as <c>level (→ next in Nb)</c>, from <see cref="BeatManager.EnergyQuery"/>.</summary>
     private static string FormatEnergyRow(EnergyInfo? info)
     {
         if (!(info is { } energy))
@@ -374,7 +374,7 @@ public sealed class ControllerEditor : Editor
         return energy.level.ToString();
     }
 
-    /// <summary>Loop as <c>rolling/set/off · Nb</c>, from the display-only <see cref="BeatManager.Loop"/>.</summary>
+    /// <summary>Loop as <c>rolling/set/off · Nb</c>, from the display-only <see cref="BeatManager.LoopQuery"/>.</summary>
     private static string FormatLoopRow(LoopInfo? info)
     {
         if (!(info is { } loop))

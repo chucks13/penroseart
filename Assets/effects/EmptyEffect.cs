@@ -68,7 +68,7 @@ public class EmptyEffect : EffectBase
     /// Waveform variant; delete it when you write your own effect.
     /// </summary>
     /// <remarks>
-    /// The base hook hides the Grid bookkeeping — you just react. The live <see cref="BeatManager.Grid"/> is a
+    /// The base hook hides the Grid bookkeeping — you just react. The live <see cref="BeatManager.GridQuery"/> is a
     /// nullable <see cref="GridInfo"/> you can still read directly in <see cref="Draw"/> for more than the
     /// downbeat edge:
     /// <list type="bullet">

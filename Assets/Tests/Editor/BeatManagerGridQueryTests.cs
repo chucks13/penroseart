@@ -4,7 +4,7 @@ using NUnit.Framework;
 using PenroseArt.RaveOsc;
 
 /// <summary>
-/// Pins the effect-facing 16-beat Grid query (<see cref="BeatManager.Grid"/> => <see cref="GridInfo"/>?).
+/// Pins the effect-facing 16-beat Grid query (<see cref="BeatManager.GridQuery"/> => <see cref="GridInfo"/>?).
 /// Wire-fed from RaveSystem's source-computed <c>timing_grid</c> lane: the null rules (off the grid /
 /// no usable wire grid), the 1..16 Count, the 1..4 Bar, the 0..1 Progress enrichment, and the
 /// locked/coasting/disputed Confidence parse.
@@ -37,7 +37,7 @@ public sealed class BeatManagerGridQueryTests
         // Default Unavailable timing_grid (beat -1, state null): no usable grid.
         var beatManager = CreateLiveBeatManager();
 
-        Assert.That(beatManager.Grid, Is.Null);
+        Assert.That(beatManager.GridQuery, Is.Null);
     }
 
     /// <summary>With no 4-count clock, Grid reads null even when a stale wire grid still rides on the snapshot.</summary>
@@ -50,7 +50,7 @@ public sealed class BeatManagerGridQueryTests
         beatManager.WireSnapshot.beatInBar = -1;
         SetGrid(beatManager, beat: 5, bar: 2, state: "locked");
 
-        Assert.That(beatManager.Grid, Is.Null);
+        Assert.That(beatManager.GridQuery, Is.Null);
     }
 
     [Test]
@@ -59,7 +59,7 @@ public sealed class BeatManagerGridQueryTests
         var beatManager = CreateLiveBeatManager();
         SetGrid(beatManager, beat: 5, bar: 2, state: "locked");
 
-        var grid = beatManager.Grid;
+        var grid = beatManager.GridQuery;
 
         Assert.That(grid, Is.Not.Null);
         Assert.That(grid!.Value.State, Is.EqualTo(GridState.Locked));
@@ -76,10 +76,10 @@ public sealed class BeatManagerGridQueryTests
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 8, 2, "coasting");
-        Assert.That(beatManager.Grid?.State, Is.EqualTo(GridState.Coasting));
+        Assert.That(beatManager.GridQuery?.State, Is.EqualTo(GridState.Coasting));
 
         SetGrid(beatManager, 8, 2, "DISPUTED");
-        Assert.That(beatManager.Grid?.State, Is.EqualTo(GridState.Disputed));
+        Assert.That(beatManager.GridQuery?.State, Is.EqualTo(GridState.Disputed));
     }
 
     [Test]
@@ -88,10 +88,10 @@ public sealed class BeatManagerGridQueryTests
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 5, 2, string.Empty);
-        Assert.That(beatManager.Grid, Is.Null, "An empty state is no usable grid.");
+        Assert.That(beatManager.GridQuery, Is.Null, "An empty state is no usable grid.");
 
         SetGrid(beatManager, 5, 2, "wobbling");
-        Assert.That(beatManager.Grid, Is.Null, "An unrecognized state never becomes a wrong state.");
+        Assert.That(beatManager.GridQuery, Is.Null, "An unrecognized state never becomes a wrong state.");
     }
 
     [Test]
@@ -101,7 +101,7 @@ public sealed class BeatManagerGridQueryTests
         var beatManager = CreateLiveBeatManager();
         SetGrid(beatManager, beat: -1, bar: -1, state: "coasting");
 
-        Assert.That(beatManager.Grid, Is.Null);
+        Assert.That(beatManager.GridQuery, Is.Null);
     }
 
     [Test]
@@ -110,14 +110,14 @@ public sealed class BeatManagerGridQueryTests
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 1, 1, "locked");
-        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(1));
-        Assert.That(beatManager.Grid!.Value.Progress, Is.EqualTo(0.03125f).Within(0.0001f)); // (0 + 0.5) / 16
-        Assert.That(beatManager.Grid!.Value.Progress, Is.InRange(0f, 1f));
+        Assert.That(beatManager.GridQuery!.Value.Beat, Is.EqualTo(1));
+        Assert.That(beatManager.GridQuery!.Value.Progress, Is.EqualTo(0.03125f).Within(0.0001f)); // (0 + 0.5) / 16
+        Assert.That(beatManager.GridQuery!.Value.Progress, Is.InRange(0f, 1f));
 
         SetGrid(beatManager, 16, 4, "locked");
-        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(16));
-        Assert.That(beatManager.Grid!.Value.Progress, Is.EqualTo(0.96875f).Within(0.0001f)); // (15 + 0.5) / 16
-        Assert.That(beatManager.Grid!.Value.Progress, Is.InRange(0f, 1f));
+        Assert.That(beatManager.GridQuery!.Value.Beat, Is.EqualTo(16));
+        Assert.That(beatManager.GridQuery!.Value.Progress, Is.EqualTo(0.96875f).Within(0.0001f)); // (15 + 0.5) / 16
+        Assert.That(beatManager.GridQuery!.Value.Progress, Is.InRange(0f, 1f));
     }
 
     [Test]
@@ -128,9 +128,9 @@ public sealed class BeatManagerGridQueryTests
         var beatManager = CreateLiveBeatManager();
 
         SetGrid(beatManager, 14, 4, "locked");
-        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(14));
+        Assert.That(beatManager.GridQuery!.Value.Beat, Is.EqualTo(14));
 
         SetGrid(beatManager, 2, 1, "locked");
-        Assert.That(beatManager.Grid!.Value.Beat, Is.EqualTo(2));
+        Assert.That(beatManager.GridQuery!.Value.Beat, Is.EqualTo(2));
     }
 }

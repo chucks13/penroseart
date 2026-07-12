@@ -123,10 +123,10 @@ internal readonly struct BeatManagerDashboardModel
             new CountdownChipView("OFF BEAT", beatManager?.OffBeat == true ? "YES" : "NO"),
             active ? beatManager.BarPhase : 0f,
             BuildEnvelopeRow(beatManager, onScreenVariant),
-            BuildPhraseEventRow(beatManager?.Fill),
-            BuildPhraseEventRow(beatManager?.Drop),
-            BuildEnergyRow(beatManager?.Energy),
-            BuildPhraseRow(beatManager?.Phrase, beatManager?.NextPhrase),
+            BuildPhraseEventRow(beatManager?.FillQuery),
+            BuildPhraseEventRow(beatManager?.DropQuery),
+            BuildEnergyRow(beatManager?.EnergyQuery),
+            BuildPhraseRow(beatManager?.PhraseQuery, beatManager?.NextPhrase),
             BuildLevelsRow(beatManager?.Levels),
             new ColorBankRowView(beatManager?.LevelsRgb, beatManager?.LevelsHue, beatManager?.LevelsPalette));
     }

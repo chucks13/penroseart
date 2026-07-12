@@ -270,7 +270,7 @@ public class CrystalGrowth : EffectBase
 
         // Arm the Drop edge to the current state so activating mid-drop doesn't fire a false flash; the flash is for
         // the drop's onset, not for being inside one.
-        wasDropActive = beatManager.Drop is { inProgress: true };
+        wasDropActive = beatManager.DropQuery is { inProgress: true };
         dropFlash = 0f;
         dropFlashElapsed = 0f;
         dropFlashSeconds = DropFlashFallbackSeconds;
@@ -317,7 +317,7 @@ public class CrystalGrowth : EffectBase
         // moment the fill ends — into the Drop sparkle when one lands, or back to normal growth when not.
         // Because Fill.progress is normalized to the fill's length, the arc scales with it — short fills snap,
         // long fills lean in.
-        PhraseEventInfo? fillInfo = beatManager.Fill;
+        PhraseEventInfo? fillInfo = beatManager.FillQuery;
         bool inFill = fillInfo is { inProgress: true };
         float progress = inFill ? (fillInfo.Value.progress ?? 1f) : 0f;
         float fillAmount = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress));
@@ -657,7 +657,7 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Drives the Drop sparkle envelope. On the rising edge of <see cref="BeatManager.Drop"/> in-progress — the
+    /// Drives the Drop sparkle envelope. On the rising edge of <see cref="BeatManager.DropQuery"/> in-progress — the
     /// drop's beat one — it opens a fresh generation seeded in one unison hue (which the spread surge then washes
     /// across the whole wall) and snaps the envelope to 1. The envelope then eases back to 0 over
     /// <see cref="DropFadeBars"/> bars (sized from the live tempo, or <see cref="DropFlashFallbackSeconds"/> when
@@ -666,7 +666,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void TriggerDropFlash(float dt)
     {
-        bool dropActive = beatManager.Drop is { inProgress: true };
+        bool dropActive = beatManager.DropQuery is { inProgress: true };
 
         if (dropActive && !wasDropActive)
         {
