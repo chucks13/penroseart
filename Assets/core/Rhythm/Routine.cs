@@ -1,103 +1,112 @@
-// Routine values: four one-bar Waveform acquisition slots composing exactly one Grid.
+// Routine values: four resolved one-bar Waveforms composing exactly one Grid.
 
 #nullable enable
 
 using System;
 
 /// <summary>
-/// A 16-beat choreography of exactly four one-bar slots. Each slot either draws a Waveform from
-/// an Energy set or pins an authored Waveform; the synthesizer owns draw resolution and live Grid
-/// evaluation. Draws persist until the holder explicitly rerolls or opts into refresh on wrap.
+/// A 16-beat choreography of exactly four resolved one-bar Waveforms. The value stores no
+/// acquisition settings or lifecycle policy; callers acquire another value explicitly when they
+/// choose. The synthesizer only evaluates this value against the hub's captured Grid.
 /// </summary>
 public sealed class Routine
 {
-    /// <summary>A Routine is exactly four one-bar slots, one 16-beat Grid.</summary>
-    public const int SlotCount = 4;
+    /// <summary>One Routine is exactly four resolved one-bar Waveforms, one 16-beat Grid.</summary>
+    internal const int SlotCount = 4;
 
-    /// <summary>The four author-provided slot acquisition instructions, in Grid bar order.</summary>
-    private readonly RoutineSlot[] slots;
+    /// <summary>The four resolved Waveforms in Grid bar order.</summary>
+    private readonly Waveform[] waveforms;
 
-    /// <summary>Resolved Waveforms for draw slots; pinned slots never use this cache.</summary>
-    private readonly Waveform?[] resolvedDraws = new Waveform?[SlotCount];
-
-    /// <summary>The last placed Grid progress this Routine observed; null before its first placed read.</summary>
-    internal float? LastObservedGridProgress { get; set; }
-
-    /// <summary>
-    /// Whether the synthesizer redraws this Routine's draw slots when two placed observations
-    /// witness the Grid position stepping backward. False by default; refresh is holder-chosen.
-    /// </summary>
-    public bool RefreshOnWrap { get; set; }
-
-    /// <summary>Builds one Routine from exactly four authorable one-bar slots.</summary>
-    /// <param name="first">How Grid bar 1 gets its Waveform.</param>
-    /// <param name="second">How Grid bar 2 gets its Waveform.</param>
-    /// <param name="third">How Grid bar 3 gets its Waveform.</param>
-    /// <param name="fourth">How Grid bar 4 gets its Waveform.</param>
-    public Routine(RoutineSlot first, RoutineSlot second, RoutineSlot third, RoutineSlot fourth)
+    /// <summary>Builds one immutable Routine from copied resolved values.</summary>
+    private Routine(Waveform[] waveforms)
     {
-        slots = new[] { first, second, third, fourth };
+        this.waveforms = (Waveform[])waveforms.Clone();
     }
 
-    /// <summary>Returns the author-provided acquisition instruction for one zero-based Grid bar.</summary>
-    internal RoutineSlot SlotAt(int index)
+    /// <summary>Composes exactly four already-resolved one-bar Waveforms into one immutable value.</summary>
+    /// <param name="bar1">The Waveform for Grid bar 1.</param>
+    /// <param name="bar2">The Waveform for Grid bar 2.</param>
+    /// <param name="bar3">The Waveform for Grid bar 3.</param>
+    /// <param name="bar4">The Waveform for Grid bar 4.</param>
+    public static Routine Of(Waveform bar1, Waveform bar2, Waveform bar3, Waveform bar4)
     {
-        return slots[index];
+        return new Routine(new[] { bar1, bar2, bar3, bar4 });
     }
 
-    /// <summary>Reads a draw slot's resolved Waveform, or null while that slot is unresolved.</summary>
-    internal Waveform? ResolvedDrawAt(int index)
+    /// <summary>Returns one zero-based Grid bar's resolved Waveform.</summary>
+    internal Waveform WaveformAt(int index)
     {
-        return resolvedDraws[index];
-    }
-
-    /// <summary>Caches one genuine Pool draw for a draw slot.</summary>
-    internal void SetResolvedDraw(int index, Waveform waveform)
-    {
-        resolvedDraws[index] = waveform;
+        return waveforms[index];
     }
 }
 
 /// <summary>
-/// One Routine bar's Waveform acquisition instruction: draw within an Energy set, or pin one
-/// Waveform value. Silence is expressed by pinning an all-zero Waveform, never by another kind.
+/// One Routine bar's acquisition setting: draw within an Energy set, pin an inline Waveform,
+/// or pin a stable Preset name. Silence is an all-zero inline Waveform, never another kind.
 /// </summary>
 public readonly struct RoutineSlot
 {
-    /// <summary>Whether this slot asks the synthesizer for a Pool draw instead of a pinned value.</summary>
-    internal bool IsDraw { get; }
-
-    /// <summary>The Energy set a draw uses; empty means the whole Pool.</summary>
-    internal Energy[] Levels { get; }
-
-    /// <summary>The author-pinned value; meaningful only when <see cref="IsDraw"/> is false.</summary>
-    internal Waveform PinnedWaveform { get; }
-
-    /// <summary>Builds the immutable acquisition instruction used by the public factories.</summary>
-    private RoutineSlot(bool isDraw, Energy[] levels, Waveform pinnedWaveform)
+    /// <summary>The three sanctioned ways a Routine bar acquires its Waveform.</summary>
+    internal enum Kind
     {
-        IsDraw = isDraw;
-        Levels = levels;
-        PinnedWaveform = pinnedWaveform;
+        /// <summary>Draw from the Waveform Pool within an Energy set.</summary>
+        Draw,
+
+        /// <summary>Pin one inline Waveform value.</summary>
+        Inline,
+
+        /// <summary>Pin one stable Preset name.</summary>
+        Preset,
     }
 
-    /// <summary>
-    /// Makes a slot that draws from Pool entries at the requested Energy levels; no levels means
-    /// the whole Pool. The set is copied so later caller mutation cannot rewrite the Routine.
-    /// </summary>
-    /// <param name="levels">The Energy levels to draw within; empty for the whole Pool.</param>
-    public static RoutineSlot Draw(params Energy[] levels)
+    /// <summary>How this slot acquires its Waveform.</summary>
+    internal Kind Acquisition { get; }
+
+    /// <summary>The Energy set for a draw; empty means the whole Pool.</summary>
+    internal Energy[] Levels { get; }
+
+    /// <summary>The inline-pinned value; meaningful only for <see cref="Kind.Inline"/>.</summary>
+    internal Waveform PinnedWaveform { get; }
+
+    /// <summary>The stable Preset handle; meaningful only for <see cref="Kind.Preset"/>.</summary>
+    internal string? PresetName { get; }
+
+    /// <summary>Builds one immutable acquisition instruction.</summary>
+    private RoutineSlot(Kind acquisition, Energy[] levels, Waveform pinnedWaveform, string? presetName)
+    {
+        Acquisition = acquisition;
+        Levels = levels;
+        PinnedWaveform = pinnedWaveform;
+        PresetName = presetName;
+    }
+
+    /// <summary>Requests a Pool draw at this Energy level during explicit Routine acquisition.</summary>
+    /// <param name="level">The Energy level to draw within.</param>
+    public static RoutineSlot Draw(Energy level)
+    {
+        return DrawFrom(new[] { level });
+    }
+
+    /// <summary>A pinned inline Waveform; this bar always plays the captured value.</summary>
+    /// <param name="waveform">The Waveform to pin, including an all-zero Waveform for silence.</param>
+    public static RoutineSlot Pin(Waveform waveform)
+    {
+        return new RoutineSlot(Kind.Inline, Array.Empty<Energy>(), waveform, null);
+    }
+
+    /// <summary>Requests a stable Preset name during explicit Routine acquisition.</summary>
+    /// <param name="presetName">The exact Preset name.</param>
+    public static RoutineSlot Pin(string presetName)
+    {
+        return new RoutineSlot(Kind.Preset, Array.Empty<Energy>(), default, presetName);
+    }
+
+    /// <summary>Builds the set-based draw used by <see cref="WaveformSynth.RandomRoutine"/>.</summary>
+    internal static RoutineSlot DrawFrom(Energy[] levels)
     {
         var copiedLevels = levels == null || levels.Length == 0
             ? Array.Empty<Energy>()
             : (Energy[])levels.Clone();
-        return new RoutineSlot(true, copiedLevels, default);
-    }
-
-    /// <summary>Makes a slot that always carries the given authored Waveform value.</summary>
-    /// <param name="waveform">The Waveform to pin, including an all-zero Waveform for silence.</param>
-    public static RoutineSlot Pin(Waveform waveform)
-    {
-        return new RoutineSlot(false, Array.Empty<Energy>(), waveform);
+        return new RoutineSlot(Kind.Draw, copiedLevels, default, null);
     }
 }

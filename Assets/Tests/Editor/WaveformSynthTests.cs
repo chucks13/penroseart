@@ -418,7 +418,7 @@ public sealed class WaveformSynthTests
         Assert.That(hitSynth.Hit(passed), Is.True);
     }
 
-    /// <summary>Releasing to Auto restores each consumer's own acquisition immediately.</summary>
+    /// <summary>Releasing to Auto restores unheld acquisition behavior for subsequent requests.</summary>
     [Test]
     public void ReleaseToAuto_RestoresAcquisition()
     {

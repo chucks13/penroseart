@@ -122,20 +122,13 @@ public sealed class WaveformSynth
     /// <param name="presetName">The Preset's name, matched exactly.</param>
     public Waveform? ByName(string presetName)
     {
-        if (string.IsNullOrEmpty(presetName))
+        var waveform = FindUnheldByName(presetName);
+        if (waveform == null)
         {
             return null;
         }
 
-        for (var i = 0; i < entries.Length; i++)
-        {
-            if (entries[i].name == presetName)
-            {
-                return held is { } heldValue ? heldValue : entries[i].waveform;
-            }
-        }
-
-        return null;
+        return held ?? waveform;
     }
 
     // ── Evaluation — the one primitive ──────────────────────────────────────
@@ -224,56 +217,58 @@ public sealed class WaveformSynth
     // ── Routines (ticket 19) ──────────────────────────────────────────────────
 
     /// <summary>
-    /// Rolls a four-slot Routine whose bars each draw within the requested Energy set; no levels
-    /// means the whole Pool. All four draws resolve immediately and bypass the Waveform Hold, so
-    /// releasing the Hold reveals the Routine's genuine values.
+    /// Explicitly acquires a four-bar Routine whose bars each draw within the requested Energy
+    /// set; no levels means the whole Pool. All draws resolve before return and bypass the
+    /// Waveform Hold, so release reveals the Routine's genuine values.
     /// </summary>
     /// <param name="levels">The Energy levels each slot draws within; empty for the whole Pool.</param>
     public Routine RandomRoutine(params Energy[] levels)
     {
-        var routine = new Routine(
-            RoutineSlot.Draw(levels),
-            RoutineSlot.Draw(levels),
-            RoutineSlot.Draw(levels),
-            RoutineSlot.Draw(levels));
-        Reroll(routine);
-        return routine;
+        return Routine.Of(
+            DrawUnheld(levels),
+            DrawUnheld(levels),
+            DrawUnheld(levels),
+            DrawUnheld(levels));
     }
 
     /// <summary>
-    /// Redraws every draw slot in the given Routine immediately, bypassing the Waveform Hold;
-    /// author-pinned slots remain untouched. Always callable, independent of Grid placement.
+    /// Explicitly acquires one immutable Routine from four caller-owned settings. Energy slots
+    /// draw from the Pool, Preset-name pins resolve by stable name, and inline pins keep their
+    /// values. Null when any Preset name is missing. Resolution bypasses the Waveform Hold so
+    /// release reveals the Routine's genuine values. This method carries no replacement policy.
     /// </summary>
-    /// <param name="routine">The holder-owned Routine whose draw caches should be replaced.</param>
-    public void Reroll(Routine routine)
+    /// <param name="bar1">How Grid bar 1 acquires its Waveform.</param>
+    /// <param name="bar2">How Grid bar 2 acquires its Waveform.</param>
+    /// <param name="bar3">How Grid bar 3 acquires its Waveform.</param>
+    /// <param name="bar4">How Grid bar 4 acquires its Waveform.</param>
+    public Routine? CreateRoutine(
+        RoutineSlot bar1,
+        RoutineSlot bar2,
+        RoutineSlot bar3,
+        RoutineSlot bar4)
     {
-        if (routine == null)
+        if (!TryResolveRoutineSlot(bar1, out var waveform1)
+            || !TryResolveRoutineSlot(bar2, out var waveform2)
+            || !TryResolveRoutineSlot(bar3, out var waveform3)
+            || !TryResolveRoutineSlot(bar4, out var waveform4))
         {
-            throw new ArgumentNullException(nameof(routine));
+            return null;
         }
 
-        for (var i = 0; i < Routine.SlotCount; i++)
-        {
-            var slot = routine.SlotAt(i);
-            if (slot.IsDraw)
-            {
-                routine.SetResolvedDraw(i, DrawUnheld(slot.Levels));
-            }
-        }
+        return Routine.Of(waveform1, waveform2, waveform3, waveform4);
     }
 
     /// <summary>
-    /// The Routine's envelope at the current placed Grid position. The one-based Grid bar selects
-    /// one of four slots and the fraction within that bar evaluates its Waveform. Null when the
-    /// Routine is null, no Grid is present, or the Grid carries the partial unplaced shape. Grid
-    /// State is served trust data, never an evaluation gate.
+    /// Observes the Routine's envelope at the current placed Grid position. The one-based Grid bar
+    /// selects one resolved Waveform and the fraction within that bar evaluates it. Null when the
+    /// Routine is null or no Grid position exists. Grid State is trust data, never an evaluation
+    /// gate.
     /// </summary>
     /// <remarks>
-    /// Each Routine remembers its own last placed Grid progress, so sparse reads still witness a
-    /// backward step. When <see cref="Routine.RefreshOnWrap"/> is enabled, that edge performs one
-    /// genuine reroll before evaluation; repeated reads at the same position do not reroll again.
-    /// The Waveform Hold reaches through both draw and pinned slots only at evaluation, leaving
-    /// draw caches genuine and ready for <see cref="ReleaseToAuto"/>.
+    /// This read never draws, caches, advances a cursor, reconstructs a wrap, or replaces anything.
+    /// A caller that wants another value invokes an acquisition method with its chosen settings
+    /// under any condition it owns. The Waveform Hold substitutes at evaluation without rewriting
+    /// the Routine.
     /// </remarks>
     /// <param name="routine">The holder-owned Routine, or null when the consumer holds none.</param>
     public float? Evaluate(Routine? routine)
@@ -288,33 +283,9 @@ public sealed class WaveformSynth
             return null;
         }
 
-        var wrapped = Edges.Wrapped(routine.LastObservedGridProgress, progress);
-        routine.LastObservedGridProgress = progress;
-        if (wrapped && routine.RefreshOnWrap)
-        {
-            Reroll(routine);
-        }
-
-        var slotIndex = bar - 1;
-        var slot = routine.SlotAt(slotIndex);
-        Waveform value;
-        if (slot.IsDraw)
-        {
-            value = routine.ResolvedDrawAt(slotIndex) ?? DrawUnheld(slot.Levels);
-            routine.SetResolvedDraw(slotIndex, value);
-        }
-        else
-        {
-            value = slot.PinnedWaveform;
-        }
-
-        if (held is { } heldValue)
-        {
-            value = heldValue;
-        }
-
-        var barFraction = Mathf.Repeat(progress * (float)Routine.SlotCount, 1f);
-        return value.Evaluate(barFraction);
+        var waveform = held ?? routine.WaveformAt(bar - 1);
+        var barFraction = Mathf.Repeat(progress * Routine.SlotCount, 1f);
+        return waveform.Evaluate(barFraction);
     }
 
     // ── The frame step ───────────────────────────────────────────────────────
@@ -347,8 +318,8 @@ public sealed class WaveformSynth
     }
 
     /// <summary>
-    /// Release the Waveform Hold; every effect acquires and evaluates its own Waveform again
-    /// (Auto).
+    /// Clears the Waveform Hold (Auto). Subsequent single-Waveform acquisitions and all
+    /// evaluations pass through caller values again; no consumer is instructed to reacquire.
     /// </summary>
     public void ReleaseToAuto()
     {
@@ -359,6 +330,50 @@ public sealed class WaveformSynth
     private Waveform DrawWholePool()
     {
         return entries[UnityEngine.Random.Range(0, entries.Length)].waveform;
+    }
+
+    /// <summary>Finds one Pool entry by stable Preset name without applying the Waveform Hold.</summary>
+    private Waveform? FindUnheldByName(string? presetName)
+    {
+        if (string.IsNullOrEmpty(presetName))
+        {
+            return null;
+        }
+
+        for (var i = 0; i < entries.Length; i++)
+        {
+            if (entries[i].name == presetName)
+            {
+                return entries[i].waveform;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Resolves one caller-authored Routine slot without applying the Waveform Hold.</summary>
+    private bool TryResolveRoutineSlot(RoutineSlot slot, out Waveform waveform)
+    {
+        switch (slot.Acquisition)
+        {
+            case RoutineSlot.Kind.Draw:
+                waveform = DrawUnheld(slot.Levels);
+                return true;
+            case RoutineSlot.Kind.Inline:
+                waveform = slot.PinnedWaveform;
+                return true;
+            case RoutineSlot.Kind.Preset:
+                if (FindUnheldByName(slot.PresetName) is { } namedWaveform)
+                {
+                    waveform = namedWaveform;
+                    return true;
+                }
+
+                waveform = default;
+                return false;
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
     }
 
     /// <summary>
