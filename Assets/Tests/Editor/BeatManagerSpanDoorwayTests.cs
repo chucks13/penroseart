@@ -569,17 +569,35 @@ public sealed class BeatManagerSpanDoorwayTests
     public void GridWrappedFiresOnTheWrapToTheOneNotOnAppearance()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.beatInBar = 1;
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 16, bar = 4, state = "locked" };
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+        {
+            OnAirOscWriter.WriteInt(ref bundle, "/rave/onair/beat_in_bar", 1);
+            OnAirOscWriter.WriteTimingGrid(ref bundle, "/rave/onair/timing_grid", 9, 3, "locked");
+        });
         beatManager.Update(0f);
         Assert.That(beatManager.Grid.Wrapped, Is.False, "the grid appearing is not a boundary the music crossed");
 
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 1, bar = 1, state = "locked" };
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+        {
+            OnAirOscWriter.WriteInt(ref bundle, "/rave/onair/beat_in_bar", 1);
+            OnAirOscWriter.WriteTimingGrid(ref bundle, "/rave/onair/timing_grid", 8, 2, "locked");
+        });
+        beatManager.Update(0f);
+        Assert.That(beatManager.Grid.Wrapped, Is.False, "a backward position that does not reach the One is not a wrap");
+
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+        {
+            OnAirOscWriter.WriteInt(ref bundle, "/rave/onair/beat_in_bar", 1);
+            OnAirOscWriter.WriteTimingGrid(ref bundle, "/rave/onair/timing_grid", 1, 1, "locked");
+        });
         beatManager.Update(0f);
         Assert.That(beatManager.Grid.Wrapped, Is.True, "the 16-count came back to the One");
 
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 2, bar = 1, state = "locked" };
+        FeedWire(beatManager, (ref OscBundleWriter bundle) =>
+        {
+            OnAirOscWriter.WriteInt(ref bundle, "/rave/onair/beat_in_bar", 1);
+            OnAirOscWriter.WriteTimingGrid(ref bundle, "/rave/onair/timing_grid", 2, 1, "locked");
+        });
         beatManager.Update(0f);
         Assert.That(beatManager.Grid.Wrapped, Is.False, "an edge is true for exactly one frame");
     }

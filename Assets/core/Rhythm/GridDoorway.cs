@@ -29,8 +29,8 @@ public readonly struct GridView
 
     /// <summary>
     /// Edge: the 16-count wrapped back to the One this frame — a new Grid began. Never null. The
-    /// grid position stepping backward between two placed observations is the wrap (a loop or
-    /// seek re-presenting an earlier Grid is a new Grid too); the grid appearing is a mode
+    /// current placed beat returning to the One after a different placed beat is the wrap. A
+    /// backward position that does not reach the One is not a wrap; the grid appearing is a mode
     /// change, not a boundary the music crossed.
     /// </summary>
     public bool Wrapped { get; }
@@ -135,7 +135,9 @@ public partial class BeatManager
         }
 
         var phase = facts?.Beat is { } placedBeat ? (float?)placedBeat : null;
-        var wrapped = Edges.Wrapped(previousGridBeat, phase);
+        var wrapped = previousGridBeat is { } previousBeat
+            && phase == 1f
+            && previousBeat != 1f;
         previousGridBeat = phase;
 
         return new GridView(facts, wrapped, elapsed);
