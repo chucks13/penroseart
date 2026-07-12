@@ -74,12 +74,12 @@ public sealed class BeatManagerLevelsDoorwayTests
         const float releaseSeconds = 0.2f;
         const float lowStep = 0f;
         const float highStep = 1f;
-        var attackAlpha = 1f - Mathf.Exp(-frameSeconds / attackSeconds);
-        var releaseAlpha = 1f - Mathf.Exp(-frameSeconds / releaseSeconds);
-        var attackFrameOne = lowStep + ((highStep - lowStep) * attackAlpha);
-        var attackFrameTwo = attackFrameOne + ((highStep - attackFrameOne) * attackAlpha);
-        var releaseFrameOne = attackFrameTwo + ((lowStep - attackFrameTwo) * releaseAlpha);
-        var releaseFrameTwo = releaseFrameOne + ((lowStep - releaseFrameOne) * releaseAlpha);
+        // Independent worked example for the existing follower contract. These literals are
+        // calculated outside the production implementation, not by restating its algorithm here.
+        const float attackFrameOne = 0.6321206f;
+        const float attackFrameTwo = 0.8646647f;
+        const float releaseFrameOne = 0.5244457f;
+        const float releaseFrameTwo = 0.3180924f;
 
         var beatManager = new BeatManager
         {
@@ -287,10 +287,10 @@ public sealed class BeatManagerLevelsDoorwayTests
     {
         var color = WiredTriple(0.2f, 0.4f, 0.6f).Hsv();
 
-        var expected = Color.HSVToRGB(2f / 3f, 2f / 3f, 0.6f);
-        Assert.That(color.r, Is.EqualTo(expected.r).Within(0.0001f));
-        Assert.That(color.g, Is.EqualTo(expected.g).Within(0.0001f));
-        Assert.That(color.b, Is.EqualTo(expected.b).Within(0.0001f));
+        // Worked HSV example: H=240°, S=2/3, V=0.6 gives RGB (0.2, 0.2, 0.6).
+        Assert.That(color.r, Is.EqualTo(0.2f).Within(0.0001f));
+        Assert.That(color.g, Is.EqualTo(0.2f).Within(0.0001f));
+        Assert.That(color.b, Is.EqualTo(0.6f).Within(0.0001f));
     }
 
     /// <summary>
@@ -334,10 +334,10 @@ public sealed class BeatManagerLevelsDoorwayTests
     {
         var color = WiredTriple(0.2f, 0.4f, 0.6f).Hsv(s: 0.7f);
 
-        var expected = Color.HSVToRGB(2f / 3f, 0.7f, 0.6f);
-        Assert.That(color.r, Is.EqualTo(expected.r).Within(0.0001f));
-        Assert.That(color.g, Is.EqualTo(expected.g).Within(0.0001f));
-        Assert.That(color.b, Is.EqualTo(expected.b).Within(0.0001f));
+        // Worked HSV example: H=240°, S=0.7, V=0.6 gives RGB (0.18, 0.18, 0.6).
+        Assert.That(color.r, Is.EqualTo(0.18f).Within(0.0001f));
+        Assert.That(color.g, Is.EqualTo(0.18f).Within(0.0001f));
+        Assert.That(color.b, Is.EqualTo(0.6f).Within(0.0001f));
     }
 
     // ---- Fixtures -----------------------------------------------------------------------------

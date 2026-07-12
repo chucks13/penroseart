@@ -6,98 +6,35 @@
 using UnityEngine;
 
 /// <summary>
-/// The three audio bands of the Levels triple. Distinct from <see cref="Energy"/> (phrase-level
-/// intensity): a Band names an instantaneous audio lane, not a tier on the intensity ladder.
+/// The Levels doorway payload: three forms of the one band triple, and effects pick by
+/// temperament — Normalized mirrors the wire, Smoothed glides, Peak snaps and drains. The
+/// doorway is nullable as a whole (the forms come all together or not at all) and carries no
+/// signals: Levels runs at frame rate, so there is no edge to serve.
 /// </summary>
-public enum Band
+public readonly struct LevelsView
 {
-    /// <summary>The low-frequency band.</summary>
-    Low,
+    /// <summary>The wire fact untouched — each band already normalized 0..1 to the track's own maxima by the sender.</summary>
+    public LevelsTriple Normalized { get; }
 
-    /// <summary>The mid-frequency band.</summary>
-    Mid,
+    /// <summary>
+    /// The attack/release follower — bands glide. Its two knobs
+    /// (<see cref="BeatManager.levelsAttackSeconds"/> / <see cref="BeatManager.levelsReleaseSeconds"/>)
+    /// live with the inbound knobs, apart from the data reads.
+    /// </summary>
+    public LevelsTriple Smoothed { get; }
 
-    /// <summary>The high-frequency band.</summary>
-    High,
-}
+    /// <summary>
+    /// Instant rise, linear drain of full scale in one beat — fixed 500 ms when levels flow with
+    /// no usable tempo. Tempo-anchored: no knob.
+    /// </summary>
+    public LevelsTriple Peak { get; }
 
-/// <summary>
-/// A Color Bank component source: a band, a reading, or any float constant — the shared readings
-/// vocabulary as knobs. Implicitly convertible from float, so a fixed component is just the
-/// number: <c>triple.Hsv(s: 0.7f)</c>. StrongestBand is not a source — it names a band, not a
-/// 0..1 value.
-/// </summary>
-public readonly struct LevelSource
-{
-    /// <summary>Which triple value the source reads; Constant reads the stored number instead.</summary>
-    private enum Selector
+    /// <summary>Built only by the hub's per-update capture, after the shaping state has settled.</summary>
+    internal LevelsView(LevelsTriple normalized, LevelsTriple smoothed, LevelsTriple peak)
     {
-        Low,
-        Mid,
-        High,
-        Average,
-        Strongest,
-        Centroid,
-        Dominance,
-        Constant,
-    }
-
-    /// <summary>The band or derived reading this knob selects, or Constant for a pinned component.</summary>
-    private readonly Selector selector;
-
-    /// <summary>The pinned component value used only when <see cref="selector"/> selects Constant.</summary>
-    private readonly float constant;
-
-    /// <summary>Builds one Color Bank knob from either a triple selector or a pinned value.</summary>
-    /// <param name="selector">The triple reading to use, or Constant to use <paramref name="constant"/>.</param>
-    /// <param name="constant">The pinned component value; ignored for band and derived-reading selectors.</param>
-    private LevelSource(Selector selector, float constant)
-    {
-        this.selector = selector;
-        this.constant = constant;
-    }
-
-    /// <summary>The low band.</summary>
-    public static readonly LevelSource Low = new LevelSource(Selector.Low, 0f);
-
-    /// <summary>The mid band.</summary>
-    public static readonly LevelSource Mid = new LevelSource(Selector.Mid, 0f);
-
-    /// <summary>The high band.</summary>
-    public static readonly LevelSource High = new LevelSource(Selector.High, 0f);
-
-    /// <summary>The Average reading — mean band energy.</summary>
-    public static readonly LevelSource Average = new LevelSource(Selector.Average, 0f);
-
-    /// <summary>The Strongest reading — the strongest band's value.</summary>
-    public static readonly LevelSource Strongest = new LevelSource(Selector.Strongest, 0f);
-
-    /// <summary>The Centroid reading — spectral balance, low 0 to high 1.</summary>
-    public static readonly LevelSource Centroid = new LevelSource(Selector.Centroid, 0f);
-
-    /// <summary>The Dominance reading — how much the strongest band dominates the weakest.</summary>
-    public static readonly LevelSource Dominance = new LevelSource(Selector.Dominance, 0f);
-
-    /// <summary>Any constant component value, e.g. pinning saturation: <c>Hsv(s: 0.7f)</c>.</summary>
-    public static implicit operator LevelSource(float constant)
-    {
-        return new LevelSource(Selector.Constant, constant);
-    }
-
-    /// <summary>Resolves this source against one triple — the Color Bank's component read.</summary>
-    internal float Read(in LevelsTriple triple)
-    {
-        switch (selector)
-        {
-            case Selector.Low: return triple.Low;
-            case Selector.Mid: return triple.Mid;
-            case Selector.High: return triple.High;
-            case Selector.Average: return triple.Average;
-            case Selector.Strongest: return triple.Strongest;
-            case Selector.Centroid: return triple.Centroid;
-            case Selector.Dominance: return triple.Dominance;
-            default: return constant;
-        }
+        Normalized = normalized;
+        Smoothed = smoothed;
+        Peak = peak;
     }
 }
 
@@ -212,35 +149,98 @@ public readonly struct LevelsTriple
 }
 
 /// <summary>
-/// The Levels doorway payload: three forms of the one band triple, and effects pick by
-/// temperament — Normalized mirrors the wire, Smoothed glides, Peak snaps and drains. The
-/// doorway is nullable as a whole (the forms come all together or not at all) and carries no
-/// signals: Levels runs at frame rate, so there is no edge to serve.
+/// The three audio bands of the Levels triple. Distinct from <see cref="Energy"/> (phrase-level
+/// intensity): a Band names an instantaneous audio lane, not a tier on the intensity ladder.
 /// </summary>
-public readonly struct LevelsView
+public enum Band
 {
-    /// <summary>The wire fact untouched — each band already normalized 0..1 to the track's own maxima by the sender.</summary>
-    public LevelsTriple Normalized { get; }
+    /// <summary>The low-frequency band.</summary>
+    Low,
 
-    /// <summary>
-    /// The attack/release follower — bands glide. Its two knobs
-    /// (<see cref="BeatManager.levelsAttackSeconds"/> / <see cref="BeatManager.levelsReleaseSeconds"/>)
-    /// live with the inbound knobs, apart from the data reads.
-    /// </summary>
-    public LevelsTriple Smoothed { get; }
+    /// <summary>The mid-frequency band.</summary>
+    Mid,
 
-    /// <summary>
-    /// Instant rise, linear drain of full scale in one beat — fixed 500 ms when levels flow with
-    /// no usable tempo. Tempo-anchored: no knob.
-    /// </summary>
-    public LevelsTriple Peak { get; }
+    /// <summary>The high-frequency band.</summary>
+    High,
+}
 
-    /// <summary>Built only by the hub's per-update capture, after the shaping state has settled.</summary>
-    internal LevelsView(LevelsTriple normalized, LevelsTriple smoothed, LevelsTriple peak)
+/// <summary>
+/// A Color Bank component source: a band, a reading, or any float constant — the shared readings
+/// vocabulary as knobs. Implicitly convertible from float, so a fixed component is just the
+/// number: <c>triple.Hsv(s: 0.7f)</c>. StrongestBand is not a source — it names a band, not a
+/// 0..1 value.
+/// </summary>
+public readonly struct LevelSource
+{
+    /// <summary>Which triple value the source reads; Constant reads the stored number instead.</summary>
+    private enum Selector
     {
-        Normalized = normalized;
-        Smoothed = smoothed;
-        Peak = peak;
+        Low,
+        Mid,
+        High,
+        Average,
+        Strongest,
+        Centroid,
+        Dominance,
+        Constant,
+    }
+
+    /// <summary>The band or derived reading this knob selects, or Constant for a pinned component.</summary>
+    private readonly Selector selector;
+
+    /// <summary>The pinned component value used only when <see cref="selector"/> selects Constant.</summary>
+    private readonly float constant;
+
+    /// <summary>Builds one Color Bank knob from either a triple selector or a pinned value.</summary>
+    /// <param name="selector">The triple reading to use, or Constant to use <paramref name="constant"/>.</param>
+    /// <param name="constant">The pinned component value; ignored for band and derived-reading selectors.</param>
+    private LevelSource(Selector selector, float constant)
+    {
+        this.selector = selector;
+        this.constant = constant;
+    }
+
+    /// <summary>The low band.</summary>
+    public static readonly LevelSource Low = new LevelSource(Selector.Low, 0f);
+
+    /// <summary>The mid band.</summary>
+    public static readonly LevelSource Mid = new LevelSource(Selector.Mid, 0f);
+
+    /// <summary>The high band.</summary>
+    public static readonly LevelSource High = new LevelSource(Selector.High, 0f);
+
+    /// <summary>The Average reading — mean band energy.</summary>
+    public static readonly LevelSource Average = new LevelSource(Selector.Average, 0f);
+
+    /// <summary>The Strongest reading — the strongest band's value.</summary>
+    public static readonly LevelSource Strongest = new LevelSource(Selector.Strongest, 0f);
+
+    /// <summary>The Centroid reading — spectral balance, low 0 to high 1.</summary>
+    public static readonly LevelSource Centroid = new LevelSource(Selector.Centroid, 0f);
+
+    /// <summary>The Dominance reading — how much the strongest band dominates the weakest.</summary>
+    public static readonly LevelSource Dominance = new LevelSource(Selector.Dominance, 0f);
+
+    /// <summary>Any constant component value, e.g. pinning saturation: <c>Hsv(s: 0.7f)</c>.</summary>
+    public static implicit operator LevelSource(float constant)
+    {
+        return new LevelSource(Selector.Constant, constant);
+    }
+
+    /// <summary>Resolves this source against one triple — the Color Bank's component read.</summary>
+    internal float Read(in LevelsTriple triple)
+    {
+        switch (selector)
+        {
+            case Selector.Low: return triple.Low;
+            case Selector.Mid: return triple.Mid;
+            case Selector.High: return triple.High;
+            case Selector.Average: return triple.Average;
+            case Selector.Strongest: return triple.Strongest;
+            case Selector.Centroid: return triple.Centroid;
+            case Selector.Dominance: return triple.Dominance;
+            default: return constant;
+        }
     }
 }
 
