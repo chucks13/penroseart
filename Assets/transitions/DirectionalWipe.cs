@@ -129,7 +129,7 @@ public class DirectionalWipe : TransitionBase
     /// </summary>
     private float CurrentLowBandLevel()
     {
-        LevelsInfo? levels = beatManager.Levels;
+        LevelsInfo? levels = beatManager.LevelsQuery;
         return levels.HasValue ? Mathf.Clamp01(levels.Value.low) : 0f;
     }
 

@@ -70,7 +70,7 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.DropQuery, Is.Null);
         Assert.That(beatManager.EnergyQuery, Is.Null);
         Assert.That(beatManager.PhraseQuery, Is.Null);
-        Assert.That(beatManager.Levels, Is.Null);
+        Assert.That(beatManager.LevelsQuery, Is.Null);
     }
 
     /// <summary>An upcoming Fill serves its countdown side — beats/ms until start and the anticipation ramp — with the in-progress fields null.</summary>
@@ -419,7 +419,7 @@ public sealed class BeatManagerContrivedQueriesTests
         var beatManager = CreateLiveBeatManager();
         beatManager.Update(0f);
 
-        Assert.That(beatManager.Levels, Is.Null);
+        Assert.That(beatManager.LevelsQuery, Is.Null);
         Assert.That(beatManager.LevelsRgb, Is.Null);
         Assert.That(beatManager.LevelsHue, Is.Null);
         Assert.That(beatManager.LevelsPalette, Is.Null);
@@ -434,7 +434,7 @@ public sealed class BeatManagerContrivedQueriesTests
 
         beatManager.Update(0f);
 
-        var levels = beatManager.Levels;
+        var levels = beatManager.LevelsQuery;
         Assert.That(levels, Is.Not.Null);
         Assert.That(levels!.Value.low, Is.EqualTo(0.2f).Within(0.0001f));
         Assert.That(levels.Value.mid, Is.EqualTo(0.4f).Within(0.0001f));
@@ -455,14 +455,14 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.levels = new Levels { low = 1f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0.1f);
         var expectedAttack = 0.2f + ((1f - 0.2f) * (1f - Mathf.Exp(-0.1f / 0.1f)));
-        Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedAttack).Within(0.0001f));
+        Assert.That(beatManager.LevelsQuery!.Value.low, Is.EqualTo(expectedAttack).Within(0.0001f));
 
         // Falling low band uses the slower release time-constant.
         beatManager.WireSnapshot.levels = new Levels { low = 0f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0.2f);
         var expectedRelease = expectedAttack + ((0f - expectedAttack) * (1f - Mathf.Exp(-0.1f / 0.4f)));
-        Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedRelease).Within(0.0001f));
-        Assert.That(beatManager.Levels!.Value.mid, Is.EqualTo(0.4f).Within(0.0001f));
+        Assert.That(beatManager.LevelsQuery!.Value.low, Is.EqualTo(expectedRelease).Within(0.0001f));
+        Assert.That(beatManager.LevelsQuery!.Value.mid, Is.EqualTo(0.4f).Within(0.0001f));
     }
 
     /// <summary>After a Levels gap the smoothing state drops, so the next live sample snaps in fresh instead of releasing from stale values.</summary>
@@ -475,12 +475,12 @@ public sealed class BeatManagerContrivedQueriesTests
 
         beatManager.WireSnapshot.levels = Levels.Unavailable;
         beatManager.Update(0.1f);
-        Assert.That(beatManager.Levels, Is.Null);
+        Assert.That(beatManager.LevelsQuery, Is.Null);
 
         // The next live sample snaps in fresh; nothing decays from the pre-gap 0.9.
         beatManager.WireSnapshot.levels = new Levels { low = 0.1f, mid = 0.1f, high = 0.1f };
         beatManager.Update(0.2f);
-        Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(0.1f).Within(0.0001f));
+        Assert.That(beatManager.LevelsQuery!.Value.low, Is.EqualTo(0.1f).Within(0.0001f));
     }
 
     /// <summary>The raw Color Bank form maps low/mid/high straight onto R/G/B with full alpha.</summary>
@@ -540,7 +540,7 @@ public sealed class BeatManagerContrivedQueriesTests
         beatManager.WireSnapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
         beatManager.Update(0f);
 
-        Assert.That(beatManager.Levels, Is.Not.Null);
+        Assert.That(beatManager.LevelsQuery, Is.Not.Null);
         Assert.That(beatManager.LevelsPalette, Is.Null);
     }
 
@@ -568,7 +568,7 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.DropQuery, Is.Null);
         Assert.That(beatManager.PhraseQuery, Is.Null);
         Assert.That(beatManager.EnergyQuery, Is.Null);
-        Assert.That(beatManager.Levels, Is.Null);
+        Assert.That(beatManager.LevelsQuery, Is.Null);
     }
 
     // --- Subdivision rhythm family (PulseOf / GateOf) ---

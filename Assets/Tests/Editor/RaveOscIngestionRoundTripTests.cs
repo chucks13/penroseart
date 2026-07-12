@@ -67,7 +67,7 @@ public sealed class RaveOscIngestionRoundTripTests
 
         Assert.That(beatManager.TrackId, Is.EqualTo(777001));
 
-        var levels = beatManager.Levels;
+        var levels = beatManager.LevelsQuery;
         Assert.That(levels, Is.Not.Null);
         Assert.That(levels!.Value.low, Is.EqualTo(0.25f).Within(0.0001f));
         Assert.That(levels.Value.mid, Is.EqualTo(0.5f).Within(0.0001f));

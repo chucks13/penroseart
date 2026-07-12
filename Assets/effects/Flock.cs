@@ -108,7 +108,7 @@ public class Flock : EffectBase
     public override void Draw()
     {
         var envelope = beatManager.Envelope(beatVariant) ?? 0f;
-        var lowEnergy = beatManager.Levels?.low ?? 0f;
+        var lowEnergy = beatManager.LevelsQuery?.low ?? 0f;
         float speedMultiplier = GetBeatSpeedMultiplier(envelope, beatEnable && beatManager.IsActive);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)

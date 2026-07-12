@@ -127,7 +127,7 @@ internal readonly struct BeatManagerDashboardModel
             BuildPhraseEventRow(beatManager?.DropQuery),
             BuildEnergyRow(beatManager?.EnergyQuery),
             BuildPhraseRow(beatManager?.PhraseQuery, beatManager?.NextPhrase),
-            BuildLevelsRow(beatManager?.Levels),
+            BuildLevelsRow(beatManager?.LevelsQuery),
             new ColorBankRowView(beatManager?.LevelsRgb, beatManager?.LevelsHue, beatManager?.LevelsPalette));
     }
 

@@ -324,7 +324,7 @@ public readonly struct GridInfo
 /// already applied, so effects can drive the wall from them without re-implementing anti-flicker.
 /// </summary>
 /// <remarks>
-/// Returned by <see cref="BeatManager.Levels"/>; null there means no live Levels are available
+/// Returned by <see cref="BeatManager.LevelsQuery"/>; null there means no live Levels are available
 /// (Standalone, with no live OSC source, never supplies them).
 /// </remarks>
 public readonly struct LevelsInfo
@@ -818,7 +818,8 @@ public partial class BeatManager
     /// Smoothed Levels, or null when no live Levels are available. Smoothing is applied once per
     /// <see cref="Update(float)"/> using <see cref="levelsAttackSeconds"/>/<see cref="levelsReleaseSeconds"/>.
     /// </summary>
-    public LevelsInfo? Levels
+    /// <remarks>Pre-Data-Surface query spelling (originally <c>Levels</c>); retires in ticket 26 in favor of the Levels doorway.</remarks>
+    public LevelsInfo? LevelsQuery
     {
         get
         {
@@ -839,7 +840,7 @@ public partial class BeatManager
     {
         get
         {
-            if (!(Levels is { } levels))
+            if (!(LevelsQuery is { } levels))
             {
                 return null;
             }
@@ -858,7 +859,7 @@ public partial class BeatManager
     {
         get
         {
-            if (!(Levels is { } levels))
+            if (!(LevelsQuery is { } levels))
             {
                 return null;
             }
@@ -889,7 +890,7 @@ public partial class BeatManager
     {
         get
         {
-            if (!(Levels is { } levels))
+            if (!(LevelsQuery is { } levels))
             {
                 return null;
             }

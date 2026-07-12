@@ -40,7 +40,7 @@ using Random = UnityEngine.Random;
 ///   each hit; Standalone falls back to a self-driven surge so its fronts still lunge on the synthetic downbeats.</description></item>
 /// <item><description>OVERALL brightness — <see cref="EffectBase.BeatBrightness"/> pulses the field with the
 ///   music when synced, holds steady when not.</description></item>
-/// <item><description>ENERGY gating — live band <see cref="BeatManager.Levels"/> ease all three off as the
+/// <item><description>ENERGY gating — live band <see cref="BeatManager.LevelsQuery"/> ease all three off as the
 ///   track quietens, so a quiet break stops chasing an inaudible beat instead of seeding/surging/strobing to it.</description></item>
 /// <item><description>PALETTE — a fresh wall palette is selected at the start of every 16-beat Grid.</description></item>
 /// </list>
@@ -200,7 +200,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Seconds the current Drop flash is drawn out over (~<see cref="DropFlashBars"/> bars, sized from the tempo at onset).</summary>
     private float dropFlashSeconds;
 
-    /// <summary>Whether live <see cref="BeatManager.Levels"/> were available this frame (false → no energy info, assume active).</summary>
+    /// <summary>Whether live <see cref="BeatManager.LevelsQuery"/> were available this frame (false → no energy info, assume active).</summary>
     private bool hasLevels;
 
     /// <summary>This frame's smoothed low-band (bass kick) level in [0..1]; 0 when no Levels.</summary>
@@ -519,7 +519,7 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Samples the live band <see cref="BeatManager.Levels"/> into this frame's <see cref="kickLow"/> /
+    /// Samples the live band <see cref="BeatManager.LevelsQuery"/> into this frame's <see cref="kickLow"/> /
     /// <see cref="energyNow"/> / <see cref="hasLevels"/> and returns the beat-coupling "activity" in [0..1]:
     /// 0 in a fully quiet break, 1 while the track drives, ramped across <see cref="QuietEnergy"/>..
     /// <see cref="ActiveEnergy"/> (straddling a third). Returns 1 when no Levels are available, so beat-driven
@@ -527,7 +527,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private float ReadLevels()
     {
-        if (beatManager.Levels is { } levels)
+        if (beatManager.LevelsQuery is { } levels)
         {
             hasLevels = true;
             kickLow = levels.low;
