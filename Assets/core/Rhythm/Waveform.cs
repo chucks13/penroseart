@@ -94,6 +94,13 @@ public struct Waveform
 
         /// <summary>Hump height in [0..1] (amplitude digit ÷ 8). 0 = silent Hump = skipped beat.</summary>
         public float amp;
+
+        /// <summary>
+        /// Whether this Hump sounds: nonzero Amplitude, a real time slot, and a start inside the
+        /// bar. The one audibility rule every peak measurement shares — silent and zero-width
+        /// Humps (and a malformed bar's overflow) never count as peaks or onsets.
+        /// </summary>
+        public bool IsAudible => amp > 0f && width > 0f && start >= 0f && start < 1f;
     }
 
     /// <summary>
@@ -257,7 +264,7 @@ public struct Waveform
         for (var i = 0; i < humps.Length; i++)
         {
             var h = humps[i];
-            if (h.amp <= 0f || h.width <= 0f || h.start < 0f || h.start >= 1f)
+            if (!h.IsAudible)
             {
                 continue;
             }
@@ -288,6 +295,103 @@ public struct Waveform
 
         var wrapGap = (firstPeak + 1f) - previousPeak;
         return Mathf.Clamp01(Mathf.Min(shortest, wrapGap));
+    }
+
+    /// <summary>
+    /// This Waveform's Energy on the shared ladder — derived from the notation, never authored or
+    /// stored, so it can never disagree with the shape. It covers every Waveform, Pool or inline.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Energy = max(density tier, gap tier). Density is audible peaks per bar (Humps with nonzero
+    /// Amplitude): 1–2 Low, 3–4 Mid, 5 or more High. Gap is the shortest audible peak spacing
+    /// (<see cref="ShortestNonZeroPeakSpacing"/>, converted to beats): 2 beats or more Low, 1 beat
+    /// or more Mid, under 1 beat High. Amplitude heights are excluded — a quiet pulse ranks with
+    /// the full one — and there is no syncopation bump. All widths are powers-of-two beat
+    /// fractions, so the tier boundaries compare exactly.
+    /// </para>
+    /// <para>
+    /// A silent Waveform (no audible peak) reads Low: zero peaks sit below Low's density floor,
+    /// and the spacing measurement's 0-for-silence convention must not leak High through the gap
+    /// tier.
+    /// </para>
+    /// </remarks>
+    public Energy Energy
+    {
+        get
+        {
+            var audible = AudiblePeakCount();
+            if (audible == 0)
+            {
+                return Energy.Low;
+            }
+
+            var density = audible <= 2 ? Energy.Low : audible <= 4 ? Energy.Mid : Energy.High;
+            var gapBeats = ShortestNonZeroPeakSpacing() * BeatsPerBar;
+            var gap = gapBeats >= 2f ? Energy.Low : gapBeats >= 1f ? Energy.Mid : Energy.High;
+            return density >= gap ? density : gap;
+        }
+    }
+
+    /// <summary>Counts the audible peaks — the same Humps <see cref="ShortestNonZeroPeakSpacing"/> measures.</summary>
+    private int AudiblePeakCount()
+    {
+        if (humps == null)
+        {
+            return 0;
+        }
+
+        var count = 0;
+        for (var i = 0; i < humps.Length; i++)
+        {
+            if (humps[i].IsAudible)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Whether any audible onset — a nonzero-Amplitude Hump's landing instant, Phase Offset
+    /// applied — falls inside the given Bar Phase window: exclusive of <paramref name="fromPhase"/>,
+    /// inclusive of <paramref name="toPhase"/>. A window whose start exceeds its end wraps with the
+    /// bar and covers (from..1) plus [0..to]; an empty window (from == to) contains nothing.
+    /// </summary>
+    /// <remarks>
+    /// This is the notation-side fact the synthesizer's Hit edge reads: the caller owns the
+    /// observation window (two consecutive clock readings); the Waveform knows where its humps
+    /// land. Zero allocation, and the offset is read live like <see cref="Evaluate"/> does.
+    /// </remarks>
+    /// <param name="fromPhase">Window start, exclusive — the previous Bar Phase observation.</param>
+    /// <param name="toPhase">Window end, inclusive — the current Bar Phase observation.</param>
+    public bool HasAudibleOnsetBetween(float fromPhase, float toPhase)
+    {
+        if (humps == null)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < humps.Length; i++)
+        {
+            var h = humps[i];
+            if (!h.IsAudible)
+            {
+                continue;
+            }
+
+            var onset = Mathf.Repeat(h.start + (offset / BeatsPerBar), 1f);
+            var inside = fromPhase <= toPhase
+                ? onset > fromPhase && onset <= toPhase
+                : onset > fromPhase || onset <= toPhase;
+            if (inside)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
