@@ -158,6 +158,18 @@ The change is deliberately small at the call sites.
 - `BeatManager.GetBeatBrightness(...)` keeps its signature shape; its **internals** swap from the seven-way variant switch to `Evaluate(waveform, barPhase)`. The ~18 effects that call it need no change if the variant selector resolves to a Waveform inside `BeatManager`.
 - `GetRandomVariant` / `GetRandomVariantChill` remain the selection seam, and are the natural home for future energy/mood-filtered selection (deferred — OSC `energy_state` is not wired into selection yet).
 
+> **Superseded (2026-07-11, beat-data-interface effort — see ADR-0001's amendment).**
+> This Migration section described the original adoption and no longer governs. The
+> synthesizer is its own readable surface beside BeatManager (the base `synth` property):
+> effects hold a nullable `waveform` **value** (never an int; `beatVariant` and
+> `beatEnable` are retired), acquired by Energy-set draw (`Random(params Energy[])` — a
+> Waveform's Energy is derived from its notation), by Preset name, or inline; index
+> addressing is retired in every form. `GetBeatBrightness`/`GetBeatTime` are retired from
+> the provider — the base helpers `BeatBrightness(min)`/`BeatTime(intensity)` are the
+> canonical effect-side seasonings over the synthesizer's one primitive (the envelope of
+> a given Waveform at the current Bar Phase, nullable with no clock). The notation model,
+> Pool file, drawer, and safety limits in the rest of this document stand.
+
 ## Out of scope (for now)
 
 - OSC `energy_state` / direction filtering of random selection (the incoming data isn't finalized).
