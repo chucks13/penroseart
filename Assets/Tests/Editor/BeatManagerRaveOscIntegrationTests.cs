@@ -5,6 +5,7 @@ using PenroseArt.RaveOsc;
 
 public sealed class BeatManagerRaveOscIntegrationTests
 {
+    /// <summary>Verifies BeatManager derives the off-beat lane halfway between live beats.</summary>
     [Test]
     public void BeatManagerUpdateDerivesOffBeatHalfwayBetweenBeats()
     {
@@ -13,48 +14,50 @@ public sealed class BeatManagerRaveOscIntegrationTests
 
         beatManager.Update(0.25f);
 
-        Assert.That(beatManager.beatData.snapshot.beatInBar, Is.EqualTo(1));
-        Assert.That(beatManager.beatData.snapshot.beatsCountMs, Is.EqualTo(new[] { 1750, 250, 750, 1250 }));
-        Assert.That(beatManager.beatData.snapshot.onBeats, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.WireSnapshot.beatInBar, Is.EqualTo(1));
+        Assert.That(beatManager.WireSnapshot.beatsCountMs, Is.EqualTo(new[] { 1750, 250, 750, 1250 }));
+        Assert.That(beatManager.WireSnapshot.onBeats, Is.EqualTo(new[] { false, false, false, false }));
         Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
-        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.OffBeatGates, Is.EqualTo(new[] { true, false, false, false }));
         Assert.That(beatManager.OffBeatPulse, Is.EqualTo(1f).Within(0.0001f));
         Assert.That(beatManager.NextOffBeatMs, Is.EqualTo(0));
         Assert.That(beatManager.OffBeat, Is.True);
     }
 
+    /// <summary>With no live source, Update clears stale transport data to the no-beat state and the queries read inert.</summary>
     [Test]
     public void BeatManagerUpdateClearsToNoBeatInStandalone()
     {
         // No live OSC source: Update must clear to the no-beat state regardless of any stale transport data.
         var beatManager = new BeatManager();
-        beatManager.beatData.snapshot.bpm = 128f;
-        beatManager.beatData.snapshot.beatPulse = 1f;
+        beatManager.WireSnapshot.bpm = 128f;
+        beatManager.WireSnapshot.beatPulse = 1f;
 
         beatManager.Update(0f);
 
         Assert.That(beatManager.IsActive, Is.False);
         Assert.That(beatManager.beatData.nextBeatMs, Is.EqualTo(-1));
-        Assert.That(beatManager.beatData.snapshot.beatPulse, Is.EqualTo(0f));
+        Assert.That(beatManager.WireSnapshot.beatPulse, Is.EqualTo(0f));
         Assert.That(beatManager.Pulse, Is.Null);
         Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(1f));
         Assert.That(beatManager.IsBeatTriggered(0), Is.False);
     }
 
+    /// <summary>While the live source owns the transport, Update stands aside and keeps the pushed wire values.</summary>
     [Test]
     public void BeatManagerUpdateDoesNotOverwriteLiveBeatData()
     {
         var beatManager = new BeatManager();
-        beatManager.beatData.snapshot.bpm = 128f;
-        beatManager.beatData.snapshot.beatInBar = 3;
-        beatManager.beatData.snapshot.beatPulse = 0.25f;
+        beatManager.WireSnapshot.bpm = 128f;
+        beatManager.WireSnapshot.beatInBar = 3;
+        beatManager.WireSnapshot.beatPulse = 0.25f;
         beatManager.SetLiveBeatSource(true);
 
         beatManager.Update(0f);
 
-        Assert.That(beatManager.beatData.snapshot.bpm, Is.EqualTo(128f));
-        Assert.That(beatManager.beatData.snapshot.beatInBar, Is.EqualTo(3));
-        Assert.That(beatManager.beatData.snapshot.beatPulse, Is.EqualTo(0.25f));
+        Assert.That(beatManager.WireSnapshot.bpm, Is.EqualTo(128f));
+        Assert.That(beatManager.WireSnapshot.beatInBar, Is.EqualTo(3));
+        Assert.That(beatManager.WireSnapshot.beatPulse, Is.EqualTo(0.25f));
     }
 
     [Test]
@@ -73,6 +76,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(RaveOscReceiver.IsBroadcastingAt(hasSnapshot: true, float.PositiveInfinity), Is.False);
     }
 
+    /// <summary>Verifies an unavailable live BPM sentinel leaves the BeatManager source inactive.</summary>
     [Test]
     public void BeatManagerLiveSourceStaysInactiveWhenOscSnapshotHasSentinelBpm()
     {
@@ -87,17 +91,16 @@ public sealed class BeatManagerRaveOscIntegrationTests
             onBeats = new[] { false, false, false, false },
         };
 
-        beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.CopyFrom(snapshot);
+        beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0f);
 
         Assert.That(beatManager.IsLiveSource, Is.True);
         Assert.That(beatManager.IsActive, Is.False);
-        Assert.That(beatManager.beatData.snapshot.bpm, Is.EqualTo(-1f));
-        Assert.That(beatManager.beatData.snapshot.playersLive, Is.EqualTo(""));
-        Assert.That(beatManager.beatData.snapshot.track, Is.EqualTo(""));
+        Assert.That(beatManager.WireSnapshot.bpm, Is.EqualTo(-1f));
+        Assert.That(beatManager.WireSnapshot.playersLive, Is.EqualTo(""));
+        Assert.That(beatManager.WireSnapshot.track, Is.EqualTo(""));
         Assert.That(beatManager.Bpm, Is.Null);
-        Assert.That(beatManager.Track, Is.Null);
+        Assert.That(beatManager.TrackText, Is.Null);
         Assert.That(beatManager.PlayersLive, Is.Null);
     }
 
@@ -230,33 +233,36 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatData.GetNextBeatMs(), Is.EqualTo(100));
     }
 
+    /// <summary>The TrackId query follows each wire track_id change across updates.</summary>
     [Test]
     public void TrackIdChangesWhenTheOnAirTrackIdChanges()
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
 
-        beatManager.beatData.snapshot.trackId = 11;
+        beatManager.WireSnapshot.trackId = 11;
         beatManager.Update(0f);
         Assert.That(beatManager.TrackId, Is.EqualTo(11));
 
-        beatManager.beatData.snapshot.trackId = 22;
+        beatManager.WireSnapshot.trackId = 22;
         beatManager.Update(0f);
         Assert.That(beatManager.TrackId, Is.EqualTo(22));
     }
 
+    /// <summary>The wire's -1 track_id sentinel reads as a null TrackId.</summary>
     [Test]
     public void TrackIdIsNullWhenTrackIdIsSentinel()
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.snapshot.trackId = -1;
+        beatManager.WireSnapshot.trackId = -1;
 
         beatManager.Update(0f);
 
         Assert.That(beatManager.TrackId, Is.Null);
     }
 
+    /// <summary>A title-only rewrite of the same track leaves TrackId untouched — a bare title change is not a new track.</summary>
     [Test]
     public void TrackIdIgnoresATitleChangeWithoutATrackIdChange()
     {
@@ -264,28 +270,29 @@ public sealed class BeatManagerRaveOscIntegrationTests
         // untouched (a bare title change is not a new track).
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.snapshot.trackId = 7;
-        beatManager.beatData.snapshot.track = "Artist - One";
+        beatManager.WireSnapshot.trackId = 7;
+        beatManager.WireSnapshot.track = "Artist - One";
         beatManager.Update(0f);
         var first = beatManager.TrackId;
         Assert.That(first, Is.EqualTo(7));
 
-        beatManager.beatData.snapshot.track = "Artist - Two";
+        beatManager.WireSnapshot.track = "Artist - Two";
         beatManager.Update(0f);
 
         Assert.That(beatManager.TrackId, Is.EqualTo(first));
     }
 
+    /// <summary>Verifies unavailable live timing disables beat and off-beat derivation.</summary>
     [Test]
     public void LiveSentinelSnapshotDisablesBeatAndOffBeatDerivation()
     {
         var beatManager = new BeatManager();
-        beatManager.beatData.snapshot.bpm = 128f;
-        beatManager.beatData.snapshot.beatInBar = 3;
-        beatManager.beatData.snapshot.onBeats = new[] { false, false, true, false };
-        beatManager.beatData.snapshot.beatPulse = 1f;
-        beatManager.beatData.snapshot.playersLive = "4";
-        beatManager.beatData.snapshot.track = "Track";
+        beatManager.WireSnapshot.bpm = 128f;
+        beatManager.WireSnapshot.beatInBar = 3;
+        beatManager.WireSnapshot.onBeats = new[] { false, false, true, false };
+        beatManager.WireSnapshot.beatPulse = 1f;
+        beatManager.WireSnapshot.playersLive = "4";
+        beatManager.WireSnapshot.track = "Track";
 
         var snapshot = new RaveOnAirSnapshot
         {
@@ -297,24 +304,24 @@ public sealed class BeatManagerRaveOscIntegrationTests
             onBeats = new[] { false, false, false, false },
         };
 
-        beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.CopyFrom(snapshot);
+        beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0f);
 
         Assert.That(beatManager.IsActive, Is.False);
-        Assert.That(beatManager.beatData.snapshot.bpm, Is.EqualTo(-1f));
+        Assert.That(beatManager.WireSnapshot.bpm, Is.EqualTo(-1f));
         Assert.That(beatManager.beatData.GetNextBeatMs(), Is.EqualTo(-1));
         Assert.That(beatManager.beatData.onBeat, Is.False);
         Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { -1, -1, -1, -1 }));
-        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { false, false, false, false }));
-        Assert.That(beatManager.beatData.snapshot.beatPulse, Is.EqualTo(0f));
-        Assert.That(beatManager.beatData.snapshot.playersLive, Is.EqualTo(""));
-        Assert.That(beatManager.beatData.snapshot.track, Is.EqualTo(""));
+        Assert.That(beatManager.OffBeatGates, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.WireSnapshot.beatPulse, Is.EqualTo(0f));
+        Assert.That(beatManager.WireSnapshot.playersLive, Is.EqualTo(""));
+        Assert.That(beatManager.WireSnapshot.track, Is.EqualTo(""));
         Assert.That(beatManager.NextOffBeatMs, Is.Null);
         Assert.That(beatManager.OffBeat, Is.Null);
         Assert.That(beatManager.OffBeatPulse, Is.Null);
     }
 
+    /// <summary>Verifies OSC beat countdowns drive the derived off-beat arrays.</summary>
     [Test]
     public void UpdateDerivesOffBeatArraysFromOscBeatCountdowns()
     {
@@ -323,12 +330,13 @@ public sealed class BeatManagerRaveOscIntegrationTests
         beatManager.Update(0f);
 
         Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 0, 500, 1000, 1500 }));
-        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.OffBeatGates, Is.EqualTo(new[] { true, false, false, false }));
         Assert.That(beatManager.OffBeatPulse, Is.EqualTo(1f));
         Assert.That(beatManager.NextOffBeatMs, Is.EqualTo(0));
         Assert.That(beatManager.OffBeat, Is.True);
     }
 
+    /// <summary>Verifies the off-beat midpoint uses the actual gap between countdown lanes.</summary>
     [Test]
     public void UpdateUsesActualCountdownGapForOffBeatMidpoint()
     {
@@ -337,9 +345,10 @@ public sealed class BeatManagerRaveOscIntegrationTests
         beatManager.Update(0f);
 
         Assert.That(beatManager.OffBeatsCountMs[0], Is.EqualTo(0));
-        Assert.That(beatManager.OffBeats[0], Is.True);
+        Assert.That(beatManager.OffBeatGates[0], Is.True);
     }
 
+    /// <summary>Verifies the off-beat gate remains open for one quarter of the average beat.</summary>
     [Test]
     public void UpdateKeepsOffBeatGateOpenForQuarterOfAverageBeat()
     {
@@ -348,10 +357,11 @@ public sealed class BeatManagerRaveOscIntegrationTests
         beatManager.Update(0f);
 
         Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 0, 450, 950, 1450 }));
-        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { true, false, false, false }));
+        Assert.That(beatManager.OffBeatGates, Is.EqualTo(new[] { true, false, false, false }));
         Assert.That(beatManager.OffBeatPulse, Is.EqualTo(0.972f).Within(0.001f));
     }
 
+    /// <summary>Verifies the off-beat gate closes after one quarter of the average beat.</summary>
     [Test]
     public void UpdateTurnsOffBeatGateOffAfterQuarterOfAverageBeat()
     {
@@ -360,19 +370,20 @@ public sealed class BeatManagerRaveOscIntegrationTests
         beatManager.Update(0f);
 
         Assert.That(beatManager.OffBeatsCountMs, Is.EqualTo(new[] { 1820, 320, 820, 1320 }));
-        Assert.That(beatManager.OffBeats, Is.EqualTo(new[] { false, false, false, false }));
+        Assert.That(beatManager.OffBeatGates, Is.EqualTo(new[] { false, false, false, false }));
         Assert.That(beatManager.OffBeatPulse, Is.EqualTo(0.705f).Within(0.001f));
     }
 
+    /// <summary>Beat brightness evaluates the variant's Waveform at the live BarPhase (trough for the Beat Pulse, peaks for offbeat/eighth at phase 0.125).</summary>
     [Test]
     public void GetBeatBrightnessUsesBarPhaseWaveformsForMusicalVariants()
     {
         var beatManager = new BeatManager();
-        beatManager.beatData.snapshot.bpm = 128f;
-        beatManager.beatData.snapshot.beatInBar = 1;
-        beatManager.beatData.snapshot.beatAverageMs = 500;
-        beatManager.beatData.snapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
-        beatManager.beatData.snapshot.beatPulse = 0.25f;
+        beatManager.WireSnapshot.bpm = 128f;
+        beatManager.WireSnapshot.beatInBar = 1;
+        beatManager.WireSnapshot.beatAverageMs = 500;
+        beatManager.WireSnapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
+        beatManager.WireSnapshot.beatPulse = 0.25f;
 
         Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(0.0001f));
         Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.5f), Is.EqualTo(0.5f).Within(0.0001f));
@@ -380,13 +391,14 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatManager.GetBeatBrightness(6, 1f, 0.5f), Is.EqualTo(1f).Within(0.0001f));
     }
 
+    /// <summary>IsBeatTriggered fires from the wire's current on-beat gate for the every-beat variant.</summary>
     [Test]
     public void IsBeatTriggeredUsesRaveOnBeatValue()
     {
         var beatManager = new BeatManager();
-        beatManager.beatData.snapshot.bpm = 128f;
-        beatManager.beatData.snapshot.beatInBar = 1;
-        beatManager.beatData.snapshot.onBeats = new[] { true, false, false, false };
+        beatManager.WireSnapshot.bpm = 128f;
+        beatManager.WireSnapshot.beatInBar = 1;
+        beatManager.WireSnapshot.onBeats = new[] { true, false, false, false };
 
         Assert.That(beatManager.IsBeatTriggered(0), Is.True);
     }
@@ -396,13 +408,13 @@ public sealed class BeatManagerRaveOscIntegrationTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.snapshot.bpm = 120f;
+        beatManager.WireSnapshot.bpm = 120f;
         // A running clock always carries a 1..4 beat label on the wire; the 4-count is now the mode
         // authority (IsActive => IsSynced), so a live fixture must supply it (ADR-0007).
-        beatManager.beatData.snapshot.beatInBar = 1;
-        beatManager.beatData.snapshot.beatAverageMs = 500;
-        beatManager.beatData.snapshot.beatsCountMs = beatsCountMs;
-        beatManager.beatData.snapshot.onBeats = new[] { false, false, false, false };
+        beatManager.WireSnapshot.beatInBar = 1;
+        beatManager.WireSnapshot.beatAverageMs = 500;
+        beatManager.WireSnapshot.beatsCountMs = beatsCountMs;
+        beatManager.WireSnapshot.onBeats = new[] { false, false, false, false };
         return beatManager;
     }
 

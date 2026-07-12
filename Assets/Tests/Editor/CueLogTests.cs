@@ -393,7 +393,7 @@ public sealed class CueLogSeamTests
         string phraseLabel = "Phrase",
         string nextPhraseLabel = "Next")
     {
-        var snapshot = controller.beatManager.beatData.snapshot;
+        var snapshot = controller.beatManager.WireSnapshot;
         snapshot.bpm = 120f;
         snapshot.beat = new BeatPosition { current = beat, total = -1 };
         snapshot.beatInBar = ((beat - 1) % 4) + 1;
@@ -413,7 +413,6 @@ public sealed class CueLogSeamTests
         snapshot.dropState = CountdownState.Unavailable;
         snapshot.fillState = CountdownState.Unavailable;
         snapshot.energyState = LabeledCountdown.Unavailable;
-        controller.beatManager.beatData.snapshot = snapshot;
         director.Tick(0f);
     }
 

@@ -19,15 +19,16 @@ public sealed class BeatManagerGridQueryTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.snapshot.beatInBar = 1;
-        beatManager.beatData.snapshot.beatAverageMs = 500;
-        beatManager.beatData.snapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
+        beatManager.WireSnapshot.beatInBar = 1;
+        beatManager.WireSnapshot.beatAverageMs = 500;
+        beatManager.WireSnapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
         return beatManager;
     }
 
+    /// <summary>Writes a <c>timing_grid</c> wire state onto the manager's held snapshot.</summary>
     private static void SetGrid(BeatManager beatManager, int beat, int bar, string? state)
     {
-        beatManager.beatData.snapshot.timingGrid = new TimingGrid { beat = beat, bar = bar, state = state };
+        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = beat, bar = bar, state = state };
     }
 
     [Test]
@@ -39,13 +40,14 @@ public sealed class BeatManagerGridQueryTests
         Assert.That(beatManager.Grid, Is.Null);
     }
 
+    /// <summary>With no 4-count clock, Grid reads null even when a stale wire grid still rides on the snapshot.</summary>
     [Test]
     public void GridIsNullOnTheStandaloneFloorEvenWithAWireGrid()
     {
         // No 4-count clock (beatInBar < 1) is a mode exit: the wall is off the grid even when a stale
         // timing_grid still rides along on the snapshot.
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.beatInBar = -1;
+        beatManager.WireSnapshot.beatInBar = -1;
         SetGrid(beatManager, beat: 5, bar: 2, state: "locked");
 
         Assert.That(beatManager.Grid, Is.Null);

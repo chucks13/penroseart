@@ -166,13 +166,18 @@ public sealed class RaveOscPacketParser : IDisposable {
         });
     }
 
+    /// <summary>
+    /// Registers a four-lane gate message. Only positive wire values open gates; the unavailable <c>-1</c> sentinel must remain closed.
+    /// </summary>
+    /// <param name="address">OSC address carrying the four integer gate lanes.</param>
+    /// <param name="setter">Snapshot mutation that receives the parsed gate lanes.</param>
     private void RegisterFourBools(string address, SnapshotBoolArraySetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
             var value = new[] {
-                ReadNextInt(address, ref reader) != 0,
-                ReadNextInt(address, ref reader) != 0,
-                ReadNextInt(address, ref reader) != 0,
-                ReadNextInt(address, ref reader) != 0,
+                ReadNextInt(address, ref reader) > 0,
+                ReadNextInt(address, ref reader) > 0,
+                ReadNextInt(address, ref reader) > 0,
+                ReadNextInt(address, ref reader) > 0,
             };
             UpdateSnapshot(snapshot => setter(snapshot, value));
         });

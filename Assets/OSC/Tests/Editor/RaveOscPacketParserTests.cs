@@ -104,6 +104,36 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(parser.TryTakeSnapshot(out _), Is.False);
     }
 
+    /// <summary>Verifies unavailable on-beat lanes never parse as open gates.</summary>
+    [Test]
+    public void DispatchTreatsUnavailableOnBeatSentinelAsClosedGates() {
+        var packet = new byte[256];
+        var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+        WriteFourInts(ref bundle, "/rave/onair/on_beats", -1, -1, -1, -1);
+
+        using var parser = new RaveOscPacketParser();
+        var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+        Assert.That(dispatched, Is.EqualTo(1));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        Assert.That(snapshot.onBeats, Is.EqualTo(new[] { false, false, false, false }));
+    }
+
+    /// <summary>Verifies zero closes an on-beat lane and one opens it.</summary>
+    [Test]
+    public void DispatchTreatsZeroAsClosedAndOneAsOpenOnBeatGate() {
+        var packet = new byte[256];
+        var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+        WriteFourInts(ref bundle, "/rave/onair/on_beats", -1, 0, 1, 0);
+
+        using var parser = new RaveOscPacketParser();
+        var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+        Assert.That(dispatched, Is.EqualTo(1));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        Assert.That(snapshot.onBeats, Is.EqualTo(new[] { false, false, true, false }));
+    }
+
     [Test]
     public void DispatchIgnoresFutureBundleTimeTagsForLiveOnAirStream() {
         var packet = new byte[512];

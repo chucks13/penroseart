@@ -639,7 +639,7 @@ public partial class BeatManager
     }
 
     /// <summary>Focused on-air track text, or null when nothing usable is on air.</summary>
-    public string? Track
+    public string? TrackText
     {
         get
         {

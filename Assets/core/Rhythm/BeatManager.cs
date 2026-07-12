@@ -137,6 +137,25 @@ public partial class BeatManager
     public BeatData beatData = new BeatData();
 
     /// <summary>
+    /// Test seam: the live wire snapshot this manager holds, so edit-mode tests can feed and inspect
+    /// wire state by name instead of reaching through <see cref="beatData"/> (which the beat-data
+    /// effort will make private). Internal machinery, never a consumer offering — consumers read the
+    /// Data Surface doorways.
+    /// </summary>
+    internal RaveOnAirSnapshot WireSnapshot => beatData.snapshot;
+
+    /// <summary>
+    /// Test seam: applies a wire snapshot exactly as the live transport does — the same move as
+    /// <see cref="RaveOscReceiver.ApplyTo"/>: mark the source live, then deep-copy the snapshot in.
+    /// Internal machinery, never a consumer offering.
+    /// </summary>
+    internal void FeedWireSnapshot(RaveOnAirSnapshot snapshot)
+    {
+        SetLiveBeatSource(true);
+        beatData.CopyFrom(snapshot);
+    }
+
+    /// <summary>
     /// Whether live RaveSystem OSC currently owns <see cref="beatData"/>: <c>true</c> = live OSC (pushed in by
     /// <see cref="RaveOscReceiver.ApplyTo"/> every frame), <c>false</c> = Standalone (no beat).
     /// </summary>
@@ -197,7 +216,7 @@ public partial class BeatManager
     public int[] OffBeatsCountMs => offBeatsCountMs;
 
     /// <summary>Derived offbeat gates in label order. Dashboard/test view — effects use the nullable queries.</summary>
-    public bool[] OffBeats => offBeats;
+    public bool[] OffBeatGates => offBeats;
 
     /// <summary>
     /// The single Standalone/Synced mode authority: true while a usable beat clock is running. The running
@@ -259,6 +278,27 @@ public partial class BeatManager
         // queries never lag the transport by a frame or smooth from stale data across a source switch.
         DeriveBeatState();
         UpdateLevelsSmoothing(timeSeconds);
+
+        // The Data Surface doorway views are captured last, once the transport and every derived
+        // value have settled, so all readers this frame — effects, transitions, the Director,
+        // dashboards — see one frame-coherent musical truth and edges are evaluated exactly once
+        // per hub update, ahead of effect Draw (ADR-0015).
+        CaptureDataSurface();
+    }
+
+    /// <summary>
+    /// Captures every Data Surface doorway view for this frame, in gateway order. Each doorway's
+    /// capture translates wire sentinels to null, copies any snapshot-owned arrays it serves, and
+    /// evaluates its edges against the prior observed state the hub retains between updates.
+    /// </summary>
+    private void CaptureDataSurface()
+    {
+        Clock = CaptureClock();
+        Position = CapturePosition();
+        Track = CaptureTrack();
+        Beats = CaptureBeats();
+        OffBeats = CaptureOffBeats();
+        Pulses = CapturePulses();
     }
 
     /// <summary>

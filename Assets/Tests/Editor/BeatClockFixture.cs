@@ -38,7 +38,7 @@ internal static class BeatClockFixture
         var onBeat = elapsedSinceBeatSeconds < gateDurationSeconds;
 
         beatManager.SetLiveBeatSource(true);
-        var snapshot = beatManager.beatData.snapshot;
+        var snapshot = beatManager.WireSnapshot;
         snapshot.bpm = bpm;
         snapshot.beatInBar = beatIndex + 1;
         snapshot.beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);

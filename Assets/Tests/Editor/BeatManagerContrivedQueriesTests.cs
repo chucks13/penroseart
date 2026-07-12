@@ -20,10 +20,10 @@ public sealed class BeatManagerContrivedQueriesTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.beatData.snapshot.bpm = 128f; // positive BPM = usable beat clock (IsActive derives from this)
-        beatManager.beatData.snapshot.beatInBar = 1;
-        beatManager.beatData.snapshot.beatAverageMs = 500;
-        beatManager.beatData.snapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
+        beatManager.WireSnapshot.bpm = 128f; // positive BPM = usable beat clock (IsActive derives from this)
+        beatManager.WireSnapshot.beatInBar = 1;
+        beatManager.WireSnapshot.beatAverageMs = 500;
+        beatManager.WireSnapshot.beatsCountMs = new[] { 0, 250, 750, 1250 };
         return beatManager;
     }
 
@@ -51,11 +51,12 @@ public sealed class BeatManagerContrivedQueriesTests
 
     // --- Fill / Drop phrase events ---
 
+    /// <summary>The wire's unavailable Fill tri-state (-1) reads as a null Fill, never an inactive one.</summary>
     [Test]
     public void FillIsNullWhenTriStateIsUnavailable()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.fillState = CountdownState.Unavailable;
+        beatManager.WireSnapshot.fillState = CountdownState.Unavailable;
 
         Assert.That(beatManager.Fill, Is.Null);
     }
@@ -72,11 +73,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.Levels, Is.Null);
     }
 
+    /// <summary>An upcoming Fill serves its countdown side — beats/ms until start and the anticipation ramp — with the in-progress fields null.</summary>
     [Test]
     public void FillCountsDownWhileUpcoming()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 };
+        beatManager.WireSnapshot.fillState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 8, remaining = 1 };
 
         var fill = beatManager.Fill;
 
@@ -92,11 +94,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(fill.Value.remaining, Is.EqualTo(1));
     }
 
+    /// <summary>A playing Fill serves beat-smoothed progress and beats-until-end, with the countdown fields null.</summary>
     [Test]
     public void FillReportsBeatSmoothedProgressWhileInProgress()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 1 };
+        beatManager.WireSnapshot.fillState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 1 };
 
         var fill = beatManager.Fill;
 
@@ -110,11 +113,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(fill.Value.progress, Is.EqualTo(0.3125f).Within(0.0001f));
     }
 
+    /// <summary>Inside a valid Fill state, each field's -1 wire unknown maps to null on its own.</summary>
     [Test]
     public void FillMapsWireUnknownsToNullFieldsInsideAValidState()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = -1 };
+        beatManager.WireSnapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = -1 };
 
         var fill = beatManager.Fill;
 
@@ -126,13 +130,14 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(fill.Value.remaining, Is.Null);
     }
 
+    /// <summary>A track whose fills are all behind the playhead reads remaining == 0 — a number, not an unavailable state.</summary>
     [Test]
     public void FillWithNoMoreOccurrencesIsValuesNotAThirdState()
     {
         var beatManager = CreateLiveBeatManager();
         // The wire shape when the track HAS fills but they are all behind the playhead:
         // still available (active 0), no known next start, zero occurrences left.
-        beatManager.beatData.snapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = 0 };
+        beatManager.WireSnapshot.fillState = new CountdownState { active = 0, countBeats = -1, lengthBeats = -1, remaining = 0 };
 
         var fill = beatManager.Fill;
 
@@ -143,24 +148,26 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(fill.Value.remaining, Is.EqualTo(0)); // zero is a valid number, not a state
     }
 
+    /// <summary>The anticipation ramp is null outside the 32-beat window and reads 1 on the start beat.</summary>
     [Test]
     public void AnticipationIsNullOutsideTheWindowAndFullAtTheStart()
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = BeatManager.AnticipationWindowBeats + 1, lengthBeats = 16, remaining = 1 };
+        beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = BeatManager.AnticipationWindowBeats + 1, lengthBeats = 16, remaining = 1 };
         Assert.That(beatManager.Drop!.Value.anticipation, Is.Null);
 
-        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 0, lengthBeats = 16, remaining = 1 };
+        beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = 0, lengthBeats = 16, remaining = 1 };
         Assert.That(beatManager.Drop!.Value.anticipation, Is.EqualTo(1f).Within(0.0001f));
     }
 
+    /// <summary>msUntilStart is null when the average beat interval is unavailable, while beatsUntilStart still serves.</summary>
     [Test]
     public void MsUntilStartIsNullWithoutAUsableBeatInterval()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.beatAverageMs = -1;
-        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 16, remaining = 1 };
+        beatManager.WireSnapshot.beatAverageMs = -1;
+        beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 16, remaining = 1 };
 
         var drop = beatManager.Drop;
 
@@ -169,11 +176,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(drop.Value.msUntilStart, Is.Null);
     }
 
+    /// <summary>Drop cooks through the same shared phrase-event shape as Fill (in-progress fields, progress, remaining).</summary>
     [Test]
     public void DropMirrorsFillCooking()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.dropState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 2 };
+        beatManager.WireSnapshot.dropState = new CountdownState { active = 1, countBeats = 6, lengthBeats = 8, remaining = 2 };
 
         var drop = beatManager.Drop;
 
@@ -187,12 +195,13 @@ public sealed class BeatManagerContrivedQueriesTests
 
     // --- Energy (closed vocabulary) ---
 
+    /// <summary>A full energy wire state parses the closed vocabulary once and serves tier, direction, and run shape.</summary>
     [Test]
     public void EnergyParsesClosedVocabularyOnce()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
-        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 8 };
+        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 8 };
 
         var energy = beatManager.Energy;
 
@@ -208,12 +217,13 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(energy.Value.nextRunLengthBeats, Is.EqualTo(8));
     }
 
+    /// <summary>Wire energy labels parse case-insensitively ("low", "HIGH").</summary>
     [Test]
     public void EnergyParsesLabelsCaseInsensitively()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "low", countBeats = 8, lengthBeats = 16 };
-        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "HIGH", countBeats = 8, lengthBeats = 16 };
+        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "low", countBeats = 8, lengthBeats = 16 };
+        beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "HIGH", countBeats = 8, lengthBeats = 16 };
 
         var energy = beatManager.Energy;
 
@@ -224,33 +234,36 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(energy.Value.direction, Is.EqualTo(1));
     }
 
+    /// <summary>An unrecognized energy label reads as null Energy, never a wrong tier.</summary>
     [Test]
     public void EnergyDegradesToNullOnUnrecognizedLabelNeverToAWrongTier()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "Banana", countBeats = 4, lengthBeats = 16 };
-        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "Banana", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
 
         Assert.That(beatManager.Energy, Is.Null);
     }
 
+    /// <summary>An empty/unavailable energy label reads as null Energy — the label is the availability signal.</summary>
     [Test]
     public void EnergyIsNullWhenLabelIsUnavailable()
     {
         // Energy no longer has its own active tri-state on the wire; an empty/null label is the
         // unavailable signal now (the label fails the closed Low/Mid/High parse).
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = LabeledCountdown.Unavailable;
+        beatManager.WireSnapshot.energyState = LabeledCountdown.Unavailable;
 
         Assert.That(beatManager.Energy, Is.Null);
     }
 
+    /// <summary>An unknown next-energy label serves next = null with a steady (0) direction.</summary>
     [Test]
     public void EnergyTreatsUnknownNextLabelAsSteadyDirection()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
-        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "", countBeats = 4, lengthBeats = 16 };
 
         var energy = beatManager.Energy;
 
@@ -261,11 +274,12 @@ public sealed class BeatManagerContrivedQueriesTests
 
     // --- Track Phrase (open vocabulary) ---
 
+    /// <summary>Phrase labels pass through as an open vocabulary while countdown, length, and progress are cooked.</summary>
     [Test]
     public void PhrasePassesOpenVocabularyLabelsThroughAndCooksStructure()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
+        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
 
         var phrase = beatManager.Phrase;
 
@@ -278,40 +292,43 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(phrase.Value.progress, Is.EqualTo(0.640625f).Within(0.0001f));
     }
 
+    /// <summary>The phrase irregular tri-state maps 1/0/-1 to true/false/null.</summary>
     [Test]
     public void PhraseIrregularTriStateMapsToNullableBool()
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 1 };
+        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 1 };
         Assert.That(beatManager.Phrase!.Value.irregular, Is.True);
 
-        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
+        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = 0 };
         Assert.That(beatManager.Phrase!.Value.irregular, Is.False);
 
-        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = -1 };
+        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Chorus 2", countBeats = 12, lengthBeats = 32, irregular = -1 };
         Assert.That(beatManager.Phrase!.Value.irregular, Is.Null);
     }
 
+    /// <summary>A phrase with no label — empty or the full unavailable shape — reads as null Phrase.</summary>
     [Test]
     public void PhraseIsNullWithoutALabelOrWhenUnavailable()
     {
         var beatManager = CreateLiveBeatManager();
 
-        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "", countBeats = 12, lengthBeats = 32, irregular = 0 };
+        beatManager.WireSnapshot.phraseState = new PhraseState { label = "", countBeats = 12, lengthBeats = 32, irregular = 0 };
         Assert.That(beatManager.Phrase, Is.Null);
 
-        beatManager.beatData.snapshot.phraseState = PhraseState.Unavailable;
+        beatManager.WireSnapshot.phraseState = PhraseState.Unavailable;
         Assert.That(beatManager.Phrase, Is.Null);
     }
 
     // --- Next Phrase planning (separate labeled countdown from the phrase-in-progress) ---
 
+    /// <summary>NextPhrase serves the upcoming label with its countdown and its own length.</summary>
     [Test]
     public void NextPhrasePassesLabelAndCooksCountdown()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.nextPhraseState = new LabeledCountdown { label = "Drop", countBeats = 9, lengthBeats = 64 };
+        beatManager.WireSnapshot.nextPhraseState = new LabeledCountdown { label = "Drop", countBeats = 9, lengthBeats = 64 };
 
         var nextPhrase = beatManager.NextPhrase;
 
@@ -321,32 +338,35 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(nextPhrase.Value.lengthBeats, Is.EqualTo(64));
     }
 
+    /// <summary>The unavailable next-phrase shape (no label) reads as null NextPhrase.</summary>
     [Test]
     public void NextPhraseIsNullWithoutALabel()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.nextPhraseState = LabeledCountdown.Unavailable;
+        beatManager.WireSnapshot.nextPhraseState = LabeledCountdown.Unavailable;
 
         Assert.That(beatManager.NextPhrase, Is.Null);
     }
 
     // --- Loop state (tri-state gating) ---
 
+    /// <summary>The wire's unavailable loop tri-state (-1) reads as a null Loop.</summary>
     [Test]
     public void LoopIsNullWhenActiveTriStateIsUnavailable()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.loopState = LoopState.Unavailable;
+        beatManager.WireSnapshot.loopState = LoopState.Unavailable;
 
         Assert.That(beatManager.Loop, Is.Null);
     }
 
+    /// <summary>An idle-but-set loop region (active 0, set 1) is real non-null data with its full shape served.</summary>
     [Test]
     public void LoopIdleButRegionSetIsRealDataNotUnavailable()
     {
         // active=0 (not rolling) with set=1 (a region exists) is idle-but-set: real data, not "unavailable".
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.loopState = new LoopState { active = 0, set = 1, lengthBeats = 4f, lengthMs = 2000, sizeNumerator = 1, sizeDenominator = 4 };
+        beatManager.WireSnapshot.loopState = new LoopState { active = 0, set = 1, lengthBeats = 4f, lengthMs = 2000, sizeNumerator = 1, sizeDenominator = 4 };
 
         var loop = beatManager.Loop;
 
@@ -359,11 +379,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(loop.Value.sizeDenominator, Is.EqualTo(4));
     }
 
+    /// <summary>A rolling loop serves looping and regionSet both true.</summary>
     [Test]
     public void LoopRollingAndRegionSetBothReadTrue()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.loopState = new LoopState { active = 1, set = 1, lengthBeats = 8f, lengthMs = 4000, sizeNumerator = 1, sizeDenominator = 2 };
+        beatManager.WireSnapshot.loopState = new LoopState { active = 1, set = 1, lengthBeats = 8f, lengthMs = 4000, sizeNumerator = 1, sizeDenominator = 2 };
 
         var loop = beatManager.Loop;
 
@@ -372,11 +393,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(loop.Value.regionSet, Is.True);
     }
 
+    /// <summary>Inside a valid loop state, each -1 length/size field maps to null on its own.</summary>
     [Test]
     public void LoopMapsNegativeLengthBeatsToNullInsideAValidState()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.loopState = new LoopState { active = 0, set = 0, lengthBeats = -1f, lengthMs = -1, sizeNumerator = -1, sizeDenominator = -1 };
+        beatManager.WireSnapshot.loopState = new LoopState { active = 0, set = 0, lengthBeats = -1f, lengthMs = -1, sizeNumerator = -1, sizeDenominator = -1 };
 
         var loop = beatManager.Loop;
 
@@ -403,11 +425,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(beatManager.LevelsPalette, Is.Null);
     }
 
+    /// <summary>The first live Levels sample snaps in unsmoothed.</summary>
     [Test]
     public void LevelsSnapToTheFirstLiveSample()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
 
         beatManager.Update(0f);
 
@@ -418,51 +441,54 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(levels.Value.high, Is.EqualTo(0.8f).Within(0.0001f));
     }
 
+    /// <summary>Rising bands follow the attack time-constant; falling bands follow the slower release.</summary>
     [Test]
     public void LevelsRiseOnAttackAndFallOnRelease()
     {
         var beatManager = CreateLiveBeatManager();
         beatManager.levelsAttackSeconds = 0.1f;
         beatManager.levelsReleaseSeconds = 0.4f;
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0f);
 
         // Rising low band uses the attack time-constant.
-        beatManager.beatData.snapshot.levels = new Levels { low = 1f, mid = 0.4f, high = 0.8f };
+        beatManager.WireSnapshot.levels = new Levels { low = 1f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0.1f);
         var expectedAttack = 0.2f + ((1f - 0.2f) * (1f - Mathf.Exp(-0.1f / 0.1f)));
         Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedAttack).Within(0.0001f));
 
         // Falling low band uses the slower release time-constant.
-        beatManager.beatData.snapshot.levels = new Levels { low = 0f, mid = 0.4f, high = 0.8f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0.2f);
         var expectedRelease = expectedAttack + ((0f - expectedAttack) * (1f - Mathf.Exp(-0.1f / 0.4f)));
         Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(expectedRelease).Within(0.0001f));
         Assert.That(beatManager.Levels!.Value.mid, Is.EqualTo(0.4f).Within(0.0001f));
     }
 
+    /// <summary>After a Levels gap the smoothing state drops, so the next live sample snaps in fresh instead of releasing from stale values.</summary>
     [Test]
     public void LevelsResetInsteadOfReleasingFromStaleValuesAfterAGap()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.9f, mid = 0.9f, high = 0.9f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.9f, mid = 0.9f, high = 0.9f };
         beatManager.Update(0f);
 
-        beatManager.beatData.snapshot.levels = Levels.Unavailable;
+        beatManager.WireSnapshot.levels = Levels.Unavailable;
         beatManager.Update(0.1f);
         Assert.That(beatManager.Levels, Is.Null);
 
         // The next live sample snaps in fresh; nothing decays from the pre-gap 0.9.
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.1f, mid = 0.1f, high = 0.1f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.1f, mid = 0.1f, high = 0.1f };
         beatManager.Update(0.2f);
         Assert.That(beatManager.Levels!.Value.low, Is.EqualTo(0.1f).Within(0.0001f));
     }
 
+    /// <summary>The raw Color Bank form maps low/mid/high straight onto R/G/B with full alpha.</summary>
     [Test]
     public void LevelsRgbMapsBandsStraightOntoChannels()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.2f, mid = 0.4f, high = 0.8f };
         beatManager.Update(0f);
 
         var color = beatManager.LevelsRgb;
@@ -474,11 +500,12 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(color.Value.a, Is.EqualTo(1f));
     }
 
+    /// <summary>The hue Color Bank form points the hue at the spectral centroid of the bands (high-only reads blue).</summary>
     [Test]
     public void LevelsHueTracksTheSpectralCentroid()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0.8f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0f, mid = 0f, high = 0.8f };
         beatManager.Update(0f);
 
         var color = beatManager.LevelsHue;
@@ -490,16 +517,18 @@ public sealed class BeatManagerContrivedQueriesTests
         Assert.That(color.Value.b, Is.EqualTo(expected.b).Within(0.0001f));
     }
 
+    /// <summary>The hue Color Bank form reads black at silence — no energy means no centroid to point at.</summary>
     [Test]
     public void LevelsHueIsBlackAtSilence()
     {
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0f, mid = 0f, high = 0f };
         beatManager.Update(0f);
 
         Assert.That(beatManager.LevelsHue, Is.EqualTo((Color?)Color.black));
     }
 
+    /// <summary>The palette Color Bank form is null in edit mode when no live Controller owns a palette.</summary>
     [Test]
     public void LevelsPaletteIsNullWithoutALiveController()
     {
@@ -508,7 +537,7 @@ public sealed class BeatManagerContrivedQueriesTests
         Assume.That(Controller.HasInstance, Is.False, "These tests assume no live Controller in the scene.");
 
         var beatManager = CreateLiveBeatManager();
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
         beatManager.Update(0f);
 
         Assert.That(beatManager.Levels, Is.Not.Null);
@@ -517,18 +546,19 @@ public sealed class BeatManagerContrivedQueriesTests
 
     // --- Source transitions ---
 
+    /// <summary>Dropping to Standalone clears phrase/level/envelope reads to null instead of replaying stale live values.</summary>
     [Test]
     public void StandaloneClearsPhraseLevelAndEnvelopeStateToUnavailable()
     {
         // Stale live values (or stale scene-serialized values) must not replay through the contrived queries
         // once the live source drops out: Standalone is a no-beat state, not a musical analysis.
         var beatManager = new BeatManager();
-        beatManager.beatData.snapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
-        beatManager.beatData.snapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
-        beatManager.beatData.snapshot.phraseState = new PhraseState { label = "Drop", countBeats = 12, lengthBeats = 32, irregular = 0 };
-        beatManager.beatData.snapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
-        beatManager.beatData.snapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
-        beatManager.beatData.snapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
+        beatManager.WireSnapshot.fillState = new CountdownState { active = 1, countBeats = 2, lengthBeats = 8, remaining = 1 };
+        beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = 16, lengthBeats = 32, remaining = 2 };
+        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Drop", countBeats = 12, lengthBeats = 32, irregular = 0 };
+        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "High", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 16 };
+        beatManager.WireSnapshot.levels = new Levels { low = 0.5f, mid = 0.5f, high = 0.5f };
 
         beatManager.Update(0f);
 
@@ -552,7 +582,7 @@ public sealed class BeatManagerContrivedQueriesTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        var snapshot = beatManager.beatData.snapshot;
+        var snapshot = beatManager.WireSnapshot;
         snapshot.bpm = 128f;
         snapshot.beatInBar = beatInBar;
         snapshot.beatAverageMs = 500;
