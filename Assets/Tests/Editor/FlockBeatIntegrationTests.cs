@@ -6,19 +6,25 @@ using UnityEngine;
 
 public sealed class FlockBeatIntegrationTests
 {
+    /// <summary>
+    /// Verifies that an available Waveform envelope preserves Flock's authored additive speed curve.
+    /// </summary>
     [TestCase(0f, 1f)]
     [TestCase(0.25f, 1.25f)]
     [TestCase(0.5f, 1.7071068f)]
     [TestCase(1f, 3f)]
     public void BeatSpeedMultiplierMapsWaveformEnvelopeToAdditiveSpeedLift(float envelope, float expected)
     {
-        Assert.That(Flock.GetBeatSpeedMultiplier(envelope, true), Is.EqualTo(expected).Within(0.0001f));
+        Assert.That(Flock.GetBeatSpeedMultiplier(envelope), Is.EqualTo(expected).Within(0.0001f));
     }
 
+    /// <summary>
+    /// Verifies that a missing Waveform evaluation preserves Flock's Standalone base speed.
+    /// </summary>
     [Test]
-    public void BeatSpeedMultiplierIsNormalSpeedWhenBeatIsDisabled()
+    public void BeatSpeedMultiplierIsNormalSpeedWhenWaveformIsUnavailable()
     {
-        Assert.That(Flock.GetBeatSpeedMultiplier(1f, false), Is.EqualTo(1f));
+        Assert.That(Flock.GetBeatSpeedMultiplier(null), Is.EqualTo(1f));
     }
 
 

@@ -26,12 +26,6 @@ public class Julia : EffectBase
     /// <summary>ln(2), for the smooth escape-time calculation.</summary>
     private const float Ln2 = 0.6931472f;
 
-    /// <summary>Fill envelope attack rate (per second); fast so even a one-beat Fill slams to full.</summary>
-    private const float FillAttack = 22f;
-
-    /// <summary>Fill envelope release rate (per second); slow so the Fill tails off cleanly.</summary>
-    private const float FillRelease = 5f;
-
     /// <summary>
     /// Fill dive depth: at full Fill the zoom is e^FillDiveDepth (~7×) deeper than the
     /// breathing zoom alone. Exponential so the dive speed feels constant at any depth.
@@ -50,12 +44,6 @@ public class Julia : EffectBase
     /// <summary>Bars the Drop slam takes to decay back to rest.</summary>
     private const int DropBars = 2;
 
-    /// <summary>Beats per bar for the current common-time beat model.</summary>
-    private const int BeatsPerBar = 4;
-
-    /// <summary>Drop decay window used when no live BPM is available.</summary>
-    private const float DropFallbackSeconds = 2f;
-
     /// <summary>Spin speed in revolutions per second at the Drop slam's peak.</summary>
     private const float DropSpinRate = 1f;
 
@@ -73,8 +61,8 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Extra hue cycling speed, in wheel revolutions per second, added at the beat envelope's
-    /// peak. The variant's envelope (0..1, peaking on its beats) scales this, so the cycle
-    /// surges on the variant's beats and settles back to the base rate between them.
+    /// peak. The held Waveform's envelope (0..1, peaking on its hits) scales this, so the cycle
+    /// surges on those hits and settles back to the base rate between them.
     /// </summary>
     private const float HueBeatRate = 0.25f;
 
@@ -124,16 +112,17 @@ public class Julia : EffectBase
 
     private float angle;
     private float speed = 0.15f;
+
+    /// <summary>The consumer-owned Waveform that seasons Julia's hue cycling.</summary>
+    private Waveform waveform;
+
     private Vector2 c;
     private Vector2 viewCenter;
     private int presetIndex;
     private float hueScroll;
     private float fillEnv;
     private float dropEnv;
-    private float dropElapsed;
-    private float dropSeconds = DropFallbackSeconds;
     private float dropSpinDir = 1f;
-    private bool dropFlashed;
     private float rotation;
     private bool usePalette;
 
@@ -153,21 +142,17 @@ public class Julia : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
         Reroll();
         hueScroll = 0f;
         fillEnv = 0f;
         dropEnv = 0f;
-        dropElapsed = 0f;
-        dropSeconds = DropFallbackSeconds;
-        dropFlashed = false;
         rotation = 0f;
         buffer.Clear();
     }
 
     /// <summary>
     /// Re-rolls the per-activation look: Julia constant preset, zoom speed, color mode
-    /// (fresh palette or rainbow), and rhythmic variant. Called once at activation and
+    /// (fresh palette or rainbow), and held Waveform. Called once at activation and
     /// again on each new Grid, so the fractal takes a fresh form in step with the music.
     /// </summary>
     private void Reroll()
@@ -178,7 +163,7 @@ public class Julia : EffectBase
         speed = Random.Range(0.1f, 0.3f);
         usePalette = Random.value < PaletteChance;
         if (usePalette) APalette.Change();
-        beatVariant = beatManager.GetRandomVariant();
+        waveform = synth.Random();
     }
 
     /// <summary>
@@ -187,51 +172,34 @@ public class Julia : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// On each new Grid the fractal takes a fresh form. If that Grid downbeat lands inside
-    /// a Drop and this Drop has not slammed yet, it also fires the one-shot spin slam.
+    /// On each new Grid the fractal takes a fresh form and held Waveform.
     /// </summary>
     protected override void OnNewGrid()
     {
         Reroll();
-        if (beatManager.DropQuery is { inProgress: true } && !dropFlashed)
-        {
-            TriggerDrop();
-            dropFlashed = true;
-        }
     }
 
     /// <summary>
-    /// Arms the Drop slam: full spin/blowout envelope now, decaying over <see cref="DropBars"/>
-    /// bars of the current tempo, with a random spin direction and an instant hue inversion.
+    /// Chooses the Drop slam's spin direction and applies its instant hue inversion; the hub-owned
+    /// stock Decay supplies the spin/blowout envelope.
     /// </summary>
     private void TriggerDrop()
     {
-        dropSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-            ? 60f / bpm * BeatsPerBar * DropBars
-            : DropFallbackSeconds;
-        dropElapsed = 0f;
-        dropEnv = 1f;
         dropSpinDir = Random.value < 0.5f ? -1f : 1f;
         hueScroll = Mathf.Repeat(hueScroll + DropHueKick, 1f);
     }
 
     /// <summary>
-    /// Updates the one-shot Drop slam: re-arms after the Drop window ends, eases the envelope
-    /// back to zero over the BPM-sized window, and integrates the spin.
+    /// Updates the Drop slam from the hub-owned Started edge and stock Decay, then integrates the spin.
     /// </summary>
     private void UpdateDropSlam()
     {
-        if (beatManager.DropQuery is not { inProgress: true })
+        if (beatManager.Drop.Span.Started)
         {
-            dropFlashed = false;
+            TriggerDrop();
         }
 
-        if (dropEnv > 0f)
-        {
-            dropElapsed += effectDelta;
-            var decayProgress = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
-            dropEnv = 1f - Mathf.SmoothStep(0f, 1f, decayProgress);
-        }
+        dropEnv = beatManager.Drop.Span.Decay(DropBars * 4f);
 
         rotation += dropSpinDir * DropSpinRate * dropEnv * effectDelta * 2f * Mathf.PI;
     }
@@ -242,8 +210,8 @@ public class Julia : EffectBase
     public override void Draw()
     {
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
-        // rate, and the variant's envelope (0..1, peaking on its beats) adds speed on top.
-        var beatEnvelope = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.0f, beatEnable);
+        // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
+        var beatEnvelope = synth.Evaluate(waveform) ?? 1f;
         hueScroll = Mathf.Repeat(hueScroll + ((HueBaseRate + (beatEnvelope * HueBeatRate)) * effectDelta), 1f);
 
         UpdateFillEnvelope();
@@ -279,15 +247,11 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Updates the Fill build: the smoothed envelope tracks Fill.progress with fast attack /
-    /// slower release, and Draw() turns it into extra zoom depth.
+    /// Reads the hub-owned Fill Build that Draw turns into extra zoom depth.
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        PhraseEventInfo? fill = beatManager.FillQuery;
-        var fillTarget = fill is { inProgress: true } ? Mathf.Clamp01(fill.Value.progress ?? 0f) : 0f;
-        var fillRate = fillTarget > fillEnv ? FillAttack : FillRelease;
-        fillEnv = Mathf.Lerp(fillEnv, fillTarget, 1f - Mathf.Exp(-fillRate * effectDelta));
+        fillEnv = beatManager.Fill.Span.Build();
     }
 
     /// <summary>

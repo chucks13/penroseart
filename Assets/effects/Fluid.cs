@@ -12,6 +12,9 @@ public class Fluid : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
+    /// <summary>The consumer-owned Waveform that offsets the diffusion palette lookup.</summary>
+    private Waveform waveform;
+
     private float[] state1;
     private float[] state2;
     int slower = 0;
@@ -33,9 +36,10 @@ public class Fluid : ScreenEffect
     {
         base.Init();
     }
+    /// <summary>Acquires this activation's Waveform and resets the diffusion buffers.</summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         state1 = new float[Penrose.Total];
         state2 = new float[Penrose.Total];
         for (int i = 0; i < state1.Length; i++)
@@ -95,14 +99,15 @@ public class Fluid : ScreenEffect
         if ((slower % 2) == 0)
             generate();
         inject();
-        // Beat pulse scales the palette-colored diffusion field.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        // The Waveform offsets the palette lookup; clockless rendering keeps the previous steady offset.
+        float? rhythm = synth.Evaluate(waveform);
+        float paletteOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         for (int i = 0; i < state1.Length; i++)
         {
             float v = state1[i] * scale;
             v += 1000.5f;
             v %= 1f;
-            buffer[i] = APalette.read(v+beatBrightness);// * beatBrightness;
+            buffer[i] = APalette.read(v + paletteOffset);
         }
     }
 

@@ -6,6 +6,9 @@ using UnityEngine;
 /// </summary>
 public class ColorSparkle : EffectBase
 {
+    /// <summary>The consumer-owned Waveform that offsets sparkle hue during this activation.</summary>
+    private Waveform waveform;
+
     private bool randomColor;
     //    private Color color;
     private float hue;
@@ -34,7 +37,7 @@ public class ColorSparkle : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         randomColor = (Random.value > 0.5f);
         hue = Random.value;
 
@@ -54,15 +57,16 @@ public class ColorSparkle : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales newly generated sparkles while the existing buffer continues to fade.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        // The Waveform offsets newly generated sparkle hues; clockless rendering stays steady.
+        float? rhythm = synth.Evaluate(waveform);
+        float hueOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
-        Color drawColor = Color.HSVToRGB((hue + beatBrightness) % 1.0f, 1f, 1f);
+        Color drawColor = Color.HSVToRGB((hue + hueOffset) % 1.0f, 1f, 1f);
         for (int i = 0; i < count; i++)
         {
             // While the beat clock is active, hold sparkle hue stable so the beat pulse is the visible rhythm.
-            if (randomColor && (!IsBeatActive))
+            if (randomColor && !beatManager.IsSynced)
                 drawColor = Color.HSVToRGB(Random.value, 1f, 1f);
 
             buffer[Random.Range(0, buffer.Length)] = drawColor;// * beatBrightness;

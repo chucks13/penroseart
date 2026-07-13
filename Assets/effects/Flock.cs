@@ -12,6 +12,9 @@ public class Flock : EffectBase
     /// </summary>
     public override Repertoire Repertoire => Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
+    /// <summary>The consumer-owned Waveform that seasons flock speed until the next Grid.</summary>
+    private Waveform waveform;
+
     private Boid[] flock;
     private int total = 80;
     private const float BaseSpeedMultiplier = 1f;
@@ -28,13 +31,13 @@ public class Flock : EffectBase
     public override string DebugText() { return $""; }
 
     /// <summary>
-    /// Maps the selected Waveform envelope to flock movement speed. Disabled beat movement stays at normal speed.
+    /// Maps an available Waveform envelope to flock movement speed, falling back to normal speed without a clock.
     /// </summary>
-    public static float GetBeatSpeedMultiplier(float envelope, bool beatEnabled)
+    public static float GetBeatSpeedMultiplier(float? envelope)
     {
-        if (!beatEnabled) return BaseSpeedMultiplier;
+        if (envelope is not { } value) return BaseSpeedMultiplier;
 
-        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(envelope), 1.5f);
+        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(value), 1.5f);
         return BaseSpeedMultiplier + (shapedEnvelope * BeatSpeedLift);
     }
 
@@ -65,11 +68,11 @@ public class Flock : EffectBase
     }
 
     /// <summary>
-    /// Initializes per-activation random state before this effect starts drawing.
+    /// Acquires this activation's Waveform and initializes the flock's artistic state.
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
 
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
@@ -99,17 +102,17 @@ public class Flock : EffectBase
     /// </summary>
     public override void OnEnd() { }
 
-    /// <summary>Picks a new Waveform variant at the one of each new 16-beat Grid (the base Locked-gated edge).</summary>
-    protected override void OnNewGrid() => beatVariant = beatManager.GetRandomVariant();
+    /// <summary>Acquires a fresh consumer-owned Waveform at each new 16-beat Grid.</summary>
+    protected override void OnNewGrid() => waveform = synth.Random();
 
     /// <summary>
-    /// Renders one frame into this effect's 900-color buffer.
+    /// Renders one frame using the live Waveform envelope and smoothed low-band level when available.
     /// </summary>
     public override void Draw()
     {
-        var envelope = beatManager.Envelope(beatVariant) ?? 0f;
-        var lowEnergy = beatManager.LevelsQuery?.low ?? 0f;
-        float speedMultiplier = GetBeatSpeedMultiplier(envelope, beatEnable && beatManager.IsActive);
+        float? envelope = synth.Evaluate(waveform);
+        float lowEnergy = beatManager.Levels?.Smoothed.Low ?? 0f;
+        float speedMultiplier = GetBeatSpeedMultiplier(envelope);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
         {

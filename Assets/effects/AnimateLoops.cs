@@ -12,6 +12,9 @@ public class AnimateLoops : EffectBase
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
+    /// <summary>The consumer-owned Waveform used by this activation's distortion mode.</summary>
+    private Waveform waveform;
+
     private Color[] colors;
     private float background;
     int[] shape;
@@ -40,7 +43,7 @@ public class AnimateLoops : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         shape = penrose.Layout.shapes.loops;
         distortionMode = Random.Range(1, 3);
         shapeName = "loops";
@@ -78,17 +81,14 @@ public class AnimateLoops : EffectBase
         float hueShift = 0.0f;
         float sampleTime = effectTime;
 
-        // This effect has three beat-response modes: brightness pulsing,
-        // palette hue offset pulsing, or time warping for a motion kick.
-        if (beatEnable)
-        {
-            if (distortionMode == 0)
-                beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f);
-            else if (distortionMode == 1)
-                hueShift = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.0f);
-            else if (distortionMode == 2)
-                sampleTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
-        }
+        // This effect owns all three response mappings and their clockless fallbacks.
+        float? rhythm = synth.Evaluate(waveform);
+        if (distortionMode == 0)
+            beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
+        else if (distortionMode == 1)
+            hueShift = 0.25f * (rhythm ?? 0f);
+        else if (distortionMode == 2)
+            sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
 
         float beatOffset = (sampleTime - effectTime);
         colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);

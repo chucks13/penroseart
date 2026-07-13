@@ -38,9 +38,9 @@ using Random = UnityEngine.Random;
 ///   resolves into a new crystal field.</description></item>
 /// <item><description>HOW FAST the front lunges — <see cref="BeatManager.Pulse"/> surges the spread rate on
 ///   each hit; Standalone falls back to a self-driven surge so its fronts still lunge on the synthetic downbeats.</description></item>
-/// <item><description>OVERALL brightness — <see cref="EffectBase.BeatBrightness"/> pulses the field with the
-///   music when synced, holds steady when not.</description></item>
-/// <item><description>ENERGY gating — live band <see cref="BeatManager.LevelsQuery"/> ease all three off as the
+/// <item><description>OVERALL brightness — this Effect evaluates its held Waveform and maps the envelope locally;
+///   clockless rendering holds steady.</description></item>
+/// <item><description>ENERGY gating — live smoothed <see cref="BeatManager.Levels"/> ease all three off as the
 ///   track quietens, so a quiet break stops chasing an inaudible beat instead of seeding/surging/strobing to it.</description></item>
 /// <item><description>PALETTE — a fresh wall palette is selected at the start of every 16-beat Grid.</description></item>
 /// </list>
@@ -90,9 +90,6 @@ public class CrystalGrowth : EffectBase
 
     /// <summary>Bars the Drop sparkle is drawn out over: full machine-gun at the hit, fading back to normal growth across this many bars.</summary>
     private const float DropFadeBars = 2f;
-
-    /// <summary>Sparkle length in seconds when no tempo is on the wire to size it in bars (a Drop without a usable BPM).</summary>
-    private const float DropFlashFallbackSeconds = 3.2f;
 
     /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP FLASH readout.</summary>
     private const float DropFlashBrightness = 1.2f;
@@ -182,25 +179,16 @@ public class CrystalGrowth : EffectBase
     /// <summary>Standalone-only seconds per synthetic downbeat (re-jittered each tick so it never feels mechanical).</summary>
     private float selfBeatPeriod;
 
-    /// <summary>Standalone-only spread surge envelope (1 at a synthetic downbeat, decaying to 0) — stands in for <see cref="BeatManager.Pulse"/>.</summary>
+    /// <summary>Standalone-only spread surge envelope (1 at a synthetic downbeat, decaying to 0) — stands in for <see cref="PulsesView.Beat"/>.</summary>
     private float selfPulse;
 
-    /// <summary>Last frame's <see cref="BeatManager.BeatInBar"/>, so a new beat can be edge-detected. Null = off-beat last frame.</summary>
-    private int? lastBeatInBar;
+    /// <summary>The consumer-owned Waveform that seasons crystal brightness during this activation.</summary>
+    private Waveform waveform;
 
-    /// <summary>Last frame's Drop in-progress state, so the drop's beat one can be edge-detected into exactly one flash.</summary>
-    private bool wasDropActive;
-
-    /// <summary>One-shot Drop flash envelope in [0..1]: 1 at the drop's onset, eased back to 0 across <see cref="dropFlashSeconds"/>. Drives the wavefront luminance lift and the spread surge that washes a fresh layer across the wall.</summary>
+    /// <summary>The hub-owned Drop decay sampled this frame; drives the wavefront luminance lift and spread surge.</summary>
     private float dropFlash;
 
-    /// <summary>Seconds elapsed since the current Drop flash onset.</summary>
-    private float dropFlashElapsed;
-
-    /// <summary>Seconds the current Drop flash is drawn out over (~<see cref="DropFlashBars"/> bars, sized from the tempo at onset).</summary>
-    private float dropFlashSeconds;
-
-    /// <summary>Whether live <see cref="BeatManager.LevelsQuery"/> were available this frame (false → no energy info, assume active).</summary>
+    /// <summary>Whether live <see cref="BeatManager.Levels"/> were available this frame (false → no energy info, assume active).</summary>
     private bool hasLevels;
 
     /// <summary>This frame's smoothed low-band (bass kick) level in [0..1]; 0 when no Levels.</summary>
@@ -211,9 +199,6 @@ public class CrystalGrowth : EffectBase
 
     /// <summary>Last frame's "kick present" state, so each bass hit is edge-detected into one bloom.</summary>
     private bool lastKick;
-
-    /// <summary>Last frame's sixteenth-gate state, so each onset of the fill ratchet seeds exactly one burst.</summary>
-    private bool lastSixteenthOn;
 
     /// <summary>Whether this frame is inside a fill, kept for the debug readout.</summary>
     private bool fillActive;
@@ -241,7 +226,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
 
         Array.Clear(charge, 0, charge.Length);
         Array.Clear(hue, 0, hue.Length);
@@ -265,15 +250,7 @@ public class CrystalGrowth : EffectBase
         energyNow = -1f;
         fillActive = false;
         fillLevel = 0f;
-        lastSixteenthOn = false;
-        lastBeatInBar = beatManager.BeatInBar;
-
-        // Arm the Drop edge to the current state so activating mid-drop doesn't fire a false flash; the flash is for
-        // the drop's onset, not for being inside one.
-        wasDropActive = beatManager.DropQuery is { inProgress: true };
         dropFlash = 0f;
-        dropFlashElapsed = 0f;
-        dropFlashSeconds = DropFlashFallbackSeconds;
 
         // Seed the very first crystal so Standalone Mode has something growing immediately.
         PlantSeed();
@@ -287,7 +264,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     public override string DebugText()
     {
-        string mode = IsBeatActive ? "Synced" : "Standalone (self-driven)";
+        string mode = beatManager.IsSynced ? "Synced" : "Standalone (self-driven)";
         string levels = energyNow < 0f
             ? "Levels: n/a"
             : $"Energy: {energyNow:0.00}{(energyNow < KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > KickThreshold ? "ON" : "--")}";
@@ -317,23 +294,32 @@ public class CrystalGrowth : EffectBase
         // moment the fill ends — into the Drop sparkle when one lands, or back to normal growth when not.
         // Because Fill.progress is normalized to the fill's length, the arc scales with it — short fills snap,
         // long fills lean in.
-        PhraseEventInfo? fillInfo = beatManager.FillQuery;
-        bool inFill = fillInfo is { inProgress: true };
-        float progress = inFill ? (fillInfo.Value.progress ?? 1f) : 0f;
-        float fillAmount = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress));
-        float ratchet = beatManager.GateOf(Subdivision.Sixteenth) ?? 0f;
+        var fill = beatManager.Fill.Span;
+        bool inFill = fill.Current.HasValue;
+        float fillAmount = fill.Build();
+        float ratchet = (beatManager.Pulses.GateEvery(Duration.Sixteenth) ?? false) ? 1f : 0f;
         fillActive = inFill;
         fillLevel = fillAmount;
 
+        if (beatManager.Drop.Span.Started)
+        {
+            generation++;
+            PlantUnisonSeeds(DropFlashSeeds);
+        }
+        dropFlash = beatManager.Drop.Span.Decay(DropFadeBars * BeatsPerBar);
+
+        if (beatManager.Pulses.GateOpenedEvery(Duration.Sixteenth) && dropFlash > 0.5f)
+        {
+            PlantSeeds(DropSeedBurst);
+        }
+
         SeedThisFrame(dt);
-        TriggerDropFlash(dt);
-        SeedDropRatchet(ratchet);
 
         // The beat surges how far the front lunges this frame. Synced rides the live Pulse; Standalone falls
         // back to the self-driven surge. The surge is scaled by 'activity' so the front stops lunging to an
         // inaudible beat during a quiet break. A fill reins the whole thing in (tension); a Drop washes the
         // fresh layer across the wall and machine-gun lunges on every sixteenth for the drop's whole window.
-        float pulse = (beatManager.Pulse ?? selfPulse) * activity;
+        float pulse = (beatManager.Pulses.Beat ?? selfPulse) * activity;
         float spread = spreadPerSec
             * (1f + (beatSurge * pulse))
             * Mathf.Lerp(1f, 1f - FillHoldback, fillAmount)
@@ -369,7 +355,9 @@ public class CrystalGrowth : EffectBase
 
         // Brightness pulses with the music; the floor is shallow (0.8) so lit tiles stay bright, and it lifts
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
-        float bright = BeatBrightness(Mathf.Lerp(1f, 0.8f, activity));
+        float minimum = Mathf.Lerp(1f, 0.8f, activity);
+        float? rhythm = synth.Evaluate(waveform);
+        float bright = rhythm is { } envelope ? Mathf.Lerp(minimum, 1f, envelope) : 1f;
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
         // the wall flashes on each 16th for the drop's whole window (easing out with the release). Applied to
@@ -464,9 +452,9 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void SeedThisFrame(float dt)
     {
-        int? beatInBar = beatManager.BeatInBar;
+        int? beatInBar = beatManager.Position.BeatInBar;
 
-        if (IsBeatActive && beatInBar is { } bib)
+        if (beatManager.IsSynced && beatInBar is { } bib)
         {
             // With live Levels, let the bass kick drive the blooms (and gate them off in a quiet break). Without
             // Levels there is no energy feed, so fall back to seeding on the beat counter itself.
@@ -478,8 +466,6 @@ public class CrystalGrowth : EffectBase
             {
                 SeedFromBeat(bib);
             }
-
-            lastBeatInBar = beatInBar;
             return;
         }
 
@@ -493,8 +479,6 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void SeedSelfDriven(float dt)
     {
-        lastBeatInBar = beatManager.BeatInBar; // tracks null here; re-arms cleanly when the beat returns
-
         selfBeatPhase += dt / selfBeatPeriod;
         if (selfBeatPhase >= 1f)
         {
@@ -519,7 +503,7 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Samples the live band <see cref="BeatManager.LevelsQuery"/> into this frame's <see cref="kickLow"/> /
+    /// Samples the live smoothed <see cref="BeatManager.Levels"/> into this frame's <see cref="kickLow"/> /
     /// <see cref="energyNow"/> / <see cref="hasLevels"/> and returns the beat-coupling "activity" in [0..1]:
     /// 0 in a fully quiet break, 1 while the track drives, ramped across <see cref="QuietEnergy"/>..
     /// <see cref="ActiveEnergy"/> (straddling a third). Returns 1 when no Levels are available, so beat-driven
@@ -527,11 +511,11 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private float ReadLevels()
     {
-        if (beatManager.LevelsQuery is { } levels)
+        if (beatManager.Levels is { } levels)
         {
             hasLevels = true;
-            kickLow = levels.low;
-            energyNow = (levels.low + levels.mid + levels.high) / 3f;
+            kickLow = levels.Smoothed.Low;
+            energyNow = levels.Smoothed.Average;
             return Mathf.InverseLerp(QuietEnergy, ActiveEnergy, energyNow);
         }
 
@@ -583,36 +567,18 @@ public class CrystalGrowth : EffectBase
 
     /// <summary>
     /// Beat-counter seeding (used when synced but no Levels feed exists): a fresh bloom on each new beat, bigger
-    /// on the bar's one. The Drop gets its own one-shot flash in <see cref="TriggerDropFlash"/>, not extra seeds
+    /// on the bar's one. The hub's Drop Started edge gets its own one-shot flash, not extra seeds
     /// here. This is the original behavior, kept for sources that carry a beat but no band energy.
     /// </summary>
     private void SeedFromBeat(int bib)
     {
-        // Edge-detect a new beat: BeatInBar steps 1→2→3→4→1… so any change is a fresh beat.
-        if (bib == lastBeatInBar)
+        if (!beatManager.Beats.OnBeatOpened)
         {
             return;
         }
 
         int seeds = bib == 1 ? 3 : 1; // the bar's one blooms several fronts at once
         PlantSeeds(seeds);
-    }
-
-    /// <summary>
-    /// The Drop's sparkle seeding: on each rising edge of the sixteenth ratchet while the Drop envelope is hot,
-    /// plant a fixed <see cref="DropSeedBurst"/> of fresh fronts so the wall machine-guns for the drop's whole
-    /// window. Edge-detected off the hard gate so exactly one burst lands per sixteenth, not one per frame.
-    /// No-op outside a Drop and in Standalone (ratchet is 0 there).
-    /// </summary>
-    private void SeedDropRatchet(float ratchet)
-    {
-        bool on = ratchet > 0.5f;
-        if (on && !lastSixteenthOn && dropFlash > 0.5f)
-        {
-            PlantSeeds(DropSeedBurst);
-        }
-
-        lastSixteenthOn = on;
     }
 
     /// <summary>
@@ -654,42 +620,6 @@ public class CrystalGrowth : EffectBase
             gen[t] = generation;
             hue[t] = hueCursor;
         }
-    }
-
-    /// <summary>
-    /// Drives the Drop sparkle envelope. On the rising edge of <see cref="BeatManager.DropQuery"/> in-progress — the
-    /// drop's beat one — it opens a fresh generation seeded in one unison hue (which the spread surge then washes
-    /// across the whole wall) and snaps the envelope to 1. The envelope then eases back to 0 over
-    /// <see cref="DropFadeBars"/> bars (sized from the live tempo, or <see cref="DropFlashFallbackSeconds"/> when
-    /// no usable BPM is on the wire), so the sparkle is ferocious at the hit and fades back to normal growth even
-    /// while the drop plays on. Edge-detected so it lands exactly once per drop.
-    /// </summary>
-    private void TriggerDropFlash(float dt)
-    {
-        bool dropActive = beatManager.DropQuery is { inProgress: true };
-
-        if (dropActive && !wasDropActive)
-        {
-            // New layer in one color, surged across the wall by DropFlashSpread below.
-            generation++;
-            PlantUnisonSeeds(DropFlashSeeds);
-
-            dropFlashSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-                ? 60f / bpm * BeatsPerBar * DropFadeBars
-                : DropFlashFallbackSeconds;
-            dropFlashElapsed = 0f;
-            dropFlash = 1f;
-        }
-        else if (dropFlash > 0f)
-        {
-            // Ease the sparkle back to 0 across the window. SmoothStep holds near full briefly, then fades — a
-            // drawn-out release rather than a linear ramp.
-            dropFlashElapsed += dt;
-            float u = dropFlashSeconds > 0f ? Mathf.Clamp01(dropFlashElapsed / dropFlashSeconds) : 1f;
-            dropFlash = 1f - Mathf.SmoothStep(0f, 1f, u);
-        }
-
-        wasDropActive = dropActive;
     }
 
     /// <summary>

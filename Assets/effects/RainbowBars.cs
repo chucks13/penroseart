@@ -12,6 +12,9 @@ public class RainbowBars : ScreenEffect
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
+    /// <summary>The consumer-owned Waveform used by this activation's distortion mode.</summary>
+    private Waveform waveform;
+
     private float sampleTime;
 
     private Direction direction;
@@ -37,7 +40,7 @@ public class RainbowBars : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         direction = (Direction)Random.Range(0, 8);
         distortionMode = Random.Range(0, 3);
     }
@@ -60,19 +63,15 @@ public class RainbowBars : ScreenEffect
         float hueShift = 0.0f;
         sampleTime = effectTime;
 
-        // This effect has three beat-response modes: brightness pulsing,
-        // palette hue offset pulsing, or time warping for a motion kick.
-        if (beatEnable)
-        {
-            if (distortionMode == 0)
-                beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.85f);
-            else if (distortionMode == 1)
-                hueShift = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.0f);
-            else if (distortionMode == 2)
-                sampleTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
-        }
-        // Beat pulse scales the screen-space bar colors before mapping to tiles.
-//        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        // This effect owns all three response mappings and their clockless fallbacks.
+        float? rhythm = synth.Evaluate(waveform);
+        if (distortionMode == 0)
+            beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
+        else if (distortionMode == 1)
+            hueShift = 0.25f * (rhythm ?? 0f);
+        else if (distortionMode == 2)
+            sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
+
         var color = Color.clear;
         for (int x = 0; x < width; x++)
         {
