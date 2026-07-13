@@ -40,14 +40,6 @@ public abstract class EffectBase
     [System.NonSerialized]
     public Waveform waveform;
 
-    /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
-    public bool IsBeatActive => controller.beatManager.IsActive;
-
-    /// <summary>Whether this effect should apply beat brightness/time/color behavior.</summary>
-    public bool beatEnable = true;
-    /// <summary>Rhythmic personality selected during OnStart().</summary>
-    public int beatVariant;
-
     /// <summary>Catalog/display name for this effect. Currently the C# type name.</summary>
     public string Name => GetType().ToString();
 
@@ -124,37 +116,10 @@ public abstract class EffectBase
     protected virtual void OnNewGrid() { }
 
     /// <summary>
-    /// Per-activation setup called every time Controller or a mixer turns this effect on.
+    /// Per-activation setup called every time Controller or a mixer turns this effect on. The base
+    /// performs no musical acquisition or response; concrete Effects own those decisions.
     /// </summary>
-    public virtual void OnStart()
-    {
-        beatEnable = true;
-        beatVariant = beatManager.GetRandomVariant();
-    }
-
-    /// <summary>
-    /// Contrived beat brightness multiplier for this effect, closing over <see cref="beatEnable"/> and
-    /// <see cref="beatVariant"/>: Synced Mode pulses between <paramref name="minBrightness"/> and 1
-    /// on this effect's Waveform; Standalone Mode (no beat clock, or beat response disabled) holds steady at 1.
-    /// </summary>
-    protected float BeatBrightness(float minBrightness = 0.5f)
-    {
-        return beatEnable && beatManager.Envelope(beatVariant) is { } envelope
-            ? Mathf.Lerp(minBrightness, 1f, envelope)
-            : 1f;
-    }
-
-    /// <summary>
-    /// Beat-warped effect time, closing over <see cref="beatEnable"/>, <see cref="beatVariant"/>, and
-    /// <see cref="effectTime"/>: Synced Mode kicks the clock forward by <paramref name="intensity"/> on
-    /// the beat without changing the stored <see cref="effectTime"/>; Standalone Mode returns it unchanged.
-    /// </summary>
-    protected float BeatTime(float intensity = 0.2f)
-    {
-        return beatEnable && beatManager.Envelope(beatVariant) is { } envelope
-            ? effectTime + (envelope * intensity)
-            : effectTime;
-    }
+    public virtual void OnStart() { }
 
     /// <summary>
     /// Reserved for future effect deactivation cleanup. The current controller

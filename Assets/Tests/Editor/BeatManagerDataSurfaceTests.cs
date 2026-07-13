@@ -74,10 +74,12 @@ public sealed class BeatManagerDataSurfaceTests
     public void ClockTranslatesTempoSentinelsToNullWhileSynced()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.beatInBar = 2;
-        beatManager.WireSnapshot.bpm = -1f;
-        beatManager.WireSnapshot.beatAverageMs = -1;
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatInBar = 2;
+            snapshot.bpm = -1f;
+            snapshot.beatAverageMs = -1;
+        });
 
         beatManager.Update(0f);
 
@@ -94,10 +96,12 @@ public sealed class BeatManagerDataSurfaceTests
     public void PositionServesWireFactsAndTranslatesSentinels()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.beatInBar = 3;
-        beatManager.WireSnapshot.beat = new BeatPosition { current = 64, total = 384 };
-        beatManager.WireSnapshot.bar = new BarPosition { current = 16, nextMs = 777 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatInBar = 3;
+            snapshot.beat = new BeatPosition { current = 64, total = 384 };
+            snapshot.bar = new BarPosition { current = 16, nextMs = 777 };
+        });
 
         beatManager.Update(0f);
 
@@ -106,8 +110,11 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Position.Bar, Is.EqualTo(16));
         Assert.That(beatManager.Position.BeatInBar, Is.EqualTo(3));
 
-        beatManager.WireSnapshot.beat = new BeatPosition { current = -1, total = -1 };
-        beatManager.WireSnapshot.bar = new BarPosition { current = -1, nextMs = -1 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beat = new BeatPosition { current = -1, total = -1 };
+            snapshot.bar = new BarPosition { current = -1, nextMs = -1 };
+        });
         beatManager.Update(0f);
 
         Assert.That(beatManager.Position.Beat, Is.Null);
@@ -123,10 +130,12 @@ public sealed class BeatManagerDataSurfaceTests
     public void TrackServesIdentityAndPlayersLive()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.track = "Artist - Track";
-        beatManager.WireSnapshot.trackId = 777001;
-        beatManager.WireSnapshot.playersLive = "4,2";
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.track = "Artist - Track";
+            snapshot.trackId = 777001;
+            snapshot.playersLive = "4,2";
+        });
 
         beatManager.Update(0f);
 
@@ -140,10 +149,12 @@ public sealed class BeatManagerDataSurfaceTests
     public void TrackPlayersLiveDistinguishesNobodyLiveFromUnavailable()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.playersLive = "";
-        beatManager.WireSnapshot.track = "";
-        beatManager.WireSnapshot.trackId = -1;
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.playersLive = "";
+            snapshot.track = "";
+            snapshot.trackId = -1;
+        });
         beatManager.Update(0f);
 
         Assert.That(beatManager.Track.PlayersLive, Is.Not.Null);
@@ -161,24 +172,27 @@ public sealed class BeatManagerDataSurfaceTests
     public void TrackChangedFiresOncePerIdentityChangeIncludingToAndFromNull()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot());
         beatManager.Update(0f);
         Assert.That(beatManager.Track.Changed, Is.False, "nothing on air yet — no change");
 
-        beatManager.WireSnapshot.track = "Artist - One";
-        beatManager.WireSnapshot.trackId = 7;
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.track = "Artist - One";
+            snapshot.trackId = 7;
+        });
         beatManager.Update(0f);
         Assert.That(beatManager.Track.Changed, Is.True, "a track appeared from nothing");
         beatManager.Update(0f);
         Assert.That(beatManager.Track.Changed, Is.False, "an edge is true for exactly one frame");
 
-        beatManager.WireSnapshot.trackId = 8;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.trackId = 8);
         beatManager.Update(0f);
         Assert.That(beatManager.Track.Changed, Is.True, "an id change with the same title is a new identity");
         beatManager.Update(0f);
         Assert.That(beatManager.Track.Changed, Is.False);
 
-        beatManager.WireSnapshot.track = "Artist - Two";
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.track = "Artist - Two");
         beatManager.Update(0f);
         Assert.That(beatManager.Track.Changed, Is.True, "a title change with the same id is a new identity");
 
@@ -198,7 +212,7 @@ public sealed class BeatManagerDataSurfaceTests
         var beatManager = CreateLiveClock(beatInBar: 3,
             beatsCountMs: new[] { 1900, 2900, 0, 900 },
             onBeats: new[] { false, false, true, false });
-        beatManager.WireSnapshot.bar = new BarPosition { current = 16, nextMs = 777 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.bar = new BarPosition { current = 16, nextMs = 777 });
 
         beatManager.Update(0f);
 
@@ -278,8 +292,11 @@ public sealed class BeatManagerDataSurfaceTests
         beatManager.Update(0f);
         Assert.That(beatManager.Beats.GateOpened(3), Is.False);
 
-        beatManager.WireSnapshot.beatsCountMs[2] = 0;
-        beatManager.WireSnapshot.onBeats[2] = true;
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatsCountMs[2] = 0;
+            snapshot.onBeats[2] = true;
+        });
         beatManager.Update(0f);
         Assert.That(beatManager.Beats.GateOpened(3), Is.True);
         Assert.That(beatManager.Beats.OnBeatOpened, Is.True, "the current count is 3, so On Beat opened too");
@@ -326,9 +343,12 @@ public sealed class BeatManagerDataSurfaceTests
 
         // ...and after a hitch, frame B lands inside count 3's open window. The served On Beat
         // value stayed true across both frames, but a beat landed: the current count's lane opened.
-        beatManager.WireSnapshot.beatInBar = 3;
-        beatManager.WireSnapshot.beatsCountMs = new[] { 1000, 1500, 0, 500 };
-        beatManager.WireSnapshot.onBeats = new[] { false, false, true, false };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatInBar = 3;
+            snapshot.beatsCountMs = new[] { 1000, 1500, 0, 500 };
+            snapshot.onBeats = new[] { false, false, true, false };
+        });
         beatManager.Update(0f);
 
         Assert.That(beatManager.Beats.OnBeat, Is.True);
@@ -338,19 +358,22 @@ public sealed class BeatManagerDataSurfaceTests
 
     /// <summary>Captured views stay identical for every reader until the next hub update, even when the snapshot mutates.</summary>
     [Test]
-    public void ViewsAreFrameCoherentAcrossInPlaceSnapshotMutation()
+    public void ViewsAreFrameCoherentAcrossWireFeeds()
     {
         var beatManager = CreateLiveClock(beatInBar: 3,
             beatsCountMs: new[] { 1900, 2900, 0, 900 },
             onBeats: new[] { false, false, true, false });
-        beatManager.WireSnapshot.track = "Artist - One";
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.track = "Artist - One");
         beatManager.Update(0f);
 
-        // Mutate the held snapshot in place, as the transport does mid-frame.
-        beatManager.WireSnapshot.beatsCountMs[2] = 400;
-        beatManager.WireSnapshot.onBeats[2] = false;
-        beatManager.WireSnapshot.bpm = 90f;
-        beatManager.WireSnapshot.track = "Artist - Two";
+        // Feed new wire data mid-frame; captured views remain unchanged until the next hub update.
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatsCountMs[2] = 400;
+            snapshot.onBeats[2] = false;
+            snapshot.bpm = 90f;
+            snapshot.track = "Artist - Two";
+        });
 
         Assert.That(beatManager.Beats.MsUntil(3), Is.EqualTo(0f), "the captured view serves capture-time values");
         Assert.That(beatManager.Beats.Gate(3), Is.True);
@@ -400,7 +423,7 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.OffBeats.Gate(1), Is.False);
         Assert.That(beatManager.OffBeats.OffBeatOpened, Is.False);
 
-        beatManager.WireSnapshot.beatsCountMs = new[] { 1700, 200, 700, 1200 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.beatsCountMs = new[] { 1700, 200, 700, 1200 });
         beatManager.Update(0f);
         Assert.That(beatManager.OffBeats.Gate(1), Is.True);
         Assert.That(beatManager.OffBeats.GateOpened(1), Is.True);
@@ -425,8 +448,11 @@ public sealed class BeatManagerDataSurfaceTests
 
         // ...frame B: the & of 3 is landing while the count advanced to 3 — Off Beat stayed true,
         // but a new "&" landed.
-        beatManager.WireSnapshot.beatInBar = 3;
-        beatManager.WireSnapshot.beatsCountMs = new[] { 750, 1250, 1750, 250 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatInBar = 3;
+            snapshot.beatsCountMs = new[] { 750, 1250, 1750, 250 };
+        });
         beatManager.Update(0f);
 
         Assert.That(beatManager.OffBeats.OffBeat, Is.True);
@@ -450,7 +476,15 @@ public sealed class BeatManagerDataSurfaceTests
 
         // The lane where null cannot be manufactured from the value: 0.0 is both trough and
         // "no timing", so availability derives from the clock, never the value.
-        beatManager.WireSnapshot.beatPulse = 0f;
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot
+        {
+            bpm = 120f,
+            beatInBar = 1,
+            beatAverageMs = 500,
+            beatPulse = 0f,
+            beatsCountMs = new[] { 1750, 250, 750, 1250 },
+            onBeats = new[] { false, false, false, false },
+        });
         beatManager.Update(0.25f);
         Assert.That(beatManager.Pulses.Beat, Is.EqualTo(0f), "a served 0.0 while synced is a real trough");
 
@@ -524,7 +558,7 @@ public sealed class BeatManagerDataSurfaceTests
 
     /// <summary>The prototyped snapshot ingress owns its wire state before the frame is captured.</summary>
     [Test]
-    public void SetLiveBeatSourceCopiesSnapshotBeforeCapturingDoorways()
+    public void FeedWireSnapshotCopiesSnapshotBeforeCapturingDoorways()
     {
         var source = new RaveOnAirSnapshot
         {
@@ -536,7 +570,7 @@ public sealed class BeatManagerDataSurfaceTests
         };
         var beatManager = new BeatManager();
 
-        beatManager.SetLiveBeatSource(source);
+        beatManager.FeedWireSnapshot(source);
         source.bpm = 90f;
         source.beatsCountMs[1] = 999;
         beatManager.Update(0f);
@@ -552,12 +586,14 @@ public sealed class BeatManagerDataSurfaceTests
     private static BeatManager CreateLiveClock(int beatInBar, int[] beatsCountMs, bool[] onBeats)
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.bpm = 120f;
-        beatManager.WireSnapshot.beatInBar = beatInBar;
-        beatManager.WireSnapshot.beatAverageMs = 500;
-        beatManager.WireSnapshot.beatsCountMs = beatsCountMs;
-        beatManager.WireSnapshot.onBeats = onBeats;
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.bpm = 120f;
+            snapshot.beatInBar = beatInBar;
+            snapshot.beatAverageMs = 500;
+            snapshot.beatsCountMs = beatsCountMs;
+            snapshot.onBeats = onBeats;
+        });
         return beatManager;
     }
 }

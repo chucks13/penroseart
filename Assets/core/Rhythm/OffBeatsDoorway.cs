@@ -2,6 +2,8 @@
 
 #nullable enable
 
+using UnityEngine;
+
 /// <summary>
 /// The "&amp;" — the moment exactly midway between beats, four per bar, one Data Surface doorway.
 /// The exact mirror of <see cref="BeatsView"/>: the wire carries nothing about the "&amp;", so
@@ -41,6 +43,15 @@ public readonly struct OffBeatsView
 
 public partial class BeatManager
 {
+    /// <summary>Milliseconds until offbeat labels 1 through 4, derived from beat countdowns.</summary>
+    private int[] offBeatsCountMs = CreateUnavailableCountdowns();
+
+    /// <summary>Derived per-label offbeat gates.</summary>
+    private bool[] offBeats = new bool[BeatSlotCount];
+
+    /// <summary>Normalized pulse at the nearest offbeat, used by the Pulses doorway.</summary>
+    private float offBeatPulse;
+
     /// <summary>
     /// The OffBeats doorway, captured once per hub update ahead of effect Draw — identical for
     /// every reader within a frame.
@@ -70,5 +81,90 @@ public partial class BeatManager
             offBeats,
             previousOffBeatGates);
         return new OffBeatsView(lanes);
+    }
+
+    /// <summary>
+    /// Derives each offbeat at the measured midpoint between adjacent beat labels, including its
+    /// quarter-beat gate and normalized pulse.
+    /// </summary>
+    private void DeriveOffBeats()
+    {
+        var counts = CreateUnavailableCountdowns();
+        var gates = new bool[BeatSlotCount];
+        offBeatPulse = 0f;
+        var snapshot = beatData.snapshot;
+        if (!IsSynced || snapshot.beatAverageMs <= 0 ||
+            snapshot.beatsCountMs == null || snapshot.beatsCountMs.Length < BeatSlotCount)
+        {
+            offBeatsCountMs = counts;
+            offBeats = gates;
+            return;
+        }
+
+        var activeWindowMs = snapshot.beatAverageMs * 0.25f;
+        var measureMs = snapshot.beatAverageMs * (float)BeatSlotCount;
+        var nearestOffBeatMs = float.MaxValue;
+        for (var i = 0; i < counts.Length; i++)
+        {
+            var nextBeatIndex = (i + 1) % counts.Length;
+            var startBeatMs = snapshot.beatsCountMs[i];
+            var nextBeatMs = snapshot.beatsCountMs[nextBeatIndex];
+            if (startBeatMs < 0 || nextBeatMs < 0)
+            {
+                continue;
+            }
+
+            var beatGapMs = (float)(nextBeatMs - startBeatMs);
+            if (beatGapMs <= 0f)
+            {
+                beatGapMs += measureMs;
+            }
+
+            var halfGapMs = beatGapMs * 0.5f;
+            var offBeatMs = nextBeatMs - halfGapMs;
+            if (offBeatMs < 0f)
+            {
+                offBeatMs += measureMs;
+            }
+            nearestOffBeatMs = Mathf.Min(nearestOffBeatMs, offBeatMs);
+
+            if (nextBeatMs > halfGapMs)
+            {
+                counts[i] = Mathf.RoundToInt(offBeatMs);
+                continue;
+            }
+
+            var elapsedMs = halfGapMs - nextBeatMs;
+            if (elapsedMs <= activeWindowMs)
+            {
+                counts[i] = 0;
+                gates[i] = true;
+            }
+            else
+            {
+                counts[i] = Mathf.RoundToInt(measureMs - elapsedMs);
+            }
+        }
+
+        if (nearestOffBeatMs != float.MaxValue)
+        {
+            var nextInCycleMs = nearestOffBeatMs % snapshot.beatAverageMs;
+            var elapsedMs = nextInCycleMs <= 0f ? 0f : snapshot.beatAverageMs - nextInCycleMs;
+            offBeatPulse = OffBeatPulse(elapsedMs, snapshot.beatAverageMs);
+        }
+
+        offBeatsCountMs = counts;
+        offBeats = gates;
+    }
+
+    /// <summary>Returns a smooth pulse that peaks at the offbeat and decays until the next one.</summary>
+    private static float OffBeatPulse(float elapsedMs, float durationMs)
+    {
+        if (durationMs <= 0f)
+        {
+            return 0f;
+        }
+
+        return 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsedMs / durationMs));
     }
 }

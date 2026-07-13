@@ -170,20 +170,23 @@ public sealed class PerformerAccessPathTests
         Assert.That(second.waveform.Lerp(0.5f, 1f), Is.EqualTo(1f));
     }
 
-    /// <summary>Proves the retained EffectBase activation lifecycle does not require a Waveforms surface.</summary>
+    /// <summary>Proves base activation neither acquires nor replaces the Effect owner's Waveform.</summary>
     [Test]
-    public void EffectBaseOnStartDoesNotRequireWaveforms()
+    public void EffectBaseOnStartDoesNotAcquireWaveform()
     {
         var controllerObject = new GameObject("performer-access-policy-controller");
         var controller = controllerObject.AddComponent<Controller>();
         var effect = new BaseStartEffect();
+        var configured = Waveform.Parse("QQQQ", "8080");
+        effect.waveform = configured;
         effect.BindController(controller);
         try
         {
             Assert.That(
                 () => effect.OnStart(),
                 Throws.Nothing,
-                "the retained legacy OnStart does not require or acquire from the uninitialized Waveforms surface");
+                "base activation has no acquisition policy");
+            Assert.That(effect.waveform, Is.EqualTo(configured));
         }
         finally
         {
@@ -199,26 +202,28 @@ public sealed class PerformerAccessPathTests
     {
         var controllerObject = new GameObject("performer-access-grid-controller");
         var controller = controllerObject.AddComponent<Controller>();
-        controller.beatManager.SetLiveBeatSource(true);
         var effect = new GridHookEffect();
         effect.BindController(controller);
 
         try
         {
-            controller.beatManager.WireSnapshot.beatInBar = 1;
-            controller.beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 16, bar = 4, state = "locked" };
+            BeatManagerWireFixture.Feed(controller.beatManager, snapshot =>
+            {
+                snapshot.beatInBar = 1;
+                snapshot.timingGrid = new TimingGrid { beat = 16, bar = 4, state = "locked" };
+            });
             controller.beatManager.Update(0f);
             effect.UpdateTime();
             Assert.That(controller.beatManager.Grid.Wrapped, Is.False);
             Assert.That(effect.NewGridCount, Is.Zero);
 
-            controller.beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 1, bar = 1, state = "disputed" };
+            BeatManagerWireFixture.Feed(controller.beatManager, snapshot => snapshot.timingGrid = new TimingGrid { beat = 1, bar = 1, state = "disputed" });
             controller.beatManager.Update(0f);
             effect.UpdateTime();
             Assert.That(controller.beatManager.Grid.Wrapped, Is.True, "the wire's 16-count returned to One");
             Assert.That(effect.NewGridCount, Is.EqualTo(1), "Grid State is data, never a gate");
 
-            controller.beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 2, bar = 1, state = "disputed" };
+            BeatManagerWireFixture.Feed(controller.beatManager, snapshot => snapshot.timingGrid = new TimingGrid { beat = 2, bar = 1, state = "disputed" });
             controller.beatManager.Update(0f);
             effect.UpdateTime();
             Assert.That(controller.beatManager.Grid.Wrapped, Is.False);
@@ -233,8 +238,7 @@ public sealed class PerformerAccessPathTests
     /// <summary>Seeds one independent worked clock and wire frame for Controller timing-order observations.</summary>
     private static void SeedFrame(BeatManager beatManager, float timeSeconds, int beat, int gridBeat)
     {
-        BeatClockFixture.SeedBeatClock(beatManager, bpm: 120f, timeSeconds: timeSeconds);
-        var snapshot = beatManager.WireSnapshot;
+        var snapshot = BeatClockFixture.CreateSnapshot(bpm: 120f, timeSeconds: timeSeconds);
         snapshot.beat = new BeatPosition { current = beat, total = -1 };
         snapshot.timingGrid = new TimingGrid
         {
@@ -252,6 +256,7 @@ public sealed class PerformerAccessPathTests
         snapshot.nextPhraseState = LabeledCountdown.Unavailable;
         snapshot.dropState = CountdownState.Unavailable;
         snapshot.fillState = CountdownState.Unavailable;
+        beatManager.FeedWireSnapshot(snapshot);
     }
 
     /// <summary>Effect probe that observes Waveforms through the ordinary render seam.</summary>

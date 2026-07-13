@@ -46,6 +46,51 @@ public partial class BeatManager
     /// </summary>
     public ClockView Clock { get; private set; }
 
+    /// <summary>Normalized position within the current four-beat bar, or zero without a live clock.</summary>
+    private float BarPhase
+    {
+        get
+        {
+            if (!IsSynced)
+            {
+                return 0f;
+            }
+
+            var label = beatData.snapshot.beatInBar;
+            return label >= 1 && label <= BeatSlotCount
+                ? ((label - 1) + IntraBeatFraction()) / BeatSlotCount
+                : 0f;
+        }
+    }
+
+    /// <summary>
+    /// Fraction elapsed into the current beat. Reads the next label's countdown so the clock does
+    /// not jump while the current on-beat gate holds its own countdown at zero.
+    /// </summary>
+    private float IntraBeatFraction()
+    {
+        if (!IsSynced)
+        {
+            return 0f;
+        }
+
+        var snapshot = beatData.snapshot;
+        var label = snapshot.beatInBar;
+        if (label < 1 || label > BeatSlotCount)
+        {
+            return 0f;
+        }
+
+        var nextSlot = label % BeatSlotCount;
+        var countdowns = snapshot.beatsCountMs;
+        var msToNext = countdowns != null && nextSlot < countdowns.Length
+            ? countdowns[nextSlot]
+            : UnavailableMs;
+        return snapshot.beatAverageMs > 0 && msToNext >= 0
+            ? UnityEngine.Mathf.Clamp01((float)(snapshot.beatAverageMs - msToNext) / snapshot.beatAverageMs)
+            : 0f;
+    }
+
     /// <summary>
     /// Captures the Clock doorway from the settled transport state. In Standalone Mode every fact
     /// is null; in Synced Mode the tempo sentinels (-1 / non-positive) still translate to null

@@ -93,8 +93,9 @@ public sealed class WaveformsRoutineTests
         string state,
         float timeSeconds)
     {
-        BeatClockFixture.SeedBeatClock(beatManager, bpm: 120f, timeSeconds: timeSeconds);
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = beat, bar = bar, state = state };
+        var snapshot = BeatClockFixture.CreateSnapshot(bpm: 120f, timeSeconds: timeSeconds);
+        snapshot.timingGrid = new TimingGrid { beat = beat, bar = bar, state = state };
+        beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(timeSeconds);
     }
 

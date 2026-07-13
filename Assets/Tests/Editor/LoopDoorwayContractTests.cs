@@ -17,8 +17,7 @@ public sealed class LoopDoorwayContractTests
     public void RollingSetLoopServesAllFacts()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
         {
             active = 1,
             set = 1,
@@ -26,7 +25,7 @@ public sealed class LoopDoorwayContractTests
             lengthMs = 1875,
             sizeNumerator = 4,
             sizeDenominator = 1
-        };
+        }});
 
         beatManager.Update(0f);
 
@@ -43,8 +42,7 @@ public sealed class LoopDoorwayContractTests
     public void IdleSetLoopPreservesLengthsAndNominalSize()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
         {
             active = 0,
             set = 1,
@@ -52,7 +50,7 @@ public sealed class LoopDoorwayContractTests
             lengthMs = 234,
             sizeNumerator = 1,
             sizeDenominator = 2
-        };
+        }});
 
         beatManager.Update(0f);
 
@@ -69,8 +67,7 @@ public sealed class LoopDoorwayContractTests
     public void AllSentinelLoopServesAllNull()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
         {
             active = -1,
             set = -1,
@@ -78,7 +75,7 @@ public sealed class LoopDoorwayContractTests
             lengthMs = -1,
             sizeNumerator = -1,
             sizeDenominator = -1
-        };
+        }});
 
         beatManager.Update(0f);
 
@@ -95,8 +92,7 @@ public sealed class LoopDoorwayContractTests
     public void ZeroLengthBeatsRemainsZero()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
         {
             active = 0,
             set = 0,
@@ -104,7 +100,7 @@ public sealed class LoopDoorwayContractTests
             lengthMs = 0,
             sizeNumerator = 0,
             sizeDenominator = 0
-        };
+        }});
 
         beatManager.Update(0f);
 

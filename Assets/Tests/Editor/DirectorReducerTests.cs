@@ -687,6 +687,7 @@ public sealed class DirectorReducerTests
 
     // ---- Standalone boundary ----------------------------------------------------------------------
 
+    /// <summary>Verifies losing the shared clock aborts synchronized cue and sheet state.</summary>
     [Test]
     public void LeavingSyncedModeAbortsTheLoadedCueAndClearsSheetMemory()
     {
@@ -695,9 +696,8 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.True, "Setup: a cue is loaded while Synced.");
 
         // The clock drops: the 4-count sentinel clears IsSynced, so the next Tick runs the Standalone path.
-        controller.beatManager.WireSnapshot.bpm = -1f;
-        controller.beatManager.WireSnapshot.beatInBar = -1;
-        controller.beatManager.WireSnapshot.beat = new BeatPosition { current = -1, total = -1 };
+        controller.beatManager.SetLiveBeatSource(false);
+        controller.beatManager.Update(1f);
         director.Tick(1f);
 
         Assert.That(director.Status.Mode, Is.EqualTo(DirectorMode.Standalone));
@@ -965,7 +965,7 @@ public sealed class DirectorReducerTests
         string phraseLabel = "Phrase",
         string nextPhraseLabel = "Next")
     {
-        var snapshot = controller.beatManager.WireSnapshot;
+        var snapshot = new RaveOnAirSnapshot();
         snapshot.bpm = 120f;
         snapshot.beat = new BeatPosition { current = beat, total = -1 };
         snapshot.beatInBar = ((beat - 1) % 4) + 1;
@@ -993,6 +993,7 @@ public sealed class DirectorReducerTests
         snapshot.energyState = energyBeatsUntilChange is { } energyChange
             ? new LabeledCountdown { label = "Energy", countBeats = energyChange, lengthBeats = 16 }
             : LabeledCountdown.Unavailable;
+        controller.beatManager.FeedWireSnapshot(snapshot);
         controller.beatManager.Update(0f);
         director.Tick(0f);
     }

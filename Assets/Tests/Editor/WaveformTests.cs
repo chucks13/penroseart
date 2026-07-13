@@ -141,25 +141,6 @@ public sealed class WaveformTests
         Assert.That(wf.ShortestNonZeroPeakSpacing(), Is.EqualTo(0f).Within(Tol));
     }
 
-    [Test]
-    public void GetShortestNonZeroPeakSpacingMs_ConvertsBarFractionToMilliseconds()
-    {
-        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // 500 ms per beat
-        beatManager.Update(0f);
-
-        Assert.That(beatManager.GetShortestNonZeroPeakSpacingMs(0), Is.EqualTo(500f).Within(Tol));
-    }
-
-
-    [Test]
-    public void GetShortestNonZeroPeakSpacingMs_ConvertsSinglePeakToFullBarMilliseconds()
-    {
-        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // 500 ms per beat, 2000 ms per bar
-        beatManager.Update(0f);
-
-        Assert.That(beatManager.GetShortestNonZeroPeakSpacingMs(3), Is.EqualTo(2000f).Within(Tol));
-    }
-
     // --- Malformation is logged, never silently substituted ---
 
     [Test]
@@ -184,52 +165,21 @@ public sealed class WaveformTests
 
     // --- BeatManager Bar Phase clock (the live forcing function behind Sample) ---
 
+    /// <summary>Verifies the offered Bar Phase starts at zero on the measure downbeat.</summary>
     [Test]
     public void BarPhase_IsZeroOnTheDownbeat()
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // beat 1, full 500 ms to next
         beatManager.Update(0f);
-        Assert.That(beatManager.BarPhase, Is.EqualTo(0f).Within(Tol));
+        Assert.That(beatManager.Clock.BarPhase, Is.EqualTo(0f).Within(Tol));
     }
 
+    /// <summary>Verifies the offered Bar Phase advances smoothly within the measure.</summary>
     [Test]
     public void BarPhase_AdvancesProportionallyWithinTheBar()
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // half a 0.5 s beat = 1/8 bar
         beatManager.Update(0.25f);
-        Assert.That(beatManager.BarPhase, Is.EqualTo(0.125f).Within(Tol));
-    }
-
-    // --- End-to-end: GetBeatBrightness maps the live envelope into a brightness range ---
-
-    [Test]
-    public void GetBeatBrightness_MapsPeakToMaxAndTroughToMin()
-    {
-        var onBeat = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // BarPhase 0 → peak → maxBrightness
-        onBeat.Update(0f);
-        Assert.That(onBeat.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(1f).Within(Tol));
-
-        var offBeat = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // BarPhase 0.125 → trough → min
-        offBeat.Update(0.25f);
-        Assert.That(offBeat.GetBeatBrightness(0, 1f, 0.85f), Is.EqualTo(0.85f).Within(Tol));
-    }
-
-    [Test]
-    public void GetBeatBrightness_DisabledReturnsMaxBrightness()
-    {
-        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // would be a trough if enabled
-        beatManager.Update(0.25f);
-        Assert.That(beatManager.GetBeatBrightness(0, 1f, 0.85f, enable: false), Is.EqualTo(1f).Within(Tol));
-    }
-
-    [Test]
-    public void GetWaveform_OutOfRangeVariant_FallsBackToBeatPulse()
-    {
-        var beatManager = new BeatManager();
-        // Variant 0 is the Beat Pulse; an out-of-range index must resolve to the same peak-on-downbeat shape
-        // rather than throwing — effect code degrades visibly to the canonical pulse.
-        Assert.That(beatManager.GetWaveform(999).Sample(0f),
-            Is.EqualTo(beatManager.GetWaveform(0).Sample(0f)).Within(Tol));
-        Assert.That(beatManager.GetWaveform(999).Sample(0f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(beatManager.Clock.BarPhase, Is.EqualTo(0.125f).Within(Tol));
     }
 }

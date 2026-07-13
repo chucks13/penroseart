@@ -3,7 +3,25 @@
 
 #nullable enable
 
+using System;
 using UnityEngine;
+
+/// <summary>
+/// How much to trust where the One sits: a fresh locked anchor, a held coasting anchor, or a
+/// disputed fresh observation. Losing the clock is represented by an unavailable Grid doorway,
+/// not by another enum value.
+/// </summary>
+public enum GridState
+{
+    /// <summary>The grid is freshly anchored and trusted.</summary>
+    Locked,
+
+    /// <summary>No fresh anchor is available, so the source holds the last good offset.</summary>
+    Coasting,
+
+    /// <summary>A fresh offset disagreed with the held one and awaits a clean re-latch.</summary>
+    Disputed,
+}
 
 /// <summary>
 /// The wall's 16-beat alignment clock, one Data Surface doorway. Cyclic, so Started/Ended
@@ -141,5 +159,30 @@ public partial class BeatManager
         previousGridBeat = phase;
 
         return new GridView(facts, wrapped, elapsed);
+    }
+
+    /// <summary>Parses the closed wire grid-state vocabulary without applying trust policy.</summary>
+    private static bool TryParseGridState(string? state, out GridState gridState)
+    {
+        if (string.Equals(state, "locked", StringComparison.OrdinalIgnoreCase))
+        {
+            gridState = GridState.Locked;
+            return true;
+        }
+
+        if (string.Equals(state, "coasting", StringComparison.OrdinalIgnoreCase))
+        {
+            gridState = GridState.Coasting;
+            return true;
+        }
+
+        if (string.Equals(state, "disputed", StringComparison.OrdinalIgnoreCase))
+        {
+            gridState = GridState.Disputed;
+            return true;
+        }
+
+        gridState = default;
+        return false;
     }
 }

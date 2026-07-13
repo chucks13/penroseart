@@ -22,9 +22,8 @@ using UnityEngine;
 /// replaced with a freshly parsed value representing the complete current Draft.
 /// </para>
 /// <para>
-/// The list ORDER is load-bearing: the legacy <c>int beatVariant</c> currency indexes it and
-/// <see cref="BeatManager.IsBeatTriggered"/> couples gate labels to indexes 1/2/3. The reorder controls carry
-/// that warning so a drag never silently re-points an effect at a different rhythm.
+/// List order is authoring presentation only. Runtime performers acquire Waveforms by Energy or
+/// uniformly from the whole Pool; no performer stores a row index.
 /// </para>
 /// </remarks>
 public sealed class WaveformPoolEditor : EditorWindow
@@ -162,16 +161,16 @@ public sealed class WaveformPoolEditor : EditorWindow
         }
     }
 
+    /// <summary>Draws the ordered authoring list and its selection controls.</summary>
     private void DrawList()
     {
         using (new EditorGUILayout.VerticalScope(GUILayout.Width(210f)))
         {
             EditorGUILayout.LabelField("Presets", EditorStyles.boldLabel);
 
-            // The index shown next to each name is the load-bearing beatVariant index — surfaced so a reorder's
-            // consequence is visible, not hidden behind a friendly name.
-            EditorGUILayout.HelpBox("Order = beatVariant index. Effects select rhythms by this number, and beats " +
-                                    "1/2/3 are wired to indexes 1/2/3 — reorder with intent.", MessageType.None);
+            EditorGUILayout.HelpBox(
+                "Order controls how Presets are presented and saved. Runtime acquisition uses Energy, not row indexes.",
+                MessageType.None);
 
             using (var scroll = new EditorGUILayout.ScrollViewScope(listScroll, GUI.skin.box))
             {

@@ -36,7 +36,7 @@ using Random = UnityEngine.Random;
 ///   across the whole wall as a bright colored wavefront (the luminance lift rides the sweeping leading edge, in
 ///   palette color, never white), easing back over a couple of bars so the drop lands as one dramatic sweep that
 ///   resolves into a new crystal field.</description></item>
-/// <item><description>HOW FAST the front lunges — <see cref="BeatManager.Pulse"/> surges the spread rate on
+/// <item><description>HOW FAST the front lunges — <see cref="PulsesView.Beat"/> surges the spread rate on
 ///   each hit; Standalone falls back to a self-driven surge so its fronts still lunge on the synthetic downbeats.</description></item>
 /// <item><description>OVERALL brightness — this Effect evaluates its held Waveform and maps the envelope locally;
 ///   clockless rendering holds steady.</description></item>
@@ -152,7 +152,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Fraction of front brightness lost per second; sets how fast the trail fades from the bright front down to the floor.</summary>
     private float leakPerSec;
 
-    /// <summary>Extra spread multiplier applied at the peak of <see cref="BeatManager.Pulse"/>.</summary>
+    /// <summary>Extra spread multiplier applied at the peak of <see cref="PulsesView.Beat"/>.</summary>
     private float beatSurge;
 
     /// <summary>Accumulated fractional front passes carried between frames (framerate-independent spread).</summary>

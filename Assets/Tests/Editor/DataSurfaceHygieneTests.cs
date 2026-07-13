@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
+using PenroseArt.RaveOsc;
 
 /// <summary>
 /// Guards the Data Surface's captured-state boundaries: served collections are immutable and
@@ -16,8 +17,10 @@ public sealed class DataSurfaceHygieneTests
     [Test]
     public void PlayersLiveCannotBeMutatedViaDowncast()
     {
-        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f);
-        beatManager.WireSnapshot.playersLive = "4,2";
+        var beatManager = new BeatManager();
+        var snapshot = BeatClockFixture.CreateSnapshot(bpm: 120f, timeSeconds: 0.25f);
+        snapshot.playersLive = "4,2";
+        beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0.25f);
 
         var players = beatManager.Track.PlayersLive;

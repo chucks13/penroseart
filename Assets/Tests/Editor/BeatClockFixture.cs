@@ -1,5 +1,6 @@
 #nullable enable
 
+using PenroseArt.RaveOsc;
 using UnityEngine;
 
 /// <summary>
@@ -9,9 +10,9 @@ using UnityEngine;
 /// </summary>
 /// <remarks>
 /// This reproduces the transport a steady metronome at <c>bpm</c> would carry at <c>timeSeconds</c> — the same
-/// fields live RaveSystem OSC pushes through <see cref="RaveOscReceiver.ApplyTo"/> — then marks the manager live
-/// (<see cref="BeatManager.SetLiveBeatSource"/>) so <see cref="BeatManager.Update"/> stands aside and keeps the
-/// seeded data. It replaces the production beat simulator removed from BeatManager: the simulator's clock math
+/// fields live RaveSystem OSC pushes through <see cref="RaveOscReceiver.ApplyTo"/> — then feeds that snapshot
+/// through <see cref="BeatManager.FeedWireSnapshot"/>. It replaces the production beat simulator removed from
+/// BeatManager: the simulator's clock math
 /// was only ever exercised by tests, so it lives here as an explicit test fixture rather than runtime code.
 /// </remarks>
 internal static class BeatClockFixture
@@ -23,10 +24,17 @@ internal static class BeatClockFixture
     /// Seeds <paramref name="beatManager"/> with the live transport a metronome at <paramref name="bpm"/> would
     /// carry at <paramref name="timeSeconds"/>, marks it as the live source, and returns it for chaining.
     /// </summary>
-    /// <param name="beatManager">The manager to seed; its <c>beatData</c> snapshot is overwritten.</param>
+    /// <param name="beatManager">The manager to seed through its live transport input.</param>
     /// <param name="bpm">Beats per minute of the seeded clock.</param>
     /// <param name="timeSeconds">Wall-clock position used to roll the bar; <c>0</c> lands the downbeat of beat 1.</param>
     public static BeatManager SeedBeatClock(BeatManager beatManager, float bpm, float timeSeconds)
+    {
+        beatManager.FeedWireSnapshot(CreateSnapshot(bpm, timeSeconds));
+        return beatManager;
+    }
+
+    /// <summary>Builds the deterministic live transport snapshot used by <see cref="SeedBeatClock"/>.</summary>
+    public static RaveOnAirSnapshot CreateSnapshot(float bpm, float timeSeconds)
     {
         var beatDurationSeconds = 60f / bpm;
         var measureDurationSeconds = beatDurationSeconds * BeatSlotCount;
@@ -37,15 +45,15 @@ internal static class BeatClockFixture
         var elapsedSinceBeatSeconds = positionSeconds - beatStartSeconds;
         var onBeat = elapsedSinceBeatSeconds < gateDurationSeconds;
 
-        beatManager.SetLiveBeatSource(true);
-        var snapshot = beatManager.WireSnapshot;
-        snapshot.bpm = bpm;
-        snapshot.beatInBar = beatIndex + 1;
-        snapshot.beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f);
-        snapshot.beatPulse = Pulse(elapsedSinceBeatSeconds, beatDurationSeconds);
-        snapshot.beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, onBeat, beatIndex);
-        snapshot.onBeats = BuildGates(onBeat, beatIndex);
-        return beatManager;
+        return new RaveOnAirSnapshot
+        {
+            bpm = bpm,
+            beatInBar = beatIndex + 1,
+            beatAverageMs = Mathf.RoundToInt(beatDurationSeconds * 1000f),
+            beatPulse = Pulse(elapsedSinceBeatSeconds, beatDurationSeconds),
+            beatsCountMs = BuildCountdowns(positionSeconds, beatDurationSeconds, onBeat, beatIndex),
+            onBeats = BuildGates(onBeat, beatIndex),
+        };
     }
 
     /// <summary>Builds a fresh live-sourced manager seeded by <see cref="SeedBeatClock"/>.</summary>

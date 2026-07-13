@@ -91,7 +91,7 @@ public sealed class BeatManagerSpanDoorwayTests
         beatManager.SetLiveBeatSource(true);
         beatManager.Update(0f);
 
-        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Intro", countBeats = 16, lengthBeats = 16, irregular = 0 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.phraseState = new PhraseState { label = "Intro", countBeats = 16, lengthBeats = 16, irregular = 0 });
         beatManager.Update(0f);
         Assert.That(beatManager.Phrase.Changed, Is.True, "a phrase appeared from nothing");
         Assert.That(beatManager.Phrase.Span.Started, Is.False, "appearance is not a witnessed onset");
@@ -100,7 +100,7 @@ public sealed class BeatManagerSpanDoorwayTests
         beatManager.Update(0f);
         Assert.That(beatManager.Phrase.Changed, Is.False, "an edge is true for exactly one frame");
 
-        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Up", countBeats = 16, lengthBeats = 16, irregular = 0 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.phraseState = new PhraseState { label = "Up", countBeats = 16, lengthBeats = 16, irregular = 0 });
         beatManager.Update(0f);
         Assert.That(beatManager.Phrase.Changed, Is.True);
         Assert.That(beatManager.Phrase.Span.Started, Is.True, "the new phrase began this frame");
@@ -117,10 +117,10 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Outro", countBeats = 4, lengthBeats = 16, irregular = 0 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.phraseState = new PhraseState { label = "Outro", countBeats = 4, lengthBeats = 16, irregular = 0 });
         beatManager.Update(0f);
 
-        beatManager.WireSnapshot.phraseState = PhraseState.Unavailable;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.phraseState = PhraseState.Unavailable);
         beatManager.Update(0f);
 
         Assert.That(beatManager.Phrase.Span.Current, Is.Null);
@@ -215,15 +215,15 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.dropState = new CountdownState { active = 0, countBeats = 1, lengthBeats = 16, remaining = 1 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.dropState = new CountdownState { active = 0, countBeats = 1, lengthBeats = 16, remaining = 1 });
         beatManager.Update(0f);
         Assert.That(beatManager.Drop.Span.Started, Is.False);
 
-        beatManager.WireSnapshot.dropState = new CountdownState { active = 1, countBeats = 16, lengthBeats = 16, remaining = 1 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.dropState = new CountdownState { active = 1, countBeats = 16, lengthBeats = 16, remaining = 1 });
         beatManager.Update(0f);
         Assert.That(beatManager.Drop.Span.Started, Is.True, "counting-down → active is the witnessed slam");
 
-        beatManager.WireSnapshot.dropState = new CountdownState { active = 1, countBeats = 15, lengthBeats = 16, remaining = 1 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.dropState = new CountdownState { active = 1, countBeats = 15, lengthBeats = 16, remaining = 1 });
         beatManager.Update(0f);
         Assert.That(beatManager.Drop.Span.Started, Is.False, "an edge is true for exactly one frame");
     }
@@ -243,7 +243,7 @@ public sealed class BeatManagerSpanDoorwayTests
         Assert.That(beatManager.Drop.Span.Current, Is.Not.Null);
         Assert.That(beatManager.Drop.Span.Started, Is.False, "the onset happened before the hub could witness it");
 
-        beatManager.WireSnapshot.dropState = CountdownState.Unavailable;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.dropState = CountdownState.Unavailable);
         beatManager.Update(0f);
         Assert.That(beatManager.Drop.Span.Ended, Is.True, "signals outlive facts");
         Assert.That(beatManager.Drop.Span.Current, Is.Null);
@@ -279,8 +279,10 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         // The seeded 120 BPM metronome at t = 0.25 s is half a beat in (the repo's worked clock
         // example), so the phrase's 10 whole elapsed beats carry an extra half: 10.5 / 16.
-        var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f);
-        beatManager.WireSnapshot.phraseState = new PhraseState { label = "Up", countBeats = 6, lengthBeats = 16, irregular = 0 };
+        var beatManager = new BeatManager();
+        var snapshot = BeatClockFixture.CreateSnapshot(bpm: 120f, timeSeconds: 0.25f);
+        snapshot.phraseState = new PhraseState { label = "Up", countBeats = 6, lengthBeats = 16, irregular = 0 };
+        beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0.25f);
 
         Assert.That(beatManager.Phrase.Span.Progress, Is.EqualTo(0.65625f).Within(0.0001f));
@@ -321,7 +323,7 @@ public sealed class BeatManagerSpanDoorwayTests
         Assert.That(fill.Span.Progress, Is.EqualTo(0f).Within(0.0001f));
         Assert.That(fill.Span.Decay(), Is.EqualTo(1f));
 
-        beatManager.WireSnapshot.fillState = CountdownState.Unavailable;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.fillState = CountdownState.Unavailable);
         beatManager.Update(0f);
         Assert.That(beatManager.Fill.Span.Ended, Is.True, "signals outlive facts");
         Assert.That(beatManager.Fill.Span.Decay(), Is.EqualTo(0f), "envelopes rest once outside");
@@ -360,17 +362,20 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "High", countBeats = 8, lengthBeats = 32 };
-        beatManager.WireSnapshot.nextEnergyState = new LabeledCountdown { label = "Low", countBeats = 8, lengthBeats = 16 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.energyState = new LabeledCountdown { label = "High", countBeats = 8, lengthBeats = 32 };
+            snapshot.nextEnergyState = new LabeledCountdown { label = "Low", countBeats = 8, lengthBeats = 16 };
+        });
         beatManager.Update(0f);
         Assert.That(beatManager.Energy.Trend, Is.EqualTo(EnergyTrend.Falling));
 
-        beatManager.WireSnapshot.nextEnergyState = LabeledCountdown.Unavailable;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.nextEnergyState = LabeledCountdown.Unavailable);
         beatManager.Update(0f);
         Assert.That(beatManager.Energy.Trend, Is.EqualTo(EnergyTrend.Steady),
             "the wire only announces differing runs — none known ahead is the analysis saying holding");
 
-        beatManager.WireSnapshot.energyState = LabeledCountdown.Unavailable;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.energyState = LabeledCountdown.Unavailable);
         beatManager.Update(0f);
         Assert.That(beatManager.Energy.Trend, Is.Null);
         Assert.That(beatManager.Energy.Run.Current, Is.Null);
@@ -383,7 +388,7 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 48 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.energyState = new LabeledCountdown { label = "Mid", countBeats = 4, lengthBeats = 48 });
         beatManager.Update(0f);
         Assert.That(beatManager.Energy.Changed, Is.True, "a level appeared from nothing");
         Assert.That(beatManager.Energy.Run.Started, Is.False, "appearance is not a witnessed onset");
@@ -391,7 +396,7 @@ public sealed class BeatManagerSpanDoorwayTests
         beatManager.Update(0f);
         Assert.That(beatManager.Energy.Changed, Is.False);
 
-        beatManager.WireSnapshot.energyState = new LabeledCountdown { label = "High", countBeats = 32, lengthBeats = 32 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.energyState = new LabeledCountdown { label = "High", countBeats = 32, lengthBeats = 32 });
         beatManager.Update(0f);
         Assert.That(beatManager.Energy.Changed, Is.True);
         Assert.That(beatManager.Energy.Run.Started, Is.True, "the new run began this frame");
@@ -440,14 +445,13 @@ public sealed class BeatManagerSpanDoorwayTests
     public void LoopServesFractionalNominalSizeAndTreatsZeroOverZeroAsNone()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
-        { active = 1, set = 1, lengthBeats = 0.5f, lengthMs = 234, sizeNumerator = 1, sizeDenominator = 2 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.loopState = new LoopState
+        { active = 1, set = 1, lengthBeats = 0.5f, lengthMs = 234, sizeNumerator = 1, sizeDenominator = 2 });
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
 
-        beatManager.WireSnapshot.loopState = new LoopState
-        { active = 1, set = 1, lengthBeats = 0.5f, lengthMs = 234, sizeNumerator = 0, sizeDenominator = 0 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.loopState = new LoopState
+        { active = 1, set = 1, lengthBeats = 0.5f, lengthMs = 234, sizeNumerator = 0, sizeDenominator = 0 });
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.NominalSizeBeats, Is.Null);
     }
@@ -457,24 +461,23 @@ public sealed class BeatManagerSpanDoorwayTests
     public void LoopDistinguishesNoRegionAndRollingStatesFromUnavailable()
     {
         var beatManager = new BeatManager();
-        beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.loopState = new LoopState
-        { active = 0, set = 0, lengthBeats = 0f, lengthMs = 0, sizeNumerator = 0, sizeDenominator = 0 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.loopState = new LoopState
+        { active = 0, set = 0, lengthBeats = 0f, lengthMs = 0, sizeNumerator = 0, sizeDenominator = 0 });
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.RegionSet, Is.False, "the wire's real answer: no region");
         Assert.That(beatManager.Loop.Rolling, Is.False);
 
-        beatManager.WireSnapshot.loopState = new LoopState
-        { active = 1, set = 1, lengthBeats = 4f, lengthMs = 1875, sizeNumerator = 4, sizeDenominator = 1 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.loopState = new LoopState
+        { active = 1, set = 1, lengthBeats = 4f, lengthMs = 1875, sizeNumerator = 4, sizeDenominator = 1 });
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.Rolling, Is.True);
 
-        beatManager.WireSnapshot.loopState = new LoopState
-        { active = 0, set = 1, lengthBeats = 4f, lengthMs = 1875, sizeNumerator = 4, sizeDenominator = 1 };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.loopState = new LoopState
+        { active = 0, set = 1, lengthBeats = 4f, lengthMs = 1875, sizeNumerator = 4, sizeDenominator = 1 });
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.Rolling, Is.False);
 
-        beatManager.WireSnapshot.loopState = LoopState.Unavailable;
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.loopState = LoopState.Unavailable);
         beatManager.Update(0f);
         Assert.That(beatManager.Loop.RegionSet, Is.Null, "the all-sentinel shape is unavailable, not a no");
         Assert.That(beatManager.Loop.Rolling, Is.Null);
@@ -509,8 +512,11 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.beatInBar = 1;
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 9, bar = 3, state = "disputed" };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatInBar = 1;
+            snapshot.timingGrid = new TimingGrid { beat = 9, bar = 3, state = "disputed" };
+        });
         beatManager.Update(0f);
 
         Assert.That(beatManager.Grid.Current!.Value.State, Is.EqualTo(GridState.Disputed));
@@ -611,8 +617,11 @@ public sealed class BeatManagerSpanDoorwayTests
     {
         var beatManager = new BeatManager();
         beatManager.SetLiveBeatSource(true);
-        beatManager.WireSnapshot.beatInBar = 1;
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 9, bar = 3, state = "locked" };
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatInBar = 1;
+            snapshot.timingGrid = new TimingGrid { beat = 9, bar = 3, state = "locked" };
+        });
         beatManager.Update(0f);
 
         // Beat 9: 8 of 16 beats elapsed. smoothstep(0.5) = 0.5 by hand.
@@ -621,7 +630,7 @@ public sealed class BeatManagerSpanDoorwayTests
         // A 4-beat window is long past: the Decay has rested since beat 5.
         Assert.That(beatManager.Grid.Decay(4f), Is.EqualTo(0f).Within(0.0001f));
 
-        beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = 1, bar = 1, state = "locked" };
+        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.timingGrid = new TimingGrid { beat = 1, bar = 1, state = "locked" });
         beatManager.Update(0f);
         Assert.That(beatManager.Grid.Wrapped, Is.True);
         Assert.That(beatManager.Grid.Build(), Is.EqualTo(0f).Within(0.0001f), "re-anchored on the One");

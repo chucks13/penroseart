@@ -99,7 +99,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     /// <remarks>
     /// Source selection is transport-only: any recognized Rave on-air OSC value on UDP 7000 makes the
     /// BeatManager live immediately. Payload sentinels such as <c>bpm = -1</c> are valid data and are
-    /// applied exactly as received; the contrived queries expose unavailable values as null instead of
+    /// applied exactly as received; concept doorways expose unavailable values as null instead of
     /// replaying stale data over an active OSC stream. BeatData receives only what the wire said —
     /// derived state (offbeats, availability) is contrived by <see cref="BeatManager.Update"/> afterwards.
     /// </remarks>
@@ -119,7 +119,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
             return;
         }
 
-        beatManager.SetLiveBeatSource(latest);
+        beatManager.FeedWireSnapshot(latest);
     }
 
     /// <summary>Returns true while the last recognized Rave OSC value is within the liveness grace window.</summary>

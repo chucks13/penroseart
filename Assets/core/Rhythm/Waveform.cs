@@ -11,7 +11,7 @@ using UnityEngine;
 /// edits a Waveform in place after construction.
 /// </para>
 /// <para>
-/// A Waveform is the data-driven replacement for the old hardcoded <c>beatVariant</c> integers. It
+/// A Waveform is an immutable rhythmic envelope definition. It
 /// describes <em>any</em> one-bar rhythm with four parts:
 /// </para>
 /// <list type="bullet">

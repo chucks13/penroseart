@@ -75,7 +75,7 @@ public static class WaveformPool
     /// <summary>
     /// Parses every <c>DEFINE_WAVEFORM(name){ seq | amp | round | offset }</c> record from file text into
     /// ordered <see cref="Entry"/> values, mirroring the GPalette hand-rolled <c>DEFINE_*</c> scan but
-    /// splitting the body on <c>|</c>. Order is preserved — it is load-bearing for <c>beatVariant</c> indexing.
+    /// splitting the body on <c>|</c>. Order is preserved for stable authoring and serialization.
     /// </summary>
     /// <remarks>
     /// Line comments are stripped first (see <see cref="StripLineComments"/>) so the canonical header comment
@@ -174,7 +174,7 @@ public static class WaveformPool
         return sb.ToString();
     }
 
-    /// <summary>The canonical header re-emitted on every save. Carries the load-bearing ORDER warning.</summary>
+    /// <summary>The canonical header re-emitted on every save.</summary>
     private const string CanonicalHeader =
         "// penrose_waveforms.txt — Waveform Pool\n" +
         "//\n" +
@@ -191,9 +191,8 @@ public static class WaveformPool
         "//   rounding   0..1 peak shape: 0 sharp triangle -> ~0.5 cosine dome -> 1 flat top.\n" +
         "//   offset     phase shift in beats; 0.5 lands on the \"&\" (offbeat).\n" +
         "//\n" +
-        "// NOTE: the entry ORDER is load-bearing. The legacy `int beatVariant` currency indexes this list, and\n" +
-        "// BeatManager.IsBeatTriggered couples its gate labels to indexes 1/2/3 (beats 1&3, beats 2&4, measure\n" +
-        "// start). The \"chill\" random subset is the lower-index range. Reorder with that in mind.\n" +
+        "// Entry order is preserved for authoring. Runtime performers acquire by Energy or uniformly across\n" +
+        "// the whole Pool; no performer stores a row index.\n" +
         "\n";
 
     /// <summary>Parses a Pool numeric field with invariant culture, logging and defaulting on a bad value.</summary>

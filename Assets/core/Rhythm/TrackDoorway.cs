@@ -84,7 +84,7 @@ public partial class BeatManager
     /// </summary>
     private IReadOnlyList<int>? CapturePlayersLive()
     {
-        if (!IsLiveSource)
+        if (!liveBeatActive)
         {
             return null;
         }
