@@ -289,7 +289,7 @@ public sealed class Switcher
         isTransitioning = false;
         transitionProgress = 0f;
         ClearLoadedCue();
-        Trace($"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
+        Trace(() => $"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
     /// <summary>Immediately puts an effect on stage, cancelling any in-flight transition.</summary>
@@ -303,7 +303,7 @@ public sealed class Switcher
         ClearLoadedCue();
         currentEffectIndex = effectIndex;
         StartEffect(effectIndex);
-        Trace($"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
+        Trace(() => $"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
     }
 
     /// <summary>
@@ -340,14 +340,14 @@ public sealed class Switcher
             // A different-mark offer after the lock is refused; the locked cue rides.
             if (loadedCueLocked)
             {
-                Trace($"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
+                Trace(() => $"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
                 return CueUpsertResult.Rejected;
             }
         }
 
         if (!CanCommitCue(cue.CueMarkBeat, cue.TransitionRepertoire, clock.CurrentBeat))
         {
-            Trace($"SWITCHER_REJECT_LATE_CUE beat={clock.CurrentBeat} cueMark={cue.CueMarkBeat} lock={LockPointBeatFor(cue.CueMarkBeat, cue.TransitionRepertoire)} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+            Trace(() => $"SWITCHER_REJECT_LATE_CUE beat={clock.CurrentBeat} cueMark={cue.CueMarkBeat} lock={LockPointBeatFor(cue.CueMarkBeat, cue.TransitionRepertoire)} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
             return CueUpsertResult.Rejected;
         }
 
@@ -438,6 +438,7 @@ public sealed class Switcher
         StartTransition(targetEffectIndex, transitionIndex, timing, Time.time, transitions[transitionIndex].Repertoire);
     }
 
+    /// <summary>Starts one fully resolved transition and defers its diagnostic display reads.</summary>
     private void StartTransition(
         int targetEffectIndex,
         int transitionIndex,
@@ -466,8 +467,7 @@ public sealed class Switcher
         transitionDurationSeconds = timing.DurationSeconds(repertoire);
         transitionProgress = ProgressAt(progressNowSeconds);
         isTransitioning = true;
-        var message = $"transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B} durationSeconds={transitionDurationSeconds:0.###} progress={transitionProgress:0.###}";
-        Trace($"SWITCHER_START {message}");
+        Trace(() => $"SWITCHER_START transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B} durationSeconds={transitionDurationSeconds:0.###} progress={transitionProgress:0.###}");
         if (transitionDurationSeconds == 0f)
         {
             CompleteTransition();
@@ -518,6 +518,7 @@ public sealed class Switcher
         return (Color[])effect.buffer.Clone();
     }
 
+    /// <summary>Projects and stores one accepted Cue against the supplied canonical beat clock.</summary>
     private void LoadCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
     {
         ProjectCueWindow(
@@ -531,7 +532,7 @@ public sealed class Switcher
         loadedCueSecondsPerBeat = clock.SecondsPerBeat;
         loadedCueLocked = false;
         hasLoadedCue = true;
-        Trace($"SWITCHER_LOAD_CUE cueMark={cue.CueMarkBeat} lock={loadedCueLockPointBeat} start={loadedCueStartBeat} startTime={loadedCueStartTime:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+        Trace(() => $"SWITCHER_LOAD_CUE cueMark={cue.CueMarkBeat} lock={loadedCueLockPointBeat} start={loadedCueStartBeat} startTime={loadedCueStartTime:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
     }
 
     private static float TimeAtBeat(SwitcherClockSnapshot clock, int beat)
@@ -554,6 +555,7 @@ public sealed class Switcher
         }
     }
 
+    /// <summary>Starts the loaded Cue's transition at the projected beat-domain time.</summary>
     private void StartLoadedCue(float nowSeconds)
     {
         var cue = loadedCue;
@@ -568,7 +570,7 @@ public sealed class Switcher
             TransitionStartTiming.FromBeatClock(startTime, secondsPerBeat),
             nowSeconds,
             cue.TransitionRepertoire);
-        Trace($"SWITCHER_START_CUE now={nowSeconds:0.###} elapsedBeats={elapsedBeats:0.###} start={startBeat} cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+        Trace(() => $"SWITCHER_START_CUE now={nowSeconds:0.###} elapsedBeats={elapsedBeats:0.###} start={startBeat} cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
     }
 
     /// <summary>
@@ -587,7 +589,7 @@ public sealed class Switcher
             return;
         }
 
-        Trace($"SWITCHER_ABORT_CUE cueMark={loadedCue.CueMarkBeat} locked={IsLoadedCueLocked} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
+        Trace(() => $"SWITCHER_ABORT_CUE cueMark={loadedCue.CueMarkBeat} locked={IsLoadedCueLocked} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
         ClearLoadedCue();
     }
 
@@ -620,6 +622,7 @@ public sealed class Switcher
             : SwitcherCueStatus.Empty;
     }
 
+    /// <summary>Promotes the transition target and emits the deferred completion trace.</summary>
     private void CompleteTransition()
     {
         var transition = transitions[currentTransitionIndex];
@@ -629,8 +632,7 @@ public sealed class Switcher
         currentEffectIndex = targetEffectIndex;
         isTransitioning = false;
         transitionProgress = 0f;
-        var message = $"transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}";
-        Trace($"SWITCHER_COMPLETE {message}");
+        Trace(() => $"SWITCHER_COMPLETE transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}");
     }
 
     private float ProgressAt(float now)
@@ -696,7 +698,8 @@ public sealed class Switcher
         return transitionIndex >= 0 && transitionIndex < transitions.Length ? $"{transitionIndex}:{transitions[transitionIndex].Name}" : $"{transitionIndex}:<none>";
     }
 
-    private void Trace(string message)
+    /// <summary>Writes a Switcher trace whose display values are resolved only when tracing is enabled.</summary>
+    private void Trace(Func<string> message)
     {
         controller.LogDirectorSwitching(message);
     }

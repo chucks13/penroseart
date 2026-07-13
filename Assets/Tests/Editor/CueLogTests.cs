@@ -14,8 +14,11 @@ using RepertoireFlags = Repertoire;
 
 public sealed class CueLogFormatTests
 {
-    private static readonly GridInfo GridAt13 = new GridInfo(GridState.Locked, 13, 4, 0f);
-    private static readonly GridInfo GridAt1 = new GridInfo(GridState.Locked, 1, 1, 0f);
+    /// <summary>Canonical placed Grid facts used by fourth-bar formatter scenarios.</summary>
+    private static readonly GridFacts GridAt13 = new GridFacts(GridState.Locked, 13, 4, 0f);
+
+    /// <summary>Canonical Grid-wrap facts used by first-beat formatter scenarios.</summary>
+    private static readonly GridFacts GridAt1 = new GridFacts(GridState.Locked, 1, 1, 0f);
 
     [Test]
     public void SheetBuiltLineHasTheAgreedShape()
@@ -147,7 +150,8 @@ public sealed class CueLogFormatTests
 
 public sealed class CueLogSinkTests
 {
-    private static readonly GridInfo GridAt12 = new GridInfo(GridState.Locked, 12, 3, 0f);
+    /// <summary>Canonical placed Grid facts read by the injected sink probe.</summary>
+    private static readonly GridFacts GridAt12 = new GridFacts(GridState.Locked, 12, 3, 0f);
 
     [Test]
     public void CueLockedJoinsTheRememberedLoadContext()
@@ -223,6 +227,7 @@ public sealed class CueLogSeamTests
     private Director director;
     private List<string> lines;
 
+    /// <summary>Builds a real Director/Switcher seam whose Cue Log probes canonical Grid facts.</summary>
     [SetUp]
     public void SetUp()
     {
@@ -260,7 +265,7 @@ public sealed class CueLogSeamTests
         controller.timer = new Timer(controller.effectTime, false);
 
         lines = new List<string>();
-        controller.cueLog = new CueLog(() => new LineCapture(lines), () => controller.beatManager.GridQuery, ownsWriter: false);
+        controller.cueLog = new CueLog(() => new LineCapture(lines), () => controller.beatManager.Grid.Current, ownsWriter: false);
 
         switcher = new Switcher(controller, controller.effects, controller.transitions, controller.cueLog);
         switcher.SetInitialEffect(0, controller.currentTransition);
@@ -383,6 +388,7 @@ public sealed class CueLogSeamTests
             "The second Chorus is built as a real next sheet the duplicate-current guard used to suppress.");
     }
 
+    /// <summary>Publishes one wire snapshot through the hub before waking the Director.</summary>
     private void FeedBeat(
         int beat,
         int phraseStartBeat,
@@ -413,6 +419,7 @@ public sealed class CueLogSeamTests
         snapshot.dropState = CountdownState.Unavailable;
         snapshot.fillState = CountdownState.Unavailable;
         snapshot.energyState = LabeledCountdown.Unavailable;
+        controller.beatManager.Update(0f);
         director.Tick(0f);
     }
 

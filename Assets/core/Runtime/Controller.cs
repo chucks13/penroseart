@@ -1309,30 +1309,32 @@ public class Controller : Singleton<Controller>
     /// <summary>Wire-fed Grid state for the HUD, annotated when the current Phrase is irregular.</summary>
     private string FormatGridState()
     {
-        if (!(beatManager != null && beatManager.GridQuery is { } grid))
+        if (!(beatManager != null && beatManager.Grid.Current is { } grid))
         {
             return "unlocked";
         }
 
-        return beatManager.PhraseQuery?.irregular == true
+        return beatManager.Phrase.Span.Current?.Irregular == true
             ? $"{grid.State} (irregular)"
             : grid.State.ToString();
     }
 
+    /// <summary>Formats the placed Grid beat, or the no-grid HUD fallback for unavailable/partial facts.</summary>
     private string FormatGridPosition()
     {
-        return beatManager != null && beatManager.GridQuery is { } grid ? $"{grid.Beat}/16" : "no grid";
+        return beatManager != null && beatManager.Grid.Current is { Beat: { } beat } ? $"{beat}/16" : "no grid";
     }
 
+    /// <summary>Formats the current or upcoming Drop directly from the canonical doorway.</summary>
     private string FormatDropCue()
     {
-        var drop = beatManager.DropQuery;
-        if (drop is { inProgress: true })
+        var drop = beatManager.Drop;
+        if (drop.Span.Current.HasValue)
         {
             return "Drop now";
         }
 
-        if (drop is { beatsUntilStart: { } beatsUntilStart })
+        if (drop.NextInBeats is { } beatsUntilStart)
         {
             return $"Drop +{beatsUntilStart}b";
         }
@@ -1375,14 +1377,15 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>Writes a tagged sequencing diagnostic line to the Unity log when enabled.</summary>
-    public void LogDirectorSwitching(string message)
+    /// <param name="message">Deferred trace text, evaluated only when diagnostics are enabled.</param>
+    public void LogDirectorSwitching(Func<string> message)
     {
         if (!logDirectorSwitching)
         {
             return;
         }
 
-        Debug.Log($"[DEBUG-DIR16] frame={Time.frameCount} t={Time.time:0.000} {message}");
+        Debug.Log($"[DEBUG-DIR16] frame={Time.frameCount} t={Time.time:0.000} {message()}");
     }
 
     /// <summary>
@@ -1471,7 +1474,7 @@ public class Controller : Singleton<Controller>
         timer = new Timer(effectTime, false);
         cueLog = CueLog.CreateForSession(
             Path.Combine(Application.persistentDataPath, "Logs"),
-            () => beatManager != null ? beatManager.GridQuery : null);
+            () => beatManager != null ? beatManager.Grid.Current : null);
         switcher = new Switcher(this, effects, transitions, cueLog);
         switcher.SetInitialEffect(currentEffect, currentTransition);
         director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition, cueLog);

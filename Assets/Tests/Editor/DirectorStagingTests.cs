@@ -73,6 +73,21 @@ public sealed class DirectorStagingTests
         Assert.That(status.Mode, Is.EqualTo(DirectorMode.NotReady));
     }
 
+    /// <summary>Disabled sequencing diagnostics never resolve their deferred display reads.</summary>
+    [Test]
+    public void DisabledDirectorTraceDoesNotResolveItsMessage()
+    {
+        var resolved = false;
+
+        controller.LogDirectorSwitching(() =>
+        {
+            resolved = true;
+            return "unused";
+        });
+
+        Assert.That(resolved, Is.False);
+    }
+
     [Test]
     public void ConstructorStagesNextEffectAndNextTransition()
     {

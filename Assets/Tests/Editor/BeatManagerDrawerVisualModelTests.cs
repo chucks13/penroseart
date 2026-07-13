@@ -42,14 +42,17 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(pulse, Is.EqualTo(1f));
     }
 
+    /// <summary>An unresolved BeatManager renders Standalone labels and unavailable doorway rows.</summary>
     [Test]
-    public void FromUsesOfflineHeaderWhenBeatManagerIsUnavailable()
+    public void FromUsesStandaloneHeaderWhenBeatManagerIsUnavailable()
     {
-        var model = BeatManagerDashboardModel.From(null, waveformIndex: 0);
+        var model = BeatManagerDashboardModel.From(null, default);
 
-        Assert.That(model.Active, Is.False);
-        Assert.That(model.BadgeText, Is.EqualTo("OFFLINE"));
+        Assert.That(model.Synced, Is.False);
+        Assert.That(model.BadgeText, Is.EqualTo("STANDALONE"));
         Assert.That(model.TrackText, Is.EqualTo("—"));
         Assert.That(model.HeaderRightText, Is.EqualTo("-- BPM"));
+        Assert.That(model.Fill.HasValue, Is.False);
+        Assert.That(model.Drop.HasValue, Is.False);
     }
 }

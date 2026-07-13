@@ -1,11 +1,10 @@
-// Editor-side presentation model for the core PhraseEventInfo rhythm query (ADR-0002). It lives in the
-// editor assembly alongside its only consumer — the BeatManager dashboard — while the PhraseEventInfo
-// data it formats stays in the runtime assembly (Assets/core/Rhythm/BeatManagerQueries.cs).
+// Editor-side presentation model for the canonical Fill and Drop doorways. It lives beside its only
+// consumer — the BeatManager dashboard — and never feeds state back into the runtime.
 
 #nullable enable
 
 /// <summary>
-/// Three-way display state of a <see cref="PhraseEventInfo"/>: playing <see cref="Now"/>, counting
+/// Three-way display state of a Fill or Drop: playing <see cref="Now"/>, counting
 /// down to a known start (<see cref="Soon"/>), or <see cref="Idle"/> (nothing upcoming). Callers map
 /// the state onto their own presentation — e.g. a chip color in an editor drawer.
 /// </summary>
@@ -17,10 +16,9 @@ public enum PhraseEventState
 }
 
 /// <summary>
-/// The display model of a <see cref="PhraseEventInfo"/> (Fill or Drop): the status chip label, the
+/// The display model of a Fill or Drop doorway: the status chip label, the
 /// meter fill in [0..1], the one-line readout, and the <see cref="PhraseEventState"/> classifying it.
-/// Built once by <see cref="Of"/> so every surface — the BeatManager inspector and any future
-/// telnet/OSC/debug readout — formats a phrase event identically.
+/// Built once by <see cref="Of"/> so the BeatManager inspector formats both doorway shapes identically.
 /// </summary>
 public readonly struct PhraseEventView
 {
@@ -44,44 +42,60 @@ public readonly struct PhraseEventView
         State = state;
     }
 
-    /// <summary>Builds the display model for <paramref name="info"/>.</summary>
-    public static PhraseEventView Of(PhraseEventInfo info)
+    /// <summary>Builds the display model for the canonical Fill doorway.</summary>
+    public static PhraseEventView Of(FillView fill)
     {
-        var state = info.inProgress ? PhraseEventState.Now
-            : info.beatsUntilStart != null ? PhraseEventState.Soon
-            : PhraseEventState.Idle;
-
-        return new PhraseEventView(BuildChip(info), BuildMeter(info), BuildReadout(info), state);
+        var current = fill.Span.Current;
+        return Of(
+            current.HasValue,
+            fill.NextInBeats,
+            fill.NextLengthBeats,
+            fill.RemainingOnTrack,
+            current?.BeatsRemaining,
+            current?.LengthBeats,
+            fill.Span.Progress);
     }
 
-    private static string BuildChip(PhraseEventInfo info)
+    /// <summary>Builds the display model for the canonical Drop doorway.</summary>
+    public static PhraseEventView Of(DropView drop)
     {
-        if (info.inProgress)
-        {
-            return "NOW";
-        }
-
-        return info.beatsUntilStart is { } beats ? $"IN {beats}" : "—";
+        var current = drop.Span.Current;
+        return Of(
+            current.HasValue,
+            drop.NextInBeats,
+            drop.NextLengthBeats,
+            drop.RemainingOnTrack,
+            current?.BeatsRemaining,
+            current?.LengthBeats,
+            drop.Span.Progress);
     }
 
-    private static float BuildMeter(PhraseEventInfo info)
+    /// <summary>Formats either doorway through their shared countdown-span display shape.</summary>
+    private static PhraseEventView Of(bool running, int? nextInBeats, int? nextLengthBeats,
+        int? remainingOnTrack, int? beatsRemaining, int? runningLengthBeats, float? progress)
     {
-        return info.inProgress ? info.progress ?? 0f : info.anticipation ?? 0f;
-    }
-
-    private static string BuildReadout(PhraseEventInfo info)
-    {
-        if (info.inProgress)
+        if (running)
         {
-            return $"ends in {RhythmText.Beats(info.beatsUntilEnd)} · len {RhythmText.Count(info.lengthBeats)} · ×{RhythmText.Count(info.remaining)}";
+            return new PhraseEventView(
+                "NOW",
+                progress ?? 0f,
+                $"ends in {RhythmText.Beats(beatsRemaining)} · len {RhythmText.Count(runningLengthBeats)} · ×{RhythmText.Count(remainingOnTrack)}",
+                PhraseEventState.Now);
         }
 
-        if (info.beatsUntilStart is { } beats)
+        if (nextInBeats is { } beats)
         {
-            var head = info.msUntilStart is { } ms ? $"in {ms / 1000f:0.0}s" : $"in {beats}b";
-            return $"{head} · len {RhythmText.Count(info.lengthBeats)} · ×{RhythmText.Count(info.remaining)}";
+            return new PhraseEventView(
+                $"IN {beats}",
+                1f - UnityEngine.Mathf.Clamp01(beats / 32f),
+                $"in {beats}b · len {RhythmText.Count(nextLengthBeats)} · ×{RhythmText.Count(remainingOnTrack)}",
+                PhraseEventState.Soon);
         }
 
-        return $"next — · ×{RhythmText.Count(info.remaining)}";
+        return new PhraseEventView(
+            "—",
+            0f,
+            $"next — · ×{RhythmText.Count(remainingOnTrack)}",
+            PhraseEventState.Idle);
     }
 }

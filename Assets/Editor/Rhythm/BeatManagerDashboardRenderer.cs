@@ -69,10 +69,10 @@ internal static class BeatManagerDashboardRenderer
     private const string OffBeatActive = "◆";
     private const string OffBeatInactive = "◇";
 
+    /// <summary>Explains that the waveform strip is a downstream, editor-only preview.</summary>
     private const string EnvelopeTooltip =
-        "Envelope(variant): the Waveform Pool envelope evaluated at the current Bar Phase — the primitive under " +
-        "BeatBrightness/BeatTime. Shows the editor-previewed Pool entry without changing the wall. " +
-        "Null: no beat clock is running.";
+        "Waveform.Envelope: the selected Pool shape evaluated against the current Bar Phase. " +
+        "Preview only; selection does not mutate runtime state.";
     private const string FillTooltip =
         "Fill: a short build-up flourish. IN n = counting down (the bar fills as it approaches over the last " +
         "32 beats); NOW = riding it (the bar sweeps its progress). next — · ×0 = the track's Fills are all " +
@@ -106,10 +106,8 @@ internal static class BeatManagerDashboardRenderer
 
     private static readonly Color PanelBackgroundColor = new Color(0.035f, 0.04f, 0.055f);
     private static readonly Color PanelLiveAccentColor = new Color(0.10f, 0.85f, 0.95f);
-    private static readonly Color PanelSimAccentColor = new Color(0.95f, 0.72f, 0.18f);
     private static readonly Color PanelOfflineAccentColor = new Color(0.45f, 0.12f, 0.16f);
     private static readonly Color LiveBadgeColor = new Color(0.02f, 0.38f, 0.30f);
-    private static readonly Color SimBadgeColor = new Color(0.46f, 0.34f, 0.06f);
     private static readonly Color OfflineBadgeColor = new Color(0.28f, 0.08f, 0.08f);
     private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.08f);
     private static readonly Color MeterTrackColor = new Color(0.07f, 0.08f, 0.10f);
@@ -171,7 +169,7 @@ internal static class BeatManagerDashboardRenderer
     {
         EnsureStyles();
 
-        var accent = !model.Active ? PanelOfflineAccentColor : model.Live ? PanelLiveAccentColor : PanelSimAccentColor;
+        var accent = model.Synced ? PanelLiveAccentColor : PanelOfflineAccentColor;
         DrawPanelBackground(rect, accent);
 
         var content = new Rect(
@@ -232,9 +230,10 @@ internal static class BeatManagerDashboardRenderer
         return actions;
     }
 
+    /// <summary>Draws synchronized/Standalone status, track identity, players, and tempo.</summary>
     private static void DrawHeader(Rect rect, BeatManagerDashboardModel model)
     {
-        var badgeColor = !model.Active ? OfflineBadgeColor : model.Live ? LiveBadgeColor : SimBadgeColor;
+        var badgeColor = model.Synced ? LiveBadgeColor : OfflineBadgeColor;
         var badgeRect = new Rect(rect.x, rect.y, 74f, rect.height);
         EditorGUI.DrawRect(badgeRect, badgeColor);
         GUI.Label(badgeRect, model.BadgeText, badgeStyle);
@@ -273,6 +272,7 @@ internal static class BeatManagerDashboardRenderer
         }
     }
 
+    /// <summary>Draws the four canonical OffBeats gates.</summary>
     private static void DrawOffBeatRow(Rect rect, BeatManagerDashboardModel model)
     {
         GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), "OFFBEAT", rowLabelStyle);
@@ -285,7 +285,7 @@ internal static class BeatManagerDashboardRenderer
             var markerRect = new Rect(rect.x + MarkerStartX + (i * spacing), rect.y, markerWidth, rect.height);
             var color = enabled
                 ? Color.Lerp(OffBeatSteadyColor, OffBeatFlashColor, model.OffBeatPulse)
-                : model.Active ? OffBeatInactiveColor : OffBeatDisabledColor;
+                : model.Synced ? OffBeatInactiveColor : OffBeatDisabledColor;
             DrawMarker(markerRect, enabled ? OffBeatActive : OffBeatInactive, color);
         }
     }
@@ -307,12 +307,13 @@ internal static class BeatManagerDashboardRenderer
         return Mathf.Min(MarkerSpacing, available / (BeatManagerDashboardModel.BeatSlotCount - 1));
     }
 
+    /// <summary>Draws the Beat, OffBeat, and combined eighth pulse meters.</summary>
     private static void DrawPulseZone(Rect rect, BeatManagerDashboardModel model)
     {
         var step = MeterRowHeight + MeterRowGap;
-        DrawPulseMeterRow(new Rect(rect.x, rect.y, rect.width, MeterRowHeight), "BEAT", model.BeatPulse, BeatMeterColor, model.Active);
-        DrawPulseMeterRow(new Rect(rect.x, rect.y + step, rect.width, MeterRowHeight), "OFF", model.OffBeatPulse, OffBeatMeterColor, model.Active);
-        DrawPulseMeterRow(new Rect(rect.x, rect.y + (step * 2f), rect.width, MeterRowHeight), "8TH", model.EighthPulse, EighthMeterColor, model.Active);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y, rect.width, MeterRowHeight), "BEAT", model.BeatPulse, BeatMeterColor, model.Synced);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y + step, rect.width, MeterRowHeight), "OFF", model.OffBeatPulse, OffBeatMeterColor, model.Synced);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y + (step * 2f), rect.width, MeterRowHeight), "8TH", model.EighthPulse, EighthMeterColor, model.Synced);
     }
 
     private static void DrawPulseMeterRow(Rect rect, string label, float pulse, Color color, bool active)
@@ -367,16 +368,17 @@ internal static class BeatManagerDashboardRenderer
             : BeatManagerDashboardActions.None;
     }
 
+    /// <summary>Draws the editor-selected Waveform and its downstream live playhead.</summary>
     private static void DrawWaveformStrip(Rect rect, BeatManagerDashboardModel model, Waveform waveform)
     {
         var plotRight = rect.xMax - WaveformValueWidth - 6f;
         var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
 
-        WaveformPlot.Draw(plot, waveform, model.Active ? WaveformPlot.Curve : WaveformCurveIdleColor,
-            model.Active ? model.BarPhase : (float?)null);
+        WaveformPlot.Draw(plot, waveform, model.Synced ? WaveformPlot.Curve : WaveformCurveIdleColor,
+            model.Synced ? model.BarPhase : (float?)null);
 
         var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
-        if (model.Active)
+        if (model.Synced)
         {
             var emitted = Mathf.Clamp01(waveform.Sample(model.BarPhase));
             GUI.Label(readout, $"{emitted:0.00}", valueStyle);
@@ -551,13 +553,14 @@ internal static class BeatManagerDashboardRenderer
             chip.AlignValueRight ? chipValueRightStyle : chipValueStyle);
     }
 
-    private static Color GetEnergyChipColor(EnergyLevel level)
+    /// <summary>Maps the canonical Energy ladder onto dashboard chip colors.</summary>
+    private static Color GetEnergyChipColor(global::Energy level)
     {
         switch (level)
         {
-            case EnergyLevel.Low:
+            case global::Energy.Low:
                 return EnergyLowChipColor;
-            case EnergyLevel.Mid:
+            case global::Energy.Mid:
                 return EnergyMidChipColor;
             default:
                 return EnergyHighChipColor;

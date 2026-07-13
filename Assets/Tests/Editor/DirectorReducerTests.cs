@@ -249,17 +249,17 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The cast aims at the Cue Mark the new Grid carries.");
     }
 
+    /// <summary>A backward mid-Grid reading remains position data and does not cast a Cue.</summary>
     [Test]
-    public void ADroppedPacketThatSkipsTheOneStillCastsOnTheWrap()
+    public void ABackwardMidGridReadingIsNotTheHubWrapEdge()
     {
         FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
 
-        // The One (Grid beat 1) packet dropped: the next reading is Grid beat 2 at absolute beat 617. That is
-        // still a backward wrap, so the new Grid [616, 632) is not skipped and its Cue Mark 632 still casts.
+        // The hub owns Grid identity: only an observed return to the One is its wrap edge. A backward
+        // mid-Grid reading after a dropped One is served as position, but does not invent a boundary.
         FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32);
 
-        Assert.That(switcher.LoadedCueStatus.HasCue, Is.True, "A dropped One must not skip a Grid.");
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632));
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
     }
 
     [Test]
@@ -387,12 +387,12 @@ public sealed class DirectorReducerTests
         StringAssert.Contains("phrase=\"Break\"", log.ToString(), "Display context is lane-sourced.");
     }
 
+    /// <summary>The starvation guard waits through mid-Grid motion and casts on the next hub wrap.</summary>
     [Test]
-    public void AStarvationGuardCastFromAMidGridWakeStillLandsOnTheGridBoundary()
+    public void AStarvationGuardCastsOnlyOnTheHubWrapEdge()
     {
-        // Same starved loop as above, but the fourth wake is a dropped One (the grid lane lands on 9, not 1).
-        // The guard targets the same live beatsToBoundary the carried path does — 16 - (9 - 1) = 8 — so its
-        // cast lands on the true Grid Boundary (608 + 8 = 616), never a flat Grid past a mid-Grid wake.
+        // A dropped One followed by a backward mid-Grid reading is not the hub's wrap edge. The guard waits;
+        // the next observed return to One supplies the fourth wake and the real boundary.
         var log = WireCueLogDirector();
 
         FeedBeat(beat: 601, gridBeat: 16, phraseStartBeat: 601, phraseLengthBeats: 96, phraseLabel: "Break");
@@ -404,10 +404,14 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Three starved wakes do not yet reach the guard's ceiling.");
 
         FeedBeat(beat: 607, gridBeat: 16, phraseStartBeat: 607, phraseLengthBeats: 96, phraseLabel: "Break");
-        FeedBeat(beat: 608, gridBeat: 9, phraseStartBeat: 608, phraseLengthBeats: 96, phraseLabel: "Break");   // wake 4, dropped One
+        FeedBeat(beat: 608, gridBeat: 9, phraseStartBeat: 608, phraseLengthBeats: 96, phraseLabel: "Break");
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "A mid-Grid reading does not synthesize a wrap.");
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(616), "The guard casts at the true next Boundary (608 + 8), not a flat Grid out.");
-        StringAssert.Contains("cue=616[8/96]", log.ToString(), "The guard cast carries the live beatsToBoundary and offset.");
+        FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 615, phraseLengthBeats: 96, phraseLabel: "Break");
+        FeedBeat(beat: 616, gridBeat: 1, phraseStartBeat: 616, phraseLengthBeats: 96, phraseLabel: "Break");   // wake 4
+
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(632), "The guard casts one Grid beyond the observed One.");
+        StringAssert.Contains("cue=632[16/96]", log.ToString(), "The guard cast carries the hub-aligned boundary.");
     }
 
     [Test]
@@ -457,14 +461,14 @@ public sealed class DirectorReducerTests
         StringAssert.Contains("cue=632[48/96]", log.ToString(), "The cast carries the sheet mark, not a guard offer.");
     }
 
+    /// <summary>A sheet mark present at the fourth hub wrap supplies the accepted Cue identity.</summary>
     [Test]
     public void ASheetProvidingAtTheGuardCeilingCastsItsOwnMarkNotTheGuard()
     {
         // The carried mark is checked before the guard, so a legal 64-gap sheet is never overridden. Hook/96's
         // first mark sits a full four Grids (64 beats) past the Phrase start — the maximum legal gap — and lands
-        // exactly on the wake the counter reaches four. That wake is mid-Grid (a dropped One, beatsToMark 8), so
-        // the sheet's mark 64 differs from the guard's would-be offer (position 56 + 16 == 72): the cast must be
-        // the sheet's.
+        // exactly on the hub wrap where the counter reaches four. The sheet remains the first source considered
+        // at that wake and carries its own mark identity into the accepted cue.
         var log = WireCueLogDirector();
 
         FeedBeat(beat: 500, gridBeat: 16, phraseStartBeat: 500, phraseLengthBeats: 96, phraseLabel: "Hook");    // build Hook/96 [64, 96]
@@ -477,11 +481,11 @@ public sealed class DirectorReducerTests
         FeedBeat(beat: 548, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 3, position 32
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "Three starved wraps pass; none lands on mark 64.");
 
-        FeedBeat(beat: 563, gridBeat: 16, phraseStartBeat: 508, phraseLengthBeats: 96, phraseLabel: "Hook");
-        FeedBeat(beat: 564, gridBeat: 9, phraseStartBeat: 508, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 4, position 56, mark 64 is 8 out
+        FeedBeat(beat: 563, gridBeat: 16, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");
+        FeedBeat(beat: 564, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 4, position 48, mark 64 is 16 out
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(572), "The carried mark 64 casts 8 beats out (564 + 8), not the guard's 16.");
-        StringAssert.Contains("cue=572[64/96]", log.ToString(), "The sheet's own mark 64 casts, not the guard's position + 16.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(580), "The carried mark 64 casts from the fourth hub wrap.");
+        StringAssert.Contains("cue=580[64/96]", log.ToString(), "The sheet's own mark 64 is carried into the cue.");
     }
 
     // ---- Lazy, preference-based casting -----------------------------------------------------------
@@ -944,8 +948,10 @@ public sealed class DirectorReducerTests
 
     // ---- Snapshot helpers -------------------------------------------------------------------------
 
-    // Feeds one synced BeatManager frame and ticks the Director once. gridBeat < 1 leaves the wall off the
-    // Grid (no cast); a present Phrase describes the current Phrase [phraseStartBeat, +phraseLengthBeats).
+    /// <summary>
+    /// Publishes one synchronized snapshot through BeatManager, then ticks the Director. A non-positive
+    /// Grid beat stays off-grid; Phrase arguments describe the current Phrase interval.
+    /// </summary>
     private void FeedBeat(
         int beat,
         int phraseStartBeat,
@@ -987,6 +993,7 @@ public sealed class DirectorReducerTests
         snapshot.energyState = energyBeatsUntilChange is { } energyChange
             ? new LabeledCountdown { label = "Energy", countBeats = energyChange, lengthBeats = 16 }
             : LabeledCountdown.Unavailable;
+        controller.beatManager.Update(0f);
         director.Tick(0f);
     }
 

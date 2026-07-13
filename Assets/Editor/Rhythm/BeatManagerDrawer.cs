@@ -133,9 +133,10 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     {
         EnsureWaveformPool();
 
-        var model = BeatManagerDashboardModel.From(beatManager, selectedWaveformIndex);
+        var selectedWaveform = SelectedWaveform();
+        var model = BeatManagerDashboardModel.From(beatManager, selectedWaveform);
         var selector = BuildWaveformSelector();
-        var actions = BeatManagerDashboardRenderer.Draw(rect, model, selector, SelectedWaveform());
+        var actions = BeatManagerDashboardRenderer.Draw(rect, model, selector, selectedWaveform);
         ApplyDashboardActions(actions);
     }
 
