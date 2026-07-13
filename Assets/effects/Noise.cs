@@ -11,6 +11,9 @@ public class Noise : EffectBase
         Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     private float n;
     private float scale;
     private float speed;
@@ -40,7 +43,7 @@ public class Noise : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         scale = Random.Range(0.05f, 0.2f);
         speed = Random.Range(0.1f, 1.5f);
         amplifier = Random.Range(1f, 5f);
@@ -63,17 +66,14 @@ public class Noise : EffectBase
         float hueShift = 0.0f;
         float sampleTime = effectTime;
 
-        // This effect has three beat-response modes: brightness pulsing,
-        // palette hue offset pulsing, or time warping for a motion kick.
-        if (beatEnable)
-        {
-            if (distortionMode == 0)
-                beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.85f);
-            else if (distortionMode == 1)
-                hueShift = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.0f);
-            else if (distortionMode == 2)
-                sampleTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
-        }
+        // This Effect owns all three response mappings and their clockless fallbacks.
+        float? rhythm = synth.Evaluate(waveform);
+        if (distortionMode == 0)
+            beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
+        else if (distortionMode == 1)
+            hueShift = 0.25f * (rhythm ?? 0f);
+        else if (distortionMode == 2)
+            sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
 
         for (int i = 0; i < buffer.Length; i++)
         {

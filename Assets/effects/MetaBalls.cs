@@ -11,6 +11,9 @@ public class MetaBalls : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     private Ball[] balls;
     private Vector2 screen;
     private int total = 8;
@@ -35,7 +38,7 @@ public class MetaBalls : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         // Randomize logic was commented out in original class
         beatMode = Random.Range(0, 3);
 
@@ -53,14 +56,11 @@ public class MetaBalls : ScreenEffect
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales metaball color output for this frame.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
-        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
-
-        float localDelta = effectDelta;
-
-        if (beatMode < 2)
-            localDelta = beatManager.GetBeatTime(beatVariant, effectDelta, 0.05f);
+        // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
+        float? rhythm = synth.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
+        float beatHue = 0.5f * (rhythm ?? 0f);
+        float localDelta = beatMode < 2 ? effectDelta + (0.05f * (rhythm ?? 0f)) : effectDelta;
 
         buffer.Fade();
 

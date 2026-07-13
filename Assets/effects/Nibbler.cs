@@ -12,6 +12,9 @@ public class Nibbler : EffectBase
 
 
     private const int Count = 10;
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     private int[] current;
     private bool randomColor;
     private Color color;
@@ -42,7 +45,7 @@ public class Nibbler : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         if (Random.value > 0.5f)
         {
             randomColor = true;
@@ -69,9 +72,10 @@ public class Nibbler : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales walker trail colors as they are written into the fading buffer.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
-        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
+        // This Effect owns its brightness, hue, and clockless fallback mappings.
+        float? rhythm = synth.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
+        float beatHue = 0.5f * (rhythm ?? 0f);
         buffer.Fade(fade);
         int count = (int)(effectDelta * 300f);
         for (int y = 0; y < Count; y++)

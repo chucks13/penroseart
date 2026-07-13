@@ -8,6 +8,9 @@ using UnityEngine;
 [System.Serializable]
 public class Lightning : EffectBase
 {
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     private float fadeValue;
     private float starthue;
     private float deltastart = 0f;
@@ -26,14 +29,11 @@ public class Lightning : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Beats per bar used to derive the Drop decay length from BPM.</summary>
+    /// <summary>Beats per bar used to express the authored Drop decay length in beats.</summary>
     private const int BeatsPerBar = 4;
 
     /// <summary>Drop decay length in bars: the slam eases from full to nothing over this many bars.</summary>
     private const float DropBars = 2f;
-
-    /// <summary>Drop decay length used when no BPM is available (≈2 bars at 120 BPM).</summary>
-    private const float DropFallbackSeconds = 4f;
 
     /// <summary>How far the bolts swell toward full brightness (HSV value) at the Drop's peak (0 = unchanged, 1 = full):
     /// a pure intensity lift that keeps the rolled hue and saturation and caps at 1, so it never washes toward white. Tune on the readout.</summary>
@@ -66,23 +66,11 @@ public class Lightning : EffectBase
     /// <summary>During a Fill the walked bolt freezes here and is only re-walked on the eighth-note jerk; one cached tile path per center-star ray.</summary>
     private List<int>[] heldRays;
 
-    /// <summary>Last eighth-note <see cref="BeatManager.GateOf"/> state, for rising-edge detection so the bolt jerks once per eighth note, not every open frame.</summary>
-    private bool eighthGateOpen;
-
     /// <summary>True while the Fill hold/jerk/strobe mode is driving the bolt (surfaced on the readout).</summary>
     private bool heldActive;
 
     /// <summary>Drop slam amount (1 at the downbeat, SmoothStep-eased to 0 over <see cref="DropBars"/>); drives the value lift, flicker, field inversion, and trail hold.</summary>
     private float dropEnv;
-
-    /// <summary>Seconds elapsed into the current Drop slam.</summary>
-    private float dropElapsed;
-
-    /// <summary>Length of the current Drop slam in seconds (BPM-derived, or <see cref="DropFallbackSeconds"/>).</summary>
-    private float dropSeconds;
-
-    /// <summary>True once the current Drop has already slammed, so it fires only once per Drop (on the first Grid downbeat inside it). Cleared when the Drop ends.</summary>
-    private bool dropFlashed;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -99,18 +87,14 @@ public class Lightning : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         buffer.Clear();
         Reroll();
 
         heldRays = null;
-        eighthGateOpen = false;
         heldActive = false;
 
         dropEnv = 0f;
-        dropElapsed = 0f;
-        dropSeconds = DropFallbackSeconds;
-        dropFlashed = false;
     }
 
     /// <summary>
@@ -140,50 +124,12 @@ public class Lightning : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// On each new Grid the bolts take a fresh form. If that Grid downbeat lands inside a Drop and this Drop has
-    /// not slammed yet, it also fires the one-shot intensity/flicker/inversion slam that decays over <see cref="DropBars"/>
-    /// bars — so the Drop always lands on the colors just rolled here.
+    /// On each new Grid the bolts take a fresh form. Drop intensity is read independently from the hub's
+    /// stock Span decay, so this hook owns only Lightning's Grid-aligned visual reroll.
     /// </summary>
     protected override void OnNewGrid()
     {
         Reroll();
-        if (beatManager.DropQuery is { inProgress: true } && !dropFlashed)
-        {
-            TriggerDrop();
-            dropFlashed = true;
-        }
-    }
-
-    /// <summary>Arms the Drop slam: full envelope now, eased to nothing over <see cref="DropBars"/> bars of the current tempo.</summary>
-    private void TriggerDrop()
-    {
-        dropSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-            ? 60f / bpm * BeatsPerBar * DropBars
-            : DropFallbackSeconds;
-        dropElapsed = 0f;
-        dropEnv = 1f;
-    }
-
-    /// <summary>
-    /// Updates the one-shot Drop envelope: a Grid-aligned Drop snaps it to full in <see cref="TriggerDrop"/>,
-    /// this eases it back to zero over the BPM-sized window, and the guard re-arms only after the Drop window
-    /// ends. At zero, every Drop term collapses out and the normal bright-bolts-on-black render is unchanged.
-    /// </summary>
-    private void UpdateDropSlam()
-    {
-        if (beatManager.DropQuery is not { inProgress: true })
-        {
-            dropFlashed = false;
-        }
-
-        if (dropEnv <= 0f)
-        {
-            return;
-        }
-
-        dropElapsed += effectDelta;
-        float decayProgress = dropSeconds > 0f ? Mathf.Clamp01(dropElapsed / dropSeconds) : 1f;
-        dropEnv = 1f - Mathf.SmoothStep(0f, 1f, decayProgress);
     }
 
     /// <summary>
@@ -231,27 +177,23 @@ public class Lightning : EffectBase
     /// </summary>
     private void UpdateHeldBolt()
     {
-        heldActive = beatManager.FillQuery is { inProgress: true };
+        heldActive = beatManager.Fill.Span.Current.HasValue;
         if (heldActive)
         {
-            bool open = GateOpen(beatManager.GateOf(Subdivision.Eighth));
-            if ((open && !eighthGateOpen) || heldRays == null)
+            if (beatManager.Pulses.GateOpenedEvery(Duration.Eighth) || heldRays == null)
             {
                 GenerateBolt();
             }
-
-            eighthGateOpen = open;
         }
         else
         {
             GenerateBolt();
-            eighthGateOpen = false;
         }
     }
 
     /// <summary>
-    /// Returns the Fill's hard sixteenth-note strobe multiplier. The held bolt blinks between full and
-    /// <see cref="FillStrobeFloor"/> while the sixteenth gate is closed; outside a Fill, 1 means no strobe.
+    /// Returns the Fill's sixteenth-note strobe multiplier from the hub Duration gate. The held bolt blinks
+    /// between full and <see cref="FillStrobeFloor"/> while closed; outside a Fill, 1 means no strobe.
     /// </summary>
     private float FillStrobe()
     {
@@ -260,7 +202,9 @@ public class Lightning : EffectBase
             return 1f;
         }
 
-        return GateOpen(beatManager.GateOf(Subdivision.Sixteenth, FillStrobeDuty)) ? 1f : FillStrobeFloor;
+        return (beatManager.Pulses.GateEvery(Duration.Sixteenth, FillStrobeDuty) ?? false)
+            ? 1f
+            : FillStrobeFloor;
     }
 
     /// <summary>
@@ -268,11 +212,12 @@ public class Lightning : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales branching lightning path colors.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
-        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
+        // This Effect owns its brightness, hue, and clockless fallback mappings.
+        float? rhythm = synth.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
+        float beatHue = 0.5f * (rhythm ?? 0f);
 
-        UpdateDropSlam();
+        dropEnv = beatManager.Drop.Span.Decay(DropBars * BeatsPerBar);
         float flicker = DropFlicker();
 
         buffer.Fade(Mathf.Lerp(fadeValue, DropFadeHold, dropEnv));
@@ -390,8 +335,6 @@ public class Lightning : EffectBase
         return mode != 0 ? APalette.read(wrapped, true) : Color.HSVToRGB(wrapped, 1f, 1f);
     }
 
-    /// <summary>True when a subdivision gate from <see cref="BeatManager.GateOf"/> is present and open. GateOf returns
-    /// a hard 0 or 1 on-clock and null off-clock, so this is the single place that reads "is this beat slot lit now".</summary>
-    private static bool GateOpen(float? gate) => gate.HasValue && gate.Value > 0.5f;
+
 
 }

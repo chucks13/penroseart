@@ -11,6 +11,9 @@ public class Petals : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     private Color[] colors;
     private float background;
 
@@ -24,7 +27,7 @@ public class Petals : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         colors = new Color[4];
         for (int i = 0; i < 4; i++)
         {
@@ -43,9 +46,10 @@ public class Petals : ScreenEffect
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales the layered shape colors for this frame.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.85f, beatEnable);
-        float hueShift = beatManager.GetBeatBrightness(beatVariant, 0.001f, 0.0f);
+        // This Effect owns its brightness, hue, and clockless fallback mappings.
+        float? rhythm = synth.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
+        float hueShift = 0.001f * (rhythm ?? 0f);
         int bitMask=Random.Range(0, 256);       // randomly select shape layers with bit masks
         background += effectDelta * 0.1f;
         background %= 1f;

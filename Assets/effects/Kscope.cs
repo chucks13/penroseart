@@ -24,6 +24,9 @@ public class Kscope : ScreenEffect
         public Texture2D tex;
         public string fname;
     };
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     string fname = "";
     private int[] mirrorList;
     private int[] centerline;
@@ -258,7 +261,7 @@ public class Kscope : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10;
         fixCenterLineInit();
 
@@ -318,12 +321,9 @@ public class Kscope : ScreenEffect
         {
             Init();
         }
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
-
-        float localDelta = effectDelta;
-
-        if (beatMode < 2)
-            localDelta = beatManager.GetBeatTime(beatVariant, effectDelta, 0.002f);
+        float rhythm = synth.Evaluate(waveform) ?? 0f;
+        float beatHue = 0.5f * rhythm;
+        float localDelta = beatMode < 2 ? effectDelta + (0.002f * rhythm) : effectDelta;
 
         positionX += motionX * localDelta * 60f;
         positionY += motionY * localDelta * 60f;
@@ -370,7 +370,7 @@ public class Kscope : ScreenEffect
                 if (beatMode > 0)
                 {
                     Color.RGBToHSV(color, out float h, out float s, out float v);
-                    color = Color.HSVToRGB((h + beatBrightness) % 1f, s, v);
+                    color = Color.HSVToRGB((h + beatHue) % 1f, s, v);
                 }
                 screenBuffer[x + (y * width)] = color;
             }

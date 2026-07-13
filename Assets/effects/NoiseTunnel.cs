@@ -14,6 +14,9 @@ public class NoiseTunnel : EffectBase
         Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
+    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
+    private Waveform waveform;
+
     private float n;
     private float scale;
     private float speed;
@@ -44,7 +47,7 @@ public class NoiseTunnel : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = synth.Random(Energy.Low, Energy.Mid);
         scale = Random.Range(0.05f, 0.2f);
         speed = Random.Range(0.1f, 1.5f);
         amplifier = Random.Range(1f, 5f);
@@ -52,7 +55,6 @@ public class NoiseTunnel : EffectBase
         style = Random.Range(0, 3);
         direction = Random.Range(0, 2);
         buffer.Clear();
-        beatVariant=beatManager.GetRandomVariantChill();
         beatMode = Random.Range(0,3);
     }
 
@@ -66,10 +68,11 @@ public class NoiseTunnel : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales the final tunnel colors without changing tunnel phase.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 0.75f, 1.0f, beatEnable);
-        float beatHue = beatManager.GetBeatBrightness(beatVariant, 0.5f, 0.0f, beatEnable);
-        float beatTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
+        // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
+        float? rhythm = synth.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
+        float beatHue = 0.5f * (rhythm ?? 0f);
+        float beatTime = effectTime + (0.5f * (rhythm ?? 0f));
         float localTime = effectTime;
 
         for (int i = 0; i < buffer.Length; i++)
