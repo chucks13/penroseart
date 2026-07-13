@@ -1,6 +1,6 @@
 # Waveform rhythm model
 
-We replaced the seven hardcoded `beatVariant` integers with a data-driven **Waveform** model: a one-bar brightness envelope built from Humps merged end-to-end, described by a `sequence` of note-value tokens (`W H Q E S`) and a parallel `amplitude` string (`0–8`), plus per-Waveform `rounding` and phase `offset`. **Waveforms** acquires values and evaluates them against BeatManager's live Bar Phase clock. Effects request rhythms inline, by Preset name, or by random draw from a curated Pool. Full model in `docs/waveform-system.md`; terms in `CONTEXT.md`.
+We replaced the seven hardcoded `beatVariant` integers with a data-driven **Waveform** model: a one-bar brightness envelope built from Humps merged end-to-end, described by a `sequence` of note-value tokens (`W H Q E S`) and a parallel `amplitude` string (`0–8`), plus per-Waveform `rounding` and phase `offset`. **Waveforms** acquires clock-bound values from a curated Pool; each held value reads its own live envelope. Full model in `docs/waveform-system.md`; terms in `CONTEXT.md`.
 
 ## Humps are concatenated in time, never summed
 A Waveform is an ordered run of Humps end-to-end — not overlapping waves added together. This keeps it an envelope (always `[0..1]`, trough at 0) rather than a signal, and makes evaluation a simple "which slot is the playhead in." The web "designer" app suggested an additive/half-cycle mental model; we explicitly rejected that. The app is a **Visual Tool** only — the runtime does not depend on it or its JSON.
@@ -23,7 +23,7 @@ A malformed spec (widths not summing to a bar, mismatched string lengths) is log
 
 - Call sites barely change: `BeatManager.GetBeatBrightness(...)` keeps its shape and swaps internals; `GetRandomVariant` becomes "draw a Waveform from the Pool." The ~18 effect call sites are untouched.
 - Random selection by song energy/direction (OSC `energy_state`) is now a natural extension point on `GetRandomVariant`, but is deferred — the incoming OSC data isn't finalized.
-- Runtime evaluation and the editor plot both delegate envelope math to `Waveform.Evaluate`, so the visualization cannot drift from runtime behavior.
+- Runtime playback and the editor plot both delegate envelope math to `Waveform.Sample`, so the visualization cannot drift from runtime behavior.
 
 ### Amendment (2026-07-11, Hunter, beat-data-interface effort)
 
@@ -48,3 +48,7 @@ ADR-0012, ADR-0013, ADR-0015, ADR-0016.
 ### Amendment (2026-07-13, Hunter, public configuration correction)
 
 The 2026-07-11 amendment's automatic base helpers and default Waveform acquisition are superseded by ADR-0017. Brightness/time mapping remains performer-side, while ordinary public artistic configuration may live on a concrete Performer or a neutral authoring base. Effects and Transitions decide acquisition timing, fallback, and explicit response math; no base lifecycle method automatically acquires, replaces, or responds to a Waveform. Waveforms still offers the same acquisition and evaluation tools without deciding how any Performer uses them.
+
+### Amendment (2026-07-13, Hunter, playback simplification)
+
+The nullable provider-side evaluation contract in the 2026-07-11 amendment is superseded. `Waveforms` only acquires required, clock-bound values from the Pool. A held `Waveform` or `Routine` exposes a total `Envelope` and `Lerp(from, to)` response directly; caller-supplied endpoints remain the artistic decision. `Waveforms.Evaluate`, the one-frame `Hit` edge and lifecycle, name lookup, and nullable Waveform configuration are removed. Mixers suppress child response with the explicit `waveforms.None` value. A missing/empty Pool or notation-invalid parsed entry fails visibly instead of synthesizing a fallback. This keeps the public path to one readable sentence and limits nullability to data whose absence is genuinely part of the domain.

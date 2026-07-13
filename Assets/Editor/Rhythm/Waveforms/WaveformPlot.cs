@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// Shared editor rendering of a one-bar <see cref="Waveform"/> envelope: a dark track, 4/4 beat
-/// gridlines, and the anti-aliased curve of <see cref="Waveform.Evaluate"/> across the bar, with an
+/// gridlines, and the anti-aliased curve of <see cref="Waveform.Sample"/> across the bar, with an
 /// optional live playhead.
 ///
 /// Both the BeatManager dashboard (live, with a playhead) and the WaveformPool authoring inspector
@@ -43,7 +43,7 @@ internal static class WaveformPlot
     /// </summary>
     /// <param name="rect">Plot bounds. Gridlines and the curve fill this rect; the caller reserves any
     /// space it needs for a readout before passing the rect in.</param>
-    /// <param name="wf">The waveform whose one-bar envelope is plotted via <see cref="Waveform.Evaluate"/>.</param>
+    /// <param name="wf">The waveform whose one-bar envelope is plotted via <see cref="Waveform.Sample"/>.</param>
     /// <param name="curveColor">Color for the AA curve — the caller's state decides it (active/idle/malformed).</param>
     /// <param name="playheadPhase">Bar phase for the live playhead, or <c>null</c> for a static plot.</param>
     public static void Draw(Rect rect, Waveform wf, Color curveColor, float? playheadPhase = null)
@@ -70,7 +70,7 @@ internal static class WaveformPlot
         for (var i = 0; i <= Samples; i++)
         {
             var p = i / (float)Samples;
-            var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Evaluate(p)));
+            var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Sample(p)));
             CurvePoints[i] = new Vector3(rect.x + (rect.width * p), y, 0f);
         }
 
@@ -88,7 +88,7 @@ internal static class WaveformPlot
         var px = rect.x + (rect.width * phase);
         EditorGUI.DrawRect(new Rect(Mathf.Floor(px), rect.y, 1f, rect.height), PlayheadLineColor);
 
-        var emitted = Mathf.Clamp01(wf.Evaluate(playheadPhase.Value));
+        var emitted = Mathf.Clamp01(wf.Sample(playheadPhase.Value));
         var dotY = Mathf.Lerp(bottom, top, emitted);
         EditorGUI.DrawRect(new Rect(px - 3f, dotY - 3f, 6f, 6f), PlayheadColor);
     }

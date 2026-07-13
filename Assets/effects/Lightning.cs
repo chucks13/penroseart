@@ -210,9 +210,9 @@ public class Lightning : EffectBase
     public override void Draw()
     {
         // This Effect owns its brightness, hue, and clockless fallback mappings.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
-        float beatHue = 0.5f * (rhythm ?? 0f);
+        float rhythm = waveform.Envelope;
+        float beatBrightness = waveform.Lerp(1f, 0.75f);
+        float beatHue = 0.5f * rhythm;
 
         dropEnv = beatManager.Drop.Span.Decay(DropBars * BeatsPerBar);
         float flicker = DropFlicker();

@@ -29,7 +29,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Switching/Deck.cs` | The rotating card deck behind effect and transition casting: rotate-to-back pulls, draw-window random draws, and read-only preferred finds pulled only on Switcher acceptance. |
 | `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime and sole owner of cue commitment (one beat-domain lock, private runway/tail/lock math; loading a cue returns accepted-or-not), Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
-| `Assets/core/Rhythm/Waveform.cs` | Runtime waveform kernel for beat-synced brightness envelopes. |
+| `Assets/core/Rhythm/Waveform.cs` | Immutable Waveform kernel plus clock-bound `Envelope`/`Lerp` playback value. |
 | `Assets/core/Rhythm/WaveformPool.cs` | Shared waveform pool codec and runtime load path for `StreamingAssets/penrose_waveforms.txt`. |
 | `Assets/core/ReactiveInputs/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
 | `Assets/core/Hardware/SerialOut.cs` | USB serial hardware discovery and frame sending for S2 Mini / ESP32 boards. |
@@ -63,7 +63,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Formats the core `PhraseEventInfo` for the BeatManager dashboard. |
 | `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for rhythm-query nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
-| `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Evaluate` output. |
+| `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Sample` output. |
 | `Assets/Editor/Effects/EffectSelectorDrawer.cs` | Effect selector property drawer. |
 | `Assets/Editor/Transitions/TransitionSettingsAssetUtility.cs` | Transition settings asset creation/restoration utility. |
 | `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Tuning window for transitions and related authoring controls. |

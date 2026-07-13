@@ -66,11 +66,11 @@ public class AnimateLoops : EffectBase
         float sampleTime = effectTime;
 
         // This effect owns both response mappings and their clockless fallbacks.
-        float? rhythm = waveforms.Evaluate(waveform);
+        float rhythm = waveform.Envelope;
         if (distortionMode == 1)
-            hueShift = 0.25f * (rhythm ?? 0f);
+            hueShift = 0.25f * rhythm;
         else if (distortionMode == 2)
-            sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
+            sampleTime = effectTime + (0.5f * rhythm);
 
         float beatOffset = sampleTime - effectTime;
         colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);

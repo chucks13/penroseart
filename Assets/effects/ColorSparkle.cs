@@ -47,8 +47,7 @@ public class ColorSparkle : EffectBase
     public override void Draw()
     {
         // The Waveform offsets newly generated sparkle hues; clockless rendering stays steady.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float hueOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
+        float hueOffset = waveform.Lerp(0.5f, 1f);
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
         Color drawColor = Color.HSVToRGB((hue + hueOffset) % 1f, 1f, 1f);

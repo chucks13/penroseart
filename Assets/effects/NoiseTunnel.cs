@@ -66,10 +66,10 @@ public class NoiseTunnel : EffectBase
     public override void Draw()
     {
         // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
-        float beatHue = 0.5f * (rhythm ?? 0f);
-        float beatTime = effectTime + (0.5f * (rhythm ?? 0f));
+        float rhythm = waveform.Envelope;
+        float beatBrightness = waveform.Lerp(1f, 0.75f);
+        float beatHue = 0.5f * rhythm;
+        float beatTime = effectTime + (0.5f * rhythm);
         float localTime = effectTime;
 
         for (int i = 0; i < buffer.Length; i++)

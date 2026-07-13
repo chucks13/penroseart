@@ -208,7 +208,7 @@ public class Julia : EffectBase
     {
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
         // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
-        var beatEnvelope = waveforms.Evaluate(waveform) ?? 1f;
+        var beatEnvelope = waveform.Lerp(0f, 1f);
         hueScroll = Mathf.Repeat(hueScroll + ((HueBaseRate + (beatEnvelope * HueBeatRate)) * effectDelta), 1f);
 
         // The hub-owned Fill Build becomes extra zoom depth below.

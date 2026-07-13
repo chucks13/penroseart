@@ -83,8 +83,7 @@ public class Vortex : EffectBase
     public override void Draw()
     {
         // Beat pulse scales the nearest-spinner palette result for each tile.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
+        float beatBrightness = waveform.Lerp(0.5f, 1f);
         Update();
         for (int i = 0; i < buffer.Length; i++)
         {

@@ -19,12 +19,12 @@ public sealed class FlockBeatIntegrationTests
     }
 
     /// <summary>
-    /// Verifies that a missing Waveform evaluation preserves Flock's Standalone base speed.
+    /// Verifies that a resting Waveform envelope preserves Flock's Standalone base speed.
     /// </summary>
     [Test]
-    public void BeatSpeedMultiplierIsNormalSpeedWhenWaveformIsUnavailable()
+    public void BeatSpeedMultiplierIsNormalSpeedAtRest()
     {
-        Assert.That(Flock.GetBeatSpeedMultiplier(null), Is.EqualTo(1f));
+        Assert.That(Flock.GetBeatSpeedMultiplier(0f), Is.EqualTo(1f));
     }
 
 

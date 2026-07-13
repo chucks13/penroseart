@@ -12,7 +12,7 @@ using UnityEngine;
 /// <remarks>
 /// <para>
 /// Both sides of the system go through here so the read path and the write path can never disagree about
-/// the format. The runtime (<see cref="BeatManager"/>) parses the file on load; the Editor's Waveform Pool
+/// the format. The runtime (<see cref="Waveforms"/>) parses the file on load; the Editor's Waveform Pool
 /// window parses on open and rewrites the whole file canonically on save. That single-owner rule is exactly
 /// why the format is dead simple — one macro per line:
 /// </para>
@@ -49,8 +49,8 @@ public static class WaveformPool
     }
 
     /// <summary>
-    /// Reads the Pool file, distinguishing the expected missing-file case (returns empty, the caller seeds)
-    /// from a present-but-unreadable file (logged as an error — a real defect, never silently swallowed).
+    /// Reads the Pool file. Missing or unreadable files return empty; runtime <see cref="Waveforms"/>
+    /// treats that as a startup configuration error, while Editor tooling may present an empty document.
     /// </summary>
     public static string ReadFileOrEmpty()
     {

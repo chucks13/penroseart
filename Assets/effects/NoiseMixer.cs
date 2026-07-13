@@ -52,7 +52,7 @@ public class NoiseMixer : MixerBase
             effects[i].Init();
             effects[i].OnStart();
             // NoiseMixer owns the rhythmic shape of the composite, so child Waveforms are suppressed.
-            effects[i].waveform = null;
+            effects[i].waveform = waveforms.None;
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
             border = Color.HSVToRGB(Random.value, 1, 1);
         }
@@ -75,14 +75,14 @@ public class NoiseMixer : MixerBase
         {
             effects[i].UpdateTime();
             // Reassert suppression after UpdateTime because the child may acquire a new Waveform on a Grid wrap.
-            effects[i].waveform = null;
+            effects[i].waveform = waveforms.None;
             effects[i].Draw();
         }
-        float? rhythm = waveforms.Evaluate(waveform);
-        float sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
+        float rhythm = waveform.Envelope;
+        float sampleTime = effectTime + (0.5f * rhythm);
         float width = 0.1f;
         if (distortionMode == 1)
-            width = rhythm is { } envelope ? Mathf.Lerp(0.1f, 0.25f, envelope) : 0.25f;
+            width = waveform.Lerp(0.1f, 0.25f);
 
         for (int i = 0; i < buffer.Length; i++)
         {

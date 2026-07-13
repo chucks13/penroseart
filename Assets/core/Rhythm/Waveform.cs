@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -5,8 +6,9 @@ using UnityEngine;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A Waveform is an immutable value. Acquire a new value through <see cref="Parse(string,string,float,float)"/>;
-/// nothing edits a Waveform in place after parsing constructs it.
+/// A Waveform is an immutable value. <see cref="Parse(string,string,float,float)"/> constructs an
+/// authoring/kernel value; <see cref="Waveforms"/> binds Pool values to runtime playback. Nothing
+/// edits a Waveform in place after construction.
 /// </para>
 /// <para>
 /// A Waveform is the data-driven replacement for the old hardcoded <c>beatVariant</c> integers. It
@@ -32,19 +34,16 @@ using UnityEngine;
 /// <c>docs/adr/0001-waveform-rhythm-model.md</c>.)
 /// </para>
 /// <para>
-/// <b>This type is the pure Waveform evaluation kernel.</b> <see cref="Evaluate"/> turns
-/// notation into a brightness for a given Bar Phase and has no dependency on Unity time, OSC, or the
-/// Pool — the live clock is passed in. The running service half is the <see cref="Waveforms"/>
-/// surface, its own root beside <see cref="BeatManager"/>, which consumes the hub's Clock doorway. The Editor property drawer
-/// plots the very same <see cref="Evaluate"/>, so the visualization can never drift from runtime
-/// behavior. The model and notation are documented in full in <c>docs/waveform-system.md</c>; the term
-/// definitions live in <c>CONTEXT.md</c>.
+/// A runtime Waveform acquired from <see cref="Waveforms"/> is bound to the shared musical clock and
+/// exposes its current <see cref="Envelope"/> plus direct response helpers such as <see cref="Lerp"/>.
+/// <see cref="Sample"/> remains the clock-agnostic shape kernel used by runtime playback and Editor
+/// plots, so visualization and playback cannot drift.
 /// </para>
 /// <para>
 /// <b>Malformation is logged, not substituted.</b> A spec whose widths do not sum to a bar, or whose
-/// amplitude string length does not match the sequence, is logged at parse time and otherwise tolerated:
-/// Bar Phase bounds every evaluation to one bar, so the worst case is one odd-looking bar that
-/// self-corrects on the next downbeat. Nothing silently falls back to the plain pulse.
+/// amplitude string length does not match the sequence, is logged and remains bounded for Editor
+/// inspection through <see cref="Sample"/>. Runtime <see cref="Waveforms"/> rejects malformed Pool
+/// entries instead of silently falling back to the plain pulse.
 /// </para>
 /// </remarks>
 public readonly struct Waveform
@@ -84,6 +83,15 @@ public readonly struct Waveform
     /// <summary>True when parsing found a defect (length mismatch, bad token, widths not summing to a bar).</summary>
     private readonly bool malformed;
 
+    /// <summary>The shared live musical source for a runtime-bound Waveform; null for parsed authoring values.</summary>
+    private readonly BeatManager clockSource;
+
+    /// <summary>Whether this explicit value suppresses Waveform response for an owning Mixer.</summary>
+    private readonly bool disabled;
+
+    /// <summary>Distinguishes a constructed Waveform from the CLR default struct value.</summary>
+    private readonly bool initialized;
+
     /// <summary>Whether this Waveform parsed with a logged defect. It still evaluates safely against one bounded bar.</summary>
     public bool IsMalformed => malformed;
 
@@ -94,7 +102,15 @@ public readonly struct Waveform
     /// <param name="offset">Phase shift in beats.</param>
     /// <param name="humps">Parsed Hump slots laid end-to-end across the bar.</param>
     /// <param name="malformed">Whether parsing found and logged a defect.</param>
-    private Waveform(string sequence, string amplitude, float rounding, float offset, Hump[] humps, bool malformed)
+    private Waveform(
+        string sequence,
+        string amplitude,
+        float rounding,
+        float offset,
+        Hump[] humps,
+        bool malformed,
+        BeatManager clockSource = null,
+        bool disabled = false)
     {
         this.sequence = sequence;
         this.amplitude = amplitude;
@@ -102,6 +118,95 @@ public readonly struct Waveform
         this.offset = offset;
         this.humps = humps;
         this.malformed = malformed;
+        this.clockSource = clockSource;
+        this.disabled = disabled;
+        initialized = true;
+    }
+
+    /// <summary>
+    /// Current Waveform envelope in <c>[0..1]</c>; rests at 0 when no live Bar Phase exists or this
+    /// is the explicit <see cref="Waveforms.None"/> value.
+    /// </summary>
+    public float Envelope
+    {
+        get
+        {
+            EnsureInitialized();
+            return TrySampleCurrent(out var envelope) ? envelope : 0f;
+        }
+    }
+
+    /// <summary>
+    /// Maps the current envelope between caller-chosen endpoints. Without a live Bar Phase, returns
+    /// <paramref name="to"/> so Standalone rendering keeps the established steady response.
+    /// </summary>
+    /// <param name="from">Value at the Waveform trough.</param>
+    /// <param name="to">Value at the Waveform peak and the Standalone fallback.</param>
+    public float Lerp(float from, float to)
+    {
+        EnsureInitialized();
+        return TrySampleCurrent(out var envelope) ? Mathf.Lerp(from, to, envelope) : to;
+    }
+
+    /// <summary>
+    /// Shortest spacing between audible peaks in milliseconds at the live tempo; 0 when tempo is
+    /// unavailable or this value intentionally suppresses Waveform response.
+    /// </summary>
+    public float ShortestPeakSpacingMs
+    {
+        get
+        {
+            EnsureInitialized();
+            EnsureRuntimeBound();
+            return !disabled && clockSource.Clock.BeatAverageMs is { } beatAverageMs
+                ? ShortestNonZeroPeakSpacing() * BeatsPerBar * beatAverageMs
+                : 0f;
+        }
+    }
+
+    /// <summary>Binds one parsed immutable shape to the shared live musical source.</summary>
+    /// <param name="source">The BeatManager whose Clock and Grid drive playback.</param>
+    internal Waveform Bind(BeatManager source)
+    {
+        EnsureInitialized();
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        return new Waveform(sequence, amplitude, rounding, offset, humps, malformed, source);
+    }
+
+    /// <summary>Creates the explicit non-null value Mixers assign to suppress child Waveform response.</summary>
+    /// <param name="source">The shared musical source that owns the value.</param>
+    internal static Waveform Disabled(BeatManager source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        return new Waveform("", "", 0f, 0f, Array.Empty<Hump>(), false, source, disabled: true);
+    }
+
+    /// <summary>The shared musical source this runtime-bound value reads.</summary>
+    internal BeatManager ClockSource
+    {
+        get
+        {
+            EnsureInitialized();
+            return clockSource;
+        }
+    }
+
+    /// <summary>Whether this value represents intentional Waveform-response suppression.</summary>
+    internal bool IsDisabled
+    {
+        get
+        {
+            EnsureInitialized();
+            return disabled;
+        }
     }
 
     /// <summary>A single Hump's time slot in bar-fraction units, plus its normalized height.</summary>
@@ -139,9 +244,9 @@ public readonly struct Waveform
     /// Parses an inline Waveform with default shaping — the plain Beat Pulse's rounding and zero offset.
     /// </summary>
     /// <remarks>
-    /// This is the inline request path used directly in effect code (e.g. <c>Waveform.Parse("HQQ", "844")</c>).
-    /// Omitting rounding/offset means "the plain pulse, but with these widths/heights," keeping the Beat
-    /// Pulse the literal origin of the space.
+    /// This convenience is used by the Pool codec, Editor previews, and tests. Omitting rounding/offset
+    /// means "the plain pulse, but with these widths/heights," keeping the Beat Pulse the literal origin
+    /// of the space. Runtime effects acquire clock-bound values from <see cref="Waveforms"/>.
     /// </remarks>
     public static Waveform Parse(string sequence, string amplitude)
     {
@@ -206,7 +311,7 @@ public readonly struct Waveform
     }
 
     /// <summary>
-    /// Evaluates this Waveform at a normalized Bar Phase and returns brightness in <c>[0..1]</c>.
+    /// Samples this Waveform at a normalized Bar Phase and returns brightness in <c>[0..1]</c>.
     /// </summary>
     /// <remarks>
     /// This is the evaluation kernel. <paramref name="barPhase"/> is the live clock (0 on the downbeat,
@@ -218,8 +323,9 @@ public readonly struct Waveform
     /// midpoint, so the fall after one beat and the rise into the next meet there.
     /// </remarks>
     /// <param name="barPhase">Position within the bar; values outside [0..1) are wrapped.</param>
-    public float Evaluate(float barPhase)
+    public float Sample(float barPhase)
     {
+        EnsureInitialized();
         if (humps == null || humps.Length == 0)
         {
             return 0f;
@@ -260,6 +366,42 @@ public readonly struct Waveform
         }
 
         return 0f; // only reached for a malformed (under-filled) bar — the gap reads as trough
+    }
+
+    /// <summary>Samples this bound value at the current Bar Phase when one exists.</summary>
+    /// <param name="envelope">The sampled envelope, or 0 when live placement is unavailable.</param>
+    /// <returns>True when a live Bar Phase was available and sampled.</returns>
+    private bool TrySampleCurrent(out float envelope)
+    {
+        EnsureRuntimeBound();
+        if (!disabled && clockSource.Clock.BarPhase is { } barPhase)
+        {
+            envelope = Sample(barPhase);
+            return true;
+        }
+
+        envelope = 0f;
+        return false;
+    }
+
+    /// <summary>Fails visibly when an effect tries to use the CLR default instead of an acquired Waveform.</summary>
+    private void EnsureInitialized()
+    {
+        if (!initialized)
+        {
+            throw new InvalidOperationException(
+                "Waveform is uninitialized. Acquire one from Waveforms or assign waveforms.None explicitly.");
+        }
+    }
+
+    /// <summary>Fails visibly when clock-driven playback is requested from an authoring-only parsed value.</summary>
+    private void EnsureRuntimeBound()
+    {
+        if (clockSource == null)
+        {
+            throw new InvalidOperationException(
+                "Waveform playback requires a runtime value acquired from Waveforms.");
+        }
     }
 
     /// <summary>
@@ -372,47 +514,6 @@ public readonly struct Waveform
         }
 
         return count;
-    }
-
-    /// <summary>
-    /// Whether any audible onset — a nonzero-Amplitude Hump's landing instant, Phase Offset
-    /// applied — falls inside the given Bar Phase window: exclusive of <paramref name="fromPhase"/>,
-    /// inclusive of <paramref name="toPhase"/>. A window whose start exceeds its end wraps with the
-    /// bar and covers (from..1) plus [0..to]; an empty window (from == to) contains nothing.
-    /// </summary>
-    /// <remarks>
-    /// This is the notation-side fact the Waveforms Hit edge reads: the caller owns the
-    /// observation window (two consecutive clock readings); the Waveform knows where its humps
-    /// land. Zero allocation, and the offset is read live like <see cref="Evaluate"/> does.
-    /// </remarks>
-    /// <param name="fromPhase">Window start, exclusive — the previous Bar Phase observation.</param>
-    /// <param name="toPhase">Window end, inclusive — the current Bar Phase observation.</param>
-    public bool HasAudibleOnsetBetween(float fromPhase, float toPhase)
-    {
-        if (humps == null)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < humps.Length; i++)
-        {
-            var h = humps[i];
-            if (!h.IsAudible)
-            {
-                continue;
-            }
-
-            var onset = Mathf.Repeat(h.start + (offset / BeatsPerBar), 1f);
-            var inside = fromPhase <= toPhase
-                ? onset > fromPhase && onset <= toPhase
-                : onset > fromPhase || onset <= toPhase;
-            if (inside)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

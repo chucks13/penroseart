@@ -64,13 +64,13 @@ public class Noise : EffectBase
         float sampleTime = effectTime;
 
         // This Effect owns all three response mappings and their clockless fallbacks.
-        float? rhythm = waveforms.Evaluate(waveform);
+        float rhythm = waveform.Envelope;
         if (distortionMode == 0)
-            beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
+            beatBrightness = waveform.Lerp(0.85f, 1f);
         else if (distortionMode == 1)
-            hueShift = 0.25f * (rhythm ?? 0f);
+            hueShift = 0.25f * rhythm;
         else if (distortionMode == 2)
-            sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
+            sampleTime = effectTime + (0.5f * rhythm);
 
         for (int i = 0; i < buffer.Length; i++)
         {

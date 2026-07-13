@@ -53,7 +53,7 @@ public class Pulse : EffectBase
         endColor = startColor.Delta(colorDelta);
         beatMode = Random.Range(0, 2);
         pulseMultipler = Random.value * 0.125f + 0.125f;
-        pulseScale = (waveforms.ShortestPeakSpacingMs(waveform) ?? 0f) / 200f;
+        pulseScale = waveform.ShortestPeakSpacingMs / 200f;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -74,8 +74,7 @@ public class Pulse : EffectBase
     public override void Draw()
     {
         var t = Mathf.InverseLerp(0f, seconds, Mathf.PingPong(effectTime, seconds));
-        float? rhythm = waveforms.Evaluate(waveform);
-        float waveHeight = rhythm is { } envelope ? Mathf.Lerp(1f, 0f, envelope) : 0f;
+        float waveHeight = waveform.Lerp(1f, 0f);
         for (int i = wave.Length - 1; i > 0; i--)
             wave[i] = wave[i - 1];
         wave[0] = waveHeight;
@@ -93,19 +92,18 @@ public class Pulse : EffectBase
             Color color = tiles[i].type == 0 ? color1 : color2;
             Color.RGBToHSV(color, out float h, out float s, out float v);
 
-            if (rhythm.HasValue)
-                switch (beatMode)
-                {
-                    case 0:
-                        h += wave[waveidx] * pulseMultipler;
-                        break;
-                    case 1:
-                        s += wave[waveidx] * pulseMultipler * 2f;
-                        break;
-                    case 2:
-                        v += wave[waveidx] * (1f - pulseMultipler);
-                        break;
-                }
+            switch (beatMode)
+            {
+                case 0:
+                    h += wave[waveidx] * pulseMultipler;
+                    break;
+                case 1:
+                    s += wave[waveidx] * pulseMultipler * 2f;
+                    break;
+                case 2:
+                    v += wave[waveidx] * (1f - pulseMultipler);
+                    break;
+            }
 
             buffer[i] = Color.HSVToRGB(h % 1f, s, v);
         }

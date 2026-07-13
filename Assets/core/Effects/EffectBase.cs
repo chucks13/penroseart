@@ -29,15 +29,16 @@ public abstract class EffectBase
     /// <summary>The live BeatManager owned by the bound Controller.</summary>
     public BeatManager beatManager => controller.beatManager;
 
-    /// <summary>The live Waveform acquisition and evaluation surface owned by the bound Controller.</summary>
+    /// <summary>The live Waveform acquisition surface owned by the bound Controller.</summary>
     public Waveforms waveforms => controller.waveforms;
 
     /// <summary>
-    /// Public artistic Waveform configuration for this Effect. A null value means this Effect has no configured
-    /// Waveform; Effects acquire values explicitly, and owners such as Mixers may replace, share, or clear them.
+    /// Public artistic Waveform configuration for this Effect. Effects acquire values explicitly;
+    /// owners such as Mixers may replace or share them, and use <see cref="Waveforms.None"/> for
+    /// intentional response suppression.
     /// </summary>
     [System.NonSerialized]
-    public Waveform? waveform;
+    public Waveform waveform;
 
     /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
     public bool IsBeatActive => controller.beatManager.IsActive;

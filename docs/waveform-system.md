@@ -1,6 +1,6 @@
 # Waveform System
 
-A **Waveform** is a one-bar rhythmic brightness envelope that effects pull from instead of the old fixed `beatVariant` integers. It replaces the seven hardcoded rhythm variants with a small notation that describes *any* one-bar rhythm, plus an always-running service that turns that notation into a `[0..1]` brightness against the live beat clock.
+A **Waveform** is a one-bar rhythmic brightness envelope that effects hold instead of the old fixed `beatVariant` integers. It replaces the seven hardcoded rhythm variants with a small notation that describes *any* one-bar rhythm. Runtime values are acquired from `Waveforms`, bound to the shared musical clock, and read directly through `Envelope` or `Lerp(from, to)`.
 
 This document is the implementer's reference. Canonical term definitions live in `CONTEXT.md` (`## Language`); the *why* is recorded in `docs/adr/0001-waveform-rhythm-model.md`. This doc carries the model, the notation, the file format, and the migration.
 
@@ -12,7 +12,7 @@ Today effects call:
 beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
 ```
 
-where `beatVariant` is an `int` selecting one of seven hardcoded rhythms. That space is closed — you cannot ask for "half, then two quarters" or "every sixteenth on beat 4." The Waveform system opens it: an effect can request any rhythm by notation (`HQQ` at `844`), by Preset name, or by random draw from a curated Pool, and get back a shaped brightness for *right now*.
+where `beatVariant` is an `int` selecting one of seven hardcoded rhythms. That space is closed — you cannot ask for "half, then two quarters" or "every sixteenth on beat 4." The Waveform system opens it: the curated Pool can carry any valid notation, and an effect draws a runtime value by Energy and reads its shaped response directly.
 
 ## The model
 
@@ -79,13 +79,17 @@ A per-Waveform shift measured in beats, applied before evaluation. `0` leaves th
 
 ## Waveforms
 
-**Waveforms** is the shared acquisition and evaluation surface beside BeatManager. BeatManager owns the live **Bar Phase** clock (0 on the downbeat → 1 at the next downbeat, locked to the DJ); Waveforms reads that clock and evaluates a caller-owned Waveform on demand:
+**Waveforms** is the shared acquisition surface beside BeatManager. BeatManager owns the live **Bar Phase** clock (0 on the downbeat → 1 at the next downbeat, locked to the DJ); every acquired Waveform is bound to that source and plays itself:
 
 ```csharp
-float? envelope = waveforms.Evaluate(waveform); // [0..1], or null without a clock
+var waveform = waveforms.Random(Energy.Low);
+float envelope = waveform.Envelope;
+float brightness = waveform.Lerp(0.5f, 1f);
 ```
 
-Effects and transitions own the Waveform values they acquire and decide how the resulting envelope shapes their art. Waveforms resolves the live clock, then delegates envelope math to `Waveform.Evaluate`; the editor plot calls that same kernel, so visualization and runtime shaping cannot drift.
+Effects and transitions own the Waveform values they acquire and choose every artistic endpoint. `Envelope` rests at `0` without a live Bar Phase; `Lerp(from, to)` returns `to` in that state, making the effect's Standalone response explicit without nullable branching. Mixers use `waveforms.None` when they intentionally suppress a child's Waveform response. There is no provider-side `Evaluate`, one-frame `Hit`, or per-frame Waveforms lifecycle.
+
+The clock-independent shape kernel is `Waveform.Sample(barPhase)`. Runtime playback and the editor plot both call it, so visualization and playback cannot drift. A value created directly with `Waveform.Parse` is an authoring/kernel value; attempting clock-driven playback from it fails until it has been acquired and bound through `Waveforms`.
 
 ## Routines
 
@@ -98,20 +102,25 @@ var routine = Routine.Of(
     waveforms.Random(Energy.High),
     waveforms.Random(Energy.Low));
 
-float? envelope = waveforms.Evaluate(routine);
+float envelope = routine.Envelope;
+float brightness = routine.Lerp(0.5f, 1f);
 ```
 
-There is no Routine-specific acquisition language, resolver, or replacement policy. The caller composes another value when it wants different bars.
+There is no Routine-specific acquisition language, resolver, evaluation service, or replacement policy. Routine reads exactly like Waveform; the current Grid bar selects its shape. Without a placed Grid, `Envelope` rests at `0` and `Lerp(from, to)` returns `to`. The caller composes another value when it wants different bars.
 
-Bar Phase is the boss. A malformed Waveform (widths that don't sum to a bar, an amplitude string shorter/longer than the sequence) cannot run away — it is still evaluated against one bounded bar. **Malformation is logged at load time and otherwise tolerated; nothing is silently substituted.** (We do not fall back to the Beat Pulse; the worst case is one odd-looking bar, which is self-correcting on the next downbeat.)
+Bar Phase is the boss. The pure parser logs malformed notation and `Sample` remains bounded to one bar for editor inspection. Runtime Pool construction is stricter: a missing/empty Pool or parsed notation-invalid entry throws before effects start. Nothing silently substitutes the Beat Pulse or widens an unsatisfied Energy request.
 
 ## Requesting a Waveform
 
-Three ways, in increasing reuse:
+Runtime performers draw from the curated Pool:
 
-1. **Inline** — typed in effect code: `Waveform.Parse("HQQ", "844")`. Bypasses the Pool entirely. When rounding/offset are omitted, an inline spec **defaults to the Beat Pulse's shaping** (Beat Pulse rounding, offset `0`) — so an inline spec with no extras behaves like the plain pulse with custom widths/heights.
-2. **By Preset name** — a named, saved spec from the Pool, referred to instead of retyping notation.
-3. **Random** — drawn from the curated Pool, so a random pick is always musically sensible.
+```csharp
+waveform = waveforms.Random();                    // whole Pool
+waveform = waveforms.Random(Energy.Low);          // one Energy tier
+waveform = waveforms.Random(Energy.Low, Energy.Mid);
+```
+
+No match is a configuration error and throws. Pool positions and Preset names are authoring details, not runtime identities. `Waveform.Parse(...)` remains the shared pure parser for the Pool codec, editor previews, tests, and direct `Sample(barPhase)` inspection; it is not a second runtime acquisition path.
 
 The plain **Beat Pulse** (`QQQQ` / `8888`) is the canonical default and the origin point: every other Waveform is "the pulse, but with these deltas."
 
@@ -169,9 +178,10 @@ The drawer animates live in Play Mode via `ControllerEditor` (`RequiresConstantR
 
 The beat-data migration is a hard cut to value ownership:
 
-- Concrete Effects and Transitions hold their own `Waveform` values; authoring bases expose only the live `waveforms` root.
-- Acquisition is explicit through `waveforms.Random(...)`, `waveforms.ByName(...)`, or inline `Waveform.Parse(...)`. Former CHILL acquisitions map to `Random(Energy.Low, Energy.Mid)`.
-- Each consumer calls `waveforms.Evaluate(...)` and owns its null fallback, brightness mapping, time warp, and other artistic response.
+- Concrete Effects and Transitions hold a non-null `Waveform`; authoring bases expose the live `waveforms` root and neutral public configuration.
+- Acquisition is explicit through `waveforms.Random(...)`. Former CHILL acquisitions map to `Random(Energy.Low, Energy.Mid)`.
+- Each consumer reads `waveform.Envelope` or supplies its endpoints to `waveform.Lerp(from, to)`. Routines use the identical spelling.
+- Mixers assign `waveforms.None`, never `null`, when they intentionally suppress child response.
 - Index currency and the provider methods `GetRandomVariant`, `GetRandomVariantChill`, `GetBeatBrightness`, and `GetBeatTime` retire as their callers migrate. No replacement base response layer is introduced.
 
 ## Out of scope (for now)

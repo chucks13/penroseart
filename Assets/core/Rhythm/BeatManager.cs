@@ -113,7 +113,7 @@ public partial class BeatManager
 {
     // The constants below name the beat-label gates used by IsBeatTriggered, the legacy discrete-event path
     // (spawns, palette changes) that deliberately survived the Waveform migration. They are NOT a variant
-    // enumeration: continuous brightness now flows through GetWaveform + Waveform.Evaluate, and random
+    // enumeration: continuous brightness now flows through GetWaveform + Waveform.Sample, and random
     // selection bounds on the live Pool length rather than a fixed variant count. Their values intentionally
     // match the seed Pool order in SeedDefaultPool (index 1 = "beats 1 & 3", 2 = "beats 2 & 4",
     // 3 = "measure start"), so a variant gates the same beats it brightens as long as that seed order holds.
@@ -473,7 +473,7 @@ public partial class BeatManager
     /// Normalized position within the current bar in [0..1): 0 on the downbeat, approaching 1 at the next.
     /// </summary>
     /// <remarks>
-    /// This is the always-running clock the Waveforms surface evaluates against. It is derived from live
+    /// This is the always-running clock held Waveforms sample. It is derived from live
     /// OSC <see cref="beatData"/>: the current 1-based beat label plus the fraction elapsed into that beat.
     /// The intra-beat fraction is read from the *next* beat label's countdown — not the nearest, which reads 0
     /// during the on-beat gate window and would jump. It is as fresh as the incoming snapshots (the same
@@ -627,7 +627,7 @@ public partial class BeatManager
     /// <remarks>
     /// This is the single migration seam from the old seven-way rhythm switch to the Waveform model. The
     /// <paramref name="variant"/> selector no longer indexes a hardcoded <c>switch</c>; it indexes the Waveform Pool.
-    /// <see cref="GetWaveform"/> resolves it to a <see cref="Waveform"/>, which <see cref="Waveform.Evaluate"/>
+    /// <see cref="GetWaveform"/> resolves it to a <see cref="Waveform"/>, which <see cref="Waveform.Sample"/>
     /// turns into a unipolar [0..1] envelope at the current <see cref="BarPhase"/>. That envelope is then mapped
     /// into the requested brightness range.
     ///
@@ -655,7 +655,7 @@ public partial class BeatManager
             return maxBrightness;
         }
 
-        var envelope = GetWaveform(variant).Evaluate(BarPhase);
+        var envelope = GetWaveform(variant).Sample(BarPhase);
         return Mathf.Lerp(minBrightness, maxBrightness, envelope);
     }
 

@@ -55,8 +55,7 @@ public class Ripple : ScreenEffect
     public override void Draw()
     {
         // Beat pulse scales ripple brightness while drop radius/progression remains independent.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float hueShift = rhythm is { } envelope ? Mathf.Lerp(0f, 0.2f, envelope) : 0.2f;
+        float hueShift = waveform.Lerp(0f, 0.2f);
         if (Random.value < intensity)
         {
             Array.Resize(ref drops, drops.Length + 1);

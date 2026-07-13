@@ -33,9 +33,9 @@ public class Flock : EffectBase
     /// <summary>
     /// Maps an available Waveform envelope to flock movement speed, falling back to normal speed without a clock.
     /// </summary>
-    public static float GetBeatSpeedMultiplier(float? envelope)
+    public static float GetBeatSpeedMultiplier(float envelope)
     {
-        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(envelope ?? 0f), 1.5f);
+        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(envelope), 1.5f);
         return BaseSpeedMultiplier + (shapedEnvelope * BeatSpeedLift);
     }
 
@@ -97,7 +97,7 @@ public class Flock : EffectBase
     /// </summary>
     public override void Draw()
     {
-        float? envelope = waveforms.Evaluate(waveform);
+        float envelope = waveform.Envelope;
         float lowEnergy = beatManager.Levels?.Smoothed.Low ?? 0f;
         float speedMultiplier = GetBeatSpeedMultiplier(envelope);
         buffer.Fade(0.925f);

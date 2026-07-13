@@ -30,14 +30,14 @@ public sealed class PerformerAccessPathTests
         var controllerObject = new GameObject("performer-access-frame-controller");
         var controller = controllerObject.AddComponent<Controller>();
         controller.logDirectorSwitching = false;
-        var quarterNotes = Waveform.Parse("QQQQ", "8888");
-        var currentEffect = new FrameObservationEffect(quarterNotes);
-        var nextEffect = new FrameObservationEffect(quarterNotes);
+        var observedWaveform = controller.waveforms.Random();
+        var currentEffect = new FrameObservationEffect(observedWaveform);
+        var nextEffect = new FrameObservationEffect(observedWaveform);
         currentEffect.BindController(controller);
         currentEffect.Init();
         nextEffect.BindController(controller);
         nextEffect.Init();
-        var transition = new FrameTransition(quarterNotes);
+        var transition = new FrameTransition(observedWaveform);
         transition.BindController(controller);
         transition.Init();
 
@@ -64,17 +64,22 @@ public sealed class PerformerAccessPathTests
         SeedFrame(controller.beatManager, timeSeconds: 0.6f, beat: 616, gridBeat: 1);
         controller.AdvanceFrameTiming(0.6f, deltaTime: 0f);
         var directorSawFreshGrid = controller.switcher.LoadedCueStatus.HasCue;
-        var directorSawFreshWaveforms = transition.ObservedHit;
+        var expectedEnvelope = observedWaveform.Envelope;
+        var directorSawFreshWaveforms = transition.ObservedEnvelope;
         controller.switcher.RenderAtTime(0.6f, out _);
-        var effectSawFreshWaveforms = currentEffect.ObservedHit;
+        var effectSawFreshWaveforms = currentEffect.ObservedEnvelope;
+        var directorObservedWaveforms = transition.WasObserved;
+        var effectObservedWaveforms = currentEffect.WasObserved;
 
         UnityEngine.Object.DestroyImmediate(controllerObject);
         yield return new ExitPlayMode();
 
         Assert.That(joinedMidGridWithoutCue, Is.True);
         Assert.That(directorSawFreshGrid, Is.True);
-        Assert.That(directorSawFreshWaveforms, Is.True);
-        Assert.That(effectSawFreshWaveforms, Is.True);
+        Assert.That(directorObservedWaveforms, Is.True);
+        Assert.That(effectObservedWaveforms, Is.True);
+        Assert.That(directorSawFreshWaveforms, Is.EqualTo(expectedEnvelope).Within(0.0001f));
+        Assert.That(effectSawFreshWaveforms, Is.EqualTo(expectedEnvelope).Within(0.0001f));
     }
 
     /// <summary>
@@ -141,13 +146,17 @@ public sealed class PerformerAccessPathTests
         Assert.That(childWaveforms, Is.SameAs(liveWaveforms));
     }
 
-    /// <summary>Proves Effect owners can directly share, replace, or suppress public Waveform configuration.</summary>
+    /// <summary>Proves Effect owners can directly share, replace, or explicitly suppress Waveform configuration.</summary>
     [Test]
-    public void EffectWaveformConfigurationIsPublicAndNullable()
+    public void EffectWaveformConfigurationIsPublicAndNonNullable()
     {
         EffectBase first = new BaseStartEffect();
         EffectBase second = new BaseStartEffect();
-        var shared = Waveform.Parse("QQQQ", "8888");
+        var waveforms = new Waveforms(new BeatManager(), new[]
+        {
+            new WaveformPool.Entry("beat pulse", Waveform.Parse("QQQQ", "8888")),
+        });
+        var shared = waveforms.Random();
 
         first.waveform = shared;
         second.waveform = first.waveform;
@@ -155,9 +164,10 @@ public sealed class PerformerAccessPathTests
         Assert.That(first.waveform, Is.EqualTo(shared));
         Assert.That(second.waveform, Is.EqualTo(shared));
 
-        second.waveform = null;
+        second.waveform = waveforms.None;
 
-        Assert.That(second.waveform, Is.Null);
+        Assert.That(second.waveform.Envelope, Is.Zero);
+        Assert.That(second.waveform.Lerp(0.5f, 1f), Is.EqualTo(1f));
     }
 
     /// <summary>Proves the retained EffectBase activation lifecycle does not require a Waveforms surface.</summary>
@@ -256,8 +266,11 @@ public sealed class PerformerAccessPathTests
             observedWaveform = waveform;
         }
 
-        /// <summary>Whether the last Draw observed the worked onset window.</summary>
-        public bool ObservedHit { get; private set; }
+        /// <summary>The live Waveform envelope observed during the last Draw.</summary>
+        public float ObservedEnvelope { get; private set; }
+
+        /// <summary>Whether the real render seam invoked this probe.</summary>
+        public bool WasObserved { get; private set; }
 
         /// <summary>Initializes only the buffer needed by the Switcher's render seam.</summary>
         public override void Init()
@@ -277,7 +290,8 @@ public sealed class PerformerAccessPathTests
         /// <summary>Observes live Waveforms state at the same seam where an ordinary Effect renders.</summary>
         public override void Draw()
         {
-            ObservedHit = waveforms.Hit(observedWaveform);
+            WasObserved = true;
+            ObservedEnvelope = observedWaveform.Envelope;
         }
     }
 
@@ -293,15 +307,19 @@ public sealed class PerformerAccessPathTests
             this.waveform = waveform;
         }
 
-        /// <summary>Whether Director's latest Repertoire read observed the fresh Waveforms onset window.</summary>
-        public bool ObservedHit { get; private set; }
+        /// <summary>The live Waveform envelope observed by Director's latest Repertoire read.</summary>
+        public float ObservedEnvelope { get; private set; }
+
+        /// <summary>Whether Director read this transition's Repertoire.</summary>
+        public bool WasObserved { get; private set; }
 
         /// <summary>Observes Waveforms through the Transition interface Director reads while casting.</summary>
         public override TransitionRepertoire Repertoire
         {
             get
             {
-                ObservedHit = waveforms.Hit(waveform);
+                WasObserved = true;
+                ObservedEnvelope = waveform.Envelope;
                 return base.Repertoire;
             }
         }

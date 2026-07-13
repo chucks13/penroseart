@@ -93,9 +93,8 @@ public class TileShapes : EffectBase
     public override void Draw()
     {
         // Beat pulse scales randomly selected shape flashes.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.75f, 1f, envelope) : 1f;
-        float hueShift = rhythm is { } hueEnvelope ? Mathf.Lerp(0f, 0.25f, hueEnvelope) : 0.25f;
+        float beatBrightness = waveform.Lerp(0.75f, 1f);
+        float hueShift = waveform.Lerp(0f, 0.25f);
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
         count = count / 5;

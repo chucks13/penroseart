@@ -44,9 +44,9 @@ public class Petals : ScreenEffect
     public override void Draw()
     {
         // This Effect owns its brightness, hue, and clockless fallback mappings.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
-        float hueShift = 0.001f * (rhythm ?? 0f);
+        float rhythm = waveform.Envelope;
+        float beatBrightness = waveform.Lerp(0.85f, 1f);
+        float hueShift = 0.001f * rhythm;
         int bitMask=Random.Range(0, 256);       // randomly select shape layers with bit masks
         background += effectDelta * 0.1f;
         background %= 1f;

@@ -66,8 +66,7 @@ public class Waterfall : ScreenEffect
     public override void Draw()
     {
         // Beat pulse scales the waterfall colors after droplet/background sampling.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
+        float beatBrightness = waveform.Lerp(0.5f, 1f);
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)

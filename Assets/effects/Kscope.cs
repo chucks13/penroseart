@@ -318,7 +318,7 @@ public class Kscope : ScreenEffect
         {
             Init();
         }
-        float rhythm = waveforms.Evaluate(waveform) ?? 0f;
+        float rhythm = waveform.Envelope;
         float beatHue = 0.5f * rhythm;
         float localDelta = beatMode < 2 ? effectDelta + (0.002f * rhythm) : effectDelta;
 

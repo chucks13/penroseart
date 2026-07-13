@@ -221,7 +221,7 @@ public class Angles : EffectBase
         Mathf.Lerp(current, target, 1f - Mathf.Exp(-rate * deltaTime));
 
     /// <summary>
-    /// Updates the Fill wavefront from the stock Build, next-Fill anticipation, and Waveform-hit kicks.
+    /// Updates the Fill wavefront from the stock Build, next-Fill anticipation, and continuous Waveform lift.
     /// </summary>
     private void UpdateFillEnvelope()
     {
@@ -233,9 +233,9 @@ public class Angles : EffectBase
         float primer = Mathf.Pow(anticipation, AnticipationCurvePower) * AnticipationPrimerCap;
         fillEnv = Mathf.Max(fill.Build(), primer);
 
-        if (filling && waveforms.Hit(waveform))
+        if (filling)
         {
-            fillEnv = Mathf.Min(1f, fillEnv + BeatKick);
+            fillEnv = Mathf.Min(1f, fillEnv + (BeatKick * waveform.Envelope));
         }
     }
 
@@ -261,8 +261,7 @@ public class Angles : EffectBase
     public override void Draw()
     {
         // Beat pulse narrows/widens the angle-to-hue mapping without changing the underlying tile-angle pattern.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float rhythmHueOffset = rhythm is { } envelope ? Mathf.Lerp(0.9f, 1f, envelope) : 1f;
+        float rhythmHueOffset = waveform.Lerp(0.9f, 1f);
         UpdateFillEnvelope();
         var drop = beatManager.Drop.Span;
         bool inDrop = drop.Current.HasValue;

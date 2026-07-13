@@ -369,7 +369,7 @@ public partial class BeatManager
             return null;
         }
 
-        return GetWaveform(variant).Evaluate(BarPhase);
+        return GetWaveform(variant).Sample(BarPhase);
     }
 
     // ---- Raw passthrough queries --------------------------------------------------------------

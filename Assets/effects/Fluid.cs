@@ -102,8 +102,7 @@ public class Fluid : ScreenEffect
 
         InjectEnergy();
         // The Waveform offsets the palette lookup; clockless rendering keeps the previous steady offset.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float paletteOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
+        float paletteOffset = waveform.Lerp(0.5f, 1f);
         for (int i = 0; i < currentState.Length; i++)
         {
             float v = currentState[i] * scale;

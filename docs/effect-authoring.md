@@ -62,8 +62,8 @@ Use `Draw()` for the frame algorithm. A valid draw writes every slot in `buffer`
 | `effectDelta` | Current frame delta time. |
 | `APalette` | Shared animated palette for all effects. |
 | `beatManager` | Shared read-only musical facts, edges, and stock envelopes. |
-| `waveforms` | Shared Waveform acquisition and evaluation tools. |
-| `waveform` | Public nullable artistic configuration. Effects acquire it explicitly; owners may share, replace, or clear it. |
+| `waveforms` | Shared Waveform acquisition tools. |
+| `waveform` | Public non-null artistic configuration. Effects acquire it explicitly; owners may share, replace, or assign `waveforms.None`. |
 
 ## Catalog identity
 
@@ -82,7 +82,9 @@ child.Init();
 child.OnStart();
 ```
 
-After `OnStart()`, the mixer may directly configure the child. Assign the mixer's `waveform` for unison, assign `null` to suppress child Waveform response, or leave it unchanged for independent behavior. These are ordinary object assignments, not runtime modes. If unison or suppression must persist across Grid wraps, reapply the assignment after `child.UpdateTime()` and before `child.Draw()`, because the child's Grid hook may acquire a new Waveform.
+After `OnStart()`, the mixer may directly configure the child. Assign the mixer's `waveform` for unison, assign `waveforms.None` to suppress child Waveform response, or leave it unchanged for independent behavior. These are ordinary object assignments, not runtime modes. If unison or suppression must persist across Grid wraps, reapply the assignment after `child.UpdateTime()` and before `child.Draw()`, because the child's Grid hook may acquire a new Waveform.
+
+Waveform response reads from the value itself. Use `waveform.Envelope` for a raw `[0..1]` lift, or `waveform.Lerp(from, to)` when the rhythm maps between two artistic endpoints. Without live placement, `Envelope` is 0 and `Lerp` returns `to`, preserving the effect's explicit Standalone response without nullable syntax.
 
 Then, inside `Draw()`:
 

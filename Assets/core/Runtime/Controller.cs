@@ -290,7 +290,7 @@ public class Controller : Singleton<Controller>
     /// <summary>Global beat clock and beat-reactive helper system.</summary>
     public BeatManager beatManager = new BeatManager();
 
-    /// <summary>The shared Waveform acquisition and evaluation surface bound to the live BeatManager.</summary>
+    /// <summary>The shared Waveform acquisition surface that binds Pool values to the live BeatManager.</summary>
     public Waveforms waveforms { get; private set; }
 
     // ---------------------------------------------------------------------
@@ -502,7 +502,6 @@ public class Controller : Singleton<Controller>
     internal void AdvanceFrameTiming(float timeSeconds, float deltaTime)
     {
         beatManager.Update(timeSeconds);
-        waveforms.Update();
         director.Tick(deltaTime);
     }
 

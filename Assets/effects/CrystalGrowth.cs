@@ -354,8 +354,7 @@ public class CrystalGrowth : EffectBase
         // Brightness pulses with the music; the floor is shallow (0.8) so lit tiles stay bright, and it lifts
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
         float minimumBrightness = Mathf.Lerp(1f, 0.8f, activity);
-        float? rhythm = waveforms.Evaluate(waveform);
-        float rhythmBrightness = rhythm is { } envelope ? Mathf.Lerp(minimumBrightness, 1f, envelope) : 1f;
+        float rhythmBrightness = waveform.Lerp(minimumBrightness, 1f);
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
         // the wall flashes on each 16th for the drop's whole window (easing out with the release). Applied to

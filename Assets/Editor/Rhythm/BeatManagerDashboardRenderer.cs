@@ -378,7 +378,7 @@ internal static class BeatManagerDashboardRenderer
         var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
         if (model.Active)
         {
-            var emitted = Mathf.Clamp01(waveform.Evaluate(model.BarPhase));
+            var emitted = Mathf.Clamp01(waveform.Sample(model.BarPhase));
             GUI.Label(readout, $"{emitted:0.00}", valueStyle);
         }
         else

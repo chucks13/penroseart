@@ -131,8 +131,7 @@ public class Tunnel : EffectBase
     public override void Draw()
     {
         // Beat pulse scales tunnel brightness without changing the tunnel phase.
-        float? rhythm = waveforms.Evaluate(waveform);
-        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(BeatBrightnessFloor, 1f, envelope) : 1f;
+        float beatBrightness = waveform.Lerp(BeatBrightnessFloor, 1f);
         UpdateFillEnvelope();
         UpdateDropSlam();
 

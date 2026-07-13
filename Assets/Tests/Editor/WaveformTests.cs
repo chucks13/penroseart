@@ -6,12 +6,12 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// Unit tests for the Waveform evaluation kernel (<see cref="Waveform.Evaluate"/>) and the
+/// Unit tests for the Waveform sampling kernel (<see cref="Waveform.Sample"/>) and the
 /// <see cref="BeatManager"/> Bar Phase clock that drives it live.
 /// </summary>
 /// <remarks>
 /// These pin the symmetric nearest-beat model: brightness peaks (1) on the beat and falls to 0 at the
-/// midpoint between beats, with Amplitude 0 gating a beat to silence. The same <see cref="Waveform.Evaluate"/>
+/// midpoint between beats, with Amplitude 0 gating a beat to silence. The same <see cref="Waveform.Sample"/>
 /// is what the property drawer plots, so the values asserted here are the contract the visualization must
 /// match — by construction it cannot drift from runtime.
 ///
@@ -30,10 +30,10 @@ public sealed class WaveformTests
     {
         var wf = Waveform.Parse("QQQQ", "8888");
         // Four beats sit at bar fractions 0, 0.25, 0.5, 0.75 — each a full-height peak.
-        Assert.That(wf.Evaluate(0f), Is.EqualTo(1f).Within(Tol));
-        Assert.That(wf.Evaluate(0.25f), Is.EqualTo(1f).Within(Tol));
-        Assert.That(wf.Evaluate(0.5f), Is.EqualTo(1f).Within(Tol));
-        Assert.That(wf.Evaluate(0.75f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(wf.Sample(0f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(wf.Sample(0.25f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(wf.Sample(0.5f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(wf.Sample(0.75f), Is.EqualTo(1f).Within(Tol));
     }
 
     [Test]
@@ -41,19 +41,19 @@ public sealed class WaveformTests
     {
         var wf = Waveform.Parse("QQQQ", "8888");
         // Midpoints sit halfway between adjacent beats: 0.125, 0.375, 0.625, 0.875.
-        Assert.That(wf.Evaluate(0.125f), Is.EqualTo(0f).Within(Tol));
-        Assert.That(wf.Evaluate(0.375f), Is.EqualTo(0f).Within(Tol));
-        Assert.That(wf.Evaluate(0.625f), Is.EqualTo(0f).Within(Tol));
-        Assert.That(wf.Evaluate(0.875f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.125f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.375f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.625f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.875f), Is.EqualTo(0f).Within(Tol));
     }
 
     [Test]
-    public void Evaluate_WrapsBarPhaseOutsideUnitInterval()
+    public void Sample_WrapsBarPhaseOutsideUnitInterval()
     {
         var wf = Waveform.Parse("QQQQ", "8888");
         // Bar Phase 1.0 is the next downbeat == phase 0; 1.25 == 0.25.
-        Assert.That(wf.Evaluate(1f), Is.EqualTo(wf.Evaluate(0f)).Within(Tol));
-        Assert.That(wf.Evaluate(1.25f), Is.EqualTo(wf.Evaluate(0.25f)).Within(Tol));
+        Assert.That(wf.Sample(1f), Is.EqualTo(wf.Sample(0f)).Within(Tol));
+        Assert.That(wf.Sample(1.25f), Is.EqualTo(wf.Sample(0.25f)).Within(Tol));
     }
 
     // --- Amplitude 0 is the gate (no separate rest token) ---
@@ -62,20 +62,20 @@ public sealed class WaveformTests
     public void MeasureStart_SilencesBeatsTwoThreeFour()
     {
         var wf = Waveform.Parse("QQQQ", "8000"); // only beat 1 sounds
-        Assert.That(wf.Evaluate(0f), Is.EqualTo(1f).Within(Tol));    // beat 1 peak
-        Assert.That(wf.Evaluate(0.25f), Is.EqualTo(0f).Within(Tol)); // beat 2 gated
-        Assert.That(wf.Evaluate(0.5f), Is.EqualTo(0f).Within(Tol));  // beat 3 gated
-        Assert.That(wf.Evaluate(0.75f), Is.EqualTo(0f).Within(Tol)); // beat 4 gated
+        Assert.That(wf.Sample(0f), Is.EqualTo(1f).Within(Tol));    // beat 1 peak
+        Assert.That(wf.Sample(0.25f), Is.EqualTo(0f).Within(Tol)); // beat 2 gated
+        Assert.That(wf.Sample(0.5f), Is.EqualTo(0f).Within(Tol));  // beat 3 gated
+        Assert.That(wf.Sample(0.75f), Is.EqualTo(0f).Within(Tol)); // beat 4 gated
     }
 
     [Test]
     public void Alternating_PeaksOnBeatsOneAndThreeOnly()
     {
         var wf = Waveform.Parse("QQQQ", "8080");
-        Assert.That(wf.Evaluate(0f), Is.EqualTo(1f).Within(Tol));    // beat 1 peak
-        Assert.That(wf.Evaluate(0.25f), Is.EqualTo(0f).Within(Tol)); // beat 2 gated
-        Assert.That(wf.Evaluate(0.5f), Is.EqualTo(1f).Within(Tol));  // beat 3 peak
-        Assert.That(wf.Evaluate(0.75f), Is.EqualTo(0f).Within(Tol)); // beat 4 gated
+        Assert.That(wf.Sample(0f), Is.EqualTo(1f).Within(Tol));    // beat 1 peak
+        Assert.That(wf.Sample(0.25f), Is.EqualTo(0f).Within(Tol)); // beat 2 gated
+        Assert.That(wf.Sample(0.5f), Is.EqualTo(1f).Within(Tol));  // beat 3 peak
+        Assert.That(wf.Sample(0.75f), Is.EqualTo(0f).Within(Tol)); // beat 4 gated
     }
 
     // --- Rounding reshapes the peak; the trough is always 0 ---
@@ -85,7 +85,7 @@ public sealed class WaveformTests
     {
         var wf = Waveform.Parse("QQQQ", "8888", 0f, 0f);
         // Halfway from beat 0 (phase 0) to its trough (phase 0.125) is phase 0.0625 → distance t=0.5 → 1-0.5.
-        Assert.That(wf.Evaluate(0.0625f), Is.EqualTo(0.5f).Within(Tol));
+        Assert.That(wf.Sample(0.0625f), Is.EqualTo(0.5f).Within(Tol));
     }
 
     [Test]
@@ -93,9 +93,9 @@ public sealed class WaveformTests
     {
         var wf = Waveform.Parse("QQQQ", "8888", 1f, 0f);
         // Flat top: 80% of the way to the trough (t=0.8, inside the 0.85 plateau) is still pinned at 1.
-        Assert.That(wf.Evaluate(0.1f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(wf.Sample(0.1f), Is.EqualTo(1f).Within(Tol));
         // The trough still bottoms out at 0 regardless of rounding — rounding never lifts the floor.
-        Assert.That(wf.Evaluate(0.125f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.125f), Is.EqualTo(0f).Within(Tol));
     }
 
     // --- Phase offset slides the whole Waveform without changing its shape ---
@@ -105,9 +105,9 @@ public sealed class WaveformTests
     {
         var wf = Waveform.Parse("QQQQ", "8888", Waveform.BeatPulseRounding, 0.5f);
         // A 0.5-beat offset == 0.125 bar fraction: the peak that was on the downbeat now lands at phase 0.125.
-        Assert.That(wf.Evaluate(0.125f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(wf.Sample(0.125f), Is.EqualTo(1f).Within(Tol));
         // And the downbeat itself now sits in a trough (between the wrapped beat 4 and the offbeat-1 peak).
-        Assert.That(wf.Evaluate(0f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0f), Is.EqualTo(0f).Within(Tol));
     }
 
     // --- Peak spacing ---
@@ -169,7 +169,7 @@ public sealed class WaveformTests
         var wf = Waveform.Parse("QQQQ", "888"); // 4 widths, 3 amplitudes
         Assert.That(wf.IsMalformed, Is.True);
         // The missing 4th amplitude reads as silent rather than throwing or substituting a fallback.
-        Assert.That(wf.Evaluate(0.75f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.75f), Is.EqualTo(0f).Within(Tol));
     }
 
     [Test]
@@ -179,10 +179,10 @@ public sealed class WaveformTests
         var wf = Waveform.Parse("QQ", "88"); // two quarters fill only half the bar
         Assert.That(wf.IsMalformed, Is.True);
         // The unfilled back half of the bar reads as trough, bounded to one bar — nothing runs away.
-        Assert.That(wf.Evaluate(0.75f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(wf.Sample(0.75f), Is.EqualTo(0f).Within(Tol));
     }
 
-    // --- BeatManager Bar Phase clock (the live forcing function behind Evaluate) ---
+    // --- BeatManager Bar Phase clock (the live forcing function behind Sample) ---
 
     [Test]
     public void BarPhase_IsZeroOnTheDownbeat()
@@ -228,8 +228,8 @@ public sealed class WaveformTests
         var beatManager = new BeatManager();
         // Variant 0 is the Beat Pulse; an out-of-range index must resolve to the same peak-on-downbeat shape
         // rather than throwing — effect code degrades visibly to the canonical pulse.
-        Assert.That(beatManager.GetWaveform(999).Evaluate(0f),
-            Is.EqualTo(beatManager.GetWaveform(0).Evaluate(0f)).Within(Tol));
-        Assert.That(beatManager.GetWaveform(999).Evaluate(0f), Is.EqualTo(1f).Within(Tol));
+        Assert.That(beatManager.GetWaveform(999).Sample(0f),
+            Is.EqualTo(beatManager.GetWaveform(0).Sample(0f)).Within(Tol));
+        Assert.That(beatManager.GetWaveform(999).Sample(0f), Is.EqualTo(1f).Within(Tol));
     }
 }
