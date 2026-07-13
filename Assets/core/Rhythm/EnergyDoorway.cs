@@ -8,7 +8,7 @@ using System;
 /// <summary>
 /// The one closed intensity ladder — Low, Mid, High — the shared vocabulary wherever intensity is
 /// spoken, whatever the subject: a track's Energy run here, a Waveform's derived Energy in the
-/// synthesizer. Track-relative by wire contract: a Low is this track's Low, never absolute loudness.
+/// Waveforms surface. Track-relative by wire contract: a Low is this track's Low, never absolute loudness.
 /// </summary>
 public enum Energy
 {

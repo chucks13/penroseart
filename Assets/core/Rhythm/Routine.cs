@@ -7,7 +7,7 @@ using System;
 /// <summary>
 /// A 16-beat choreography of exactly four resolved one-bar Waveforms. The value stores no
 /// acquisition settings or lifecycle policy; callers acquire another value explicitly when they
-/// choose. The synthesizer only evaluates this value against the hub's captured Grid.
+/// choose. The Waveforms surface only evaluates this value against the hub's captured Grid.
 /// </summary>
 public sealed class Routine
 {
@@ -101,7 +101,7 @@ public readonly struct RoutineSlot
         return new RoutineSlot(Kind.Preset, Array.Empty<Energy>(), default, presetName);
     }
 
-    /// <summary>Builds the set-based draw used by <see cref="WaveformSynth.RandomRoutine"/>.</summary>
+    /// <summary>Builds the set-based draw used by <see cref="Waveforms.RandomRoutine"/>.</summary>
     internal static RoutineSlot DrawFrom(Energy[] levels)
     {
         var copiedLevels = levels == null || levels.Length == 0

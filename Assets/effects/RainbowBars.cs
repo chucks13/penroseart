@@ -32,7 +32,7 @@ public class RainbowBars : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         direction = (Direction)Random.Range(0, 8);
         distortionMode = Random.Range(0, 3);
     }
@@ -58,7 +58,7 @@ public class RainbowBars : ScreenEffect
         float sampleTime = effectTime;
 
         // This effect owns all three response mappings and their clockless fallbacks.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         if (distortionMode == 0)
             beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
         else if (distortionMode == 1)

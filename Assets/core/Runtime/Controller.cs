@@ -314,8 +314,8 @@ public class Controller : Singleton<Controller>
     /// <summary>Global beat clock and beat-reactive helper system.</summary>
     public BeatManager beatManager = new BeatManager();
 
-    /// <summary>The one Waveform Synthesizer bound to this Controller's live BeatManager.</summary>
-    public WaveformSynth synth { get; private set; }
+    /// <summary>The shared Waveform acquisition and evaluation surface bound to the live BeatManager.</summary>
+    public Waveforms waveforms { get; private set; }
 
     // ---------------------------------------------------------------------
     // UI and scene references
@@ -520,13 +520,13 @@ public class Controller : Singleton<Controller>
         return builder.ToString();
     }
 
-    /// <summary>Advances the hub, synth, and Director once in their required per-frame observation order.</summary>
+    /// <summary>Advances BeatManager, Waveforms, and Director in their required per-frame observation order.</summary>
     /// <param name="timeSeconds">Absolute Unity time captured for the current frame.</param>
     /// <param name="deltaTime">Unity frame delta consumed by Standalone Director timing.</param>
     internal void AdvanceFrameTiming(float timeSeconds, float deltaTime)
     {
         beatManager.Update(timeSeconds);
-        synth.Update();
+        waveforms.Update();
         director.Tick(deltaTime);
     }
 
@@ -1423,11 +1423,11 @@ public class Controller : Singleton<Controller>
         return File.ReadAllText(path);
     }
 
-    /// <summary>Registers the Controller singleton and constructs its one synth from the deserialized live BeatManager.</summary>
+    /// <summary>Registers the Controller singleton and constructs the shared Waveforms surface.</summary>
     protected override void Awake()
     {
         base.Awake();
-        synth = new WaveformSynth(beatManager);
+        waveforms = new Waveforms(beatManager);
     }
 
     /// <summary>Initializes scene data and runtime catalogs after Awake has established the live rhythm roots.</summary>

@@ -553,7 +553,7 @@ public partial class BeatManager
     /// Normalized position within the current bar in [0..1): 0 on the downbeat, approaching 1 at the next.
     /// </summary>
     /// <remarks>
-    /// This is the always-running clock the Waveform Synthesizer evaluates against. It is derived from live
+    /// This is the always-running clock the Waveforms surface evaluates against. It is derived from live
     /// OSC <see cref="beatData"/>: the current 1-based beat label plus the fraction elapsed into that beat.
     /// The intra-beat fraction is read from the *next* beat label's countdown — not the nearest, which reads 0
     /// during the on-beat gate window and would jump. It is as fresh as the incoming snapshots (the same

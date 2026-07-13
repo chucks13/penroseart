@@ -29,8 +29,8 @@ public abstract class EffectBase
     /// <summary>The live BeatManager owned by the bound Controller.</summary>
     public BeatManager beatManager => controller.beatManager;
 
-    /// <summary>The live Waveform Synthesizer owned by the bound Controller.</summary>
-    public WaveformSynth synth => controller.synth;
+    /// <summary>The live Waveform acquisition and evaluation surface owned by the bound Controller.</summary>
+    public Waveforms waveforms => controller.waveforms;
 
     /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
     public bool IsBeatActive => controller.beatManager.IsActive;

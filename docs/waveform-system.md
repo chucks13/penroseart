@@ -77,15 +77,15 @@ Recommended implementation: shape each Hump with a cosine dome and let `rounding
 
 A per-Waveform shift measured in beats, applied before evaluation. `0` leaves the Waveform on the beat; `0.5` lands it on the "&" (the **Offbeat** / Half-Step). Fractional values express swing/shuffle feel. Offset moves *when* the Humps land without changing their shape or count.
 
-## The synthesizer
+## Waveforms
 
-The **Waveform Synthesizer** is an always-running runtime service. The live pulse keeps a **Bar Phase** clock turning (0 on the downbeat → 1 at the next downbeat, locked to the DJ). Given any Waveform spec, the synthesizer evaluates it against the current Bar Phase and returns a brightness in `[0..1]` on demand:
+**Waveforms** is the shared acquisition and evaluation surface beside BeatManager. BeatManager owns the live **Bar Phase** clock (0 on the downbeat → 1 at the next downbeat, locked to the DJ); Waveforms reads that clock and evaluates a caller-owned Waveform on demand:
 
 ```csharp
-float Evaluate(Waveform wf, float barPhase);   // → [0..1]
+float? envelope = waveforms.Evaluate(waveform); // [0..1], or null without a clock
 ```
 
-Effects do not own the clock — they own (or request) a Waveform and ask for its value *now*. The synthesizer is the single forcing function: the property drawer plots exactly what `Evaluate` returns, so the visualization can never drift from runtime behavior.
+Effects and transitions own the Waveform values they acquire and decide how the resulting envelope shapes their art. Waveforms resolves the live clock and Hold substitution, then delegates envelope math to `Waveform.Evaluate`; the editor plot calls that same kernel, so visualization and runtime shaping cannot drift.
 
 Bar Phase is the boss. A malformed Waveform (widths that don't sum to a bar, an amplitude string shorter/longer than the sequence) cannot run away — it is still evaluated against one bounded bar. **Malformation is logged at load time and otherwise tolerated; nothing is silently substituted.** (We do not fall back to the Beat Pulse; the worst case is one odd-looking bar, which is self-correcting on the next downbeat.)
 
@@ -126,18 +126,17 @@ Conventions, matching the palette files: named entries, `//` line comments, blan
 
 ### Reading (runtime)
 
-Read by **raw C# in `BeatManager`**, using the same `StreamReader` + hand-rolled parse pattern `GPalette`/`Penrose` already use:
+Read through the shared `WaveformPool` codec. Waveforms uses the same parser as the editor:
 
 ```csharp
-var sr = new StreamReader(Application.streamingAssetsPath + "/penrose_waveforms.txt");
-// split each DEFINE_WAVEFORM(name){ ... } line on '{', '}', '|'
+var entries = WaveformPool.Parse(WaveformPool.ReadFileOrEmpty());
 ```
 
-This keeps the runtime synth side independent of any Editor code.
+This keeps runtime Pool parsing independent of Editor code.
 
 ### Writing (Editor)
 
-The **property drawer owns the file.** It parses what it can on load and, on save, **rewrites the whole file canonically** from its in-memory list of records. There is no comment-preservation and no append-merge: drawer save is a full canonical rewrite. Hand-editing is the bootstrap/fallback path; the drawer is the primary editor. Anything in the file that is not a `DEFINE_WAVEFORM` record (comments, blank lines, hand formatting) is **not preserved** across a drawer save.
+The **Waveform Pool editor owns file writes.** It parses what it can on load and, on save, **rewrites the whole file canonically** from its in-memory list of records. There is no comment-preservation and no append-merge: editor save is a full canonical rewrite. Hand-editing is the bootstrap/fallback path; the editor window is the primary UI. Anything in the file that is not a `DEFINE_WAVEFORM` record (comments, blank lines, hand formatting) is **not preserved** across an editor save.
 
 This single-owner rule is why the format is dead simple to parse and serialize — see the ADR for the trade-off.
 
@@ -152,23 +151,12 @@ The drawer animates live in Play Mode via `ControllerEditor` (`RequiresConstantR
 
 ## Migration
 
-The change is deliberately small at the call sites.
+The beat-data migration is a hard cut to value ownership:
 
-- `EffectBase` already carries `beatEnable` and `beatVariant`; effects already default to a random rhythm (`beatVariant = beatManager.GetRandomVariant()` in `EffectBase` init). That seam stays — `GetRandomVariant` becomes "draw a Waveform from the Pool."
-- `BeatManager.GetBeatBrightness(...)` keeps its signature shape; its **internals** swap from the seven-way variant switch to `Evaluate(waveform, barPhase)`. The ~18 effects that call it need no change if the variant selector resolves to a Waveform inside `BeatManager`.
-- `GetRandomVariant` / `GetRandomVariantChill` remain the selection seam, and are the natural home for future energy/mood-filtered selection (deferred — OSC `energy_state` is not wired into selection yet).
-
-> **Superseded (2026-07-11, beat-data-interface effort — see ADR-0001's amendment).**
-> This Migration section described the original adoption and no longer governs. The
-> synthesizer is its own readable surface beside BeatManager (the base `synth` property):
-> effects hold a nullable `waveform` **value** (never an int; `beatVariant` and
-> `beatEnable` are retired), acquired by Energy-set draw (`Random(params Energy[])` — a
-> Waveform's Energy is derived from its notation), by Preset name, or inline; index
-> addressing is retired in every form. `GetBeatBrightness`/`GetBeatTime` are retired from
-> the provider — the base helpers `BeatBrightness(min)`/`BeatTime(intensity)` are the
-> canonical effect-side seasonings over the synthesizer's one primitive (the envelope of
-> a given Waveform at the current Bar Phase, nullable with no clock). The notation model,
-> Pool file, drawer, and safety limits in the rest of this document stand.
+- Concrete Effects and Transitions hold their own `Waveform` values; authoring bases expose only the live `waveforms` root.
+- Acquisition is explicit through `waveforms.Random(...)`, `waveforms.ByName(...)`, or inline `Waveform.Parse(...)`. Former CHILL acquisitions map to `Random(Energy.Low, Energy.Mid)`.
+- Each consumer calls `waveforms.Evaluate(...)` and owns its null fallback, brightness mapping, time warp, and other artistic response.
+- Index currency and the provider methods `GetRandomVariant`, `GetRandomVariantChill`, `GetBeatBrightness`, and `GetBeatTime` retire as their callers migrate. No replacement base response layer is introduced.
 
 ## Out of scope (for now)
 

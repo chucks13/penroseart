@@ -261,7 +261,7 @@ public class Kscope : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10;
         fixCenterLineInit();
 
@@ -321,7 +321,7 @@ public class Kscope : ScreenEffect
         {
             Init();
         }
-        float rhythm = synth.Evaluate(waveform) ?? 0f;
+        float rhythm = waveforms.Evaluate(waveform) ?? 0f;
         float beatHue = 0.5f * rhythm;
         float localDelta = beatMode < 2 ? effectDelta + (0.002f * rhythm) : effectDelta;
 

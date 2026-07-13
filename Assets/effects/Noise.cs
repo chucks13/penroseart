@@ -43,7 +43,7 @@ public class Noise : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         scale = Random.Range(0.05f, 0.2f);
         speed = Random.Range(0.1f, 1.5f);
         amplifier = Random.Range(1f, 5f);
@@ -67,7 +67,7 @@ public class Noise : EffectBase
         float sampleTime = effectTime;
 
         // This Effect owns all three response mappings and their clockless fallbacks.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         if (distortionMode == 0)
             beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.85f, 1f, envelope) : 1f;
         else if (distortionMode == 1)

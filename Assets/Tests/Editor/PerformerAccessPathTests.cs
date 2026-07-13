@@ -21,7 +21,7 @@ public sealed class PerformerAccessPathTests
         }
     }
 
-    /// <summary>Proves one Controller timing step publishes the fresh hub and synth frame before Director and Effect work.</summary>
+    /// <summary>Proves one Controller timing step publishes fresh BeatManager and Waveforms state before Director and Effect work.</summary>
     [UnityTest]
     public IEnumerator ControllerFramePublishesFreshRhythmBeforeDirectorAndRendering()
     {
@@ -64,17 +64,17 @@ public sealed class PerformerAccessPathTests
         SeedFrame(controller.beatManager, timeSeconds: 0.6f, beat: 616, gridBeat: 1);
         controller.AdvanceFrameTiming(0.6f, deltaTime: 0f);
         var directorSawFreshGrid = controller.switcher.LoadedCueStatus.HasCue;
-        var directorSawFreshSynth = transition.ObservedHit;
+        var directorSawFreshWaveforms = transition.ObservedHit;
         controller.switcher.RenderAtTime(0.6f, out _);
-        var effectSawFreshSynth = currentEffect.ObservedHit;
+        var effectSawFreshWaveforms = currentEffect.ObservedHit;
 
         UnityEngine.Object.DestroyImmediate(controllerObject);
         yield return new ExitPlayMode();
 
         Assert.That(joinedMidGridWithoutCue, Is.True);
         Assert.That(directorSawFreshGrid, Is.True);
-        Assert.That(directorSawFreshSynth, Is.True);
-        Assert.That(effectSawFreshSynth, Is.True);
+        Assert.That(directorSawFreshWaveforms, Is.True);
+        Assert.That(effectSawFreshWaveforms, Is.True);
     }
 
     /// <summary>
@@ -88,7 +88,7 @@ public sealed class PerformerAccessPathTests
         var controllerObject = new GameObject("performer-access-controller");
         var controller = controllerObject.AddComponent<Controller>();
         var liveBeatManager = controller.beatManager;
-        var liveSynth = controller.synth;
+        var liveWaveforms = controller.waveforms;
         var effect = new LifecycleEffect();
         effect.BindController(controller);
         effect.Init();
@@ -103,15 +103,15 @@ public sealed class PerformerAccessPathTests
         yield return new ExitPlayMode();
 
         Assert.That(liveBeatManager, Is.Not.Null);
-        Assert.That(liveSynth, Is.Not.Null);
+        Assert.That(liveWaveforms, Is.Not.Null);
         Assert.That(effect.InitBeatManager, Is.SameAs(liveBeatManager));
         Assert.That(effect.StartBeatManager, Is.SameAs(liveBeatManager));
-        Assert.That(effect.InitSynth, Is.SameAs(liveSynth));
-        Assert.That(effect.StartSynth, Is.SameAs(liveSynth));
+        Assert.That(effect.InitWaveforms, Is.SameAs(liveWaveforms));
+        Assert.That(effect.StartWaveforms, Is.SameAs(liveWaveforms));
         Assert.That(transition.InitBeatManager, Is.SameAs(liveBeatManager));
         Assert.That(transition.StartBeatManager, Is.SameAs(liveBeatManager));
-        Assert.That(transition.InitSynth, Is.SameAs(liveSynth));
-        Assert.That(transition.StartSynth, Is.SameAs(liveSynth));
+        Assert.That(transition.InitWaveforms, Is.SameAs(liveWaveforms));
+        Assert.That(transition.StartWaveforms, Is.SameAs(liveWaveforms));
     }
 
     /// <summary>Proves a Mixer-owned child receives ordinary Effect access without a Mixer rhythm seam.</summary>
@@ -124,26 +124,26 @@ public sealed class PerformerAccessPathTests
         var controller = controllerObject.AddComponent<Controller>();
         controller.penrose = controllerObject.AddComponent<Penrose>();
         var liveBeatManager = controller.beatManager;
-        var liveSynth = controller.synth;
+        var liveWaveforms = controller.waveforms;
         var mixer = new OwningMixer();
         mixer.BindController(controller);
         mixer.Init();
         var child = mixer.GetRandomEffect();
         var childBeatManager = child.beatManager;
-        var childSynth = child.synth;
+        var childWaveforms = child.waveforms;
 
         UnityEngine.Object.DestroyImmediate(controllerObject);
         yield return new ExitPlayMode();
 
         Assert.That(liveBeatManager, Is.Not.Null);
-        Assert.That(liveSynth, Is.Not.Null);
+        Assert.That(liveWaveforms, Is.Not.Null);
         Assert.That(childBeatManager, Is.SameAs(liveBeatManager));
-        Assert.That(childSynth, Is.SameAs(liveSynth));
+        Assert.That(childWaveforms, Is.SameAs(liveWaveforms));
     }
 
-    /// <summary>Proves the retained EffectBase activation lifecycle does not require a synth root.</summary>
+    /// <summary>Proves the retained EffectBase activation lifecycle does not require a Waveforms surface.</summary>
     [Test]
-    public void EffectBaseOnStartDoesNotRequireSynth()
+    public void EffectBaseOnStartDoesNotRequireWaveforms()
     {
         var controllerObject = new GameObject("performer-access-policy-controller");
         var controller = controllerObject.AddComponent<Controller>();
@@ -154,7 +154,7 @@ public sealed class PerformerAccessPathTests
             Assert.That(
                 () => effect.OnStart(),
                 Throws.Nothing,
-                "the retained legacy OnStart does not require or acquire from the uninitialized synth root");
+                "the retained legacy OnStart does not require or acquire from the uninitialized Waveforms surface");
         }
         finally
         {
@@ -225,7 +225,7 @@ public sealed class PerformerAccessPathTests
         snapshot.fillState = CountdownState.Unavailable;
     }
 
-    /// <summary>Effect probe that observes the synth through the ordinary render seam.</summary>
+    /// <summary>Effect probe that observes Waveforms through the ordinary render seam.</summary>
     private sealed class FrameObservationEffect : EffectBase
     {
         /// <summary>The worked quarter-note Waveform observed during Draw.</summary>
@@ -255,10 +255,10 @@ public sealed class PerformerAccessPathTests
         /// <summary>This frame-order probe has no cleanup behavior.</summary>
         public override void OnEnd() { }
 
-        /// <summary>Observes the live synth at the same seam where an ordinary Effect renders.</summary>
+        /// <summary>Observes live Waveforms state at the same seam where an ordinary Effect renders.</summary>
         public override void Draw()
         {
-            ObservedHit = synth.Hit(waveform);
+            ObservedHit = waveforms.Hit(waveform);
         }
     }
 
@@ -274,15 +274,15 @@ public sealed class PerformerAccessPathTests
             this.waveform = waveform;
         }
 
-        /// <summary>Whether Director's latest Repertoire read observed the fresh synth onset window.</summary>
+        /// <summary>Whether Director's latest Repertoire read observed the fresh Waveforms onset window.</summary>
         public bool ObservedHit { get; private set; }
 
-        /// <summary>Observes the synth through the Transition interface Director reads while casting.</summary>
+        /// <summary>Observes Waveforms through the Transition interface Director reads while casting.</summary>
         public override TransitionRepertoire Repertoire
         {
             get
             {
-                ObservedHit = synth.Hit(waveform);
+                ObservedHit = waveforms.Hit(waveform);
                 return base.Repertoire;
             }
         }
@@ -306,27 +306,27 @@ public sealed class PerformerAccessPathTests
         /// <summary>The BeatManager observed during Init.</summary>
         public BeatManager InitBeatManager { get; private set; }
 
-        /// <summary>The synth observed during Init.</summary>
-        public WaveformSynth InitSynth { get; private set; }
+        /// <summary>The Waveforms surface observed during Init.</summary>
+        public Waveforms InitWaveforms { get; private set; }
 
         /// <summary>The BeatManager observed during OnStart.</summary>
         public BeatManager StartBeatManager { get; private set; }
 
-        /// <summary>The synth observed during OnStart.</summary>
-        public WaveformSynth StartSynth { get; private set; }
+        /// <summary>The Waveforms surface observed during OnStart.</summary>
+        public Waveforms StartWaveforms { get; private set; }
 
         /// <summary>Records rhythm-root availability before EffectBase's Penrose-dependent setup.</summary>
         public override void Init()
         {
             InitBeatManager = beatManager;
-            InitSynth = synth;
+            InitWaveforms = waveforms;
         }
 
         /// <summary>Records rhythm-root availability without acquiring artistic state.</summary>
         public override void OnStart()
         {
             StartBeatManager = beatManager;
-            StartSynth = synth;
+            StartWaveforms = waveforms;
         }
 
         /// <summary>No cleanup is needed by this probe.</summary>
@@ -342,20 +342,20 @@ public sealed class PerformerAccessPathTests
         /// <summary>The BeatManager observed during Init.</summary>
         public BeatManager InitBeatManager { get; private set; }
 
-        /// <summary>The synth observed during Init.</summary>
-        public WaveformSynth InitSynth { get; private set; }
+        /// <summary>The Waveforms surface observed during Init.</summary>
+        public Waveforms InitWaveforms { get; private set; }
 
         /// <summary>The BeatManager observed during OnStart.</summary>
         public BeatManager StartBeatManager { get; private set; }
 
-        /// <summary>The synth observed during OnStart.</summary>
-        public WaveformSynth StartSynth { get; private set; }
+        /// <summary>The Waveforms surface observed during OnStart.</summary>
+        public Waveforms StartWaveforms { get; private set; }
 
         /// <summary>Records rhythm-root availability before normal transition setup.</summary>
         public override void Init()
         {
             InitBeatManager = beatManager;
-            InitSynth = synth;
+            InitWaveforms = waveforms;
             base.Init();
         }
 
@@ -363,7 +363,7 @@ public sealed class PerformerAccessPathTests
         public override void OnStart()
         {
             StartBeatManager = beatManager;
-            StartSynth = synth;
+            StartWaveforms = waveforms;
         }
 
         /// <summary>No cleanup is needed by this probe.</summary>

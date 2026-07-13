@@ -226,7 +226,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
 
         Array.Clear(charge, 0, charge.Length);
         Array.Clear(hue, 0, hue.Length);
@@ -357,7 +357,7 @@ public class CrystalGrowth : EffectBase
         // Brightness pulses with the music; the floor is shallow (0.8) so lit tiles stay bright, and it lifts
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
         float minimumBrightness = Mathf.Lerp(1f, 0.8f, activity);
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         float rhythmBrightness = rhythm is { } envelope ? Mathf.Lerp(minimumBrightness, 1f, envelope) : 1f;
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so

@@ -43,7 +43,7 @@ public class AnimateLoops : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         shape = penrose.Layout.shapes.loops;
         distortionMode = Random.Range(1, 3);
         shapeName = "loops";
@@ -69,7 +69,7 @@ public class AnimateLoops : EffectBase
         float sampleTime = effectTime;
 
         // This effect owns both response mappings and their clockless fallbacks.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         if (distortionMode == 1)
             hueShift = 0.25f * (rhythm ?? 0f);
         else if (distortionMode == 2)

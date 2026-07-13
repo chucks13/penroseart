@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// Unit tests for the Waveform synthesizer kernel (<see cref="Waveform.Evaluate"/>) and the
+/// Unit tests for the Waveform evaluation kernel (<see cref="Waveform.Evaluate"/>) and the
 /// <see cref="BeatManager"/> Bar Phase clock that drives it live.
 /// </summary>
 /// <remarks>

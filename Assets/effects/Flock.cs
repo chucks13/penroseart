@@ -65,7 +65,7 @@ public class Flock : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
 
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
@@ -93,14 +93,14 @@ public class Flock : EffectBase
     public override void OnEnd() { }
 
     /// <summary>Acquires a fresh consumer-owned Waveform at each new 16-beat Grid.</summary>
-    protected override void OnNewGrid() => waveform = synth.Random();
+    protected override void OnNewGrid() => waveform = waveforms.Random();
 
     /// <summary>
     /// Renders one frame using the live Waveform envelope and smoothed low-band level when available.
     /// </summary>
     public override void Draw()
     {
-        float? envelope = synth.Evaluate(waveform);
+        float? envelope = waveforms.Evaluate(waveform);
         float lowEnergy = beatManager.Levels?.Smoothed.Low ?? 0f;
         float speedMultiplier = GetBeatSpeedMultiplier(envelope);
         buffer.Fade(0.925f);

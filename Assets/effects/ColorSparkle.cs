@@ -30,7 +30,7 @@ public class ColorSparkle : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         randomColor = Random.value > 0.5f;
         hue = Random.value;
 
@@ -50,7 +50,7 @@ public class ColorSparkle : EffectBase
     public override void Draw()
     {
         // The Waveform offsets newly generated sparkle hues; clockless rendering stays steady.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         float hueOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);

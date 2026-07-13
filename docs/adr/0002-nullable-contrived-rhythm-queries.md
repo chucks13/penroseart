@@ -134,8 +134,8 @@ consumer owns its Standalone response.
   served beside each Span; the Energy and Track Phase structs (`EnergyInfo?`,
   `PhaseInfo?`) reshape into the Energy and Phrase doorway views the same way.
 - **"One home, thin accessors"**: musical data lives on two sibling read-only surfaces —
-  BeatManager (the Data Surface, organized as concept doorways) and WaveformSynth (its
-  own root, the base `synth` property beside `beatManager`) — both under ADR-0012.
+  BeatManager (the Data Surface, organized as concept doorways) and Waveforms (its
+  own root, the base `waveforms` property beside `beatManager`) — both under ADR-0012.
   Effects and transitions receive the same two live roots, but neither base holds a
   Waveform or Routine or owns automatic acquisition, replacement, or response policy;
   concrete Performers own those artistic decisions under ADR-0017.

@@ -8,7 +8,7 @@ using UnityEngine;
 /// The pulse family, one Data Surface doorway — the rhythmic heartbeat signals effects animate
 /// against, gathered under one roof. Three of the four offerings live here: the wire's beat
 /// triangle, the contrived offbeat ramp, and the idealized-clock Duration pulses/gates. The
-/// fourth — Waveforms, the authored dance moves — is the synthesizer's. Four offerings, four
+/// fourth — Waveforms, the authored dance moves — belongs to the Waveforms surface. Four offerings, four
 /// purposes; none is a duplicate of another. Facts are nullable; edges are never null.
 /// </summary>
 public readonly struct PulsesView

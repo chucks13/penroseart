@@ -200,7 +200,7 @@ public class Angles : EffectBase
     private void Reroll()
     {
         speed = Random.Range(MinSpeed, MaxSpeed);
-        waveform = synth.Random(Energy.Low, Energy.Mid);
+        waveform = waveforms.Random(Energy.Low, Energy.Mid);
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
     }
 
@@ -236,7 +236,7 @@ public class Angles : EffectBase
         float primer = Mathf.Pow(anticipation, AnticipationCurvePower) * AnticipationPrimerCap;
         fillEnv = Mathf.Max(fill.Build(), primer);
 
-        if (filling && synth.Hit(waveform))
+        if (filling && waveforms.Hit(waveform))
         {
             fillEnv = Mathf.Min(1f, fillEnv + BeatKick);
         }
@@ -264,7 +264,7 @@ public class Angles : EffectBase
     public override void Draw()
     {
         // Beat pulse narrows/widens the angle-to-hue mapping without changing the underlying tile-angle pattern.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         float rhythmHueOffset = rhythm is { } envelope ? Mathf.Lerp(0.9f, 1f, envelope) : 1f;
         UpdateFillEnvelope();
         var drop = beatManager.Drop.Span;

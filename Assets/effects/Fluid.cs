@@ -45,7 +45,7 @@ public class Fluid : ScreenEffect
     /// <summary>Acquires this activation's Waveform and resets the diffusion buffers.</summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         currentState = new float[Penrose.Total];
         previousState = new float[Penrose.Total];
     }
@@ -105,7 +105,7 @@ public class Fluid : ScreenEffect
 
         InjectEnergy();
         // The Waveform offsets the palette lookup; clockless rendering keeps the previous steady offset.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         float paletteOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         for (int i = 0; i < currentState.Length; i++)
         {

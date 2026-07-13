@@ -1,4 +1,4 @@
-// Seam-2 tests for Routine choreography through the Waveform Synthesizer public surface.
+// Seam-2 tests for Routine choreography through the Waveforms public surface.
 
 #nullable enable
 
@@ -9,11 +9,11 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// Pins ticket 19's Routine contract at the Waveform Synthesizer seam: explicit caller-owned
+/// Pins ticket 19's Routine contract at the Waveforms seam: explicit caller-owned
 /// acquisition, immutable resolved values, observational Grid reads, hub-owned wrap identity,
 /// name-pinned settings, and Hold reach-through without rewriting the Routine.
 /// </summary>
-public sealed class WaveformSynthRoutineTests
+public sealed class WaveformsRoutineTests
 {
     /// <summary>Worked-value tolerance for Waveform envelope assertions.</summary>
     private const float Tol = 0.0001f;
@@ -22,9 +22,9 @@ public sealed class WaveformSynthRoutineTests
     [Test]
     public void RandomRoutine_ResolvesEverySlotWithinTheRequestedEnergySet()
     {
-        var (beatManager, synth) = CreateSynth(EnergyEntries());
+        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
 
-        var values = EvaluateBars(beatManager, synth, synth.RandomRoutine(Energy.Low, Energy.High));
+        var values = EvaluateBars(beatManager, waveforms, waveforms.RandomRoutine(Energy.Low, Energy.High));
 
         Assert.That(values.Item1, Is.EqualTo(0.25f).Or.EqualTo(1f));
         Assert.That(values.Item2, Is.EqualTo(0.25f).Or.EqualTo(1f));
@@ -41,14 +41,14 @@ public sealed class WaveformSynthRoutineTests
             Entry("low", "QQQQ", "2000"),
             Entry("mid", "QQQQ", "4444"),
         };
-        var (beatManager, synth) = CreateSynth(entries);
+        var (beatManager, waveforms) = CreateWaveforms(entries);
         for (var i = 0; i < 4; i++)
         {
             LogAssert.Expect(LogType.Warning, new Regex(
-                @"^\[WaveformSynth\] no Pool entry matches the requested Energy set \(High\) — drawing from the whole Pool\.$"));
+                @"^\[Waveforms\] no Pool entry matches the requested Energy set \(High\) — drawing from the whole Pool\.$"));
         }
 
-        var values = EvaluateBars(beatManager, synth, synth.RandomRoutine(Energy.High));
+        var values = EvaluateBars(beatManager, waveforms, waveforms.RandomRoutine(Energy.High));
 
         Assert.That(values.Item1, Is.EqualTo(0.25f).Or.EqualTo(0.5f));
         Assert.That(values.Item2, Is.EqualTo(0.25f).Or.EqualTo(0.5f));
@@ -60,24 +60,24 @@ public sealed class WaveformSynthRoutineTests
     [Test]
     public void CreateRoutine_ResolvesEveryAuthoredAcquisitionPath()
     {
-        var (beatManager, synth) = CreateSynth(EnergyEntries());
+        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
 
-        var routine = RequireRoutine(synth.CreateRoutine(
+        var routine = RequireRoutine(waveforms.CreateRoutine(
             RoutineSlot.Pin("mid"),
             RoutineSlot.Draw(Energy.High),
             RoutineSlot.Pin(Waveform.Parse("QQQQ", "0000")),
             RoutineSlot.Pin(Waveform.Parse("QQQQ", "8888"))));
 
-        Assert.That(EvaluateBars(beatManager, synth, routine), Is.EqualTo((0.5f, 1f, 0f, 1f)));
+        Assert.That(EvaluateBars(beatManager, waveforms, routine), Is.EqualTo((0.5f, 1f, 0f, 1f)));
     }
 
     /// <summary>A missing pinned Preset fails acquisition before an unresolved Routine can be held.</summary>
     [Test]
     public void CreateRoutine_MissingPresetReadsNull()
     {
-        var (_, synth) = CreateSynth(EnergyEntries());
+        var (_, waveforms) = CreateWaveforms(EnergyEntries());
 
-        var routine = synth.CreateRoutine(
+        var routine = waveforms.CreateRoutine(
             RoutineSlot.Pin("missing"),
             RoutineSlot.Pin(Waveform.Parse("QQQQ", "8888")),
             RoutineSlot.Draw(Energy.Low),
@@ -90,16 +90,16 @@ public sealed class WaveformSynthRoutineTests
     [Test]
     public void Evaluate_UsesKnownGridPositions()
     {
-        var (beatManager, synth) = CreateSynth(EnergyEntries());
+        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
         var routine = PinnedRoutine(0.25f, 0.5f, 0.75f, 1f);
 
-        Assert.That(EvaluateAt(beatManager, synth, routine, beat: 1, bar: 1, timeSeconds: 0f),
+        Assert.That(EvaluateAt(beatManager, waveforms, routine, beat: 1, bar: 1, timeSeconds: 0f),
             Is.EqualTo(0.25f).Within(Tol), "bar 1 downbeat selects bar 1");
-        Assert.That(EvaluateAt(beatManager, synth, routine, beat: 5, bar: 2, timeSeconds: 0.25f),
+        Assert.That(EvaluateAt(beatManager, waveforms, routine, beat: 5, bar: 2, timeSeconds: 0.25f),
             Is.EqualTo(0f).Within(Tol), "halfway between beats is the selected Waveform's trough");
-        Assert.That(EvaluateAt(beatManager, synth, routine, beat: 9, bar: 3, timeSeconds: 0f),
+        Assert.That(EvaluateAt(beatManager, waveforms, routine, beat: 9, bar: 3, timeSeconds: 0f),
             Is.EqualTo(0.75f).Within(Tol), "bar 3 downbeat selects bar 3");
-        Assert.That(EvaluateAt(beatManager, synth, routine, beat: 13, bar: 4, timeSeconds: 0f),
+        Assert.That(EvaluateAt(beatManager, waveforms, routine, beat: 13, bar: 4, timeSeconds: 0f),
             Is.EqualTo(1f).Within(Tol), "bar 4 downbeat selects bar 4");
     }
 
@@ -107,13 +107,13 @@ public sealed class WaveformSynthRoutineTests
     [Test]
     public void Evaluate_RepeatedReadsArePureAndGridWrapIdentityStaysHubOwned()
     {
-        var (beatManager, synth) = CreateSynth(EnergyEntries());
+        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
         var routine = PinnedRoutine(0.25f, 0.5f, 0.75f, 1f);
-        PlaceGrid(beatManager, synth, beat: 16, bar: 4, state: "locked", timeSeconds: 0f);
-        PlaceGrid(beatManager, synth, beat: 12, bar: 3, state: "locked", timeSeconds: 0f);
+        PlaceGrid(beatManager, waveforms, beat: 16, bar: 4, state: "locked", timeSeconds: 0f);
+        PlaceGrid(beatManager, waveforms, beat: 12, bar: 3, state: "locked", timeSeconds: 0f);
 
-        var first = synth.Evaluate(routine);
-        var second = synth.Evaluate(routine);
+        var first = waveforms.Evaluate(routine);
+        var second = waveforms.Evaluate(routine);
 
         Assert.That(beatManager.Grid.Wrapped, Is.False, "a backward non-One position is not a wrap");
         Assert.That(first, Is.EqualTo(0.75f).Within(Tol));
@@ -125,14 +125,14 @@ public sealed class WaveformSynthRoutineTests
     public void Evaluate_UsesGridPlacementButNotGridConfidence()
     {
         var routine = PinnedRoutine(1f, 1f, 1f, 1f);
-        var noClock = new WaveformSynth(new BeatManager(), EnergyEntries());
+        var noClock = new Waveforms(new BeatManager(), EnergyEntries());
         Assert.That(noClock.Evaluate(routine), Is.Null, "no clock");
 
-        var (beatManager, synth) = CreateSynth(EnergyEntries());
-        PlaceGrid(beatManager, synth, beat: -1, bar: -1, state: "coasting", timeSeconds: 0f);
-        Assert.That(synth.Evaluate(routine), Is.Null, "partial unplaced Grid");
+        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
+        PlaceGrid(beatManager, waveforms, beat: -1, bar: -1, state: "coasting", timeSeconds: 0f);
+        Assert.That(waveforms.Evaluate(routine), Is.Null, "partial unplaced Grid");
 
-        Assert.That(EvaluateAt(beatManager, synth, routine,
+        Assert.That(EvaluateAt(beatManager, waveforms, routine,
             beat: 1, bar: 1, timeSeconds: 0f, state: "disputed"), Is.EqualTo(1f).Within(Tol));
     }
 
@@ -141,24 +141,24 @@ public sealed class WaveformSynthRoutineTests
     public void CallerChoosesWhenToAcquireAReplacementRoutine()
     {
         Random.InitState(19);
-        var (beatManager, synth) = CreateSynth(TwoMidEntries());
+        var (beatManager, waveforms) = CreateWaveforms(TwoMidEntries());
         var bar1 = RoutineSlot.Draw(Energy.Mid);
         var bar2 = RoutineSlot.Pin("quiet mid");
         var bar3 = RoutineSlot.Draw(Energy.Mid);
         var bar4 = RoutineSlot.Pin(Waveform.Parse("QQQQ", "8888"));
-        var original = RequireRoutine(synth.CreateRoutine(bar1, bar2, bar3, bar4));
+        var original = RequireRoutine(waveforms.CreateRoutine(bar1, bar2, bar3, bar4));
 
-        PlaceGrid(beatManager, synth, beat: 16, bar: 4, state: "locked", timeSeconds: 0f);
-        PlaceGrid(beatManager, synth, beat: 1, bar: 1, state: "locked", timeSeconds: 0f);
+        PlaceGrid(beatManager, waveforms, beat: 16, bar: 4, state: "locked", timeSeconds: 0f);
+        PlaceGrid(beatManager, waveforms, beat: 1, bar: 1, state: "locked", timeSeconds: 0f);
         Assert.That(beatManager.Grid.Wrapped, Is.True);
-        var originalAtWrap = synth.Evaluate(original);
-        Assert.That(synth.Evaluate(original), Is.EqualTo(originalAtWrap),
+        var originalAtWrap = waveforms.Evaluate(original);
+        Assert.That(waveforms.Evaluate(original), Is.EqualTo(originalAtWrap),
             "the provider reports the wrap but never replaces the held value");
 
-        var replacement = RequireRoutine(synth.CreateRoutine(bar1, bar2, bar3, bar4));
+        var replacement = RequireRoutine(waveforms.CreateRoutine(bar1, bar2, bar3, bar4));
 
         Assert.That(replacement, Is.Not.SameAs(original));
-        Assert.That(synth.Evaluate(original), Is.EqualTo(originalAtWrap),
+        Assert.That(waveforms.Evaluate(original), Is.EqualTo(originalAtWrap),
             "caller acquisition cannot mutate the previously held Routine");
     }
 
@@ -166,19 +166,19 @@ public sealed class WaveformSynthRoutineTests
     [Test]
     public void Hold_ReachesThroughRoutineAndReleaseRestoresItsValues()
     {
-        var (beatManager, synth) = CreateSynth(EnergyEntries());
-        synth.Hold(Waveform.Parse("QQQQ", "8888"));
+        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
+        waveforms.Hold(Waveform.Parse("QQQQ", "8888"));
 
-        var routine = RequireRoutine(synth.CreateRoutine(
+        var routine = RequireRoutine(waveforms.CreateRoutine(
             RoutineSlot.Draw(Energy.Low),
             RoutineSlot.Pin("mid"),
             RoutineSlot.Draw(Energy.Low),
             RoutineSlot.Pin(Waveform.Parse("QQQQ", "4444"))));
-        Assert.That(EvaluateBars(beatManager, synth, routine),
+        Assert.That(EvaluateBars(beatManager, waveforms, routine),
             Is.EqualTo((1f, 1f, 1f, 1f)), "Hold substitutes during every Routine read");
 
-        synth.ReleaseToAuto();
-        Assert.That(EvaluateBars(beatManager, synth, routine),
+        waveforms.ReleaseToAuto();
+        Assert.That(EvaluateBars(beatManager, waveforms, routine),
             Is.EqualTo((0.25f, 0.5f, 0.25f, 0.5f)),
             "acquisition under Hold preserved the Routine's genuine resolved values");
     }
@@ -190,47 +190,47 @@ public sealed class WaveformSynthRoutineTests
         return routine!;
     }
 
-    /// <summary>Builds a live BeatManager and synth over caller-provided Pool entries.</summary>
-    private static (BeatManager, WaveformSynth) CreateSynth(WaveformPool.Entry[] entries)
+    /// <summary>Builds a live BeatManager and Waveforms instance over caller-provided Pool entries.</summary>
+    private static (BeatManager, Waveforms) CreateWaveforms(WaveformPool.Entry[] entries)
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f);
         beatManager.Update(0f);
-        return (beatManager, new WaveformSynth(beatManager, entries));
+        return (beatManager, new Waveforms(beatManager, entries));
     }
 
     /// <summary>Evaluates the four bars on their downbeats and returns their public envelope values.</summary>
     private static (float, float, float, float) EvaluateBars(
         BeatManager beatManager,
-        WaveformSynth synth,
+        Waveforms waveforms,
         Routine routine)
     {
         return (
-            EvaluateAt(beatManager, synth, routine, beat: 1, bar: 1, timeSeconds: 0f),
-            EvaluateAt(beatManager, synth, routine, beat: 5, bar: 2, timeSeconds: 0f),
-            EvaluateAt(beatManager, synth, routine, beat: 9, bar: 3, timeSeconds: 0f),
-            EvaluateAt(beatManager, synth, routine, beat: 13, bar: 4, timeSeconds: 0f));
+            EvaluateAt(beatManager, waveforms, routine, beat: 1, bar: 1, timeSeconds: 0f),
+            EvaluateAt(beatManager, waveforms, routine, beat: 5, bar: 2, timeSeconds: 0f),
+            EvaluateAt(beatManager, waveforms, routine, beat: 9, bar: 3, timeSeconds: 0f),
+            EvaluateAt(beatManager, waveforms, routine, beat: 13, bar: 4, timeSeconds: 0f));
     }
 
-    /// <summary>Places one Grid observation and reads the Routine envelope through the synth.</summary>
+    /// <summary>Places one Grid observation and reads the Routine envelope through Waveforms.</summary>
     private static float EvaluateAt(
         BeatManager beatManager,
-        WaveformSynth synth,
+        Waveforms waveforms,
         Routine routine,
         int beat,
         int bar,
         float timeSeconds,
         string state = "locked")
     {
-        PlaceGrid(beatManager, synth, beat, bar, state, timeSeconds);
-        var value = synth.Evaluate(routine);
+        PlaceGrid(beatManager, waveforms, beat, bar, state, timeSeconds);
+        var value = waveforms.Evaluate(routine);
         Assert.That(value, Is.Not.Null, "the placed Grid has a Routine value");
         return value!.Value;
     }
 
-    /// <summary>Seeds the shared clock, places timing-grid facts, then steps the hub and synth.</summary>
+    /// <summary>Seeds the shared clock, places timing-grid facts, then steps the hub and Waveforms.</summary>
     private static void PlaceGrid(
         BeatManager beatManager,
-        WaveformSynth synth,
+        Waveforms waveforms,
         int beat,
         int bar,
         string state,
@@ -239,7 +239,7 @@ public sealed class WaveformSynthRoutineTests
         BeatClockFixture.SeedBeatClock(beatManager, bpm: 120f, timeSeconds: timeSeconds);
         beatManager.WireSnapshot.timingGrid = new TimingGrid { beat = beat, bar = bar, state = state };
         beatManager.Update(timeSeconds);
-        synth.Update();
+        waveforms.Update();
     }
 
     /// <summary>Composes four resolved quarter-note Waveforms with known normalized peak heights.</summary>

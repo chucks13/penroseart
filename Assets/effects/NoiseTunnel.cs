@@ -47,7 +47,7 @@ public class NoiseTunnel : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random(Energy.Low, Energy.Mid);
+        waveform = waveforms.Random(Energy.Low, Energy.Mid);
         scale = Random.Range(0.05f, 0.2f);
         speed = Random.Range(0.1f, 1.5f);
         amplifier = Random.Range(1f, 5f);
@@ -69,7 +69,7 @@ public class NoiseTunnel : EffectBase
     public override void Draw()
     {
         // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
         float beatHue = 0.5f * (rhythm ?? 0f);
         float beatTime = effectTime + (0.5f * (rhythm ?? 0f));

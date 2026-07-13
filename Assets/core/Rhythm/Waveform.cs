@@ -32,9 +32,9 @@ using UnityEngine;
 /// <c>docs/adr/0001-waveform-rhythm-model.md</c>.)
 /// </para>
 /// <para>
-/// <b>This type is the pure kernel of the Waveform Synthesizer.</b> <see cref="Evaluate"/> turns
+/// <b>This type is the pure Waveform evaluation kernel.</b> <see cref="Evaluate"/> turns
 /// notation into a brightness for a given Bar Phase and has no dependency on Unity time, OSC, or the
-/// Pool — the live clock is passed in. The running service half is the <see cref="WaveformSynth"/>
+/// Pool — the live clock is passed in. The running service half is the <see cref="Waveforms"/>
 /// surface, its own root beside <see cref="BeatManager"/>, which consumes the hub's Clock doorway. The Editor property drawer
 /// plots the very same <see cref="Evaluate"/>, so the visualization can never drift from runtime
 /// behavior. The model and notation are documented in full in <c>docs/waveform-system.md</c>; the term
@@ -209,7 +209,7 @@ public readonly struct Waveform
     /// Evaluates this Waveform at a normalized Bar Phase and returns brightness in <c>[0..1]</c>.
     /// </summary>
     /// <remarks>
-    /// This is the synthesizer kernel. <paramref name="barPhase"/> is the live clock (0 on the downbeat,
+    /// This is the evaluation kernel. <paramref name="barPhase"/> is the live clock (0 on the downbeat,
     /// 1 at the next downbeat); the caller owns it. Brightness is <b>symmetric around every beat</b>: full
     /// on the beat (a Hump's onset), falling to 0 at the midpoint to the adjacent beat, then rising back
     /// into the next beat. Evaluation: shift by <see cref="offset"/>, find the segment between two
@@ -381,7 +381,7 @@ public readonly struct Waveform
     /// bar and covers (from..1) plus [0..to]; an empty window (from == to) contains nothing.
     /// </summary>
     /// <remarks>
-    /// This is the notation-side fact the synthesizer's Hit edge reads: the caller owns the
+    /// This is the notation-side fact the Waveforms Hit edge reads: the caller owns the
     /// observation window (two consecutive clock readings); the Waveform knows where its humps
     /// land. Zero allocation, and the offset is read live like <see cref="Evaluate"/> does.
     /// </remarks>

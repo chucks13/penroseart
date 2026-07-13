@@ -1,4 +1,4 @@
-// The Waveform Synthesizer: the sibling readable surface beside BeatManager (beat-data spec).
+// Waveform acquisition and evaluation beside BeatManager's musical data surface.
 
 #nullable enable
 
@@ -7,17 +7,15 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// The wall's own instrument — the always-running Waveform Synthesizer, its own surface root
-/// beside BeatManager's Data Surface: BeatManager answers "what is the music doing", this surface
-/// answers "play my rhythm". It acquires and evaluates both one-bar Waveforms and four-bar
-/// Routines. Readable by any holder of the reference; it consumes the Bar Phase and Grid clocks
-/// internally through the hub's doorways.
+/// Provides Waveform and Routine acquisition and evaluation beside BeatManager's musical data
+/// surface. Consumers hold the values they acquire and decide how those values shape their art.
+/// The live Bar Phase and Grid clocks are read internally through BeatManager's doorways.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The currency is the Waveform value itself: a consumer acquires one — an Energy-set draw
 /// (<see cref="Random"/>), a Preset name (<see cref="ByName"/>), or inline notation
-/// (<see cref="Waveform.Parse(string,string)"/>, no synthesizer involved) — holds it, and asks for
+/// (<see cref="Waveform.Parse(string,string)"/>) — holds it, and asks for
 /// its value now with the one primitive, <see cref="Evaluate"/>. Index addressing does not exist
 /// in any form: a Pool position may change at any time; names and values are the handles.
 /// </para>
@@ -28,7 +26,7 @@ using UnityEngine;
 /// known entries through the dependency-accepting constructor.
 /// </para>
 /// <para>
-/// The Waveform Hold (<see cref="Hold"/> / <see cref="ReleaseToAuto"/>) is the synthesizer's one
+/// The Waveform Hold (<see cref="Hold"/> / <see cref="ReleaseToAuto"/>) is this surface's one
 /// inbound knob — control sitting apart from the data reads, actuated by editor surfaces
 /// (ADR-0016). While engaged it pins every draw and every evaluation of a non-null Waveform
 /// argument to the held value; null still means the consumer holds no rhythm.
@@ -40,7 +38,7 @@ using UnityEngine;
 /// rules).
 /// </para>
 /// </remarks>
-public sealed class WaveformSynth
+public sealed class Waveforms
 {
     /// <summary>The hub whose Clock doorway supplies the Bar Phase clock and tempo yardstick.</summary>
     private readonly BeatManager clockSource;
@@ -61,8 +59,8 @@ public sealed class WaveformSynth
     /// The production surface: reads the Pool from the StreamingAssets file through
     /// <see cref="WaveformPool"/>, the single owner of the format.
     /// </summary>
-    /// <param name="clockSource">The hub whose Clock doorway the synthesizer consumes internally.</param>
-    public WaveformSynth(BeatManager clockSource)
+    /// <param name="clockSource">The hub whose Clock doorway supplies the live waveform clock.</param>
+    public Waveforms(BeatManager clockSource)
         : this(clockSource, WaveformPool.Parse(WaveformPool.ReadFileOrEmpty()))
     {
     }
@@ -71,19 +69,19 @@ public sealed class WaveformSynth
     /// The dependency-accepting seam: the caller supplies the Pool entries. Tests seed known
     /// entries here; the production constructor routes through it with the parsed file.
     /// </summary>
-    /// <param name="clockSource">The hub whose Clock doorway the synthesizer consumes internally.</param>
+    /// <param name="clockSource">The hub whose Clock doorway supplies the live waveform clock.</param>
     /// <param name="poolEntries">
     /// The Pool. An empty or null list is logged and degrades to the canonical Beat Pulse
     /// (<c>QQQQ</c> / <c>8888</c>) as the one entry, keeping the "a draw is never null" promise
     /// without duplicating the hub's legacy seed list.
     /// </param>
-    public WaveformSynth(BeatManager clockSource, IReadOnlyList<WaveformPool.Entry> poolEntries)
+    public Waveforms(BeatManager clockSource, IReadOnlyList<WaveformPool.Entry> poolEntries)
     {
         this.clockSource = clockSource ?? throw new ArgumentNullException(nameof(clockSource));
 
         if (poolEntries == null || poolEntries.Count == 0)
         {
-            Debug.LogWarning("[WaveformSynth] the Waveform Pool has no entries — the canonical Beat Pulse stands in.");
+            Debug.LogWarning("[Waveforms] the Waveform Pool has no entries — the canonical Beat Pulse stands in.");
             entries = new[] { new WaveformPool.Entry("beat pulse", Waveform.Parse("QQQQ", "8888")) };
             return;
         }
@@ -291,7 +289,7 @@ public sealed class WaveformSynth
     // ── The frame step ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Steps the synthesizer's observation of the Bar Phase clock. This owner-only operation is
+    /// Steps this surface's observation of the Bar Phase clock. This owner-only operation is
     /// internal so consumers cannot advance the window; the runtime owner calls it once per hub
     /// update, after BeatManager's own update and ahead of effect Draw. The step from the previous
     /// observation to this one is the window the <see cref="Hit"/> edge reads, so the edge is
@@ -398,7 +396,7 @@ public sealed class WaveformSynth
 
         if (matches.Count == 0)
         {
-            Debug.LogWarning($"[WaveformSynth] no Pool entry matches the requested Energy set " +
+            Debug.LogWarning($"[Waveforms] no Pool entry matches the requested Energy set " +
                              $"({string.Join(", ", levels)}) — drawing from the whole Pool.");
             return DrawWholePool();
         }

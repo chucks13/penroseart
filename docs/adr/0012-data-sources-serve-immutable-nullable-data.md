@@ -6,7 +6,7 @@ Any system in this application that makes data available to other systems serves
 chooses its own response to a missing value), and **unrestricted** (any consumer may read
 anything and combine it freely). Decided with Hunter during the beat-data-interface
 effort (2026-07-10): BeatManager is the first instance — all wire facts and all contrived
-values pulled through the one gateway under this contract — the Waveform Synthesizer is
+values pulled through the one gateway under this contract — Waveforms is
 its sibling under the same contract, and future surfaces (the palette, and whatever
 comes after) land on it instead of re-litigating the shape. This generalizes ADR-0002's
 nullable-query pattern from one surface to an application-wide contract.

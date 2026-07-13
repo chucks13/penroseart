@@ -38,7 +38,7 @@ public class MetaBalls : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        waveform = synth.Random();
+        waveform = waveforms.Random();
         // Randomize logic was commented out in original class
         beatMode = Random.Range(0, 3);
 
@@ -57,7 +57,7 @@ public class MetaBalls : ScreenEffect
     public override void Draw()
     {
         // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
-        float? rhythm = synth.Evaluate(waveform);
+        float? rhythm = waveforms.Evaluate(waveform);
         float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(1f, 0.75f, envelope) : 0.75f;
         float beatHue = 0.5f * (rhythm ?? 0f);
         float localDelta = beatMode < 2 ? effectDelta + (0.05f * (rhythm ?? 0f)) : effectDelta;
