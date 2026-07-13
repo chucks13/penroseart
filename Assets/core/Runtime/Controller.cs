@@ -520,17 +520,14 @@ public class Controller : Singleton<Controller>
         return builder.ToString();
     }
 
-    /// <summary>Captures one BeatManager frame, then advances the owned synth over that captured clock.</summary>
-    internal void UpdateRhythm(float timeSeconds)
+    /// <summary>Advances the hub, synth, and Director once in their required per-frame observation order.</summary>
+    /// <param name="timeSeconds">Absolute Unity time captured for the current frame.</param>
+    /// <param name="deltaTime">Unity frame delta consumed by Standalone Director timing.</param>
+    internal void AdvanceFrameTiming(float timeSeconds, float deltaTime)
     {
         beatManager.Update(timeSeconds);
         synth.Update();
-    }
-
-    /// <summary>Constructs the Controller-owned Waveform Synthesizer before any Performer lifecycle runs.</summary>
-    internal void InitializeSynth()
-    {
-        synth = new WaveformSynth(beatManager);
+        director.Tick(deltaTime);
     }
 
     /// <summary>
@@ -1414,9 +1411,6 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Unity startup hook. Initializes the scene model, runtime catalogs, input systems, overlays, timer, and active hardware output.
-    /// </summary>
-    /// <summary>
     /// Reads a wall data file (layout or wiring) from StreamingAssets, where it stays
     /// hand-editable next to a built player — fix a wiring mistake by editing the text
     /// file and restarting the app; no Unity, no rebuild.
@@ -1429,6 +1423,14 @@ public class Controller : Singleton<Controller>
         return File.ReadAllText(path);
     }
 
+    /// <summary>Registers the Controller singleton and constructs its one synth from the deserialized live BeatManager.</summary>
+    protected override void Awake()
+    {
+        base.Awake();
+        synth = new WaveformSynth(beatManager);
+    }
+
+    /// <summary>Initializes scene data and runtime catalogs after Awake has established the live rhythm roots.</summary>
     void Start()
     {
         // Unity/application setup.
@@ -1458,10 +1460,6 @@ public class Controller : Singleton<Controller>
         offTime.onEndEdit.AddListener(offTimeEndEditCallback);
         destIP.onEndEdit.AddListener(destIPEndEditCallback);
         onToggle.onValueChanged.AddListener(displayOnChange);
-
-        // Build the rhythm service before Performer catalogs because Effect and Transition
-        // Init/OnStart may read both live roots.
-        InitializeSynth();
 
         // Build runtime catalogs. These are plain C# objects, not scene objects.
         // Effects are also started here because the first frame needs an active
@@ -1592,11 +1590,7 @@ public class Controller : Singleton<Controller>
 #endif
         if (raveOsc != null)
             raveOsc.ApplyTo(beatManager);
-        UpdateRhythm(Time.time);
-
-        // Director reads the freshly-applied beat state: live OSC drives Synced Mode,
-        // while no live source leaves Standalone Mode on its independent timer path.
-        director.Tick(effectDelta);
+        AdvanceFrameTiming(Time.time, effectDelta);
 #if ENABLE_TELNET
         server.Service();                   // service pending telnet commands
 #endif

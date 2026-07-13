@@ -26,13 +26,12 @@ public abstract class EffectBase
     protected Penrose.TileData[] tiles;
     public static AnimPalette APalette;
 
-    /// <summary>Current shared beat data from the controller's BeatManager.</summary>
-    
-    /// <summary>Shared beat helper used for rhythmic effect behavior.</summary>
+    /// <summary>The live BeatManager owned by the bound Controller.</summary>
     public BeatManager beatManager => controller.beatManager;
 
     /// <summary>The live Waveform Synthesizer owned by the bound Controller.</summary>
     public WaveformSynth synth => controller.synth;
+
     /// <summary>Whether beat-reactive behavior should currently affect this effect.</summary>
     public bool IsBeatActive => controller.beatManager.IsActive;
 

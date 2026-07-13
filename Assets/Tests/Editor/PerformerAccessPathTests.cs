@@ -1,113 +1,151 @@
 // Seam-3 contract tests for Controller-owned rhythm stepping and live Performer access roots.
 
+using System.Collections;
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 /// <summary>
-/// Seam-3 tests for the live rhythm roots exposed to Effects and Transitions.
+/// Seam-3 tests for Controller frame ownership and the live rhythm roots exposed to Performers.
 /// </summary>
 public sealed class PerformerAccessPathTests
 {
-    /// <summary>Proves one Controller rhythm step observes the new hub frame exactly once in hub-then-synth order.</summary>
-    [Test]
-    public void ControllerRhythmStepAdvancesSynthExactlyOnceAfterBeatManager()
+    /// <summary>Returns the Editor to Edit Mode when a PlayMode seam test fails before its explicit cleanup.</summary>
+    [UnityTearDown]
+    public IEnumerator ExitPlayModeAfterEachTest()
     {
-        var controllerObject = new GameObject("ticket-20-frame-controller");
+        if (Application.isPlaying)
+        {
+            yield return new ExitPlayMode();
+        }
+    }
+
+    /// <summary>Proves one Controller timing step publishes the fresh hub and synth frame before Director and Effect work.</summary>
+    [UnityTest]
+    public IEnumerator ControllerFramePublishesFreshRhythmBeforeDirectorAndRendering()
+    {
+        yield return new EnterPlayMode();
+
+        var controllerObject = new GameObject("performer-access-frame-controller");
         var controller = controllerObject.AddComponent<Controller>();
-        controller.beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.4f);
-        controller.InitializeSynth();
+        controller.logDirectorSwitching = false;
         var quarterNotes = Waveform.Parse("QQQQ", "8888");
+        var currentEffect = new FrameObservationEffect(quarterNotes);
+        var nextEffect = new FrameObservationEffect(quarterNotes);
+        currentEffect.BindController(controller);
+        currentEffect.Init();
+        nextEffect.BindController(controller);
+        nextEffect.Init();
+        var transition = new FrameTransition(quarterNotes);
+        transition.BindController(controller);
+        transition.Init();
 
-        try
-        {
-            controller.UpdateRhythm(0.4f);
-            Assert.That(controller.synth.Hit(quarterNotes), Is.False, "first observation opens no hit window");
+        controller.effects = new EffectBase[] { currentEffect, nextEffect };
+        controller.transitions = new TransitionBase[] { transition };
+        controller.effectDeck = new[] { 1, 0 };
+        controller.transitionDeck = new[] { 0 };
+        controller.currentTransition = 0;
+        controller.timer = new Timer(10f, false);
+        controller.switcher = new Switcher(controller, controller.effects, controller.transitions);
+        controller.switcher.SetInitialEffect(0, controller.currentTransition);
+        controller.director = new Director(
+            controller,
+            controller.switcher,
+            controller.timer,
+            controller.effectDeck,
+            controller.transitionDeck,
+            controller.currentTransition);
 
-            // At 120 BPM, 0.4s -> 0.6s crosses the beat-2 onset at 0.5s.
-            BeatClockFixture.SeedBeatClock(controller.beatManager, bpm: 120f, timeSeconds: 0.6f);
-            controller.UpdateRhythm(0.6f);
+        SeedFrame(controller.beatManager, timeSeconds: 0.4f, beat: 615, gridBeat: 16);
+        controller.AdvanceFrameTiming(0.4f, deltaTime: 0f);
+        var joinedMidGridWithoutCue = !controller.switcher.LoadedCueStatus.HasCue;
 
-            Assert.That(
-                controller.synth.Hit(quarterNotes),
-                Is.True,
-                "one synth step after the new hub frame preserves the worked onset window");
-        }
-        finally
-        {
-            UnityEngine.Object.DestroyImmediate(controllerObject);
-        }
+        SeedFrame(controller.beatManager, timeSeconds: 0.6f, beat: 616, gridBeat: 1);
+        controller.AdvanceFrameTiming(0.6f, deltaTime: 0f);
+        var directorSawFreshGrid = controller.switcher.LoadedCueStatus.HasCue;
+        var directorSawFreshSynth = transition.ObservedHit;
+        controller.switcher.RenderAtTime(0.6f, out _);
+        var effectSawFreshSynth = currentEffect.ObservedHit;
+
+        UnityEngine.Object.DestroyImmediate(controllerObject);
+        yield return new ExitPlayMode();
+
+        Assert.That(joinedMidGridWithoutCue, Is.True);
+        Assert.That(directorSawFreshGrid, Is.True);
+        Assert.That(directorSawFreshSynth, Is.True);
+        Assert.That(effectSawFreshSynth, Is.True);
     }
 
     /// <summary>
-    /// Proves both Performer bases can read the Controller's same live roots during Init and OnStart.
+    /// Proves Unity component creation establishes both live roots before Performer Init and OnStart.
     /// </summary>
-    [Test]
-    public void EffectAndTransitionLifecycleReceiveTheSameLiveRhythmRoots()
+    [UnityTest]
+    public IEnumerator ControllerCreationMakesLiveRhythmRootsAvailableToEffectAndTransitionLifecycle()
     {
-        var controllerObject = new GameObject("ticket-20-controller");
+        yield return new EnterPlayMode();
+
+        var controllerObject = new GameObject("performer-access-controller");
         var controller = controllerObject.AddComponent<Controller>();
-        controller.beatManager = new BeatManager();
-        controller.InitializeSynth();
+        var liveBeatManager = controller.beatManager;
+        var liveSynth = controller.synth;
+        var effect = new LifecycleEffect();
+        effect.BindController(controller);
+        effect.Init();
+        effect.OnStart();
 
-        try
-        {
-            var effect = new LifecycleEffect();
-            effect.BindController(controller);
-            effect.Init();
-            effect.OnStart();
+        var transition = new LifecycleTransition();
+        transition.BindController(controller);
+        transition.Init();
+        transition.OnStart();
 
-            var transition = new LifecycleTransition();
-            transition.BindController(controller);
-            transition.Init();
-            transition.OnStart();
+        UnityEngine.Object.DestroyImmediate(controllerObject);
+        yield return new ExitPlayMode();
 
-            Assert.That(effect.InitBeatManager, Is.SameAs(controller.beatManager));
-            Assert.That(effect.StartBeatManager, Is.SameAs(controller.beatManager));
-            Assert.That(effect.InitSynth, Is.SameAs(controller.synth));
-            Assert.That(effect.StartSynth, Is.SameAs(controller.synth));
-            Assert.That(transition.InitBeatManager, Is.SameAs(controller.beatManager));
-            Assert.That(transition.StartBeatManager, Is.SameAs(controller.beatManager));
-            Assert.That(transition.InitSynth, Is.SameAs(controller.synth));
-            Assert.That(transition.StartSynth, Is.SameAs(controller.synth));
-        }
-        finally
-        {
-            UnityEngine.Object.DestroyImmediate(controllerObject);
-        }
+        Assert.That(liveBeatManager, Is.Not.Null);
+        Assert.That(liveSynth, Is.Not.Null);
+        Assert.That(effect.InitBeatManager, Is.SameAs(liveBeatManager));
+        Assert.That(effect.StartBeatManager, Is.SameAs(liveBeatManager));
+        Assert.That(effect.InitSynth, Is.SameAs(liveSynth));
+        Assert.That(effect.StartSynth, Is.SameAs(liveSynth));
+        Assert.That(transition.InitBeatManager, Is.SameAs(liveBeatManager));
+        Assert.That(transition.StartBeatManager, Is.SameAs(liveBeatManager));
+        Assert.That(transition.InitSynth, Is.SameAs(liveSynth));
+        Assert.That(transition.StartSynth, Is.SameAs(liveSynth));
     }
 
     /// <summary>Proves a Mixer-owned child receives ordinary Effect access without a Mixer rhythm seam.</summary>
-    [Test]
-    public void MixerOwnedChildUsesOrdinaryEffectRhythmRoots()
+    [UnityTest]
+    public IEnumerator MixerOwnedChildUsesOrdinaryEffectRhythmRoots()
     {
-        var controllerObject = new GameObject("ticket-20-mixer-controller");
+        yield return new EnterPlayMode();
+
+        var controllerObject = new GameObject("performer-access-mixer-controller");
         var controller = controllerObject.AddComponent<Controller>();
-        controller.beatManager = new BeatManager();
-        controller.InitializeSynth();
         controller.penrose = controllerObject.AddComponent<Penrose>();
+        var liveBeatManager = controller.beatManager;
+        var liveSynth = controller.synth;
+        var mixer = new OwningMixer();
+        mixer.BindController(controller);
+        mixer.Init();
+        var child = mixer.GetRandomEffect();
+        var childBeatManager = child.beatManager;
+        var childSynth = child.synth;
 
-        try
-        {
-            var mixer = new OwningMixer();
-            mixer.BindController(controller);
-            mixer.Init();
-            var child = mixer.GetRandomEffect();
+        UnityEngine.Object.DestroyImmediate(controllerObject);
+        yield return new ExitPlayMode();
 
-            Assert.That(child.beatManager, Is.SameAs(controller.beatManager));
-            Assert.That(child.synth, Is.SameAs(controller.synth));
-        }
-        finally
-        {
-            UnityEngine.Object.DestroyImmediate(controllerObject);
-        }
+        Assert.That(liveBeatManager, Is.Not.Null);
+        Assert.That(liveSynth, Is.Not.Null);
+        Assert.That(childBeatManager, Is.SameAs(liveBeatManager));
+        Assert.That(childSynth, Is.SameAs(liveSynth));
     }
 
-    /// <summary>Proves the retained EffectBase activation lifecycle performs no synth acquisition or response.</summary>
+    /// <summary>Proves the retained EffectBase activation lifecycle does not require a synth root.</summary>
     [Test]
-    public void EffectBaseOnStartDoesNotAcquireFromSynth()
+    public void EffectBaseOnStartDoesNotRequireSynth()
     {
-        var controllerObject = new GameObject("ticket-20-policy-controller");
+        var controllerObject = new GameObject("performer-access-policy-controller");
         var controller = controllerObject.AddComponent<Controller>();
         var effect = new BaseStartEffect();
         effect.BindController(controller);
@@ -130,11 +168,9 @@ public sealed class PerformerAccessPathTests
     [Test]
     public void EffectGridHookMatchesGridWrappedExactly()
     {
-        var controllerObject = new GameObject("ticket-20-grid-controller");
+        var controllerObject = new GameObject("performer-access-grid-controller");
         var controller = controllerObject.AddComponent<Controller>();
-        controller.beatManager = new BeatManager();
         controller.beatManager.SetLiveBeatSource(true);
-        controller.InitializeSynth();
         var effect = new GridHookEffect();
         effect.BindController(controller);
 
@@ -163,6 +199,102 @@ public sealed class PerformerAccessPathTests
         {
             UnityEngine.Object.DestroyImmediate(controllerObject);
         }
+    }
+
+    /// <summary>Seeds one independent worked clock and wire frame for Controller timing-order observations.</summary>
+    private static void SeedFrame(BeatManager beatManager, float timeSeconds, int beat, int gridBeat)
+    {
+        BeatClockFixture.SeedBeatClock(beatManager, bpm: 120f, timeSeconds: timeSeconds);
+        var snapshot = beatManager.WireSnapshot;
+        snapshot.beat = new BeatPosition { current = beat, total = -1 };
+        snapshot.timingGrid = new TimingGrid
+        {
+            beat = gridBeat,
+            bar = ((gridBeat - 1) / 4) + 1,
+            state = "locked",
+        };
+        snapshot.phraseState = new PhraseState
+        {
+            label = "Phrase",
+            countBeats = 632 - beat,
+            lengthBeats = 32,
+            irregular = 0,
+        };
+        snapshot.nextPhraseState = LabeledCountdown.Unavailable;
+        snapshot.dropState = CountdownState.Unavailable;
+        snapshot.fillState = CountdownState.Unavailable;
+    }
+
+    /// <summary>Effect probe that observes the synth through the ordinary render seam.</summary>
+    private sealed class FrameObservationEffect : EffectBase
+    {
+        /// <summary>The worked quarter-note Waveform observed during Draw.</summary>
+        private readonly Waveform waveform;
+
+        /// <summary>Creates a render probe for the worked Waveform.</summary>
+        public FrameObservationEffect(Waveform waveform)
+        {
+            this.waveform = waveform;
+        }
+
+        /// <summary>Whether the last Draw observed the worked onset window.</summary>
+        public bool ObservedHit { get; private set; }
+
+        /// <summary>Initializes only the buffer needed by the Switcher's render seam.</summary>
+        public override void Init()
+        {
+            buffer = new Color[Penrose.Total];
+        }
+
+        /// <summary>This frame-order probe has no runtime debug detail.</summary>
+        public override string DebugText() => string.Empty;
+
+        /// <summary>This frame-order probe has no activation behavior.</summary>
+        public override void OnStart() { }
+
+        /// <summary>This frame-order probe has no cleanup behavior.</summary>
+        public override void OnEnd() { }
+
+        /// <summary>Observes the live synth at the same seam where an ordinary Effect renders.</summary>
+        public override void Draw()
+        {
+            ObservedHit = synth.Hit(waveform);
+        }
+    }
+
+    /// <summary>Minimal Transition needed for the real Switcher and Director timing seam.</summary>
+    private sealed class FrameTransition : TransitionBase
+    {
+        /// <summary>The worked quarter-note Waveform observed while Director reads Repertoire.</summary>
+        private readonly Waveform waveform;
+
+        /// <summary>Creates a Director-order probe for the worked Waveform.</summary>
+        public FrameTransition(Waveform waveform)
+        {
+            this.waveform = waveform;
+        }
+
+        /// <summary>Whether Director's latest Repertoire read observed the fresh synth onset window.</summary>
+        public bool ObservedHit { get; private set; }
+
+        /// <summary>Observes the synth through the Transition interface Director reads while casting.</summary>
+        public override TransitionRepertoire Repertoire
+        {
+            get
+            {
+                ObservedHit = synth.Hit(waveform);
+                return base.Repertoire;
+            }
+        }
+
+        /// <summary>This frame-order probe has no activation behavior.</summary>
+        public override void OnStart() { }
+
+        /// <summary>This frame-order probe has no cleanup behavior.</summary>
+        public override void OnEnd() { }
+
+        /// <summary>This frame-order probe does not render.</summary>
+        public override void Draw() { }
     }
 
     /// <summary>Effect probe that records both roots at the two lifecycle boundaries.</summary>
