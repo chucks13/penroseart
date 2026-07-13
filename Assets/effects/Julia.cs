@@ -41,8 +41,8 @@ public class Julia : EffectBase
     /// <summary>Chance that an activation colors from the shared palette instead of the HSV rainbow.</summary>
     private const float PaletteChance = 0.5f;
 
-    /// <summary>Bars the Drop slam takes to decay back to rest.</summary>
-    private const int DropBars = 2;
+    /// <summary>Beats the Drop slam takes to decay back to rest.</summary>
+    private const float DropDecayBeats = 8f;
 
     /// <summary>Spin speed in revolutions per second at the Drop slam's peak.</summary>
     private const float DropSpinRate = 1f;
@@ -183,7 +183,7 @@ public class Julia : EffectBase
     /// Chooses the Drop slam's spin direction and applies its instant hue inversion; the hub-owned
     /// stock Decay supplies the spin/blowout envelope.
     /// </summary>
-    private void TriggerDrop()
+    private void ApplyDropHit()
     {
         dropSpinDir = Random.value < 0.5f ? -1f : 1f;
         hueScroll = Mathf.Repeat(hueScroll + DropHueKick, 1f);
@@ -196,10 +196,10 @@ public class Julia : EffectBase
     {
         if (beatManager.Drop.Span.Started)
         {
-            TriggerDrop();
+            ApplyDropHit();
         }
 
-        dropEnv = beatManager.Drop.Span.Decay(DropBars * 4f);
+        dropEnv = beatManager.Drop.Span.Decay(DropDecayBeats);
 
         rotation += dropSpinDir * DropSpinRate * dropEnv * effectDelta * 2f * Mathf.PI;
     }
@@ -214,7 +214,8 @@ public class Julia : EffectBase
         var beatEnvelope = synth.Evaluate(waveform) ?? 1f;
         hueScroll = Mathf.Repeat(hueScroll + ((HueBaseRate + (beatEnvelope * HueBeatRate)) * effectDelta), 1f);
 
-        UpdateFillEnvelope();
+        // The hub-owned Fill Build becomes extra zoom depth below.
+        fillEnv = beatManager.Fill.Span.Build();
         UpdateDropSlam();
 
         // Breathing zoom (window width oscillates between WindowWidth and MinWindow), deepened
@@ -244,14 +245,6 @@ public class Julia : EffectBase
 
             buffer[i] = pix / aaOffsets.Length;
         }
-    }
-
-    /// <summary>
-    /// Reads the hub-owned Fill Build that Draw turns into extra zoom depth.
-    /// </summary>
-    private void UpdateFillEnvelope()
-    {
-        fillEnv = beatManager.Fill.Span.Build();
     }
 
     /// <summary>

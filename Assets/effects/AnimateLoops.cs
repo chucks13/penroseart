@@ -1,6 +1,5 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
-using System.Numerics;
 
 /// <summary>
 /// Animates packed Penrose loop shape groups over a background color.
@@ -15,27 +14,28 @@ public class AnimateLoops : EffectBase
     /// <summary>The consumer-owned Waveform used by this activation's distortion mode.</summary>
     private Waveform waveform;
 
+    /// <summary>Per-loop colors advanced across the packed shape data.</summary>
     private Color[] colors;
+
+    /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
-    int[] shape;
-    string shapeName;
-    private int distortionMode; // 0: Brightness, 1: Color, 2: Time
+
+    /// <summary>The packed loop shape groups supplied by the Penrose layout.</summary>
+    private int[] shape;
+
+    /// <summary>The active packed-shape name shown in the debug readout.</summary>
+    private string shapeName;
+
+    /// <summary>Which beat response this activation applies: color or time.</summary>
+    private int distortionMode; // 1: Color, 2: Time
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
     public override string DebugText()
     {
-        string[] modeNames = { "Brightness", "Color", "Time Warp" };
-        return $"shape: {shapeName}\nBeat Mode: {modeNames[distortionMode]}";
-    }
-
-    /// <summary>
-    /// Performs one-time setup after reflection creates this effect instance.
-    /// </summary>
-    public override void Init()
-    {
-        base.Init();
+        string modeName = distortionMode == 1 ? "Color" : "Time Warp";
+        return $"shape: {shapeName}\nBeat Mode: {modeName}";
     }
 
     /// <summary>
@@ -47,18 +47,6 @@ public class AnimateLoops : EffectBase
         shape = penrose.Layout.shapes.loops;
         distortionMode = Random.Range(1, 3);
         shapeName = "loops";
-        /*        switch (Random.Range(0, 2))
-                {
-                    case 0:
-                        shape = penrose.Layout.shapes.loops;
-                        shapeName = "loops";
-                        break;
-                    case 1:
-                        shape = penrose.Layout.shapes.stars;
-                        shapeName = "stars";
-                        break;
-                }
-        */
         colors = new Color[shape[0]];
         for (int i = 0; i < shape[0]; i++)
         {
@@ -77,26 +65,23 @@ public class AnimateLoops : EffectBase
     /// </summary>
     public override void Draw()
     {
-        float beatBrightness = 1.0f;
-        float hueShift = 0.0f;
+        float hueShift = 0f;
         float sampleTime = effectTime;
 
-        // This effect owns all three response mappings and their clockless fallbacks.
+        // This effect owns both response mappings and their clockless fallbacks.
         float? rhythm = synth.Evaluate(waveform);
-        if (distortionMode == 0)
-            beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
-        else if (distortionMode == 1)
+        if (distortionMode == 1)
             hueShift = 0.25f * (rhythm ?? 0f);
         else if (distortionMode == 2)
             sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
 
-        float beatOffset = (sampleTime - effectTime);
+        float beatOffset = sampleTime - effectTime;
         colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);
         background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = Color.HSVToRGB((background + beatOffset * 0.1f + hueShift) % 1f, 1f, 1f) * beatBrightness;
+            buffer[i] = Color.HSVToRGB((background + beatOffset * 0.1f + hueShift) % 1f, 1f, 1f);
         }
         for (int i = 0; i < shape[0]; i++)
         {
@@ -107,7 +92,7 @@ public class AnimateLoops : EffectBase
             for (int j = start; j < end; j++)
             {
                 int idx = shape[j];
-                buffer[idx] = Color.HSVToRGB((hue + 0.01f * j + beatOffset * 0.1f + hueShift) % 1f, sat, bri) * beatBrightness;
+                buffer[idx] = Color.HSVToRGB((hue + 0.01f * j + beatOffset * 0.1f + hueShift) % 1f, sat, bri);
             }
             colors[i] = Color.HSVToRGB((hue + 0.01f) % 1f, sat, bri);
         }

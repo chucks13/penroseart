@@ -1,5 +1,4 @@
-﻿using System;
-using UnityEngine;
+﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
@@ -15,25 +14,18 @@ public class RainbowBars : ScreenEffect
     /// <summary>The consumer-owned Waveform used by this activation's distortion mode.</summary>
     private Waveform waveform;
 
-    private float sampleTime;
-
+    /// <summary>The screen-space direction used to sample the palette bands.</summary>
     private Direction direction;
+
+    /// <summary>Which beat response this activation applies: brightness, color, or time.</summary>
     private int distortionMode; // 0: Brightness, 1: Color, 2: Time
 
     /// <summary>
     /// Called ever frame to update the debug UI text element
     /// </summary>
     /// <returns></returns>
-    public override string DebugText() { return $"{direction.ToString()}"; }
+    public override string DebugText() => direction.ToString();
 
-
-    /// <summary>
-    /// Called once when effect is created
-    /// </summary>
-    public override void Init()
-    {
-        base.Init();
-    }
 
     /// <summary>
     /// Called when effect is selected by controller to be drawn every frame
@@ -49,9 +41,11 @@ public class RainbowBars : ScreenEffect
     /// Called when effect is no longer selected to be drawn by the controller
     /// </summary>
     public override void OnEnd() { }
-    private Color getColor(float n)
+
+    /// <summary>Samples the scrolling palette at a screen-space position.</summary>
+    private static Color GetColor(float position, float sampleTime)
     {
-        return APalette.read((n + sampleTime) % 1f, true);
+        return APalette.read((position + sampleTime) % 1f, true);
     }
 
     /// <summary>
@@ -61,7 +55,7 @@ public class RainbowBars : ScreenEffect
     {
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;
-        sampleTime = effectTime;
+        float sampleTime = effectTime;
 
         // This effect owns all three response mappings and their clockless fallbacks.
         float? rhythm = synth.Evaluate(waveform);
@@ -72,54 +66,34 @@ public class RainbowBars : ScreenEffect
         else if (distortionMode == 2)
             sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
 
-        var color = Color.clear;
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-
-                switch (direction)
+                float samplePosition = direction switch
                 {
-                    case Direction.Up:
-                        color = getColor(x + y * -0.1f);
-                        break;
-                    default:
-                    case Direction.UpLeft:
-                        color = getColor(x * 0.1f + y * -0.1f);
-                        break;
-                    case Direction.UpRight:
-                        color = getColor(x * -0.1f + y * -0.1f);
-                        break;
-                    case Direction.Down:
-                        color = getColor(x + y * 0.1f);
-                        break;
-                    case Direction.DownLeft:
-                        color = getColor(x * 0.1f + y * 0.1f);
-                        break;
-                    case Direction.DownRight:
-                        color = getColor(x * -0.1f + y * 0.1f);
-                        break;
-                    case Direction.Left:
-                        color = getColor(x * 0.1f + y);
-                        break;
-                    case Direction.Right:
-                        color = getColor(x * -0.1f + y);
-                        break;
+                    Direction.Up => x + (y * -0.1f),
+                    Direction.UpRight => (x * -0.1f) + (y * -0.1f),
+                    Direction.Down => x + (y * 0.1f),
+                    Direction.DownLeft => (x * 0.1f) + (y * 0.1f),
+                    Direction.DownRight => (x * -0.1f) + (y * 0.1f),
+                    Direction.Left => (x * 0.1f) + y,
+                    Direction.Right => (x * -0.1f) + y,
+                    _ => (x * 0.1f) + (y * -0.1f),
+                };
 
-                }
-                Color c = color;
+                Color color = GetColor(samplePosition, sampleTime);
                 if (hueShift > 0)
                 {
-                    float h, s, v_col;
-                    Color.RGBToHSV(c, out h, out s, out v_col);
-                    c = Color.HSVToRGB((h + hueShift) % 1f, s, v_col);
+                    Color.RGBToHSV(color, out float hue, out float saturation, out float value);
+                    color = Color.HSVToRGB((hue + hueShift) % 1f, saturation, value);
                 }
 
-                screenBuffer[x + (y * width)] =  c * beatBrightness;
+                screenBuffer[x + (y * width)] = color * beatBrightness;
             }
         }
 
         // convert the 2D Matrix buffer to a tile buffer
-        ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
+        ConvertScreenBuffer(ref screenBuffer, in buffer);
     }
 }

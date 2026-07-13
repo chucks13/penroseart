@@ -265,7 +265,7 @@ public class Angles : EffectBase
     {
         // Beat pulse narrows/widens the angle-to-hue mapping without changing the underlying tile-angle pattern.
         float? rhythm = synth.Evaluate(waveform);
-        float beatAngle = rhythm is { } envelope ? Mathf.Lerp(0.9f, 1f, envelope) : 1f;
+        float rhythmHueOffset = rhythm is { } envelope ? Mathf.Lerp(0.9f, 1f, envelope) : 1f;
         UpdateFillEnvelope();
         var drop = beatManager.Drop.Span;
         bool inDrop = drop.Current.HasValue;
@@ -291,7 +291,7 @@ public class Angles : EffectBase
                 : 1f;
             float value = Mathf.Lerp(DarkFloor, shade, lit);
 
-            buffer[i] = Color.HSVToRGB(Mathf.Repeat(angle + beatAngle, 1f), 1f, value);
+            buffer[i] = Color.HSVToRGB(Mathf.Repeat(angle + rhythmHueOffset, 1f), 1f, value);
         }
     }
 }

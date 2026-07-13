@@ -280,7 +280,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     public override void Draw()
     {
-        float dt = effectDelta;
+        float deltaTime = effectDelta;
 
         // Read the live band energy first: it gates how much the wall couples to the beat. The crucial case is
         // a quiet break — when the average energy falls below a third, the audible beat is gone, so seeding, the
@@ -292,7 +292,7 @@ public class CrystalGrowth : EffectBase
         // drop, so its gesture must build tension AND resolve cleanly on its own. The hold-back reins the base
         // spread in as the fill builds while the swell charges the crystal's glow, then both snap back the
         // moment the fill ends — into the Drop sparkle when one lands, or back to normal growth when not.
-        // Because Fill.progress is normalized to the fill's length, the arc scales with it — short fills snap,
+        // Because the stock Fill Build is normalized to the fill's length, the arc scales with it — short fills snap,
         // long fills lean in.
         var fill = beatManager.Fill.Span;
         bool inFill = fill.Current.HasValue;
@@ -301,19 +301,20 @@ public class CrystalGrowth : EffectBase
         fillActive = inFill;
         fillLevel = fillAmount;
 
-        if (beatManager.Drop.Span.Started)
+        var drop = beatManager.Drop.Span;
+        if (drop.Started)
         {
             generation++;
             PlantUnisonSeeds(DropFlashSeeds);
         }
-        dropFlash = beatManager.Drop.Span.Decay(DropFadeBars * BeatsPerBar);
+        dropFlash = drop.Decay(DropFadeBars * BeatsPerBar);
 
         if (beatManager.Pulses.GateOpenedEvery(Duration.Sixteenth) && dropFlash > 0.5f)
         {
             PlantSeeds(DropSeedBurst);
         }
 
-        SeedThisFrame(dt);
+        SeedThisFrame(deltaTime);
 
         // The beat surges how far the front lunges this frame. Synced rides the live Pulse; Standalone falls
         // back to the self-driven surge. The surge is scaled by 'activity' so the front stops lunging to an
@@ -327,7 +328,7 @@ public class CrystalGrowth : EffectBase
             * (1f + (DropFlashSpread * dropFlash));
 
         // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
-        spreadBudget += spread * dt;
+        spreadBudget += spread * deltaTime;
         int passes = 0;
         while (spreadBudget >= 1f && passes < MaxFrontPassesPerFrame)
         {
@@ -338,7 +339,7 @@ public class CrystalGrowth : EffectBase
 
         // Fade the trailing heat so the bright band trails off behind the front; grown tiles still render at the
         // CrystalFloor (keyed on gen), so they never go black.
-        float keep = Mathf.Clamp01(1f - (leakPerSec * dt));
+        float keep = Mathf.Clamp01(1f - (leakPerSec * deltaTime));
         for (int i = 0; i < charge.Length; i++)
         {
             charge[i] *= keep;
@@ -351,13 +352,13 @@ public class CrystalGrowth : EffectBase
             CheckGenerationAdvance();
         }
 
-        RelaxHue(dt);
+        RelaxHue(deltaTime);
 
         // Brightness pulses with the music; the floor is shallow (0.8) so lit tiles stay bright, and it lifts
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
-        float minimum = Mathf.Lerp(1f, 0.8f, activity);
+        float minimumBrightness = Mathf.Lerp(1f, 0.8f, activity);
         float? rhythm = synth.Evaluate(waveform);
-        float bright = rhythm is { } envelope ? Mathf.Lerp(minimum, 1f, envelope) : 1f;
+        float rhythmBrightness = rhythm is { } envelope ? Mathf.Lerp(minimumBrightness, 1f, envelope) : 1f;
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
         // the wall flashes on each 16th for the drop's whole window (easing out with the release). Applied to
@@ -388,7 +389,7 @@ public class CrystalGrowth : EffectBase
             // The Drop flash adds a luminance lift weighted by front heat (c) and the eased envelope, so the boost
             // rides the sweeping leading edge — a bright colored wavefront crossing the wall — and trails back to
             // normal behind it, all in the tile's own palette color (never toward white). Collapses to ×1 off a flash.
-            float factor = Mathf.Max(Mathf.Sqrt(c) * bright, CrystalFloor) * (1f + DropFlashBrightness * dropFlash * c);
+            float factor = Mathf.Max(Mathf.Sqrt(c) * rhythmBrightness, CrystalFloor) * (1f + DropFlashBrightness * dropFlash * c);
             buffer[i] = col * (factor * strobe * swell);
         }
     }

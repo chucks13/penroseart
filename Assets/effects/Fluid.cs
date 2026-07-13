@@ -1,6 +1,4 @@
-﻿
-using System;
-using UnityEngine;
+﻿using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
@@ -15,38 +13,41 @@ public class Fluid : ScreenEffect
     /// <summary>The consumer-owned Waveform that offsets the diffusion palette lookup.</summary>
     private Waveform waveform;
 
-    private float[] state1;
-    private float[] state2;
-    int slower = 0;
+    /// <summary>The diffusion field rendered on the current frame.</summary>
+    private float[] currentState;
+
+    /// <summary>The previous diffusion field reused as the next simulation target.</summary>
+    private float[] previousState;
+
+    /// <summary>Frame counter used to advance the diffusion simulation every other frame.</summary>
+    private int frameCount;
+
+    /// <summary>Fraction of simulated motion retained each step.</summary>
     public float fdamping = 0.95f;
+
+    /// <summary>Energy placed into the field by each random injection.</summary>
     public float impulse = 1f;
+
+    /// <summary>Inverse probability of injecting energy on a frame.</summary>
     public int activity = 50;
+
+    /// <summary>Multiplier applied before wrapping field values into palette space.</summary>
     public float scale = 10f;
+
+    /// <summary>Weight applied to the average neighboring field value.</summary>
     public float fneighbors = 2f;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-    public override string DebugText() { return $""; }
+    public override string DebugText() => string.Empty;
 
-    /// <summary>
-    /// Performs one-time setup after reflection creates this effect instance.
-    /// </summary>
-    public override void Init()
-    {
-        base.Init();
-    }
     /// <summary>Acquires this activation's Waveform and resets the diffusion buffers.</summary>
     public override void OnStart()
     {
         waveform = synth.Random();
-        state1 = new float[Penrose.Total];
-        state2 = new float[Penrose.Total];
-        for (int i = 0; i < state1.Length; i++)
-        {
-            state1[i] = 0f;
-            state2[i] = 0f;
-        }
+        currentState = new float[Penrose.Total];
+        previousState = new float[Penrose.Total];
     }
 
     /// <summary>
@@ -54,9 +55,10 @@ public class Fluid : ScreenEffect
     /// </summary>
     public override void OnEnd() { }
 
-    void generate()
+    /// <summary>Advances the neighbor-driven diffusion field by one simulation step.</summary>
+    private void AdvanceSimulation()
     {
-        for (int i = 0; i < state1.Length; i++)
+        for (int i = 0; i < currentState.Length; i++)
         {
             float total = 0;
             float count = 0;
@@ -65,50 +67,52 @@ public class Fluid : ScreenEffect
                 int n = tiles[i].neighbors[j].tileIdx;
                 if (n >= 0)
                 {
-                    total += state1[n];
+                    total += currentState[n];
                     count++;
                 }
             }
-            float neighbors = (total / count);      // average target
-            neighbors *= fneighbors;                // weight of neighbors factor    
-            float x = neighbors - state2[i];        // how far from current valur we are
-            state2[i] = x * fdamping;               // dampening factor
+            float neighbors = total / count;
+            neighbors *= fneighbors;
+            float displacement = neighbors - previousState[i];
+            previousState[i] = displacement * fdamping;
         }
-        float[] swap = state1;
-        state1 = state2;
-        state2 = swap;
+        float[] swap = currentState;
+        currentState = previousState;
+        previousState = swap;
     }
+
     /// <summary>
     /// Randomly injects energy into the diffusion field.
     /// </summary>
-    void inject()
+    private void InjectEnergy()
     {
         if (Random.Range(0, activity) == 0)
         {
-            state1[Random.Range(0, state1.Length)] = impulse;
+            currentState[Random.Range(0, currentState.Length)] = impulse;
         }
-        //        for(int i=0;i<2460;i+=820)
-        //        state1[455+i] = 20f;
     }
+
     /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
     public override void Draw()
     {
-        slower++;
-        if ((slower % 2) == 0)
-            generate();
-        inject();
+        frameCount++;
+        if (frameCount % 2 == 0)
+        {
+            AdvanceSimulation();
+        }
+
+        InjectEnergy();
         // The Waveform offsets the palette lookup; clockless rendering keeps the previous steady offset.
         float? rhythm = synth.Evaluate(waveform);
         float paletteOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
-        for (int i = 0; i < state1.Length; i++)
+        for (int i = 0; i < currentState.Length; i++)
         {
-            float v = state1[i] * scale;
+            float v = currentState[i] * scale;
             v += 1000.5f;
             v %= 1f;
             buffer[i] = APalette.read(v + paletteOffset);
         }
     }
-
 }

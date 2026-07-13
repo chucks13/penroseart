@@ -15,8 +15,11 @@ public class Flock : EffectBase
     /// <summary>The consumer-owned Waveform that seasons flock speed until the next Grid.</summary>
     private Waveform waveform;
 
+    /// <summary>Number of boids simulated by the effect.</summary>
+    private const int BoidCount = 80;
+
+    /// <summary>The boids projected onto the Penrose wall.</summary>
     private Boid[] flock;
-    private int total = 80;
     private const float BaseSpeedMultiplier = 1f;
     private const float BeatSpeedLift = 2f;
     private const float LowEnergyHueShift = 0.2f;
@@ -28,16 +31,14 @@ public class Flock : EffectBase
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-    public override string DebugText() { return $""; }
+    public override string DebugText() => string.Empty;
 
     /// <summary>
     /// Maps an available Waveform envelope to flock movement speed, falling back to normal speed without a clock.
     /// </summary>
     public static float GetBeatSpeedMultiplier(float? envelope)
     {
-        if (envelope is not { } value) return BaseSpeedMultiplier;
-
-        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(value), 1.5f);
+        float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(envelope ?? 0f), 1.5f);
         return BaseSpeedMultiplier + (shapedEnvelope * BeatSpeedLift);
     }
 
@@ -60,14 +61,6 @@ public class Flock : EffectBase
     }
 
     /// <summary>
-    /// Performs one-time setup after reflection creates this effect instance.
-    /// </summary>
-    public override void Init()
-    {
-        base.Init();
-    }
-
-    /// <summary>
     /// Acquires this activation's Waveform and initializes the flock's artistic state.
     /// </summary>
     public override void OnStart()
@@ -77,19 +70,16 @@ public class Flock : EffectBase
         var min = penrose.Bounds.min;
         var max = penrose.Bounds.max;
 
-        total = 80;
         alignment = 0.75f;
         cohesion = 1f;
         separation = 1.25f;
 
-        flock = new Boid[total];
-        for (int i = 0; i < total; i++)
+        flock = new Boid[BoidCount];
+        for (int i = 0; i < BoidCount; i++)
         {
-            Color bcolor;
-            bcolor = APalette.read((float)i / total, true);
             flock[i] = new Boid(min, max, this)
             {
-                color = bcolor,
+                color = APalette.read((float)i / BoidCount, true),
                 boids = flock,
             };
         }
@@ -116,9 +106,9 @@ public class Flock : EffectBase
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)
         {
-            var f = flock[i];
-            f.Update(effectDelta * speedMultiplier);
-            buffer[controller.penrose.GetIndexFromPosition(f.position)] = ShiftHueByLowEnergy(f.color, lowEnergy);
+            Boid boid = flock[i];
+            boid.Update(effectDelta * speedMultiplier);
+            buffer[penrose.GetIndexFromPosition(boid.position)] = ShiftHueByLowEnergy(boid.color, lowEnergy);
         }
     }
 

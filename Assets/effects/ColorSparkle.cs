@@ -9,8 +9,10 @@ public class ColorSparkle : EffectBase
     /// <summary>The consumer-owned Waveform that offsets sparkle hue during this activation.</summary>
     private Waveform waveform;
 
+    /// <summary>Whether each sparkle chooses a fresh hue when no beat clock is available.</summary>
     private bool randomColor;
-    //    private Color color;
+
+    /// <summary>The activation's base sparkle hue.</summary>
     private float hue;
 
     /// <summary>ColorSparkle's fading sparkle bursts can accent short Fill moments without new behavior;
@@ -24,29 +26,19 @@ public class ColorSparkle : EffectBase
     public override string DebugText() => randomColor ? "Color: random" : $"hue: {hue}";
 
     /// <summary>
-    /// Performs one-time setup after reflection creates this effect instance.
-    /// </summary>
-    public override void Init()
-    {
-        base.Init();
-    }
-
-    // Should be called every time an effect is turned on
-    /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
         waveform = synth.Random();
-        randomColor = (Random.value > 0.5f);
+        randomColor = Random.value > 0.5f;
         hue = Random.value;
 
-        var text = (randomColor) ? "random " : hue.ToString();
+        var text = randomColor ? "random " : hue.ToString();
         controller.debugText.text = $"Color: {text}";
         buffer.Clear();
     }
 
-    // Should be called every time an effect is turned off
     /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
@@ -62,14 +54,14 @@ public class ColorSparkle : EffectBase
         float hueOffset = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
-        Color drawColor = Color.HSVToRGB((hue + hueOffset) % 1.0f, 1f, 1f);
+        Color drawColor = Color.HSVToRGB((hue + hueOffset) % 1f, 1f, 1f);
         for (int i = 0; i < count; i++)
         {
-            // While the beat clock is active, hold sparkle hue stable so the beat pulse is the visible rhythm.
+            // Without a beat clock, preserve this activation's original per-sparkle color variation.
             if (randomColor && !beatManager.IsSynced)
                 drawColor = Color.HSVToRGB(Random.value, 1f, 1f);
 
-            buffer[Random.Range(0, buffer.Length)] = drawColor;// * beatBrightness;
+            buffer[Random.Range(0, buffer.Length)] = drawColor;
         }
     }
 }
