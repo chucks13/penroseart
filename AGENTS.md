@@ -67,6 +67,22 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
   means preserving a second copy of anything. Prefer the decisive refactor that leaves
   exactly one canonical form.
 
+### Caller-First Simplicity
+
+These rules apply to tickets, specs, prototypes, and implementation.
+
+Start with the simplest design that serves the first real production caller. Prefer direct
+composition of existing code. Do not introduce types, modes, factories, resolvers, or
+abstractions for hypothetical needs or merely to restate existing calls; tests and prototypes
+alone do not establish a need.
+
+More structure is justified when it hides demonstrated complexity, concentrates a real rule or
+invariant, or serves actual variation. Before locking it into a spec or writing it, show the
+concrete caller and explain why the simpler composition is insufficient.
+
+Prototype approval covers only interfaces exercised by realistic caller examples; unexercised
+surface remains unapproved.
+
 ## Core Files and Systems
 
 Start with these before adding new structures:
