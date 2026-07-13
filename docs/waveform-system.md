@@ -85,7 +85,23 @@ A per-Waveform shift measured in beats, applied before evaluation. `0` leaves th
 float? envelope = waveforms.Evaluate(waveform); // [0..1], or null without a clock
 ```
 
-Effects and transitions own the Waveform values they acquire and decide how the resulting envelope shapes their art. Waveforms resolves the live clock and Hold substitution, then delegates envelope math to `Waveform.Evaluate`; the editor plot calls that same kernel, so visualization and runtime shaping cannot drift.
+Effects and transitions own the Waveform values they acquire and decide how the resulting envelope shapes their art. Waveforms resolves the live clock, then delegates envelope math to `Waveform.Evaluate`; the editor plot calls that same kernel, so visualization and runtime shaping cannot drift.
+
+## Routines
+
+A Routine is four already-resolved Waveforms spanning one 16-beat Grid. Callers use the same Waveform acquisition operations they already know, then compose the result directly:
+
+```csharp
+var routine = Routine.Of(
+    waveforms.Random(Energy.Mid),
+    waveforms.Random(Energy.Low),
+    waveforms.Random(Energy.High),
+    waveforms.Random(Energy.Low));
+
+float? envelope = waveforms.Evaluate(routine);
+```
+
+There is no Routine-specific acquisition language, resolver, or replacement policy. The caller composes another value when it wants different bars.
 
 Bar Phase is the boss. A malformed Waveform (widths that don't sum to a bar, an amplitude string shorter/longer than the sequence) cannot run away — it is still evaluated against one bounded bar. **Malformation is logged at load time and otherwise tolerated; nothing is silently substituted.** (We do not fall back to the Beat Pulse; the worst case is one odd-looking bar, which is self-correcting on the next downbeat.)
 

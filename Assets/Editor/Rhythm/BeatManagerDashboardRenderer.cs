@@ -7,7 +7,7 @@ using UnityEngine;
 /// <remarks>
 /// This module owns layout, colors, styles, and widgets. It consumes <see cref="BeatManagerDashboardModel"/>
 /// instead of reading runtime state directly, keeping Unity drawing separate from the dashboard's display
-/// decisions. User actions are returned to the drawer adapter so writes to live wall state stay outside the
+/// decisions. User actions are returned to the drawer adapter so editor-only preview state stays outside the
 /// renderer.
 /// </remarks>
 internal static class BeatManagerDashboardRenderer
@@ -71,7 +71,7 @@ internal static class BeatManagerDashboardRenderer
 
     private const string EnvelopeTooltip =
         "Envelope(variant): the Waveform Pool envelope evaluated at the current Bar Phase — the primitive under " +
-        "BeatBrightness/BeatTime. Shows the wall's effective variant (the lock, or the on-screen effect's). " +
+        "BeatBrightness/BeatTime. Shows the editor-previewed Pool entry without changing the wall. " +
         "Null: no beat clock is running.";
     private const string FillTooltip =
         "Fill: a short build-up flourish. IN n = counting down (the bar fills as it approaches over the last " +
@@ -345,12 +345,13 @@ internal static class BeatManagerDashboardRenderer
         DrawCountdownChip(new Rect(rect.x + (step * 3f), rect.y, chipWidth, rect.height), model.OffBeatGate, OffBeatGateChipColor);
     }
 
+    /// <summary>Draws the editor-only Waveform preview selector and reports any chosen action.</summary>
     private static BeatManagerDashboardActions DrawWaveformSelector(Rect rect, WaveformSelectorView selector)
     {
         const float editButtonWidth = 90f;
         const float gap = 6f;
 
-        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), selector.Live ? "WALL" : "PREVIEW", rowLabelStyle);
+        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), "PREVIEW", rowLabelStyle);
 
         var popupX = rect.x + RowLabelWidth;
         var popupRight = rect.xMax - editButtonWidth - gap;

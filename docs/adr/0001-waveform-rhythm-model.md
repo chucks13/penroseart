@@ -42,7 +42,7 @@ retired in every form** — effects hold Waveform *values*, acquired by draw, by
 name, or inline; a Pool position may change at any time. Everything else in this ADR
 stands: the notation model, the Pool file, malformation handling, and the sixteenth
 safety limit (re-affirmed on its own merits as an authored full-wall strobe hazard).
-Vocabulary: CONTEXT.md (Waveforms, Energy, Waveform Hold); contracts:
+Vocabulary: CONTEXT.md (Waveforms, Energy, Routine); contracts:
 ADR-0012, ADR-0013, ADR-0015, ADR-0016.
 
 ### Amendment (2026-07-12, Hunter, Performer ownership correction)

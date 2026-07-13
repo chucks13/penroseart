@@ -15,8 +15,6 @@ using UnityEngine;
 [CustomPropertyDrawer(typeof(BeatManager))]
 public sealed class BeatManagerDrawer : PropertyDrawer
 {
-    private const string WaveformAutoLabel = "Auto (wall picks)";
-
     // The canonical Beat Pulse, parsed once and reused: the origin envelope and the strip's fallback when the Pool
     // is empty/missing. A struct, so caching just avoids re-parsing (and re-allocating its Hump[]) on every repaint.
     private static Waveform beatPulseWaveform;
@@ -26,16 +24,11 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     // re-reading every frame would re-run Waveform.Parse (which logs malformations) on a constantly-repainting
     // Play Mode inspector. The file's last-write time is the cache key, so an external save (the Pool editor's
     // AssetDatabase.Refresh) is picked up automatically without parsing — and therefore without log spam — in between.
-    // Index alignment is what makes the two-way wall binding work: BeatManager.LoadWaveformPool parses the SAME file
-    // through the SAME codec in the SAME order, so a Pool index here equals the runtime's beatVariant for that entry.
+    // BeatManager and this preview parse the same file through the same codec.
     private static WaveformPool.Entry[] waveformPoolEntries;
     private static string[] waveformPoolNames;
-    private static string[] waveformPopupOptions;
-    private static int waveformPopupAutoVariant = int.MinValue;
 
-    // The dropdown's selected row, NOT a raw Pool index: row 0 is the "Auto" sentinel, row k+1 is Pool index k.
-    // In Play Mode it is recomputed from BeatManager.activeVariant each repaint (read-back); in Edit Mode it is the
-    // local preview choice the user is browsing.
+    // Editor-only Pool preview. It never writes musical runtime state.
     private static int selectedWaveformIndex;
     private static long waveformPoolStampTicks = long.MinValue; // sentinel: nothing loaded yet
 
@@ -59,7 +52,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
                 line.y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 var panelRect = EditorGUI.IndentedRect(new Rect(line.x, line.y, line.width, BeatManagerDashboardRenderer.DashboardHeight));
-                DrawDashboard(panelRect, ResolveBeatManager(property), property.serializedObject.targetObject);
+                DrawDashboard(panelRect, ResolveBeatManager(property));
                 line.y += BeatManagerDashboardRenderer.DashboardHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 DrawChildFields(line, property);
@@ -116,14 +109,6 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         return target != null ? fieldInfo?.GetValue(target) as BeatManager : null;
     }
 
-    /// <summary>
-    /// The on-screen effect's live variant, or <c>-1</c> outside safe Play Mode Controller access.
-    /// </summary>
-    private static int ResolveOnScreenVariant(Object owner)
-    {
-        return WallVariantControl.ResolveOnScreenVariant(owner);
-    }
-
     /// <summary>Draws the serialized BeatManager fields (beatData and smoothing tunables) normally.</summary>
     /// <remarks>Children are enumerated rather than listed by name so future fields appear without touching
     /// this drawer; beatData renders through Unity's plain default foldout — that is the raw-values debug view,
@@ -143,14 +128,15 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         }
     }
 
-    private static void DrawDashboard(Rect rect, BeatManager beatManager, Object owner)
+    /// <summary>Draws the live rhythm facts beside an editor-only Waveform preview.</summary>
+    private static void DrawDashboard(Rect rect, BeatManager beatManager)
     {
         EnsureWaveformPool();
 
-        var model = BeatManagerDashboardModel.From(beatManager, ResolveOnScreenVariant(owner));
+        var model = BeatManagerDashboardModel.From(beatManager, selectedWaveformIndex);
         var selector = BuildWaveformSelector();
         var actions = BeatManagerDashboardRenderer.Draw(rect, model, selector, SelectedWaveform());
-        ApplyDashboardActions(actions, selector.Live);
+        ApplyDashboardActions(actions);
     }
 
     /// <summary>Returns the canonical Beat Pulse Waveform (<c>QQQQ</c> / <c>8888</c>), parsed once and cached.</summary>
@@ -208,18 +194,13 @@ public sealed class BeatManagerDrawer : PropertyDrawer
             waveformPoolNames[i] = waveformPoolEntries[i].name;
         }
 
-        waveformPopupOptions = null;
-        waveformPopupAutoVariant = int.MinValue;
-
-        // Clamp to the dropdown range, which has one extra row (index 0 = "Auto") on top of the Pool entries.
-        selectedWaveformIndex = Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolEntries.Length);
+        selectedWaveformIndex = Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolEntries.Length - 1);
         waveformPoolStampTicks = stamp;
     }
 
     /// <summary>
-    /// The Waveform the strip plots: when the wall is live, the locked Waveform if one is set, otherwise the one the
-    /// on-screen effect is actually using right now (the read-back); in Edit Mode, the local preview choice. Falls
-    /// back to the first Pool entry / Beat Pulse during the brief startup or transition gap, or when the Pool is empty.
+    /// The Waveform the strip plots from editor-only preview state. Falls back to the canonical
+    /// Beat Pulse when the Pool is empty.
     /// </summary>
     private static Waveform SelectedWaveform()
     {
@@ -228,68 +209,23 @@ public sealed class BeatManagerDrawer : PropertyDrawer
             return GetBeatPulseWaveform();
         }
 
-        int index;
-        if (WallVariantControl.TryGetState(out var wall))
-        {
-            // Locked: plot the lock. Auto: plot whatever the on-screen effect uses, falling back to index 0 in the gap.
-            index = wall.ActiveVariant >= 0 ? wall.ActiveVariant : (wall.CurrentVariant >= 0 ? wall.CurrentVariant : 0);
-        }
-        else
-        {
-            // Edit Mode: dropdown row 0 ("Auto") has no live effect to mirror, so it previews the first Pool entry.
-            index = selectedWaveformIndex <= 0 ? 0 : selectedWaveformIndex - 1;
-        }
-
-        index = Mathf.Clamp(index, 0, waveformPoolEntries.Length - 1);
+        var index = Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolEntries.Length - 1);
         return waveformPoolEntries[index].waveform;
     }
 
+    /// <summary>Builds the preview selector from the cached Pool without exposing runtime control.</summary>
     private static WaveformSelectorView BuildWaveformSelector()
     {
-        var live = WallVariantControl.TryGetState(out var wall);
-        var options = GetWaveformPopupOptions(live, wall.ActiveVariant, wall.CurrentVariant);
-        var shownIndex = live
-            ? (wall.ActiveVariant < 0 ? 0 : Mathf.Clamp(wall.ActiveVariant + 1, 0, options.Length - 1))
-            : Mathf.Clamp(selectedWaveformIndex, 0, options.Length - 1);
-        return new WaveformSelectorView(live, shownIndex, options);
+        var shownIndex = Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolNames.Length - 1);
+        return new WaveformSelectorView(shownIndex, waveformPoolNames);
     }
 
-    private static string[] GetWaveformPopupOptions(bool live, int activeVariant, int currentVariant)
-    {
-        if (waveformPopupOptions == null || waveformPopupOptions.Length != waveformPoolNames.Length + 1)
-        {
-            waveformPopupOptions = new string[waveformPoolNames.Length + 1];
-            for (var i = 0; i < waveformPoolNames.Length; i++)
-            {
-                waveformPopupOptions[i + 1] = waveformPoolNames[i];
-            }
-
-            waveformPopupAutoVariant = int.MinValue;
-        }
-
-        var autoVariant = live && activeVariant < 0 && currentVariant >= 0 && currentVariant < waveformPoolNames.Length
-            ? currentVariant
-            : -1;
-        if (waveformPopupAutoVariant != autoVariant)
-        {
-            waveformPopupOptions[0] = autoVariant >= 0
-                ? WaveformAutoLabel + " → " + waveformPoolNames[autoVariant]
-                : WaveformAutoLabel;
-            waveformPopupAutoVariant = autoVariant;
-        }
-
-        return waveformPopupOptions;
-    }
-
-    private static void ApplyDashboardActions(BeatManagerDashboardActions actions, bool live)
+    /// <summary>Applies preview and Pool-editor actions without writing musical runtime state.</summary>
+    private static void ApplyDashboardActions(BeatManagerDashboardActions actions)
     {
         if (actions.HasWaveformSelection)
         {
-            selectedWaveformIndex = actions.SelectedWaveformIndex; // remember for Edit-Mode preview and the next repaint
-            if (live && WallVariantControl.TryGetState(out var wall))
-            {
-                WallVariantControl.ApplySelection(wall.BeatManager, actions.SelectedWaveformIndex);
-            }
+            selectedWaveformIndex = actions.SelectedWaveformIndex;
         }
 
         if (actions.OpenWaveformPoolEditor)

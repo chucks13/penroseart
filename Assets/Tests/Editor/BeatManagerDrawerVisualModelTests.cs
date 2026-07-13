@@ -45,7 +45,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void FromUsesOfflineHeaderWhenBeatManagerIsUnavailable()
     {
-        var model = BeatManagerDashboardModel.From(null, onScreenVariant: -1);
+        var model = BeatManagerDashboardModel.From(null, waveformIndex: 0);
 
         Assert.That(model.Active, Is.False);
         Assert.That(model.BadgeText, Is.EqualTo("OFFLINE"));

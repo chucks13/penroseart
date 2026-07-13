@@ -92,11 +92,11 @@ internal readonly struct BeatManagerDashboardModel
     }
 
     /// <summary>
-    /// Builds the dashboard display model from the live runtime object and the on-screen effect's variant.
+    /// Builds the dashboard display model from the live runtime object and the previewed Pool entry.
     /// </summary>
     /// <param name="beatManager">Runtime beat manager, or <c>null</c> when the property cannot resolve one.</param>
-    /// <param name="onScreenVariant">The effect variant currently visible on the wall, or <c>-1</c> outside Play Mode.</param>
-    public static BeatManagerDashboardModel From(BeatManager beatManager, int onScreenVariant)
+    /// <param name="waveformIndex">The Pool entry selected for editor-only preview.</param>
+    public static BeatManagerDashboardModel From(BeatManager beatManager, int waveformIndex)
     {
         var active = beatManager != null && beatManager.IsActive;
         var live = beatManager != null && beatManager.IsLiveSource;
@@ -122,7 +122,7 @@ internal readonly struct BeatManagerDashboardModel
             new CountdownChipView("NEXT OFF BEAT", FormatMs(beatManager?.NextOffBeatMs), alignValueRight: true),
             new CountdownChipView("OFF BEAT", beatManager?.OffBeat == true ? "YES" : "NO"),
             active ? beatManager.BarPhase : 0f,
-            BuildEnvelopeRow(beatManager, onScreenVariant),
+            BuildEnvelopeRow(beatManager, waveformIndex),
             BuildPhraseEventRow(beatManager?.FillQuery),
             BuildPhraseEventRow(beatManager?.DropQuery),
             BuildEnergyRow(beatManager?.EnergyQuery),
@@ -187,16 +187,16 @@ internal readonly struct BeatManagerDashboardModel
         return value is { } ms ? $"{ms}ms" : "--";
     }
 
-    private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, int onScreenVariant)
+    /// <summary>Builds the live-clock envelope row for the editor-previewed Pool entry.</summary>
+    private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, int waveformIndex)
     {
         if (beatManager == null)
         {
             return EnvelopeRowView.Null;
         }
 
-        var variant = beatManager.ResolveDisplayVariant(onScreenVariant);
-        return beatManager.Envelope(variant) is { } envelope
-            ? new EnvelopeRowView(true, envelope, $"{envelope:0.00} · var {variant}")
+        return beatManager.Envelope(waveformIndex) is { } envelope
+            ? new EnvelopeRowView(true, envelope, $"{envelope:0.00} · preview {waveformIndex}")
             : EnvelopeRowView.Null;
     }
 
@@ -365,15 +365,20 @@ internal readonly struct ColorBankRowView
     }
 }
 
+/// <summary>Immutable editor-only Waveform Pool preview selection.</summary>
 internal readonly struct WaveformSelectorView
 {
-    public readonly bool Live;
+    /// <summary>The zero-based Pool entry shown in the preview.</summary>
     public readonly int ShownIndex;
+
+    /// <summary>The Pool names offered by the preview popup.</summary>
     public readonly string[] Options;
 
-    public WaveformSelectorView(bool live, int shownIndex, string[] options)
+    /// <summary>Captures one preview selection and its available Pool names.</summary>
+    /// <param name="shownIndex">The zero-based Pool entry shown in the preview.</param>
+    /// <param name="options">The Pool names offered by the preview popup.</param>
+    public WaveformSelectorView(int shownIndex, string[] options)
     {
-        Live = live;
         ShownIndex = shownIndex;
         Options = options;
     }

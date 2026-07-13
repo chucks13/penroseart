@@ -211,30 +211,6 @@ public class Controller : Singleton<Controller>
     /// </summary>
     private int currentEffect;
 
-    /// <summary>
-    /// The beat variant (Waveform Pool index) of the effect currently on screen, or <c>-1</c> when no single
-    /// effect owns the frame (startup gap or mid-transition, where <see cref="currentEffect"/> is -1).
-    /// </summary>
-    /// <remarks>
-    /// Exposes the otherwise-private on-screen variant to the Waveform Pool selector in the BeatManager dashboard so
-    /// it can show what the wall is actually pulsing to in "Auto" mode (the read-back), and so locking a specific
-    /// Waveform can retarget the live effect's pulse immediately instead of waiting for the next effect to start.
-    /// This is an editor/inspector affordance; the runtime selection model is unchanged.
-    /// </remarks>
-    public int CurrentBeatVariant
-    {
-        get
-        {
-            int index = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
-            return (effects != null && index >= 0 && index < effects.Length) ? effects[index].beatVariant : -1;
-        }
-        set
-        {
-            int index = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
-            if (effects != null && index >= 0 && index < effects.Length) effects[index].beatVariant = value;
-        }
-    }
-
     /// <summary>Read-only Director sequencing snapshot for inspectors and status displays.</summary>
     public DirectorStatus DirectorStatus => director != null ? director.Status : DirectorStatus.NotReady;
 

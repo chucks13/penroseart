@@ -2,89 +2,18 @@
 
 #nullable enable
 
-using System.Text.RegularExpressions;
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
 using UnityEngine;
-using UnityEngine.TestTools;
 
 /// <summary>
-/// Pins ticket 19's Routine contract at the Waveforms seam: explicit caller-owned
-/// acquisition, immutable resolved values, observational Grid reads, hub-owned wrap identity,
-/// name-pinned settings, and Hold reach-through without rewriting the Routine.
+/// Pins the Routine contract at the Waveforms seam: direct four-Waveform composition,
+/// observational Grid reads, and hub-owned wrap identity.
 /// </summary>
 public sealed class WaveformsRoutineTests
 {
     /// <summary>Worked-value tolerance for Waveform envelope assertions.</summary>
     private const float Tol = 0.0001f;
-
-    /// <summary>A random acquisition resolves every Routine bar within the requested Energy set.</summary>
-    [Test]
-    public void RandomRoutine_ResolvesEverySlotWithinTheRequestedEnergySet()
-    {
-        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
-
-        var values = EvaluateBars(beatManager, waveforms, waveforms.RandomRoutine(Energy.Low, Energy.High));
-
-        Assert.That(values.Item1, Is.EqualTo(0.25f).Or.EqualTo(1f));
-        Assert.That(values.Item2, Is.EqualTo(0.25f).Or.EqualTo(1f));
-        Assert.That(values.Item3, Is.EqualTo(0.25f).Or.EqualTo(1f));
-        Assert.That(values.Item4, Is.EqualTo(0.25f).Or.EqualTo(1f));
-    }
-
-    /// <summary>An empty Energy match logs and resolves every bar from the whole-Pool fallback.</summary>
-    [Test]
-    public void RandomRoutine_EmptyEnergyMatchFallsBackToTheWholePool()
-    {
-        var entries = new[]
-        {
-            Entry("low", "QQQQ", "2000"),
-            Entry("mid", "QQQQ", "4444"),
-        };
-        var (beatManager, waveforms) = CreateWaveforms(entries);
-        for (var i = 0; i < 4; i++)
-        {
-            LogAssert.Expect(LogType.Warning, new Regex(
-                @"^\[Waveforms\] no Pool entry matches the requested Energy set \(High\) — drawing from the whole Pool\.$"));
-        }
-
-        var values = EvaluateBars(beatManager, waveforms, waveforms.RandomRoutine(Energy.High));
-
-        Assert.That(values.Item1, Is.EqualTo(0.25f).Or.EqualTo(0.5f));
-        Assert.That(values.Item2, Is.EqualTo(0.25f).Or.EqualTo(0.5f));
-        Assert.That(values.Item3, Is.EqualTo(0.25f).Or.EqualTo(0.5f));
-        Assert.That(values.Item4, Is.EqualTo(0.25f).Or.EqualTo(0.5f));
-    }
-
-    /// <summary>Explicit authored acquisition resolves draw, Preset-name, inline, and silence settings.</summary>
-    [Test]
-    public void CreateRoutine_ResolvesEveryAuthoredAcquisitionPath()
-    {
-        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
-
-        var routine = RequireRoutine(waveforms.CreateRoutine(
-            RoutineSlot.Pin("mid"),
-            RoutineSlot.Draw(Energy.High),
-            RoutineSlot.Pin(Waveform.Parse("QQQQ", "0000")),
-            RoutineSlot.Pin(Waveform.Parse("QQQQ", "8888"))));
-
-        Assert.That(EvaluateBars(beatManager, waveforms, routine), Is.EqualTo((0.5f, 1f, 0f, 1f)));
-    }
-
-    /// <summary>A missing pinned Preset fails acquisition before an unresolved Routine can be held.</summary>
-    [Test]
-    public void CreateRoutine_MissingPresetReadsNull()
-    {
-        var (_, waveforms) = CreateWaveforms(EnergyEntries());
-
-        var routine = waveforms.CreateRoutine(
-            RoutineSlot.Pin("missing"),
-            RoutineSlot.Pin(Waveform.Parse("QQQQ", "8888")),
-            RoutineSlot.Draw(Energy.Low),
-            RoutineSlot.Draw(Energy.High));
-
-        Assert.That(routine, Is.Null);
-    }
 
     /// <summary>The Grid bar selects one of four directly composed resolved Waveforms.</summary>
     [Test]
@@ -136,79 +65,12 @@ public sealed class WaveformsRoutineTests
             beat: 1, bar: 1, timeSeconds: 0f, state: "disputed"), Is.EqualTo(1f).Within(Tol));
     }
 
-    /// <summary>The caller alone chooses whether and when to repeat acquisition with its settings.</summary>
-    [Test]
-    public void CallerChoosesWhenToAcquireAReplacementRoutine()
-    {
-        Random.InitState(19);
-        var (beatManager, waveforms) = CreateWaveforms(TwoMidEntries());
-        var bar1 = RoutineSlot.Draw(Energy.Mid);
-        var bar2 = RoutineSlot.Pin("quiet mid");
-        var bar3 = RoutineSlot.Draw(Energy.Mid);
-        var bar4 = RoutineSlot.Pin(Waveform.Parse("QQQQ", "8888"));
-        var original = RequireRoutine(waveforms.CreateRoutine(bar1, bar2, bar3, bar4));
-
-        PlaceGrid(beatManager, waveforms, beat: 16, bar: 4, state: "locked", timeSeconds: 0f);
-        PlaceGrid(beatManager, waveforms, beat: 1, bar: 1, state: "locked", timeSeconds: 0f);
-        Assert.That(beatManager.Grid.Wrapped, Is.True);
-        var originalAtWrap = waveforms.Evaluate(original);
-        Assert.That(waveforms.Evaluate(original), Is.EqualTo(originalAtWrap),
-            "the provider reports the wrap but never replaces the held value");
-
-        var replacement = RequireRoutine(waveforms.CreateRoutine(bar1, bar2, bar3, bar4));
-
-        Assert.That(replacement, Is.Not.SameAs(original));
-        Assert.That(waveforms.Evaluate(original), Is.EqualTo(originalAtWrap),
-            "caller acquisition cannot mutate the previously held Routine");
-    }
-
-    /// <summary>Hold substitutes at evaluation while acquisition still preserves genuine resolved values.</summary>
-    [Test]
-    public void Hold_ReachesThroughRoutineAndReleaseRestoresItsValues()
-    {
-        var (beatManager, waveforms) = CreateWaveforms(EnergyEntries());
-        waveforms.Hold(Waveform.Parse("QQQQ", "8888"));
-
-        var routine = RequireRoutine(waveforms.CreateRoutine(
-            RoutineSlot.Draw(Energy.Low),
-            RoutineSlot.Pin("mid"),
-            RoutineSlot.Draw(Energy.Low),
-            RoutineSlot.Pin(Waveform.Parse("QQQQ", "4444"))));
-        Assert.That(EvaluateBars(beatManager, waveforms, routine),
-            Is.EqualTo((1f, 1f, 1f, 1f)), "Hold substitutes during every Routine read");
-
-        waveforms.ReleaseToAuto();
-        Assert.That(EvaluateBars(beatManager, waveforms, routine),
-            Is.EqualTo((0.25f, 0.5f, 0.25f, 0.5f)),
-            "acquisition under Hold preserved the Routine's genuine resolved values");
-    }
-
-    /// <summary>Requires a successful authored acquisition and returns its resolved value.</summary>
-    private static Routine RequireRoutine(Routine? routine)
-    {
-        Assert.That(routine, Is.Not.Null, "the authored settings resolve");
-        return routine!;
-    }
-
     /// <summary>Builds a live BeatManager and Waveforms instance over caller-provided Pool entries.</summary>
     private static (BeatManager, Waveforms) CreateWaveforms(WaveformPool.Entry[] entries)
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f);
         beatManager.Update(0f);
         return (beatManager, new Waveforms(beatManager, entries));
-    }
-
-    /// <summary>Evaluates the four bars on their downbeats and returns their public envelope values.</summary>
-    private static (float, float, float, float) EvaluateBars(
-        BeatManager beatManager,
-        Waveforms waveforms,
-        Routine routine)
-    {
-        return (
-            EvaluateAt(beatManager, waveforms, routine, beat: 1, bar: 1, timeSeconds: 0f),
-            EvaluateAt(beatManager, waveforms, routine, beat: 5, bar: 2, timeSeconds: 0f),
-            EvaluateAt(beatManager, waveforms, routine, beat: 9, bar: 3, timeSeconds: 0f),
-            EvaluateAt(beatManager, waveforms, routine, beat: 13, bar: 4, timeSeconds: 0f));
     }
 
     /// <summary>Places one Grid observation and reads the Routine envelope through Waveforms.</summary>
@@ -267,16 +129,6 @@ public sealed class WaveformsRoutineTests
             Entry("low", "QQQQ", "2000"),
             Entry("mid", "QQQQ", "4444"),
             Entry("high", "EEEEEEEE", "88888888"),
-        };
-    }
-
-    /// <summary>Pool with two observable choices in the same Mid tier.</summary>
-    private static WaveformPool.Entry[] TwoMidEntries()
-    {
-        return new[]
-        {
-            Entry("quiet mid", "QQQQ", "2222"),
-            Entry("loud mid", "QQQQ", "4444"),
         };
     }
 

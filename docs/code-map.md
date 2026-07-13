@@ -62,7 +62,6 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/BeatManagerDashboardRenderer.cs` | IMGUI rendering for the BeatManager dashboard. |
 | `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Formats the core `PhraseEventInfo` for the BeatManager dashboard. |
 | `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for rhythm-query nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
-| `Assets/Editor/Rhythm/WallVariantControl.cs` | Editor-side wall variant selector state and writeback. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Evaluate` output. |
 | `Assets/Editor/Effects/EffectSelectorDrawer.cs` | Effect selector property drawer. |

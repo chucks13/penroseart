@@ -13,9 +13,8 @@ using UnityEngine.TestTools;
 /// seeded clock states and notation worked examples. Covers the derived Energy classification
 /// (the seed seven, locked from notation), draws (Energy-set membership, by-name misses,
 /// empty-match whole-Pool fallback), Evaluate against known clock states, the Hit edge on actual
-/// onsets, peak-spacing worked examples, and the Waveform Hold reaching through draws and
-/// evaluation. Expected values come from the notation and the locked classifications, never from
-/// re-running the implementation's math.
+/// onsets, and peak-spacing worked examples. Expected values come from the notation and the
+/// locked classifications, never from re-running the implementation's math.
 /// </summary>
 public sealed class WaveformsTests
 {
@@ -313,126 +312,6 @@ public sealed class WaveformsTests
         Assert.That(waveforms.Hit(Waveform.Parse("QQQQ", "8888")), Is.False);
     }
 
-    // ---- The Waveform Hold (released state: Auto) ------------------------------------------------
-
-    /// <summary>While engaged, the Hold pins every draw — random and by-name alike — to the held value.</summary>
-    [Test]
-    public void Hold_PinsEveryDrawToTheHeldValue()
-    {
-        var waveforms = CreateSeededWaveforms();
-        var heartbeat = Waveform.Parse("EEQEEQ", "860860");
-
-        waveforms.Hold(heartbeat);
-
-        AssertNotation(waveforms.Random(), "EEQEEQ", "860860", 0f, "whole-Pool draw under the Hold");
-        AssertNotation(waveforms.Random(Energy.Low), "EEQEEQ", "860860", 0f, "Energy-set draw under the Hold");
-        var byName = waveforms.ByName("beat pulse");
-        Assert.That(byName, Is.Not.Null);
-        AssertNotation(byName!.Value, "EEQEEQ", "860860", 0f, "by-name acquisition under the Hold");
-        // A miss is still a fact about the Pool — the Hold never invents an entry for an unknown name.
-        Assert.That(waveforms.ByName("no such preset"), Is.Null);
-    }
-
-    /// <summary>A non-null Evaluate argument reads the held Waveform at the seeded Bar Phase.</summary>
-    [Test]
-    public void Hold_ReachesEvaluate()
-    {
-        // At phase 0, measure start peaks at 1 while beats 2 and 4 has no hump and reads 0.
-        var waveforms = CreateSeededWaveforms(bpm: 120f, timeSeconds: 0f);
-        var passed = Waveform.Parse("QQQQ", "0808");
-        Assert.That(waveforms.Evaluate(passed), Is.EqualTo(0f).Within(Tol), "passed Waveform before the Hold");
-
-        waveforms.Hold(Waveform.Parse("QQQQ", "8000"));
-
-        Assert.That(waveforms.Evaluate(passed), Is.EqualTo(1f).Within(Tol), "held Waveform under the Hold");
-    }
-
-    /// <summary>The Hold supplies Hit's onsets and an immediate retarget removes passed-only onsets.</summary>
-    [Test]
-    public void Hold_ReachesHit()
-    {
-        // At 120 BPM, the window from t = 1.2 to 1.3 s is phase (0.6, 0.65]. The offbeat onset at
-        // 0.625 is inside it; measure start has no onset there.
-        var (_, waveforms) = CreateSteppedWaveforms(1.2f, 1.3f);
-        var offbeat = Waveform.Parse("QQQQ", "8888", Waveform.BeatPulseRounding, 0.5f);
-        var measureStart = Waveform.Parse("QQQQ", "8000");
-
-        waveforms.Hold(offbeat);
-        Assert.That(waveforms.Hit(measureStart), Is.True, "an onset present only in the held Waveform fires");
-
-        waveforms.Hold(measureStart);
-        Assert.That(waveforms.Hit(offbeat), Is.False, "an onset present only in the passed Waveform does not fire");
-    }
-
-    /// <summary>A non-null spacing argument measures the held Waveform at the current tempo.</summary>
-    [Test]
-    public void Hold_ReachesShortestPeakSpacingMs()
-    {
-        // At 120 BPM, quarter-note pulse spacing is 500 ms; one peak per bar spaces 2000 ms.
-        var waveforms = CreateSeededWaveforms(bpm: 120f, timeSeconds: 0f);
-        var passed = Waveform.Parse("QQQQ", "8888");
-        Assert.That(waveforms.ShortestPeakSpacingMs(passed), Is.EqualTo(500f).Within(Tol));
-
-        waveforms.Hold(Waveform.Parse("QQQQ", "8000"));
-
-        Assert.That(waveforms.ShortestPeakSpacingMs(passed), Is.EqualTo(2000f).Within(Tol));
-    }
-
-    /// <summary>Null evaluation arguments stay empty under the Hold; it never invents a rhythm.</summary>
-    [Test]
-    public void Hold_NullEvaluationArgumentsStayEmpty()
-    {
-        var (_, waveforms) = CreateSteppedWaveforms(1.2f, 1.3f);
-        waveforms.Hold(Waveform.Parse("QQQQ", "8888"));
-
-        Assert.That(waveforms.Evaluate((Waveform?)null), Is.Null);
-        Assert.That(waveforms.Hit(null), Is.False);
-        Assert.That(waveforms.ShortestPeakSpacingMs(null), Is.Null);
-    }
-
-    /// <summary>Release to Auto restores pass-through for envelope, onset, and spacing evaluation.</summary>
-    [Test]
-    public void ReleaseToAuto_RestoresEvaluationPassThrough()
-    {
-        // At phase 0, measure start reads 1 while beats 2 and 4 reads 0. Their shortest spacings at
-        // 120 BPM are 2000 ms and 1000 ms respectively.
-        var evaluationWaveforms = CreateSeededWaveforms(bpm: 120f, timeSeconds: 0f);
-        var passed = Waveform.Parse("QQQQ", "0808");
-        evaluationWaveforms.Hold(Waveform.Parse("QQQQ", "8000"));
-        Assert.That(evaluationWaveforms.Evaluate(passed), Is.EqualTo(1f).Within(Tol));
-        Assert.That(evaluationWaveforms.ShortestPeakSpacingMs(passed), Is.EqualTo(2000f).Within(Tol));
-
-        evaluationWaveforms.ReleaseToAuto();
-
-        Assert.That(evaluationWaveforms.Evaluate(passed), Is.EqualTo(0f).Within(Tol));
-        Assert.That(evaluationWaveforms.ShortestPeakSpacingMs(passed), Is.EqualTo(1000f).Within(Tol));
-
-        // The phase window (0.2, 0.3] crosses beat 2 at 0.25. The held measure start has no onset
-        // there; after release, the passed beats-2-and-4 Waveform does.
-        var (_, hitWaveforms) = CreateSteppedWaveforms(0.4f, 0.6f);
-        hitWaveforms.Hold(Waveform.Parse("QQQQ", "8000"));
-        Assert.That(hitWaveforms.Hit(passed), Is.False);
-
-        hitWaveforms.ReleaseToAuto();
-
-        Assert.That(hitWaveforms.Hit(passed), Is.True);
-    }
-
-    /// <summary>Releasing to Auto restores unheld acquisition behavior for subsequent requests.</summary>
-    [Test]
-    public void ReleaseToAuto_RestoresAcquisition()
-    {
-        var waveforms = CreateSeededWaveforms();
-        waveforms.Hold(Waveform.Parse("EEQEEQ", "860860"));
-
-        waveforms.ReleaseToAuto();
-
-        var byName = waveforms.ByName("beat pulse");
-        Assert.That(byName, Is.Not.Null);
-        AssertNotation(byName!.Value, "QQQQ", "8888", 0f, "by-name after release");
-        AssertNotation(waveforms.Random(Energy.High), "EEEEEEEE", "88888888", 0f, "High draw after release");
-    }
-
     // ---- Fixture helpers -------------------------------------------------------------------------
 
     /// <summary>
@@ -454,7 +333,7 @@ public sealed class WaveformsTests
         };
     }
 
-    /// <summary>A Waveforms instance over the seed seven with no clock — draws and the Hold need no bar position.</summary>
+    /// <summary>A Waveforms instance over the seed seven with no clock for acquisition tests.</summary>
     private static Waveforms CreateSeededWaveforms()
     {
         return new Waveforms(new BeatManager(), SeedEntries());
