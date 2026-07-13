@@ -1,6 +1,5 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
-using System.Xml.Linq;
 
 /// <summary>
 /// Alternates two colors across tile types with a ping-pong time curve.
@@ -45,17 +44,16 @@ public class Pulse : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = waveforms.Random();
         wave = new float[400];      // clear array
         color = Color.HSVToRGB(Random.value, 1f, 1f);
         seconds = Random.Range(1f, 5f);
         colorDelta = Random.Range(0.25f, 0.75f);
-        beatVariant = beatManager.GetRandomVariant();
         startColor = color;
         endColor = startColor.Delta(colorDelta);
         beatMode = Random.Range(0, 2);
         pulseMultipler = Random.value * 0.125f + 0.125f;
-        pulseScale = beatManager.GetShortestNonZeroPeakSpacingMs(beatVariant) / 200;
+        pulseScale = (waveforms.ShortestPeakSpacingMs(waveform) ?? 0f) / 200f;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -76,7 +74,8 @@ public class Pulse : EffectBase
     public override void Draw()
     {
         var t = Mathf.InverseLerp(0f, seconds, Mathf.PingPong(effectTime, seconds));
-        float waveHeight = beatManager.GetBeatBrightness(beatVariant, 0.0f, 1.0f, beatEnable);
+        float? rhythm = waveforms.Evaluate(waveform);
+        float waveHeight = rhythm is { } envelope ? Mathf.Lerp(1f, 0f, envelope) : 0f;
         for (int i = wave.Length - 1; i > 0; i--)
             wave[i] = wave[i - 1];
         wave[0] = waveHeight;
@@ -94,7 +93,7 @@ public class Pulse : EffectBase
             Color color = tiles[i].type == 0 ? color1 : color2;
             Color.RGBToHSV(color, out float h, out float s, out float v);
 
-            if (IsBeatActive)
+            if (rhythm.HasValue)
                 switch (beatMode)
                 {
                     case 0:

@@ -35,9 +35,10 @@ public class RandomEffectsMixer : MixerBase
     {
         base.Init();
     }
+
+    /// <summary>Creates and starts independent child Effects for this activation.</summary>
     public override void OnStart()
     {
-        base.OnStart();
         effects = new EffectBase[Random.Range(2, 4)];
         total = effects.Length;
 

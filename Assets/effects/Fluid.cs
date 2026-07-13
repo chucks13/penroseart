@@ -10,9 +10,6 @@ public class Fluid : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    /// <summary>The consumer-owned Waveform that offsets the diffusion palette lookup.</summary>
-    private Waveform waveform;
-
     /// <summary>The diffusion field rendered on the current frame.</summary>
     private float[] currentState;
 

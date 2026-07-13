@@ -141,6 +141,25 @@ public sealed class PerformerAccessPathTests
         Assert.That(childWaveforms, Is.SameAs(liveWaveforms));
     }
 
+    /// <summary>Proves Effect owners can directly share, replace, or suppress public Waveform configuration.</summary>
+    [Test]
+    public void EffectWaveformConfigurationIsPublicAndNullable()
+    {
+        EffectBase first = new BaseStartEffect();
+        EffectBase second = new BaseStartEffect();
+        var shared = Waveform.Parse("QQQQ", "8888");
+
+        first.waveform = shared;
+        second.waveform = first.waveform;
+
+        Assert.That(first.waveform, Is.EqualTo(shared));
+        Assert.That(second.waveform, Is.EqualTo(shared));
+
+        second.waveform = null;
+
+        Assert.That(second.waveform, Is.Null);
+    }
+
     /// <summary>Proves the retained EffectBase activation lifecycle does not require a Waveforms surface.</summary>
     [Test]
     public void EffectBaseOnStartDoesNotRequireWaveforms()
@@ -229,12 +248,12 @@ public sealed class PerformerAccessPathTests
     private sealed class FrameObservationEffect : EffectBase
     {
         /// <summary>The worked quarter-note Waveform observed during Draw.</summary>
-        private readonly Waveform waveform;
+        private readonly Waveform observedWaveform;
 
         /// <summary>Creates a render probe for the worked Waveform.</summary>
         public FrameObservationEffect(Waveform waveform)
         {
-            this.waveform = waveform;
+            observedWaveform = waveform;
         }
 
         /// <summary>Whether the last Draw observed the worked onset window.</summary>
@@ -258,7 +277,7 @@ public sealed class PerformerAccessPathTests
         /// <summary>Observes live Waveforms state at the same seam where an ordinary Effect renders.</summary>
         public override void Draw()
         {
-            ObservedHit = waveforms.Hit(waveform);
+            ObservedHit = waveforms.Hit(observedWaveform);
         }
     }
 
@@ -373,7 +392,7 @@ public sealed class PerformerAccessPathTests
         public override void Draw() { }
     }
 
-    /// <summary>Test Mixer whose private ownership operation uses ordinary Effect binding.</summary>
+    /// <summary>Test Mixer whose child ownership operation uses ordinary Effect binding.</summary>
     private sealed class OwningMixer : MixerBase
     {
         /// <summary>This ownership probe has no runtime debug detail.</summary>

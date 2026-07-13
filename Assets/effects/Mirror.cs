@@ -88,7 +88,7 @@ public class Mirror : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = waveforms.Random();
         mirrorList = Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10;
         fixCenterLineInit();
 
@@ -97,8 +97,8 @@ public class Mirror : MixerBase
         sourceEffect.Init();
         sourceEffect.RandomizeTime();
         sourceEffect.OnStart();
-        // Mirror is a wrapper, so the child uses the same beat variant as the parent.
-        sourceEffect.beatVariant = this.beatVariant;
+        // Mirror is a wrapper, so the child uses the same public Waveform configuration as the parent.
+        sourceEffect.waveform = waveform;
         debugText += $"{sourceEffect.Name}";
 
         controller.debugText.text = debugText;
@@ -115,6 +115,8 @@ public class Mirror : MixerBase
     public override void Draw()
     {
         sourceEffect.UpdateTime();
+        // Reassert unison after UpdateTime because the child may acquire a new Waveform on a Grid wrap.
+        sourceEffect.waveform = waveform;
         sourceEffect.Draw();
 
         int groupcount = mirrorList[0];     // how many copies

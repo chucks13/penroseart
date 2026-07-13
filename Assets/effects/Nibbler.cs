@@ -12,9 +12,6 @@ public class Nibbler : EffectBase
 
 
     private const int Count = 10;
-    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
-    private Waveform waveform;
-
     private int[] current;
     private bool randomColor;
     private Color color;

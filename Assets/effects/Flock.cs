@@ -12,9 +12,6 @@ public class Flock : EffectBase
     /// </summary>
     public override Repertoire Repertoire => Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>The consumer-owned Waveform that seasons flock speed until the next Grid.</summary>
-    private Waveform waveform;
-
     /// <summary>Number of boids simulated by the effect.</summary>
     private const int BoidCount = 80;
 

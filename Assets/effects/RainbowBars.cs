@@ -11,9 +11,6 @@ public class RainbowBars : ScreenEffect
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
-    /// <summary>The consumer-owned Waveform used by this activation's distortion mode.</summary>
-    private Waveform waveform;
-
     /// <summary>The screen-space direction used to sample the palette bands.</summary>
     private Direction direction;
 

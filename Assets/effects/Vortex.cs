@@ -39,7 +39,7 @@ public class Vortex : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = waveforms.Random();
         count = Random.Range(1, 5);
         angle = 0f;
         speed = Random.Range(50, 100);
@@ -83,7 +83,8 @@ public class Vortex : EffectBase
     public override void Draw()
     {
         // Beat pulse scales the nearest-spinner palette result for each tile.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float? rhythm = waveforms.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         Update();
         for (int i = 0; i < buffer.Length; i++)
         {

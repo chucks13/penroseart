@@ -11,9 +11,6 @@ public class MetaBalls : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
-    private Waveform waveform;
-
     private Ball[] balls;
     private Vector2 screen;
     private int total = 8;

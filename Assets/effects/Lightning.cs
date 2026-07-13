@@ -8,9 +8,6 @@ using UnityEngine;
 [System.Serializable]
 public class Lightning : EffectBase
 {
-    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
-    private Waveform waveform;
-
     private float fadeValue;
     private float starthue;
     private float deltastart = 0f;

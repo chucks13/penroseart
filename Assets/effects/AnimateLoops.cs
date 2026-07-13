@@ -11,9 +11,6 @@ public class AnimateLoops : EffectBase
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
-    /// <summary>The consumer-owned Waveform used by this activation's distortion mode.</summary>
-    private Waveform waveform;
-
     /// <summary>Per-loop colors advanced across the packed shape data.</summary>
     private Color[] colors;
 

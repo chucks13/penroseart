@@ -6,9 +6,6 @@ using UnityEngine;
 /// </summary>
 public class ColorSparkle : EffectBase
 {
-    /// <summary>The consumer-owned Waveform that offsets sparkle hue during this activation.</summary>
-    private Waveform waveform;
-
     /// <summary>Whether each sparkle chooses a fresh hue when no beat clock is available.</summary>
     private bool randomColor;
 

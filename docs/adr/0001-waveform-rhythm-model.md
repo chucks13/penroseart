@@ -45,6 +45,6 @@ safety limit (re-affirmed on its own merits as an authored full-wall strobe haza
 Vocabulary: CONTEXT.md (Waveforms, Energy, Routine); contracts:
 ADR-0012, ADR-0013, ADR-0015, ADR-0016.
 
-### Amendment (2026-07-12, Hunter, Performer ownership correction)
+### Amendment (2026-07-13, Hunter, public configuration correction)
 
-The 2026-07-11 amendment's canonical base helpers and base-held Waveform are superseded by ADR-0017. Brightness/time mapping remains effect-side, but each concrete Effect or Transition owns its Waveform, acquisition timing, fallback, and explicit response math; no authoring base holds rhythm state or automatically acquires or replaces it. Waveforms still offers the same acquisition and evaluation tools without deciding how any Performer uses them.
+The 2026-07-11 amendment's automatic base helpers and default Waveform acquisition are superseded by ADR-0017. Brightness/time mapping remains performer-side, while ordinary public artistic configuration may live on a concrete Performer or a neutral authoring base. Effects and Transitions decide acquisition timing, fallback, and explicit response math; no base lifecycle method automatically acquires, replaces, or responds to a Waveform. Waveforms still offers the same acquisition and evaluation tools without deciding how any Performer uses them.

@@ -24,9 +24,6 @@ public class Kscope : ScreenEffect
         public Texture2D tex;
         public string fname;
     };
-    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
-    private Waveform waveform;
-
     string fname = "";
     private int[] mirrorList;
     private int[] centerline;

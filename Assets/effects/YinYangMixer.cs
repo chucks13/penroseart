@@ -45,7 +45,7 @@ public class YinYangMixer : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = waveforms.Random();
         effects = new EffectBase[2];
         var debugText = string.Empty;
         for (var i = 0; i < 2; i++)
@@ -55,7 +55,7 @@ public class YinYangMixer : MixerBase
             effects[i].Init();
             effects[i].OnStart();
             // The parent applies one shared beat pulse after splitting child buffers.
-            effects[i].beatEnable = false;
+            effects[i].waveform = null;
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
         }
         controller.debugText.text = debugText;
@@ -80,10 +80,13 @@ public class YinYangMixer : MixerBase
         for (int i = 0; i < 2; i++)
         {
             effects[i].UpdateTime();
+            // Reassert suppression after UpdateTime because the child may acquire a new Waveform on a Grid wrap.
+            effects[i].waveform = null;
             effects[i].Draw();
         }
         // Parent beat pulse scales the final split/masked child-effect output.
-        float beatBrightness = beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+        float? rhythm = waveforms.Evaluate(waveform);
+        float beatBrightness = rhythm is { } envelope ? Mathf.Lerp(0.5f, 1f, envelope) : 1f;
         Color ribbon = APalette.read(0.5f, true) * beatBrightness;
 
         for (int i = 0; i < buffer.Length; i++)

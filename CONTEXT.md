@@ -25,7 +25,7 @@ Provides the shared rhythm state for effects and the Director. It can run from t
 - **Nullable queries**: `BeatManagerQueries` exposes ready-to-use rhythm values where `null` means not available right now.
 - **Waveforms**: Controller owns one `Waveforms` surface beside BeatManager and exposes it to Effects and Transitions as `waveforms`. Migrated Performers acquire immutable Waveform values and own their response; legacy index-addressed Variant members remain only for consumers awaiting their migration and contract cut.
 - **Rhythmic Logic**: Uses an x^4 decay curve to create sharp visual kicks without making off-beat visuals too dark.
-- **Mixer internals**: A Mixer is one Effect publicly. Existing Mixers privately configure and combine children in different ways; those choices are local artistic implementation, not generic propagation modes promised by the runtime.
+- **Mixer internals**: A Mixer is one Effect publicly. It owns its child instances and may directly configure their public artistic state; those choices are local implementation, not behavior prescribed by the runtime.
 
 ### 3. Buffer and Effect System
 
@@ -228,8 +228,8 @@ What a Performer advertises it can do, so the Director can cast it knowingly: ha
 _Avoid_: "profile" / "capabilities" (earlier names); treating it as configuration the Director sets — it is the Performer's own declaration.
 
 **Mixer**:
-An Effect that combines child Effects. To everything outside it a Mixer is one ordinary Effect; how it selects, configures, suppresses, synchronizes, or combines its children is the Mixer's private artistic implementation, not a system-wide child contract.
-_Avoid_: special-casing Mixers in casting or switching; letting child effects speak for themselves past the Mixer; prescribing suppress/unison/passive behavior for every Mixer; exposing a generic child-control policy merely to standardize private composition.
+An Effect that owns and combines child Effects. To everything outside it a Mixer is one ordinary Effect; inside it may directly configure any public child state, while suppress/unison/passive behavior remains the Mixer's choice rather than a system-wide policy.
+_Avoid_: special-casing Mixers in casting or switching; treating independent child behavior as an isolation boundary; prescribing one child policy for every Mixer.
 
 **A-to-B Transition**:
 A Transition is a move from the current on-wall Effect (**A**) toward the destination Effect (**B**). Its visible position is described as progress from 0 to 1: 0 is fully A, 0.5 is exactly between A and B, and 1 is fully B. Once started, it is visual execution according to its Transition Settings; Runway and Tail must be non-negative and their total must not exceed 12 beats, leaving room inside the 16-beat minimum cadence without feeding back into Grid Boundary decisions. `Runway=0` and `Tail=0` is a valid hard cut.

@@ -41,7 +41,7 @@ public class NoiseMixer : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
+        waveform = waveforms.Random();
         effects = new EffectBase[2];
 
         var debugText = string.Empty;
@@ -51,8 +51,8 @@ public class NoiseMixer : MixerBase
             effects[i].RandomizeTime();
             effects[i].Init();
             effects[i].OnStart();
-            // NoiseMixer owns the rhythmic shape of the composite, so child pulses are suppressed.
-            effects[i].beatEnable = false;
+            // NoiseMixer owns the rhythmic shape of the composite, so child Waveforms are suppressed.
+            effects[i].waveform = null;
             debugText += (i < 2 - 1) ? $"{effects[i].Name}, " : $"{effects[i].Name}";
             border = Color.HSVToRGB(Random.value, 1, 1);
         }
@@ -74,12 +74,15 @@ public class NoiseMixer : MixerBase
         for (int i = 0; i < 2; i++)
         {
             effects[i].UpdateTime();
+            // Reassert suppression after UpdateTime because the child may acquire a new Waveform on a Grid wrap.
+            effects[i].waveform = null;
             effects[i].Draw();
         }
-        float sampleTime = beatManager.GetBeatTime(beatVariant, effectTime, 0.5f);
+        float? rhythm = waveforms.Evaluate(waveform);
+        float sampleTime = effectTime + (0.5f * (rhythm ?? 0f));
         float width = 0.1f;
         if (distortionMode == 1)
-            width = beatManager.GetBeatBrightness(beatVariant, 0.25f, 0.1f);
+            width = rhythm is { } envelope ? Mathf.Lerp(0.1f, 0.25f, envelope) : 0.25f;
 
         for (int i = 0; i < buffer.Length; i++)
         {

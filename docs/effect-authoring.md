@@ -38,16 +38,16 @@ public override void OnEnd()
 Init()       once after reflection creates the catalog instance
 OnStart()   whenever the effect becomes active
 UpdateTime() called by Controller before Draw()
-OnNewGrid() once on the downbeat of each new Locked 16-beat Grid
+OnNewGrid() once when the BeatManager reports a new 16-beat Grid
 Draw()      every active frame
 OnEnd()     not currently called
 ```
 
-`OnNewGrid()` is a base hook on `EffectBase`. `UpdateTime()` edge-detects the downbeat of each new 16-beat Grid (Count wraps 16 → 1) and calls it once, gated on a `Locked` grid. Override it to re-roll a look, switch palette, or pick a new beat variant in step with the music. It never fires off the beat clock (Standalone), and an effect nested in a mixer only receives it if the mixer forwards `UpdateTime()`.
+`OnNewGrid()` is a base hook on `EffectBase`. `UpdateTime()` forwards BeatManager's frame-coherent `Grid.Wrapped` edge exactly. Override it to re-roll a look, switch palette, or acquire a new Waveform in step with the music. An effect nested in a mixer only receives it if the mixer calls the child's `UpdateTime()`.
 
 Use `Init()` for reusable setup that depends on `Controller.Instance`, `penrose`, or `tiles` existing.
 
-Use `OnStart()` for per-activation state: random parameters, child effect selection, beat variant alignment, or clearing persistent buffers.
+Use `OnStart()` for per-activation state: random parameters, child effect selection, Waveform acquisition/alignment, or clearing persistent buffers.
 
 Use `Draw()` for the frame algorithm. A valid draw writes every slot in `buffer`, unless the effect intentionally uses trails/fading and documents that behavior.
 
@@ -61,9 +61,9 @@ Use `Draw()` for the frame algorithm. A valid draw writes every slot in `buffer`
 | `effectTime` | Seconds since the effect's randomized seed time. |
 | `effectDelta` | Current frame delta time. |
 | `APalette` | Shared animated palette for all effects. |
-| `beatManager` / `beat` | Global beat state and helper methods. |
-| `beatVariant` | Rhythmic personality selected in `OnStart()`. |
-| `beatEnable` | Whether the effect should react to beat brightness. |
+| `beatManager` | Shared read-only musical facts, edges, and stock envelopes. |
+| `waveforms` | Shared Waveform acquisition and evaluation tools. |
+| `waveform` | Public nullable artistic configuration. Effects acquire it explicitly; owners may share, replace, or clear it. |
 
 ## Catalog identity
 
@@ -81,6 +81,8 @@ A mixer that creates a child effect should usually call:
 child.Init();
 child.OnStart();
 ```
+
+After `OnStart()`, the mixer may directly configure the child. Assign the mixer's `waveform` for unison, assign `null` to suppress child Waveform response, or leave it unchanged for independent behavior. These are ordinary object assignments, not runtime modes. If unison or suppression must persist across Grid wraps, reapply the assignment after `child.UpdateTime()` and before `child.Draw()`, because the child's Grid hook may acquire a new Waveform.
 
 Then, inside `Draw()`:
 

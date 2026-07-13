@@ -182,9 +182,6 @@ public class CrystalGrowth : EffectBase
     /// <summary>Standalone-only spread surge envelope (1 at a synthetic downbeat, decaying to 0) — stands in for <see cref="PulsesView.Beat"/>.</summary>
     private float selfPulse;
 
-    /// <summary>The consumer-owned Waveform that seasons crystal brightness during this activation.</summary>
-    private Waveform waveform;
-
     /// <summary>The hub-owned Drop decay sampled this frame; drives the wavefront luminance lift and spread surge.</summary>
     private float dropFlash;
 

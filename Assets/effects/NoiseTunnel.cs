@@ -14,9 +14,6 @@ public class NoiseTunnel : EffectBase
         Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
-    /// <summary>The Waveform this Effect owns and evaluates for its local rhythm responses.</summary>
-    private Waveform waveform;
-
     private float n;
     private float scale;
     private float speed;

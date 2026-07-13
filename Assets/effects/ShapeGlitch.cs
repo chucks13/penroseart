@@ -55,7 +55,6 @@ public class ShapeGlitch : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        base.OnStart();
         switch (Random.Range(0, 2))
         {
             case 0:
@@ -106,8 +105,7 @@ public class ShapeGlitch : MixerBase
         effect.RandomizeTime();
         effect.Init();
         effect.OnStart();
-        // ShapeGlitch owns the overlay rhythm, so the child effect does not pulse independently.
-//        effect.beatEnable = false;
+        // Passive composition: the child keeps the Waveform it acquired for itself.
         var debugText = $"{effect.Name}";
         controller.debugText.text = debugText;
     }

@@ -38,9 +38,6 @@ public class Angles : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>The consumer-owned Low/Mid-energy Waveform that seasons hue and Fill motion.</summary>
-    private Waveform waveform;
-
     private float speed;
 
     /// <summary>Width, in normalized rank space (0..1), of the collapsing wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>

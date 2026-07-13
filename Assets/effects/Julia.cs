@@ -113,9 +113,6 @@ public class Julia : EffectBase
     private float angle;
     private float speed = 0.15f;
 
-    /// <summary>The consumer-owned Waveform that seasons Julia's hue cycling.</summary>
-    private Waveform waveform;
-
     private Vector2 c;
     private Vector2 viewCenter;
     private int presetIndex;
