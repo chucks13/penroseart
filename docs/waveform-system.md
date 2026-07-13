@@ -1,18 +1,19 @@
 # Waveform System
 
-A **Waveform** is a one-bar rhythmic brightness envelope that effects hold instead of the old fixed `beatVariant` integers. It replaces the seven hardcoded rhythm variants with a small notation that describes *any* one-bar rhythm. Runtime values are acquired from `Waveforms`, bound to the shared musical clock, and read directly through `Envelope` or `Lerp(from, to)`.
+A **Waveform** is a one-bar rhythmic brightness envelope described by compact musical notation. Runtime values are acquired from `Waveforms`, bound to the shared musical clock, and read directly through `Envelope` or `Lerp(from, to)`.
 
 This document is the implementer's reference. Canonical term definitions live in `CONTEXT.md` (`## Language`); the *why* is recorded in `docs/adr/0001-waveform-rhythm-model.md`. This doc carries the model, the notation, the file format, and the migration.
 
 ## What problem this solves
 
-Today effects call:
+An Effect may need a pulse on every beat, a single measure-start accent, alternating hits, or a shape such as "half, then two quarters." Encoding those choices as a closed set would make each new dance move a provider change.
 
 ```csharp
-beatManager.GetBeatBrightness(beatVariant, 1.0f, 0.5f, beatEnable);
+waveform = waveforms.Random(Energy.Low, Energy.Mid);
+float brightness = waveform.Lerp(0.5f, 1f);
 ```
 
-where `beatVariant` is an `int` selecting one of seven hardcoded rhythms. That space is closed — you cannot ask for "half, then two quarters" or "every sixteenth on beat 4." The Waveform system opens it: the curated Pool can carry any valid notation, and an effect draws a runtime value by Energy and reads its shaped response directly.
+The curated Pool can carry any valid notation. Waveforms owns Pool selection and clock binding; the concrete Effect or Transition owns when it acquires, which Energy set it requests, and how the held envelope changes the art.
 
 ## The model
 
@@ -122,7 +123,7 @@ waveform = waveforms.Random(Energy.Low, Energy.Mid);
 
 No match is a configuration error and throws. Pool positions and Preset names are authoring details, not runtime identities. `Waveform.Parse(...)` remains the shared pure parser for the Pool codec, editor previews, tests, and direct `Sample(barPhase)` inspection; it is not a second runtime acquisition path.
 
-The plain **Beat Pulse** (`QQQQ` / `8888`) is the canonical default and the origin point: every other Waveform is "the pulse, but with these deltas."
+The plain **Beat Pulse** (`QQQQ` / `8888`) is the canonical default Preset.
 
 ## The Pool file
 
@@ -147,7 +148,7 @@ DEFINE_WAVEFORM(alternating)   { QQQQ | 8080 | 0.2 | 0   }
 DEFINE_WAVEFORM(four on floor) { HQQ  | 844  | 0.5 | 0   }
 ```
 
-Conventions, matching the palette files: named entries, `//` line comments, blank lines ignored, brace-delimited data. The seven legacy variants seed the default Pool.
+Conventions, matching the palette files: named entries, `//` line comments, blank lines ignored, brace-delimited data. The seven original rhythm Presets seed the default Pool.
 
 ### Reading (runtime)
 
@@ -176,16 +177,17 @@ The drawer animates live in Play Mode via `ControllerEditor` (`RequiresConstantR
 
 ## Migration
 
-The beat-data migration is a hard cut to value ownership:
+The landed runtime is a hard cut to value ownership:
 
-- Concrete Effects and Transitions hold a non-null `Waveform`; authoring bases expose the live `waveforms` root and neutral public configuration.
-- Acquisition is explicit through `waveforms.Random(...)`. Former CHILL acquisitions map to `Random(Energy.Low, Energy.Mid)`.
-- Each consumer reads `waveform.Envelope` or supplies its endpoints to `waveform.Lerp(from, to)`. Routines use the identical spelling.
-- Mixers assign `waveforms.None`, never `null`, when they intentionally suppress child response.
-- Index currency and the provider methods `GetRandomVariant`, `GetRandomVariantChill`, `GetBeatBrightness`, and `GetBeatTime` retire as their callers migrate. No replacement base response layer is introduced.
+- Controller owns `BeatManager` and its sibling `Waveforms` surface. `EffectBase` and `TransitionBase` expose both roots to concrete Performers.
+- Acquisition is explicit through `waveforms.Random(...)`; a held `Waveform` is immutable and bound to the shared clock.
+- Each concrete Effect or Transition chooses acquisition timing, reads `Envelope` or supplies the endpoints to `Lerp(from, to)`, and owns its Standalone response and any local state. Routines use the identical playback spelling.
+- Authoring bases provide access and neutral configuration only. They do not acquire, replace, refresh, or map Waveforms automatically.
+- A Mixer is one Effect publicly. It configures its privately owned child Effects directly and assigns `waveforms.None` when it intentionally suppresses a child's response.
+- `Routine.Of(...)` composes four already-acquired values directly; it owns no resolver, lifecycle, or replacement policy.
 
 ## Out of scope (for now)
 
-- OSC `energy_state` / direction filtering of random selection (the incoming data isn't finalized).
+- Provider-side automatic filtering from live Energy direction. Performers choose the Energy tiers they request.
 - The `energy` integer from the web designer's JSON export — it does nothing to the curve and is dropped from the Pool format.
 - The web "designer" app (`waveforms/`) is a **Visual Tool** only: a sketchpad for seeing notation before committing it. The runtime does not depend on it or its exported JSON.

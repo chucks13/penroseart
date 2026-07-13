@@ -142,49 +142,47 @@ dropScroll = Mathf.Repeat(dropScroll - speed * DropRush * dropEnv * effectDelta,
 
 `Mathf.Repeat(…, 1f)` keeps each accumulator in `[0,1)` so it never drifts. Fill adds (`+`), Drop subtracts (`-`) — make the two motions **opposite** so the Drop reads as an inversion of the Fill, not just "more of it."
 
-### 3. Shape each moment with the right envelope
+### 3. Read Stock Envelopes from the concept doorways
 
-- **Fill is continuous** — drive it from `BeatManager.Fill` progress so it ramps with the music. Use fast attack / slow release so even a one-beat fill slams to full and tails off cleanly:
-
-  ```csharp
-  PhraseEventInfo? fill = beatManager.Fill;
-  float fillTarget = fill is { inProgress: true } ? Mathf.Clamp01(fill.Value.progress ?? 0f) : 0f;
-  float fillRate = fillTarget > fillEnv ? FillAttack : FillRelease;   // e.g. 22 / 5
-  fillEnv = Mathf.Lerp(fillEnv, fillTarget, 1f - Mathf.Exp(-fillRate * effectDelta));
-  ```
-
-- **Drop is a one-shot** — snap to 1 at the instant, then `SmoothStep`-decay over a BPM-derived duration (with a seconds fallback when no BPM):
-
-  ```csharp
-  dropSeconds = beatManager.Bpm is { } bpm && bpm > 0f
-      ? (60f / bpm) * BeatsPerBar * DropBars : DropFallbackSeconds;
-  // in Draw(): dropEnv = 1f - Mathf.SmoothStep(0f, 1f, dropElapsed / dropSeconds);
-  ```
-
-### 4. Trigger the Drop off the grid edge, once per drop
-
-The Drop fires on beat one of the grid *inside* a drop — a discrete instant — so ride the `OnNewGrid()` hook, not a poll in `Draw()`. Latch it so it fires once per drop, and clear the latch in `Draw()` when the drop ends:
+Fill and Drop each expose an always-present `Span` view. Facts inside the Span are nullable, while its Edges and Stock Envelopes stay total and rest at zero when the musical span is unavailable. `Tunnel` uses the stock shapes directly:
 
 ```csharp
+fillEnv = beatManager.Fill.Span.Build();
+dropEnv = beatManager.Drop.Span.Decay(DropBars * 4f);
+```
+
+Use `beatManager.Fill.Span.Current` or `beatManager.Drop.Span.Current` only when the Effect needs the nullable event facts themselves. Use `Started` or `Ended` for a one-frame event edge; do not add a private latch for an edge BeatManager already captures once per frame.
+
+### 4. Acquire Waveforms explicitly
+
+The base exposes the sibling `waveforms` root and neutral public `waveform` configuration, but it performs no acquisition. A concrete Effect chooses when and what to draw:
+
+```csharp
+public override void OnStart()
+{
+    waveform = waveforms.Random(Energy.Low, Energy.Mid);
+}
+
 protected override void OnNewGrid()
 {
-    Reroll();                                          // fresh look every grid
-    if (beatManager.Drop is { inProgress: true } && !dropFlashed)
-    {
-        TriggerDrop();                                 // dropEnv = 1; reset decay clock
-        dropFlashed = true;
-    }
+    waveform = waveforms.Random(Energy.Low, Energy.Mid);
 }
-// in Draw(): if (!(beatManager.Drop is { inProgress: true })) dropFlashed = false;
+
+// In Draw():
+float brightness = waveform.Lerp(BeatBrightnessFloor, 1f);
 ```
+
+Transitions follow the same ownership rule: expose their own public artistic configuration when it should be tunable, acquire explicitly in their concrete lifecycle, and choose their own `Envelope`/`Lerp` mapping.
 
 ### 5. Fold envelopes into every consequence, and expose them
 
 One envelope can drive several visual results (scroll **and** zoom) so the gesture feels coherent: `zoom = 1 + FillZoom*fillEnv + DropZoom*dropEnv`. Make every magnitude a named, documented `const`, and surface the live envelopes on `DebugText()` (`FILL 0.83`, `DROP 0.41`) so they can be tuned on the wall instead of by guessing.
 
-### Lift shared plumbing into the base
+### Keep artistic policy in the Performer
 
-When the same beat-detection plumbing appears in a second effect, it belongs in `EffectBase`, not copied. The grid-downbeat edge detection now lives in `EffectBase.UpdateTime()` → `OnNewGrid()` for exactly this reason; effects just override the hook.
+BeatManager and Waveforms provide shared musical facts, Edges, Stock Envelopes, and acquisition tools. The concrete Effect or Transition owns how those inputs affect color, motion, timing, fallback, and local state. Do not add automatic acquisition, replacement, or response policy to an authoring base. The existing `EffectBase.UpdateTime()` → `OnNewGrid()` hook is a narrow shared seam for the captured Grid wrap Edge; overriding it remains a concrete Effect decision.
+
+A Mixer is still one Effect to the rest of the runtime. It privately owns its child Effects and can directly set their public artistic state, including sharing a held Waveform or assigning `waveforms.None`; it does not publish child policy as a second runtime system.
 
 ## Documentation expectations for new effects
 

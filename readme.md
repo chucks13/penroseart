@@ -7,7 +7,7 @@ Unity is the host and simulator. The effect system itself is mostly plain C# so 
 ## Start here
 
 - [`docs/runtime-architecture.md`](docs/runtime-architecture.md) — how the Controller, catalogs, buffers, transitions, inputs, and outputs fit together.
-- [`docs/effect-authoring.md`](docs/effect-authoring.md) — how to create effects, use the lifecycle, and work with buffers.
+- [`docs/effect-authoring.md`](docs/effect-authoring.md) — how to create Effects and Transitions, use their lifecycles, and work with buffers.
 - [`docs/code-map.md`](docs/code-map.md) — file-by-file map of the project-authored runtime code.
 - [`CONTEXT.md`](CONTEXT.md) — operational project context and platform/output notes.
 - [`Assets/core/Hardware/S2_MINI_PROTOCOL.md`](Assets/core/Hardware/S2_MINI_PROTOCOL.md) — USB serial protocol used by the S2 Mini / ESP32 boards.
@@ -59,12 +59,12 @@ Indexes are not permanent IDs. Adding, removing, or renaming classes can shift s
 
 ## Beat system
 
-`BeatManager` provides a shared beat clock for rhythmic visuals.
+`BeatManager` is the one read-only gateway to musical state. `RaveOscReceiver` applies live RaveSystem data before the frame is captured; without a usable live clock, `IsSynced` is false and the wall renders its intentional Standalone behavior.
 
-- Effects can use `beatManager.GetBeatBrightness()` for pulse-like brightness.
-- `OnStart()` chooses a `beatVariant` so effects can have different rhythmic personalities.
-- The current beat source is simulated/debug timing from Unity time, not an external sync source.
-- If beat behavior is inactive, effects generally return to standard brightness/motion.
+- Read facts through concept doorways such as `Clock`, `Beats`, `Phrase`, `Fill`, `Drop`, `Energy`, `Grid`, and `Levels`. Unavailable facts are `null`; doorway Edges and Stock Envelopes remain readable.
+- Use the sibling `waveforms` root to acquire an immutable `Waveform` explicitly, then read `Envelope` or call `Lerp(from, to)`. A `Routine` composes four held Waveforms over one Grid with the same playback spelling.
+- Concrete Effects and Transitions own acquisition timing, endpoints, fallback, and local artistic response. The base classes provide access but never acquire or replace a value automatically.
+- A Mixer remains one public Effect. It owns and configures child Effects privately, using `waveforms.None` when it intentionally suppresses a child's Waveform response.
 
 ## Palette system
 

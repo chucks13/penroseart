@@ -21,16 +21,18 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Effects/MixerBase.cs` | Base for effects that own child effects. |
 | `Assets/core/Transitions/TransitionBase.cs` | Base for effect-to-effect transitions and transition-as-blender behavior. |
 | `Assets/core/Reference/Transition.cs` | Legacy/orphaned transition shape inheriting `EffectBase`; not used by the current controller. |
-| `Assets/core/Rhythm/BeatManager.cs` | Shared live/simulated rhythm state and beat-reactive helper functions. |
-| `Assets/core/Rhythm/BeatManagerQueries.cs` | Contrived rhythm-query layer (ADR-0002): the nullable `PhraseEventInfo`/`EnergyInfo`/`GridInfo`/`LevelsInfo` shapes and the `BeatManager` queries that build them. |
+| `Assets/core/Rhythm/BeatManager.cs` | Private Rave snapshot ownership, live/Standalone source handling, `IsSynced`, per-frame derivation, and frame-coherent Data Surface capture. |
+| `Assets/core/Rhythm/ClockDoorway.cs`, `PositionDoorway.cs`, `TrackDoorway.cs` | Clock, playhead-position, and track-identity facts, plus the captured Track identity-change signal. |
+| `Assets/core/Rhythm/BeatsDoorway.cs`, `OffBeatsDoorway.cs`, `PulsesDoorway.cs`, `Duration.cs`, `Edges.cs` | Beat/offbeat countdowns and gates, idealized pulses, shared note durations, and captured edge primitives. |
+| `Assets/core/Rhythm/PhraseDoorway.cs`, `FillDoorway.cs`, `DropDoorway.cs`, `EnergyDoorway.cs`, `GridDoorway.cs`, `SpanView.cs` | Phrase-structure doorways, nullable Span facts, started/ended edges, and stock Build/Decay envelopes. |
+| `Assets/core/Rhythm/LoopDoorway.cs`, `LevelsDoorway.cs` | Flat loop facts and nullable normalized/smoothed/peak audio-band facts and color helpers. |
+| `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Explicit immutable Waveform acquisition, clock-bound playback, Pool codec/load path, and four-bar Routine composition. |
 | `Assets/core/IO/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
 | `Assets/core/Switching/Director.cs` | Wire-change reducer (ADR-0011) for Standalone/Synced/Hold sequencing: holds two Cue Sheets repaired by invariant on each new-beat wake, casts a Cue lazily and preference-based when a Grid carrying a Cue Mark begins, and hands it to the Switcher fire-and-forget. Records no decision memory. Plus staged choices and read-only status. |
 | `Assets/core/Switching/CueSheet.cs` | Builds a Cue Sheet: an index of Cue Marks over an announced phrase length, marks on Grid Boundaries, gaps of one to four Grids, phrase end always marked; layout is an announcement-seeded random roll. |
 | `Assets/core/Switching/Deck.cs` | The rotating card deck behind effect and transition casting: rotate-to-back pulls, draw-window random draws, and read-only preferred finds pulled only on Switcher acceptance. |
 | `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime and sole owner of cue commitment (one beat-domain lock, private runway/tail/lock math; loading a cue returns accepted-or-not), Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
-| `Assets/core/Rhythm/Waveform.cs` | Immutable Waveform kernel plus clock-bound `Envelope`/`Lerp` playback value. |
-| `Assets/core/Rhythm/WaveformPool.cs` | Shared waveform pool codec and runtime load path for `StreamingAssets/penrose_waveforms.txt`. |
 | `Assets/core/ReactiveInputs/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
 | `Assets/core/Hardware/SerialOut.cs` | USB serial hardware discovery and frame sending for S2 Mini / ESP32 boards. |
 | `Assets/core/IO/PixelReceiver.cs` | UDP pixel-source receiver for external frame blending. |
@@ -60,8 +62,8 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/BeatManagerDrawer.cs` | BeatManager property drawer and dashboard adapter. |
 | `Assets/Editor/Rhythm/BeatManagerDashboardModel.cs` | Editor-only rhythm dashboard display model, including phrase-event and rhythm text formatting. |
 | `Assets/Editor/Rhythm/BeatManagerDashboardRenderer.cs` | IMGUI rendering for the BeatManager dashboard. |
-| `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side display model of a phrase-event rhythm query (Fill/Drop): chip, meter, readout, and Now/Soon/Idle state. Formats the core `PhraseEventInfo` for the BeatManager dashboard. |
-| `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for rhythm-query nullable beat/count values (`"16b"`, plain counts, `"—"` for null). |
+| `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side Fill/Drop display model: chip, meter, readout, and Now/Soon/Idle state derived from the landed doorway and `SpanView` facts. |
+| `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for nullable musical beat/count facts (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Sample` output. |
 | `Assets/Editor/Effects/EffectSelectorDrawer.cs` | Effect selector property drawer. |
