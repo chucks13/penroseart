@@ -1,4 +1,4 @@
-# Effect Authoring Guide
+# Effect and Transition Authoring Guide
 
 Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. They are discovered automatically at runtime, so most new visuals do not need scene or prefab changes.
 
@@ -11,6 +11,16 @@ Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. 
 5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
 
 `EmptyEffect` itself is intentionally ignored by the runtime catalog. It exists only as a documented starter template.
+
+## Create a new transition
+
+1. Copy `Assets/transitions/EmptyTransition.cs`.
+2. Rename the file and class to the new transition name.
+3. Remove `[RuntimeCatalogIgnore]` from the copy.
+4. Adjust its Runway/Tail settings and implement the A-to-B blend in `Draw()`.
+5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
+
+`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects.
 
 ## Choose a base class
 

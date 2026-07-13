@@ -39,9 +39,11 @@ OnEnd()     reserved; Controller does not currently call it
 
 Effects write into a `Color[] buffer` with `Penrose.Total == 900` entries. The controller copies the active effect or transition buffer into `penrose.buffer`, applies overlays/blending, sends hardware output, then updates the Unity preview mesh.
 
-## Authoring effects
+## Authoring effects and transitions
 
 For a new effect, copy `Assets/effects/EmptyEffect.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, and implement `Draw()`.
+
+For a new transition, copy `Assets/transitions/EmptyTransition.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, and implement its A-to-B blend and timing settings.
 
 Choose the base class by shape:
 

@@ -4,6 +4,13 @@ using UnityEngine;
 /// Copyable starter template for a new PenroseArt effect.
 /// </summary>
 /// <remarks>
+/// Authoring orientation:
+/// - Effects and Transitions receive the live Data Surface as <see cref="EffectBase.beatManager"/> or <see cref="TransitionBase.beatManager"/>.
+/// - They receive Waveform acquisition tools as <see cref="EffectBase.waveforms"/> or <see cref="TransitionBase.waveforms"/>.
+/// - <see cref="EffectBase.waveform"/> is neutral public artistic configuration that an owning Performer may replace.
+/// - Transitions declare only the public artistic configuration they actually use.
+/// - Base classes acquire and respond to nothing automatically; the concrete Performer owns every example decision below.
+///
 /// This class is intentionally excluded from the runtime effect catalog by
 /// <see cref="RuntimeCatalogIgnoreAttribute"/>. To create a real effect:
 ///
@@ -22,9 +29,7 @@ using UnityEngine;
 /// - <see cref="OnEnd"/> exists for future cleanup hooks, but Controller does
 ///   not currently call it.
 ///
-/// This template also collects small, copy-paste <c>EXAMPLE</c>s of the live musical
-/// data an effect can read through <see cref="EffectBase.beatManager"/>. Each is
-/// marked <c>EXAMPLE</c> and is safe to delete. The first one reads the 16-beat Grid.
+/// Every <c>EXAMPLE</c> below is local to this effect and safe to delete.
 /// </remarks>
 [RuntimeCatalogIgnore]
 public class EmptyEffect : EffectBase
@@ -45,6 +50,18 @@ public class EmptyEffect : EffectBase
     public override void OnStart()
     {
         base.OnStart();
+
+        // EXAMPLE — delete if this effect does not use a Waveform.
+        waveform = waveforms.Random();
+    }
+
+    /// <summary>
+    /// EXAMPLE — explicitly chooses a new Waveform when the shared 16-beat Grid wraps.
+    /// Delete this override when the effect should keep its current value.
+    /// </summary>
+    protected override void OnNewGrid()
+    {
+        waveform = waveforms.Random();
     }
 
     /// <summary>
@@ -58,6 +75,18 @@ public class EmptyEffect : EffectBase
     /// </summary>
     public override void Draw()
     {
+        // EXAMPLE — the second endpoint is the no-placement fallback.
+        float brightness = waveform.Lerp(0.35f, 1f);
+
+        // EXAMPLE — facts are nullable; Edges and Stock Envelopes are total values.
+        float gridProgress = beatManager.Grid.Current?.Progress ?? 0f;
+        float fillBuild = beatManager.Fill.Span.Build();
+        bool dropStarted = beatManager.Drop.Span.Started;
+        Energy? energy = beatManager.Energy.Run.Current?.Level;
+
+        // EXAMPLE — audio bands and their color mappings begin at beatManager.Levels.
+        _ = (brightness, gridProgress, fillBuild, dropStarted, energy);
+
         for (int i = 0; i < buffer.Length; i++)
             buffer[i] = Color.black;
     }
