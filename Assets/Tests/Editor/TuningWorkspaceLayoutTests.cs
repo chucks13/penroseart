@@ -79,21 +79,33 @@ public sealed class TuningWorkspaceLayoutTests
             Is.EqualTo("Waves → Fluid · Fade · END IN 4"));
     }
 
-    /// <summary>On the first Runway beat, the live header calls out Start Now before settling into Active.</summary>
+    /// <summary>At the pending-to-active handoff, the executing Transition retains the Start Now callout.</summary>
     [Test]
-    public void LiveTimelineFormatsTransitionStartNow()
+    public void LiveTimelineFormatsActiveTransitionStartNow()
     {
         var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
         var model = LiveTimelineProjection.Build(new LiveTimelineInput(
             true,
             114,
             14,
-            SwitcherCueStatus.Empty,
-            cue));
+            cue,
+            SwitcherCueStatus.Empty));
+        var switcher = new SwitcherStatus(
+            true,
+            -1,
+            string.Empty,
+            0,
+            "Waves",
+            1,
+            "Fluid",
+            0,
+            "Fade",
+            "Fade",
+            0f);
 
         Assert.That(
-            LiveTimelineRenderer.FormatPendingTimingStatus(model.Pending),
-            Is.EqualTo("LOCKED · START NOW · END IN 5"));
+            LiveTimelineRenderer.FormatActiveTransitionLabel(switcher, model.Active),
+            Is.EqualTo("Waves → Fluid · Fade · START NOW · END IN 5"));
     }
 
     /// <summary>The Live identity comes from the Cue whose timing is rendered, not newly staged Director choices.</summary>
@@ -170,12 +182,12 @@ public sealed class TuningWorkspaceLayoutTests
         var window = ScriptableObject.CreateInstance<LiveTimelineSmokeHost>();
         try
         {
-            window.position = new Rect(0f, 0f, 360f, 180f);
+            window.position = new Rect(0f, 0f, 360f, 240f);
             window.Show();
             window.Repaint();
             yield return null;
 
-            window.position = new Rect(0f, 0f, 900f, 180f);
+            window.position = new Rect(0f, 0f, 900f, 240f);
             window.Repaint();
             yield return null;
 
@@ -307,13 +319,16 @@ internal sealed class LiveTimelineSmokeHost : EditorWindow
             -1,
             string.Empty,
             0,
-            "Waves",
+            "ChromaticInterferenceWaves",
             1,
-            "Fluid",
+            "FluidVoronoiConstellation",
             0,
-            "Fade",
-            "Fade",
+            "IrisTransitionWithLongDescriptiveName",
+            "IrisTransitionWithLongDescriptiveName",
             0.75f);
-        LiveTimelineRenderer.Draw(model, switcher, "CrystalGrowth · IrisTransition");
+        LiveTimelineRenderer.Draw(
+            model,
+            switcher,
+            "RecursiveCrystalGrowthWithLongDescriptiveName · KaleidoscopicIrisTransition");
     }
 }

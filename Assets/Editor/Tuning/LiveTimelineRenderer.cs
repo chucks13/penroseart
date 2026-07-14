@@ -15,6 +15,9 @@ internal static class LiveTimelineRenderer
     /// <summary>Cached bold style for Transition boundary cells.</summary>
     private static GUIStyle? boundaryCellStyle;
 
+    /// <summary>Cached full-width wrapping style for essential Cue identities.</summary>
+    private static GUIStyle? identityStyle;
+
     /// <summary>Neutral Grid-cell fill.</summary>
     private static readonly Color BaseFill = new(0.12f, 0.13f, 0.16f);
 
@@ -49,7 +52,7 @@ internal static class LiveTimelineRenderer
 
         EnsureStyles();
         DrawActiveTransition(switcher, model.Active);
-        EditorGUILayout.LabelField("NEXT", string.IsNullOrWhiteSpace(pendingCueLabel) ? "—" : pendingCueLabel);
+        DrawIdentity("NEXT", string.IsNullOrWhiteSpace(pendingCueLabel) ? "—" : pendingCueLabel);
         EditorGUILayout.LabelField(
             model.IsSynced ? FormatPendingTimingStatus(model.Pending) : "TIMING UNAVAILABLE",
             EditorStyles.boldLabel);
@@ -131,9 +134,13 @@ internal static class LiveTimelineRenderer
         var label = $"{FormatName(switcher.SourceEffectIndex, switcher.SourceEffectName, "Effect")} → " +
             $"{FormatName(switcher.TargetEffectIndex, switcher.TargetEffectName, "Effect")} · " +
             FormatName(switcher.CurrentTransitionIndex, switcher.CurrentTransitionName, "Transition");
-        return active.CueTimingAvailable
-            ? $"{label} · {FormatEvent("END", active.EndBeatsUntil)}"
-            : label;
+        if (!active.CueTimingAvailable)
+        {
+            return label;
+        }
+
+        var startStatus = active.StartBeatsUntil == 0 ? " · START NOW" : string.Empty;
+        return $"{label}{startStatus} · {FormatEvent("END", active.EndBeatsUntil)}";
     }
 
     /// <summary>Draws the restored active Transition progress bar while the Switcher owns an A-to-B move.</summary>
@@ -144,10 +151,17 @@ internal static class LiveTimelineRenderer
             return;
         }
 
-        EditorGUILayout.LabelField("ACTIVE", FormatActiveTransitionLabel(switcher, active));
+        DrawIdentity("ACTIVE", FormatActiveTransitionLabel(switcher, active));
         var rect = EditorGUILayout.GetControlRect(false, 18f);
         EditorGUI.ProgressBar(rect, switcher.TransitionProgress, $"{switcher.TransitionProgress:P0}");
         EditorGUILayout.Space(4f);
+    }
+
+    /// <summary>Draws an essential identity on a full-width wrapping row so narrow Live views do not clip it.</summary>
+    private static void DrawIdentity(string heading, string value)
+    {
+        EditorGUILayout.LabelField(heading, EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField(value, identityStyle!);
     }
 
     /// <summary>Formats one runtime catalog name compactly, retaining an index fallback.</summary>
@@ -277,6 +291,10 @@ internal static class LiveTimelineRenderer
         boundaryCellStyle = new GUIStyle(cellStyle)
         {
             fontStyle = FontStyle.Bold,
+        };
+        identityStyle = new GUIStyle(EditorStyles.wordWrappedLabel)
+        {
+            clipping = TextClipping.Overflow,
         };
     }
 

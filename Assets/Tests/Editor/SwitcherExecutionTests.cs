@@ -80,7 +80,7 @@ public sealed class SwitcherExecutionTests
             transitionRepertoire: transition.Repertoire);
         switcher.UpsertLoadedCue(activeCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
 
-        switcher.RenderAtTime(11.25f, out _);
+        switcher.RenderAtTime(11f, out _);
 
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
         Assert.That(switcher.ActiveCueStatus.HasCue, Is.True);
@@ -89,6 +89,17 @@ public sealed class SwitcherExecutionTests
         Assert.That(switcher.ActiveCueStatus.StartBeat, Is.EqualTo(9));
         Assert.That(switcher.ActiveCueStatus.CueMarkBeat, Is.EqualTo(10));
         Assert.That(switcher.ActiveCueStatus.CompleteBeat, Is.EqualTo(10));
+
+        var startModel = LiveTimelineProjection.Build(new LiveTimelineInput(
+            true,
+            9,
+            9,
+            switcher.ActiveCueStatus,
+            switcher.LoadedCueStatus));
+        Assert.That(
+            LiveTimelineRenderer.FormatActiveTransitionLabel(switcher.Status, startModel.Active),
+            Does.Contain("START NOW"),
+            "The real pending-to-active handoff must keep the Cue's Start visible.");
 
         var nextCue = new SwitcherCueDirection(
             cueMarkBeat: 20,
