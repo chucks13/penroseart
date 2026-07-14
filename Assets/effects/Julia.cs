@@ -141,6 +141,9 @@ public class Julia : EffectBase
     /// </summary>
     public override void OnStart()
     {
+        presetIndex = Random.Range(0, valueSets.Length);
+        c = valueSets[presetIndex];
+        viewCenter = offSets[presetIndex];
         Reroll();
         hueScroll = 0f;
         fillEnv = 0f;
@@ -157,9 +160,6 @@ public class Julia : EffectBase
     /// </summary>
     private void Reroll()
     {
-        presetIndex = Random.Range(0, valueSets.Length);
-        c = valueSets[presetIndex];
-        viewCenter = offSets[presetIndex];
         speed = Random.Range(0.1f, 0.3f);
         usePalette = Random.value < PaletteChance;
         if (usePalette) APalette.Change();
