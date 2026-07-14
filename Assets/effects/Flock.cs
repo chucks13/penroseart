@@ -260,10 +260,10 @@ public class Flock : EffectBase
     private float courseTurnDirection;
 
     /// <summary>Duration-aware Fill orbit drive, allowed above one for very short Fills.</summary>
-    private float fillDrive;
+    private float fillOrbitDrive;
 
     /// <summary>Smooth zero-to-one progress through the eight-beat pre-Drop gather.</summary>
-    private float dropApproach;
+    private float dropGather;
 
     /// <summary>Short one-to-zero release envelope after the Drop begins.</summary>
     private float dropRelease;
@@ -287,8 +287,8 @@ public class Flock : EffectBase
     {
         RerollRoutine();
         RerollWander();
-        fillOrbitDirection = Random.value < 0.5f ? -1f : 1f;
-        courseTurnDirection = Random.value < 0.5f ? -1f : 1f;
+        fillOrbitDirection = RollDirection();
+        courseTurnDirection = RollDirection();
 
         Vector2 min = penrose.Bounds.min;
         Vector2 max = penrose.Bounds.max;
@@ -310,7 +310,7 @@ public class Flock : EffectBase
     {
         RerollRoutine();
         RerollWander();
-        fillOrbitDirection = Random.value < 0.5f ? -1f : 1f;
+        fillOrbitDirection = RollDirection();
         courseTurnDirection = courseTurnDirection < 0f ? 1f : -1f;
     }
 
@@ -331,7 +331,7 @@ public class Flock : EffectBase
     public override string DebugText() =>
         $"ACT {movementActivity:0.00} MID {midManeuver:0.00} DETAIL {spectralAgitation:0.00}\n" +
         $"ROUTINE {routineEnvelope:0.00} WANDER {wanderStrength:0.00}/{wanderTurnRate:0.00}\n" +
-        $"FILL {fillDrive:0.00}\nGATHER {dropApproach:0.00}\nDROP {dropRelease:0.00}";
+        $"FILL {fillOrbitDrive:0.00}\nGATHER {dropGather:0.00}\nDROP {dropRelease:0.00}";
 
     /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this method.
@@ -382,6 +382,10 @@ public class Flock : EffectBase
         wanderTurnRate = Random.Range(WanderTurnRateMin, WanderTurnRateMax);
     }
 
+    /// <summary>Randomly chooses one of the two directions around the wall center.</summary>
+    /// <returns>Negative one for clockwise motion or positive one for counterclockwise motion.</returns>
+    private static float RollDirection() => Random.value < 0.5f ? -1f : 1f;
+
     /// <summary>Resets values that are sampled or edge-detected independently for each activation.</summary>
     private void ResetMusicalState()
     {
@@ -389,8 +393,8 @@ public class Flock : EffectBase
         midManeuver = 0f;
         spectralAgitation = 0f;
         routineEnvelope = 0f;
-        fillDrive = 0f;
-        dropApproach = 0f;
+        fillOrbitDrive = 0f;
+        dropGather = 0f;
         dropRelease = 0f;
 
         // Starting during an active event joins its sustained motion without inventing a false onset impulse.
@@ -444,7 +448,7 @@ public class Flock : EffectBase
     {
         var fill = beatManager.Fill;
         bool fillActive = fill.Active == true;
-        fillDrive = GetFillApproach(
+        fillOrbitDrive = GetFillApproach(
             fillActive,
             fill.BeatsUntil,
             beatManager.Timing.BeatProgress,
@@ -467,7 +471,7 @@ public class Flock : EffectBase
     {
         var drop = beatManager.Drop;
         bool dropActive = drop.Active == true;
-        dropApproach = GetDropApproach(dropActive, drop.BeatsUntil, beatManager.Timing.BeatProgress);
+        dropGather = GetDropApproach(dropActive, drop.BeatsUntil, beatManager.Timing.BeatProgress);
 
         if (dropActive && !previousDropActive)
         {
@@ -743,10 +747,10 @@ public class Flock : EffectBase
         public Flock parent;
 
         /// <summary>Minimum wrapped wall-space bounds.</summary>
-        private Vector2 min;
+        private readonly Vector2 min;
 
         /// <summary>Maximum wrapped wall-space bounds.</summary>
-        private Vector2 max;
+        private readonly Vector2 max;
 
         /// <summary>Steering toward neighbors' average velocity.</summary>
         private Vector2 alignmentSteering;
@@ -836,7 +840,7 @@ public class Flock : EffectBase
         private float GetActiveSpeedLimit()
         {
             float ordinarySpeedLimit = maxSpeed * GetMovementSpeedMultiplier(parent.movementActivity);
-            float eventDrive = Mathf.Clamp01(Mathf.Max(parent.fillDrive, parent.dropApproach));
+            float eventDrive = Mathf.Clamp01(Mathf.Max(parent.fillOrbitDrive, parent.dropGather));
             float speedLimit = Mathf.Lerp(
                 ordinarySpeedLimit,
                 Mathf.Max(ordinarySpeedLimit, maxSpeed),
@@ -848,9 +852,9 @@ public class Flock : EffectBase
         /// <returns>Weighted alignment, cohesion, and separation acceleration.</returns>
         private Vector2 GetWeightedFlockingAcceleration()
         {
-            float fillSpread = parent.fillDrive * (1f - parent.dropApproach);
+            float fillSpread = parent.fillOrbitDrive * (1f - parent.dropGather);
             float alignmentWeight = BaseAlignmentWeight
-                * (1f + (FillAlignmentLift * parent.fillDrive) + (MidAlignmentLift * parent.midManeuver));
+                * (1f + (FillAlignmentLift * parent.fillOrbitDrive) + (MidAlignmentLift * parent.midManeuver));
             float cohesionWeight = BaseCohesionWeight
                 * (1f + (MidCohesionLift * parent.midManeuver))
                 * (1f - (DropCohesionSuppression * parent.dropRelease));
@@ -858,7 +862,7 @@ public class Flock : EffectBase
                 * (1f + (FillSeparationLift * fillSpread)
                     + (SpectralSeparationLift * parent.spectralAgitation)
                     + (DropSeparationLift * parent.dropRelease))
-                * (1f - (DropGatherSeparationSuppression * parent.dropApproach));
+                * (1f - (DropGatherSeparationSuppression * parent.dropGather));
 
             return (alignmentSteering * alignmentWeight)
                 + (cohesionSteering * cohesionWeight)
@@ -870,8 +874,8 @@ public class Flock : EffectBase
         /// <param name="speedLimit">Current desired speed used by steering forces.</param>
         private void AddMusicalSteering(float deltaTime, float speedLimit)
         {
-            float dropDominance = Mathf.Max(parent.dropApproach, parent.dropRelease);
-            float eventDominance = Mathf.Clamp01(Mathf.Max(parent.fillDrive, dropDominance));
+            float dropDominance = Mathf.Max(parent.dropGather, parent.dropRelease);
+            float eventDominance = Mathf.Clamp01(Mathf.Max(parent.fillOrbitDrive, dropDominance));
 
             // Mid bends the shared course only while Fill/Drop choreography is not dominant.
             Vector2 collectiveTurn = GetCollectiveTurnDirection(velocity, parent.courseTurnDirection);
@@ -895,13 +899,13 @@ public class Flock : EffectBase
             // Fill circles the center, gathering bends that circle into a spiral, and Drop reverses it outward.
             Vector2 radial = position - parent.wallCenter;
             Vector2 tangent = new(-radial.y, radial.x);
-            float orbitAmount = parent.fillDrive * Mathf.Lerp(
+            float orbitAmount = parent.fillOrbitDrive * Mathf.Lerp(
                 1f,
                 FillOrbitAtFullGather,
-                parent.dropApproach);
+                parent.dropGather);
             acceleration += Steer(tangent * parent.fillOrbitDirection, speedLimit)
                 * (FillOrbitSteering * orbitAmount);
-            acceleration += Steer(-radial, speedLimit) * (DropGatherSteering * parent.dropApproach);
+            acceleration += Steer(-radial, speedLimit) * (DropGatherSteering * parent.dropGather);
             acceleration += Steer(radial, speedLimit) * (DropOutwardSteering * parent.dropRelease);
         }
 
@@ -971,21 +975,23 @@ public class Flock : EffectBase
 
             int neighborCount = 0;
             Vector2 boundsSize = max - min;
+            float squaredPerception = perception * perception;
             for (int i = 0; i < boids.Length; i++)
             {
-                if (boids[i] == this)
+                Boid neighbor = boids[i];
+                if (neighbor == this)
                 {
                     continue;
                 }
 
-                Vector2 offset = GetWrappedOffset(position, boids[i].position, boundsSize);
+                Vector2 offset = GetWrappedOffset(position, neighbor.position, boundsSize);
                 float squaredDistance = offset.sqrMagnitude;
-                if (squaredDistance > perception * perception)
+                if (squaredDistance > squaredPerception)
                 {
                     continue;
                 }
 
-                alignmentSteering += boids[i].velocity;
+                alignmentSteering += neighbor.velocity;
 
                 // Average wrapped offsets, not absolute positions, so edge neighbors pull across the seam correctly.
                 cohesionSteering += offset;
@@ -998,7 +1004,7 @@ public class Flock : EffectBase
                 neighborCount++;
             }
 
-            if (neighborCount <= 0)
+            if (neighborCount == 0)
             {
                 return;
             }
