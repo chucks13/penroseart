@@ -222,7 +222,8 @@ public class OSCReader : MonoBehaviour
 
     Hashtable AddressTable;
 
-    public ArrayList messagesReceived;
+    /// <summary>Messages queued by the reader thread for dispatch on the Unity main thread.</summary>
+    private ArrayList messagesReceived;
 
     private object ReadThreadLock = new object();
 

@@ -66,6 +66,7 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 - Treat "this is low-risk / minimal change / let's keep both for now" as a **smell** when it
   means preserving a second copy of anything. Prefer the decisive refactor that leaves
   exactly one canonical form.
+- Any diagnostic code warning or above is to be treated as an error and must be either brought up to the user or fixed.
 
 ### Caller-First Simplicity
 
