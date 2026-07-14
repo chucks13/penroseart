@@ -121,11 +121,12 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
+        var layoutWidth = position.width;
         var dashboardRect = EditorGUILayout.GetControlRect(
             hasLabel: false,
-            height: BeatManagerDashboardRenderer.DashboardHeight,
+            height: BeatManagerDashboardRenderer.DashboardHeightForWidth(layoutWidth),
             GUILayout.ExpandWidth(true));
-        BeatManagerDrawer.DrawDashboard(dashboardRect, controller.beatManager);
+        BeatManagerDrawer.DrawDashboard(dashboardRect, controller.beatManager, layoutWidth);
     }
 
     /// <summary>Finds the live Controller first, then an inactive-compatible scene Controller for Edit Mode.</summary>

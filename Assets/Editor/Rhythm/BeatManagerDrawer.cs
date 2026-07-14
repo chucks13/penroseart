@@ -50,7 +50,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
                 line.y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 var panelRect = EditorGUI.IndentedRect(new Rect(line.x, line.y, line.width, BeatManagerDashboardRenderer.DashboardHeight));
-                DrawDashboard(panelRect, ResolveBeatManager(property));
+                DrawDashboard(panelRect, ResolveBeatManager(property), panelRect.width);
                 line.y += BeatManagerDashboardRenderer.DashboardHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 DrawChildFields(line, property);
@@ -126,18 +126,18 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         }
     }
 
-    /// <summary>Draws the live rhythm facts beside an editor-only Waveform preview.</summary>
+    /// <summary>Draws the read-only BeatManager dashboard without exposing serialized transport fields.</summary>
     /// <param name="rect">The dashboard rectangle allocated by the property drawer.</param>
     /// <param name="beatManager">The live runtime source, or null when it cannot be resolved.</param>
-    /// <summary>Draws the read-only BeatManager dashboard without exposing serialized transport fields.</summary>
-    internal static void DrawDashboard(Rect rect, BeatManager beatManager)
+    /// <param name="layoutWidth">The available workspace width that selects the responsive flow.</param>
+    internal static void DrawDashboard(Rect rect, BeatManager beatManager, float layoutWidth)
     {
         EnsureWaveformPool();
 
         var selectedWaveform = SelectedWaveform();
-        var model = BeatManagerDashboardModel.From(beatManager, selectedWaveform);
+        var model = BeatManagerDashboardModel.From(beatManager, selectedWaveform, waveformPoolError);
         var selector = BuildWaveformSelector();
-        var actions = BeatManagerDashboardRenderer.Draw(rect, model, selector, selectedWaveform);
+        var actions = BeatManagerDashboardRenderer.Draw(rect, model, selector, selectedWaveform, layoutWidth);
         ApplyDashboardActions(actions);
     }
 

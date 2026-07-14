@@ -2,13 +2,13 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// IMGUI renderer for the BeatManager Inspector dashboard.
+/// Responsive IMGUI renderer for the BeatManager Rhythm dashboard.
 /// </summary>
 /// <remarks>
 /// This module owns layout, colors, styles, and widgets. It consumes <see cref="BeatManagerDashboardModel"/>
 /// instead of reading runtime state directly, keeping Unity drawing separate from the dashboard's display
-/// decisions. User actions are returned to the drawer adapter so editor-only preview state stays outside the
-/// renderer.
+/// decisions. The Tuning Window and legacy drawer share this renderer; user actions return to the drawer adapter
+/// so editor-only preview selection stays outside the runtime.
 /// </remarks>
 internal static class BeatManagerDashboardRenderer
 {
@@ -18,18 +18,17 @@ internal static class BeatManagerDashboardRenderer
     private const float BodyHeight = 78f;
     private const float BodyGap = 12f;
     private const float ChipHeight = 24f;
-    private const float SectionGap = 12f;
-    private const float QueriesHeaderHeight = 18f;
-    private const float QueriesHeaderGap = 10f;
+    /// <summary>Height of one semantic dashboard group heading.</summary>
+    private const float GroupHeaderHeight = 18f;
+    /// <summary>Space between one group heading and its first fact.</summary>
+    private const float GroupHeaderGap = 8f;
+    /// <summary>Space between adjacent semantic groups.</summary>
+    private const float GroupGap = 14f;
     private const float QueryRowHeight = 22f;
     private const float QueryRowGap = 6f;
-    private const int QueryRowCount = 6; // envelope, fill, drop, energy, phrase, levels
 
-    public const float DashboardHeight =
-        PanelPadding + HeaderHeight + HeaderGap + BodyHeight + BodyGap + ChipHeight
-        + WaveformStripGap + WaveformSelectorHeight + WaveformSelectorGap + WaveformStripHeight
-        + SectionGap + QueriesHeaderHeight + QueriesHeaderGap
-        + (QueryRowCount * (QueryRowHeight + QueryRowGap)) + PanelPadding;
+    /// <summary>The conservative stacked height used by narrow property-drawer callers.</summary>
+    public const float DashboardHeight = 708f;
 
     private const float BarHeight = 8f;
 
@@ -47,23 +46,25 @@ internal static class BeatManagerDashboardRenderer
     private const float MeterRowHeight = 22f;
     private const float MeterRowGap = 6f;
     private const float MeterLabelWidth = 40f;
-    private const float MeterValueWidth = 46f;
+    /// <summary>Width reserved for a numeric pulse or the full unavailable label.</summary>
+    private const float MeterValueWidth = 76f;
 
     private const float ChipGap = 8f;
 
-    private const float WaveformStripGap = 12f;
     private const float WaveformSelectorHeight = 20f;
     private const float WaveformSelectorGap = 6f;
     private const float WaveformStripHeight = 46f;
     private const float WaveformValueWidth = 46f;
 
-    private const float QueryRowLabelWidth = 70f;
+    /// <summary>Width reserved for each semantic query-row label.</summary>
+    private const float QueryRowLabelWidth = 84f;
     private const float RightTextWidth = 150f;
     private const float StatusChipWidth = 46f;
     private const float PhraseLabelWidth = 90f;
     private const float SegmentGap = 6f;
 
-    private const string NullValueText = "—  null → Standalone";
+    /// <summary>Canonical whole-row text for an unavailable display fact.</summary>
+    private const string NullValueText = BeatManagerDashboardModel.UnavailableText;
     private const string OffBeatActive = "◆";
     private const string OffBeatInactive = "◇";
 
@@ -71,30 +72,43 @@ internal static class BeatManagerDashboardRenderer
     private const string EnvelopeTooltip =
         "Waveform.Envelope: the selected Pool shape evaluated against the current Bar Phase. " +
         "Preview only; selection does not mutate runtime state.";
+    /// <summary>Explains the canonical Fill phrase-event presentation.</summary>
     private const string FillTooltip =
         "Fill: a short build-up flourish. IN n = counting down (the bar fills as it approaches over the last " +
         "32 beats); NOW = riding it (the bar sweeps its progress). next — · ×0 = the track's Fills are all " +
-        "behind the playhead. Null: no Fill data on the wire right now.";
+        "behind the playhead. Unavailable: no Fill data on the wire right now.";
+    /// <summary>Explains the canonical Drop phrase-event presentation.</summary>
     private const string DropTooltip =
         "Drop: the payoff section, same anatomy as Fill — the bar fills toward the start (land transitions " +
-        "on it), then sweeps its progress while it plays. next — · ×0 = no Drops left ahead. Null: no Drop " +
+        "on it), then sweeps its progress while it plays. next — · ×0 = no Drops left ahead. Unavailable: no Drop " +
         "data on the wire right now.";
+    /// <summary>Explains current and announced next Energy presentation.</summary>
     private const string EnergyTooltip =
-        "Energy: the track's intensity tier in the closed Low/Mid/High vocabulary, with where it is heading " +
-        "and the changes still ahead. The bar sweeps the current same-energy run. Null: unavailable, or the " +
-        "wire label was unrecognized.";
+        "Energy: the track's intensity tier in the closed Low/Mid/High vocabulary. Current progress and the " +
+        "announced next run stay separate. Unavailable means the wire lane is absent or unrecognized.";
+    /// <summary>Explains current and announced next Phrase presentation.</summary>
     private const string PhraseTooltip =
-        "Phrase: the track's current section label (open vocabulary — display it, don't keyword-parse it), with " +
-        "contrived progress and the upcoming section. Null: no phrase data on the wire right now.";
+        "Phrase: the track's open-vocabulary section label. Current progress and the announced next Phrase stay " +
+        "separate. Unavailable means the corresponding wire lane is absent.";
+    /// <summary>Explains the live Levels follower and Standalone availability contract.</summary>
     private const string LevelsTooltip =
         "Levels: low/mid/high band energy with BeatManager's attack/release smoothing already applied " +
-        "(fast up, slow down — anti-flicker). Missing wire levels read as zero.";
+        "(fast up, slow down — anti-flicker). Synced missing levels follow the runtime's zero contract; " +
+        "Standalone Mode is unavailable.";
 
     private static readonly GUIContent EnvelopeLabel = new("ENVELOPE", EnvelopeTooltip);
     private static readonly GUIContent FillLabel = new("FILL", FillTooltip);
     private static readonly GUIContent DropLabel = new("DROP", DropTooltip);
     private static readonly GUIContent EnergyLabel = new("ENERGY", EnergyTooltip);
     private static readonly GUIContent PhraseLabel = new("PHRASE", PhraseTooltip);
+    /// <summary>Label for announced next Energy state.</summary>
+    private static readonly GUIContent NextEnergyLabel = new("NEXT ENERGY", EnergyTooltip);
+    /// <summary>Label for announced next Phrase state.</summary>
+    private static readonly GUIContent NextPhraseLabel = new("NEXT PHRASE", PhraseTooltip);
+    /// <summary>Label and availability guidance for sender-provided Grid placement.</summary>
+    private static readonly GUIContent GridLabel = new(
+        "GRID",
+        "Grid: the sender-provided one-based Bar and Beat placement. Unavailable means no complete Grid fact was broadcast.");
     private static readonly GUIContent LevelsLabel = new("LEVELS", LevelsTooltip);
 
     private static readonly Color PanelBackgroundColor = new(0.035f, 0.04f, 0.055f);
@@ -148,7 +162,6 @@ internal static class BeatManagerDashboardRenderer
     private static GUIStyle chipValueStyle;
     private static GUIStyle chipValueRightStyle;
     private static GUIStyle queriesHeaderStyle;
-    private static GUIStyle hintStyle;
     private static GUIStyle nullStyle;
     private static GUIStyle statusChipStyle;
     private static GUIStyle phraseTextStyle;
@@ -159,8 +172,9 @@ internal static class BeatManagerDashboardRenderer
     /// <param name="model">The immutable live rhythm display facts.</param>
     /// <param name="selector">The valid preview choices or required-Pool failure.</param>
     /// <param name="waveform">The selected runtime Waveform, or null when preview is unavailable.</param>
+    /// <param name="layoutWidth">The available workspace width used to select one responsive flow.</param>
     public static BeatManagerDashboardActions Draw(Rect rect, BeatManagerDashboardModel model,
-        WaveformSelectorView selector, Waveform? waveform)
+        WaveformSelectorView selector, Waveform? waveform, float layoutWidth)
     {
         EnsureStyles();
 
@@ -173,9 +187,15 @@ internal static class BeatManagerDashboardRenderer
             Mathf.Max(0f, rect.width - (PanelPadding * 2f)),
             rect.height - (PanelPadding * 2f));
 
-        DrawHeader(new Rect(content.x, content.y, content.width, HeaderHeight), model);
+        var flow = BeatManagerDashboardModel.FlowForWidth(layoutWidth);
+        var y = content.y;
+        DrawHeader(new Rect(content.x, y, content.width, HeaderHeight), model);
+        y += HeaderHeight + HeaderGap;
 
-        var body = new Rect(content.x, content.y + HeaderHeight + HeaderGap, content.width, BodyHeight);
+        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "TIMING");
+        y += GroupHeaderHeight + GroupHeaderGap;
+
+        var body = new Rect(content.x, y, content.width, BodyHeight);
         var leftWidth = Mathf.Min(LeftZoneWidth, body.width * LeftZoneMaxFraction);
         var leftZone = new Rect(body.x, body.y, leftWidth, body.height);
         DrawPositionZone(leftZone, model);
@@ -185,48 +205,96 @@ internal static class BeatManagerDashboardRenderer
 
         var rightX = leftZone.xMax + ZoneDividerGap;
         DrawPulseZone(new Rect(rightX, body.y, Mathf.Max(0f, body.xMax - rightX), body.height), model);
+        y = body.yMax + BodyGap;
 
-        var chipsRect = new Rect(content.x, body.yMax + BodyGap, content.width, ChipHeight);
-        DrawCountdownChips(chipsRect, model);
+        var chipAreaHeight = flow == RhythmDashboardFlow.Stacked ? (ChipHeight * 2f) + ChipGap : ChipHeight;
+        var chipsRect = new Rect(content.x, y, content.width, chipAreaHeight);
+        DrawCountdownChips(chipsRect, model, flow);
+        y = chipsRect.yMax + QueryRowGap;
 
-        var selectorRect = new Rect(content.x, chipsRect.yMax + WaveformStripGap, content.width, WaveformSelectorHeight);
+        DrawGridRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Grid);
+        y += QueryRowHeight + GroupGap;
+
+        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "WAVEFORM PREVIEW");
+        y += GroupHeaderHeight + GroupHeaderGap;
+
+        var selectorRect = new Rect(content.x, y, content.width, WaveformSelectorHeight);
         var actions = DrawWaveformSelector(selectorRect, selector);
 
         var stripRect = new Rect(content.x, selectorRect.yMax + WaveformSelectorGap, content.width, WaveformStripHeight);
-        DrawWaveformStrip(stripRect, model, waveform, selector.Error);
-
-        var queriesY = stripRect.yMax + SectionGap;
-        GUI.Label(new Rect(content.x, queriesY, content.width * 0.5f, QueriesHeaderHeight), "RHYTHM QUERIES", queriesHeaderStyle);
-        GUI.Label(new Rect(content.x + (content.width * 0.5f), queriesY, content.width * 0.5f, QueriesHeaderHeight),
-            "— = null → Standalone", hintStyle);
-
-        var y = queriesY + QueriesHeaderHeight + QueriesHeaderGap;
+        DrawWaveformStrip(stripRect, model, model.PoolHealthy ? waveform : null, model.PoolError);
+        y = stripRect.yMax + QueryRowGap;
         DrawEnvelopeRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Envelope);
-        y += QueryRowHeight + QueryRowGap;
+        y += QueryRowHeight + GroupGap;
 
-        DrawPhraseEventRow(new Rect(content.x, y, content.width, QueryRowHeight), FillLabel, model.Fill,
-            FillNowChipColor, FillSoonChipColor, FillMeterColor);
-        y += QueryRowHeight + QueryRowGap;
+        if (flow == RhythmDashboardFlow.Split)
+        {
+            var columnWidth = Mathf.Max(0f, (content.width - GroupGap) * 0.5f);
+            var currentBottom = DrawCurrentGroup(new Rect(content.x, y, columnWidth, 0f), model);
+            var nextBottom = DrawNextGroup(
+                new Rect(content.x + columnWidth + GroupGap, y, columnWidth, 0f),
+                model);
+            y = Mathf.Max(currentBottom, nextBottom) + GroupGap;
+        }
+        else
+        {
+            y = DrawCurrentGroup(new Rect(content.x, y, content.width, 0f), model) + GroupGap;
+            y = DrawNextGroup(new Rect(content.x, y, content.width, 0f), model) + GroupGap;
+        }
 
-        DrawPhraseEventRow(new Rect(content.x, y, content.width, QueryRowHeight), DropLabel, model.Drop,
-            DropNowChipColor, DropSoonChipColor, DropMeterColor);
-        y += QueryRowHeight + QueryRowGap;
-
-        DrawEnergyRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Energy);
-        y += QueryRowHeight + QueryRowGap;
-
-        DrawPhraseRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Phrase);
-        y += QueryRowHeight + QueryRowGap;
-
+        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "LEVELS");
+        y += GroupHeaderHeight + GroupHeaderGap;
         DrawLevelsRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Levels);
         return actions;
+    }
+
+    /// <summary>Returns the dashboard height required by the responsive flow at a given width.</summary>
+    public static float DashboardHeightForWidth(float width)
+    {
+        return BeatManagerDashboardModel.FlowForWidth(width) == RhythmDashboardFlow.Split ? 606f : DashboardHeight;
+    }
+
+    /// <summary>Draws the current Phrase, Fill, Drop, and Energy group and returns its lower edge.</summary>
+    private static float DrawCurrentGroup(Rect rect, BeatManagerDashboardModel model)
+    {
+        var y = rect.y;
+        DrawGroupHeader(new Rect(rect.x, y, rect.width, GroupHeaderHeight), "CURRENT");
+        y += GroupHeaderHeight + GroupHeaderGap;
+        DrawPhraseRow(new Rect(rect.x, y, rect.width, QueryRowHeight), PhraseLabel, model.CurrentPhrase, showMeter: true);
+        y += QueryRowHeight + QueryRowGap;
+        DrawPhraseEventRow(new Rect(rect.x, y, rect.width, QueryRowHeight), FillLabel, model.Fill,
+            FillNowChipColor, FillSoonChipColor, FillMeterColor);
+        y += QueryRowHeight + QueryRowGap;
+        DrawPhraseEventRow(new Rect(rect.x, y, rect.width, QueryRowHeight), DropLabel, model.Drop,
+            DropNowChipColor, DropSoonChipColor, DropMeterColor);
+        y += QueryRowHeight + QueryRowGap;
+        DrawEnergyRow(new Rect(rect.x, y, rect.width, QueryRowHeight), EnergyLabel, model.CurrentEnergy, showMeter: true);
+        return y + QueryRowHeight;
+    }
+
+    /// <summary>Draws announced next Phrase and Energy facts and returns its lower edge.</summary>
+    private static float DrawNextGroup(Rect rect, BeatManagerDashboardModel model)
+    {
+        var y = rect.y;
+        DrawGroupHeader(new Rect(rect.x, y, rect.width, GroupHeaderHeight), "NEXT");
+        y += GroupHeaderHeight + GroupHeaderGap;
+        DrawPhraseRow(new Rect(rect.x, y, rect.width, QueryRowHeight), NextPhraseLabel, model.NextPhrase, showMeter: false);
+        y += QueryRowHeight + QueryRowGap;
+        DrawEnergyRow(new Rect(rect.x, y, rect.width, QueryRowHeight), NextEnergyLabel, model.NextEnergy, showMeter: false);
+        return y + QueryRowHeight;
+    }
+
+    /// <summary>Draws one stable semantic group heading.</summary>
+    private static void DrawGroupHeader(Rect rect, string text)
+    {
+        GUI.Label(rect, text, queriesHeaderStyle);
     }
 
     /// <summary>Draws synchronized/Standalone status, track identity, players, and tempo.</summary>
     private static void DrawHeader(Rect rect, BeatManagerDashboardModel model)
     {
         var badgeColor = model.Synced ? LiveBadgeColor : OfflineBadgeColor;
-        var badgeRect = new Rect(rect.x, rect.y, 74f, rect.height);
+        var badgeRect = new Rect(rect.x, rect.y, 112f, rect.height);
         EditorGUI.DrawRect(badgeRect, badgeColor);
         GUI.Label(badgeRect, model.BadgeText, badgeStyle);
 
@@ -273,12 +341,18 @@ internal static class BeatManagerDashboardRenderer
         var markerWidth = Mathf.Min(MarkerWidth, spacing);
         for (var i = 0; i < BeatManagerDashboardModel.BeatSlotCount; i++)
         {
-            var enabled = model.IsOffBeatEnabled(i);
+            var enabled = model.OffBeatGateAt(i);
             var markerRect = new Rect(rect.x + MarkerStartX + (i * spacing), rect.y, markerWidth, rect.height);
-            var color = enabled
-                ? Color.Lerp(OffBeatSteadyColor, OffBeatFlashColor, model.OffBeatPulse)
-                : model.Synced ? OffBeatInactiveColor : OffBeatDisabledColor;
-            DrawMarker(markerRect, enabled ? OffBeatActive : OffBeatInactive, color);
+            if (!enabled.HasValue)
+            {
+                DrawMarker(markerRect, "—", OffBeatDisabledColor);
+                continue;
+            }
+
+            var color = enabled.Value
+                ? Color.Lerp(OffBeatSteadyColor, OffBeatFlashColor, model.OffBeatPulse ?? 0f)
+                : OffBeatInactiveColor;
+            DrawMarker(markerRect, enabled.Value ? OffBeatActive : OffBeatInactive, color);
         }
     }
 
@@ -303,12 +377,13 @@ internal static class BeatManagerDashboardRenderer
     private static void DrawPulseZone(Rect rect, BeatManagerDashboardModel model)
     {
         var step = MeterRowHeight + MeterRowGap;
-        DrawPulseMeterRow(new Rect(rect.x, rect.y, rect.width, MeterRowHeight), "BEAT", model.BeatPulse, BeatMeterColor, model.Synced);
-        DrawPulseMeterRow(new Rect(rect.x, rect.y + step, rect.width, MeterRowHeight), "OFF", model.OffBeatPulse, OffBeatMeterColor, model.Synced);
-        DrawPulseMeterRow(new Rect(rect.x, rect.y + (step * 2f), rect.width, MeterRowHeight), "8TH", model.EighthPulse, EighthMeterColor, model.Synced);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y, rect.width, MeterRowHeight), "BEAT", model.BeatPulse, BeatMeterColor);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y + step, rect.width, MeterRowHeight), "OFF", model.OffBeatPulse, OffBeatMeterColor);
+        DrawPulseMeterRow(new Rect(rect.x, rect.y + (step * 2f), rect.width, MeterRowHeight), "8TH", model.EighthPulse, EighthMeterColor);
     }
 
-    private static void DrawPulseMeterRow(Rect rect, string label, float pulse, Color color, bool active)
+    /// <summary>Draws one nullable pulse meter without manufacturing a zero value.</summary>
+    private static void DrawPulseMeterRow(Rect rect, string label, float? pulse, Color color)
     {
         GUI.Label(new Rect(rect.x, rect.y, MeterLabelWidth, rect.height), label, rowLabelStyle);
 
@@ -317,25 +392,47 @@ internal static class BeatManagerDashboardRenderer
         var barRect = new Rect(barX, rect.y + ((rect.height - BarHeight) * 0.5f), Mathf.Max(0f, barRight - barX), BarHeight);
         EditorGUI.DrawRect(barRect, MeterTrackColor);
 
-        var fill = new Rect(barRect.x, barRect.y, barRect.width * Mathf.Clamp01(pulse), barRect.height);
-        var fillColor = active ? color : new Color(color.r * 0.25f, color.g * 0.25f, color.b * 0.25f, 0.8f);
-        EditorGUI.DrawRect(fill, fillColor);
+        if (pulse is not { } value)
+        {
+            GUI.Label(new Rect(rect.xMax - MeterValueWidth, rect.y, MeterValueWidth, rect.height),
+                NullValueText, nullStyle);
+            return;
+        }
+
+        var fill = new Rect(barRect.x, barRect.y, barRect.width * Mathf.Clamp01(value), barRect.height);
+        EditorGUI.DrawRect(fill, color);
 
         var shine = new Rect(fill.x, fill.y, fill.width, Mathf.Max(1f, fill.height * 0.35f));
-        EditorGUI.DrawRect(shine, new Color(1f, 1f, 1f, active ? 0.22f : 0.08f));
+        EditorGUI.DrawRect(shine, new Color(1f, 1f, 1f, 0.22f));
 
-        GUI.Label(new Rect(rect.xMax - MeterValueWidth, rect.y, MeterValueWidth, rect.height), $"{pulse:0.00}", valueStyle);
+        GUI.Label(new Rect(rect.xMax - MeterValueWidth, rect.y, MeterValueWidth, rect.height), $"{value:0.00}", valueStyle);
     }
 
-    private static void DrawCountdownChips(Rect rect, BeatManagerDashboardModel model)
+    /// <summary>Draws timing chips in one wide row or two readable narrow rows.</summary>
+    private static void DrawCountdownChips(
+        Rect rect,
+        BeatManagerDashboardModel model,
+        RhythmDashboardFlow flow)
     {
-        var chipWidth = Mathf.Max(0f, (rect.width - (ChipGap * 3f)) / 4f);
-        var step = chipWidth + ChipGap;
+        if (flow == RhythmDashboardFlow.Split)
+        {
+            var chipWidth = Mathf.Max(0f, (rect.width - (ChipGap * 3f)) / 4f);
+            var step = chipWidth + ChipGap;
 
-        DrawCountdownChip(new Rect(rect.x, rect.y, chipWidth, rect.height), model.NextBeat, BeatChipColor);
-        DrawCountdownChip(new Rect(rect.x + step, rect.y, chipWidth, rect.height), model.OnBeatGate, OnBeatChipColor);
-        DrawCountdownChip(new Rect(rect.x + (step * 2f), rect.y, chipWidth, rect.height), model.NextOffBeat, OffBeatChipColor);
-        DrawCountdownChip(new Rect(rect.x + (step * 3f), rect.y, chipWidth, rect.height), model.OffBeatGate, OffBeatGateChipColor);
+            DrawCountdownChip(new Rect(rect.x, rect.y, chipWidth, ChipHeight), model.NextBeat, BeatChipColor);
+            DrawCountdownChip(new Rect(rect.x + step, rect.y, chipWidth, ChipHeight), model.OnBeatGate, OnBeatChipColor);
+            DrawCountdownChip(new Rect(rect.x + (step * 2f), rect.y, chipWidth, ChipHeight), model.NextOffBeat, OffBeatChipColor);
+            DrawCountdownChip(new Rect(rect.x + (step * 3f), rect.y, chipWidth, ChipHeight), model.OffBeatGate, OffBeatGateChipColor);
+            return;
+        }
+
+        var narrowWidth = Mathf.Max(0f, (rect.width - ChipGap) * 0.5f);
+        var secondColumn = rect.x + narrowWidth + ChipGap;
+        var secondRow = rect.y + ChipHeight + ChipGap;
+        DrawCountdownChip(new Rect(rect.x, rect.y, narrowWidth, ChipHeight), model.NextBeat, BeatChipColor);
+        DrawCountdownChip(new Rect(secondColumn, rect.y, narrowWidth, ChipHeight), model.OnBeatGate, OnBeatChipColor);
+        DrawCountdownChip(new Rect(rect.x, secondRow, narrowWidth, ChipHeight), model.NextOffBeat, OffBeatChipColor);
+        DrawCountdownChip(new Rect(secondColumn, secondRow, narrowWidth, ChipHeight), model.OffBeatGate, OffBeatGateChipColor);
     }
 
     /// <summary>Draws the editor-only Waveform preview selector and reports any chosen action.</summary>
@@ -360,7 +457,7 @@ internal static class BeatManagerDashboardRenderer
         }
         else
         {
-            EditorGUI.HelpBox(popupRect, "Pool configuration error", MessageType.Error);
+            EditorGUI.HelpBox(popupRect, selector.Error, MessageType.Error);
         }
 
         var buttonRect = new Rect(rect.xMax - editButtonWidth, rect.y, editButtonWidth, rect.height);
@@ -391,17 +488,17 @@ internal static class BeatManagerDashboardRenderer
         var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
 
         WaveformPlot.Draw(plot, availableWaveform, model.Synced ? WaveformPlot.Curve : WaveformCurveIdleColor,
-            model.Synced ? model.BarPhase : null);
+            model.BarPhase);
 
         var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
-        if (model.Synced)
+        if (model.BarPhase is { } barPhase)
         {
-            var emitted = Mathf.Clamp01(availableWaveform.Sample(model.BarPhase));
+            var emitted = Mathf.Clamp01(availableWaveform.Sample(barPhase));
             GUI.Label(readout, $"{emitted:0.00}", valueStyle);
         }
         else
         {
-            GUI.Label(readout, "--", valueStyle);
+            GUI.Label(readout, "—", valueStyle);
         }
     }
 
@@ -444,9 +541,10 @@ internal static class BeatManagerDashboardRenderer
         GUI.Label(right, view.Readout, valueStyle);
     }
 
-    private static void DrawEnergyRow(Rect row, EnergyRowView energy)
+    /// <summary>Draws one current or next Energy row with optional progress.</summary>
+    private static void DrawEnergyRow(Rect row, GUIContent label, EnergyRowView energy, bool showMeter)
     {
-        var content = DrawQueryRowLabel(row, EnergyLabel);
+        var content = DrawQueryRowLabel(row, label);
         if (!energy.HasValue)
         {
             DrawNullValue(content);
@@ -457,13 +555,17 @@ internal static class BeatManagerDashboardRenderer
         DrawStatusChip(chip, energy.Chip, GetEnergyChipColor(energy.Level));
 
         var right = TakeRight(ref content, RightTextWidth);
-        DrawMeter(content, energy.Meter, EnergyMeterColor);
+        if (showMeter)
+        {
+            DrawMeter(content, energy.Meter, EnergyMeterColor);
+        }
         GUI.Label(right, energy.Readout, valueStyle);
     }
 
-    private static void DrawPhraseRow(Rect row, PhraseRowView phrase)
+    /// <summary>Draws one current or next Phrase row with optional progress.</summary>
+    private static void DrawPhraseRow(Rect row, GUIContent label, PhraseRowView phrase, bool showMeter)
     {
-        var content = DrawQueryRowLabel(row, PhraseLabel);
+        var content = DrawQueryRowLabel(row, label);
         if (!phrase.HasValue)
         {
             DrawNullValue(content);
@@ -474,8 +576,28 @@ internal static class BeatManagerDashboardRenderer
         GUI.Label(labelRect, phrase.Label, phraseTextStyle);
 
         var right = TakeRight(ref content, RightTextWidth);
-        DrawMeter(content, phrase.Meter, PhraseMeterColor);
+        if (showMeter)
+        {
+            DrawMeter(content, phrase.Meter, PhraseMeterColor);
+        }
         GUI.Label(right, phrase.Readout, valueStyle);
+    }
+
+    /// <summary>Draws the sender-provided one-based Grid placement.</summary>
+    private static void DrawGridRow(Rect row, GridRowView grid)
+    {
+        var content = DrawQueryRowLabel(row, GridLabel);
+        if (!grid.HasValue)
+        {
+            DrawNullValue(content);
+            return;
+        }
+
+        var chip = TakeLeft(ref content, StatusChipWidth + 18f);
+        DrawStatusChip(chip, grid.State, BeatChipColor);
+        var right = TakeRight(ref content, RightTextWidth);
+        DrawMeter(content, grid.Meter, PhraseMeterColor);
+        GUI.Label(right, grid.Readout, valueStyle);
     }
 
     private static void DrawLevelsRow(Rect row, LevelsRowView levels)
@@ -592,11 +714,14 @@ internal static class BeatManagerDashboardRenderer
             BeatMarkerState.Current => Color.Lerp(
                 CurrentBeatSteadyColor,
                 CurrentBeatFlashColor,
-                model.OnBeat ? Mathf.Max(0.45f, model.BeatPulse) : model.BeatPulse * 0.35f),
+                model.OnBeat == true
+                    ? Mathf.Max(0.45f, model.BeatPulse ?? 0f)
+                    : (model.BeatPulse ?? 0f) * 0.35f),
             BeatMarkerState.Future => FutureBeatDotColor,
             _ => DisabledDotColor,
         };
 
+    /// <summary>Creates the shared IMGUI styles once for the active editor domain.</summary>
     private static void EnsureStyles()
     {
         if (titleStyle != null)
@@ -657,11 +782,6 @@ internal static class BeatManagerDashboardRenderer
         {
             normal = { textColor = new Color(0.70f, 0.95f, 0.72f) },
             alignment = TextAnchor.MiddleLeft,
-        };
-        hintStyle = new GUIStyle(EditorStyles.miniLabel)
-        {
-            normal = { textColor = new Color(0.45f, 0.50f, 0.55f) },
-            alignment = TextAnchor.MiddleRight,
         };
         nullStyle = new GUIStyle(EditorStyles.miniLabel)
         {

@@ -1,13 +1,15 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Pure display model for the BeatManager Inspector dashboard.
+/// Pure display model for the BeatManager Rhythm dashboard.
 /// </summary>
 /// <remarks>
 /// The Unity <see cref="UnityEditor.PropertyDrawer"/> adapter resolves editor-only context, then this module
-/// converts a live <see cref="BeatManager"/> into stable dashboard facts: status text, marker states, query
-/// rows, countdown readouts, and waveform playhead data. Keeping these display decisions out of IMGUI gives
-/// tests a small seam that exercises the same behavior the Inspector renders without driving Unity layout.
+/// converts a live <see cref="BeatManager"/> into stable dashboard facts: authoritative mode, independent
+/// availability, responsive grouping, current/next state, Grid placement, countdowns, and Waveform health.
+/// Keeping these decisions out of IMGUI gives tests the same seam rendered by the Tuning Window and drawer.
 /// </remarks>
 internal readonly struct BeatManagerDashboardModel
 {
@@ -15,7 +17,21 @@ internal readonly struct BeatManagerDashboardModel
 
     private const string DotFilled = "●";
     private const string DotEmpty = "○";
+    /// <summary>The canonical label for one unavailable display fact.</summary>
+    internal const string UnavailableText = "Unavailable";
     private const int UnavailableBeat = -1;
+    /// <summary>The practical width at which current and next state can remain readable side by side.</summary>
+    private const float SplitLayoutMinWidth = 820f;
+
+    /// <summary>The stable scan order shared by narrow and wide dashboard layouts.</summary>
+    private static readonly IReadOnlyList<RhythmDashboardGroup> DisplayGroups = Array.AsReadOnly(new[]
+    {
+        RhythmDashboardGroup.Timing,
+        RhythmDashboardGroup.Waveform,
+        RhythmDashboardGroup.Current,
+        RhythmDashboardGroup.Next,
+        RhythmDashboardGroup.Levels,
+    });
 
     /// <summary>Whether the canonical rhythm hub currently serves a live four-count.</summary>
     public readonly bool Synced;
@@ -23,22 +39,42 @@ internal readonly struct BeatManagerDashboardModel
     public readonly string TrackText;
     public readonly string HeaderRightText;
     public readonly int BeatInBar;
-    public readonly bool OnBeat;
-    public readonly float BeatPulse;
-    public readonly bool[] OffBeatGates;
-    public readonly float OffBeatPulse;
-    public readonly float EighthPulse;
+    /// <summary>The current count's On Beat gate, or null when that lane is unavailable.</summary>
+    public readonly bool? OnBeat;
+    /// <summary>The wire Beat Pulse, or null when the sender did not provide it.</summary>
+    public readonly float? BeatPulse;
+    /// <summary>The four nullable Off Beat gates in one-based musical order.</summary>
+    private readonly bool?[] offBeatGates;
+    /// <summary>The derived Off Beat pulse, or null when its timing inputs are unavailable.</summary>
+    public readonly float? OffBeatPulse;
+    /// <summary>The strongest available Beat or Off Beat pulse, or null when neither exists.</summary>
+    public readonly float? EighthPulse;
     public readonly CountdownChipView NextBeat;
     public readonly CountdownChipView OnBeatGate;
     public readonly CountdownChipView NextOffBeat;
     public readonly CountdownChipView OffBeatGate;
-    public readonly float BarPhase;
+    /// <summary>The live bar phase, or null when its timing inputs are unavailable.</summary>
+    public readonly float? BarPhase;
     public readonly EnvelopeRowView Envelope;
     public readonly PhraseEventRowView Fill;
     public readonly PhraseEventRowView Drop;
-    public readonly EnergyRowView Energy;
-    public readonly PhraseRowView Phrase;
+    /// <summary>The current Energy run, kept separate from the announced next run.</summary>
+    public readonly EnergyRowView CurrentEnergy;
+    /// <summary>The announced next Energy run.</summary>
+    public readonly EnergyRowView NextEnergy;
+    /// <summary>The current Phrase, kept separate from the announced next Phrase.</summary>
+    public readonly PhraseRowView CurrentPhrase;
+    /// <summary>The announced next Phrase.</summary>
+    public readonly PhraseRowView NextPhrase;
+    /// <summary>The sender-provided one-based Grid position.</summary>
+    public readonly GridRowView Grid;
     public readonly LevelsRowView Levels;
+    /// <summary>Whether the required Waveform Pool can provide an honest preview.</summary>
+    public readonly bool PoolHealthy;
+    /// <summary>The required-Pool configuration failure, or empty when healthy.</summary>
+    public readonly string PoolError;
+    /// <summary>The semantic section order rendered by both responsive flows.</summary>
+    public readonly IReadOnlyList<RhythmDashboardGroup> Groups;
 
     /// <summary>Captures one immutable set of downstream Inspector display facts.</summary>
     private BeatManagerDashboardModel(
@@ -47,22 +83,27 @@ internal readonly struct BeatManagerDashboardModel
         string trackText,
         string headerRightText,
         int beatInBar,
-        bool onBeat,
-        float beatPulse,
-        bool[] offBeatGates,
-        float offBeatPulse,
-        float eighthPulse,
+        bool? onBeat,
+        float? beatPulse,
+        bool?[] offBeatGates,
+        float? offBeatPulse,
+        float? eighthPulse,
         CountdownChipView nextBeat,
         CountdownChipView onBeatGate,
         CountdownChipView nextOffBeat,
         CountdownChipView offBeatGate,
-        float barPhase,
+        float? barPhase,
         EnvelopeRowView envelope,
         PhraseEventRowView fill,
         PhraseEventRowView drop,
-        EnergyRowView energy,
-        PhraseRowView phrase,
-        LevelsRowView levels)
+        EnergyRowView currentEnergy,
+        EnergyRowView nextEnergy,
+        PhraseRowView currentPhrase,
+        PhraseRowView nextPhrase,
+        GridRowView grid,
+        LevelsRowView levels,
+        bool poolHealthy,
+        string poolError)
     {
         Synced = synced;
         BadgeText = badgeText;
@@ -71,7 +112,7 @@ internal readonly struct BeatManagerDashboardModel
         BeatInBar = beatInBar;
         OnBeat = onBeat;
         BeatPulse = beatPulse;
-        OffBeatGates = offBeatGates;
+        this.offBeatGates = offBeatGates;
         OffBeatPulse = offBeatPulse;
         EighthPulse = eighthPulse;
         NextBeat = nextBeat;
@@ -82,9 +123,15 @@ internal readonly struct BeatManagerDashboardModel
         Envelope = envelope;
         Fill = fill;
         Drop = drop;
-        Energy = energy;
-        Phrase = phrase;
+        CurrentEnergy = currentEnergy;
+        NextEnergy = nextEnergy;
+        CurrentPhrase = currentPhrase;
+        NextPhrase = nextPhrase;
+        Grid = grid;
         Levels = levels;
+        PoolHealthy = poolHealthy;
+        PoolError = poolError;
+        Groups = DisplayGroups;
     }
 
     /// <summary>
@@ -92,51 +139,104 @@ internal readonly struct BeatManagerDashboardModel
     /// </summary>
     /// <param name="beatManager">Runtime beat manager, or <c>null</c> when the property cannot resolve one.</param>
     /// <param name="previewWaveform">The parsed Pool entry selected for editor-only preview, or null when unusable.</param>
-    public static BeatManagerDashboardModel From(BeatManager beatManager, Waveform? previewWaveform)
+    /// <param name="poolError">The required-Pool failure, or empty when the Pool is usable.</param>
+    public static BeatManagerDashboardModel From(BeatManager beatManager, Waveform? previewWaveform, string poolError)
     {
         var synced = beatManager != null && beatManager.IsSynced;
+        var poolHealthy = previewWaveform.HasValue && string.IsNullOrEmpty(poolError);
+        if (!synced)
+        {
+            return new BeatManagerDashboardModel(
+                false,
+                "STANDALONE MODE",
+                UnavailableText,
+                UnavailableText,
+                UnavailableBeat,
+                null,
+                null,
+                new bool?[BeatSlotCount],
+                null,
+                null,
+                UnavailableChip("NEXT BEAT", alignValueRight: true),
+                UnavailableChip("ON BEAT"),
+                UnavailableChip("NEXT OFF BEAT", alignValueRight: true),
+                UnavailableChip("OFF BEAT"),
+                null,
+                EnvelopeRowView.Null,
+                PhraseEventRowView.Null,
+                PhraseEventRowView.Null,
+                EnergyRowView.Null,
+                EnergyRowView.Null,
+                PhraseRowView.Null,
+                PhraseRowView.Null,
+                GridRowView.Null,
+                LevelsRowView.Null,
+                poolHealthy,
+                poolError ?? string.Empty);
+        }
+
         var timing = beatManager != null ? beatManager.Timing : default;
         var beats = beatManager != null ? beatManager.Beats : default;
         var offbeats = beatManager != null ? beatManager.Offbeats : default;
         var pulses = beatManager != null ? beatManager.Pulses : default;
         var track = beatManager != null ? beatManager.Track : default;
-        var bpmText = timing.Bpm is { } bpm ? $"{bpm:0.##} BPM" : "-- BPM";
+        var bpmText = timing.Bpm is { } bpm ? $"{bpm:0.##} BPM" : UnavailableText;
         var rightText = track.PlayersLive is { Count: > 0 } players ? $"{string.Join(",", players)} · {bpmText}" : bpmText;
-        var beatPulse = Mathf.Clamp01(pulses.Beat ?? 0f);
-        var offBeatPulse = Mathf.Clamp01(pulses.OffBeat ?? 0f);
-        var offBeatGates = new bool[BeatSlotCount];
+        var beatPulse = ClampPulse(pulses.Beat);
+        var offBeatPulse = ClampPulse(pulses.OffBeat);
+        var offBeatGates = new bool?[BeatSlotCount];
         for (var slot = 0; slot < offBeatGates.Length; slot++)
         {
-            offBeatGates[slot] = offbeats.OffBeat(slot + 1) == true;
+            offBeatGates[slot] = offbeats.OffBeat(slot + 1);
         }
 
         var count = timing.BeatInBar ?? UnavailableBeat;
         var nextCount = count is >= 1 and <= BeatSlotCount ? (count % BeatSlotCount) + 1 : UnavailableBeat;
         var nextBeatMs = nextCount > 0 ? beats.OnBeatMs(nextCount) : null;
         var nextOffbeatMs = MinimumOffbeatMilliseconds(offbeats);
+        var onBeat = count > 0 ? beats.OnBeat(count) : null;
+        var offBeat = count > 0 ? offbeats.OffBeat(count) : null;
+        var barPhase = timing.BarProgress;
 
         return new BeatManagerDashboardModel(
             synced,
-            synced ? "SYNCED" : "STANDALONE",
-            track.Title ?? "—",
+            "SYNCED MODE",
+            track.Title ?? UnavailableText,
             rightText,
             count,
-            count > 0 && beats.OnBeat(count) == true,
+            onBeat,
             beatPulse,
             offBeatGates,
             offBeatPulse,
-            GetClampedEighthPulseValue(beatPulse, offBeatPulse),
+            GetAvailableEighthPulse(beatPulse, offBeatPulse),
             new CountdownChipView("NEXT BEAT", FormatMs(nextBeatMs), alignValueRight: true),
-            new CountdownChipView("ON BEAT", count > 0 && beats.OnBeat(count) == true ? "YES" : "NO"),
+            new CountdownChipView("ON BEAT", FormatGate(onBeat)),
             new CountdownChipView("NEXT OFF BEAT", FormatMs(nextOffbeatMs), alignValueRight: true),
-            new CountdownChipView("OFF BEAT", count > 0 && offbeats.OffBeat(count) == true ? "YES" : "NO"),
-            synced ? timing.BarProgress ?? 0f : 0f,
+            new CountdownChipView("OFF BEAT", FormatGate(offBeat)),
+            barPhase,
             BuildEnvelopeRow(beatManager, previewWaveform),
             BuildPhraseEventRow(beatManager != null ? beatManager.Fill : default),
             BuildPhraseEventRow(beatManager != null ? beatManager.Drop : default),
             BuildEnergyRow(beatManager),
-            BuildPhraseRow(beatManager),
-            BuildLevelsRow(beatManager));
+            BuildNextEnergyRow(beatManager),
+            BuildCurrentPhraseRow(beatManager),
+            BuildNextPhraseRow(beatManager),
+            BuildGridRow(beatManager),
+            BuildLevelsRow(beatManager),
+            poolHealthy,
+            poolError ?? string.Empty);
+    }
+
+    /// <summary>Selects stacked content below the practical split-layout width.</summary>
+    public static RhythmDashboardFlow FlowForWidth(float width)
+    {
+        return width >= SplitLayoutMinWidth ? RhythmDashboardFlow.Split : RhythmDashboardFlow.Stacked;
+    }
+
+    /// <summary>Creates an unavailable timing chip without implying a false negative gate.</summary>
+    private static CountdownChipView UnavailableChip(string label, bool alignValueRight = false)
+    {
+        return new CountdownChipView(label, UnavailableText, alignValueRight);
     }
 
     /// <summary>Classifies one beat label against the current synchronized bar position.</summary>
@@ -161,10 +261,12 @@ internal readonly struct BeatManagerDashboardModel
         return BuildBeatDotGlyph(Synced, BeatInBar, beatLabel);
     }
 
-    /// <summary>Whether the zero-based offbeat marker has a served open gate.</summary>
-    public bool IsOffBeatEnabled(int index)
+    /// <summary>Returns the zero-based Off Beat gate, or null when that lane is unavailable.</summary>
+    public bool? OffBeatGateAt(int index)
     {
-        return Synced && OffBeatGates != null && index >= 0 && index < OffBeatGates.Length && OffBeatGates[index];
+        return Synced && offBeatGates != null && index >= 0 && index < offBeatGates.Length
+            ? offBeatGates[index]
+            : null;
     }
 
     /// <summary>
@@ -188,6 +290,26 @@ internal readonly struct BeatManagerDashboardModel
         return Mathf.Max(Mathf.Clamp01(beatPulse), Mathf.Clamp01(offBeatPulse));
     }
 
+    /// <summary>Returns the stronger available pulse, preserving absence when both inputs are missing.</summary>
+    private static float? GetAvailableEighthPulse(float? beatPulse, float? offBeatPulse)
+    {
+        return beatPulse.HasValue || offBeatPulse.HasValue
+            ? GetClampedEighthPulseValue(beatPulse ?? 0f, offBeatPulse ?? 0f)
+            : null;
+    }
+
+    /// <summary>Clamps one available pulse while preserving an unavailable lane.</summary>
+    private static float? ClampPulse(float? pulse)
+    {
+        return pulse is { } value ? Mathf.Clamp01(value) : null;
+    }
+
+    /// <summary>Formats one nullable timing gate without turning absence into a false negative.</summary>
+    private static string FormatGate(bool? active)
+    {
+        return active is { } value ? value ? "YES" : "NO" : UnavailableText;
+    }
+
     private static string BuildBeatDotGlyph(bool active, int beatInBar, int beatLabel)
     {
         return active && beatLabel >= 1 && beatLabel <= beatInBar && beatInBar <= BeatSlotCount ? DotFilled : DotEmpty;
@@ -196,7 +318,7 @@ internal readonly struct BeatManagerDashboardModel
     /// <summary>Formats a nullable millisecond countdown for a compact dashboard chip.</summary>
     private static string FormatMs(float? value)
     {
-        return value is { } ms ? $"{ms:0}ms" : "--";
+        return value is { } ms ? $"{ms:0}ms" : UnavailableText;
     }
 
     /// <summary>Returns the nearest available offbeat countdown across musical labels one through four.</summary>
@@ -252,10 +374,7 @@ internal readonly struct BeatManagerDashboardModel
         }
 
         var energy = beatManager.Energy;
-        var arrow = energy.Trend == EnergyTrend.Rising ? "↗" : energy.Trend == EnergyTrend.Falling ? "↘" : "→";
-        var heading = beatManager.NextEnergy.Level is { } next
-            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {RhythmText.Beats(beatManager.NextEnergy.BeatsUntil)}"
-            : "steady";
+        var heading = $"{RhythmText.Beats(energy.BeatsRemaining)} left · len {RhythmText.Count(energy.LengthBeats)}";
         return new EnergyRowView(
             true,
             level.ToString().ToUpperInvariant(),
@@ -264,8 +383,25 @@ internal readonly struct BeatManagerDashboardModel
             heading);
     }
 
-    /// <summary>Builds the current and upcoming Phrase row from the canonical value groups.</summary>
-    private static PhraseRowView BuildPhraseRow(BeatManager beatManager)
+    /// <summary>Builds the announced next Energy run without merging it into current state.</summary>
+    private static EnergyRowView BuildNextEnergyRow(BeatManager beatManager)
+    {
+        if (beatManager == null || beatManager.NextEnergy.Level is not { } level)
+        {
+            return EnergyRowView.Null;
+        }
+
+        var next = beatManager.NextEnergy;
+        return new EnergyRowView(
+            true,
+            level.ToString().ToUpperInvariant(),
+            level,
+            0f,
+            $"in {RhythmText.Beats(next.BeatsUntil)} · len {RhythmText.Count(next.LengthBeats)}");
+    }
+
+    /// <summary>Builds current Phrase display facts without merging the announced next Phrase.</summary>
+    private static PhraseRowView BuildCurrentPhraseRow(BeatManager beatManager)
     {
         if (beatManager == null || beatManager.Phrase.Name is not { } name)
         {
@@ -273,10 +409,40 @@ internal readonly struct BeatManagerDashboardModel
         }
 
         var phrase = beatManager.Phrase;
-        var heading = beatManager.NextPhrase.Name is { } nextName
-            ? $"→ {nextName} in {RhythmText.Beats(beatManager.NextPhrase.BeatsUntil)}"
-            : $"len {RhythmText.Count(phrase.LengthBeats)}";
+        var heading = $"{RhythmText.Beats(phrase.BeatsRemaining)} left · len {RhythmText.Count(phrase.LengthBeats)}";
         return new PhraseRowView(true, name, phrase.Progress ?? 0f, heading);
+    }
+
+    /// <summary>Builds the announced next Phrase as a distinct display row.</summary>
+    private static PhraseRowView BuildNextPhraseRow(BeatManager beatManager)
+    {
+        if (beatManager == null || beatManager.NextPhrase.Name is not { } name)
+        {
+            return PhraseRowView.Null;
+        }
+
+        var next = beatManager.NextPhrase;
+        return new PhraseRowView(
+            true,
+            name,
+            0f,
+            $"in {RhythmText.Beats(next.BeatsUntil)} · len {RhythmText.Count(next.LengthBeats)}");
+    }
+
+    /// <summary>Builds the sender-provided one-based Grid position without synthesizing placement.</summary>
+    private static GridRowView BuildGridRow(BeatManager beatManager)
+    {
+        if (beatManager == null || beatManager.Grid.State is not { } state ||
+            beatManager.Grid.Bar is not { } bar || beatManager.Grid.Beat is not { } beat)
+        {
+            return GridRowView.Null;
+        }
+
+        return new GridRowView(
+            true,
+            state.ToString().ToUpperInvariant(),
+            beatManager.Grid.Progress ?? 0f,
+            $"Bar {bar} · Beat {beat}");
     }
 
     /// <summary>Builds the band-meter row from smoothed canonical Levels.</summary>
@@ -294,6 +460,30 @@ internal enum BeatMarkerState
     Past,
     Current,
     Future,
+}
+
+/// <summary>The semantic scan groups shared by the responsive Rhythm dashboard layouts.</summary>
+internal enum RhythmDashboardGroup
+{
+    /// <summary>Track, tempo, beat/offbeat timing, and Grid placement.</summary>
+    Timing,
+    /// <summary>Required-Pool selection, plot, and emitted envelope.</summary>
+    Waveform,
+    /// <summary>Current Phrase, Fill, Drop, and Energy.</summary>
+    Current,
+    /// <summary>Announced next Phrase and Energy.</summary>
+    Next,
+    /// <summary>Smoothed low, mid, and high bands.</summary>
+    Levels,
+}
+
+/// <summary>Whether dashboard groups stack vertically or use the available wide workspace.</summary>
+internal enum RhythmDashboardFlow
+{
+    /// <summary>All groups use the full width in scan order.</summary>
+    Stacked,
+    /// <summary>Current and next musical state share a wide row.</summary>
+    Split,
 }
 
 internal readonly struct CountdownChipView
@@ -376,6 +566,34 @@ internal readonly struct PhraseRowView
     {
         HasValue = hasValue;
         Label = label;
+        Meter = meter;
+        Readout = readout;
+    }
+}
+
+/// <summary>Immutable one-based Grid placement prepared for editor display.</summary>
+internal readonly struct GridRowView
+{
+    /// <summary>The unavailable Grid row.</summary>
+    public static readonly GridRowView Null = new(false, string.Empty, 0f, string.Empty);
+
+    /// <summary>Whether the sender provided complete Grid state and placement.</summary>
+    public readonly bool HasValue;
+
+    /// <summary>The sender's Grid trust state.</summary>
+    public readonly string State;
+
+    /// <summary>The 0..1 Grid progress used by the renderer.</summary>
+    public readonly float Meter;
+
+    /// <summary>The one-based Bar and Beat display text.</summary>
+    public readonly string Readout;
+
+    /// <summary>Captures one complete Grid row's display facts.</summary>
+    public GridRowView(bool hasValue, string state, float meter, string readout)
+    {
+        HasValue = hasValue;
+        State = state;
         Meter = meter;
         Readout = readout;
     }

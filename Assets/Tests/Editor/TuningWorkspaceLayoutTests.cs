@@ -57,6 +57,31 @@ public sealed class TuningWorkspaceLayoutTests
         }
     }
 
+    /// <summary>The actual Rhythm renderer survives stacked and split Editor repaint events.</summary>
+    [UnityTest]
+    public IEnumerator RhythmDashboardRendersNarrowAndWideWithoutExceptions()
+    {
+        var window = ScriptableObject.CreateInstance<RhythmDashboardSmokeHost>();
+        try
+        {
+            window.position = new Rect(0f, 0f, 560f, BeatManagerDashboardRenderer.DashboardHeightForWidth(560f));
+            window.Show();
+            window.Repaint();
+            yield return null;
+
+            window.position = new Rect(0f, 0f, 900f, BeatManagerDashboardRenderer.DashboardHeightForWidth(900f));
+            window.Repaint();
+            yield return null;
+
+            Assert.That(window.RenderCount, Is.GreaterThan(0));
+            LogAssert.NoUnexpectedReceived();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>The compact Controller Inspector survives a real host-window repaint without exceptions.</summary>
     [UnityTest]
     public IEnumerator CompactControllerInspectorRendersWithoutExceptions()
@@ -98,6 +123,27 @@ internal sealed class ControllerInspectorSmokeHost : EditorWindow
     private void OnGUI()
     {
         RenderCount++;
-        Inspector?.OnInspectorGUI();
+        if (Inspector != null)
+        {
+            Inspector.OnInspectorGUI();
+        }
+    }
+}
+
+/// <summary>Hosts the responsive Rhythm renderer inside a real IMGUI EditorWindow for smoke coverage.</summary>
+internal sealed class RhythmDashboardSmokeHost : EditorWindow
+{
+    /// <summary>Number of IMGUI repaint/layout events observed by the host.</summary>
+    internal int RenderCount { get; private set; }
+
+    /// <summary>Renders explicit Standalone and required-Pool failure facts at the host window's current width.</summary>
+    private void OnGUI()
+    {
+        RenderCount++;
+        var error = $"Required Waveform Pool '{WaveformPool.FileName}' contains no Waveforms.";
+        var model = BeatManagerDashboardModel.From(null, default, error);
+        var selector = new WaveformSelectorView(-1, System.Array.Empty<string>(), error);
+        var rect = new Rect(0f, 0f, position.width, BeatManagerDashboardRenderer.DashboardHeightForWidth(position.width));
+        BeatManagerDashboardRenderer.Draw(rect, model, selector, default, position.width);
     }
 }
