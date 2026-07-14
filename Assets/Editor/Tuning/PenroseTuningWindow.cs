@@ -184,12 +184,25 @@ public sealed class PenroseTuningWindow : EditorWindow
     {
         var director = controller.DirectorStatus;
         var beatManager = controller.beatManager;
+        var nextCueBeatsUntil = beatManager == null
+            ? null
+            : LiveTimelineProjection.FindNextCueBeatsUntil(
+                director.CurrentSheet,
+                beatManager.Phrase.LengthBeats,
+                beatManager.Phrase.BeatsRemaining);
+        var nextCueGridLengthBeats = beatManager == null
+            ? null
+            : LiveTimelineProjection.FindNextCueGridLengthBeats(
+                director.CurrentSheet,
+                beatManager.Phrase.LengthBeats,
+                beatManager.Phrase.BeatsRemaining);
         return new LiveTimelineInput(
             director.IsSyncedMode,
-            beatManager?.Timing.Beat,
             beatManager?.Grid.Beat,
             controller.SwitcherActiveCueStatus,
-            controller.SwitcherLoadedCueStatus);
+            controller.SwitcherLoadedCueStatus,
+            nextCueBeatsUntil,
+            nextCueGridLengthBeats);
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>

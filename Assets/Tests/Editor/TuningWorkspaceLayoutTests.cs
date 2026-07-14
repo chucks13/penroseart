@@ -40,7 +40,6 @@ public sealed class TuningWorkspaceLayoutTests
         var cue = new SwitcherCueStatus(true, false, 117, 2, 1, 113, 114, 119, 3, 2);
         var model = LiveTimelineProjection.Build(new LiveTimelineInput(
             true,
-            112,
             12,
             SwitcherCueStatus.Empty,
             cue));
@@ -50,6 +49,16 @@ public sealed class TuningWorkspaceLayoutTests
             Is.EqualTo("LOCK IN 1 · START IN 2 · END IN 7"));
     }
 
+    /// <summary>The Live header keeps the next Cue visible across the full Cue Sheet gap.</summary>
+    [TestCase(64, "NEXT CUE IN 64 BEATS")]
+    [TestCase(1, "NEXT CUE IN 1 BEAT")]
+    [TestCase(0, "NEXT CUE NOW")]
+    [TestCase(null, "NEXT CUE —")]
+    public void LiveTimelineFormatsNextCueCountdown(int? beatsUntil, string expected)
+    {
+        Assert.That(LiveTimelineRenderer.FormatNextCueCountdown(beatsUntil), Is.EqualTo(expected));
+    }
+
     /// <summary>The active Transition bar names A, B, and the Transition while counting down to End.</summary>
     [Test]
     public void LiveTimelineFormatsActiveTransitionBar()
@@ -57,7 +66,6 @@ public sealed class TuningWorkspaceLayoutTests
         var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
         var model = LiveTimelineProjection.Build(new LiveTimelineInput(
             true,
-            115,
             15,
             cue,
             SwitcherCueStatus.Empty));
@@ -86,7 +94,6 @@ public sealed class TuningWorkspaceLayoutTests
         var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
         var model = LiveTimelineProjection.Build(new LiveTimelineInput(
             true,
-            114,
             14,
             cue,
             SwitcherCueStatus.Empty));
@@ -312,8 +319,8 @@ internal sealed class LiveTimelineSmokeHost : EditorWindow
     {
         RenderCount++;
         var activeCue = new SwitcherCueStatus(true, true, 101, 1, 0, 99, 100, 105, 1, 4);
-        var pendingCue = new SwitcherCueStatus(true, false, 116, 2, 1, 111, 112, 116, 4, 0);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 101, 1, activeCue, pendingCue));
+        var pendingCue = new SwitcherCueStatus(true, false, 117, 2, 1, 112, 113, 117, 4, 0);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 1, activeCue, pendingCue, 16));
         var switcher = new SwitcherStatus(
             true,
             -1,

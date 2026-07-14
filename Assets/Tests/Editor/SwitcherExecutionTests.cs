@@ -92,8 +92,7 @@ public sealed class SwitcherExecutionTests
 
         var startModel = LiveTimelineProjection.Build(new LiveTimelineInput(
             true,
-            9,
-            9,
+            16,
             switcher.ActiveCueStatus,
             switcher.LoadedCueStatus));
         Assert.That(

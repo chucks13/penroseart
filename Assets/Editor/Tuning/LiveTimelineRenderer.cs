@@ -51,8 +51,10 @@ internal static class LiveTimelineRenderer
         }
 
         EnsureStyles();
-        DrawActiveTransition(switcher, model.Active);
         DrawIdentity("NEXT", string.IsNullOrWhiteSpace(pendingCueLabel) ? "—" : pendingCueLabel);
+        EditorGUILayout.LabelField(
+            FormatNextCueCountdown(model.NextCueBeatsUntil),
+            EditorStyles.boldLabel);
         EditorGUILayout.LabelField(
             model.IsSynced ? FormatPendingTimingStatus(model.Pending) : "TIMING UNAVAILABLE",
             EditorStyles.boldLabel);
@@ -64,34 +66,48 @@ internal static class LiveTimelineRenderer
         if (!model.IsSynced)
         {
             EditorGUILayout.HelpBox("Standalone Mode · live Transition timing unavailable.", MessageType.None);
-            return;
         }
-
-        if (!model.CurrentPositionAvailable)
+        else if (!model.CurrentPositionAvailable)
         {
             EditorGUILayout.HelpBox("Current Grid position unavailable.", MessageType.None);
-            return;
         }
-
-        if (model.Active.HasCue && !model.Active.CueTimingAvailable)
+        else
         {
-            EditorGUILayout.HelpBox("Active Cue timing unavailable.", MessageType.None);
+            if (model.Active.HasCue && !model.Active.CueTimingAvailable)
+            {
+                EditorGUILayout.HelpBox("Active Cue timing unavailable.", MessageType.None);
+            }
+
+            if (model.Pending.HasCue && !model.Pending.CueTimingAvailable)
+            {
+                EditorGUILayout.HelpBox("Pending Cue timing unavailable.", MessageType.None);
+            }
+
+            if (model.Grids.Count != 2)
+            {
+                EditorGUILayout.HelpBox("Rolling Grid window unavailable.", MessageType.None);
+            }
+            else
+            {
+                DrawGrid("CURRENT", model.Grids[0]);
+                EditorGUILayout.Space(3f);
+                DrawGrid("NEXT", model.Grids[1]);
+            }
         }
 
-        if (model.Pending.HasCue && !model.Pending.CueTimingAvailable)
+        DrawActiveTransition(switcher, model.Active);
+    }
+
+    /// <summary>Formats the current Cue Sheet's next Cue Mark countdown.</summary>
+    internal static string FormatNextCueCountdown(int? beatsUntil)
+    {
+        return beatsUntil switch
         {
-            EditorGUILayout.HelpBox("Pending Cue timing unavailable.", MessageType.None);
-        }
-
-        if (model.Grids.Count != 2)
-        {
-            EditorGUILayout.HelpBox("Rolling Grid window unavailable.", MessageType.None);
-            return;
-        }
-
-        DrawGrid("CURRENT", model.Grids[0]);
-        EditorGUILayout.Space(3f);
-        DrawGrid("NEXT", model.Grids[1]);
+            null => "NEXT CUE —",
+            0 => "NEXT CUE NOW",
+            1 => "NEXT CUE IN 1 BEAT",
+            _ => $"NEXT CUE IN {beatsUntil.Value} BEATS",
+        };
     }
 
     /// <summary>Formats the pending Cue's Lock, Start, and End countdowns.</summary>
@@ -182,7 +198,7 @@ internal static class LiveTimelineRenderer
         };
     }
 
-    /// <summary>Draws one complete Grid row with a fixed label and 16 responsive cells.</summary>
+    /// <summary>Draws one Grid row with a fixed label and space reserved for a full 16-beat Grid.</summary>
     private static void DrawGrid(string label, LiveTimelineGrid grid)
     {
         var row = GUILayoutUtility.GetRect(220f, 34f, GUILayout.ExpandWidth(true));
@@ -192,8 +208,8 @@ internal static class LiveTimelineRenderer
         GUI.Label(labelRect, label, EditorStyles.miniBoldLabel);
 
         var cellsRect = new Rect(row.x + labelWidth, row.y, row.width - labelWidth, row.height);
-        var totalGap = gap * Math.Max(0, grid.Cells.Count - 1);
-        var cellWidth = Math.Max(8f, (cellsRect.width - totalGap) / grid.Cells.Count);
+        var totalGap = gap * (CueSheet.GridBeats - 1);
+        var cellWidth = Math.Max(8f, (cellsRect.width - totalGap) / CueSheet.GridBeats);
         for (var index = 0; index < grid.Cells.Count; index++)
         {
             var cellRect = new Rect(
@@ -255,7 +271,7 @@ internal static class LiveTimelineRenderer
     /// <summary>Builds an accessibility tooltip from every independent timing attribute.</summary>
     private static string Tooltip(LiveTimelineCell cell)
     {
-        var text = new StringBuilder($"Grid beat {cell.GridBeat} · Absolute beat {cell.AbsoluteBeat}");
+        var text = new StringBuilder($"Grid beat {cell.GridBeat}");
         if (cell.IsLockPoint) text.Append(" · Lock Point");
         if (cell.IsStart) text.Append(" · Start");
         if (cell.IsRunway) text.Append(" · Runway");
