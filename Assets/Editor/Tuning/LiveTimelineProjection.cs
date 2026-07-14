@@ -68,7 +68,7 @@ internal sealed class LiveTimelineModel
     /// <summary>Whether the Switcher reports a pending or active Cue.</summary>
     public bool HasCue { get; }
 
-    /// <summary>Whether the Switcher reports that the Loaded Cue is locked.</summary>
+    /// <summary>Whether the Switcher reports that the pending-or-active Cue is locked.</summary>
     public bool IsCueLocked { get; }
 
     /// <summary>Whether the Cue exposes one self-consistent timing window.</summary>
@@ -238,7 +238,7 @@ internal static class LiveTimelineProjection
             endBeatsUntil);
     }
 
-    /// <summary>Checks the Loaded Cue's existing timing facts without repairing or deriving them.</summary>
+    /// <summary>Checks the pending-or-active Cue's timing facts without repairing or deriving them.</summary>
     private static bool HasConsistentTiming(SwitcherCueStatus cue)
     {
         return cue.CueMarkBeat >= 1 &&
@@ -253,7 +253,7 @@ internal static class LiveTimelineProjection
     private static IReadOnlyList<LiveTimelineGrid> BuildRollingGrids(
         LiveTimelineInput input,
         bool currentPositionAvailable,
-        SwitcherCueStatus loadedCue)
+        SwitcherCueStatus cue)
     {
         if (!currentPositionAvailable ||
             input.CurrentAbsoluteBeat is not { } currentBeat ||
@@ -267,7 +267,7 @@ internal static class LiveTimelineProjection
         for (var gridIndex = 0; gridIndex < grids.Length; gridIndex++)
         {
             var gridStart = currentGridStart + gridIndex * CueSheet.GridBeats;
-            grids[gridIndex] = BuildGrid(gridStart, currentBeat, loadedCue);
+            grids[gridIndex] = BuildGrid(gridStart, currentBeat, cue);
         }
 
         return Array.AsReadOnly(grids);
@@ -277,29 +277,29 @@ internal static class LiveTimelineProjection
     private static LiveTimelineGrid BuildGrid(
         int gridStart,
         int currentBeat,
-        SwitcherCueStatus loadedCue)
+        SwitcherCueStatus cue)
     {
         var cells = new LiveTimelineCell[CueSheet.GridBeats];
         for (var cellIndex = 0; cellIndex < cells.Length; cellIndex++)
         {
             var gridBeat = cellIndex + 1;
             var absoluteBeat = gridStart + cellIndex;
-            var hasCue = loadedCue.HasCue;
-            var isImpactPoint = hasCue && absoluteBeat == loadedCue.CueMarkBeat;
+            var hasCue = cue.HasCue;
+            var isImpactPoint = hasCue && absoluteBeat == cue.CueMarkBeat;
             var isRunway = hasCue &&
-                absoluteBeat >= loadedCue.StartBeat &&
-                absoluteBeat < loadedCue.CueMarkBeat;
+                absoluteBeat >= cue.StartBeat &&
+                absoluteBeat < cue.CueMarkBeat;
             var isTail = hasCue &&
-                absoluteBeat > loadedCue.CueMarkBeat &&
-                absoluteBeat <= loadedCue.CompleteBeat;
+                absoluteBeat > cue.CueMarkBeat &&
+                absoluteBeat <= cue.CompleteBeat;
 
             cells[cellIndex] = new LiveTimelineCell(
                 gridBeat,
                 absoluteBeat,
-                hasCue && absoluteBeat == loadedCue.LockPointBeat,
-                hasCue && absoluteBeat == loadedCue.StartBeat,
+                hasCue && absoluteBeat == cue.LockPointBeat,
+                hasCue && absoluteBeat == cue.StartBeat,
                 isImpactPoint,
-                hasCue && absoluteBeat == loadedCue.CompleteBeat,
+                hasCue && absoluteBeat == cue.CompleteBeat,
                 isRunway,
                 isTail,
                 absoluteBeat == currentBeat);
