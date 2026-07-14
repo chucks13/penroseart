@@ -3,19 +3,22 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Standalone authoring window for Penrose runtime tuning. The Transitions tab edits saved Transition Settings
-/// and, in Play Mode, steers the Director's staged Next Transition.
+/// Canonical wide authoring window for read-only live sequencing observation and saved Transition tuning.
 /// </summary>
 public sealed class PenroseTuningWindow : EditorWindow
 {
-    private static readonly string[] Tabs = { "Transitions", "Effects" };
+    /// <summary>Current workspace tabs; Rhythm and final placeholder removal land in their owning tickets.</summary>
+    private static readonly string[] Tabs = { "Live", "Transitions", "Effects" };
 
     private Type[] transitionTypes = Array.Empty<Type>();
     private string[] transitionNames = Array.Empty<string>();
     private int selectedTransitionIndex = -1;
     private int selectedTab;
     private Vector2 transitionListScroll;
+    /// <summary>Scroll position for the selected Transition Settings editor.</summary>
     private Vector2 settingsScroll;
+    /// <summary>Scroll position for the live sequencing timeline.</summary>
+    private Vector2 liveTimelineScroll;
     private TransitionSettingsAsset selectedAsset;
     private SerializedObject selectedSerializedObject;
     private bool settingsChangedSinceLastSave;
@@ -48,6 +51,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         LiveControllerAccess.RepaintDuringPlayMode(this);
     }
 
+    /// <summary>Draws the active workspace tab without mutating runtime sequencing state.</summary>
     private void OnGUI()
     {
         DrawToolbar();
@@ -57,9 +61,12 @@ public sealed class PenroseTuningWindow : EditorWindow
         switch (selectedTab)
         {
             case 0:
-                DrawTransitionsTab();
+                DrawLiveTab();
                 break;
             case 1:
+                DrawTransitionsTab();
+                break;
+            case 2:
                 DrawEffectsTab();
                 break;
         }
@@ -83,6 +90,104 @@ public sealed class PenroseTuningWindow : EditorWindow
             GUILayout.FlexibleSpace();
             GUILayout.Label("Window > Penrose > Tuning", EditorStyles.miniLabel);
         }
+    }
+
+    /// <summary>Draws read-only Director, Cue Sheet, Switcher, and live musical placement in one timeline.</summary>
+    private void DrawLiveTab()
+    {
+        if (!LiveControllerAccess.TryGet(out var liveController))
+        {
+            EditorGUILayout.HelpBox(
+                "Live timeline unavailable. Enter Play Mode and wait for the Controller to initialize.",
+                MessageType.Info);
+            return;
+        }
+
+        var director = liveController.DirectorStatus;
+        var switcher = liveController.SwitcherStatus;
+        var loadedCue = liveController.SwitcherLoadedCueStatus;
+        var mode = director.IsSyncedMode ? "Synced Mode" : "Standalone Mode";
+
+        using (var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll))
+        {
+            liveTimelineScroll = scroll.scrollPosition;
+
+            EditorGUILayout.LabelField("LIVE SEQUENCING", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Mode", mode);
+            EditorGUILayout.LabelField("Director State", director.Mode.ToString());
+            EditorGUILayout.LabelField(
+                "Director Next Effect",
+                FormatCatalogChoice(director.NextEffectIndex, director.NextEffectName));
+            EditorGUILayout.LabelField(
+                "Director Next Transition",
+                FormatCatalogChoice(director.NextTransitionIndex, director.NextTransitionName));
+            EditorGUILayout.LabelField(
+                "Hold Selected",
+                $"Effect {(director.HoldSelectedEffect ? "On" : "Off")} · Transition {(director.HoldSelectedTransition ? "On" : "Off")}");
+            EditorGUILayout.LabelField("Switcher Active", FormatSwitcherActive(switcher));
+            EditorGUILayout.LabelField("Loaded Cue", FormatLoadedCue(loadedCue));
+
+            EditorGUILayout.Space(10f);
+            LiveTimelineRenderer.Draw(LiveTimelineProjection.Build(CaptureTimelineInput(liveController)));
+        }
+    }
+
+    /// <summary>Captures one frame of existing read-only runtime status for the pure timeline projection.</summary>
+    private static LiveTimelineInput CaptureTimelineInput(Controller controller)
+    {
+        var director = controller.DirectorStatus;
+        var switcher = controller.SwitcherStatus;
+        var beatManager = controller.beatManager;
+        var phrase = beatManager != null ? beatManager.Phrase : default;
+
+        int? phraseBeat = null;
+        if (phrase.LengthBeats is { } phraseLength &&
+            phrase.BeatsRemaining is { } beatsRemaining &&
+            phraseLength > 0 &&
+            beatsRemaining >= 1 &&
+            beatsRemaining <= phraseLength)
+        {
+            phraseBeat = phraseLength - beatsRemaining + 1;
+        }
+
+        float? executionProgress = switcher.CurrentTransitionIndex >= 0
+            ? switcher.TransitionProgress
+            : null;
+
+        return new LiveTimelineInput(
+            director.IsSyncedMode,
+            director.CurrentSheet,
+            director.NextSheet,
+            beatManager?.Timing.Beat,
+            phraseBeat,
+            beatManager?.Grid.Beat,
+            beatManager?.NextPhrase.BeatsUntil,
+            controller.SwitcherLoadedCueStatus,
+            executionProgress);
+    }
+
+    /// <summary>Formats the Switcher's active Effect or Transition without confusing it with Director intent.</summary>
+    private static string FormatSwitcherActive(SwitcherStatus status)
+    {
+        if (!status.Ready)
+        {
+            return "Unavailable";
+        }
+
+        return status.CurrentTransitionIndex >= 0
+            ? $"{FormatCatalogChoice(status.CurrentTransitionIndex, status.CurrentTransitionName)} · {status.TransitionProgress:P0}"
+            : FormatCatalogChoice(status.CurrentEffectIndex, status.CurrentEffectName);
+    }
+
+    /// <summary>Formats the Switcher's Loaded Cue lifecycle separately from active execution.</summary>
+    private static string FormatLoadedCue(SwitcherCueStatus cue)
+    {
+        if (!cue.HasCue)
+        {
+            return "None";
+        }
+
+        return $"Beat {cue.CueMarkBeat} · {(cue.IsLocked ? "Locked" : "Loaded")} · {cue.RunwayBeats}b Runway / {cue.TailBeats}b Tail";
     }
 
     private void DrawTransitionsTab()
