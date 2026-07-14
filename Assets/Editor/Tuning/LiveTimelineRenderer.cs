@@ -1,4 +1,4 @@
-// Renders the live sequencing timeline projection in the Unity Editor.
+// Renders the rolling live Transition projection in the Unity Editor.
 #nullable enable
 
 using System;
@@ -6,35 +6,41 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>Draws responsive live sequencing timelines without interpreting runtime scheduling policy.</summary>
+/// <summary>Draws two compact live Grid rows without interpreting runtime scheduling policy.</summary>
 internal static class LiveTimelineRenderer
 {
-    /// <summary>Cached centered style for ordinary beat cells.</summary>
+    /// <summary>Cached centered style for beat cells.</summary>
     private static GUIStyle? cellStyle;
 
-    /// <summary>Cached centered style for Cue Mark and Impact Point beat cells.</summary>
-    private static GUIStyle? markedCellStyle;
+    /// <summary>Cached bold style for Transition boundary cells.</summary>
+    private static GUIStyle? boundaryCellStyle;
 
     /// <summary>Neutral Grid-cell fill.</summary>
     private static readonly Color BaseFill = new(0.12f, 0.13f, 0.16f);
 
-    /// <summary>Runway fill and top-stripe color.</summary>
-    private static readonly Color RunwayFill = new(0.14f, 0.31f, 0.50f);
+    /// <summary>Runway fill restored from the original live phase strip.</summary>
+    private static readonly Color RunwayFill = new(1f, 0.35f, 0.85f);
 
-    /// <summary>Tail fill and bottom-stripe color.</summary>
-    private static readonly Color TailFill = new(0.38f, 0.18f, 0.46f);
+    /// <summary>Tail fill restored from the original live phase strip.</summary>
+    private static readonly Color TailFill = new(0.25f, 0.8f, 0.45f);
 
-    /// <summary>Current-beat fill and outline color.</summary>
-    private static readonly Color CurrentFill = new(0.92f, 0.62f, 0.12f);
+    /// <summary>Lock Point fill restored from the original live phase strip.</summary>
+    private static readonly Color LockFill = new(1f, 0.55f, 0.2f);
 
-    /// <summary>High-contrast outline used to keep the current beat visible over its fill.</summary>
-    private static readonly Color CurrentOutline = new(1f, 1f, 1f);
+    /// <summary>Impact Point fill restored from the original live phase strip.</summary>
+    private static readonly Color ImpactFill = new(0.25f, 0.95f, 1f);
 
-    /// <summary>High-contrast mark color for Cue and execution glyphs.</summary>
-    private static readonly Color MarkColor = new(0.95f, 0.95f, 0.95f);
+    /// <summary>Current-beat fill restored from the original live phase strip.</summary>
+    private static readonly Color CurrentFill = new(1f, 0.9f, 0.35f);
 
-    /// <summary>Draws current and next Phrase plans with a shared legend and optional execution progress.</summary>
-    public static void Draw(LiveTimelineModel model)
+    /// <summary>High-contrast outline used to keep the current beat trackable.</summary>
+    private static readonly Color CurrentOutline = Color.white;
+
+    /// <summary>Ordinary cell content color.</summary>
+    private static readonly Color CellContent = new(0.95f, 0.95f, 0.95f);
+
+    /// <summary>Draws next-Cue identity, timing state, legend, and the two rolling Grid rows.</summary>
+    public static void Draw(LiveTimelineModel model, string nextCueLabel)
     {
         if (model == null)
         {
@@ -42,19 +48,23 @@ internal static class LiveTimelineRenderer
         }
 
         EnsureStyles();
-        DrawLegend();
+        EditorGUILayout.LabelField("NEXT", string.IsNullOrWhiteSpace(nextCueLabel) ? "—" : nextCueLabel);
+        EditorGUILayout.LabelField(FormatTimingStatus(model), EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(
+            "L Lock  ·  S Start / Runway  ·  X Impact  ·  T Tail / E End  ·  Yellow Current",
+            EditorStyles.wordWrappedMiniLabel);
+        EditorGUILayout.Space(4f);
 
         if (!model.IsSynced)
         {
-            EditorGUILayout.HelpBox(
-                "Standalone Mode · live Grid and Transition timing unavailable.",
-                MessageType.None);
+            EditorGUILayout.HelpBox("Standalone Mode · live Transition timing unavailable.", MessageType.None);
+            return;
         }
-        else if (!model.CurrentPositionAvailable)
+
+        if (!model.CurrentPositionAvailable)
         {
-            EditorGUILayout.HelpBox(
-                "Current Grid/Phrase position unavailable.",
-                MessageType.None);
+            EditorGUILayout.HelpBox("Current Grid position unavailable.", MessageType.None);
+            return;
         }
 
         if (model.HasLoadedCue && !model.LoadedCueTimingAvailable)
@@ -62,157 +72,161 @@ internal static class LiveTimelineRenderer
             EditorGUILayout.HelpBox("Loaded Cue timing unavailable.", MessageType.None);
         }
 
-        DrawPhrase("CURRENT CUE SHEET", model.Current);
-        EditorGUILayout.Space(8f);
-        DrawPhrase("NEXT CUE SHEET", model.Next);
-
-        if (model.ExecutionProgress is { } progress)
+        if (model.Grids.Count != 2)
         {
-            EditorGUILayout.Space(8f);
-            var rect = EditorGUILayout.GetControlRect(false, 18f);
-            EditorGUI.ProgressBar(rect, progress, $"Active Transition  {progress:P0}");
-            EditorGUILayout.HelpBox(
-                "Active Transition beat placement unavailable · Switcher reports progress only.",
-                MessageType.None);
-        }
-    }
-
-    /// <summary>Draws the visual vocabulary once, using both colors and text shapes.</summary>
-    internal static void DrawLegend()
-    {
-        using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
-        {
-            GUILayout.Label("▰ Runway", EditorStyles.miniLabel);
-            GUILayout.Label("▱ Tail", EditorStyles.miniLabel);
-            GUILayout.Label("◆ Cue Mark", EditorStyles.miniLabel);
-            GUILayout.Label("● Loaded Cue", EditorStyles.miniLabel);
-            GUILayout.Label("▣ Locked", EditorStyles.miniLabel);
-            GUILayout.Label("□ Current", EditorStyles.miniLabel);
-            GUILayout.FlexibleSpace();
-        }
-    }
-
-    /// <summary>Draws one available Phrase as consecutive full or partial Grid rows.</summary>
-    internal static void DrawPhrase(string heading, LiveTimelinePhrase phrase)
-    {
-        EditorGUILayout.LabelField(heading, EditorStyles.boldLabel);
-        if (!phrase.IsAvailable)
-        {
-            EditorGUILayout.HelpBox("Cue Sheet unavailable.", MessageType.None);
+            EditorGUILayout.HelpBox("Rolling Grid window unavailable.", MessageType.None);
             return;
         }
 
-        var identity = string.IsNullOrWhiteSpace(phrase.Label)
-            ? $"{phrase.LengthBeats} beats"
-            : $"{phrase.Label}  ·  {phrase.LengthBeats} beats";
-        EditorGUILayout.LabelField(identity, EditorStyles.miniBoldLabel);
-
-        for (var blockIndex = 0; blockIndex < phrase.Blocks.Count; blockIndex++)
-        {
-            DrawBlock(blockIndex, phrase.Blocks[blockIndex]);
-        }
+        DrawGrid("CURRENT", model.Grids[0]);
+        EditorGUILayout.Space(3f);
+        DrawGrid("NEXT", model.Grids[1]);
     }
 
-    /// <summary>Draws one responsive Grid row; a partial final row uses only its real cells.</summary>
-    private static void DrawBlock(int blockIndex, LiveTimelineBlock block)
+    /// <summary>Formats the live Lock, Start, active, and End state without targeting the Impact Point.</summary>
+    internal static string FormatTimingStatus(LiveTimelineModel model)
     {
-        var endBeat = block.StartPhraseBeat + block.Cells.Count - 1;
-        EditorGUILayout.LabelField(
-            $"Grid {blockIndex + 1}  ·  beats {block.StartPhraseBeat}–{endBeat}",
-            EditorStyles.miniLabel);
-
-        var row = GUILayoutUtility.GetRect(160f, 34f, GUILayout.ExpandWidth(true));
-        const float gap = 2f;
-        var totalGap = gap * Math.Max(0, block.Cells.Count - 1);
-        var cellWidth = Math.Max(8f, (row.width - totalGap) / block.Cells.Count);
-
-        for (var index = 0; index < block.Cells.Count; index++)
+        if (model == null)
         {
-            var cellRect = new Rect(row.x + index * (cellWidth + gap), row.y, cellWidth, row.height);
-            DrawCell(cellRect, block.Cells[index]);
+            throw new ArgumentNullException(nameof(model));
+        }
+
+        if (!model.IsSynced)
+        {
+            return "TIMING UNAVAILABLE";
+        }
+
+        if (!model.HasLoadedCue)
+        {
+            return "NO LOADED CUE";
+        }
+
+        if (!model.LoadedCueTimingAvailable)
+        {
+            return "LOADED CUE TIMING UNAVAILABLE";
+        }
+
+        var lockStatus = model.IsCueLocked
+            ? "LOCKED"
+            : FormatEvent("LOCK", model.LockBeatsUntil);
+        if (model.StartBeatsUntil == 0)
+        {
+            return $"{lockStatus} · START NOW · {FormatEvent("END", model.EndBeatsUntil)}";
+        }
+
+        if (model.IsActive)
+        {
+            return $"{lockStatus} · ACTIVE · {FormatEvent("END", model.EndBeatsUntil)}";
+        }
+
+        if (model.EndBeatsUntil is < 0)
+        {
+            return $"{lockStatus} · COMPLETE";
+        }
+
+        return $"{lockStatus} · {FormatEvent("START", model.StartBeatsUntil)} · {FormatEvent("END", model.EndBeatsUntil)}";
+    }
+
+    /// <summary>Formats one signed event delta as an operational countdown.</summary>
+    private static string FormatEvent(string label, int? beatsUntil)
+    {
+        return beatsUntil switch
+        {
+            null => $"{label} —",
+            > 0 => $"{label} IN {beatsUntil.Value}",
+            0 => $"{label} NOW",
+            _ => $"{label} PASSED",
+        };
+    }
+
+    /// <summary>Draws one complete Grid row with a fixed label and 16 responsive cells.</summary>
+    private static void DrawGrid(string label, LiveTimelineGrid grid)
+    {
+        var row = GUILayoutUtility.GetRect(220f, 34f, GUILayout.ExpandWidth(true));
+        const float labelWidth = 54f;
+        const float gap = 2f;
+        var labelRect = new Rect(row.x, row.y, labelWidth - gap, row.height);
+        GUI.Label(labelRect, label, EditorStyles.miniBoldLabel);
+
+        var cellsRect = new Rect(row.x + labelWidth, row.y, row.width - labelWidth, row.height);
+        var totalGap = gap * Math.Max(0, grid.Cells.Count - 1);
+        var cellWidth = Math.Max(8f, (cellsRect.width - totalGap) / grid.Cells.Count);
+        for (var index = 0; index < grid.Cells.Count; index++)
+        {
+            var cellRect = new Rect(
+                cellsRect.x + index * (cellWidth + gap),
+                cellsRect.y,
+                cellWidth,
+                cellsRect.height);
+            DrawCell(cellRect, grid.Cells[index]);
         }
     }
 
-    /// <summary>Draws one cell from resolved fill plus independent Cue, lock, execution, and current-beat marks.</summary>
+    /// <summary>Draws one beat from its resolved fill and independent boundary markers.</summary>
     private static void DrawCell(Rect rect, LiveTimelineCell cell)
     {
         EditorGUI.DrawRect(rect, FillColor(cell.Fill));
-
-        if (cell.IsRunway)
-        {
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 3f), RunwayFill * 1.35f);
-        }
-
-        if (cell.IsTail)
-        {
-            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 3f, rect.width, 3f), TailFill * 1.35f);
-        }
-
-        if (cell.IsExecuting)
-        {
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y + 3f, rect.width, 1f), MarkColor);
-        }
-
         if (cell.IsCurrentBeat)
         {
             DrawOutline(rect, CurrentOutline, 2f);
         }
 
         var previousColor = GUI.contentColor;
-        GUI.contentColor = cell.IsCurrentBeat ? Color.black : MarkColor;
+        GUI.contentColor = cell.Fill == LiveTimelineFill.Base ? CellContent : Color.black;
         GUI.Label(rect, new GUIContent(CellText(cell), Tooltip(cell)), CellStyle(cell));
         GUI.contentColor = previousColor;
     }
 
-    /// <summary>Resolves only the already-decided semantic fill.</summary>
+    /// <summary>Maps each semantic fill to the approved live color vocabulary.</summary>
     private static Color FillColor(LiveTimelineFill fill)
     {
         return fill switch
         {
             LiveTimelineFill.Runway => RunwayFill,
             LiveTimelineFill.Tail => TailFill,
+            LiveTimelineFill.LockPoint => LockFill,
+            LiveTimelineFill.ImpactPoint => ImpactFill,
             LiveTimelineFill.CurrentBeat => CurrentFill,
             _ => BaseFill,
         };
     }
 
-    /// <summary>Returns a compact shape-plus-count label for a cell.</summary>
+    /// <summary>Returns compact boundary letters, falling back to the one-based Grid beat.</summary>
     private static string CellText(LiveTimelineCell cell)
     {
-        var glyph = cell.IsLocked
-            ? "▣"
-            : cell.IsLoadedCue
-                ? "●"
-                : cell.IsImpactPoint || cell.IsCueMark
-                    ? "◆"
-                    : string.Empty;
-        return $"{glyph}{cell.PhraseBeat}";
+        var markers = new StringBuilder(3);
+        if (cell.IsLockPoint) markers.Append('L');
+        if (cell.IsStart) markers.Append('S');
+        if (cell.IsImpactPoint) markers.Append('X');
+        if (cell.IsEnd) markers.Append('E');
+        return markers.Length > 0
+            ? markers.ToString()
+            : cell.GridBeat.ToString("00");
     }
 
-    /// <summary>Builds an accessibility tooltip from every independent semantic attribute.</summary>
+    /// <summary>Builds an accessibility tooltip from every independent timing attribute.</summary>
     private static string Tooltip(LiveTimelineCell cell)
     {
-        var text = new StringBuilder($"Phrase beat {cell.PhraseBeat}");
-        if (cell.IsCueMark) text.Append(" · Cue Mark");
-        if (cell.IsLoadedCue) text.Append(" · Loaded Cue");
-        if (cell.IsLocked) text.Append(" · Locked");
-        if (cell.IsImpactPoint) text.Append(" · Impact Point");
+        var text = new StringBuilder($"Grid beat {cell.GridBeat} · Absolute beat {cell.AbsoluteBeat}");
+        if (cell.IsLockPoint) text.Append(" · Lock Point");
+        if (cell.IsStart) text.Append(" · Start");
         if (cell.IsRunway) text.Append(" · Runway");
+        if (cell.IsImpactPoint) text.Append(" · Impact Point");
         if (cell.IsTail) text.Append(" · Tail");
-        if (cell.IsExecuting) text.Append(" · Active Transition");
+        if (cell.IsEnd) text.Append(" · End");
         if (cell.IsCurrentBeat) text.Append(" · Current beat");
         return text.ToString();
     }
 
-    /// <summary>Returns the cached centered editor-native label style for a cell.</summary>
+    /// <summary>Returns the cached ordinary or boundary cell style.</summary>
     private static GUIStyle CellStyle(LiveTimelineCell cell)
     {
-        return cell.IsCueMark || cell.IsImpactPoint
-            ? markedCellStyle!
+        return cell.IsLockPoint || cell.IsStart || cell.IsImpactPoint || cell.IsEnd
+            ? boundaryCellStyle!
             : cellStyle!;
     }
 
-    /// <summary>Creates the two cell styles once, after Unity's editor styles are available.</summary>
+    /// <summary>Creates cell styles once after Unity's editor styles are available.</summary>
     private static void EnsureStyles()
     {
         if (cellStyle != null)
@@ -225,13 +239,13 @@ internal static class LiveTimelineRenderer
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Clip,
         };
-        markedCellStyle = new GUIStyle(cellStyle)
+        boundaryCellStyle = new GUIStyle(cellStyle)
         {
             fontStyle = FontStyle.Bold,
         };
     }
 
-    /// <summary>Draws a rectangular current-beat outline without replacing interior marks.</summary>
+    /// <summary>Draws a rectangular outline inside the supplied cell.</summary>
     private static void DrawOutline(Rect rect, Color color, float thickness)
     {
         EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, thickness), color);

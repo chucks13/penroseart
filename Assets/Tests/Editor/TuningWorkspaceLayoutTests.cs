@@ -33,6 +33,42 @@ public sealed class TuningWorkspaceLayoutTests
         Assert.That(layout, Is.EqualTo(TuningWorkspaceFlow.Split));
     }
 
+    /// <summary>Before Start, the live header counts down Lock, Start, and End from the current beat.</summary>
+    [Test]
+    public void LiveTimelineFormatsUpcomingTransitionCountdowns()
+    {
+        var cue = new SwitcherCueStatus(true, false, 117, 2, 1, 113, 114, 119, 3, 2);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 112, 12, cue));
+
+        Assert.That(
+            LiveTimelineRenderer.FormatTimingStatus(model),
+            Is.EqualTo("LOCK IN 1 · START IN 2 · END IN 7"));
+    }
+
+    /// <summary>After Start, the live header replaces stale countdowns with Locked, Active, and End state.</summary>
+    [Test]
+    public void LiveTimelineFormatsActiveTransitionCountdown()
+    {
+        var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 115, 15, cue));
+
+        Assert.That(
+            LiveTimelineRenderer.FormatTimingStatus(model),
+            Is.EqualTo("LOCKED · ACTIVE · END IN 4"));
+    }
+
+    /// <summary>On the first Runway beat, the live header calls out Start Now before settling into Active.</summary>
+    [Test]
+    public void LiveTimelineFormatsTransitionStartNow()
+    {
+        var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 114, 14, cue));
+
+        Assert.That(
+            LiveTimelineRenderer.FormatTimingStatus(model),
+            Is.EqualTo("LOCKED · START NOW · END IN 5"));
+    }
+
     /// <summary>Narrow and wide Tuning Window layouts survive real Editor repaint events without exceptions.</summary>
     [UnityTest]
     public IEnumerator TuningWindowRendersNarrowAndWideWithoutExceptions()
@@ -70,6 +106,31 @@ public sealed class TuningWorkspaceLayoutTests
             yield return null;
 
             window.position = new Rect(0f, 0f, 900f, BeatManagerDashboardRenderer.DashboardHeightForWidth(900f));
+            window.Repaint();
+            yield return null;
+
+            Assert.That(window.RenderCount, Is.GreaterThan(0));
+            LogAssert.NoUnexpectedReceived();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>The two-row Live renderer survives narrow and wide Editor repaint events.</summary>
+    [UnityTest]
+    public IEnumerator LiveTimelineRendersNarrowAndWideWithoutExceptions()
+    {
+        var window = ScriptableObject.CreateInstance<LiveTimelineSmokeHost>();
+        try
+        {
+            window.position = new Rect(0f, 0f, 360f, 180f);
+            window.Show();
+            window.Repaint();
+            yield return null;
+
+            window.position = new Rect(0f, 0f, 900f, 180f);
             window.Repaint();
             yield return null;
 
@@ -180,5 +241,21 @@ internal sealed class RhythmDashboardSmokeHost : EditorWindow
         {
             Repaint();
         }
+    }
+}
+
+/// <summary>Hosts the real rolling Live renderer for responsive Editor repaint tests.</summary>
+internal sealed class LiveTimelineSmokeHost : EditorWindow
+{
+    /// <summary>Number of IMGUI events observed by the host.</summary>
+    internal int RenderCount { get; private set; }
+
+    /// <summary>Draws a representative cross-Grid Transition at the host window's current width.</summary>
+    private void OnGUI()
+    {
+        RenderCount++;
+        var cue = new SwitcherCueStatus(true, false, 117, 2, 1, 113, 114, 119, 3, 2);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 112, 12, cue));
+        LiveTimelineRenderer.Draw(model, "2 Waves · 1 Fade");
     }
 }

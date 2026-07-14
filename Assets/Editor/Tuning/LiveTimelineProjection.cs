@@ -1,220 +1,191 @@
-// Projects read-only sequencing status into immutable timeline display meaning.
+// Projects live Transition timing into a rolling two-Grid editor model.
 #nullable enable
 
 using System;
 using System.Collections.Generic;
 
-/// <summary>Read-only inputs captured from the live sequencing status surfaces for timeline projection.</summary>
+/// <summary>Frame-coherent runtime facts required by the live Transition display.</summary>
 internal readonly struct LiveTimelineInput
 {
-    /// <summary>Creates one frame-coherent set of inputs for the editor-only timeline.</summary>
+    /// <summary>Creates one input snapshot without deriving or repairing runtime timing.</summary>
     public LiveTimelineInput(
         bool isSynced,
-        CueSheetView currentSheet,
-        CueSheetView nextSheet,
         int? currentAbsoluteBeat,
-        int? currentPhraseBeat,
         int? currentGridBeat,
-        int? nextPhraseStartsInBeats,
-        SwitcherCueStatus loadedCue,
-        float? executionProgress)
+        SwitcherCueStatus loadedCue)
     {
         IsSynced = isSynced;
-        CurrentSheet = currentSheet;
-        NextSheet = nextSheet;
         CurrentAbsoluteBeat = currentAbsoluteBeat;
-        CurrentPhraseBeat = currentPhraseBeat;
         CurrentGridBeat = currentGridBeat;
-        NextPhraseStartsInBeats = nextPhraseStartsInBeats;
         LoadedCue = loadedCue;
-        ExecutionProgress = executionProgress;
     }
 
     /// <summary>Whether the runtime has a usable live beat clock.</summary>
     public bool IsSynced { get; }
 
-    /// <summary>The current Phrase's Cue Sheet.</summary>
-    public CueSheetView CurrentSheet { get; }
-
-    /// <summary>The announced next Phrase's Cue Sheet.</summary>
-    public CueSheetView NextSheet { get; }
-
     /// <summary>The current absolute beat reported by the wire, when available.</summary>
     public int? CurrentAbsoluteBeat { get; }
-
-    /// <summary>The current one-based beat within the Phrase, when available.</summary>
-    public int? CurrentPhraseBeat { get; }
 
     /// <summary>The current one-based beat within the Grid, when available.</summary>
     public int? CurrentGridBeat { get; }
 
-    /// <summary>Wire countdown to the next Phrase's first beat, when available.</summary>
-    public int? NextPhraseStartsInBeats { get; }
-
     /// <summary>The Switcher's currently loaded Cue.</summary>
     public SwitcherCueStatus LoadedCue { get; }
-
-    /// <summary>Active normalized Transition progress directly exposed by the Switcher.</summary>
-    public float? ExecutionProgress { get; }
 }
 
-/// <summary>Immutable display model for one live sequencing frame.</summary>
+/// <summary>Display-ready rolling Grid rows and Transition countdowns for one editor frame.</summary>
 internal sealed class LiveTimelineModel
 {
-    /// <summary>Creates a model containing distinct current and next Phrase plans.</summary>
+    /// <summary>Creates a model from already-resolved availability, rows, and countdown facts.</summary>
     public LiveTimelineModel(
         bool isSynced,
         bool currentPositionAvailable,
         bool hasLoadedCue,
+        bool isCueLocked,
         bool loadedCueTimingAvailable,
-        LiveTimelinePhrase current,
-        LiveTimelinePhrase next,
-        float? executionProgress)
+        IReadOnlyList<LiveTimelineGrid> grids,
+        int? lockBeatsUntil,
+        int? startBeatsUntil,
+        int? endBeatsUntil)
     {
         IsSynced = isSynced;
         CurrentPositionAvailable = currentPositionAvailable;
         HasLoadedCue = hasLoadedCue;
+        IsCueLocked = isCueLocked;
         LoadedCueTimingAvailable = loadedCueTimingAvailable;
-        Current = current;
-        Next = next;
-        ExecutionProgress = executionProgress;
+        Grids = grids ?? throw new ArgumentNullException(nameof(grids));
+        LockBeatsUntil = lockBeatsUntil;
+        StartBeatsUntil = startBeatsUntil;
+        EndBeatsUntil = endBeatsUntil;
     }
 
     /// <summary>Whether the runtime is in Synced Mode.</summary>
     public bool IsSynced { get; }
 
-    /// <summary>Whether current Phrase and Grid facts agree on one live cell.</summary>
+    /// <summary>Whether live absolute and Grid beats identify one current cell.</summary>
     public bool CurrentPositionAvailable { get; }
 
     /// <summary>Whether the Switcher reports a Loaded Cue.</summary>
     public bool HasLoadedCue { get; }
 
-    /// <summary>Whether the Loaded Cue exposes a self-consistent beat timing window.</summary>
+    /// <summary>Whether the Switcher reports that the Loaded Cue is locked.</summary>
+    public bool IsCueLocked { get; }
+
+    /// <summary>Whether the Loaded Cue exposes one self-consistent timing window.</summary>
     public bool LoadedCueTimingAvailable { get; }
 
-    /// <summary>The current Phrase projection.</summary>
-    public LiveTimelinePhrase Current { get; }
+    /// <summary>The rolling current and immediately following Grid rows.</summary>
+    public IReadOnlyList<LiveTimelineGrid> Grids { get; }
 
-    /// <summary>The announced next Phrase projection.</summary>
-    public LiveTimelinePhrase Next { get; }
+    /// <summary>Signed beats from now to the loaded Cue's Lock Point.</summary>
+    public int? LockBeatsUntil { get; }
 
-    /// <summary>Active normalized Transition progress, or null when no execution is exposed.</summary>
-    public float? ExecutionProgress { get; }
+    /// <summary>Signed beats from now to the loaded Cue's Transition Start.</summary>
+    public int? StartBeatsUntil { get; }
+
+    /// <summary>Signed beats from now to the loaded Cue's Transition End.</summary>
+    public int? EndBeatsUntil { get; }
+
+    /// <summary>Whether the live beat lies from Transition Start through End.</summary>
+    public bool IsActive =>
+        LoadedCueTimingAvailable &&
+        StartBeatsUntil is <= 0 &&
+        EndBeatsUntil is >= 0;
 }
 
-/// <summary>Immutable display projection of one Cue Sheet.</summary>
-internal sealed class LiveTimelinePhrase
+/// <summary>One complete 16-beat row in the rolling live window.</summary>
+internal sealed class LiveTimelineGrid
 {
-    /// <summary>The explicit absent state used when no Cue Sheet is available.</summary>
-    public static LiveTimelinePhrase Unavailable { get; } =
-        new(false, string.Empty, 0, Array.Empty<LiveTimelineBlock>());
-
-    /// <summary>Creates one display-ready Phrase plan.</summary>
-    public LiveTimelinePhrase(
-        bool isAvailable,
-        string label,
-        int lengthBeats,
-        IReadOnlyList<LiveTimelineBlock> blocks)
+    /// <summary>Creates one Grid row anchored to its first absolute beat.</summary>
+    public LiveTimelineGrid(int startAbsoluteBeat, IReadOnlyList<LiveTimelineCell> cells)
     {
-        IsAvailable = isAvailable;
-        Label = label ?? string.Empty;
-        LengthBeats = lengthBeats;
-        Blocks = blocks ?? throw new ArgumentNullException(nameof(blocks));
-    }
-
-    /// <summary>Whether a valid Cue Sheet exists.</summary>
-    public bool IsAvailable { get; }
-
-    /// <summary>The announced Phrase label.</summary>
-    public string Label { get; }
-
-    /// <summary>The Phrase length in beats.</summary>
-    public int LengthBeats { get; }
-
-    /// <summary>Consecutive full or partial Grid blocks.</summary>
-    public IReadOnlyList<LiveTimelineBlock> Blocks { get; }
-}
-
-/// <summary>Immutable display projection of one full or partial sixteen-beat Grid block.</summary>
-internal sealed class LiveTimelineBlock
-{
-    /// <summary>Creates a display block from ordered one-based beat cells.</summary>
-    public LiveTimelineBlock(int startPhraseBeat, IReadOnlyList<LiveTimelineCell> cells)
-    {
-        StartPhraseBeat = startPhraseBeat;
+        StartAbsoluteBeat = startAbsoluteBeat;
         Cells = cells ?? throw new ArgumentNullException(nameof(cells));
     }
 
-    /// <summary>The first one-based Phrase beat represented by this block.</summary>
-    public int StartPhraseBeat { get; }
+    /// <summary>The absolute beat represented by the first cell.</summary>
+    public int StartAbsoluteBeat { get; }
 
-    /// <summary>The block's ordered beat cells.</summary>
+    /// <summary>The Grid's ordered beat cells.</summary>
     public IReadOnlyList<LiveTimelineCell> Cells { get; }
 }
 
-/// <summary>Background meaning after semantic precedence is applied to a timeline cell.</summary>
+/// <summary>Semantic background fill for one live Grid cell.</summary>
 internal enum LiveTimelineFill
 {
     /// <summary>Neutral Grid background.</summary>
     Base,
 
-    /// <summary>Transition Runway before the Impact Point.</summary>
+    /// <summary>Transition Runway from Start until the Impact Point.</summary>
     Runway,
 
-    /// <summary>Transition Tail after the Impact Point.</summary>
+    /// <summary>Transition Tail after the Impact Point through End.</summary>
     Tail,
 
-    /// <summary>Live current-beat fill, which overrides Transition timing colors.</summary>
+    /// <summary>The last mutable beat before Transition Start.</summary>
+    LockPoint,
+
+    /// <summary>The Transition Impact Point between Runway and Tail.</summary>
+    ImpactPoint,
+
+    /// <summary>Live current-beat fill, which overrides every timing color.</summary>
     CurrentBeat,
 }
 
-/// <summary>Semantic display attributes for one musical beat.</summary>
+/// <summary>One beat cell with independent Transition markers and resolved color precedence.</summary>
 internal readonly struct LiveTimelineCell
 {
-    /// <summary>Creates one Phrase-relative beat cell with independent timing and identity attributes.</summary>
+    /// <summary>Creates one display cell from absolute timing facts.</summary>
     public LiveTimelineCell(
-        int phraseBeat,
-        bool isCueMark,
-        bool isLoadedCue,
-        bool isLocked,
+        int gridBeat,
+        int absoluteBeat,
+        bool isLockPoint,
+        bool isStart,
         bool isImpactPoint,
+        bool isEnd,
         bool isRunway,
         bool isTail,
-        bool isCurrentBeat,
-        bool isExecuting)
+        bool isCurrentBeat)
     {
-        PhraseBeat = phraseBeat;
-        IsCueMark = isCueMark;
-        IsLoadedCue = isLoadedCue;
-        IsLocked = isLocked;
+        GridBeat = gridBeat;
+        AbsoluteBeat = absoluteBeat;
+        IsLockPoint = isLockPoint;
+        IsStart = isStart;
         IsImpactPoint = isImpactPoint;
+        IsEnd = isEnd;
         IsRunway = isRunway;
         IsTail = isTail;
         IsCurrentBeat = isCurrentBeat;
-        IsExecuting = isExecuting;
         Fill = isCurrentBeat
             ? LiveTimelineFill.CurrentBeat
-            : isRunway
-                ? LiveTimelineFill.Runway
-                : isTail
-                    ? LiveTimelineFill.Tail
-                    : LiveTimelineFill.Base;
+            : isLockPoint
+                ? LiveTimelineFill.LockPoint
+                : isImpactPoint
+                    ? LiveTimelineFill.ImpactPoint
+                    : isRunway
+                        ? LiveTimelineFill.Runway
+                        : isTail
+                            ? LiveTimelineFill.Tail
+                            : LiveTimelineFill.Base;
     }
 
-    /// <summary>The one-based beat within the Phrase.</summary>
-    public int PhraseBeat { get; }
+    /// <summary>The one-based beat within this Grid row.</summary>
+    public int GridBeat { get; }
 
-    /// <summary>Whether the Cue Sheet places an ordinary Cue Mark on this beat.</summary>
-    public bool IsCueMark { get; }
+    /// <summary>The absolute wire beat represented by this cell.</summary>
+    public int AbsoluteBeat { get; }
 
-    /// <summary>Whether the Switcher has loaded this beat's Cue Mark.</summary>
-    public bool IsLoadedCue { get; }
+    /// <summary>Whether this beat is the loaded Cue's Lock Point.</summary>
+    public bool IsLockPoint { get; }
 
-    /// <summary>Whether the loaded Cue is locked.</summary>
-    public bool IsLocked { get; }
+    /// <summary>Whether this beat starts the Transition Runway.</summary>
+    public bool IsStart { get; }
 
     /// <summary>Whether this beat is the Transition Impact Point.</summary>
     public bool IsImpactPoint { get; }
+
+    /// <summary>Whether this beat ends the Transition Tail.</summary>
+    public bool IsEnd { get; }
 
     /// <summary>Whether this beat lies in the Transition Runway.</summary>
     public bool IsRunway { get; }
@@ -225,140 +196,115 @@ internal readonly struct LiveTimelineCell
     /// <summary>Whether this is the live current beat.</summary>
     public bool IsCurrentBeat { get; }
 
-    /// <summary>Whether an active Transition execution occupies this beat.</summary>
-    public bool IsExecuting { get; }
-
-    /// <summary>The resolved background fill after current-beat precedence.</summary>
+    /// <summary>The resolved background fill after current-beat and boundary precedence.</summary>
     public LiveTimelineFill Fill { get; }
 }
 
-/// <summary>Pure editor-only projection from read-only runtime snapshots to timeline display meaning.</summary>
+/// <summary>Builds a rolling two-Grid view without owning runtime scheduling policy.</summary>
 internal static class LiveTimelineProjection
 {
-    /// <summary>Projects the current and next Cue Sheets into ordered Grid blocks without changing runtime state.</summary>
+    /// <summary>Projects one runtime snapshot into two adjacent Grid rows and signed timing deltas.</summary>
     public static LiveTimelineModel Build(LiveTimelineInput input)
     {
-        var currentPositionAvailable = input.IsSynced &&
-            input.CurrentPhraseBeat is { } livePhraseBeat &&
-            livePhraseBeat > 0 &&
-            input.CurrentGridBeat is { } liveGridBeat &&
-            liveGridBeat >= 1 &&
-            liveGridBeat <= CueSheet.GridBeats &&
-            liveGridBeat == (livePhraseBeat - 1) % CueSheet.GridBeats + 1;
-
-        int? currentPhraseStartBeat = null;
-        if (input.IsSynced &&
-            input.CurrentAbsoluteBeat is { } absoluteBeat &&
-            input.CurrentPhraseBeat is { } phraseBeat &&
-            phraseBeat > 0)
-        {
-            currentPhraseStartBeat = absoluteBeat - phraseBeat + 1;
-        }
-
-        int? nextPhraseStartBeat = null;
-        if (input.IsSynced &&
-            input.CurrentAbsoluteBeat is { } currentBeat &&
-            input.NextPhraseStartsInBeats is { } startsInBeats &&
-            startsInBeats >= 1)
-        {
-            nextPhraseStartBeat = currentBeat + startsInBeats;
-        }
-
-        var executionProgress = input.IsSynced && input.ExecutionProgress is { } progress
-            ? Math.Max(0f, Math.Min(1f, progress))
-            : (float?)null;
-
+        var currentPositionAvailable =
+            input.IsSynced &&
+            input.CurrentAbsoluteBeat is >= 1 &&
+            input.CurrentGridBeat is >= 1 and <= CueSheet.GridBeats;
         var hasLoadedCue = input.IsSynced && input.LoadedCue.HasCue;
         var loadedCueTimingAvailable = hasLoadedCue && HasConsistentTiming(input.LoadedCue);
-        var loadedCue = loadedCueTimingAvailable ? input.LoadedCue : SwitcherCueStatus.Empty;
+        var loadedCue = loadedCueTimingAvailable
+            ? input.LoadedCue
+            : SwitcherCueStatus.Empty;
+
+        int? lockBeatsUntil = null;
+        int? startBeatsUntil = null;
+        int? endBeatsUntil = null;
+        if (loadedCueTimingAvailable && input.CurrentAbsoluteBeat is { } currentBeat)
+        {
+            lockBeatsUntil = loadedCue.LockPointBeat - currentBeat;
+            startBeatsUntil = loadedCue.StartBeat - currentBeat;
+            endBeatsUntil = loadedCue.CompleteBeat - currentBeat;
+        }
+
         return new LiveTimelineModel(
             input.IsSynced,
             currentPositionAvailable,
             hasLoadedCue,
+            hasLoadedCue && input.LoadedCue.IsLocked,
             loadedCueTimingAvailable,
-            BuildPhrase(
-                input.CurrentSheet,
-                currentPhraseStartBeat,
-                currentPositionAvailable ? input.CurrentPhraseBeat : null,
-                loadedCue,
-                executionProgress.HasValue),
-            BuildPhrase(
-                input.NextSheet,
-                nextPhraseStartBeat,
-                null,
-                loadedCue,
-                false),
-            executionProgress);
+            BuildRollingGrids(input, currentPositionAvailable, loadedCue),
+            lockBeatsUntil,
+            startBeatsUntil,
+            endBeatsUntil);
     }
 
-    /// <summary>Checks the Loaded Cue's existing timing facts without repairing or deriving any of them.</summary>
+    /// <summary>Checks the Loaded Cue's existing timing facts without repairing or deriving them.</summary>
     private static bool HasConsistentTiming(SwitcherCueStatus cue)
     {
         return cue.CueMarkBeat >= 1 &&
             cue.RunwayBeats >= 0 &&
             cue.TailBeats >= 0 &&
+            cue.LockPointBeat == cue.StartBeat - 1 &&
             cue.StartBeat == cue.CueMarkBeat - cue.RunwayBeats &&
             cue.CompleteBeat == cue.CueMarkBeat + cue.TailBeats;
     }
 
-    /// <summary>Splits one valid Phrase into full Grid blocks followed by its honest partial remainder.</summary>
-    private static LiveTimelinePhrase BuildPhrase(
-        CueSheetView sheet,
-        int? phraseStartAbsoluteBeat,
-        int? currentPhraseBeat,
-        SwitcherCueStatus loadedCue,
-        bool isExecutionActive)
+    /// <summary>Builds the current Grid and its immediate successor from the live Grid clock.</summary>
+    private static IReadOnlyList<LiveTimelineGrid> BuildRollingGrids(
+        LiveTimelineInput input,
+        bool currentPositionAvailable,
+        SwitcherCueStatus loadedCue)
     {
-        if (!sheet.HasSheet || sheet.PhraseLengthBeats <= 0)
+        if (!currentPositionAvailable ||
+            input.CurrentAbsoluteBeat is not { } currentBeat ||
+            input.CurrentGridBeat is not { } currentGridBeat)
         {
-            return LiveTimelinePhrase.Unavailable;
+            return Array.Empty<LiveTimelineGrid>();
         }
 
-        var blockCount = (sheet.PhraseLengthBeats + CueSheet.GridBeats - 1) / CueSheet.GridBeats;
-        var blocks = new LiveTimelineBlock[blockCount];
-        var cueMarks = sheet.CueMarkOffsets ?? Array.Empty<int>();
-
-        for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
+        var currentGridStart = currentBeat - currentGridBeat + 1;
+        var grids = new LiveTimelineGrid[2];
+        for (var gridIndex = 0; gridIndex < grids.Length; gridIndex++)
         {
-            var startBeat = blockIndex * CueSheet.GridBeats + 1;
-            var cellCount = Math.Min(CueSheet.GridBeats, sheet.PhraseLengthBeats - startBeat + 1);
-            var cells = new LiveTimelineCell[cellCount];
-            for (var cellIndex = 0; cellIndex < cellCount; cellIndex++)
-            {
-                var phraseBeat = startBeat + cellIndex;
-                int? absoluteBeat = phraseStartAbsoluteBeat is { } phraseStart
-                    ? phraseStart + phraseBeat - 1
-                    : null;
-                var isLoadedImpact = loadedCue.HasCue &&
-                    absoluteBeat == loadedCue.CueMarkBeat;
-                var isRunway = loadedCue.HasCue &&
-                    absoluteBeat >= loadedCue.StartBeat &&
-                    absoluteBeat < loadedCue.CueMarkBeat;
-                var isTail = loadedCue.HasCue &&
-                    absoluteBeat > loadedCue.CueMarkBeat &&
-                    absoluteBeat <= loadedCue.CompleteBeat;
-                var isCurrentBeat = currentPhraseBeat == phraseBeat;
-                var isExecuting = isExecutionActive && isCurrentBeat;
-
-                cells[cellIndex] = new LiveTimelineCell(
-                    phraseBeat,
-                    Array.IndexOf(cueMarks, phraseBeat) >= 0,
-                    isLoadedImpact,
-                    isLoadedImpact && loadedCue.IsLocked,
-                    isLoadedImpact,
-                    isRunway,
-                    isTail,
-                    isCurrentBeat,
-                    isExecuting);
-            }
-
-            blocks[blockIndex] = new LiveTimelineBlock(startBeat, Array.AsReadOnly(cells));
+            var gridStart = currentGridStart + gridIndex * CueSheet.GridBeats;
+            grids[gridIndex] = BuildGrid(gridStart, currentBeat, loadedCue);
         }
 
-        return new LiveTimelinePhrase(
-            true,
-            sheet.PhraseLabel,
-            sheet.PhraseLengthBeats,
-            Array.AsReadOnly(blocks));
+        return Array.AsReadOnly(grids);
+    }
+
+    /// <summary>Builds one complete Grid row with absolute Transition timing projected onto its cells.</summary>
+    private static LiveTimelineGrid BuildGrid(
+        int gridStart,
+        int currentBeat,
+        SwitcherCueStatus loadedCue)
+    {
+        var cells = new LiveTimelineCell[CueSheet.GridBeats];
+        for (var cellIndex = 0; cellIndex < cells.Length; cellIndex++)
+        {
+            var gridBeat = cellIndex + 1;
+            var absoluteBeat = gridStart + cellIndex;
+            var hasCue = loadedCue.HasCue;
+            var isImpactPoint = hasCue && absoluteBeat == loadedCue.CueMarkBeat;
+            var isRunway = hasCue &&
+                absoluteBeat >= loadedCue.StartBeat &&
+                absoluteBeat < loadedCue.CueMarkBeat;
+            var isTail = hasCue &&
+                absoluteBeat > loadedCue.CueMarkBeat &&
+                absoluteBeat <= loadedCue.CompleteBeat;
+
+            cells[cellIndex] = new LiveTimelineCell(
+                gridBeat,
+                absoluteBeat,
+                hasCue && absoluteBeat == loadedCue.LockPointBeat,
+                hasCue && absoluteBeat == loadedCue.StartBeat,
+                isImpactPoint,
+                hasCue && absoluteBeat == loadedCue.CompleteBeat,
+                isRunway,
+                isTail,
+                absoluteBeat == currentBeat);
+        }
+
+        return new LiveTimelineGrid(gridStart, Array.AsReadOnly(cells));
     }
 }

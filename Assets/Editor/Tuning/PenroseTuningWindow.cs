@@ -157,7 +157,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         return false;
     }
 
-    /// <summary>Draws read-only Director, Cue Sheet, Switcher, and live musical placement in one timeline.</summary>
+    /// <summary>Draws the next Transition's countdowns and rolling current/following Grid rows.</summary>
     private void DrawLiveTab()
     {
         if (!LiveControllerAccess.TryGet(out var liveController))
@@ -169,75 +169,25 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
 
         var director = liveController.DirectorStatus;
-        var switcher = liveController.SwitcherStatus;
-        var loadedCue = liveController.SwitcherLoadedCueStatus;
-        var mode = director.IsSyncedMode ? "Synced Mode" : "Standalone Mode";
+        using var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll);
+        liveTimelineScroll = scroll.scrollPosition;
 
-        using (var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll))
-        {
-            liveTimelineScroll = scroll.scrollPosition;
-
-            EditorGUILayout.LabelField("LIVE SEQUENCING", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Mode", mode);
-            EditorGUILayout.LabelField("Director State", director.Mode.ToString());
-            EditorGUILayout.LabelField(
-                "Director Next",
-                ControllerStatusText.FormatDirectorNext(director));
-            EditorGUILayout.LabelField(
-                "Hold Selected",
-                $"Effect {(director.HoldSelectedEffect ? "On" : "Off")} · Transition {(director.HoldSelectedTransition ? "On" : "Off")}");
-            EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(liveController));
-            EditorGUILayout.LabelField("Switcher Active", ControllerStatusText.FormatSwitcherActive(switcher));
-            EditorGUILayout.LabelField("Loaded Cue", FormatLoadedCue(loadedCue));
-
-            EditorGUILayout.Space(10f);
-            LiveTimelineRenderer.Draw(LiveTimelineProjection.Build(CaptureTimelineInput(liveController)));
-        }
+        EditorGUILayout.LabelField("LIVE TRANSITION", EditorStyles.boldLabel);
+        LiveTimelineRenderer.Draw(
+            LiveTimelineProjection.Build(CaptureTimelineInput(liveController)),
+            ControllerStatusText.FormatDirectorNext(director));
     }
 
-    /// <summary>Captures one frame of existing read-only runtime status for the pure timeline projection.</summary>
+    /// <summary>Captures one frame-coherent set of facts for the rolling live Transition display.</summary>
     private static LiveTimelineInput CaptureTimelineInput(Controller controller)
     {
         var director = controller.DirectorStatus;
-        var switcher = controller.SwitcherStatus;
         var beatManager = controller.beatManager;
-        var phrase = beatManager != null ? beatManager.Phrase : default;
-
-        int? phraseBeat = null;
-        if (phrase.LengthBeats is { } phraseLength &&
-            phrase.BeatsRemaining is { } beatsRemaining &&
-            phraseLength > 0 &&
-            beatsRemaining >= 1 &&
-            beatsRemaining <= phraseLength)
-        {
-            phraseBeat = phraseLength - beatsRemaining + 1;
-        }
-
-        float? executionProgress = switcher.CurrentTransitionIndex >= 0
-            ? switcher.TransitionProgress
-            : null;
-
         return new LiveTimelineInput(
             director.IsSyncedMode,
-            director.CurrentSheet,
-            director.NextSheet,
             beatManager?.Timing.Beat,
-            phraseBeat,
             beatManager?.Grid.Beat,
-            beatManager?.NextPhrase.BeatsUntil,
-            controller.SwitcherLoadedCueStatus,
-            executionProgress);
-    }
-
-    /// <summary>Formats the Switcher's Loaded Cue lifecycle separately from active execution.</summary>
-    private static string FormatLoadedCue(SwitcherCueStatus cue)
-    {
-        if (!cue.HasCue)
-        {
-            return "None";
-        }
-
-        return $"Beat {cue.CueMarkBeat} · {(cue.IsLocked ? "Locked" : "Loaded")} · {cue.RunwayBeats}b Runway / {cue.TailBeats}b Tail";
+            controller.SwitcherLoadedCueStatus);
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>
