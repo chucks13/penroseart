@@ -38,7 +38,7 @@ internal static class ControllerStatusText
             FormatCatalogChoice(status.NextTransitionIndex, status.NextTransitionName);
     }
 
-    /// <summary>Formats the pending-or-active Cue from the same Switcher snapshot used for its timing.</summary>
+    /// <summary>Formats one Switcher Cue from the same snapshot used for its timing.</summary>
     internal static string FormatSwitcherCue(Controller controller, SwitcherCueStatus status)
     {
         if (!status.HasCue)

@@ -38,23 +38,45 @@ public sealed class TuningWorkspaceLayoutTests
     public void LiveTimelineFormatsUpcomingTransitionCountdowns()
     {
         var cue = new SwitcherCueStatus(true, false, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 112, 12, cue));
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
+            true,
+            112,
+            12,
+            SwitcherCueStatus.Empty,
+            cue));
 
         Assert.That(
-            LiveTimelineRenderer.FormatTimingStatus(model),
+            LiveTimelineRenderer.FormatPendingTimingStatus(model.Pending),
             Is.EqualTo("LOCK IN 1 · START IN 2 · END IN 7"));
     }
 
-    /// <summary>After Start, the live header replaces stale countdowns with Locked, Active, and End state.</summary>
+    /// <summary>The active Transition bar names A, B, and the Transition while counting down to End.</summary>
     [Test]
-    public void LiveTimelineFormatsActiveTransitionCountdown()
+    public void LiveTimelineFormatsActiveTransitionBar()
     {
         var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 115, 15, cue));
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
+            true,
+            115,
+            15,
+            cue,
+            SwitcherCueStatus.Empty));
+        var switcher = new SwitcherStatus(
+            true,
+            -1,
+            string.Empty,
+            0,
+            "Waves",
+            1,
+            "Fluid",
+            0,
+            "Fade",
+            "Fade",
+            0.75f);
 
         Assert.That(
-            LiveTimelineRenderer.FormatTimingStatus(model),
-            Is.EqualTo("LOCKED · ACTIVE · END IN 4"));
+            LiveTimelineRenderer.FormatActiveTransitionLabel(switcher, model.Active),
+            Is.EqualTo("Waves → Fluid · Fade · END IN 4"));
     }
 
     /// <summary>On the first Runway beat, the live header calls out Start Now before settling into Active.</summary>
@@ -62,10 +84,15 @@ public sealed class TuningWorkspaceLayoutTests
     public void LiveTimelineFormatsTransitionStartNow()
     {
         var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 114, 14, cue));
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
+            true,
+            114,
+            14,
+            SwitcherCueStatus.Empty,
+            cue));
 
         Assert.That(
-            LiveTimelineRenderer.FormatTimingStatus(model),
+            LiveTimelineRenderer.FormatPendingTimingStatus(model.Pending),
             Is.EqualTo("LOCKED · START NOW · END IN 5"));
     }
 
@@ -272,8 +299,21 @@ internal sealed class LiveTimelineSmokeHost : EditorWindow
     private void OnGUI()
     {
         RenderCount++;
-        var cue = new SwitcherCueStatus(true, false, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 112, 12, cue));
-        LiveTimelineRenderer.Draw(model, "2 Waves · 1 Fade");
+        var activeCue = new SwitcherCueStatus(true, true, 101, 1, 0, 99, 100, 105, 1, 4);
+        var pendingCue = new SwitcherCueStatus(true, false, 116, 2, 1, 111, 112, 116, 4, 0);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 101, 1, activeCue, pendingCue));
+        var switcher = new SwitcherStatus(
+            true,
+            -1,
+            string.Empty,
+            0,
+            "Waves",
+            1,
+            "Fluid",
+            0,
+            "Fade",
+            "Fade",
+            0.75f);
+        LiveTimelineRenderer.Draw(model, switcher, "CrystalGrowth · IrisTransition");
     }
 }

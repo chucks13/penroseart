@@ -6,7 +6,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>Draws two compact live Grid rows without interpreting runtime scheduling policy.</summary>
+/// <summary>Draws active A-to-B progress and two compact live Grid rows without scheduling policy.</summary>
 internal static class LiveTimelineRenderer
 {
     /// <summary>Cached centered style for beat cells.</summary>
@@ -39,8 +39,8 @@ internal static class LiveTimelineRenderer
     /// <summary>Ordinary cell content color.</summary>
     private static readonly Color CellContent = new(0.95f, 0.95f, 0.95f);
 
-    /// <summary>Draws pending-or-active Cue identity, timing state, legend, and two rolling Grid rows.</summary>
-    public static void Draw(LiveTimelineModel model, string cueLabel)
+    /// <summary>Draws active execution, pending Cue timing, and two rolling Grid rows.</summary>
+    public static void Draw(LiveTimelineModel model, SwitcherStatus switcher, string pendingCueLabel)
     {
         if (model == null)
         {
@@ -48,12 +48,13 @@ internal static class LiveTimelineRenderer
         }
 
         EnsureStyles();
+        DrawActiveTransition(switcher, model.Active);
+        EditorGUILayout.LabelField("NEXT", string.IsNullOrWhiteSpace(pendingCueLabel) ? "—" : pendingCueLabel);
         EditorGUILayout.LabelField(
-            model.IsActive ? "ACTIVE" : "NEXT",
-            string.IsNullOrWhiteSpace(cueLabel) ? "—" : cueLabel);
-        EditorGUILayout.LabelField(FormatTimingStatus(model), EditorStyles.boldLabel);
+            model.IsSynced ? FormatPendingTimingStatus(model.Pending) : "TIMING UNAVAILABLE",
+            EditorStyles.boldLabel);
         EditorGUILayout.LabelField(
-            "L Lock  ·  S Start / Runway  ·  X Impact  ·  T Tail / E End  ·  Yellow Current",
+            "L Lock  ·  S Start / pink Runway  ·  X Impact  ·  green Tail / E End  ·  Yellow Current",
             EditorStyles.wordWrappedMiniLabel);
         EditorGUILayout.Space(4f);
 
@@ -69,9 +70,14 @@ internal static class LiveTimelineRenderer
             return;
         }
 
-        if (model.HasCue && !model.CueTimingAvailable)
+        if (model.Active.HasCue && !model.Active.CueTimingAvailable)
         {
-            EditorGUILayout.HelpBox("Cue timing unavailable.", MessageType.None);
+            EditorGUILayout.HelpBox("Active Cue timing unavailable.", MessageType.None);
+        }
+
+        if (model.Pending.HasCue && !model.Pending.CueTimingAvailable)
+        {
+            EditorGUILayout.HelpBox("Pending Cue timing unavailable.", MessageType.None);
         }
 
         if (model.Grids.Count != 2)
@@ -85,48 +91,69 @@ internal static class LiveTimelineRenderer
         DrawGrid("NEXT", model.Grids[1]);
     }
 
-    /// <summary>Formats the live Lock, Start, active, and End state without targeting the Impact Point.</summary>
-    internal static string FormatTimingStatus(LiveTimelineModel model)
+    /// <summary>Formats the pending Cue's Lock, Start, and End countdowns.</summary>
+    internal static string FormatPendingTimingStatus(LiveCueTiming pending)
     {
-        if (model == null)
+        if (!pending.HasCue)
         {
-            throw new ArgumentNullException(nameof(model));
+            return "NO PENDING CUE";
         }
 
-        if (!model.IsSynced)
+        if (!pending.CueTimingAvailable)
         {
-            return "TIMING UNAVAILABLE";
+            return "PENDING CUE TIMING UNAVAILABLE";
         }
 
-        if (!model.HasCue)
-        {
-            return "NO CUE";
-        }
-
-        if (!model.CueTimingAvailable)
-        {
-            return "CUE TIMING UNAVAILABLE";
-        }
-
-        var lockStatus = model.IsCueLocked
+        var lockStatus = pending.IsCueLocked
             ? "LOCKED"
-            : FormatEvent("LOCK", model.LockBeatsUntil);
-        if (model.StartBeatsUntil == 0)
+            : FormatEvent("LOCK", pending.LockBeatsUntil);
+        if (pending.StartBeatsUntil == 0)
         {
-            return $"{lockStatus} · START NOW · {FormatEvent("END", model.EndBeatsUntil)}";
+            return $"{lockStatus} · START NOW · {FormatEvent("END", pending.EndBeatsUntil)}";
         }
 
-        if (model.IsActive)
-        {
-            return $"{lockStatus} · ACTIVE · {FormatEvent("END", model.EndBeatsUntil)}";
-        }
-
-        if (model.EndBeatsUntil is < 0)
+        if (pending.EndBeatsUntil is < 0)
         {
             return $"{lockStatus} · COMPLETE";
         }
 
-        return $"{lockStatus} · {FormatEvent("START", model.StartBeatsUntil)} · {FormatEvent("END", model.EndBeatsUntil)}";
+        return $"{lockStatus} · {FormatEvent("START", pending.StartBeatsUntil)} · {FormatEvent("END", pending.EndBeatsUntil)}";
+    }
+
+    /// <summary>Formats one active A-to-B move plus its Cue End countdown when available.</summary>
+    internal static string FormatActiveTransitionLabel(SwitcherStatus switcher, LiveCueTiming active)
+    {
+        if (!switcher.Ready || switcher.CurrentTransitionIndex < 0)
+        {
+            return "—";
+        }
+
+        var label = $"{FormatName(switcher.SourceEffectIndex, switcher.SourceEffectName, "Effect")} → " +
+            $"{FormatName(switcher.TargetEffectIndex, switcher.TargetEffectName, "Effect")} · " +
+            FormatName(switcher.CurrentTransitionIndex, switcher.CurrentTransitionName, "Transition");
+        return active.CueTimingAvailable
+            ? $"{label} · {FormatEvent("END", active.EndBeatsUntil)}"
+            : label;
+    }
+
+    /// <summary>Draws the restored active Transition progress bar while the Switcher owns an A-to-B move.</summary>
+    private static void DrawActiveTransition(SwitcherStatus switcher, LiveCueTiming active)
+    {
+        if (!switcher.Ready || switcher.CurrentTransitionIndex < 0)
+        {
+            return;
+        }
+
+        EditorGUILayout.LabelField("ACTIVE", FormatActiveTransitionLabel(switcher, active));
+        var rect = EditorGUILayout.GetControlRect(false, 18f);
+        EditorGUI.ProgressBar(rect, switcher.TransitionProgress, $"{switcher.TransitionProgress:P0}");
+        EditorGUILayout.Space(4f);
+    }
+
+    /// <summary>Formats one runtime catalog name compactly, retaining an index fallback.</summary>
+    private static string FormatName(int index, string name, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(name) ? $"{fallback} #{index}" : name;
     }
 
     /// <summary>Formats one signed event delta as an operational countdown.</summary>
@@ -168,6 +195,11 @@ internal static class LiveTimelineRenderer
     private static void DrawCell(Rect rect, LiveTimelineCell cell)
     {
         EditorGUI.DrawRect(rect, FillColor(cell.Fill));
+        if (cell.IsActiveTail)
+        {
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 4f, rect.width, 4f), TailFill);
+        }
+
         if (cell.IsCurrentBeat)
         {
             DrawOutline(rect, CurrentOutline, 2f);
@@ -215,6 +247,7 @@ internal static class LiveTimelineRenderer
         if (cell.IsRunway) text.Append(" · Runway");
         if (cell.IsImpactPoint) text.Append(" · Impact Point");
         if (cell.IsTail) text.Append(" · Tail");
+        if (cell.IsActiveTail) text.Append(" · Active Tail");
         if (cell.IsEnd) text.Append(" · End");
         if (cell.IsCurrentBeat) text.Append(" · Current beat");
         return text.ToString();

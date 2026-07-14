@@ -157,7 +157,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         return false;
     }
 
-    /// <summary>Draws the next Transition's countdowns and rolling current/following Grid rows.</summary>
+    /// <summary>Draws active A-to-B progress, next-Cue countdowns, and rolling Grid rows.</summary>
     private void DrawLiveTab()
     {
         if (!LiveControllerAccess.TryGet(out var liveController))
@@ -175,7 +175,8 @@ public sealed class PenroseTuningWindow : EditorWindow
         EditorGUILayout.LabelField("LIVE TRANSITION", EditorStyles.boldLabel);
         LiveTimelineRenderer.Draw(
             LiveTimelineProjection.Build(timelineInput),
-            ControllerStatusText.FormatSwitcherCue(liveController, timelineInput.Cue));
+            liveController.SwitcherStatus,
+            ControllerStatusText.FormatSwitcherCue(liveController, timelineInput.PendingCue));
     }
 
     /// <summary>Captures one frame-coherent set of facts for the rolling live Transition display.</summary>
@@ -187,7 +188,8 @@ public sealed class PenroseTuningWindow : EditorWindow
             director.IsSyncedMode,
             beatManager?.Timing.Beat,
             beatManager?.Grid.Beat,
-            controller.SwitcherPendingOrActiveCueStatus);
+            controller.SwitcherActiveCueStatus,
+            controller.SwitcherLoadedCueStatus);
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>

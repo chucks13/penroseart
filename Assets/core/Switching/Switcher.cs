@@ -266,9 +266,8 @@ public sealed class Switcher
     /// <summary>Current read-only Loaded Cue lifecycle snapshot.</summary>
     public SwitcherCueStatus LoadedCueStatus => BuildLoadedCueStatus();
 
-    /// <summary>The active Cue while executing; otherwise the Cue waiting to start.</summary>
-    public SwitcherCueStatus PendingOrActiveCueStatus =>
-        activeCueStatus.HasCue ? activeCueStatus : BuildLoadedCueStatus();
+    /// <summary>The Cue whose Transition currently owns the stage.</summary>
+    public SwitcherCueStatus ActiveCueStatus => activeCueStatus;
 
     public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions, CueLog cueLog = null)
     {

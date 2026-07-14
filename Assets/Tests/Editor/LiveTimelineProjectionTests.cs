@@ -14,7 +14,8 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 114,
             currentGridBeat: 14,
-            cue: SwitcherCueStatus.Empty));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: SwitcherCueStatus.Empty));
 
         Assert.That(model.Grids, Has.Count.EqualTo(2));
         Assert.That(model.Grids[0].StartAbsoluteBeat, Is.EqualTo(101));
@@ -30,7 +31,8 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 112,
             currentGridBeat: 12,
-            cue: WrappedCue(isLocked: false)));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: WrappedCue(isLocked: false)));
         var lockPoint = model.Grids[0].Cells[12];
         var start = model.Grids[0].Cells[13];
         var impact = model.Grids[1].Cells[0];
@@ -47,9 +49,50 @@ public sealed class LiveTimelineProjectionTests
         Assert.That(tail.IsTail, Is.True);
         Assert.That(end.IsEnd, Is.True);
         Assert.That(end.IsTail, Is.True);
-        Assert.That(model.LockBeatsUntil, Is.EqualTo(1));
-        Assert.That(model.StartBeatsUntil, Is.EqualTo(2));
-        Assert.That(model.EndBeatsUntil, Is.EqualTo(7));
+        Assert.That(model.Pending.LockBeatsUntil, Is.EqualTo(1));
+        Assert.That(model.Pending.StartBeatsUntil, Is.EqualTo(2));
+        Assert.That(model.Pending.EndBeatsUntil, Is.EqualTo(7));
+    }
+
+    /// <summary>An executing Tail and the next Loaded Cue remain visible together without a mid-Grid handoff.</summary>
+    [Test]
+    public void ActiveTailAndPendingCueProjectIntoTheSameRollingWindow()
+    {
+        var activeCue = new SwitcherCueStatus(
+            true,
+            true,
+            101,
+            1,
+            0,
+            99,
+            100,
+            105,
+            1,
+            4);
+        var pendingCue = new SwitcherCueStatus(
+            true,
+            false,
+            116,
+            2,
+            1,
+            111,
+            112,
+            116,
+            4,
+            0);
+        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
+            isSynced: true,
+            currentAbsoluteBeat: 101,
+            currentGridBeat: 1,
+            activeCue: activeCue,
+            pendingCue: pendingCue));
+
+        Assert.That(model.Active.HasCue, Is.True);
+        Assert.That(model.Pending.HasCue, Is.True);
+        Assert.That(model.Grids[0].Cells[1].IsActiveTail, Is.True, "The executing Tail remains on beat 102.");
+        Assert.That(model.Grids[0].Cells[10].IsLockPoint, Is.True, "The pending Lock remains on beat 111.");
+        Assert.That(model.Grids[0].Cells[11].IsRunway, Is.True, "The pending Runway begins on beat 112.");
+        Assert.That(model.Grids[0].Cells[15].IsImpactPoint, Is.True, "The pending Impact remains on beat 116.");
     }
 
     /// <summary>The lower Grid becomes current when the live clock wraps from beat 16 to beat 1.</summary>
@@ -60,12 +103,14 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 116,
             currentGridBeat: 16,
-            cue: SwitcherCueStatus.Empty));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: SwitcherCueStatus.Empty));
         var after = LiveTimelineProjection.Build(new LiveTimelineInput(
             isSynced: true,
             currentAbsoluteBeat: 117,
             currentGridBeat: 1,
-            cue: SwitcherCueStatus.Empty));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: SwitcherCueStatus.Empty));
 
         Assert.That(before.Grids[1].StartAbsoluteBeat, Is.EqualTo(117));
         Assert.That(after.Grids[0].StartAbsoluteBeat, Is.EqualTo(117));
@@ -81,12 +126,13 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 115,
             currentGridBeat: 15,
-            cue: WrappedCue(isLocked: true)));
+            activeCue: WrappedCue(isLocked: true),
+            pendingCue: SwitcherCueStatus.Empty));
         var current = model.Grids[0].Cells[14];
 
-        Assert.That(model.IsActive, Is.True);
-        Assert.That(model.StartBeatsUntil, Is.EqualTo(-1));
-        Assert.That(model.EndBeatsUntil, Is.EqualTo(4));
+        Assert.That(model.Active.HasCue, Is.True);
+        Assert.That(model.Active.StartBeatsUntil, Is.EqualTo(-1));
+        Assert.That(model.Active.EndBeatsUntil, Is.EqualTo(4));
         Assert.That(current.IsRunway, Is.True);
         Assert.That(current.IsCurrentBeat, Is.True);
         Assert.That(current.Fill, Is.EqualTo(LiveTimelineFill.CurrentBeat));
@@ -100,7 +146,8 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 117,
             currentGridBeat: 1,
-            cue: WrappedCue(isLocked: true)));
+            activeCue: WrappedCue(isLocked: true),
+            pendingCue: SwitcherCueStatus.Empty));
         var current = model.Grids[0].Cells[0];
 
         Assert.That(current.IsImpactPoint, Is.True);
@@ -127,7 +174,8 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 116,
             currentGridBeat: 16,
-            cue: cue));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: cue));
         var boundary = model.Grids[1].Cells[0];
 
         Assert.That(boundary.IsStart, Is.True);
@@ -146,13 +194,14 @@ public sealed class LiveTimelineProjectionTests
             isSynced: false,
             currentAbsoluteBeat: 112,
             currentGridBeat: 12,
-            cue: WrappedCue(isLocked: true)));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: WrappedCue(isLocked: true)));
 
         Assert.That(model.Grids, Is.Empty);
-        Assert.That(model.HasCue, Is.False);
-        Assert.That(model.LockBeatsUntil, Is.Null);
-        Assert.That(model.StartBeatsUntil, Is.Null);
-        Assert.That(model.EndBeatsUntil, Is.Null);
+        Assert.That(model.Pending.HasCue, Is.False);
+        Assert.That(model.Pending.LockBeatsUntil, Is.Null);
+        Assert.That(model.Pending.StartBeatsUntil, Is.Null);
+        Assert.That(model.Pending.EndBeatsUntil, Is.Null);
     }
 
     /// <summary>An invalid Grid position makes the rolling rows unavailable.</summary>
@@ -165,7 +214,8 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 112,
             currentGridBeat: gridBeat,
-            cue: SwitcherCueStatus.Empty));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: SwitcherCueStatus.Empty));
 
         Assert.That(model.CurrentPositionAvailable, Is.False);
         Assert.That(model.Grids, Is.Empty);
@@ -190,11 +240,12 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 112,
             currentGridBeat: 12,
-            cue: cue));
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: cue));
 
-        Assert.That(model.HasCue, Is.True);
-        Assert.That(model.CueTimingAvailable, Is.False);
-        Assert.That(model.StartBeatsUntil, Is.Null);
+        Assert.That(model.Pending.HasCue, Is.True);
+        Assert.That(model.Pending.CueTimingAvailable, Is.False);
+        Assert.That(model.Pending.StartBeatsUntil, Is.Null);
         Assert.That(model.Grids[0].Cells[13].IsStart, Is.False);
         Assert.That(model.Grids[1].Cells[0].IsImpactPoint, Is.False);
     }

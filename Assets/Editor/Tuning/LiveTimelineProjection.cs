@@ -12,12 +12,14 @@ internal readonly struct LiveTimelineInput
         bool isSynced,
         int? currentAbsoluteBeat,
         int? currentGridBeat,
-        SwitcherCueStatus cue)
+        SwitcherCueStatus activeCue,
+        SwitcherCueStatus pendingCue)
     {
         IsSynced = isSynced;
         CurrentAbsoluteBeat = currentAbsoluteBeat;
         CurrentGridBeat = currentGridBeat;
-        Cue = cue;
+        ActiveCue = activeCue;
+        PendingCue = pendingCue;
     }
 
     /// <summary>Whether the runtime has a usable live beat clock.</summary>
@@ -29,53 +31,41 @@ internal readonly struct LiveTimelineInput
     /// <summary>The current one-based beat within the Grid, when available.</summary>
     public int? CurrentGridBeat { get; }
 
-    /// <summary>The Switcher's pending or currently executing Cue.</summary>
-    public SwitcherCueStatus Cue { get; }
+    /// <summary>The Switcher's currently executing Cue.</summary>
+    public SwitcherCueStatus ActiveCue { get; }
+
+    /// <summary>The Switcher's Loaded Cue waiting to start.</summary>
+    public SwitcherCueStatus PendingCue { get; }
 }
 
-/// <summary>Display-ready rolling Grid rows and Transition countdowns for one editor frame.</summary>
-internal sealed class LiveTimelineModel
+/// <summary>Display-ready availability and countdown facts for one Cue lifecycle slot.</summary>
+internal readonly struct LiveCueTiming
 {
-    /// <summary>Creates a model from already-resolved availability, rows, and countdown facts.</summary>
-    public LiveTimelineModel(
-        bool isSynced,
-        bool currentPositionAvailable,
+    /// <summary>Creates one Cue timing snapshot without deriving runtime scheduling state.</summary>
+    public LiveCueTiming(
         bool hasCue,
         bool isCueLocked,
         bool cueTimingAvailable,
-        IReadOnlyList<LiveTimelineGrid> grids,
         int? lockBeatsUntil,
         int? startBeatsUntil,
         int? endBeatsUntil)
     {
-        IsSynced = isSynced;
-        CurrentPositionAvailable = currentPositionAvailable;
         HasCue = hasCue;
         IsCueLocked = isCueLocked;
         CueTimingAvailable = cueTimingAvailable;
-        Grids = grids ?? throw new ArgumentNullException(nameof(grids));
         LockBeatsUntil = lockBeatsUntil;
         StartBeatsUntil = startBeatsUntil;
         EndBeatsUntil = endBeatsUntil;
     }
 
-    /// <summary>Whether the runtime is in Synced Mode.</summary>
-    public bool IsSynced { get; }
-
-    /// <summary>Whether live absolute and Grid beats identify one current cell.</summary>
-    public bool CurrentPositionAvailable { get; }
-
-    /// <summary>Whether the Switcher reports a pending or active Cue.</summary>
+    /// <summary>Whether this lifecycle slot contains a Cue.</summary>
     public bool HasCue { get; }
 
-    /// <summary>Whether the Switcher reports that the pending-or-active Cue is locked.</summary>
+    /// <summary>Whether the Switcher reports that this Cue is locked.</summary>
     public bool IsCueLocked { get; }
 
     /// <summary>Whether the Cue exposes one self-consistent timing window.</summary>
     public bool CueTimingAvailable { get; }
-
-    /// <summary>The rolling current and immediately following Grid rows.</summary>
-    public IReadOnlyList<LiveTimelineGrid> Grids { get; }
 
     /// <summary>Signed beats from now to the Cue's Lock Point.</summary>
     public int? LockBeatsUntil { get; }
@@ -85,12 +75,40 @@ internal sealed class LiveTimelineModel
 
     /// <summary>Signed beats from now to the Cue's Transition End.</summary>
     public int? EndBeatsUntil { get; }
+}
 
-    /// <summary>Whether the live beat lies from Transition Start through End.</summary>
-    public bool IsActive =>
-        CueTimingAvailable &&
-        StartBeatsUntil is <= 0 &&
-        EndBeatsUntil is >= 0;
+/// <summary>Display-ready rolling Grid rows plus separate Active and Pending Cue timing.</summary>
+internal sealed class LiveTimelineModel
+{
+    /// <summary>Creates a model from already-resolved availability, lifecycle slots, and Grid rows.</summary>
+    public LiveTimelineModel(
+        bool isSynced,
+        bool currentPositionAvailable,
+        LiveCueTiming active,
+        LiveCueTiming pending,
+        IReadOnlyList<LiveTimelineGrid> grids)
+    {
+        IsSynced = isSynced;
+        CurrentPositionAvailable = currentPositionAvailable;
+        Active = active;
+        Pending = pending;
+        Grids = grids ?? throw new ArgumentNullException(nameof(grids));
+    }
+
+    /// <summary>Whether the runtime is in Synced Mode.</summary>
+    public bool IsSynced { get; }
+
+    /// <summary>Whether live absolute and Grid beats identify one current cell.</summary>
+    public bool CurrentPositionAvailable { get; }
+
+    /// <summary>The Cue whose Transition currently owns the stage.</summary>
+    public LiveCueTiming Active { get; }
+
+    /// <summary>The Loaded Cue waiting to start.</summary>
+    public LiveCueTiming Pending { get; }
+
+    /// <summary>The rolling current and immediately following Grid rows.</summary>
+    public IReadOnlyList<LiveTimelineGrid> Grids { get; }
 }
 
 /// <summary>One complete 16-beat row in the rolling live window.</summary>
@@ -145,6 +163,7 @@ internal readonly struct LiveTimelineCell
         bool isEnd,
         bool isRunway,
         bool isTail,
+        bool isActiveTail,
         bool isCurrentBeat)
     {
         GridBeat = gridBeat;
@@ -155,6 +174,7 @@ internal readonly struct LiveTimelineCell
         IsEnd = isEnd;
         IsRunway = isRunway;
         IsTail = isTail;
+        IsActiveTail = isActiveTail;
         IsCurrentBeat = isCurrentBeat;
         Fill = isCurrentBeat
             ? LiveTimelineFill.CurrentBeat
@@ -193,6 +213,9 @@ internal readonly struct LiveTimelineCell
     /// <summary>Whether this beat lies in the Transition Tail.</summary>
     public bool IsTail { get; }
 
+    /// <summary>Whether the currently executing Transition's Tail includes this beat.</summary>
+    public bool IsActiveTail { get; }
+
     /// <summary>Whether this is the live current beat.</summary>
     public bool IsCurrentBeat { get; }
 
@@ -210,35 +233,51 @@ internal static class LiveTimelineProjection
             input.IsSynced &&
             input.CurrentAbsoluteBeat is >= 1 &&
             input.CurrentGridBeat is >= 1 and <= CueSheet.GridBeats;
-        var hasCue = input.IsSynced && input.Cue.HasCue;
-        var cueTimingAvailable = hasCue && HasConsistentTiming(input.Cue);
-        var cue = cueTimingAvailable
-            ? input.Cue
+        var active = ProjectCueTiming(input.IsSynced, input.CurrentAbsoluteBeat, input.ActiveCue);
+        var pending = ProjectCueTiming(input.IsSynced, input.CurrentAbsoluteBeat, input.PendingCue);
+        var activeCue = active.CueTimingAvailable
+            ? input.ActiveCue
             : SwitcherCueStatus.Empty;
+        var gridCue = pending.HasCue
+            ? (pending.CueTimingAvailable ? input.PendingCue : SwitcherCueStatus.Empty)
+            : activeCue;
 
+        return new LiveTimelineModel(
+            input.IsSynced,
+            currentPositionAvailable,
+            active,
+            pending,
+            BuildRollingGrids(input, currentPositionAvailable, gridCue, activeCue));
+    }
+
+    /// <summary>Projects one Cue slot into honest availability and signed countdown facts.</summary>
+    private static LiveCueTiming ProjectCueTiming(
+        bool isSynced,
+        int? currentAbsoluteBeat,
+        SwitcherCueStatus cue)
+    {
+        var hasCue = isSynced && cue.HasCue;
+        var cueTimingAvailable = hasCue && HasConsistentTiming(cue);
         int? lockBeatsUntil = null;
         int? startBeatsUntil = null;
         int? endBeatsUntil = null;
-        if (cueTimingAvailable && input.CurrentAbsoluteBeat is { } currentBeat)
+        if (cueTimingAvailable && currentAbsoluteBeat is { } currentBeat)
         {
             lockBeatsUntil = cue.LockPointBeat - currentBeat;
             startBeatsUntil = cue.StartBeat - currentBeat;
             endBeatsUntil = cue.CompleteBeat - currentBeat;
         }
 
-        return new LiveTimelineModel(
-            input.IsSynced,
-            currentPositionAvailable,
+        return new LiveCueTiming(
             hasCue,
-            hasCue && input.Cue.IsLocked,
+            hasCue && cue.IsLocked,
             cueTimingAvailable,
-            BuildRollingGrids(input, currentPositionAvailable, cue),
             lockBeatsUntil,
             startBeatsUntil,
             endBeatsUntil);
     }
 
-    /// <summary>Checks the pending-or-active Cue's timing facts without repairing or deriving them.</summary>
+    /// <summary>Checks one Cue's timing facts without repairing or deriving them.</summary>
     private static bool HasConsistentTiming(SwitcherCueStatus cue)
     {
         return cue.CueMarkBeat >= 1 &&
@@ -253,7 +292,8 @@ internal static class LiveTimelineProjection
     private static IReadOnlyList<LiveTimelineGrid> BuildRollingGrids(
         LiveTimelineInput input,
         bool currentPositionAvailable,
-        SwitcherCueStatus cue)
+        SwitcherCueStatus gridCue,
+        SwitcherCueStatus activeCue)
     {
         if (!currentPositionAvailable ||
             input.CurrentAbsoluteBeat is not { } currentBeat ||
@@ -267,7 +307,7 @@ internal static class LiveTimelineProjection
         for (var gridIndex = 0; gridIndex < grids.Length; gridIndex++)
         {
             var gridStart = currentGridStart + gridIndex * CueSheet.GridBeats;
-            grids[gridIndex] = BuildGrid(gridStart, currentBeat, cue);
+            grids[gridIndex] = BuildGrid(gridStart, currentBeat, gridCue, activeCue);
         }
 
         return Array.AsReadOnly(grids);
@@ -277,31 +317,36 @@ internal static class LiveTimelineProjection
     private static LiveTimelineGrid BuildGrid(
         int gridStart,
         int currentBeat,
-        SwitcherCueStatus cue)
+        SwitcherCueStatus gridCue,
+        SwitcherCueStatus activeCue)
     {
         var cells = new LiveTimelineCell[CueSheet.GridBeats];
         for (var cellIndex = 0; cellIndex < cells.Length; cellIndex++)
         {
             var gridBeat = cellIndex + 1;
             var absoluteBeat = gridStart + cellIndex;
-            var hasCue = cue.HasCue;
-            var isImpactPoint = hasCue && absoluteBeat == cue.CueMarkBeat;
+            var hasCue = gridCue.HasCue;
+            var isImpactPoint = hasCue && absoluteBeat == gridCue.CueMarkBeat;
             var isRunway = hasCue &&
-                absoluteBeat >= cue.StartBeat &&
-                absoluteBeat < cue.CueMarkBeat;
+                absoluteBeat >= gridCue.StartBeat &&
+                absoluteBeat < gridCue.CueMarkBeat;
             var isTail = hasCue &&
-                absoluteBeat > cue.CueMarkBeat &&
-                absoluteBeat <= cue.CompleteBeat;
+                absoluteBeat > gridCue.CueMarkBeat &&
+                absoluteBeat <= gridCue.CompleteBeat;
+            var isActiveTail = activeCue.HasCue &&
+                absoluteBeat > activeCue.CueMarkBeat &&
+                absoluteBeat <= activeCue.CompleteBeat;
 
             cells[cellIndex] = new LiveTimelineCell(
                 gridBeat,
                 absoluteBeat,
-                hasCue && absoluteBeat == cue.LockPointBeat,
-                hasCue && absoluteBeat == cue.StartBeat,
+                hasCue && absoluteBeat == gridCue.LockPointBeat,
+                hasCue && absoluteBeat == gridCue.StartBeat,
                 isImpactPoint,
-                hasCue && absoluteBeat == cue.CompleteBeat,
+                hasCue && absoluteBeat == gridCue.CompleteBeat,
                 isRunway,
                 isTail,
+                isActiveTail,
                 absoluteBeat == currentBeat);
         }
 
