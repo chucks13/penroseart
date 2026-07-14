@@ -1,4 +1,4 @@
-// Exposes the wire pulse and tempo-derived musical subdivision pulses.
+// Exposes the wire pulse and tempo-derived Duration pulses.
 
 #nullable enable
 
@@ -21,10 +21,10 @@ public readonly struct PulsesValues
         this.barProgress = barProgress;
     }
 
-    /// <summary>The wire's own beat triangle.</summary>
+    /// <summary>The wire's own analyzed beat pulse.</summary>
     public float? Beat { get; }
 
-    /// <summary>Tempo-derived pulse centered on each Off Beat.</summary>
+    /// <summary>Tempo-derived pulse centered on each Offbeat.</summary>
     public float? OffBeat { get; }
 
     /// <summary>Returns a tempo-based 1→0 pulse for every selected musical duration.</summary>
@@ -42,7 +42,7 @@ public readonly struct PulsesValues
     }
 }
 
-/// <summary>Converts bar progress into tempo-based musical subdivision phases.</summary>
+/// <summary>Converts bar progress into tempo-based musical Duration phases.</summary>
 internal static class DurationClock
 {
     /// <summary>Number of quarter-note beats in the common-time bar.</summary>

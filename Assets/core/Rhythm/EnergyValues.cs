@@ -119,7 +119,7 @@ public partial class BeatManager
     }
 
     /// <summary>Translates the wire's closed Energy labels without inventing another vocabulary.</summary>
-    private static global::Energy? ParseEnergy(string? label)
+    private static Energy? ParseEnergy(string? label)
     {
         if (string.Equals(label, "Low", StringComparison.OrdinalIgnoreCase)) return global::Energy.Low;
         if (string.Equals(label, "Mid", StringComparison.OrdinalIgnoreCase)) return global::Energy.Mid;
@@ -128,7 +128,7 @@ public partial class BeatManager
     }
 
     /// <summary>Compares current and next Energy values into a readable direction.</summary>
-    private static EnergyTrend? ContriveTrend(global::Energy? level, global::Energy? nextLevel)
+    private static EnergyTrend? ContriveTrend(Energy? level, Energy? nextLevel)
     {
         if (level is not { } current) return null;
         if (nextLevel is not { } next || next == current) return EnergyTrend.Steady;

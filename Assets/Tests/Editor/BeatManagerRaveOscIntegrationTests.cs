@@ -6,6 +6,7 @@ using PenroseArt.RaveOsc;
 /// <summary>Integration tests at BeatManager's OSC snapshot boundary.</summary>
 public sealed class BeatManagerRaveOscIntegrationTests
 {
+    /// <summary>Verifies BeatManager derives the Off Beat lanes and pulse from live On Beat countdowns.</summary>
     [Test]
     public void UpdateDerivesOffbeatsFromLiveBeatCountdowns()
     {
@@ -18,6 +19,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatManager.Pulses.OffBeat, Is.EqualTo(1f).Within(0.001f));
     }
 
+    /// <summary>Verifies frame capture preserves the live wire values supplied at ingress.</summary>
     [Test]
     public void UpdateDoesNotOverwriteLiveWireValues()
     {
@@ -36,6 +38,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatManager.Pulses.Beat, Is.EqualTo(0.25f));
     }
 
+    /// <summary>Verifies ingress owns the mutable wire arrays before the caller can change them.</summary>
     [Test]
     public void SnapshotIngressOwnsADeepCopy()
     {
@@ -55,6 +58,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(beatManager.Beats.OnBeat(1), Is.True);
     }
 
+    /// <summary>Verifies the OSC adapter's broadcast-liveness grace window at both sides of its threshold.</summary>
     [Test]
     public void BroadcastLivenessUsesTheDocumentedGraceWindow()
     {

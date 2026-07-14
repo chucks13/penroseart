@@ -32,6 +32,32 @@ public sealed class DataSurfaceHygieneTests
         Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 4, 2 }));
     }
 
+    /// <summary>A captured lane value remains stable after BeatManager captures a later frame.</summary>
+    [Test]
+    public void CapturedBeatLanesRemainStableAcrossLaterUpdates()
+    {
+        var beatManager = new BeatManager();
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatsCountMs = new[] { 0, 500, 1000, 1500 };
+            snapshot.onBeats = new[] { true, false, false, false };
+        });
+        beatManager.Update(0f);
+        var captured = beatManager.Beats;
+
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+        {
+            snapshot.beatsCountMs = new[] { 500, 0, 500, 1000 };
+            snapshot.onBeats = new[] { false, true, false, false };
+        });
+        beatManager.Update(0.5f);
+
+        Assert.That(captured.OnBeatMs(1), Is.Zero);
+        Assert.That(captured.OnBeat(1), Is.True);
+        Assert.That(beatManager.Beats.OnBeatMs(1), Is.EqualTo(500));
+        Assert.That(beatManager.Beats.OnBeat(1), Is.False);
+    }
+
     /// <summary>An out-of-range Duration serves unavailable pulse facts.</summary>
     [Test]
     public void InvalidDurationReadsNullFacts()

@@ -44,26 +44,29 @@ public sealed class Routine
     /// <param name="bar2">The Waveform for Grid bar 2.</param>
     /// <param name="bar3">The Waveform for Grid bar 3.</param>
     /// <param name="bar4">The Waveform for Grid bar 4.</param>
+    /// <returns>A held Routine that reads the shared Grid position of its Waveforms.</returns>
     public static Routine Of(Waveform bar1, Waveform bar2, Waveform bar3, Waveform bar4)
     {
-        var source = bar1.ClockSource
+        var resolvedBars = new[] { bar1, bar2, bar3, bar4 };
+        var source = resolvedBars[0].ClockSource
             ?? throw new InvalidOperationException("Routine Waveforms must be acquired from Waveforms.");
 
-        var bars = new[] { bar1, bar2, bar3, bar4 };
-        for (var i = 0; i < bars.Length; i++)
+        for (var i = 0; i < resolvedBars.Length; i++)
         {
-            if (bars[i].IsDisabled)
+            var waveform = resolvedBars[i];
+            if (waveform.IsDisabled)
             {
                 throw new InvalidOperationException("waveforms.None cannot be placed inside a Routine.");
             }
 
-            if (!ReferenceEquals(source, bars[i].ClockSource))
+            if (!ReferenceEquals(source, waveform.ClockSource))
             {
-                throw new InvalidOperationException("Every Waveform in a Routine must use the same musical source.");
+                throw new InvalidOperationException(
+                    "Every Waveform in a Routine must use the same musical source.");
             }
         }
 
-        return new Routine(bars, source);
+        return new Routine(resolvedBars, source);
     }
 
     /// <summary>Samples the Waveform selected by the current one-based Grid bar.</summary>
@@ -71,17 +74,17 @@ public sealed class Routine
     /// <returns>True when a valid Grid position was available and sampled.</returns>
     private bool TrySampleCurrent(out float envelope)
     {
-        if (clockSource.Grid.Bar is { } bar
-            && clockSource.Grid.Progress is { } progress
-            && bar >= 1
-            && bar <= SlotCount)
+        if (clockSource.Grid.Bar is not { } bar
+            || clockSource.Grid.Progress is not { } progress
+            || bar < 1
+            || bar > SlotCount)
         {
-            var barFraction = Mathf.Repeat(progress * SlotCount, 1f);
-            envelope = waveforms[bar - 1].Sample(barFraction);
-            return true;
+            envelope = 0f;
+            return false;
         }
 
-        envelope = 0f;
-        return false;
+        var barFraction = Mathf.Repeat(progress * SlotCount, 1f);
+        envelope = waveforms[bar - 1].Sample(barFraction);
+        return true;
     }
 }

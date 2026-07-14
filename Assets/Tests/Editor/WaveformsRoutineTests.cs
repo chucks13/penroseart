@@ -1,4 +1,4 @@
-// Caller-facing tests for fluent Routine playback.
+// Caller-facing tests for held-value Routine playback.
 
 using NUnit.Framework;
 using PenroseArt.RaveOsc;

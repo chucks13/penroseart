@@ -6,8 +6,8 @@ using System.Text;
 using UnityEngine;
 
 /// <summary>
-/// The canonical codec for the Waveform Pool file (<c>penrose_waveforms.txt</c>): the single owner of how
-/// Presets are parsed from, and serialized to, the hand-editable StreamingAssets text format.
+/// The canonical codec for the Waveform Pool file (<c>penrose_waveforms.txt</c>): the single owner of
+/// Preset parsing and serialization for the hand-editable StreamingAssets text format.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,15 +32,24 @@ public static class WaveformPool
     /// <summary>The macro token each Preset line opens with.</summary>
     private const string DefineToken = "DEFINE_WAVEFORM(";
 
+    /// <summary>Characters that would alter the Pool record grammar when embedded in a Preset name.</summary>
+    private static readonly char[] ReservedNameCharacters = { '(', ')', '{', '}', '|', '\r', '\n' };
+
     /// <summary>Absolute path to the Pool file under StreamingAssets (valid in the Editor and at runtime).</summary>
     public static string FilePath => Application.streamingAssetsPath + "/" + FileName;
 
     /// <summary>One named Preset: a display name paired with its parsed Waveform.</summary>
     public struct Entry
     {
+        /// <summary>The human/editor display name; runtime acquisition does not treat it as identity.</summary>
         public string name;
+
+        /// <summary>The parsed one-bar Waveform definition.</summary>
         public Waveform waveform;
 
+        /// <summary>Creates one named Pool entry.</summary>
+        /// <param name="name">The human/editor display name.</param>
+        /// <param name="waveform">The parsed Waveform definition.</param>
         public Entry(string name, Waveform waveform)
         {
             this.name = name;
@@ -62,8 +71,8 @@ public static class WaveformPool
 
         try
         {
-            using var sr = new StreamReader(path);
-            return sr.ReadToEnd();
+            using var reader = new StreamReader(path);
+            return reader.ReadToEnd();
         }
         catch (Exception e)
         {
@@ -130,13 +139,13 @@ public static class WaveformPool
                 break; // cannot reliably advance past a broken macro
             }
 
-            var name = text.Substring(nameStart, nameEnd - nameStart).Trim();
+            var name = text[nameStart..nameEnd].Trim();
             if (!IsValidName(name))
             {
                 messages.Add($"Preset name \"{name}\" is empty or contains a reserved delimiter.");
             }
 
-            var body = text.Substring(braceOpen + 1, braceClose - braceOpen - 1);
+            var body = text[(braceOpen + 1)..braceClose];
             cursor = braceClose + 1;
 
             var parts = body.Split('|');
@@ -175,7 +184,7 @@ public static class WaveformPool
             return false;
         }
 
-        return name.IndexOfAny(new[] { '(', ')', '{', '}', '|', '\r', '\n' }) < 0;
+        return name.IndexOfAny(ReservedNameCharacters) < 0;
     }
 
     /// <summary>
@@ -184,43 +193,54 @@ public static class WaveformPool
     /// </summary>
     public static string Serialize(IReadOnlyList<Entry> entries)
     {
-        var sb = new StringBuilder();
-        sb.Append(CanonicalHeader);
+        var builder = new StringBuilder();
+        builder.Append(CanonicalHeader);
 
-        // Pad name/sequence/amplitude to aligned columns so a hand-reading the file (the bootstrap path)
-        // gets the same tidy, stacked look the seed file ships with.
+        // Align the hand-editable bootstrap format with the tidy, stacked look of the seed file.
         var nameWidth = 0;
-        var seqWidth = 0;
-        var ampWidth = 0;
+        var sequenceWidth = 0;
+        var amplitudeWidth = 0;
         for (var i = 0; i < entries.Count; i++)
         {
-            if (!IsValidName(entries[i].name))
+            var entry = entries[i];
+            if (!IsValidName(entry.name))
             {
-                throw new ArgumentException($"Waveform Pool entry {i} has an empty or delimiter-containing name.", nameof(entries));
+                throw new ArgumentException(
+                    $"Waveform Pool entry {i} has an empty or delimiter-containing name.",
+                    nameof(entries));
             }
 
-            nameWidth = Mathf.Max(nameWidth, (entries[i].name ?? "").Length);
-            seqWidth = Mathf.Max(seqWidth, (entries[i].waveform.sequence ?? "").Length);
-            ampWidth = Mathf.Max(ampWidth, (entries[i].waveform.amplitude ?? "").Length);
+            nameWidth = Mathf.Max(nameWidth, entry.name.Length);
+            sequenceWidth = Mathf.Max(sequenceWidth, (entry.waveform.sequence ?? "").Length);
+            amplitudeWidth = Mathf.Max(amplitudeWidth, (entry.waveform.amplitude ?? "").Length);
         }
 
         for (var i = 0; i < entries.Count; i++)
         {
-            var name = entries[i].name ?? "";
-            var wf = entries[i].waveform;
-            var seq = (wf.sequence ?? "").PadRight(seqWidth);
-            var amp = (wf.amplitude ?? "").PadRight(ampWidth);
-            var round = wf.rounding.ToString("0.###", CultureInfo.InvariantCulture);
-            var offset = wf.offset.ToString("0.###", CultureInfo.InvariantCulture);
+            var entry = entries[i];
+            var sequence = (entry.waveform.sequence ?? "").PadRight(sequenceWidth);
+            var amplitude = (entry.waveform.amplitude ?? "").PadRight(amplitudeWidth);
+            var roundingText = entry.waveform.rounding.ToString("0.###", CultureInfo.InvariantCulture);
+            var offsetText = entry.waveform.offset.ToString("0.###", CultureInfo.InvariantCulture);
 
-            sb.Append(DefineToken).Append(name).Append(')')
-              .Append(' ', Mathf.Max(1, (nameWidth - name.Length) + 1))
-              .Append("{ ").Append(seq).Append(" | ").Append(amp).Append(" | ")
-              .Append(round).Append(" | ").Append(offset).Append(" }")
-              .Append('\n');
+            builder
+                .Append(DefineToken)
+                .Append(entry.name)
+                .Append(')')
+                .Append(' ', Mathf.Max(1, nameWidth - entry.name.Length + 1))
+                .Append("{ ")
+                .Append(sequence)
+                .Append(" | ")
+                .Append(amplitude)
+                .Append(" | ")
+                .Append(roundingText)
+                .Append(" | ")
+                .Append(offsetText)
+                .Append(" }")
+                .Append('\n');
         }
 
-        return sb.ToString();
+        return builder.ToString();
     }
 
     /// <summary>The canonical header re-emitted on every save.</summary>
@@ -276,7 +296,7 @@ public static class WaveformPool
         foreach (var line in text.Split('\n'))
         {
             var comment = line.IndexOf("//", StringComparison.Ordinal);
-            sb.Append(comment >= 0 ? line.Substring(0, comment) : line);
+            sb.Append(comment >= 0 ? line[..comment] : line);
             sb.Append('\n');
         }
 

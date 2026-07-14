@@ -12,7 +12,7 @@ using PenroseArt.RaveOsc;
 /// </summary>
 public sealed class LoopValuesTests
 {
-    /// <summary>A rolling, set lane serves every translated wire fact directly on the flat view.</summary>
+    /// <summary>A rolling, set lane serves every translated wire fact directly on the flat group.</summary>
     [Test]
     public void RollingSetLoopServesAllFacts()
     {
@@ -34,6 +34,8 @@ public sealed class LoopValuesTests
         Assert.That(loop.RegionSet, Is.True);
         Assert.That(loop.LengthBeats, Is.EqualTo(4f).Within(0.0001f));
         Assert.That(loop.LengthMilliseconds, Is.EqualTo(1875));
+        Assert.That(loop.SizeNumerator, Is.EqualTo(4));
+        Assert.That(loop.SizeDenominator, Is.EqualTo(1));
         Assert.That(loop.NominalSizeBeats, Is.EqualTo(4f).Within(0.0001f));
     }
 
@@ -59,6 +61,8 @@ public sealed class LoopValuesTests
         Assert.That(loop.RegionSet, Is.True);
         Assert.That(loop.LengthBeats, Is.EqualTo(0.5f).Within(0.0001f));
         Assert.That(loop.LengthMilliseconds, Is.EqualTo(234));
+        Assert.That(loop.SizeNumerator, Is.EqualTo(1));
+        Assert.That(loop.SizeDenominator, Is.EqualTo(2));
         Assert.That(loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
     }
 
@@ -84,12 +88,14 @@ public sealed class LoopValuesTests
         Assert.That(loop.RegionSet, Is.Null);
         Assert.That(loop.LengthBeats, Is.Null);
         Assert.That(loop.LengthMilliseconds, Is.Null);
+        Assert.That(loop.SizeNumerator, Is.Null);
+        Assert.That(loop.SizeDenominator, Is.Null);
         Assert.That(loop.NominalSizeBeats, Is.Null);
     }
 
-    /// <summary>A zero measured beat length remains the wire's real zero rather than becoming null.</summary>
+    /// <summary>Real zero wire values remain zero while a zero denominator produces no nominal size.</summary>
     [Test]
-    public void ZeroLengthBeatsRemainsZero()
+    public void RealZerosRemainZeroWithoutInventingANominalSize()
     {
         var beatManager = new BeatManager();
         beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
@@ -104,6 +110,11 @@ public sealed class LoopValuesTests
 
         beatManager.Update(0f);
 
-        Assert.That(beatManager.Loop.LengthBeats, Is.EqualTo(0f));
+        var loop = beatManager.Loop;
+        Assert.That(loop.LengthBeats, Is.EqualTo(0f));
+        Assert.That(loop.LengthMilliseconds, Is.Zero);
+        Assert.That(loop.SizeNumerator, Is.Zero);
+        Assert.That(loop.SizeDenominator, Is.Zero);
+        Assert.That(loop.NominalSizeBeats, Is.Null);
     }
 }

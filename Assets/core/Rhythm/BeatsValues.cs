@@ -8,10 +8,10 @@ using System;
 public readonly struct BeatsValues
 {
     /// <summary>The captured four-lane storage.</summary>
-    private readonly OnBeatLanes lanes;
+    private readonly BeatCountLanes lanes;
 
     /// <summary>Creates one public On Beat reading from captured lane storage.</summary>
-    internal BeatsValues(OnBeatLanes lanes)
+    internal BeatsValues(BeatCountLanes lanes)
     {
         this.lanes = lanes;
     }
@@ -23,16 +23,17 @@ public readonly struct BeatsValues
     public bool? OnBeat(int count) => lanes.Active(count);
 }
 
-/// <summary>Private immutable storage shared by the On Beat wire lanes and contrived Off Beat lanes.</summary>
-internal readonly struct OnBeatLanes
+/// <summary>Immutable storage shared by the wire On Beat lanes and derived Offbeat lanes.</summary>
+internal readonly struct BeatCountLanes
 {
     /// <summary>Captured milliseconds-until values in count order.</summary>
     private readonly int[]? milliseconds;
+
     /// <summary>Captured active-window values in count order.</summary>
     private readonly bool[]? active;
 
     /// <summary>Captures four aligned countdown and active-window lanes.</summary>
-    internal OnBeatLanes(int[] milliseconds, bool[] active)
+    internal BeatCountLanes(int[] milliseconds, bool[] active)
     {
         this.milliseconds = milliseconds;
         this.active = active;
@@ -66,7 +67,7 @@ public partial class BeatManager
     private BeatsValues CaptureBeats()
     {
         var snapshot = wireSnapshot;
-        return new BeatsValues(new OnBeatLanes(
+        return new BeatsValues(new BeatCountLanes(
             CopyCountdownLanes(snapshot.beatsCountMs),
             CopyActiveLanes(snapshot.onBeats)));
     }

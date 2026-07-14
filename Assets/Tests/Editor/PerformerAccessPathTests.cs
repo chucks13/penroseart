@@ -1,4 +1,4 @@
-// Seam-3 contract tests for Controller-owned rhythm stepping and live Performer access roots.
+// Contract tests for Controller-owned rhythm stepping and live Performer access roots.
 
 using System.Collections;
 using NUnit.Framework;
@@ -7,7 +7,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// Seam-3 tests for Controller frame ownership and the live rhythm roots exposed to Performers.
+/// Tests Controller frame ownership and the live rhythm roots exposed to Performers.
 /// </summary>
 public sealed class PerformerAccessPathTests
 {

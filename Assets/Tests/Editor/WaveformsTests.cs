@@ -1,4 +1,4 @@
-// Caller-facing tests for Waveform acquisition and fluent playback.
+// Caller-facing tests for Waveform acquisition and held-value playback.
 
 using System;
 using NUnit.Framework;
@@ -84,6 +84,21 @@ public sealed class WaveformsTests
     {
         Assert.Throws<InvalidOperationException>(
             () => new Waveforms(new BeatManager(), Array.Empty<WaveformPool.Entry>()));
+    }
+
+    /// <summary>Caller mutation after construction cannot replace the values owned by Waveforms.</summary>
+    [Test]
+    public void Construction_SnapshotsPoolValuesBeforeCallerMutation()
+    {
+        var poolEntries = new[]
+        {
+            Entry("original", "QQQQ", "8888"),
+        };
+        var waveforms = new Waveforms(new BeatManager(), poolEntries);
+
+        poolEntries[0] = Entry("replacement", "QQQQ", "8000");
+
+        AssertNotationIn(waveforms.Random(), ("QQQQ", "8888", 0f));
     }
 
     /// <summary>A bound Waveform exposes its envelope and direct Lerp at the current Bar Phase.</summary>

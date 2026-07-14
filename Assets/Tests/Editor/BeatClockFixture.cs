@@ -11,9 +11,8 @@ using UnityEngine;
 /// <remarks>
 /// This reproduces the transport a steady metronome at <c>bpm</c> would carry at <c>timeSeconds</c> — the same
 /// fields live RaveSystem OSC pushes through <see cref="RaveOscReceiver.ApplyTo"/> — then feeds that snapshot
-/// through <see cref="BeatManager.FeedWireSnapshot"/>. It replaces the production beat simulator removed from
-/// BeatManager: the simulator's clock math
-/// was only ever exercised by tests, so it lives here as an explicit test fixture rather than runtime code.
+/// through <see cref="BeatManager.FeedWireSnapshot"/>. It replaces the removed production beat simulator:
+/// the clock math was only exercised by tests, so it belongs in this explicit fixture rather than runtime code.
 /// </remarks>
 internal static class BeatClockFixture
 {

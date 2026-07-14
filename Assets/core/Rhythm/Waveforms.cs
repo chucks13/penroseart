@@ -13,8 +13,8 @@ using System.Collections.Generic;
 /// </remarks>
 public sealed class Waveforms
 {
-    /// <summary>The Pool entries available for random acquisition. Always non-empty and runtime-bound.</summary>
-    private readonly WaveformPool.Entry[] entries;
+    /// <summary>The runtime-bound Waveforms available for random acquisition.</summary>
+    private readonly Waveform[] waveforms;
 
     /// <summary>
     /// Explicit non-null Waveform value Mixers assign when they intentionally suppress a child's
@@ -50,8 +50,8 @@ public sealed class Waveforms
                 $"Waveform Pool '{WaveformPool.FilePath}' contains no Waveforms.");
         }
 
-        entries = new WaveformPool.Entry[poolEntries.Count];
-        for (var i = 0; i < entries.Length; i++)
+        waveforms = new Waveform[poolEntries.Count];
+        for (var i = 0; i < waveforms.Length; i++)
         {
             var entry = poolEntries[i];
             if (entry.waveform.IsMalformed)
@@ -60,7 +60,7 @@ public sealed class Waveforms
                     $"Waveform Pool entry '{entry.name}' is malformed. Fix the Pool before starting the runtime.");
             }
 
-            entries[i] = new WaveformPool.Entry(entry.name, entry.waveform.Bind(clockSource));
+            waveforms[i] = entry.waveform.Bind(clockSource);
         }
 
         None = Waveform.Disabled(clockSource);
@@ -70,6 +70,7 @@ public sealed class Waveforms
     /// Draws one Waveform from the requested Energy levels; no levels means the whole Pool.
     /// </summary>
     /// <param name="levels">The Energy levels eligible for this draw.</param>
+    /// <returns>A uniformly selected, runtime-bound Waveform.</returns>
     public Waveform Random(params Energy[] levels)
     {
         if (levels == null)
@@ -82,12 +83,13 @@ public sealed class Waveforms
             return DrawWholePool();
         }
 
-        var matches = new List<int>(entries.Length);
-        for (var i = 0; i < entries.Length; i++)
+        var matches = new List<Waveform>(waveforms.Length);
+        for (var i = 0; i < waveforms.Length; i++)
         {
-            if (Array.IndexOf(levels, entries[i].waveform.Energy) >= 0)
+            var waveform = waveforms[i];
+            if (Array.IndexOf(levels, waveform.Energy) >= 0)
             {
-                matches.Add(i);
+                matches.Add(waveform);
             }
         }
 
@@ -97,12 +99,13 @@ public sealed class Waveforms
                 $"Waveform Pool contains no entry at the requested Energy levels ({string.Join(", ", levels)}).");
         }
 
-        return entries[matches[UnityEngine.Random.Range(0, matches.Count)]].waveform;
+        return matches[UnityEngine.Random.Range(0, matches.Count)];
     }
 
     /// <summary>Draws uniformly across the whole Pool.</summary>
+    /// <returns>A runtime-bound Waveform from the Pool.</returns>
     private Waveform DrawWholePool()
     {
-        return entries[UnityEngine.Random.Range(0, entries.Length)].waveform;
+        return waveforms[UnityEngine.Random.Range(0, waveforms.Length)];
     }
 }

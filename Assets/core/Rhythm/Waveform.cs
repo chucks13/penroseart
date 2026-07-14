@@ -7,13 +7,9 @@ using UnityEngine;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A Waveform is an immutable value. <see cref="Parse(string,string,float,float)"/> constructs an
-/// authoring/kernel value; <see cref="Waveforms"/> binds Pool values to runtime playback. Nothing
-/// edits a Waveform in place after construction.
-/// </para>
-/// <para>
-/// A Waveform is an immutable rhythmic envelope definition. It
-/// describes <em>any</em> one-bar rhythm with four parts:
+/// A Waveform is an immutable rhythmic envelope definition. <see cref="Parse(string,string,float,float)"/>
+/// constructs an authoring/kernel value; <see cref="Waveforms"/> binds Pool values to runtime playback.
+/// It describes a one-bar rhythm with four parts:
 /// </para>
 /// <list type="bullet">
 ///   <item><b>sequence</b> — one note-value token per Hump, left to right, giving each Hump's width.
@@ -53,9 +49,9 @@ public readonly struct Waveform
     public const int BeatsPerBar = 4;
 
     /// <summary>
-    /// Canonical rounding of the plain Beat Pulse (<c>QQQQ</c> / <c>8888</c>), the origin point every
-    /// other Waveform is "the pulse, but with these deltas." An inline spec that omits rounding/offset
-    /// defaults to this shaping. The seed Pool's <c>beat pulse</c> entry must carry the same value.
+    /// Canonical rounding of the plain Beat Pulse (<c>QQQQ</c> / <c>8888</c>). An inline spec that
+    /// omits rounding and offset defaults to this shaping, and the seed Pool's <c>beat pulse</c>
+    /// Preset carries the same value.
     /// </summary>
     public const float BeatPulseRounding = 0.3f;
 
@@ -219,35 +215,35 @@ public readonly struct Waveform
         /// <summary>Slot width as a fraction of the bar (quarter = 0.25, eighth = 0.125, …).</summary>
         public readonly float width;
 
-        /// <summary>Hump height in [0..1] (amplitude digit ÷ 8). 0 = silent Hump = skipped beat.</summary>
-        public readonly float amp;
+        /// <summary>Hump height in [0..1] (amplitude digit ÷ 8). Zero makes the Hump silent.</summary>
+        public readonly float amplitude;
 
         /// <summary>Creates one immutable parsed Hump slot.</summary>
         /// <param name="start">Slot start as a fraction of the bar.</param>
         /// <param name="width">Slot width as a fraction of the bar.</param>
-        /// <param name="amp">Normalized Hump height.</param>
-        public Hump(float start, float width, float amp)
+        /// <param name="amplitude">Normalized Hump height.</param>
+        public Hump(float start, float width, float amplitude)
         {
             this.start = start;
             this.width = width;
-            this.amp = amp;
+            this.amplitude = amplitude;
         }
 
         /// <summary>
-        /// Whether this Hump sounds: nonzero Amplitude, a real time slot, and a start inside the
-        /// bar. The one audibility rule every peak measurement shares — silent and zero-width
-        /// Humps (and a malformed bar's overflow) never count as peaks or onsets.
+        /// Whether this Hump contributes a peak: nonzero Amplitude, a real time slot, and a start
+        /// inside the bar. Silent, zero-width, and malformed overflow Humps are excluded from every
+        /// peak measurement.
         /// </summary>
-        public bool IsAudible => amp > 0f && width > 0f && start >= 0f && start < 1f;
+        public bool IsAudible => amplitude > 0f && width > 0f && start >= 0f && start < 1f;
     }
 
     /// <summary>
     /// Parses an inline Waveform with default shaping — the plain Beat Pulse's rounding and zero offset.
     /// </summary>
     /// <remarks>
-    /// This convenience is used by the Pool codec, Editor previews, and tests. Omitting rounding/offset
-    /// means "the plain pulse, but with these widths/heights," keeping the Beat Pulse the literal origin
-    /// of the space. Runtime effects acquire clock-bound values from <see cref="Waveforms"/>.
+    /// This convenience is used by the Pool codec, Editor previews, and tests. Omitting rounding and
+    /// offset applies the canonical Beat Pulse shaping without deriving the authored notation from that
+    /// Preset. Runtime Performers acquire clock-bound values from <see cref="Waveforms"/>.
     /// </remarks>
     public static Waveform Parse(string sequence, string amplitude)
     {
@@ -370,41 +366,39 @@ public readonly struct Waveform
             return 0f;
         }
 
-        // Offset slides the Waveform later in time: a Hump authored on the beat appears `offset` beats
-        // later. We achieve that by looking the un-shifted Waveform up at an earlier phase, wrapped to one bar.
+        // Looking up an earlier phase moves the authored peaks later by the requested offset.
         var lookup = Mathf.Repeat(barPhase - (offset / BeatsPerBar), 1f);
 
         for (var i = 0; i < humps.Length; i++)
         {
-            var h = humps[i];
-            if (h.width <= 0f)
+            var hump = humps[i];
+            if (hump.width <= 0f)
             {
                 continue;
             }
 
-            var segStart = h.start;          // this beat's onset (peak)
-            var segEnd = h.start + h.width;   // the next beat's onset (peak)
-            if (lookup < segStart || lookup >= segEnd)
+            var segmentStart = hump.start;
+            var segmentEnd = hump.start + hump.width;
+            if (lookup < segmentStart || lookup >= segmentEnd)
             {
                 continue;
             }
 
-            var mid = (segStart + segEnd) * 0.5f; // trough: halfway between the two beats
-            if (lookup < mid)
+            var midpoint = (segmentStart + segmentEnd) * 0.5f;
+            if (lookup < midpoint)
             {
-                // Falling away from this beat. A silent Hump (amp 0) folds to 0 across this whole half.
-                var t = (lookup - segStart) / (mid - segStart); // 0 on the beat, 1 at the trough
-                return h.amp * ShapeHump(t, rounding);
+                var distanceFromPeak = (lookup - segmentStart) / (midpoint - segmentStart);
+                return hump.amplitude * ShapeHump(distanceFromPeak, rounding);
             }
 
-            // Rising into the next beat, whose amplitude governs this half. The last segment's "next beat"
-            // wraps to the first Hump (the next bar's downbeat).
-            var nextAmp = humps[(i + 1) % humps.Length].amp;
-            var tt = (segEnd - lookup) / (segEnd - mid); // 0 on the next beat, 1 at the trough
-            return nextAmp * ShapeHump(tt, rounding);
+            // The next Hump owns the rising half; the final segment wraps to the next bar's downbeat.
+            var nextAmplitude = humps[(i + 1) % humps.Length].amplitude;
+            var distanceFromNextPeak = (segmentEnd - lookup) / (segmentEnd - midpoint);
+            return nextAmplitude * ShapeHump(distanceFromNextPeak, rounding);
         }
 
-        return 0f; // only reached for a malformed (under-filled) bar — the gap reads as trough
+        // A malformed under-filled bar reads its uncovered interval as trough.
+        return 0f;
     }
 
     /// <summary>Samples this bound value at the current Bar Phase when one exists.</summary>
@@ -577,25 +571,21 @@ public readonly struct Waveform
     /// </remarks>
     private static float ShapeHump(float u, float rounding)
     {
-        u = Mathf.Clamp01(u);
-        var r = Mathf.Clamp01(rounding);
+        var distanceFromPeak = Mathf.Clamp01(u);
+        var clampedRounding = Mathf.Clamp01(rounding);
 
-        // Flat top: a plateau pinned at 1 that only grows in the upper half of rounding, capped so a
-        // trough always remains before the next beat.
-        var plateau = Mathf.Clamp01((r - 0.5f) * 2f) * FlatTopMaxFraction;
-        if (u <= plateau)
+        // The plateau grows only in the upper half of rounding and leaves room for a zero trough.
+        var plateau = Mathf.Clamp01((clampedRounding - 0.5f) * 2f) * FlatTopMaxFraction;
+        if (distanceFromPeak <= plateau)
         {
             return 1f;
         }
 
-        // Remap the region after the plateau to [0..1] for the falling edge.
-        var v = (u - plateau) / (1f - plateau);
-
-        // Blend a linear (sharp) fall with a cosine-dome fall; the dome ramps in over the lower half of rounding.
-        var dome = Mathf.Clamp01(r * 2f);
-        var triangle = 1f - v;
-        var cosine = (Mathf.Cos(v * Mathf.PI) + 1f) * 0.5f;
-        return dome.Lerp(triangle, cosine);
+        var fallProgress = (distanceFromPeak - plateau) / (1f - plateau);
+        var domeBlend = Mathf.Clamp01(clampedRounding * 2f);
+        var triangle = 1f - fallProgress;
+        var cosine = (Mathf.Cos(fallProgress * Mathf.PI) + 1f) * 0.5f;
+        return domeBlend.Lerp(triangle, cosine);
     }
 
     /// <summary>Returns a token's width in beats, or 0 for an unrecognized token (caller reports and skips).</summary>

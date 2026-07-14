@@ -8,6 +8,7 @@ using PenroseArt.RaveOsc;
 /// <summary>Tests the always-present normalized, smoothed, and peak level groups.</summary>
 public sealed class BeatManagerLevelsTests
 {
+    /// <summary>Every level form serves the same complete band-reading interface.</summary>
     [Test]
     public void EveryLevelFormExposesTheSameBandAndDerivedReadings()
     {
@@ -22,6 +23,7 @@ public sealed class BeatManagerLevelsTests
         Assert.That(beatManager.Levels.Normalized.Dominance, Is.GreaterThan(0f));
     }
 
+    /// <summary>Unavailable wire levels clear Normalized immediately without snapping shaped values.</summary>
     [Test]
     public void MissingWireLevelsBecomeNormalizedZeroWhileFollowersFall()
     {
@@ -34,11 +36,13 @@ public sealed class BeatManagerLevelsTests
         Assert.That(beatManager.Levels.Peak.Average, Is.GreaterThan(0f));
     }
 
+    /// <summary>Peak rises with its input and drains linearly over one synchronized beat.</summary>
     [Test]
     public void PeakRisesImmediatelyAndDrainsOverOneBeat()
     {
         var beatManager = ManagerWithLevels(1f, 0f, 0f, 0f);
-        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0f });
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+            snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0f });
         beatManager.Update(0.25f);
         Assert.That(beatManager.Levels.Peak.Low, Is.EqualTo(0.5f).Within(0.001f));
 
@@ -46,6 +50,7 @@ public sealed class BeatManagerLevelsTests
         Assert.That(beatManager.Levels.Peak.Low, Is.Zero.Within(0.001f));
     }
 
+    /// <summary>The musical Levels value does not acquire caller-owned color policy.</summary>
     [Test]
     public void LevelBandsDoNotContainColorPolicy()
     {
@@ -54,14 +59,17 @@ public sealed class BeatManagerLevelsTests
         Assert.That(typeof(LevelBands).GetMethod("FromPalette"), Is.Null);
     }
 
+    /// <summary>Creates one synchronized BeatManager captured with the requested wire levels.</summary>
     private static BeatManager ManagerWithLevels(float low, float mid, float high, float time)
     {
         var beatManager = BeatClockFixture.CreateSeeded(120f, 0f);
-        BeatManagerWireFixture.Feed(beatManager, snapshot => snapshot.levels = new Levels { low = low, mid = mid, high = high });
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+            snapshot.levels = new Levels { low = low, mid = mid, high = high });
         beatManager.Update(time);
         return beatManager;
     }
 
+    /// <summary>Asserts the complete caller-facing range contract for one band reading.</summary>
     private static void AssertBands(LevelBands bands)
     {
         Assert.That(bands.Low, Is.InRange(0f, 1f));

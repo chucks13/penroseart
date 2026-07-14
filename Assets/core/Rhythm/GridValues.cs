@@ -7,11 +7,11 @@ using UnityEngine;
 /// <summary>How much the sender trusts the current sixteen-beat grid placement.</summary>
 public enum GridState
 {
-    /// <summary>The grid is freshly anchored and trusted.</summary>
+    /// <summary>The grid is freshly placed and trusted.</summary>
     Locked,
-    /// <summary>The source is holding its last good anchor.</summary>
+    /// <summary>The source is holding its last good offset.</summary>
     Coasting,
-    /// <summary>A fresh observation disagrees with the held anchor.</summary>
+    /// <summary>A fresh observation disagrees with the held offset.</summary>
     Disputed,
 }
 

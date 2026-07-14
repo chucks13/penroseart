@@ -8,6 +8,7 @@ using PenroseArt.RaveOsc;
 /// <summary>Tests structural wire groups and their direct progress/build/decay conveniences.</summary>
 public sealed class BeatManagerStructureTests
 {
+    /// <summary>Verifies current and next Phrase facts stay in their explicitly separate wire groups.</summary>
     [Test]
     public void PhraseAndNextPhraseRemainSeparateWireLanes()
     {
@@ -24,6 +25,7 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.NextPhrase.BeatsUntil, Is.EqualTo(24));
     }
 
+    /// <summary>Verifies an active Drop preserves its raw wire count and readable remaining-beat value.</summary>
     [Test]
     public void DropKeepsRawCountAndAddsReadableActiveInterpretation()
     {
@@ -38,6 +40,7 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.Drop.Progress, Is.Not.Null);
     }
 
+    /// <summary>Verifies an upcoming Fill preserves its raw wire count and readable beats-until value.</summary>
     [Test]
     public void FillKeepsRawCountAndAddsReadableUpcomingInterpretation()
     {
@@ -51,6 +54,7 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.Fill.LengthBeats, Is.EqualTo(4));
     }
 
+    /// <summary>Verifies stock envelopes support both the full event length and a shorter caller window.</summary>
     [Test]
     public void BuildAndDecayCanUseTheFullDurationOrAShorterWindow()
     {
@@ -63,8 +67,9 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.Drop.Decay(16), Is.EqualTo(0f).Within(0.01f));
     }
 
+    /// <summary>Verifies current Energy derives its Trend while the explicit next lane remains separate.</summary>
     [Test]
-    public void EnergyAndNextEnergyExposeTrendWithoutAnotherRunView()
+    public void EnergyAndNextEnergyExposeCurrentTrendAndUpcomingState()
     {
         var beatManager = LiveManager(snapshot =>
         {
@@ -78,6 +83,7 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.NextEnergy.BeatsUntil, Is.EqualTo(48));
     }
 
+    /// <summary>Verifies Loop exposes both raw size fields and their derived nominal beat length.</summary>
     [Test]
     public void LoopExposesItsRawSizeFractionAndDerivedNominalBeats()
     {
@@ -91,6 +97,7 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f));
     }
 
+    /// <summary>Verifies Grid exposes durable placement without manufacturing a hub-owned wrap event.</summary>
     [Test]
     public void GridExposesStateAndPositionWithoutManufacturingWrapEvents()
     {
@@ -103,6 +110,7 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.Grid.Progress, Is.Not.Null);
     }
 
+    /// <summary>Captures one live frame after applying a focused mutation to a deterministic snapshot.</summary>
     private static BeatManager LiveManager(System.Action<RaveOnAirSnapshot> mutate)
     {
         var snapshot = BeatClockFixture.CreateSnapshot(120f, 0f);

@@ -71,7 +71,7 @@ public partial class BeatManager
     public bool IsSynced { get; private set; }
 
     /// <summary>
-    /// Advances the per-frame derived beat state from Unity time.
+    /// Captures the next frame of wire facts and derived musical values using Unity time.
     /// </summary>
     /// <remarks>
     /// Live OSC is the only beat source. In Standalone (no live OSC) <see cref="wireSnapshot"/> is cleared to the
@@ -83,7 +83,7 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Advances the per-frame derived beat state from a supplied clock value.
+    /// Captures the next frame of wire facts and derived musical values using a supplied clock value.
     /// </summary>
     /// <remarks>
     /// The explicit time overload keeps the Levels shaping (the attack/release follower and the
@@ -93,20 +93,15 @@ public partial class BeatManager
     {
         wireSnapshot ??= new();
 
-        if (liveBeatActive)
-        {
-            // Live RaveSystem OSC owns wireSnapshot; RaveOscReceiver.ApplyTo wrote it earlier this frame
-            // (Controller calls ApplyTo immediately before this Update).
-        }
-        else
+        if (!liveBeatActive)
         {
             ClearToNoBeat();
         }
 
         IsSynced = wireSnapshot.beatInBar is >= 1 and <= BeatSlotCount;
 
-        // Derivation and shaping run after wireSnapshot has settled for this frame so the contrived
-        // queries never lag the transport by a frame or shape from stale data across a source switch.
+        // Derivation and shaping run after wireSnapshot has settled for this frame so contrived values
+        // never lag the transport by a frame or shape from stale data across a source switch.
         DeriveBeatState();
         UpdateLevelsShaping(timeSeconds);
 
@@ -190,7 +185,7 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Resets levels and the phrase states (phase/drop/fill/energy) to their unavailable sentinels.
+    /// Resets Levels and the Phrase, Drop, Fill, Energy, Loop, Grid, and Track ID facts to unavailable.
     /// </summary>
     /// <remarks>
     /// Standalone is a no-beat state, not a musical analysis, so it must never present phrase data. Running

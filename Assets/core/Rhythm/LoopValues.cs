@@ -38,12 +38,12 @@ public partial class BeatManager
     /// <summary>The focus deck's loop wire values.</summary>
     public LoopValues Loop { get; private set; }
 
-    /// <summary>Captures the settled loop lane without dropping its size fraction.</summary>
+    /// <summary>Captures raw non-negative loop values and derives nominal size only from a positive denominator.</summary>
     private LoopValues CaptureLoop()
     {
         var state = wireSnapshot.loopState;
         var numerator = NonNegativeOrNull(state.sizeNumerator);
-        var denominator = state.sizeDenominator > 0 ? state.sizeDenominator : (int?)null;
+        var denominator = NonNegativeOrNull(state.sizeDenominator);
         return new LoopValues(
             TriStateOrNull(state.active),
             TriStateOrNull(state.set),
@@ -51,6 +51,6 @@ public partial class BeatManager
             NonNegativeOrNull(state.lengthMs),
             numerator,
             denominator,
-            numerator is { } n && denominator is { } d ? n / (float)d : null);
+            numerator is { } n && denominator is { } d && d > 0 ? n / (float)d : null);
     }
 }

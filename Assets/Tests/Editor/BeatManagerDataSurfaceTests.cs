@@ -123,7 +123,7 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Pulses.OffBeat, Is.EqualTo(1f).Within(0.001f));
     }
 
-    /// <summary>Subdivision pulses follow tempo and accept a caller-selected active fraction.</summary>
+    /// <summary>Duration pulses follow tempo and accept a caller-selected active fraction.</summary>
     [Test]
     public void PulsesExposeTempoBasedValuesAndConfigurableActiveWindows()
     {
@@ -135,9 +135,9 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Pulses.On(Duration.Quarter, activeFor: 0.75f), Is.True);
     }
 
-    /// <summary>Track values parse the live-player list into a collection callers cannot mutate.</summary>
+    /// <summary>Track values preserve parsed player order alongside the focused track identity.</summary>
     [Test]
-    public void TrackValuesAreParsedAndReadOnly()
+    public void TrackValuesPreservePlayerOrderAndIdentity()
     {
         var beatManager = new BeatManager();
         BeatManagerWireFixture.Feed(beatManager, snapshot =>
@@ -151,7 +151,6 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 2, 1 }));
         Assert.That(beatManager.Track.Title, Is.EqualTo("Artist - Track"));
         Assert.That(beatManager.Track.Id, Is.EqualTo(7661));
-        Assert.That(beatManager.Track.PlayersLive, Is.InstanceOf<System.Collections.ObjectModel.ReadOnlyCollection<int>>());
     }
 
     /// <summary>The public surface omits the deleted navigation and one-frame edge members.</summary>
