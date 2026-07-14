@@ -2,14 +2,37 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
+/// <summary>Describes how the Transitions workspace arranges navigation and settings.</summary>
+internal enum TuningWorkspaceFlow
+{
+    /// <summary>Places Transition navigation above the selected settings.</summary>
+    Stacked,
+
+    /// <summary>Places Transition navigation beside the selected settings.</summary>
+    Split,
+}
+
+/// <summary>Defines the visible navigation and responsive flow of the canonical Tuning Window.</summary>
+internal static class TuningWorkspaceLayout
+{
+    /// <summary>Minimum width that keeps Transition navigation beside its settings.</summary>
+    private const float SplitViewWidth = 760f;
+
+    /// <summary>The focused workspaces presented by the canonical Tuning Window.</summary>
+    internal static readonly string[] Tabs = { "Live", "Rhythm", "Transitions" };
+
+    /// <summary>Chooses stacked or split flow for the current workspace width.</summary>
+    internal static TuningWorkspaceFlow ForWidth(float width)
+    {
+        return width >= SplitViewWidth ? TuningWorkspaceFlow.Split : TuningWorkspaceFlow.Stacked;
+    }
+}
+
 /// <summary>
-/// Canonical wide authoring window for read-only live sequencing observation and saved Transition tuning.
+/// Canonical authoring window for live sequencing, rhythm observation, and saved Transition tuning.
 /// </summary>
 public sealed class PenroseTuningWindow : EditorWindow
 {
-    /// <summary>Current workspace tabs; Rhythm and final placeholder removal land in their owning tickets.</summary>
-    private static readonly string[] Tabs = { "Live", "Transitions", "Effects" };
-
     private Type[] transitionTypes = Array.Empty<Type>();
     private string[] transitionNames = Array.Empty<string>();
     private int selectedTransitionIndex = -1;
@@ -19,17 +42,21 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 settingsScroll;
     /// <summary>Scroll position for the live sequencing timeline.</summary>
     private Vector2 liveTimelineScroll;
+    /// <summary>Scroll position for the rhythm workspace.</summary>
+    private Vector2 rhythmScroll;
     private TransitionSettingsAsset selectedAsset;
     private SerializedObject selectedSerializedObject;
     private bool settingsChangedSinceLastSave;
 
+    /// <summary>Opens or focuses the canonical Penrose Tuning Window.</summary>
     [MenuItem("Window/Penrose/Tuning")]
     public static void Open()
     {
         var window = GetWindow<PenroseTuningWindow>();
         window.titleContent = new GUIContent("Penrose Tuning");
-        window.minSize = new Vector2(720f, 440f);
+        window.minSize = new Vector2(520f, 440f);
         window.Show();
+        window.Focus();
     }
 
     private void OnEnable()
@@ -54,8 +81,7 @@ public sealed class PenroseTuningWindow : EditorWindow
     /// <summary>Draws the active workspace tab without mutating runtime sequencing state.</summary>
     private void OnGUI()
     {
-        DrawToolbar();
-        selectedTab = GUILayout.Toolbar(selectedTab, Tabs, EditorStyles.toolbarButton);
+        selectedTab = GUILayout.Toolbar(selectedTab, TuningWorkspaceLayout.Tabs, EditorStyles.toolbarButton);
 
         EditorGUILayout.Space();
         switch (selectedTab)
@@ -64,32 +90,75 @@ public sealed class PenroseTuningWindow : EditorWindow
                 DrawLiveTab();
                 break;
             case 1:
-                DrawTransitionsTab();
+                DrawRhythmTab();
                 break;
             case 2:
-                DrawEffectsTab();
+                DrawTransitionsTab();
                 break;
         }
     }
 
-    private void DrawToolbar()
+    /// <summary>Draws the scene Controller's BeatManager dashboard and serialized rhythm configuration.</summary>
+    private void DrawRhythmTab()
     {
-        using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+        using var scroll = new EditorGUILayout.ScrollViewScope(rhythmScroll);
+        rhythmScroll = scroll.scrollPosition;
+
+        EditorGUILayout.LabelField("RHYTHM", EditorStyles.boldLabel);
+        if (!TryGetWorkspaceController(out var controller))
         {
-            if (GUILayout.Button("Reload", EditorStyles.toolbarButton, GUILayout.Width(64f)))
-            {
-                ReloadTransitions();
-            }
-
-            if (GUILayout.Button("Create Missing Settings", EditorStyles.toolbarButton, GUILayout.Width(150f)))
-            {
-                TransitionSettingsAssetUtility.EnsureCatalogAssets();
-                ReloadTransitions();
-            }
-
-            GUILayout.FlexibleSpace();
-            GUILayout.Label("Window > Penrose > Tuning", EditorStyles.miniLabel);
+            EditorGUILayout.HelpBox(
+                "No compatible scene Controller is available. Open the wall scene to inspect rhythm configuration.",
+                MessageType.Info);
+            return;
         }
+
+        if (!Application.isPlaying)
+        {
+            EditorGUILayout.HelpBox(
+                "Edit Mode shows saved rhythm configuration. Enter Play Mode for live musical facts.",
+                MessageType.Info);
+        }
+
+        using (new EditorGUI.DisabledScope(true))
+        {
+            EditorGUILayout.ObjectField("Controller", controller, typeof(Controller), true);
+        }
+
+        using var controllerState = new SerializedObject(controller);
+        controllerState.Update();
+        var beatManagerProperty = controllerState.FindProperty("beatManager");
+        if (beatManagerProperty == null)
+        {
+            EditorGUILayout.HelpBox("This Controller has no compatible Beat Manager configuration.", MessageType.Warning);
+            return;
+        }
+
+        beatManagerProperty.isExpanded = true;
+        EditorGUILayout.PropertyField(beatManagerProperty, includeChildren: true);
+        controllerState.ApplyModifiedProperties();
+    }
+
+    /// <summary>Finds the live Controller first, then an inactive-compatible scene Controller for Edit Mode.</summary>
+    private static bool TryGetWorkspaceController(out Controller controller)
+    {
+        if (LiveControllerAccess.TryGet(out controller))
+        {
+            return true;
+        }
+
+        var controllers = UnityEngine.Object.FindObjectsByType<Controller>(FindObjectsInactive.Include);
+        for (var i = 0; i < controllers.Length; i++)
+        {
+            if (controllers[i] != null && controllers[i].gameObject.scene.IsValid())
+            {
+                controller = controllers[i];
+                return true;
+            }
+        }
+
+        controller = null;
+        return false;
     }
 
     /// <summary>Draws read-only Director, Cue Sheet, Switcher, and live musical placement in one timeline.</summary>
@@ -116,14 +185,13 @@ public sealed class PenroseTuningWindow : EditorWindow
             EditorGUILayout.LabelField("Mode", mode);
             EditorGUILayout.LabelField("Director State", director.Mode.ToString());
             EditorGUILayout.LabelField(
-                "Director Next Effect",
-                FormatCatalogChoice(director.NextEffectIndex, director.NextEffectName));
-            EditorGUILayout.LabelField(
-                "Director Next Transition",
+                "Director Next",
+                $"{FormatCatalogChoice(director.NextEffectIndex, director.NextEffectName)} · " +
                 FormatCatalogChoice(director.NextTransitionIndex, director.NextTransitionName));
             EditorGUILayout.LabelField(
                 "Hold Selected",
                 $"Effect {(director.HoldSelectedEffect ? "On" : "Off")} · Transition {(director.HoldSelectedTransition ? "On" : "Off")}");
+            EditorGUILayout.LabelField("Held Effect", FormatHeldEffect(liveController));
             EditorGUILayout.LabelField("Switcher Active", FormatSwitcherActive(switcher));
             EditorGUILayout.LabelField("Loaded Cue", FormatLoadedCue(loadedCue));
 
@@ -179,6 +247,19 @@ public sealed class PenroseTuningWindow : EditorWindow
             : FormatCatalogChoice(status.CurrentEffectIndex, status.CurrentEffectName);
     }
 
+    /// <summary>Formats the Controller's Held Effect without confusing Random rotation with a concrete hold.</summary>
+    private static string FormatHeldEffect(Controller controller)
+    {
+        if (!controller.TryGetHeldEffectIndex(out var effectIndex))
+        {
+            return "Random";
+        }
+
+        return controller.effects != null && effectIndex < controller.effects.Length && controller.effects[effectIndex] != null
+            ? controller.effects[effectIndex].GetType().Name
+            : $"Effect {effectIndex}";
+    }
+
     /// <summary>Formats the Switcher's Loaded Cue lifecycle separately from active execution.</summary>
     private static string FormatLoadedCue(SwitcherCueStatus cue)
     {
@@ -190,6 +271,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         return $"Beat {cue.CueMarkBeat} · {(cue.IsLocked ? "Locked" : "Loaded")} · {cue.RunwayBeats}b Runway / {cue.TailBeats}b Tail";
     }
 
+    /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>
     private void DrawTransitionsTab()
     {
         LiveControllerAccess.TryGet(out var liveController);
@@ -198,16 +280,44 @@ public sealed class PenroseTuningWindow : EditorWindow
             SyncSelectedTransitionFromDirector(liveController);
         }
 
-        using (new EditorGUILayout.HorizontalScope())
+        DrawTransitionToolbar();
+        if (TuningWorkspaceLayout.ForWidth(position.width) == TuningWorkspaceFlow.Split)
         {
-            DrawTransitionList(liveController);
+            using var row = new EditorGUILayout.HorizontalScope();
+            DrawTransitionList(liveController, GUILayout.Width(260f));
             DrawSelectedTransitionSettings(liveController);
+            return;
         }
+
+        var listHeight = Mathf.Clamp(position.height * 0.32f, 150f, 260f);
+        DrawTransitionList(liveController, GUILayout.Height(listHeight));
+        EditorGUILayout.Space(6f);
+        DrawSelectedTransitionSettings(liveController);
     }
 
-    private void DrawTransitionList(Controller liveController)
+    /// <summary>Draws Transition-specific catalog actions inside the Transitions workspace.</summary>
+    private void DrawTransitionToolbar()
     {
-        using (new EditorGUILayout.VerticalScope(GUILayout.Width(260f)))
+        using var toolbar = new EditorGUILayout.HorizontalScope(EditorStyles.toolbar);
+        if (GUILayout.Button("Reload", EditorStyles.toolbarButton, GUILayout.Width(64f)))
+        {
+            ReloadTransitions();
+        }
+
+        if (GUILayout.Button("Create Missing Settings", EditorStyles.toolbarButton, GUILayout.Width(150f)))
+        {
+            TransitionSettingsAssetUtility.EnsureCatalogAssets();
+            ReloadTransitions();
+        }
+
+        GUILayout.FlexibleSpace();
+        GUILayout.Label("Saved Transition Settings", EditorStyles.miniLabel);
+    }
+
+    /// <summary>Draws the Transition catalog within the supplied responsive layout constraints.</summary>
+    private void DrawTransitionList(Controller liveController, params GUILayoutOption[] layoutOptions)
+    {
+        using (new EditorGUILayout.VerticalScope(layoutOptions))
         {
             EditorGUILayout.LabelField("Transitions", EditorStyles.boldLabel);
             if (liveController != null && liveController.director != null)
@@ -320,6 +430,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
+    /// <summary>Draws distinct Director Next, Switcher Active, Hold Selected, and Held Effect state.</summary>
     private void DrawPlayModeTransitionSteering(Controller liveController)
     {
         var directorReady = liveController.director != null;
@@ -329,27 +440,26 @@ public sealed class PenroseTuningWindow : EditorWindow
         EditorGUILayout.LabelField("Play Mode Steering", EditorStyles.boldLabel);
         using (new EditorGUILayout.VerticalScope(GUI.skin.box))
         {
-            EditorGUILayout.LabelField("Director Next Transition", FormatCatalogChoice(directorStatus.NextTransitionIndex, directorStatus.NextTransitionName));
-            EditorGUILayout.LabelField("Director Next Effect", FormatCatalogChoice(directorStatus.NextEffectIndex, directorStatus.NextEffectName));
+            EditorGUILayout.LabelField(
+                "Director Next",
+                $"{FormatCatalogChoice(directorStatus.NextEffectIndex, directorStatus.NextEffectName)} · " +
+                FormatCatalogChoice(directorStatus.NextTransitionIndex, directorStatus.NextTransitionName));
 
             var switcherShowingTransition = switcherStatus.Ready && switcherStatus.CurrentEffectIndex < 0;
-            var activeTransition = !switcherStatus.Ready
-                ? "Not Ready"
-                : switcherShowingTransition
-                    ? FormatCatalogChoice(switcherStatus.CurrentTransitionIndex, switcherStatus.CurrentTransitionName)
-                    : "None — Mechanical Switcher is showing an Effect";
-            EditorGUILayout.LabelField("Mechanical Switcher Active Transition", activeTransition);
-            EditorGUILayout.LabelField("Mechanical Switcher Stage", string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
-            EditorGUILayout.LabelField("Current Effect", FormatCatalogChoice(switcherStatus.CurrentEffectIndex, switcherStatus.CurrentEffectName));
+            EditorGUILayout.LabelField("Switcher Active", FormatSwitcherActive(switcherStatus));
+            EditorGUILayout.LabelField("Switcher Stage", string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
+            EditorGUILayout.LabelField("Held Effect", FormatHeldEffect(liveController));
             if (switcherShowingTransition)
             {
-                EditorGUILayout.LabelField("Transition Target Effect", FormatCatalogChoice(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
+                EditorGUILayout.LabelField("Switcher Target", FormatCatalogChoice(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
             }
 
             using (new EditorGUI.DisabledScope(!directorReady || !IsValidTransitionIndex(selectedTransitionIndex)))
             {
                 EditorGUI.BeginChangeCheck();
-                var holdSelected = EditorGUILayout.ToggleLeft("Hold Selected Transition", directorStatus.HoldSelectedTransition);
+                var holdSelected = EditorGUILayout.ToggleLeft(
+                    new GUIContent("Hold Selected", "Keep this Transition as Director Next after each move."),
+                    directorStatus.HoldSelectedTransition);
                 if (EditorGUI.EndChangeCheck() && directorReady)
                 {
                     if (holdSelected)
@@ -362,15 +472,6 @@ public sealed class PenroseTuningWindow : EditorWindow
                 }
             }
         }
-    }
-
-    private void DrawEffectsTab()
-    {
-        EditorGUILayout.LabelField("Effects", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox(
-            "Effects tuning will follow the same selection and Hold Selected pattern later. " +
-            "This slice implements Transitions settings authoring and Play Mode steering.",
-            MessageType.Info);
     }
 
     private void ReloadTransitions()
