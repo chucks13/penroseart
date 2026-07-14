@@ -30,6 +30,9 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     private static int selectedWaveformIndex;
     private static long waveformPoolStampTicks = long.MinValue; // sentinel: nothing loaded yet
 
+    /// <summary>Four editor-only Pool choices; never written back to the Pool document or runtime.</summary>
+    private static RoutineStoryboardSelection routineSelection = RoutineStoryboardSelection.Default(0);
+
     /// <summary>Draws the foldout, the unified rhythm dashboard, and the regular serialized child fields.</summary>
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
     {
@@ -137,7 +140,15 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         var selectedWaveform = SelectedWaveform();
         var model = BeatManagerDashboardModel.From(beatManager, selectedWaveform, waveformPoolError);
         var selector = BuildWaveformSelector();
-        var actions = BeatManagerDashboardRenderer.Draw(rect, model, selector, selectedWaveform, layoutWidth);
+        var storyboard = BuildRoutineStoryboard(beatManager);
+        var actions = BeatManagerDashboardRenderer.Draw(
+            rect,
+            model,
+            selector,
+            selectedWaveform,
+            storyboard,
+            waveformPoolNames,
+            layoutWidth);
         ApplyDashboardActions(actions);
     }
 
@@ -187,6 +198,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         selectedWaveformIndex = waveformPoolEntries.Length > 0
             ? Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolEntries.Length - 1)
             : -1;
+        routineSelection = routineSelection.WithPoolCount(waveformPoolEntries.Length);
         waveformPoolStampTicks = stamp;
     }
 
@@ -211,12 +223,35 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         return new WaveformSelectorView(shownIndex, waveformPoolNames, waveformPoolError);
     }
 
+    /// <summary>Builds the four-bar editor storyboard from Pool choices and read-only live Grid placement.</summary>
+    /// <param name="beatManager">The live runtime source, or null when placement is unavailable.</param>
+    /// <returns>The complete editor-only storyboard view.</returns>
+    private static RoutineStoryboardView BuildRoutineStoryboard(BeatManager beatManager)
+    {
+        var grid = beatManager != null ? beatManager.Grid : default;
+        return RoutineStoryboardView.From(
+            waveformPoolEntries,
+            routineSelection,
+            waveformPoolError,
+            grid.Bar,
+            grid.Progress);
+    }
+
     /// <summary>Applies preview and Pool-editor actions without writing musical runtime state.</summary>
+    /// <param name="actions">Editor-only selections and explicit Pool-editor requests.</param>
     private static void ApplyDashboardActions(BeatManagerDashboardActions actions)
     {
         if (actions.HasWaveformSelection)
         {
             selectedWaveformIndex = actions.SelectedWaveformIndex;
+        }
+
+        if (actions.HasRoutineSelection)
+        {
+            routineSelection = routineSelection.Select(
+                actions.RoutineBarIndex,
+                actions.RoutineWaveformIndex,
+                waveformPoolEntries.Length);
         }
 
         if (actions.OpenWaveformPoolEditor)

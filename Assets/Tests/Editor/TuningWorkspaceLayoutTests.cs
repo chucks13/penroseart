@@ -337,21 +337,45 @@ internal sealed class ControllerInspectorSmokeHost : EditorWindow
 /// <summary>Hosts the responsive Rhythm renderer inside a real IMGUI EditorWindow for smoke coverage.</summary>
 internal sealed class RhythmDashboardSmokeHost : EditorWindow
 {
+    /// <summary>Four known Pool entries used to exercise every storyboard card.</summary>
+    private static readonly WaveformPool.Entry[] Entries =
+    {
+        new("One", Waveform.Parse("QQQQ", "2222")),
+        new("Two", Waveform.Parse("QQQQ", "4444")),
+        new("Three", Waveform.Parse("QQQQ", "6666")),
+        new("Four", Waveform.Parse("QQQQ", "8888")),
+    };
+
+    /// <summary>Popup labels matching <see cref="Entries"/>.</summary>
+    private static readonly string[] Names = { "One", "Two", "Three", "Four" };
+
     /// <summary>Number of IMGUI repaint/layout events observed by the host.</summary>
     internal int RenderCount { get; private set; }
 
     /// <summary>Whether the host should model a visible live Rhythm surface's continuous repaint loop.</summary>
     internal bool ContinuousRepaint { get; set; }
 
-    /// <summary>Renders explicit Standalone and required-Pool failure facts at the host window's current width.</summary>
+    /// <summary>Renders the usable Waveform and Routine previews at the host window's current width.</summary>
     private void OnGUI()
     {
         RenderCount++;
-        var error = $"Required Waveform Pool '{WaveformPool.FileName}' contains no Waveforms.";
-        var model = BeatManagerDashboardModel.From(null, default, error);
-        var selector = new WaveformSelectorView(-1, System.Array.Empty<string>(), error);
+        var model = BeatManagerDashboardModel.From(null, Entries[0].waveform, "");
+        var selector = new WaveformSelectorView(0, Names, "");
+        var storyboard = RoutineStoryboardView.From(
+            Entries,
+            RoutineStoryboardSelection.Default(Entries.Length),
+            poolError: "",
+            gridBar: 3,
+            gridProgress: 0.5f);
         var rect = new Rect(0f, 0f, position.width, BeatManagerDashboardRenderer.DashboardHeightForWidth(position.width));
-        BeatManagerDashboardRenderer.Draw(rect, model, selector, default, position.width);
+        BeatManagerDashboardRenderer.Draw(
+            rect,
+            model,
+            selector,
+            Entries[0].waveform,
+            storyboard,
+            Names,
+            position.width);
         if (ContinuousRepaint && Event.current.type == EventType.Repaint)
         {
             Repaint();

@@ -5,8 +5,8 @@ using PenroseArt.RaveOsc;
 
 /// <summary>
 /// Pins the pure BeatManager dashboard seam: authoritative mode, independent availability, required-Pool
-/// health, responsive grouping, one-based placement, and timing glyph/readout helpers. Fill and Drop keep
-/// their canonical presentation in <see cref="PhraseEventView"/> and its focused tests.
+/// health, responsive grouping, one-based placement, timing glyph/readout helpers, and the editor-only
+/// four-bar Routine storyboard.
 /// </summary>
 public sealed class BeatManagerDrawerVisualModelTests
 {
@@ -52,8 +52,8 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(model.BadgeText, Is.EqualTo("STANDALONE MODE"));
         Assert.That(model.TrackText, Is.EqualTo("Unavailable"));
         Assert.That(model.HeaderRightText, Is.EqualTo("Unavailable"));
-        Assert.That(model.Fill.HasValue, Is.False);
-        Assert.That(model.Drop.HasValue, Is.False);
+        Assert.That(model.Envelope.HasValue, Is.False);
+        Assert.That(model.Grid.HasValue, Is.False);
     }
 
     /// <summary>NEXT BEAT follows the next musical label instead of reusing the current label's zero-ms gate.</summary>
@@ -93,8 +93,6 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(model.EighthPulse, Is.Zero);
         Assert.That(model.OffBeatGateAt(0), Is.Null);
         Assert.That(model.BarPhase, Is.Zero);
-        Assert.That(model.CurrentPhrase.HasValue, Is.False);
-        Assert.That(model.NextPhrase.HasValue, Is.False);
         Assert.That(model.Grid.HasValue, Is.False);
     }
 
@@ -127,10 +125,7 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(model.EighthPulse, Is.Null);
         Assert.That(model.OffBeatGateAt(0), Is.Null);
         Assert.That(model.BarPhase, Is.Null);
-        Assert.That(model.CurrentPhrase.HasValue, Is.False);
-        Assert.That(model.NextPhrase.HasValue, Is.False);
         Assert.That(model.Grid.HasValue, Is.False);
-        Assert.That(model.Levels.HasValue, Is.False);
     }
 
     /// <summary>Required Waveform Pool failures remain part of the dashboard's immutable health facts.</summary>
@@ -158,9 +153,7 @@ public sealed class BeatManagerDrawerVisualModelTests
         {
             RhythmDashboardGroup.Timing,
             RhythmDashboardGroup.Waveform,
-            RhythmDashboardGroup.Current,
-            RhythmDashboardGroup.Next,
-            RhythmDashboardGroup.Levels,
+            RhythmDashboardGroup.Routine,
         }));
         Assert.That(BeatManagerDashboardModel.FlowForWidth(560f), Is.EqualTo(RhythmDashboardFlow.Stacked));
         Assert.That(BeatManagerDashboardModel.FlowForWidth(819f), Is.EqualTo(RhythmDashboardFlow.Stacked));
@@ -168,30 +161,128 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(BeatManagerDashboardModel.FlowForWidth(900f), Is.EqualTo(RhythmDashboardFlow.Split));
     }
 
-    /// <summary>Current Phrase, next Phrase, and Grid display their runtime-provided one-based musical counts.</summary>
+    /// <summary>Grid displays the runtime-provided one-based musical counts.</summary>
     [Test]
-    public void FromSeparatesCurrentAndNextPhraseAndKeepsGridCountsOneBased()
+    public void FromKeepsGridCountsOneBased()
     {
         var beatManager = LiveManager(new RaveOnAirSnapshot
         {
             beatInBar = 2,
             bpm = 128f,
-            phraseState = new PhraseState { label = "Intro", countBeats = 24, lengthBeats = 32, irregular = 0 },
-            nextPhraseState = new LabeledCountdown { label = "Drop", countBeats = 24, lengthBeats = 32 },
-            energyState = new LabeledCountdown { label = "Low", countBeats = 24, lengthBeats = 32 },
-            nextEnergyState = new LabeledCountdown { label = "High", countBeats = 24, lengthBeats = 32 },
             timingGrid = new TimingGrid { state = "locked", beat = 5, bar = 2 },
         });
 
         var model = BeatManagerDashboardModel.From(beatManager, default, "");
 
-        Assert.That(model.CurrentPhrase.Label, Is.EqualTo("Intro"));
-        Assert.That(model.CurrentPhrase.Readout, Does.Contain("24b"));
-        Assert.That(model.NextPhrase.Label, Is.EqualTo("Drop"));
-        Assert.That(model.NextPhrase.Readout, Does.Contain("24b"));
-        Assert.That(model.CurrentEnergy.Chip, Is.EqualTo("LOW"));
-        Assert.That(model.NextEnergy.Chip, Is.EqualTo("HIGH"));
         Assert.That(model.Grid.Readout, Is.EqualTo("Bar 2 · Beat 5"));
+    }
+
+    /// <summary>Four editor-only selections preserve bar order and sample the placed bar through Waveform.</summary>
+    [Test]
+    public void RoutineStoryboardOrdersSelectionsAndSamplesThePlacedGridBar()
+    {
+        var entries = new[]
+        {
+            new WaveformPool.Entry("One", Waveform.Parse("QQQQ", "2222")),
+            new WaveformPool.Entry("Two", Waveform.Parse("QQQQ", "4444")),
+            new WaveformPool.Entry("Three", Waveform.Parse("QQQQ", "6666")),
+            new WaveformPool.Entry("Four", Waveform.Parse("QQQQ", "8888")),
+        };
+        var selection = RoutineStoryboardSelection.Default(entries.Length)
+            .Select(barIndex: 0, waveformIndex: 3, entries.Length)
+            .Select(barIndex: 3, waveformIndex: 0, entries.Length);
+
+        var placedBars = new[]
+        {
+            RoutineStoryboardView.From(entries, selection, poolError: "", gridBar: 1, gridProgress: 0f),
+            RoutineStoryboardView.From(entries, selection, poolError: "", gridBar: 2, gridProgress: 0.25f),
+            RoutineStoryboardView.From(entries, selection, poolError: "", gridBar: 3, gridProgress: 0.5f),
+            RoutineStoryboardView.From(entries, selection, poolError: "", gridBar: 4, gridProgress: 0.75f),
+        };
+
+        Assert.That(placedBars[0].EntryAt(0)?.name, Is.EqualTo("Four"));
+        Assert.That(placedBars[0].EntryAt(1)?.name, Is.EqualTo("Two"));
+        Assert.That(placedBars[0].EntryAt(2)?.name, Is.EqualTo("Three"));
+        Assert.That(placedBars[0].EntryAt(3)?.name, Is.EqualTo("One"));
+        Assert.That(placedBars[0].ActiveBar, Is.EqualTo(1));
+        Assert.That(placedBars[1].ActiveBar, Is.EqualTo(2));
+        Assert.That(placedBars[2].ActiveBar, Is.EqualTo(3));
+        Assert.That(placedBars[3].ActiveBar, Is.EqualTo(4));
+        Assert.That(placedBars[0].ActiveBarPhase, Is.Zero);
+        Assert.That(placedBars[1].ActiveBarPhase, Is.Zero);
+        Assert.That(placedBars[2].ActiveBarPhase, Is.Zero);
+        Assert.That(placedBars[3].ActiveBarPhase, Is.Zero);
+        Assert.That(placedBars[0].Envelope, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(placedBars[1].Envelope, Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(placedBars[2].Envelope, Is.EqualTo(0.75f).Within(0.0001f));
+        Assert.That(placedBars[3].Envelope, Is.EqualTo(0.25f).Within(0.0001f));
+    }
+
+    /// <summary>Unavailable Grid placement keeps the editor preview at the runtime Routine's zero rest.</summary>
+    [Test]
+    public void RoutineStoryboardWithoutPlacementRestsAtZero()
+    {
+        var entries = new[]
+        {
+            new WaveformPool.Entry("One", Waveform.Parse("QQQQ", "8888")),
+        };
+
+        var storyboard = RoutineStoryboardView.From(
+            entries,
+            RoutineStoryboardSelection.Default(entries.Length),
+            poolError: "",
+            gridBar: null,
+            gridProgress: null);
+
+        Assert.That(storyboard.IsUsable, Is.True);
+        Assert.That(storyboard.ActiveBar, Is.Null);
+        Assert.That(storyboard.ActiveBarPhase, Is.Null);
+        Assert.That(storyboard.Envelope, Is.Zero);
+    }
+
+    /// <summary>An unusable required Pool reports its failure and never supplies replacement storyboard bars.</summary>
+    [Test]
+    public void RoutineStoryboardPreservesRequiredPoolFailureWithoutSubstitution()
+    {
+        const string error = "Required Waveform Pool contains no Waveforms.";
+
+        var storyboard = RoutineStoryboardView.From(
+            System.Array.Empty<WaveformPool.Entry>(),
+            RoutineStoryboardSelection.Default(0),
+            error,
+            gridBar: 1,
+            gridProgress: 0f);
+
+        Assert.That(storyboard.IsUsable, Is.False);
+        Assert.That(storyboard.Error, Is.EqualTo(error));
+        Assert.That(storyboard.EntryAt(0), Is.Null);
+        Assert.That(storyboard.Envelope, Is.Zero);
+    }
+
+    /// <summary>Changing editor-only Routine choices leaves the serialized Pool document byte-for-byte unchanged.</summary>
+    [Test]
+    public void RoutineStoryboardSelectionDoesNotMutatePoolDocument()
+    {
+        var entries = new[]
+        {
+            new WaveformPool.Entry("One", Waveform.Parse("QQQQ", "2222")),
+            new WaveformPool.Entry("Two", Waveform.Parse("QQQQ", "4444")),
+            new WaveformPool.Entry("Three", Waveform.Parse("QQQQ", "6666")),
+            new WaveformPool.Entry("Four", Waveform.Parse("QQQQ", "8888")),
+        };
+        var before = WaveformPool.Serialize(entries);
+
+        var selection = RoutineStoryboardSelection.Default(entries.Length)
+            .Select(barIndex: 0, waveformIndex: 3, entries.Length);
+        var storyboard = RoutineStoryboardView.From(
+            entries,
+            selection,
+            poolError: "",
+            gridBar: null,
+            gridProgress: null);
+
+        Assert.That(storyboard.EntryAt(0)?.name, Is.EqualTo("Four"));
+        Assert.That(WaveformPool.Serialize(entries), Is.EqualTo(before));
     }
 
     /// <summary>Captures one live BeatManager frame from an exact OSC-shaped snapshot.</summary>
