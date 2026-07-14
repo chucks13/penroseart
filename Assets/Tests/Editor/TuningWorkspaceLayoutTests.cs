@@ -82,6 +82,34 @@ public sealed class TuningWorkspaceLayoutTests
         }
     }
 
+    /// <summary>A visible Rhythm surface keeps repainting across Editor frames instead of waiting for Inspector ticks.</summary>
+    [UnityTest]
+    public IEnumerator RhythmDashboardMaintainsInteractiveRepaintCadence()
+    {
+        var window = ScriptableObject.CreateInstance<RhythmDashboardSmokeHost>();
+        try
+        {
+            window.position = new Rect(0f, 0f, 900f, BeatManagerDashboardRenderer.DashboardHeightForWidth(900f));
+            window.ContinuousRepaint = true;
+            window.Show();
+            window.Repaint();
+            yield return null;
+
+            var startingRenderCount = window.RenderCount;
+            for (var frame = 0; frame < 8; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(window.RenderCount - startingRenderCount, Is.GreaterThanOrEqualTo(6),
+                "The visible Rhythm dashboard stopped repainting between Editor frames.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>The compact Controller Inspector survives a real host-window repaint without exceptions.</summary>
     [UnityTest]
     public IEnumerator CompactControllerInspectorRendersWithoutExceptions()
@@ -136,6 +164,9 @@ internal sealed class RhythmDashboardSmokeHost : EditorWindow
     /// <summary>Number of IMGUI repaint/layout events observed by the host.</summary>
     internal int RenderCount { get; private set; }
 
+    /// <summary>Whether the host should model a visible live Rhythm surface's continuous repaint loop.</summary>
+    internal bool ContinuousRepaint { get; set; }
+
     /// <summary>Renders explicit Standalone and required-Pool failure facts at the host window's current width.</summary>
     private void OnGUI()
     {
@@ -145,5 +176,9 @@ internal sealed class RhythmDashboardSmokeHost : EditorWindow
         var selector = new WaveformSelectorView(-1, System.Array.Empty<string>(), error);
         var rect = new Rect(0f, 0f, position.width, BeatManagerDashboardRenderer.DashboardHeightForWidth(position.width));
         BeatManagerDashboardRenderer.Draw(rect, model, selector, default, position.width);
+        if (ContinuousRepaint && Event.current.type == EventType.Repaint)
+        {
+            Repaint();
+        }
     }
 }

@@ -127,6 +127,12 @@ public sealed class PenroseTuningWindow : EditorWindow
             height: BeatManagerDashboardRenderer.DashboardHeightForWidth(layoutWidth),
             GUILayout.ExpandWidth(true));
         BeatManagerDrawer.DrawDashboard(dashboardRect, controller.beatManager, layoutWidth);
+        // OnInspectorUpdate is capped at 10 Hz. A visible Rhythm repaint schedules the next one so live
+        // pulses stay smooth; hidden tabs never enter this branch and keep the cheaper Inspector cadence.
+        if (Application.isPlaying && Event.current.type == EventType.Repaint)
+        {
+            Repaint();
+        }
     }
 
     /// <summary>Finds the live Controller first, then an inactive-compatible scene Controller for Edit Mode.</summary>
