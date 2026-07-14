@@ -7,8 +7,8 @@ using Random = UnityEngine.Random;
 /// </summary>
 /// <remarks>
 /// FILL: the tunnel rushes (scroll accelerates) and zooms (radial bands tighten) as the Fill builds,
-/// both driven by the hub-owned Fill build envelope.
-/// DROP: the hub-owned Drop decay drives a hard reverse warp plus a deep zoom over two bars.
+/// both driven by <see cref="BeatManager.Fill"/> Build.
+/// DROP: <see cref="BeatManager.Drop"/> Decay drives a hard reverse warp plus a deep zoom over two bars.
 /// </remarks>
 public class Tunnel : EffectBase
 {
@@ -31,7 +31,7 @@ public class Tunnel : EffectBase
     /// <summary>Extra ring-compression multiple at full Fill: the radial bands tighten (zoom in) this much at the build's peak. Tune on the readout.</summary>
     private const float FillZoom = 3f;
 
-    /// <summary>Hub-owned Fill build amount driving rush and zoom.</summary>
+    /// <summary>Fill Build amount driving rush and zoom.</summary>
     private float fillEnv;
 
     /// <summary>Integrated extra scroll phase from the Fill rush, kept in [0,1). Integrating the rate avoids the phase jump that scaling absolute effectTime would cause.</summary>
@@ -49,7 +49,7 @@ public class Tunnel : EffectBase
     /// <summary>Extra ring-compression multiple at the Drop's peak, stacked on any Fill zoom. Tune on the readout.</summary>
     private const float DropZoom = 6f;
 
-    /// <summary>Hub-owned Drop decay amount driving the reverse warp and zoom punch.</summary>
+    /// <summary>Drop Decay amount driving the reverse warp and zoom punch.</summary>
     private float dropEnv;
 
     /// <summary>Integrated reverse scroll phase from the Drop warp, kept in [0,1). Like <see cref="fillScroll"/> but pulls the phase the other way.</summary>
@@ -106,22 +106,22 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Reads the hub-owned Fill build and integrates an extra scroll rate from that envelope. Integrating the rush preserves tunnel phase;
+    /// Reads Fill Build and integrates an extra scroll rate from that value. Integrating the rush preserves tunnel phase;
     /// scaling absolute effectTime would make the bands jump when a Fill starts or ends.
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        fillEnv = beatManager.Fill.Span.Build();
+        fillEnv = beatManager.Fill.Build();
         fillScroll = Mathf.Repeat(fillScroll + (speed * FillRush * fillEnv * effectDelta), 1f);
     }
 
     /// <summary>
-    /// Reads the hub-owned two-bar Drop decay and integrates reverse scroll. The reverse phase is intentionally the inverse of
+    /// Reads the two-bar Drop Decay and integrates reverse scroll. The reverse phase is intentionally the inverse of
     /// the Fill rush, so the Drop reads as an inward warp instead of a stronger version of the build.
     /// </summary>
     private void UpdateDropSlam()
     {
-        dropEnv = beatManager.Drop.Span.Decay(DropBars * 4f);
+        dropEnv = beatManager.Drop.Decay(DropBars * 4f);
         dropScroll = Mathf.Repeat(dropScroll - (speed * DropRush * dropEnv * effectDelta), 1f);
     }
 

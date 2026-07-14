@@ -86,7 +86,7 @@ public class Julia : EffectBase
         {
             var a = (s + 0.5f) / AaSamples * 2f * Mathf.PI;
             var r = AaRadius * (s % 2 == 0 ? 1f : 0.55f);
-            offsets[s] = new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+            offsets[s] = new(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
         }
 
         return offsets;
@@ -94,20 +94,20 @@ public class Julia : EffectBase
 
     /// <summary>Julia constants (c = x + yi) known to produce interesting sets.</summary>
     private readonly Vector2[] valueSets = {
-      new Vector2(0.285f, 0.01f),
-      new Vector2(-0.70176f, -0.3842f),
-      new Vector2(-0.835f, -0.2321f),
-      new Vector2(-0.8f, 0.156f),
-      new Vector2(-0.7269f, 0.1889f)
+      new(0.285f, 0.01f),
+      new(-0.70176f, -0.3842f),
+      new(-0.835f, -0.2321f),
+      new(-0.8f, 0.156f),
+      new(-0.7269f, 0.1889f)
     };
 
     /// <summary>Per-constant view centers in the complex plane, paired by index with <see cref="valueSets"/>.</summary>
     private readonly Vector2[] offSets = {
-      new Vector2(0.2f, 0.04f),
-      new Vector2(-0.125f, -0.04f),
-      new Vector2(-0.0375f, 0f),
-      new Vector2(0.175f, 0.05f),
-      new Vector2(0.0875f, 0.225f)
+      new(0.2f, 0.04f),
+      new(-0.125f, -0.04f),
+      new(-0.0375f, 0f),
+      new(0.175f, 0.05f),
+      new(0.0875f, 0.225f)
     };
 
     private float angle;
@@ -122,6 +122,8 @@ public class Julia : EffectBase
     private float dropSpinDir = 1f;
     private float rotation;
     private bool usePalette;
+    /// <summary>Whether Drop was active on the preceding frame, retained for local onset detection.</summary>
+    private bool previousDropActive;
 
     /// <summary>
     /// Called every frame to update the debug UI text element.
@@ -144,6 +146,7 @@ public class Julia : EffectBase
         fillEnv = 0f;
         dropEnv = 0f;
         rotation = 0f;
+        previousDropActive = beatManager.Drop.Active == true;
         buffer.Clear();
     }
 
@@ -177,8 +180,8 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Chooses the Drop slam's spin direction and applies its instant hue inversion; the hub-owned
-    /// stock Decay supplies the spin/blowout envelope.
+    /// Chooses the Drop slam's spin direction and applies its instant hue inversion; Drop Decay
+    /// supplies the spin/blowout envelope.
     /// </summary>
     private void ApplyDropHit()
     {
@@ -187,16 +190,18 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Updates the Drop slam from the hub-owned Started edge and stock Decay, then integrates the spin.
+    /// Detects the Drop onset from local prior state, reads Drop Decay, then integrates the spin.
     /// </summary>
     private void UpdateDropSlam()
     {
-        if (beatManager.Drop.Span.Started)
+        var dropActive = beatManager.Drop.Active == true;
+        if (dropActive && !previousDropActive)
         {
             ApplyDropHit();
         }
+        previousDropActive = dropActive;
 
-        dropEnv = beatManager.Drop.Span.Decay(DropDecayBeats);
+        dropEnv = beatManager.Drop.Decay(DropDecayBeats);
 
         rotation += dropSpinDir * DropSpinRate * dropEnv * effectDelta * 2f * Mathf.PI;
     }
@@ -211,13 +216,13 @@ public class Julia : EffectBase
         var beatEnvelope = waveform.Lerp(0f, 1f);
         hueScroll = Mathf.Repeat(hueScroll + ((HueBaseRate + (beatEnvelope * HueBeatRate)) * effectDelta), 1f);
 
-        // The hub-owned Fill Build becomes extra zoom depth below.
-        fillEnv = beatManager.Fill.Span.Build();
+        // Fill Build becomes extra zoom depth below.
+        fillEnv = beatManager.Fill.Build();
         UpdateDropSlam();
 
         // Breathing zoom (window width oscillates between WindowWidth and MinWindow), deepened
         // exponentially by the Fill dive and blasted back out by the Drop slam.
-        var sa = Mathf.Sin(angle).Map01(1f, -1f);
+        var sa = Mathf.Sin(angle).Remap(1f, -1f, 0f, 1f);
         var window = Mathf.Clamp(
             WindowWidth * sa * Mathf.Exp((DropBlowout * dropEnv) - (FillDiveDepth * fillEnv)),
             MinWindow, WindowWidth);

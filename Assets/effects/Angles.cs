@@ -8,12 +8,12 @@ using UnityEngine;
 /// <remarks>
 /// FILL: a soft-edged wavefront sweeps across the tiles, ordered by each tile's hue distance from the
 /// wall's own mean hue (closest first), collapsing their hue toward that mean. The front position is
-/// driven by <see cref="FillView.Span"/> Build (so it always finishes by the Fill's end regardless of
-/// how many beats the Fill lasts), given a light pre-Fill primer from <see cref="FillView.NextInBeats"/>,
+/// driven by <see cref="FillValues.Build"/> (so it always finishes by the Fill's end regardless of
+/// how many beats the Fill lasts), given a light pre-Fill primer from <see cref="FillValues.BeatsUntil"/>,
 /// and kicked forward once per Waveform hit so the sweep
 /// visibly lurches on the beat instead of gliding smoothly.
 ///
-/// DROP: from the Drop Span's onset the whole wall slams to near-black, then reignites as a
+/// DROP: from the Drop's onset the whole wall slams to near-black, then reignites as a
 /// staccato cascade through the tiling's ten orientation classes — the multiples-of-18° directional
 /// families of the underlying pentagrid. Because orientation drives hue here, each class is also a single
 /// hue, so the smooth rainbow visibly reassembles itself one hue/direction at a time out of the darkness,
@@ -79,7 +79,7 @@ public class Angles : EffectBase
     /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Tune on the readout.</summary>
     private const float ShadeDepthHigh = 0.4f;
 
-    /// <summary>Energy level assumed when <see cref="EnergyView.Run"/> has no facts: 0.5 = Mid, a steady moderate shading depth. Tune on the readout.</summary>
+    /// <summary>Energy level assumed when <see cref="EnergyValues.Level"/> has no value: 0.5 = Mid, a steady moderate shading depth. Tune on the readout.</summary>
     private const float StandaloneEnergy = 0.5f;
 
     /// <summary>Smoothing rate (per second) easing the shading depth between energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the readout.</summary>
@@ -119,8 +119,8 @@ public class Angles : EffectBase
         "Angles" +
         $"\nEN {smoothedEnergy:0.00}" +
         (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
-        (beatManager.Drop.Span.Current.HasValue
-            ? $"\nDROP {1f - beatManager.Drop.Span.Decay(DropBeats):0.00}"
+        (beatManager.Drop.Active == true
+            ? $"\nDROP {1f - beatManager.Drop.Decay(DropBeats):0.00}"
             : "");
 
     /// <summary>
@@ -218,17 +218,17 @@ public class Angles : EffectBase
     /// Exponentially eases a value toward a target at a frame-rate-independent rate.
     /// </summary>
     private static float SmoothToward(float current, float target, float rate, float deltaTime) =>
-        Mathf.Lerp(current, target, 1f - Mathf.Exp(-rate * deltaTime));
+        (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
     /// <summary>
     /// Updates the Fill wavefront from the stock Build, next-Fill anticipation, and continuous Waveform lift.
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        var fill = beatManager.Fill.Span;
-        bool filling = fill.Current.HasValue;
-        float anticipation = !filling && beatManager.Fill.NextInBeats is { } next
-            ? 1f - Mathf.Clamp01(next / 32f)
+        var fill = beatManager.Fill;
+        bool filling = fill.Active == true;
+        float anticipation = !filling && fill.BeatsUntil is { } next
+            ? ((float)next).Remap(0f, 32f, 1f, 0f, clamp: true)
             : 0f;
         float primer = Mathf.Pow(anticipation, AnticipationCurvePower) * AnticipationPrimerCap;
         fillEnv = Mathf.Max(fill.Build(), primer);
@@ -244,7 +244,7 @@ public class Angles : EffectBase
     /// </summary>
     private float UpdateShadeDepth()
     {
-        float energyTarget = beatManager.Energy.Run.Current?.Level switch
+        float energyTarget = beatManager.Energy.Level switch
         {
             Energy.Low => 0f,
             Energy.Mid => 0.5f,
@@ -252,7 +252,7 @@ public class Angles : EffectBase
             _ => StandaloneEnergy,
         };
         smoothedEnergy = SmoothToward(smoothedEnergy, energyTarget, EnergySmoothing, effectDelta);
-        return Mathf.Lerp(ShadeDepthLow, ShadeDepthHigh, smoothedEnergy);
+        return smoothedEnergy.Lerp(ShadeDepthLow, ShadeDepthHigh);
     }
 
     /// <summary>
@@ -263,29 +263,31 @@ public class Angles : EffectBase
         // Beat pulse narrows/widens the angle-to-hue mapping without changing the underlying tile-angle pattern.
         float rhythmHueOffset = waveform.Lerp(0.9f, 1f);
         UpdateFillEnvelope();
-        var drop = beatManager.Drop.Span;
-        bool inDrop = drop.Current.HasValue;
+        var drop = beatManager.Drop;
+        bool inDrop = drop.Active == true;
         float cascade = inDrop
-            ? Mathf.InverseLerp(BlackHold, 1f, 1f - drop.Decay(DropBeats))
+            ? (1f - drop.Decay(DropBeats)).Remap(BlackHold, 1f, 0f, 1f, clamp: true)
             : 1f;
         float shadeDepth = UpdateShadeDepth();
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            float collapse = Mathf.InverseLerp(frontStart[i], frontStart[i] + FrontSoftness, fillEnv);
+            float collapse = fillEnv.Remap(
+                frontStart[i], frontStart[i] + FrontSoftness, 0f, 1f, clamp: true);
             float angle = rawHue[i] + (hueDelta[i] * collapse) + (effectTime * speed);
 
             // Directional shading: same-facing tiles (0° ≡ 180°) shade identically, giving the angle
             // families brightness definition on top of hue.
             float align = 0.5f + (0.5f * Mathf.Cos((orient01[i] * Mathf.PI * 2f) - lightPhase));
-            float shade = Mathf.Lerp(1f - shadeDepth, 1f, align);
+            float shade = align.Lerp(1f - shadeDepth, 1f);
 
             // Drop reignition: outside a Drop every tile sits at its shaded brightness; during a Drop,
             // each orientation class snaps up as the cascade reaches its reveal point.
             float lit = inDrop
-                ? Mathf.Clamp01((cascade - classReveal[i]) / ClassSnapWidth)
+                ? cascade.Remap(
+                    classReveal[i], classReveal[i] + ClassSnapWidth, 0f, 1f, clamp: true)
                 : 1f;
-            float value = Mathf.Lerp(DarkFloor, shade, lit);
+            float value = lit.Lerp(DarkFloor, shade);
 
             buffer[i] = Color.HSVToRGB(Mathf.Repeat(angle + rhythmHueOffset, 1f), 1f, value);
         }

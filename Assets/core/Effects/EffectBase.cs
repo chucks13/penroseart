@@ -19,6 +19,7 @@ public abstract class EffectBase
 
     public float effectTime;
     public float effectDelta;
+    private int? previousGridBeat;
     [HideInInspector]
     // public int sortIndex;
 
@@ -103,15 +104,21 @@ public abstract class EffectBase
     {
         effectDelta = Time.deltaTime;
         effectTime += effectDelta;
-        if (controller != null && beatManager.Grid.Wrapped)
+        if (controller == null)
+        {
+            return;
+        }
+
+        var gridBeat = beatManager.Grid.Beat;
+        if (gridBeat == 1 && previousGridBeat is { } previous && previous != 1)
         {
             OnNewGrid();
         }
+        previousGridBeat = gridBeat;
     }
 
     /// <summary>
-    /// Called exactly when the hub's <see cref="GridView.Wrapped"/> Edge is true. The base performs no response;
-    /// concrete Effects may override this evidence-backed hook or read the Edge directly.
+    /// Called when this effect observes the timing-grid beat return to one after another placed beat.
     /// </summary>
     protected virtual void OnNewGrid() { }
 

@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using RepertoireFlags = Repertoire;
 
 
@@ -66,7 +64,7 @@ public class NoiseTransition : TransitionBase
     /// </summary>
     private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, Color brd, TransitionSettings transitionSettings)
     {
-        float v2 = V2.Map(0f, 1f, -transitionSettings.NoiseProgressRange, transitionSettings.NoiseProgressRange);
+        float v2 = V2.Remap(0f, 1f, -transitionSettings.NoiseProgressRange, transitionSettings.NoiseProgressRange);
 
         for (int i = 0; i < buffer.Length; i++)
         {

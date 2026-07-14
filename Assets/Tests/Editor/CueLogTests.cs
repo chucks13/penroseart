@@ -15,10 +15,10 @@ using RepertoireFlags = Repertoire;
 public sealed class CueLogFormatTests
 {
     /// <summary>Canonical placed Grid facts used by fourth-bar formatter scenarios.</summary>
-    private static readonly GridFacts GridAt13 = new GridFacts(GridState.Locked, 13, 4, 0f);
+    private static readonly GridValues GridAt13 = new(GridState.Locked, 13, 4, 0f, 0f);
 
     /// <summary>Canonical Grid-wrap facts used by first-beat formatter scenarios.</summary>
-    private static readonly GridFacts GridAt1 = new GridFacts(GridState.Locked, 1, 1, 0f);
+    private static readonly GridValues GridAt1 = new(GridState.Locked, 1, 1, 0f, 0f);
 
     [Test]
     public void SheetBuiltLineHasTheAgreedShape()
@@ -151,7 +151,7 @@ public sealed class CueLogFormatTests
 public sealed class CueLogSinkTests
 {
     /// <summary>Canonical placed Grid facts read by the injected sink probe.</summary>
-    private static readonly GridFacts GridAt12 = new GridFacts(GridState.Locked, 12, 3, 0f);
+    private static readonly GridValues GridAt12 = new(GridState.Locked, 12, 3, 0f, 0f);
 
     [Test]
     public void CueLockedJoinsTheRememberedLoadContext()
@@ -265,7 +265,7 @@ public sealed class CueLogSeamTests
         controller.timer = new Timer(controller.effectTime, false);
 
         lines = new List<string>();
-        controller.cueLog = new CueLog(() => new LineCapture(lines), () => controller.beatManager.Grid.Current, ownsWriter: false);
+        controller.cueLog = new CueLog(() => new LineCapture(lines), () => controller.beatManager.Grid, ownsWriter: false);
 
         switcher = new Switcher(controller, controller.effects, controller.transitions, controller.cueLog);
         switcher.SetInitialEffect(0, controller.currentTransition);
@@ -399,26 +399,28 @@ public sealed class CueLogSeamTests
         string phraseLabel = "Phrase",
         string nextPhraseLabel = "Next")
     {
-        var snapshot = new RaveOnAirSnapshot();
-        snapshot.bpm = 120f;
-        snapshot.beat = new BeatPosition { current = beat, total = -1 };
-        snapshot.beatInBar = ((beat - 1) % 4) + 1;
-        snapshot.timingGrid = gridBeat >= 1
-            ? new TimingGrid { beat = gridBeat, bar = ((gridBeat - 1) / 4) + 1, state = "locked" }
-            : TimingGrid.Unavailable;
-        snapshot.phraseState = new PhraseState
+        var snapshot = new RaveOnAirSnapshot
         {
-            label = phraseLabel,
-            countBeats = phraseStartBeat + phraseLengthBeats - beat,
-            lengthBeats = phraseLengthBeats,
-            irregular = 0,
+            bpm = 120f,
+            beat = new BeatPosition { current = beat, total = -1 },
+            beatInBar = ((beat - 1) % 4) + 1,
+            timingGrid = gridBeat >= 1
+                ? new TimingGrid { beat = gridBeat, bar = ((gridBeat - 1) / 4) + 1, state = "locked" }
+                : TimingGrid.Unavailable,
+            phraseState = new PhraseState
+            {
+                label = phraseLabel,
+                countBeats = phraseStartBeat + phraseLengthBeats - beat,
+                lengthBeats = phraseLengthBeats,
+                irregular = 0,
+            },
+            nextPhraseState = nextPhraseStartBeat is { } nextStart && nextPhraseLengthBeats is { } nextLength
+                ? new LabeledCountdown { label = nextPhraseLabel, countBeats = nextStart - beat, lengthBeats = nextLength }
+                : LabeledCountdown.Unavailable,
+            dropState = CountdownState.Unavailable,
+            fillState = CountdownState.Unavailable,
+            energyState = LabeledCountdown.Unavailable,
         };
-        snapshot.nextPhraseState = nextPhraseStartBeat is { } nextStart && nextPhraseLengthBeats is { } nextLength
-            ? new LabeledCountdown { label = nextPhraseLabel, countBeats = nextStart - beat, lengthBeats = nextLength }
-            : LabeledCountdown.Unavailable;
-        snapshot.dropState = CountdownState.Unavailable;
-        snapshot.fillState = CountdownState.Unavailable;
-        snapshot.energyState = LabeledCountdown.Unavailable;
         controller.beatManager.FeedWireSnapshot(snapshot);
         controller.beatManager.Update(0f);
         director.Tick(0f);

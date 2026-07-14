@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -40,10 +41,10 @@ using UnityEngine;
 /// plots, so visualization and playback cannot drift.
 /// </para>
 /// <para>
-/// <b>Malformation is logged, not substituted.</b> A spec whose widths do not sum to a bar, or whose
-/// amplitude string length does not match the sequence, is logged and remains bounded for Editor
-/// inspection through <see cref="Sample"/>. Runtime <see cref="Waveforms"/> rejects malformed Pool
-/// entries instead of silently falling back to the plain pulse.
+/// <b>Malformation is reported and bounded, not hidden.</b> The runtime-facing parser logs diagnostics;
+/// authoring callers can receive the same diagnostics as data. Missing or invalid amplitudes evaluate as
+/// silence so <see cref="Sample"/> remains safe for inspection. Runtime <see cref="Waveforms"/> rejects
+/// malformed Pool entries instead of silently falling back to the plain pulse.
 /// </para>
 /// </remarks>
 public readonly struct Waveform
@@ -92,7 +93,7 @@ public readonly struct Waveform
     /// <summary>Distinguishes a constructed Waveform from the CLR default struct value.</summary>
     private readonly bool initialized;
 
-    /// <summary>Whether this Waveform parsed with a logged defect. It still evaluates safely against one bounded bar.</summary>
+    /// <summary>Whether this Waveform parsed with a reported defect. It still evaluates safely against one bounded bar.</summary>
     public bool IsMalformed => malformed;
 
     /// <summary>Creates one fully parsed immutable Waveform value.</summary>
@@ -101,7 +102,7 @@ public readonly struct Waveform
     /// <param name="rounding">Peak shape scalar.</param>
     /// <param name="offset">Phase shift in beats.</param>
     /// <param name="humps">Parsed Hump slots laid end-to-end across the bar.</param>
-    /// <param name="malformed">Whether parsing found and logged a defect.</param>
+    /// <param name="malformed">Whether parsing found a reported defect.</param>
     private Waveform(
         string sequence,
         string amplitude,
@@ -145,7 +146,7 @@ public readonly struct Waveform
     public float Lerp(float from, float to)
     {
         EnsureInitialized();
-        return TrySampleCurrent(out var envelope) ? Mathf.Lerp(from, to, envelope) : to;
+        return TrySampleCurrent(out var envelope) ? envelope.Lerp(from, to) : to;
     }
 
     /// <summary>
@@ -158,14 +159,14 @@ public readonly struct Waveform
         {
             EnsureInitialized();
             EnsureRuntimeBound();
-            return !disabled && clockSource.Clock.BeatAverageMs is { } beatAverageMs
+            return !disabled && clockSource.Timing.BeatAverageMilliseconds is { } beatAverageMs
                 ? ShortestNonZeroPeakSpacing() * BeatsPerBar * beatAverageMs
                 : 0f;
         }
     }
 
     /// <summary>Binds one parsed immutable shape to the shared live musical source.</summary>
-    /// <param name="source">The BeatManager whose Clock and Grid drive playback.</param>
+    /// <param name="source">The BeatManager whose Timing and Grid values drive playback.</param>
     internal Waveform Bind(BeatManager source)
     {
         EnsureInitialized();
@@ -254,7 +255,7 @@ public readonly struct Waveform
     }
 
     /// <summary>
-    /// Parses a full Waveform spec into evaluable Hump slots, logging (never substituting) any defect.
+    /// Parses a full Waveform spec into safe Hump slots and logs every diagnostic.
     /// </summary>
     /// <param name="sequence">Note-value tokens, one per Hump (<c>W H Q E S</c>).</param>
     /// <param name="amplitude">Digits <c>0–8</c>, one per Hump, read straight across.</param>
@@ -262,18 +263,48 @@ public readonly struct Waveform
     /// <param name="offset">Phase shift in beats.</param>
     public static Waveform Parse(string sequence, string amplitude, float rounding, float offset)
     {
+        var waveform = Parse(sequence, amplitude, rounding, offset, out var diagnostics);
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            Debug.LogWarning($"[Waveform] {diagnostics[i]}");
+        }
+
+        return waveform;
+    }
+
+    /// <summary>
+    /// Parses a full Waveform spec and returns its diagnostics without writing to the Console.
+    /// </summary>
+    /// <remarks>
+    /// The returned value remains safe to inspect through <see cref="Sample"/> when malformed. Runtime
+    /// acquisition still rejects malformed Pool entries; this overload lets authoring surfaces present
+    /// transient typing errors in place instead of logging on every keystroke.
+    /// </remarks>
+    /// <param name="sequence">Note-value tokens, one per Hump (<c>W H Q E S</c>).</param>
+    /// <param name="amplitude">Digits <c>0–8</c>, one per Hump, read straight across.</param>
+    /// <param name="rounding">Peak shape scalar [0..1].</param>
+    /// <param name="offset">Phase shift in beats.</param>
+    /// <param name="diagnostics">Every notation defect found while parsing.</param>
+    public static Waveform Parse(
+        string sequence,
+        string amplitude,
+        float rounding,
+        float offset,
+        out string[] diagnostics)
+    {
         var seq = sequence ?? "";
         var amp = amplitude ?? "";
         var malformed = false;
+        var messages = new List<string>();
 
-        // Amplitude is read 1:1 against the sequence. A length mismatch is a defect we log and tolerate:
+        // Amplitude is read 1:1 against the sequence. A length mismatch is a defect we report and tolerate:
         // a missing digit reads as silent (0), an extra digit is ignored. We do not pad or truncate the
         // stored strings — the raw spec is preserved for canonical rewrite.
         if (seq.Length != amp.Length)
         {
             malformed = true;
-            Debug.LogWarning($"[Waveform] sequence/amplitude length mismatch ({seq.Length} vs {amp.Length}) " +
-                             $"in \"{seq}\" / \"{amp}\" — missing digits read as silent.");
+            messages.Add($"sequence/amplitude length mismatch ({seq.Length} vs {amp.Length}) " +
+                         $"in \"{seq}\" / \"{amp}\" — missing digits read as silent.");
         }
 
         var humps = new Hump[seq.Length];
@@ -283,30 +314,38 @@ public readonly struct Waveform
             var widthBeats = TokenBeats(seq[i]);
             if (widthBeats <= 0f)
             {
-                // Unknown token: log, give it zero width so it occupies no time, and keep parsing the rest.
+                // Unknown token: report it, give it zero width so it occupies no time, and keep parsing the rest.
                 malformed = true;
-                Debug.LogWarning($"[Waveform] unknown sequence token '{seq[i]}' in \"{seq}\" — expected one of W H Q E S.");
+                messages.Add($"unknown sequence token '{seq[i]}' in \"{seq}\" — expected one of W H Q E S.");
                 humps[i] = new Hump(cursorBeats / BeatsPerBar, 0f, 0f);
                 continue;
+            }
+
+            var amplitudeValue = AmplitudeAt(amp, i, out var invalidAmplitude);
+            if (invalidAmplitude)
+            {
+                malformed = true;
+                messages.Add($"invalid amplitude '{amp[i]}' at position {i + 1} in \"{amp}\" — expected a digit 0–8; read as silent.");
             }
 
             humps[i] = new Hump(
                 cursorBeats / BeatsPerBar,
                 widthBeats / BeatsPerBar,
-                AmplitudeAt(amp, i));
+                amplitudeValue);
             cursorBeats += widthBeats;
         }
 
-        // Widths should sum to exactly one bar. If they do not, it is a defect we log; Bar Phase still
+        // Widths should sum to exactly one bar. If they do not, it is a defect we report; Bar Phase still
         // bounds evaluation to [0..1), so an under-filled bar shows trough in the gap and an over-filled
         // bar simply never reaches its trailing Humps.
         if (!Mathf.Approximately(cursorBeats, BeatsPerBar))
         {
             malformed = true;
-            Debug.LogWarning($"[Waveform] widths sum to {cursorBeats} beats, expected {BeatsPerBar} " +
-                             $"in \"{seq}\" — evaluated against one bounded bar regardless.");
+            messages.Add($"widths sum to {cursorBeats} beats, expected {BeatsPerBar} " +
+                         $"in \"{seq}\" — evaluated against one bounded bar regardless.");
         }
 
+        diagnostics = messages.ToArray();
         return new Waveform(seq, amp, rounding, offset, humps, malformed);
     }
 
@@ -374,7 +413,7 @@ public readonly struct Waveform
     private bool TrySampleCurrent(out float envelope)
     {
         EnsureRuntimeBound();
-        if (!disabled && clockSource.Clock.BarPhase is { } barPhase)
+        if (!disabled && clockSource.Timing.BarProgress is { } barPhase)
         {
             envelope = Sample(barPhase);
             return true;
@@ -456,7 +495,7 @@ public readonly struct Waveform
             return 1f;
         }
 
-        var wrapGap = (firstPeak + 1f) - previousPeak;
+        var wrapGap = firstPeak + 1f - previousPeak;
         return Mathf.Clamp01(Mathf.Min(shortest, wrapGap));
     }
 
@@ -556,38 +595,40 @@ public readonly struct Waveform
         var dome = Mathf.Clamp01(r * 2f);
         var triangle = 1f - v;
         var cosine = (Mathf.Cos(v * Mathf.PI) + 1f) * 0.5f;
-        return Mathf.Lerp(triangle, cosine, dome);
+        return dome.Lerp(triangle, cosine);
     }
 
-    /// <summary>Returns a token's width in beats, or 0 for an unrecognized token (caller logs and skips).</summary>
-    private static float TokenBeats(char token)
+    /// <summary>Returns a token's width in beats, or 0 for an unrecognized token (caller reports and skips).</summary>
+    private static float TokenBeats(char token) => token switch
     {
-        switch (token)
-        {
-            case 'W': return 4f;  // whole — the full bar
-            case 'H': return 2f;  // half
-            case 'Q': return 1f;  // quarter — one beat
-            case 'E': return 0.5f; // eighth
-            case 'S': return 0.25f; // sixteenth — the fastest allowed width
-            default: return 0f;
-        }
-    }
+        'W' => 4f,    // whole — the full bar
+        'H' => 2f,    // half
+        'Q' => 1f,    // quarter — one beat
+        'E' => 0.5f,  // eighth
+        'S' => 0.25f, // sixteenth — the fastest allowed width
+        _ => 0f,
+    };
 
-    /// <summary>Reads the amplitude digit for Hump <paramref name="index"/> and maps it to [0..1] via ÷8.</summary>
-    /// <remarks>A missing digit (short amplitude string) or a non-digit reads as 0 — a silent Hump.</remarks>
-    private static float AmplitudeAt(string amplitude, int index)
+    /// <summary>Reads one amplitude digit and reports notation outside the documented <c>0–8</c> range.</summary>
+    /// <param name="amplitude">The raw amplitude string.</param>
+    /// <param name="index">The Hump position to read.</param>
+    /// <param name="invalid">True when a present character is not a digit from <c>0</c> through <c>8</c>.</param>
+    /// <returns>The normalized amplitude, or zero for missing/invalid notation.</returns>
+    private static float AmplitudeAt(string amplitude, int index, out bool invalid)
     {
+        invalid = false;
         if (amplitude == null || index < 0 || index >= amplitude.Length)
         {
             return 0f;
         }
 
         var c = amplitude[index];
-        if (c < '0' || c > '9')
+        if (c < '0' || c > '8')
         {
+            invalid = true;
             return 0f;
         }
 
-        return Mathf.Clamp01((c - '0') / 8f);
+        return (c - '0') / 8f;
     }
 }

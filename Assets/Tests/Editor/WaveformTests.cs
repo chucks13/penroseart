@@ -163,6 +163,21 @@ public sealed class WaveformTests
         Assert.That(wf.Sample(0.75f), Is.EqualTo(0f).Within(Tol));
     }
 
+    /// <summary>Verifies authoring callers receive exact diagnostics without transient Console warnings.</summary>
+    [Test]
+    public void ParseWithDiagnostics_InvalidAmplitudeIsMalformedAndSilentWithoutLogging()
+    {
+        var waveform = Waveform.Parse("QQQQ", "89x8", Waveform.BeatPulseRounding, 0f, out var diagnostics);
+
+        Assert.That(waveform.IsMalformed, Is.True);
+        Assert.That(diagnostics, Has.Length.EqualTo(2));
+        Assert.That(diagnostics[0], Does.Contain("'9'").And.Contain("0–8"));
+        Assert.That(diagnostics[1], Does.Contain("'x'").And.Contain("0–8"));
+        Assert.That(waveform.Sample(0.25f), Is.EqualTo(0f).Within(Tol));
+        Assert.That(waveform.Sample(0.5f), Is.EqualTo(0f).Within(Tol));
+        LogAssert.NoUnexpectedReceived();
+    }
+
     // --- BeatManager Bar Phase clock (the live forcing function behind Sample) ---
 
     /// <summary>Verifies the offered Bar Phase starts at zero on the measure downbeat.</summary>
@@ -171,7 +186,7 @@ public sealed class WaveformTests
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0f); // beat 1, full 500 ms to next
         beatManager.Update(0f);
-        Assert.That(beatManager.Clock.BarPhase, Is.EqualTo(0f).Within(Tol));
+        Assert.That(beatManager.Timing.BarProgress, Is.EqualTo(0f).Within(Tol));
     }
 
     /// <summary>Verifies the offered Bar Phase advances smoothly within the measure.</summary>
@@ -180,6 +195,6 @@ public sealed class WaveformTests
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f); // half a 0.5 s beat = 1/8 bar
         beatManager.Update(0.25f);
-        Assert.That(beatManager.Clock.BarPhase, Is.EqualTo(0.125f).Within(Tol));
+        Assert.That(beatManager.Timing.BarProgress, Is.EqualTo(0.125f).Within(Tol));
     }
 }

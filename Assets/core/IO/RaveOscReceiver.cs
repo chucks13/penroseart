@@ -25,10 +25,10 @@ public sealed class RaveOscReceiver : MonoBehaviour
     /// <summary>Sentinel for "no recognized packet yet"; kept out of arithmetic to avoid tick overflow.</summary>
     private const long NoPacketTimestamp = long.MinValue;
 
-    private readonly object errorLock = new object();
+    private readonly object errorLock = new();
     private OscUdpSocket socket;
     private RaveOscPacketParser parser;
-    private RaveOnAirSnapshot latest = new RaveOnAirSnapshot();
+    private RaveOnAirSnapshot latest = new();
     private Exception pendingError;
     private bool hasPendingError;
     private bool hasSnapshot;
@@ -99,8 +99,8 @@ public sealed class RaveOscReceiver : MonoBehaviour
     /// <remarks>
     /// Source selection is transport-only: any recognized Rave on-air OSC value on UDP 7000 makes the
     /// BeatManager live immediately. Payload sentinels such as <c>bpm = -1</c> are valid data and are
-    /// applied exactly as received; concept doorways expose unavailable values as null instead of
-    /// replaying stale data over an active OSC stream. BeatData receives only what the wire said —
+    /// applied exactly as received; BeatManager's public value groups expose unavailable facts as null instead of
+    /// replaying stale data over an active OSC stream. BeatManager's private wire snapshot receives only what the wire said —
     /// derived state (offbeats, availability) is contrived by <see cref="BeatManager.Update"/> afterwards.
     /// </remarks>
     public void ApplyTo(BeatManager beatManager)

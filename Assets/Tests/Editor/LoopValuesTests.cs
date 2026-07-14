@@ -1,4 +1,4 @@
-// Contract tests for the Loop doorway's flat, nullable mirror of the loop_state wire lane.
+// Contract tests for the Loop values' flat, nullable mirror of the loop_state wire lane.
 
 #nullable enable
 
@@ -6,11 +6,11 @@ using NUnit.Framework;
 using PenroseArt.RaveOsc;
 
 /// <summary>
-/// Pins the Loop doorway's flat wire-mirror contract with hand-worked lane values: rolling and set
+/// Pins the Loop group's flat wire-mirror contract with hand-worked lane values: rolling and set
 /// are independent facts, idle regions retain their measurements, and sentinels translate to null
 /// without derived span semantics.
 /// </summary>
-public sealed class LoopDoorwayContractTests
+public sealed class LoopValuesTests
 {
     /// <summary>A rolling, set lane serves every translated wire fact directly on the flat view.</summary>
     [Test]
@@ -33,7 +33,7 @@ public sealed class LoopDoorwayContractTests
         Assert.That(loop.Rolling, Is.True);
         Assert.That(loop.RegionSet, Is.True);
         Assert.That(loop.LengthBeats, Is.EqualTo(4f).Within(0.0001f));
-        Assert.That(loop.LengthMs, Is.EqualTo(1875));
+        Assert.That(loop.LengthMilliseconds, Is.EqualTo(1875));
         Assert.That(loop.NominalSizeBeats, Is.EqualTo(4f).Within(0.0001f));
     }
 
@@ -58,7 +58,7 @@ public sealed class LoopDoorwayContractTests
         Assert.That(loop.Rolling, Is.False);
         Assert.That(loop.RegionSet, Is.True);
         Assert.That(loop.LengthBeats, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(loop.LengthMs, Is.EqualTo(234));
+        Assert.That(loop.LengthMilliseconds, Is.EqualTo(234));
         Assert.That(loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
     }
 
@@ -83,7 +83,7 @@ public sealed class LoopDoorwayContractTests
         Assert.That(loop.Rolling, Is.Null);
         Assert.That(loop.RegionSet, Is.Null);
         Assert.That(loop.LengthBeats, Is.Null);
-        Assert.That(loop.LengthMs, Is.Null);
+        Assert.That(loop.LengthMilliseconds, Is.Null);
         Assert.That(loop.NominalSizeBeats, Is.Null);
     }
 

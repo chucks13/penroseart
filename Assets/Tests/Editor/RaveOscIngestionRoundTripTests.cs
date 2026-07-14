@@ -9,64 +9,64 @@ using RaveSystem.Osc;
 /// Standing guardrail for the full RaveSystem on-air ingestion path: a packet that writes EVERY registered
 /// <c>/rave/onair/*</c> address is dispatched through <see cref="RaveOscPacketParser"/>, the taken snapshot is
 /// fed into a <see cref="BeatManager"/>, and the canonical Data Surface is asserted. Adding a wire
-/// field without carrying it to its concept doorway therefore fails at the production ingress seam.
+/// field without carrying it to its public value group therefore fails at the production ingress seam.
 /// </summary>
 public sealed class RaveOscIngestionRoundTripTests
 {
-    /// <summary>Verifies every on-air OSC address reaches its canonical BeatManager doorway.</summary>
+    /// <summary>Verifies every on-air OSC address reaches its canonical BeatManager group.</summary>
     [Test]
     public void EveryOnAirAddressFlowsThroughToTheDataSurface()
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket());
 
         Assert.That(beatManager.IsSynced, Is.True);
-        Assert.That(beatManager.Clock.Bpm, Is.EqualTo(128.5f).Within(0.0001f));
-        Assert.That(beatManager.Position.Beat, Is.EqualTo(64));
-        Assert.That(beatManager.Position.TotalBeats, Is.EqualTo(384));
-        Assert.That(beatManager.Position.Bar, Is.EqualTo(16));
-        Assert.That(beatManager.Position.BeatInBar, Is.EqualTo(3));
-        Assert.That(beatManager.Track.TrackTitle, Is.EqualTo("Artist - Track"));
+        Assert.That(beatManager.Timing.Bpm, Is.EqualTo(128.5f).Within(0.0001f));
+        Assert.That(beatManager.Timing.Beat, Is.EqualTo(64));
+        Assert.That(beatManager.Timing.TotalBeats, Is.EqualTo(384));
+        Assert.That(beatManager.Timing.Bar, Is.EqualTo(16));
+        Assert.That(beatManager.Timing.BeatInBar, Is.EqualTo(3));
+        Assert.That(beatManager.Track.Title, Is.EqualTo("Artist - Track"));
         Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 4, 2 }));
 
-        Assert.That(beatManager.Drop.Span.Current, Is.Not.Null);
-        Assert.That(beatManager.Drop.RemainingOnTrack, Is.EqualTo(2));
-        Assert.That(beatManager.Fill.Span.Current, Is.Null);
-        Assert.That(beatManager.Fill.NextInBeats, Is.EqualTo(16));
+        Assert.That(beatManager.Drop.Active, Is.True);
+        Assert.That(beatManager.Drop.Remaining, Is.EqualTo(2));
+        Assert.That(beatManager.Fill.Active, Is.False);
+        Assert.That(beatManager.Fill.BeatsUntil, Is.EqualTo(16));
 
-        Assert.That(beatManager.Phrase.Span.Current?.Name, Is.EqualTo("Drop"));
-        Assert.That(beatManager.Phrase.Span.Current?.Irregular, Is.True);
-        Assert.That(beatManager.Phrase.Span.Current?.LengthBeats, Is.EqualTo(32));
-        Assert.That(beatManager.Phrase.NextName, Is.EqualTo("Break"));
-        Assert.That(beatManager.Phrase.NextInBeats, Is.EqualTo(8));
-        Assert.That(beatManager.Phrase.NextLengthBeats, Is.EqualTo(16));
+        Assert.That(beatManager.Phrase.Name, Is.EqualTo("Drop"));
+        Assert.That(beatManager.Phrase.Irregular, Is.True);
+        Assert.That(beatManager.Phrase.LengthBeats, Is.EqualTo(32));
+        Assert.That(beatManager.NextPhrase.Name, Is.EqualTo("Break"));
+        Assert.That(beatManager.NextPhrase.BeatsUntil, Is.EqualTo(8));
+        Assert.That(beatManager.NextPhrase.LengthBeats, Is.EqualTo(16));
 
-        Assert.That(beatManager.Energy.Run.Current?.Level, Is.EqualTo(Energy.High));
-        Assert.That(beatManager.Energy.NextLevel, Is.EqualTo(Energy.Mid));
-        Assert.That(beatManager.Energy.NextRunLengthBeats, Is.EqualTo(64));
+        Assert.That(beatManager.Energy.Level, Is.EqualTo(Energy.High));
+        Assert.That(beatManager.NextEnergy.Level, Is.EqualTo(Energy.Mid));
+        Assert.That(beatManager.NextEnergy.LengthBeats, Is.EqualTo(64));
 
         Assert.That(beatManager.Loop.Rolling, Is.True);
         Assert.That(beatManager.Loop.RegionSet, Is.True);
         Assert.That(beatManager.Loop.LengthBeats, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(beatManager.Loop.LengthMs, Is.EqualTo(938));
+        Assert.That(beatManager.Loop.LengthMilliseconds, Is.EqualTo(938));
         Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(beatManager.Track.TrackId, Is.EqualTo(777001));
+        Assert.That(beatManager.Track.Id, Is.EqualTo(777001));
 
-        Assert.That(beatManager.Levels?.Normalized.Low, Is.EqualTo(0.25f).Within(0.0001f));
-        Assert.That(beatManager.Levels?.Normalized.Mid, Is.EqualTo(0.5f).Within(0.0001f));
-        Assert.That(beatManager.Levels?.Normalized.High, Is.EqualTo(0.75f).Within(0.0001f));
+        Assert.That(beatManager.Levels.Normalized.Low, Is.EqualTo(0.25f).Within(0.0001f));
+        Assert.That(beatManager.Levels.Normalized.Mid, Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(beatManager.Levels.Normalized.High, Is.EqualTo(0.75f).Within(0.0001f));
     }
 
-    /// <summary>Verifies an omitted current Phrase lane does not erase populated sibling doorways.</summary>
+    /// <summary>Verifies an omitted current Phrase lane does not erase populated sibling groups.</summary>
     [Test]
     public void PhraseStateOmittedLeavesPhraseNullButSiblingsPopulated()
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/phrase_state"));
 
-        Assert.That(beatManager.Phrase.Span.Current, Is.Null);
-        Assert.That(beatManager.Phrase.NextName, Is.Not.Null);
-        Assert.That(beatManager.Energy.Run.Current, Is.Not.Null);
+        Assert.That(beatManager.Phrase.Name, Is.Null);
+        Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
+        Assert.That(beatManager.Energy.Level, Is.Not.Null);
         Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
-        Assert.That(beatManager.Track.TrackId, Is.Not.Null);
+        Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
     /// <summary>Verifies an omitted next Phrase lane nulls only the next announcement.</summary>
@@ -75,24 +75,24 @@ public sealed class RaveOscIngestionRoundTripTests
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/next_phrase_state"));
 
-        Assert.That(beatManager.Phrase.NextName, Is.Null);
-        Assert.That(beatManager.Phrase.Span.Current, Is.Not.Null);
-        Assert.That(beatManager.Energy.Run.Current, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase.Name, Is.Null);
+        Assert.That(beatManager.Phrase.Name, Is.Not.Null);
+        Assert.That(beatManager.Energy.Level, Is.Not.Null);
         Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
-        Assert.That(beatManager.Track.TrackId, Is.Not.Null);
+        Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
-    /// <summary>Verifies an omitted current Energy lane does not erase populated sibling doorways.</summary>
+    /// <summary>Verifies an omitted current Energy lane does not erase populated sibling groups.</summary>
     [Test]
     public void EnergyStateOmittedLeavesEnergyNullButSiblingsPopulated()
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/energy_state"));
 
-        Assert.That(beatManager.Energy.Run.Current, Is.Null);
-        Assert.That(beatManager.Phrase.Span.Current, Is.Not.Null);
-        Assert.That(beatManager.Phrase.NextName, Is.Not.Null);
+        Assert.That(beatManager.Energy.Level, Is.Null);
+        Assert.That(beatManager.Phrase.Name, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
         Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
-        Assert.That(beatManager.Track.TrackId, Is.Not.Null);
+        Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
     /// <summary>Verifies an omitted next Energy lane preserves the current run and nulls only its successor.</summary>
@@ -103,12 +103,12 @@ public sealed class RaveOscIngestionRoundTripTests
         // it should null out only that field, not the whole Energy result.
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/next_energy_state"));
 
-        Assert.That(beatManager.Energy.Run.Current?.Level, Is.EqualTo(Energy.High));
-        Assert.That(beatManager.Energy.NextLevel, Is.Null);
-        Assert.That(beatManager.Phrase.Span.Current, Is.Not.Null);
-        Assert.That(beatManager.Phrase.NextName, Is.Not.Null);
+        Assert.That(beatManager.Energy.Level, Is.EqualTo(Energy.High));
+        Assert.That(beatManager.NextEnergy.Level, Is.Null);
+        Assert.That(beatManager.Phrase.Name, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
         Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
-        Assert.That(beatManager.Track.TrackId, Is.Not.Null);
+        Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
     /// <summary>Verifies an omitted Loop lane serves unavailable Loop facts without disturbing siblings.</summary>
@@ -118,22 +118,22 @@ public sealed class RaveOscIngestionRoundTripTests
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/loop_state"));
 
         Assert.That(beatManager.Loop.Rolling, Is.Null);
-        Assert.That(beatManager.Phrase.Span.Current, Is.Not.Null);
-        Assert.That(beatManager.Phrase.NextName, Is.Not.Null);
-        Assert.That(beatManager.Energy.Run.Current, Is.Not.Null);
-        Assert.That(beatManager.Track.TrackId, Is.Not.Null);
+        Assert.That(beatManager.Phrase.Name, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
+        Assert.That(beatManager.Energy.Level, Is.Not.Null);
+        Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
-    /// <summary>Verifies an omitted track id translates to null without disturbing sibling doorways.</summary>
+    /// <summary>Verifies an omitted track id translates to null without disturbing sibling groups.</summary>
     [Test]
     public void TrackIdOmittedLeavesTrackIdNullButSiblingsPopulated()
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/track_id"));
 
-        Assert.That(beatManager.Track.TrackId, Is.Null);
-        Assert.That(beatManager.Phrase.Span.Current, Is.Not.Null);
-        Assert.That(beatManager.Phrase.NextName, Is.Not.Null);
-        Assert.That(beatManager.Energy.Run.Current, Is.Not.Null);
+        Assert.That(beatManager.Track.Id, Is.Null);
+        Assert.That(beatManager.Phrase.Name, Is.Not.Null);
+        Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
+        Assert.That(beatManager.Energy.Level, Is.Not.Null);
         Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
     }
 

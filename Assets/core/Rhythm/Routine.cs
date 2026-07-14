@@ -1,3 +1,5 @@
+// Composes four one-bar Waveforms across the current timing Grid.
+
 using System;
 using UnityEngine;
 
@@ -34,7 +36,7 @@ public sealed class Routine
     /// <param name="to">Value at its peak and the Standalone fallback.</param>
     public float Lerp(float from, float to)
     {
-        return TrySampleCurrent(out var envelope) ? Mathf.Lerp(from, to, envelope) : to;
+        return TrySampleCurrent(out var envelope) ? envelope.Lerp(from, to) : to;
     }
 
     /// <summary>Composes exactly four runtime-bound one-bar Waveforms into one immutable value.</summary>
@@ -44,11 +46,8 @@ public sealed class Routine
     /// <param name="bar4">The Waveform for Grid bar 4.</param>
     public static Routine Of(Waveform bar1, Waveform bar2, Waveform bar3, Waveform bar4)
     {
-        var source = bar1.ClockSource;
-        if (source == null)
-        {
-            throw new InvalidOperationException("Routine Waveforms must be acquired from Waveforms.");
-        }
+        var source = bar1.ClockSource
+            ?? throw new InvalidOperationException("Routine Waveforms must be acquired from Waveforms.");
 
         var bars = new[] { bar1, bar2, bar3, bar4 };
         for (var i = 0; i < bars.Length; i++)
@@ -72,9 +71,8 @@ public sealed class Routine
     /// <returns>True when a valid Grid position was available and sampled.</returns>
     private bool TrySampleCurrent(out float envelope)
     {
-        if (clockSource.Grid.Current is { } facts
-            && facts.Bar is { } bar
-            && facts.Progress is { } progress
+        if (clockSource.Grid.Bar is { } bar
+            && clockSource.Grid.Progress is { } progress
             && bar >= 1
             && bar <= SlotCount)
         {

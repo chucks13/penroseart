@@ -48,12 +48,12 @@ public override void OnEnd()
 Init()       once after reflection creates the catalog instance
 OnStart()   whenever the effect becomes active
 UpdateTime() called by Controller before Draw()
-OnNewGrid() once when the BeatManager reports a new 16-beat Grid
+OnNewGrid() once when this Effect observes the 16-beat Grid return to one
 Draw()      every active frame
 OnEnd()     not currently called
 ```
 
-`OnNewGrid()` is a base hook on `EffectBase`. `UpdateTime()` forwards BeatManager's frame-coherent `Grid.Wrapped` edge exactly. Override it to re-roll a look, switch palette, or acquire a new Waveform in step with the music. An effect nested in a mixer only receives it if the mixer calls the child's `UpdateTime()`.
+`OnNewGrid()` is a base hook on `EffectBase`. `UpdateTime()` compares the current `Grid.Beat` with that Effect's prior observation and calls the hook when the count returns to one. Override it to re-roll a look, switch palette, or acquire a new Waveform in step with the music. An effect nested in a mixer only receives it if the mixer calls the child's `UpdateTime()`.
 
 Use `Init()` for reusable setup that depends on `Controller.Instance`, `penrose`, or `tiles` existing.
 
@@ -71,7 +71,7 @@ Use `Draw()` for the frame algorithm. A valid draw writes every slot in `buffer`
 | `effectTime` | Seconds since the effect's randomized seed time. |
 | `effectDelta` | Current frame delta time. |
 | `APalette` | Shared animated palette for all effects. |
-| `beatManager` | Shared read-only musical facts, edges, and stock envelopes. |
+| `beatManager` | Shared read-only wire facts and derived musical values. |
 | `waveforms` | Shared Waveform acquisition tools. |
 | `waveform` | Public non-null artistic configuration. Effects acquire it explicitly; owners may share, replace, or assign `waveforms.None`. |
 
@@ -142,16 +142,16 @@ dropScroll = Mathf.Repeat(dropScroll - speed * DropRush * dropEnv * effectDelta,
 
 `Mathf.Repeat(…, 1f)` keeps each accumulator in `[0,1)` so it never drifts. Fill adds (`+`), Drop subtracts (`-`) — make the two motions **opposite** so the Drop reads as an inversion of the Fill, not just "more of it."
 
-### 3. Read Stock Envelopes from the concept doorways
+### 3. Read direct structure values and envelopes
 
-Fill and Drop each expose an always-present `Span` view. Facts inside the Span are nullable, while its Edges and Stock Envelopes stay total and rest at zero when the musical span is unavailable. `Tunnel` uses the stock shapes directly:
+Fill and Drop each keep their raw countdown fields beside readable interpretations (`Active`, `BeatsRemaining`, `BeatsUntil`, and `Progress`). Their `Build()` and `Decay()` conveniences rest at zero when the event is inactive. `Tunnel` uses them directly:
 
 ```csharp
-fillEnv = beatManager.Fill.Span.Build();
-dropEnv = beatManager.Drop.Span.Decay(DropBars * 4f);
+fillEnv = beatManager.Fill.Build();
+dropEnv = beatManager.Drop.Decay(DropBars * 4f);
 ```
 
-Use `beatManager.Fill.Span.Current` or `beatManager.Drop.Span.Current` only when the Effect needs the nullable event facts themselves. Use `Started` or `Ended` for a one-frame event edge; do not add a private latch for an edge BeatManager already captures once per frame.
+Read `Active`, `CountBeats`, `LengthBeats`, and `Remaining` when the Effect needs wire facts. If an Effect needs an onset, retain its own prior `Active` value and compare locally; BeatManager deliberately exposes state, not one-frame event flags.
 
 ### 4. Acquire Waveforms explicitly
 

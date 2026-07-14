@@ -81,14 +81,14 @@ public class DirectionalWipe : TransitionBase
     {
         var width = (int)controller.penrose.Bounds.size.x.Round();
         var height = (int)controller.penrose.Bounds.size.y.Round();
-        Vector2 diagonal = new Vector2(width, height);
+        Vector2 diagonal = new(width, height);
         diagonalsize = diagonal.magnitude;
     }
 
     /// <summary>
     /// Rotates a 2D point by delta radians for directional wipe projection.
     /// </summary>
-    public static Vector2 rotate(Vector2 v, float delta)
+    public static Vector2 Rotate(Vector2 v, float delta)
     {
         return new Vector2(
             v.x * Mathf.Cos(delta) - v.y * Mathf.Sin(delta),
@@ -115,8 +115,9 @@ public class DirectionalWipe : TransitionBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            Vector2 point = rotate(controller.penrose.tiles[i].position, Angle2);
-            float projectedProgress = (point.x + diagonalsize / 2f) / diagonalsize;
+            Vector2 point = Rotate(controller.penrose.tiles[i].position, Angle2);
+            float halfDiagonal = diagonalsize / 2f;
+            float projectedProgress = point.x.Remap(-halfDiagonal, halfDiagonal, 0f, 1f);
             Color baseColor = projectedProgress >= V2 ? src1[i] : src2[i];
             float edgePresence = EdgePresence(projectedProgress, V2, transitionSettings.DirectionalReactiveEdgeWidth);
             dest[i] = ApplyLowBandEdgeBrightness(baseColor, edgePresence, lowBandLevel, transitionSettings);
@@ -129,7 +130,7 @@ public class DirectionalWipe : TransitionBase
     /// </summary>
     private float CurrentLowBandLevel()
     {
-        return beatManager.Levels?.Smoothed.Low ?? 0f;
+        return beatManager.Levels.Smoothed.Low;
     }
 
     /// <summary>
@@ -140,9 +141,14 @@ public class DirectionalWipe : TransitionBase
         return EdgePresence(projectedProgress, transitionProgress, ReactiveEdgeWidth);
     }
 
-    private static float EdgePresence(float projectedProgress, float transitionProgress, float reactiveEdgeWidth)
+    /// <summary>Maps distance from the wipe boundary into the configured edge band.</summary>
+    private static float EdgePresence(
+        float projectedProgress,
+        float transitionProgress,
+        float reactiveEdgeWidth)
     {
-        return 1f - Mathf.Clamp01(Mathf.Abs(projectedProgress - transitionProgress) / reactiveEdgeWidth);
+        return Mathf.Abs(projectedProgress - transitionProgress)
+            .Remap(0f, reactiveEdgeWidth, 1f, 0f, clamp: true);
     }
 
     /// <summary>

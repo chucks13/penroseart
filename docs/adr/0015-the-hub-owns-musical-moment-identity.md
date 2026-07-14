@@ -1,5 +1,7 @@
 # The hub owns musical moment identity
 
+Status: superseded by ADR-0018
+
 OSC delivers musical events as incrementally updated state, so every effect hand-rolled its
 own edge detection and response curves — the drop latch existed five times (only one handling
 mid-event activation correctly), the fill envelope constants three times. Decided with Hunter

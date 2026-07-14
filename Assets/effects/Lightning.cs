@@ -65,6 +65,7 @@ public class Lightning : EffectBase
 
     /// <summary>True while the Fill hold/jerk/strobe mode is driving the bolt (surfaced on the readout).</summary>
     private bool heldActive;
+    private bool previousEighthOn;
 
     /// <summary>Drop slam amount (1 at the downbeat, SmoothStep-eased to 0 over <see cref="DropBars"/>); drives the value lift, flicker, field inversion, and trail hold.</summary>
     private float dropEnv;
@@ -90,6 +91,7 @@ public class Lightning : EffectBase
 
         heldRays = null;
         heldActive = false;
+        previousEighthOn = false;
 
         dropEnv = 0f;
     }
@@ -122,7 +124,7 @@ public class Lightning : EffectBase
 
     /// <summary>
     /// On each new Grid the bolts take a fresh form. Drop intensity is read independently from the hub's
-    /// stock Span decay, so this hook owns only Lightning's Grid-aligned visual reroll.
+    /// direct Drop decay, so this hook owns only Lightning's Grid-aligned visual reroll.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -174,10 +176,11 @@ public class Lightning : EffectBase
     /// </summary>
     private void UpdateHeldBolt()
     {
-        heldActive = beatManager.Fill.Span.Current.HasValue;
+        heldActive = beatManager.Fill.Active == true;
+        var eighthOn = beatManager.Pulses.On(Duration.Eighth) == true;
         if (heldActive)
         {
-            if (beatManager.Pulses.GateOpenedEvery(Duration.Eighth) || heldRays == null)
+            if ((eighthOn && !previousEighthOn) || heldRays == null)
             {
                 GenerateBolt();
             }
@@ -186,6 +189,7 @@ public class Lightning : EffectBase
         {
             GenerateBolt();
         }
+        previousEighthOn = eighthOn;
     }
 
     /// <summary>
@@ -199,7 +203,7 @@ public class Lightning : EffectBase
             return 1f;
         }
 
-        return (beatManager.Pulses.GateEvery(Duration.Sixteenth, FillStrobeDuty) ?? false)
+        return (beatManager.Pulses.On(Duration.Sixteenth, FillStrobeDuty) ?? false)
             ? 1f
             : FillStrobeFloor;
     }
@@ -214,10 +218,10 @@ public class Lightning : EffectBase
         float beatBrightness = waveform.Lerp(1f, 0.75f);
         float beatHue = 0.5f * rhythm;
 
-        dropEnv = beatManager.Drop.Span.Decay(DropBars * BeatsPerBar);
+        dropEnv = beatManager.Drop.Decay(DropBars * BeatsPerBar);
         float flicker = DropFlicker();
 
-        buffer.Fade(Mathf.Lerp(fadeValue, DropFadeHold, dropEnv));
+        buffer.Fade(dropEnv.Lerp(fadeValue, DropFadeHold));
         FloodDropField(flicker);
 
         UpdateHeldBolt();
@@ -310,7 +314,7 @@ public class Lightning : EffectBase
                     // Swell intensity in value space (caps at 1) so the rolled hue/saturation are untouched and it
                     // never washes toward white — pure "change of intensity," felt as the bolts return after the slam.
                     Color.RGBToHSV(strokeColor, out float dh, out float ds, out float dv);
-                    strokeColor = Color.HSVToRGB(dh, ds, Mathf.Lerp(dv, 1f, DropValueLift * dropEnv));
+                    strokeColor = Color.HSVToRGB(dh, ds, (DropValueLift * dropEnv).Lerp(dv, 1f));
                 }
                 Color boltColor = strokeColor * beatBrightness * flicker * strobe;
                 // Invert the bolt toward black so it reads as a dark cut through the flooded field at the Drop's peak,

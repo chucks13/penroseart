@@ -3,7 +3,7 @@
 using NUnit.Framework;
 
 /// <summary>
-/// Pins <see cref="PhraseEventView"/>'s display model of the canonical Fill doorway:
+/// Pins <see cref="PhraseEventView"/>'s display model of the canonical Fill values:
 /// the status chip label, the meter fill, the one-line readout, and the Now/Soon/Idle state. This is
 /// the interface the BeatManager inspector actually calls, so the tests target it directly rather
 /// than reaching into a drawer's private helpers.
@@ -11,15 +11,16 @@ using NUnit.Framework;
 public sealed class PhraseEventViewTests
 {
     /// <summary>A running Fill with served progress, length, countdown, and remaining count.</summary>
-    private static FillView InProgressEvent => new FillView(
-        new SpanView<FillFacts>(new FillFacts(9, 16), 0.4375f, false, false, 7f, 16f),
-        null, null, 1);
+    private static FillValues InProgressEvent => new(
+        new CountdownValues(true, 9, 16, 1, 9, null, 0.4375f, 7f));
 
     /// <summary>An upcoming Fill seven beats away with two occurrences remaining.</summary>
-    private static FillView UpcomingEvent => new FillView(default, 7, 16, 2);
+    private static FillValues UpcomingEvent => new(
+        new CountdownValues(false, 7, 16, 2, null, 7, null, null));
 
     /// <summary>The "no more left" wire shape: nothing upcoming, zero remaining — values, not a state.</summary>
-    private static FillView NoUpcomingEvent => new FillView(default, null, null, 0);
+    private static FillValues NoUpcomingEvent => new(
+        new CountdownValues(false, null, null, 0, null, null, null, null));
 
     [Test]
     public void ChipSaysNowInProgressCountdownWhileUpcomingAndNullOtherwise()
@@ -55,11 +56,11 @@ public sealed class PhraseEventViewTests
         Assert.That(PhraseEventView.Of(NoUpcomingEvent).Readout, Is.EqualTo("next — · ×0"));
     }
 
-    /// <summary>The Drop doorway formats through the same countdown display shape as Fill.</summary>
+    /// <summary>The Drop values format through the same countdown display shape as Fill.</summary>
     [Test]
     public void DropUsesTheSameCanonicalCountdownShape()
     {
-        var drop = new DropView(default, 7, 16, 2);
+        var drop = new DropValues(new CountdownValues(false, 7, 16, 2, null, 7, null, null));
 
         Assert.That(PhraseEventView.Of(drop).Readout, Is.EqualTo("in 7b · len 16 · ×2"));
     }

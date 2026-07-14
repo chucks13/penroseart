@@ -23,15 +23,13 @@ internal static class BeatManagerDashboardRenderer
     private const float QueriesHeaderGap = 10f;
     private const float QueryRowHeight = 22f;
     private const float QueryRowGap = 6f;
-    private const float SwatchRowHeight = 26f;
     private const int QueryRowCount = 6; // envelope, fill, drop, energy, phrase, levels
 
     public const float DashboardHeight =
         PanelPadding + HeaderHeight + HeaderGap + BodyHeight + BodyGap + ChipHeight
         + WaveformStripGap + WaveformSelectorHeight + WaveformSelectorGap + WaveformStripHeight
         + SectionGap + QueriesHeaderHeight + QueriesHeaderGap
-        + (QueryRowCount * (QueryRowHeight + QueryRowGap))
-        + SwatchRowHeight + PanelPadding;
+        + (QueryRowCount * (QueryRowHeight + QueryRowGap)) + PanelPadding;
 
     private const float BarHeight = 8f;
 
@@ -90,61 +88,55 @@ internal static class BeatManagerDashboardRenderer
         "contrived progress and the upcoming section. Null: no phrase data on the wire right now.";
     private const string LevelsTooltip =
         "Levels: low/mid/high band energy with BeatManager's attack/release smoothing already applied " +
-        "(fast up, slow down — anti-flicker). Null: no live Levels (Standalone never supplies them).";
-    private const string ColorTooltip =
-        "Color Bank, the three contrived Levels colors — RGB: bands mapped straight onto red/green/blue channels; " +
-        "HUE: spectral-centroid hue, dominance saturation, strongest-band value; PAL: the live AnimPalette read " +
-        "at the bands' centroid, scaled by the strongest band.";
+        "(fast up, slow down — anti-flicker). Missing wire levels read as zero.";
 
-    private static readonly GUIContent EnvelopeLabel = new GUIContent("ENVELOPE", EnvelopeTooltip);
-    private static readonly GUIContent FillLabel = new GUIContent("FILL", FillTooltip);
-    private static readonly GUIContent DropLabel = new GUIContent("DROP", DropTooltip);
-    private static readonly GUIContent EnergyLabel = new GUIContent("ENERGY", EnergyTooltip);
-    private static readonly GUIContent PhraseLabel = new GUIContent("PHRASE", PhraseTooltip);
-    private static readonly GUIContent LevelsLabel = new GUIContent("LEVELS", LevelsTooltip);
-    private static readonly GUIContent ColorLabel = new GUIContent("COLOR", ColorTooltip);
+    private static readonly GUIContent EnvelopeLabel = new("ENVELOPE", EnvelopeTooltip);
+    private static readonly GUIContent FillLabel = new("FILL", FillTooltip);
+    private static readonly GUIContent DropLabel = new("DROP", DropTooltip);
+    private static readonly GUIContent EnergyLabel = new("ENERGY", EnergyTooltip);
+    private static readonly GUIContent PhraseLabel = new("PHRASE", PhraseTooltip);
+    private static readonly GUIContent LevelsLabel = new("LEVELS", LevelsTooltip);
 
-    private static readonly Color PanelBackgroundColor = new Color(0.035f, 0.04f, 0.055f);
-    private static readonly Color PanelLiveAccentColor = new Color(0.10f, 0.85f, 0.95f);
-    private static readonly Color PanelOfflineAccentColor = new Color(0.45f, 0.12f, 0.16f);
-    private static readonly Color LiveBadgeColor = new Color(0.02f, 0.38f, 0.30f);
-    private static readonly Color OfflineBadgeColor = new Color(0.28f, 0.08f, 0.08f);
-    private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.08f);
-    private static readonly Color MeterTrackColor = new Color(0.07f, 0.08f, 0.10f);
-    private static readonly Color BeatMeterColor = new Color(0.12f, 0.92f, 1f);
-    private static readonly Color OffBeatMeterColor = new Color(1f, 0.42f, 0.92f);
-    private static readonly Color EighthMeterColor = new Color(0.62f, 1f, 0.25f);
-    private static readonly Color BeatChipColor = new Color(0.08f, 0.28f, 0.34f);
-    private static readonly Color OnBeatChipColor = new Color(0.10f, 0.32f, 0.18f);
-    private static readonly Color OffBeatChipColor = new Color(0.26f, 0.10f, 0.32f);
-    private static readonly Color OffBeatGateChipColor = new Color(0.24f, 0.10f, 0.25f);
-    private static readonly Color DisabledDotColor = new Color(0.32f, 0.34f, 0.38f);
-    private static readonly Color PastBeatDotColor = new Color(0.16f, 0.42f, 0.45f);
-    private static readonly Color FutureBeatDotColor = new Color(0.30f, 0.33f, 0.38f);
-    private static readonly Color CurrentBeatSteadyColor = new Color(0.10f, 0.70f, 0.78f);
-    private static readonly Color CurrentBeatFlashColor = new Color(0.28f, 1f, 0.98f);
-    private static readonly Color OffBeatSteadyColor = new Color(0.45f, 0.08f, 0.42f);
-    private static readonly Color OffBeatFlashColor = new Color(1f, 0.42f, 0.92f);
-    private static readonly Color OffBeatInactiveColor = new Color(0.34f, 0.24f, 0.38f, 1f);
-    private static readonly Color OffBeatDisabledColor = new Color(0.34f, 0.24f, 0.38f, 0.55f);
-    private static readonly Color WaveformCurveIdleColor = new Color(0.34f, 0.42f, 0.47f);
-    private static readonly Color EnvelopeMeterColor = new Color(0.12f, 0.92f, 1f);
-    private static readonly Color FillNowChipColor = new Color(0.10f, 0.42f, 0.22f);
-    private static readonly Color FillSoonChipColor = new Color(0.08f, 0.28f, 0.20f);
-    private static readonly Color FillMeterColor = new Color(0.35f, 0.95f, 0.55f);
-    private static readonly Color DropNowChipColor = new Color(0.44f, 0.12f, 0.30f);
-    private static readonly Color DropSoonChipColor = new Color(0.24f, 0.10f, 0.22f);
-    private static readonly Color DropMeterColor = new Color(1f, 0.42f, 0.62f);
-    private static readonly Color PhraseEventIdleChipColor = new Color(0.20f, 0.21f, 0.24f);
-    private static readonly Color EnergyLowChipColor = new Color(0.10f, 0.30f, 0.45f);
-    private static readonly Color EnergyMidChipColor = new Color(0.46f, 0.34f, 0.06f);
-    private static readonly Color EnergyHighChipColor = new Color(0.50f, 0.12f, 0.16f);
-    private static readonly Color EnergyMeterColor = new Color(1f, 0.72f, 0.25f);
-    private static readonly Color PhraseMeterColor = new Color(0.62f, 0.55f, 1f);
-    private static readonly Color LowBandColor = new Color(0.95f, 0.40f, 0.30f);
-    private static readonly Color MidBandColor = new Color(0.40f, 0.90f, 0.45f);
-    private static readonly Color HighBandColor = new Color(0.40f, 0.60f, 1f);
-    private static readonly Color SwatchBorderColor = new Color(1f, 1f, 1f, 0.18f);
+    private static readonly Color PanelBackgroundColor = new(0.035f, 0.04f, 0.055f);
+    private static readonly Color PanelLiveAccentColor = new(0.10f, 0.85f, 0.95f);
+    private static readonly Color PanelOfflineAccentColor = new(0.45f, 0.12f, 0.16f);
+    private static readonly Color LiveBadgeColor = new(0.02f, 0.38f, 0.30f);
+    private static readonly Color OfflineBadgeColor = new(0.28f, 0.08f, 0.08f);
+    private static readonly Color DividerColor = new(1f, 1f, 1f, 0.08f);
+    private static readonly Color MeterTrackColor = new(0.07f, 0.08f, 0.10f);
+    private static readonly Color BeatMeterColor = new(0.12f, 0.92f, 1f);
+    private static readonly Color OffBeatMeterColor = new(1f, 0.42f, 0.92f);
+    private static readonly Color EighthMeterColor = new(0.62f, 1f, 0.25f);
+    private static readonly Color BeatChipColor = new(0.08f, 0.28f, 0.34f);
+    private static readonly Color OnBeatChipColor = new(0.10f, 0.32f, 0.18f);
+    private static readonly Color OffBeatChipColor = new(0.26f, 0.10f, 0.32f);
+    private static readonly Color OffBeatGateChipColor = new(0.24f, 0.10f, 0.25f);
+    private static readonly Color DisabledDotColor = new(0.32f, 0.34f, 0.38f);
+    private static readonly Color PastBeatDotColor = new(0.16f, 0.42f, 0.45f);
+    private static readonly Color FutureBeatDotColor = new(0.30f, 0.33f, 0.38f);
+    private static readonly Color CurrentBeatSteadyColor = new(0.10f, 0.70f, 0.78f);
+    private static readonly Color CurrentBeatFlashColor = new(0.28f, 1f, 0.98f);
+    private static readonly Color OffBeatSteadyColor = new(0.45f, 0.08f, 0.42f);
+    private static readonly Color OffBeatFlashColor = new(1f, 0.42f, 0.92f);
+    private static readonly Color OffBeatInactiveColor = new(0.34f, 0.24f, 0.38f, 1f);
+    private static readonly Color OffBeatDisabledColor = new(0.34f, 0.24f, 0.38f, 0.55f);
+    private static readonly Color WaveformCurveIdleColor = new(0.34f, 0.42f, 0.47f);
+    private static readonly Color EnvelopeMeterColor = new(0.12f, 0.92f, 1f);
+    private static readonly Color FillNowChipColor = new(0.10f, 0.42f, 0.22f);
+    private static readonly Color FillSoonChipColor = new(0.08f, 0.28f, 0.20f);
+    private static readonly Color FillMeterColor = new(0.35f, 0.95f, 0.55f);
+    private static readonly Color DropNowChipColor = new(0.44f, 0.12f, 0.30f);
+    private static readonly Color DropSoonChipColor = new(0.24f, 0.10f, 0.22f);
+    private static readonly Color DropMeterColor = new(1f, 0.42f, 0.62f);
+    private static readonly Color PhraseEventIdleChipColor = new(0.20f, 0.21f, 0.24f);
+    private static readonly Color EnergyLowChipColor = new(0.10f, 0.30f, 0.45f);
+    private static readonly Color EnergyMidChipColor = new(0.46f, 0.34f, 0.06f);
+    private static readonly Color EnergyHighChipColor = new(0.50f, 0.12f, 0.16f);
+    private static readonly Color EnergyMeterColor = new(1f, 0.72f, 0.25f);
+    private static readonly Color PhraseMeterColor = new(0.62f, 0.55f, 1f);
+    private static readonly Color LowBandColor = new(0.95f, 0.40f, 0.30f);
+    private static readonly Color MidBandColor = new(0.40f, 0.90f, 0.45f);
+    private static readonly Color HighBandColor = new(0.40f, 0.60f, 1f);
 
     private static GUIStyle titleStyle;
     private static GUIStyle rowLabelStyle;
@@ -158,7 +150,6 @@ internal static class BeatManagerDashboardRenderer
     private static GUIStyle queriesHeaderStyle;
     private static GUIStyle hintStyle;
     private static GUIStyle nullStyle;
-    private static GUIStyle nullCenterStyle;
     private static GUIStyle statusChipStyle;
     private static GUIStyle phraseTextStyle;
     private static GUIStyle bandLabelStyle;
@@ -224,9 +215,6 @@ internal static class BeatManagerDashboardRenderer
         y += QueryRowHeight + QueryRowGap;
 
         DrawLevelsRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Levels);
-        y += QueryRowHeight + QueryRowGap;
-
-        DrawColorRow(new Rect(content.x, y, content.width, SwatchRowHeight), model.ColorBank);
         return actions;
     }
 
@@ -375,7 +363,7 @@ internal static class BeatManagerDashboardRenderer
         var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
 
         WaveformPlot.Draw(plot, waveform, model.Synced ? WaveformPlot.Curve : WaveformCurveIdleColor,
-            model.Synced ? model.BarPhase : (float?)null);
+            model.Synced ? model.BarPhase : null);
 
         var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
         if (model.Synced)
@@ -486,34 +474,6 @@ internal static class BeatManagerDashboardRenderer
         GUI.Label(valueRect, $"{value:0.00}", valueStyle);
     }
 
-    private static void DrawColorRow(Rect row, ColorBankRowView colorBank)
-    {
-        var content = DrawQueryRowLabel(row, ColorLabel);
-        var segmentWidth = Mathf.Max(0f, (content.width - (SegmentGap * 2f)) / 3f);
-        DrawSwatch(new Rect(content.x, content.y, segmentWidth, content.height), "RGB", colorBank.Rgb);
-        DrawSwatch(new Rect(content.x + segmentWidth + SegmentGap, content.y, segmentWidth, content.height), "HUE", colorBank.Hue);
-        DrawSwatch(new Rect(content.x + ((segmentWidth + SegmentGap) * 2f), content.y, segmentWidth, content.height), "PAL", colorBank.Palette);
-    }
-
-    private static void DrawSwatch(Rect rect, string label, Color? color)
-    {
-        GUI.Label(new Rect(rect.x, rect.y, 30f, rect.height), label, bandLabelStyle);
-
-        var box = new Rect(rect.x + 32f, rect.y + 3f, Mathf.Max(0f, rect.width - 32f), rect.height - 6f);
-        EditorGUI.DrawRect(box, SwatchBorderColor);
-
-        var inner = new Rect(box.x + 1f, box.y + 1f, Mathf.Max(0f, box.width - 2f), Mathf.Max(0f, box.height - 2f));
-        if (color is { } value)
-        {
-            EditorGUI.DrawRect(inner, new Color(value.r, value.g, value.b, 1f));
-        }
-        else
-        {
-            EditorGUI.DrawRect(inner, MeterTrackColor);
-            GUI.Label(inner, "—", nullCenterStyle);
-        }
-    }
-
     private static Rect DrawQueryRowLabel(Rect row, GUIContent label)
     {
         GUI.Label(new Rect(row.x, row.y, QueryRowLabelWidth, row.height), label, rowLabelStyle);
@@ -554,18 +514,12 @@ internal static class BeatManagerDashboardRenderer
     }
 
     /// <summary>Maps the canonical Energy ladder onto dashboard chip colors.</summary>
-    private static Color GetEnergyChipColor(global::Energy level)
+    private static Color GetEnergyChipColor(Energy level) => level switch
     {
-        switch (level)
-        {
-            case global::Energy.Low:
-                return EnergyLowChipColor;
-            case global::Energy.Mid:
-                return EnergyMidChipColor;
-            default:
-                return EnergyHighChipColor;
-        }
-    }
+        Energy.Low => EnergyLowChipColor,
+        Energy.Mid => EnergyMidChipColor,
+        _ => EnergyHighChipColor,
+    };
 
     private static Rect TakeLeft(ref Rect rect, float width)
     {
@@ -602,21 +556,18 @@ internal static class BeatManagerDashboardRenderer
         GUI.color = previous;
     }
 
-    private static Color GetBeatDotColor(BeatManagerDashboardModel model, int beatLabel)
-    {
-        switch (model.GetBeatMarkerState(beatLabel))
+    /// <summary>Chooses the dashboard color for one musical beat marker.</summary>
+    private static Color GetBeatDotColor(BeatManagerDashboardModel model, int beatLabel) =>
+        model.GetBeatMarkerState(beatLabel) switch
         {
-            case BeatMarkerState.Past:
-                return PastBeatDotColor;
-            case BeatMarkerState.Current:
-                return Color.Lerp(CurrentBeatSteadyColor, CurrentBeatFlashColor,
-                    model.OnBeat ? Mathf.Max(0.45f, model.BeatPulse) : model.BeatPulse * 0.35f);
-            case BeatMarkerState.Future:
-                return FutureBeatDotColor;
-            default:
-                return DisabledDotColor;
-        }
-    }
+            BeatMarkerState.Past => PastBeatDotColor,
+            BeatMarkerState.Current => Color.Lerp(
+                CurrentBeatSteadyColor,
+                CurrentBeatFlashColor,
+                model.OnBeat ? Mathf.Max(0.45f, model.BeatPulse) : model.BeatPulse * 0.35f),
+            BeatMarkerState.Future => FutureBeatDotColor,
+            _ => DisabledDotColor,
+        };
 
     private static void EnsureStyles()
     {
@@ -688,10 +639,6 @@ internal static class BeatManagerDashboardRenderer
         {
             normal = { textColor = new Color(0.45f, 0.50f, 0.55f) },
             alignment = TextAnchor.MiddleLeft,
-        };
-        nullCenterStyle = new GUIStyle(nullStyle)
-        {
-            alignment = TextAnchor.MiddleCenter,
         };
         statusChipStyle = new GUIStyle(EditorStyles.miniBoldLabel)
         {

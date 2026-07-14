@@ -149,11 +149,11 @@ public sealed class Director
     // Phantom instances during loops are accepted cosmetics — sheets self-heal on the announcement check and
     // the starvation guard floors any stillness — so no monotonicity or near-boundary guard belongs here
     // (live evidence: the 2026-07-05 session logs, where a looped 16-beat section sawtoothed the countdown).
-    private readonly LaneMemory<PhraseLaneObservation> phraseLane = new LaneMemory<PhraseLaneObservation>(
+    private readonly LaneMemory<PhraseLaneObservation> phraseLane = new(
         (previous, current) => previous is { } last && current.BeatsUntilNext > last.BeatsUntilNext,
         clearOnAbsence: true);
 
-    private readonly LaneMemory<PhraseAnnouncement> nextAnnouncementLane = new LaneMemory<PhraseAnnouncement>(
+    private readonly LaneMemory<PhraseAnnouncement> nextAnnouncementLane = new(
         (previous, current) => !(previous is { } last) || !last.Equals(current),
         clearOnAbsence: true);
 
@@ -170,6 +170,9 @@ public sealed class Director
     // 64 real beats — accepted; backsteps can only bring the floor forward, never delay it. It resets to zero
     // on any accepted Cue offer (the wall is committed to change) and with reducer memory.
     private int starvedWakes;
+
+    /// <summary>Last Grid beat observed by the Director while recognizing a return to beat one.</summary>
+    private int? previousGridBeat;
 
     // The sheet builder's own law is a Cue Mark at least every four Grids; the guard restates that ceiling in
     // live time. The count resets at the accepted offer and the wall changes one Grid later, so the wakes at
@@ -258,9 +261,9 @@ public sealed class Director
         public readonly int Index;
         public readonly int DeckIndex;
 
-        public static Cast Staged(int index) => new Cast(index, -1);
+        public static Cast Staged(int index) => new(index, -1);
 
-        public static Cast FromDeck(int index, int deckIndex) => new Cast(index, deckIndex);
+        public static Cast FromDeck(int index, int deckIndex) => new(index, deckIndex);
     }
 
     /// <summary>
@@ -469,7 +472,7 @@ public sealed class Director
     /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence and reducer memory.</summary>
     public void ShowNow(int effectIndex, float durationSeconds)
     {
-        Trace(() => $"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Position.Beat)}");
+        Trace(() => $"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
         switcher.ShowNow(effectIndex);
         currentEffectIndexForSelection = effectIndex;
         ResetReducerMemory();
@@ -501,7 +504,7 @@ public sealed class Director
     {
         if (IsSyncedMode)
         {
-            Trace(() => $"TIMER_IGNORED_SYNC beat={FormatNullableBeat(controller.beatManager.Position.Beat)}");
+            Trace(() => $"TIMER_IGNORED_SYNC beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
             return;
         }
 
@@ -514,8 +517,8 @@ public sealed class Director
     {
         // The mode boundary owns cue teardown and reducer reset: a beat-domain cue loaded while Synced carries
         // a Unity-time start and would fire into a dead clock, so abort any Switcher-held cue (even a locked
-        // one). Sheet memory must not cross a Standalone gap either; the hub owns and clears Grid identity as
-        // its synchronized doorway vanishes. Idempotent every-frame (ADR-0007).
+        // one). Sheet memory and the Director's prior Grid observation must not cross a Standalone gap either.
+        // Idempotent every-frame (ADR-0007).
         switcher.AbortLoadedCue();
         ResetReducerMemory();
         standaloneTimer.Update(deltaTime);
@@ -604,9 +607,10 @@ public sealed class Director
     /// </summary>
     private PhraseLaneObservation? ReadPhraseObservation()
     {
-        return controller.beatManager.Phrase.Span.Current is { BeatsRemaining: { } beatsRemaining } phrase
-            ? new PhraseLaneObservation(phrase.Name, phrase.LengthBeats ?? -1, beatsRemaining)
-            : (PhraseLaneObservation?)null;
+        var phrase = controller.beatManager.Phrase;
+        return phrase.Name is { } name && phrase.BeatsRemaining is { } beatsRemaining
+            ? new PhraseLaneObservation(name, phrase.LengthBeats ?? -1, beatsRemaining)
+            : null;
     }
 
     /// <summary>
@@ -617,10 +621,10 @@ public sealed class Director
     /// </summary>
     private PhraseAnnouncement? ReadNextAnnouncement()
     {
-        var phrase = controller.beatManager.Phrase;
-        return phrase.NextName is { } nextName
-            ? new PhraseAnnouncement(nextName, phrase.NextLengthBeats ?? -1)
-            : (PhraseAnnouncement?)null;
+        var phrase = controller.beatManager.NextPhrase;
+        return phrase.Name is { } nextName
+            ? new PhraseAnnouncement(nextName, phrase.LengthBeats ?? -1)
+            : null;
     }
 
     /// <summary>Shifts the next sheet into the current slot and empties the next slot (the observed turnover).</summary>
@@ -643,11 +647,11 @@ public sealed class Director
     {
         phraseLengthBeats = -1;
         phraseLabel = null;
-        if (controller.beatManager.Phrase.Span.Current is { LengthBeats: { } lengthBeats } phrase
-            && lengthBeats > 0)
+        var phrase = controller.beatManager.Phrase;
+        if (phrase.Name is { } name && phrase.LengthBeats is { } lengthBeats && lengthBeats > 0)
         {
             phraseLengthBeats = lengthBeats;
-            phraseLabel = phrase.Name;
+            phraseLabel = name;
             return true;
         }
 
@@ -659,8 +663,8 @@ public sealed class Director
     {
         phraseLengthBeats = -1;
         phraseLabel = null;
-        var phrase = controller.beatManager.Phrase;
-        if (phrase.NextName is { } nextName && phrase.NextLengthBeats is { } lengthBeats && lengthBeats > 0)
+        var phrase = controller.beatManager.NextPhrase;
+        if (phrase.Name is { } nextName && phrase.LengthBeats is { } lengthBeats && lengthBeats > 0)
         {
             phraseLengthBeats = lengthBeats;
             phraseLabel = nextName;
@@ -707,31 +711,34 @@ public sealed class Director
     /// </summary>
     private int DisplaySheetStart(CueLogSlot slot, int phraseLengthBeats)
     {
-        if (!(controller.beatManager.Position.Beat is { } beat))
+        if (!(controller.beatManager.Timing.Beat is { } beat))
         {
             return -1;
         }
 
         if (slot == CueLogSlot.Current)
         {
-            return controller.beatManager.Phrase.Span.Current is { BeatsRemaining: { } beatsRemaining }
+            return controller.beatManager.Phrase.BeatsRemaining is { } beatsRemaining
                 ? beat + beatsRemaining - phraseLengthBeats
                 : -1;
         }
 
-        return controller.beatManager.Phrase.NextInBeats is { } nextInBeats
+        return controller.beatManager.NextPhrase.BeatsUntil is { } nextInBeats
             ? beat + nextInBeats
             : -1;
     }
 
     /// <summary>
-    /// Casts and hands off a Cue when the hub reports that the 16-count returned to the One. Grid identity
-    /// belongs to <see cref="BeatManager.Grid"/>; a first or backward mid-Grid reading does not synthesize a wrap.
+    /// Casts and hands off a Cue when the BeatManager Grid returns to beat one. The Director compares the
+    /// current read-only value with its own prior observation; a first or backward mid-Grid reading is not a wrap.
     /// </summary>
     private void CastOnNewGrid()
     {
         var grid = controller.beatManager.Grid;
-        if (!grid.Wrapped || !(grid.Current is { Beat: { } gridBeat }))
+        var gridBeatValue = grid.Beat;
+        var wrapped = gridBeatValue == 1 && previousGridBeat is { } previous && previous != 1;
+        previousGridBeat = gridBeatValue;
+        if (!wrapped || gridBeatValue is not { } gridBeat)
         {
             return;
         }
@@ -742,7 +749,8 @@ public sealed class Director
 
         // The Phrase, read live: its position in the Phrase is length - beatsUntilNext. Both the carried-mark
         // path and the no-sheet boundary path need it, so it is read once here.
-        if (!(controller.beatManager.Phrase.Span.Current is { BeatsRemaining: { } beatsUntilNext, LengthBeats: { } lengthBeats } phrase))
+        var phrase = controller.beatManager.Phrase;
+        if (phrase.BeatsRemaining is not { } beatsUntilNext || phrase.LengthBeats is not { } lengthBeats)
         {
             return;
         }
@@ -811,7 +819,7 @@ public sealed class Director
     {
         // The one absolute beat a Cue needs is minted here, at the Switcher seam: the live clock beat plus the
         // beats-to-mark. No usable beat means no handoff — the Synced-but-no-beat edge the mode gate covers.
-        if (!(controller.beatManager.Position.Beat is { } seamBeat))
+        if (!(controller.beatManager.Timing.Beat is { } seamBeat))
         {
             return;
         }
@@ -911,7 +919,7 @@ public sealed class Director
             loaded.RunwayBeats,
             loaded.TailBeats,
             priorLoaded.HasCue ? CueLogUpsert.Replaced : CueLogUpsert.New,
-            priorLoaded.HasCue ? priorLoaded.CueMarkBeat : (int?)null);
+            priorLoaded.HasCue ? priorLoaded.CueMarkBeat : null);
     }
 
     /// <summary>Maps the preferred casting Repertoire onto the Cue Log's Fill/Drop/None flavor vocabulary.</summary>
@@ -939,12 +947,12 @@ public sealed class Director
         // Windows in beats-from-now: "this Grid" is [0, beatsToMark) — the Grid whose Boundary is the Cue Mark;
         // "next Grid" is [beatsToMark, beatsToMark + 16), which the Drop lands on the front of. Read from the
         // Fill/Drop lanes' own countdowns, never an absolute beat.
-        if (EventStartsWithin(controller.beatManager.Fill.NextInBeats, 0, beatsToMark))
+        if (EventStartsWithin(controller.beatManager.Fill.BeatsUntil, 0, beatsToMark))
         {
             return Repertoire.HandlesFill;
         }
 
-        if (EventStartsWithin(controller.beatManager.Drop.NextInBeats, beatsToMark, beatsToMark + CueSheet.GridBeats))
+        if (EventStartsWithin(controller.beatManager.Drop.BeatsUntil, beatsToMark, beatsToMark + CueSheet.GridBeats))
         {
             return Repertoire.HandlesDrop;
         }
@@ -1019,7 +1027,7 @@ public sealed class Director
     {
         return new SwitcherClockSnapshot(
             beat,
-            controller.beatManager.Clock.BeatFraction ?? 0f,
+            controller.beatManager.Timing.BeatProgress ?? 0f,
             CurrentSecondsPerBeat(),
             Time.time);
     }
@@ -1027,7 +1035,7 @@ public sealed class Director
     /// <summary>Returns live seconds per beat, falling back to the established 120-BPM cadence.</summary>
     private float CurrentSecondsPerBeat()
     {
-        return controller.beatManager.Clock.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
+        return controller.beatManager.Timing.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
     }
 
     /// <summary>Clears Director-owned sheet and phrase observations across a mode boundary.</summary>
@@ -1039,6 +1047,7 @@ public sealed class Director
         nextAnnouncementLane.Forget();
         phraseInstance = 0;
         starvedWakes = 0;
+        previousGridBeat = null;
     }
 
     /// <summary>Builds the downstream read-only view of the Director's current state.</summary>
@@ -1047,7 +1056,7 @@ public sealed class Director
         var isSynced = IsSyncedMode;
         var isHeld = controller.TryGetHeldEffectIndex(out _);
         var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
-        var currentBeat = isSynced && controller.beatManager.Position.Beat is { } beat ? beat : -1;
+        var currentBeat = isSynced && controller.beatManager.Timing.Beat is { } beat ? beat : -1;
 
         return new DirectorStatus(
             mode,
@@ -1077,7 +1086,7 @@ public sealed class Director
             return;
         }
 
-        Trace(() => $"MODE {lastLoggedMode}->{mode} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Position.Beat)}");
+        Trace(() => $"MODE {lastLoggedMode}->{mode} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
         lastLoggedMode = mode;
     }
 

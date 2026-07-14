@@ -71,7 +71,7 @@ public sealed class PerformerAccessPathTests
         var directorObservedWaveforms = transition.WasObserved;
         var effectObservedWaveforms = currentEffect.WasObserved;
 
-        UnityEngine.Object.DestroyImmediate(controllerObject);
+        Object.DestroyImmediate(controllerObject);
         yield return new ExitPlayMode();
 
         Assert.That(joinedMidGridWithoutCue, Is.True);
@@ -104,7 +104,7 @@ public sealed class PerformerAccessPathTests
         transition.Init();
         transition.OnStart();
 
-        UnityEngine.Object.DestroyImmediate(controllerObject);
+        Object.DestroyImmediate(controllerObject);
         yield return new ExitPlayMode();
 
         Assert.That(liveBeatManager, Is.Not.Null);
@@ -137,7 +137,7 @@ public sealed class PerformerAccessPathTests
         var childBeatManager = child.beatManager;
         var childWaveforms = child.waveforms;
 
-        UnityEngine.Object.DestroyImmediate(controllerObject);
+        Object.DestroyImmediate(controllerObject);
         yield return new ExitPlayMode();
 
         Assert.That(liveBeatManager, Is.Not.Null);
@@ -190,15 +190,15 @@ public sealed class PerformerAccessPathTests
         }
         finally
         {
-            UnityEngine.Object.DestroyImmediate(controllerObject);
+            Object.DestroyImmediate(controllerObject);
         }
     }
 
     /// <summary>
-    /// Proves EffectBase reports the hub's one-frame Grid wrap Edge without rebuilding or gating it.
+    /// Proves EffectBase detects the Grid returning to one from its own prior observation.
     /// </summary>
     [Test]
-    public void EffectGridHookMatchesGridWrappedExactly()
+    public void EffectGridHookUsesConsumerLocalGridHistory()
     {
         var controllerObject = new GameObject("performer-access-grid-controller");
         var controller = controllerObject.AddComponent<Controller>();
@@ -214,24 +214,21 @@ public sealed class PerformerAccessPathTests
             });
             controller.beatManager.Update(0f);
             effect.UpdateTime();
-            Assert.That(controller.beatManager.Grid.Wrapped, Is.False);
             Assert.That(effect.NewGridCount, Is.Zero);
 
             BeatManagerWireFixture.Feed(controller.beatManager, snapshot => snapshot.timingGrid = new TimingGrid { beat = 1, bar = 1, state = "disputed" });
             controller.beatManager.Update(0f);
             effect.UpdateTime();
-            Assert.That(controller.beatManager.Grid.Wrapped, Is.True, "the wire's 16-count returned to One");
-            Assert.That(effect.NewGridCount, Is.EqualTo(1), "Grid State is data, never a gate");
+            Assert.That(effect.NewGridCount, Is.EqualTo(1), "the observed 16-count returned to One");
 
             BeatManagerWireFixture.Feed(controller.beatManager, snapshot => snapshot.timingGrid = new TimingGrid { beat = 2, bar = 1, state = "disputed" });
             controller.beatManager.Update(0f);
             effect.UpdateTime();
-            Assert.That(controller.beatManager.Grid.Wrapped, Is.False);
-            Assert.That(effect.NewGridCount, Is.EqualTo(1), "the hook performs no latched response after the Edge closes");
+            Assert.That(effect.NewGridCount, Is.EqualTo(1), "the hook does not repeat away from the boundary");
         }
         finally
         {
-            UnityEngine.Object.DestroyImmediate(controllerObject);
+            Object.DestroyImmediate(controllerObject);
         }
     }
 
@@ -447,7 +444,7 @@ public sealed class PerformerAccessPathTests
     /// <summary>Effect probe that counts the existing protected Grid hook.</summary>
     private sealed class GridHookEffect : EffectBase
     {
-        /// <summary>Number of hub Grid wrap Edges reported to this Effect.</summary>
+        /// <summary>Number of Grid returns detected from this Effect's local prior observation.</summary>
         public int NewGridCount { get; private set; }
 
         /// <summary>This Grid probe has no runtime debug detail.</summary>

@@ -36,7 +36,7 @@ public class Flock : EffectBase
     public static float GetBeatSpeedMultiplier(float envelope)
     {
         float shapedEnvelope = Mathf.Pow(Mathf.Clamp01(envelope), 1.5f);
-        return BaseSpeedMultiplier + (shapedEnvelope * BeatSpeedLift);
+        return shapedEnvelope.Lerp(BaseSpeedMultiplier, BaseSpeedMultiplier + BeatSpeedLift);
     }
 
 
@@ -52,7 +52,8 @@ public class Flock : EffectBase
         }
 
         Color.RGBToHSV(color, out var hue, out var saturation, out var value);
-        var shifted = Color.HSVToRGB((hue + (amount * LowEnergyHueShift)) % 1f, saturation, value);
+        var hueShift = amount.Lerp(0f, LowEnergyHueShift);
+        var shifted = Color.HSVToRGB((hue + hueShift) % 1f, saturation, value);
         shifted.a = color.a;
         return shifted;
     }
@@ -98,7 +99,7 @@ public class Flock : EffectBase
     public override void Draw()
     {
         float envelope = waveform.Envelope;
-        float lowEnergy = beatManager.Levels?.Smoothed.Low ?? 0f;
+        float lowEnergy = beatManager.Levels.Smoothed.Low;
         float speedMultiplier = GetBeatSpeedMultiplier(envelope);
         buffer.Fade(0.925f);
         for (int i = 0; i < flock.Length; i++)

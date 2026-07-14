@@ -1,4 +1,4 @@
-// Editor-side presentation model for the canonical Fill and Drop doorways. It lives beside its only
+// Editor-side presentation model for the canonical Fill and Drop values. It lives beside its only
 // consumer — the BeatManager dashboard — and never feeds state back into the runtime.
 
 #nullable enable
@@ -16,9 +16,9 @@ public enum PhraseEventState
 }
 
 /// <summary>
-/// The display model of a Fill or Drop doorway: the status chip label, the
+/// The display model of Fill or Drop values: the status chip label, the
 /// meter fill in [0..1], the one-line readout, and the <see cref="PhraseEventState"/> classifying it.
-/// Built once by <see cref="Of"/> so the BeatManager inspector formats both doorway shapes identically.
+/// Built once by <see cref="Of"/> so the BeatManager inspector formats both shapes identically.
 /// </summary>
 public readonly struct PhraseEventView
 {
@@ -42,35 +42,33 @@ public readonly struct PhraseEventView
         State = state;
     }
 
-    /// <summary>Builds the display model for the canonical Fill doorway.</summary>
-    public static PhraseEventView Of(FillView fill)
+    /// <summary>Builds the display model for the canonical Fill values.</summary>
+    public static PhraseEventView Of(FillValues fill)
     {
-        var current = fill.Span.Current;
         return Of(
-            current.HasValue,
-            fill.NextInBeats,
-            fill.NextLengthBeats,
-            fill.RemainingOnTrack,
-            current?.BeatsRemaining,
-            current?.LengthBeats,
-            fill.Span.Progress);
+            fill.Active == true,
+            fill.BeatsUntil,
+            fill.LengthBeats,
+            fill.Remaining,
+            fill.BeatsRemaining,
+            fill.LengthBeats,
+            fill.Progress);
     }
 
-    /// <summary>Builds the display model for the canonical Drop doorway.</summary>
-    public static PhraseEventView Of(DropView drop)
+    /// <summary>Builds the display model for the canonical Drop values.</summary>
+    public static PhraseEventView Of(DropValues drop)
     {
-        var current = drop.Span.Current;
         return Of(
-            current.HasValue,
-            drop.NextInBeats,
-            drop.NextLengthBeats,
-            drop.RemainingOnTrack,
-            current?.BeatsRemaining,
-            current?.LengthBeats,
-            drop.Span.Progress);
+            drop.Active == true,
+            drop.BeatsUntil,
+            drop.LengthBeats,
+            drop.Remaining,
+            drop.BeatsRemaining,
+            drop.LengthBeats,
+            drop.Progress);
     }
 
-    /// <summary>Formats either doorway through their shared countdown-span display shape.</summary>
+    /// <summary>Formats either group through their shared countdown display shape.</summary>
     private static PhraseEventView Of(bool running, int? nextInBeats, int? nextLengthBeats,
         int? remainingOnTrack, int? beatsRemaining, int? runningLengthBeats, float? progress)
     {

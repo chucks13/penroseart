@@ -36,7 +36,7 @@ using Random = UnityEngine.Random;
 ///   across the whole wall as a bright colored wavefront (the luminance lift rides the sweeping leading edge, in
 ///   palette color, never white), easing back over a couple of bars so the drop lands as one dramatic sweep that
 ///   resolves into a new crystal field.</description></item>
-/// <item><description>HOW FAST the front lunges — <see cref="PulsesView.Beat"/> surges the spread rate on
+/// <item><description>HOW FAST the front lunges — <see cref="PulsesValues.Beat"/> surges the spread rate on
 ///   each hit; Standalone falls back to a self-driven surge so its fronts still lunge on the synthetic downbeats.</description></item>
 /// <item><description>OVERALL brightness — this Effect evaluates its held Waveform and maps the envelope locally;
 ///   clockless rendering holds steady.</description></item>
@@ -152,7 +152,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Fraction of front brightness lost per second; sets how fast the trail fades from the bright front down to the floor.</summary>
     private float leakPerSec;
 
-    /// <summary>Extra spread multiplier applied at the peak of <see cref="PulsesView.Beat"/>.</summary>
+    /// <summary>Extra spread multiplier applied at the peak of <see cref="PulsesValues.Beat"/>.</summary>
     private float beatSurge;
 
     /// <summary>Accumulated fractional front passes carried between frames (framerate-independent spread).</summary>
@@ -179,19 +179,19 @@ public class CrystalGrowth : EffectBase
     /// <summary>Standalone-only seconds per synthetic downbeat (re-jittered each tick so it never feels mechanical).</summary>
     private float selfBeatPeriod;
 
-    /// <summary>Standalone-only spread surge envelope (1 at a synthetic downbeat, decaying to 0) — stands in for <see cref="PulsesView.Beat"/>.</summary>
+    /// <summary>Standalone-only spread surge envelope (1 at a synthetic downbeat, decaying to 0).</summary>
     private float selfPulse;
 
-    /// <summary>The hub-owned Drop decay sampled this frame; drives the wavefront luminance lift and spread surge.</summary>
+    /// <summary>Drop Decay sampled this frame; drives the wavefront luminance lift and spread surge.</summary>
     private float dropFlash;
 
-    /// <summary>Whether live <see cref="BeatManager.Levels"/> were available this frame (false → no energy info, assume active).</summary>
-    private bool hasLevels;
+    private bool previousDropActive;
+    private bool previousSixteenthOn;
 
-    /// <summary>This frame's smoothed low-band (bass kick) level in [0..1]; 0 when no Levels.</summary>
+    /// <summary>This frame's smoothed low-band (bass kick) level in [0..1]; zero when wire levels are missing.</summary>
     private float kickLow;
 
-    /// <summary>This frame's average-band energy in [0..1], or -1 when no Levels (for the debug readout).</summary>
+    /// <summary>This frame's average-band energy in [0..1]; missing wire levels read as zero.</summary>
     private float energyNow;
 
     /// <summary>Last frame's "kick present" state, so each bass hit is edge-detected into one bloom.</summary>
@@ -244,10 +244,12 @@ public class CrystalGrowth : EffectBase
         selfBeatPeriod = Random.Range(SelfBeatPeriodMin, SelfBeatPeriodMax);
         selfPulse = 0f;
         lastKick = false;
-        energyNow = -1f;
+        energyNow = 0f;
         fillActive = false;
         fillLevel = 0f;
         dropFlash = 0f;
+        previousDropActive = beatManager.Drop.Active == true;
+        previousSixteenthOn = beatManager.Pulses.On(Duration.Sixteenth) == true;
 
         // Seed the very first crystal so Standalone Mode has something growing immediately.
         PlantSeed();
@@ -262,9 +264,7 @@ public class CrystalGrowth : EffectBase
     public override string DebugText()
     {
         string mode = beatManager.IsSynced ? "Synced" : "Standalone (self-driven)";
-        string levels = energyNow < 0f
-            ? "Levels: n/a"
-            : $"Energy: {energyNow:0.00}{(energyNow < KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > KickThreshold ? "ON" : "--")}";
+        string levels = $"Energy: {energyNow:0.00}{(energyNow < KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > KickThreshold ? "ON" : "--")}";
         string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (hold-back + swell)" : "";
         string dropReadout = dropFlash > 0f ? $"\nDROP SPARKLE {dropFlash:0.00}" : "";
         return $"Crystal Growth\nMode: {mode}\nLayer: {generation}\n{levels}{fillReadout}{dropReadout}";
@@ -282,7 +282,7 @@ public class CrystalGrowth : EffectBase
         // Read the live band energy first: it gates how much the wall couples to the beat. The crucial case is
         // a quiet break — when the average energy falls below a third, the audible beat is gone, so seeding, the
         // spread surge, and the brightness pulse all gate off and the crystal just keeps growing calmly instead
-        // of chasing a beat nobody can hear. 'activity' is 1 (full coupling) when no Levels are available.
+        // of chasing a beat nobody can hear. Missing wire levels are zero and therefore quiet.
         float activity = ReadLevels();
 
         // The fill is the short transition that leads into the next phrase — and it does not always land on a
@@ -291,25 +291,29 @@ public class CrystalGrowth : EffectBase
         // moment the fill ends — into the Drop sparkle when one lands, or back to normal growth when not.
         // Because the stock Fill Build is normalized to the fill's length, the arc scales with it — short fills snap,
         // long fills lean in.
-        var fill = beatManager.Fill.Span;
-        bool inFill = fill.Current.HasValue;
+        var fill = beatManager.Fill;
+        bool inFill = fill.Active == true;
         float fillAmount = fill.Build();
-        float ratchet = (beatManager.Pulses.GateEvery(Duration.Sixteenth) ?? false) ? 1f : 0f;
+        var sixteenthOn = beatManager.Pulses.On(Duration.Sixteenth) == true;
+        float ratchet = sixteenthOn ? 1f : 0f;
         fillActive = inFill;
         fillLevel = fillAmount;
 
-        var drop = beatManager.Drop.Span;
-        if (drop.Started)
+        var drop = beatManager.Drop;
+        var dropActive = drop.Active == true;
+        if (dropActive && !previousDropActive)
         {
             generation++;
             PlantUnisonSeeds(DropFlashSeeds);
         }
+        previousDropActive = dropActive;
         dropFlash = drop.Decay(DropFadeBars * BeatsPerBar);
 
-        if (beatManager.Pulses.GateOpenedEvery(Duration.Sixteenth) && dropFlash > 0.5f)
+        if (sixteenthOn && !previousSixteenthOn && dropFlash > 0.5f)
         {
             PlantSeeds(DropSeedBurst);
         }
+        previousSixteenthOn = sixteenthOn;
 
         SeedThisFrame(deltaTime);
 
@@ -320,7 +324,7 @@ public class CrystalGrowth : EffectBase
         float pulse = (beatManager.Pulses.Beat ?? selfPulse) * activity;
         float spread = spreadPerSec
             * (1f + (beatSurge * pulse))
-            * Mathf.Lerp(1f, 1f - FillHoldback, fillAmount)
+            * fillAmount.Lerp(1f, 1f - FillHoldback)
             * (1f + (DropRatchetSpread * dropFlash * ratchet))
             * (1f + (DropFlashSpread * dropFlash));
 
@@ -353,7 +357,7 @@ public class CrystalGrowth : EffectBase
 
         // Brightness pulses with the music; the floor is shallow (0.8) so lit tiles stay bright, and it lifts
         // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
-        float minimumBrightness = Mathf.Lerp(1f, 0.8f, activity);
+        float minimumBrightness = activity.Lerp(1f, 0.8f);
         float rhythmBrightness = waveform.Lerp(minimumBrightness, 1f);
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
@@ -377,7 +381,7 @@ public class CrystalGrowth : EffectBase
             // never drops below CrystalFloor, so the crystal lingers as a dim layer instead of going black. The
             // very tip whitens slightly into a crystalline sparkle.
             Color col = APalette.read(hue[i], true);
-            float tip = Mathf.InverseLerp(0.8f, 1f, c);
+            float tip = c.Remap(0.8f, 1f, 0f, 1f, clamp: true);
             col = Color.Lerp(col, Color.white, tip * 0.5f);
 
             // sqrt widens the bright band: the whole active growth area stays bright and only the oldest tail
@@ -444,25 +448,15 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Decides and plants this frame's seeds: Synced delegates to <see cref="SeedFromEnergy"/> when live band
-    /// energy is available, else to <see cref="SeedFromBeat"/>; Standalone runs a self-driven metronome.
+    /// Decides and plants this frame's seeds from levels while synced, or a self-driven clock in Standalone.
     /// </summary>
     private void SeedThisFrame(float dt)
     {
-        int? beatInBar = beatManager.Position.BeatInBar;
+        int? beatInBar = beatManager.Timing.BeatInBar;
 
         if (beatManager.IsSynced && beatInBar is { } bib)
         {
-            // With live Levels, let the bass kick drive the blooms (and gate them off in a quiet break). Without
-            // Levels there is no energy feed, so fall back to seeding on the beat counter itself.
-            if (hasLevels)
-            {
-                SeedFromEnergy(dt, bib);
-            }
-            else
-            {
-                SeedFromBeat(bib);
-            }
+            SeedFromEnergy(dt, bib);
             return;
         }
 
@@ -501,26 +495,16 @@ public class CrystalGrowth : EffectBase
 
     /// <summary>
     /// Samples the live smoothed <see cref="BeatManager.Levels"/> into this frame's <see cref="kickLow"/> /
-    /// <see cref="energyNow"/> / <see cref="hasLevels"/> and returns the beat-coupling "activity" in [0..1]:
+    /// <see cref="energyNow"/> and returns the beat-coupling "activity" in [0..1]:
     /// 0 in a fully quiet break, 1 while the track drives, ramped across <see cref="QuietEnergy"/>..
-    /// <see cref="ActiveEnergy"/> (straddling a third). Returns 1 when no Levels are available, so beat-driven
-    /// behavior is unchanged wherever there is no energy feed.
+    /// <see cref="ActiveEnergy"/> (straddling a third). Missing wire levels read as zero.
     /// </summary>
     private float ReadLevels()
     {
-        if (beatManager.Levels is { } levels)
-        {
-            hasLevels = true;
-            kickLow = levels.Smoothed.Low;
-            energyNow = levels.Smoothed.Average;
-            return Mathf.InverseLerp(QuietEnergy, ActiveEnergy, energyNow);
-        }
-
-        hasLevels = false;
-        kickLow = 0f;
-        energyNow = -1f;
-        lastKick = false; // re-arm the kick edge detector for when Levels return
-        return 1f;
+        var levels = beatManager.Levels;
+        kickLow = levels.Smoothed.Low;
+        energyNow = levels.Smoothed.Average;
+        return energyNow.Remap(QuietEnergy, ActiveEnergy, 0f, 1f, clamp: true);
     }
 
     /// <summary>
@@ -530,7 +514,7 @@ public class CrystalGrowth : EffectBase
     protected override void OnNewGrid() => APalette.Change();
 
     /// <summary>
-    /// Energy-aware seeding (used when live Levels exist): each rising edge of the bass kick blooms a burst sized
+    /// Energy-aware seeding: each rising edge of the bass kick blooms a burst sized
     /// by how hard it hits, while a gentle idle heartbeat keeps the wall growing at all times. In a quiet break
     /// the kick never crosses its threshold, so only the calm heartbeat runs — the crystal stops chasing the beat.
     /// </summary>
@@ -539,7 +523,8 @@ public class CrystalGrowth : EffectBase
         bool kickNow = kickLow > KickThreshold;
         if (kickNow && !lastKick)
         {
-            int burst = Mathf.RoundToInt(Mathf.Lerp(2f, 6f, Mathf.InverseLerp(KickThreshold, 1f, kickLow)));
+            float kickAmount = kickLow.Remap(KickThreshold, 1f, 0f, 1f, clamp: true);
+            int burst = Mathf.RoundToInt(kickAmount.Lerp(2f, 6f));
             if (bib == 1)
             {
                 burst += 2; // extra weight on the bar's one
@@ -560,22 +545,6 @@ public class CrystalGrowth : EffectBase
             seedTimer = 0f;
             seedInterval = Random.Range(SyncedIdleSeedMin, SyncedIdleSeedMax);
         }
-    }
-
-    /// <summary>
-    /// Beat-counter seeding (used when synced but no Levels feed exists): a fresh bloom on each new beat, bigger
-    /// on the bar's one. The hub's Drop Started edge gets its own one-shot flash, not extra seeds
-    /// here. This is the original behavior, kept for sources that carry a beat but no band energy.
-    /// </summary>
-    private void SeedFromBeat(int bib)
-    {
-        if (!beatManager.Beats.OnBeatOpened)
-        {
-            return;
-        }
-
-        int seeds = bib == 1 ? 3 : 1; // the bar's one blooms several fronts at once
-        PlantSeeds(seeds);
     }
 
     /// <summary>

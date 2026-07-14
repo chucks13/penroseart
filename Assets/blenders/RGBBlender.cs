@@ -24,9 +24,9 @@ public class RGBBlender : BlenderBase
                 Color c2 = src2[i];
 
                 dest[i] = new Color(
-                    Mathf.Lerp(c1.r, c2.r, settings[0]),
-                    Mathf.Lerp(c1.g, c2.g, settings[1]),
-                    Mathf.Lerp(c1.b, c2.b, settings[2])
+                    settings[0].Lerp(c1.r, c2.r),
+                    settings[1].Lerp(c1.g, c2.g),
+                    settings[2].Lerp(c1.b, c2.b)
                 );
             }
     }

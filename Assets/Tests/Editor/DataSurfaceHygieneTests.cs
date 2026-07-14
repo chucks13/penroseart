@@ -5,7 +5,6 @@
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using PenroseArt.RaveOsc;
 
 /// <summary>
 /// Guards the Data Surface's captured-state boundaries: served collections are immutable and
@@ -33,16 +32,16 @@ public sealed class DataSurfaceHygieneTests
         Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 4, 2 }));
     }
 
-    /// <summary>An out-of-range Duration serves unavailable facts and never reports an opening edge.</summary>
+    /// <summary>An out-of-range Duration serves unavailable pulse facts.</summary>
     [Test]
-    public void InvalidDurationReadsNullFactsAndFalseEdge()
+    public void InvalidDurationReadsNullFacts()
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f);
         beatManager.Update(0.25f);
         var invalidDuration = (Duration)99;
 
         Assert.That(beatManager.Pulses.Every(invalidDuration), Is.Null);
-        Assert.That(beatManager.Pulses.GateEvery(invalidDuration), Is.Null);
-        Assert.That(beatManager.Pulses.GateOpenedEvery(invalidDuration), Is.False);
+        Assert.That(beatManager.Pulses.On(invalidDuration), Is.Null);
+        Assert.That(typeof(PulsesValues).GetMethod("GateOpenedEvery"), Is.Null);
     }
 }

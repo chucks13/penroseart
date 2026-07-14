@@ -22,10 +22,10 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Transitions/TransitionBase.cs` | Base for effect-to-effect transitions and transition-as-blender behavior. |
 | `Assets/core/Reference/Transition.cs` | Legacy/orphaned transition shape inheriting `EffectBase`; not used by the current controller. |
 | `Assets/core/Rhythm/BeatManager.cs` | Private Rave snapshot ownership, live/Standalone source handling, `IsSynced`, per-frame derivation, and frame-coherent Data Surface capture. |
-| `Assets/core/Rhythm/ClockDoorway.cs`, `PositionDoorway.cs`, `TrackDoorway.cs` | Clock, playhead-position, and track-identity facts, plus the captured Track identity-change signal. |
-| `Assets/core/Rhythm/BeatsDoorway.cs`, `OffBeatsDoorway.cs`, `PulsesDoorway.cs`, `Duration.cs`, `Edges.cs` | Beat/offbeat countdowns and gates, idealized pulses, shared note durations, and captured edge primitives. |
-| `Assets/core/Rhythm/PhraseDoorway.cs`, `FillDoorway.cs`, `DropDoorway.cs`, `EnergyDoorway.cs`, `GridDoorway.cs`, `SpanView.cs` | Phrase-structure doorways, nullable Span facts, started/ended edges, and stock Build/Decay envelopes. |
-| `Assets/core/Rhythm/LoopDoorway.cs`, `LevelsDoorway.cs` | Flat loop facts and nullable normalized/smoothed/peak audio-band facts and color helpers. |
+| `Assets/core/Rhythm/TimingValues.cs`, `TrackValues.cs` | Captured route, timing, playhead-position, and track-identity values. |
+| `Assets/core/Rhythm/BeatsValues.cs`, `OffbeatsValues.cs`, `PulsesValues.cs`, `Duration.cs` | Beat/offbeat wire countdowns and triggers, plus tempo-based musical pulses. |
+| `Assets/core/Rhythm/PhraseValues.cs`, `FillValues.cs`, `DropValues.cs`, `EnergyValues.cs`, `GridValues.cs`, `StockEnvelopes.cs` | Phrase-structure wire values, direct progress facts, and Build/Decay calculations. |
+| `Assets/core/Rhythm/LoopValues.cs`, `LevelsValues.cs` | Loop wire values and always-available normalized/smoothed/peak audio-band values. |
 | `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Explicit immutable Waveform acquisition, clock-bound playback, Pool codec/load path, and four-bar Routine composition. |
 | `Assets/core/IO/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
 | `Assets/core/Switching/Director.cs` | Wire-change reducer (ADR-0011) for Standalone/Synced/Hold sequencing: holds two Cue Sheets repaired by invariant on each new-beat wake, casts a Cue lazily and preference-based when a Grid carrying a Cue Mark begins, and hands it to the Switcher fire-and-forget. Records no decision memory. Plus staged choices and read-only status. |
@@ -62,7 +62,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/BeatManagerDrawer.cs` | BeatManager property drawer and dashboard adapter. |
 | `Assets/Editor/Rhythm/BeatManagerDashboardModel.cs` | Editor-only rhythm dashboard display model, including phrase-event and rhythm text formatting. |
 | `Assets/Editor/Rhythm/BeatManagerDashboardRenderer.cs` | IMGUI rendering for the BeatManager dashboard. |
-| `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side Fill/Drop display model: chip, meter, readout, and Now/Soon/Idle state derived from the landed doorway and `SpanView` facts. |
+| `Assets/Editor/Rhythm/PhraseEventView.cs` | Editor-side Fill/Drop display model: chip, meter, readout, and Now/Soon/Idle state derived from the captured values. |
 | `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for nullable musical beat/count facts (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Sample` output. |

@@ -1,6 +1,7 @@
 #nullable enable
 
 using NUnit.Framework;
+using PenroseArt.RaveOsc;
 
 /// <summary>
 /// Pins <see cref="BeatManagerDrawer"/>'s pure visual-model helpers: the beat-dot glyph row and the
@@ -42,7 +43,7 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(pulse, Is.EqualTo(1f));
     }
 
-    /// <summary>An unresolved BeatManager renders Standalone labels and unavailable doorway rows.</summary>
+    /// <summary>An unresolved BeatManager renders Standalone labels and unavailable value rows.</summary>
     [Test]
     public void FromUsesStandaloneHeaderWhenBeatManagerIsUnavailable()
     {
@@ -54,5 +55,24 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(model.HeaderRightText, Is.EqualTo("-- BPM"));
         Assert.That(model.Fill.HasValue, Is.False);
         Assert.That(model.Drop.HasValue, Is.False);
+    }
+
+    /// <summary>NEXT BEAT follows the next musical label instead of reusing the current label's zero-ms gate.</summary>
+    [Test]
+    public void FromUsesTheFollowingMusicalLabelForNextBeat()
+    {
+        var beatManager = new BeatManager();
+        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot
+        {
+            beatInBar = 2,
+            beatAverageMs = 400,
+            beatsCountMs = new[] { 1200, 0, 400, 800 },
+            onBeats = new[] { false, true, false, false },
+        });
+        beatManager.Update(0f);
+
+        var model = BeatManagerDashboardModel.From(beatManager, Waveform.Parse("QQQQ", "8888"));
+
+        Assert.That(model.NextBeat.Value, Is.EqualTo("400ms"));
     }
 }

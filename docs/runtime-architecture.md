@@ -43,7 +43,7 @@ The active runtime frame flow is:
 
 1. `Controller.Update()` advances local frame time and optional command systems.
 2. `RaveOscReceiver.ApplyTo(beatManager)` applies the newest live Rave OSC state before any sequencing decision.
-3. `BeatManager.Update()` settles the live or Standalone source, derives shared signals, and captures every concept doorway once so the frame sees one coherent Data Surface.
+3. `BeatManager.Update()` settles the live or Standalone source, derives shared values, and captures every public value group once so the frame sees one coherent musical snapshot.
 4. `Director.Tick(deltaTime)` chooses Standalone, Synced, or Hold behavior.
 5. In Synced Mode, the Director wakes only on a new beat; it reads Grid and Phrase truth from `BeatManager` (wire-decoded) and repairs its two Cue Sheets by invariant.
 6. When a Grid carrying a Cue Mark begins, the Director casts a Cue lazily — a Fill on this Grid or a Drop on the next Grid makes capable Repertoire *preferred*, never required — reading the freshest wire truth.
@@ -65,7 +65,7 @@ Standalone Mode is the intentional self-running behavior when no live OSC source
 
 ### Synced Mode
 
-Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. Grid and Phrase truth come from the wire (RaveSystem OSC schema v2) decoded into BeatManager's concept doorways; the Director does not re-derive timing from arithmetic. The Director is a wire-change reducer (ADR-0011): it wakes once per new beat — nothing in the decision path runs per frame — and does three things.
+Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. Grid and Phrase truth come from the wire (RaveSystem OSC schema v2) decoded into BeatManager's shallow read-only groups; the Director does not re-derive timing from arithmetic. The Director is a wire-change reducer (ADR-0011): it wakes once per new beat — nothing in the decision path runs per frame — and does three things.
 
 On each wake the Director:
 
@@ -176,7 +176,7 @@ Switcher-rendered Effect or Transition buffer
 | Transitions/settings | `Assets/core/Transitions/TransitionBase.cs`, `Assets/core/Transitions/TransitionSettings*.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B; concrete Transitions own musical response while settings declare Runway/Tail/Shape/Intensity defaults and saved tuning. |
 | External blenders | `Assets/core/Blending/BlenderBase.cs`, `Assets/blenders/*.cs` | Mix incoming pixel-source data with the native Penrose buffer. |
 | Palette | `Assets/core/helpers/GPalette.cs` | Global palette sampling and animated palette transitions. |
-| Rhythm Data Surface | `Assets/core/Rhythm/BeatManager.cs`, `*Doorway.cs`, `SpanView.cs`, `Edges.cs`, `Duration.cs` | One live/Standalone musical gateway, split by concept into frame-coherent nullable facts, total Edges, pulses, and Stock Envelopes. |
+| Rhythm Data Surface | `Assets/core/Rhythm/BeatManager.cs`, `*Values.cs`, `StockEnvelopes.cs`, `Duration.cs` | One live/Standalone musical gateway exposing shallow, frame-coherent wire values and derived musical values. |
 | Waveform tools | `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Sibling acquisition surface, immutable clock-bound values, Pool loading/codec, and direct four-bar choreography composition. |
 | Rave OSC | `Assets/core/IO/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
 | Drum overlay | `Assets/core/ReactiveInputs/drums.cs` | Drum/ring overlay triggers and drawing. |

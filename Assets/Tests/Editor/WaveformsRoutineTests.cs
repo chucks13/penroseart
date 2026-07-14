@@ -28,9 +28,9 @@ public sealed class WaveformsRoutineTests
             Is.EqualTo(1f).Within(Tol), "bar 4 downbeat selects bar 4");
     }
 
-    /// <summary>Routine reads are observational and do not infer private Grid identity.</summary>
+    /// <summary>Routine reads are observational and do not manufacture Grid events.</summary>
     [Test]
-    public void Routine_RepeatedReadsArePureAndGridWrapIdentityStaysHubOwned()
+    public void Routine_RepeatedReadsArePureAndDoNotManufactureGridEvents()
     {
         var beatManager = CreateBeatManager();
         var routine = PinnedRoutine(beatManager, 0.25f, 0.5f, 0.75f, 1f);
@@ -40,7 +40,7 @@ public sealed class WaveformsRoutineTests
         var first = routine.Envelope;
         var second = routine.Envelope;
 
-        Assert.That(beatManager.Grid.Wrapped, Is.False, "a backward non-One position is not a wrap");
+        Assert.That(typeof(GridValues).GetProperty("Wrapped"), Is.Null);
         Assert.That(first, Is.EqualTo(0.75f).Within(Tol));
         Assert.That(second, Is.EqualTo(first));
     }

@@ -73,7 +73,7 @@ public class Pulse : EffectBase
     /// </summary>
     public override void Draw()
     {
-        var t = Mathf.InverseLerp(0f, seconds, Mathf.PingPong(effectTime, seconds));
+        var t = Mathf.PingPong(effectTime, seconds).Remap(0f, seconds, 0f, 1f, clamp: true);
         float waveHeight = waveform.Lerp(1f, 0f);
         for (int i = wave.Length - 1; i > 0; i--)
             wave[i] = wave[i - 1];

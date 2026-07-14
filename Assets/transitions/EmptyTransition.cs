@@ -7,7 +7,7 @@ using RepertoireFlags = Repertoire;
 /// </summary>
 /// <remarks>
 /// Authoring orientation:
-/// - Effects and Transitions receive the live Data Surface as <see cref="EffectBase.beatManager"/> or <see cref="TransitionBase.beatManager"/>.
+/// - Effects and Transitions receive live read-only musical values through <see cref="EffectBase.beatManager"/> or <see cref="TransitionBase.beatManager"/>.
 /// - They receive Waveform acquisition tools as <see cref="EffectBase.waveforms"/> or <see cref="TransitionBase.waveforms"/>.
 /// - <see cref="EffectBase.waveform"/> is neutral public artistic configuration that an owning Performer may replace.
 /// - Transitions declare only the public artistic configuration they actually use.
@@ -31,6 +31,8 @@ using RepertoireFlags = Repertoire;
 [RuntimeCatalogIgnore]
 public class EmptyTransition : TransitionBase
 {
+    private int? previousGridBeat;
+
     /// <summary>
     /// EXAMPLE — public artistic configuration used only by this Transition. An owner may replace it.
     /// </summary>
@@ -59,6 +61,7 @@ public class EmptyTransition : TransitionBase
     public override void OnStart()
     {
         waveform = waveforms.Random();
+        previousGridBeat = beatManager.Grid.Beat;
     }
 
     /// <summary>
@@ -66,9 +69,11 @@ public class EmptyTransition : TransitionBase
     /// </summary>
     public override void Draw()
     {
-        // EXAMPLE — transitions read musical moments directly; there is no transition Grid hook.
-        if (beatManager.Grid.Wrapped)
+        // EXAMPLE — this transition detects the grid boundary from its own prior observation.
+        var gridBeat = beatManager.Grid.Beat;
+        if (gridBeat == 1 && previousGridBeat is { } previous && previous != 1)
             waveform = waveforms.Random();
+        previousGridBeat = gridBeat;
 
         controller.effects[A].Draw();
         controller.effects[B].Draw();

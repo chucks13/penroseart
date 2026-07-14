@@ -20,12 +20,12 @@ internal static class WaveformPlot
     /// Canonical "on" curve color. Callers pass this for the active/normal state and substitute their
     /// own state color (e.g. idle or malformed) when appropriate.
     /// </summary>
-    public static readonly Color Curve = new Color(0.12f, 0.92f, 1f);
+    public static readonly Color Curve = new(0.12f, 0.92f, 1f);
 
-    private static readonly Color TrackColor = new Color(0.055f, 0.065f, 0.085f);
-    private static readonly Color GridColor = new Color(1f, 1f, 1f, 0.07f);
-    private static readonly Color PlayheadColor = new Color(1f, 0.92f, 0.35f);
-    private static readonly Color PlayheadLineColor = new Color(1f, 0.92f, 0.35f, 0.55f);
+    private static readonly Color TrackColor = new(0.055f, 0.065f, 0.085f);
+    private static readonly Color GridColor = new(1f, 1f, 1f, 0.07f);
+    private static readonly Color PlayheadColor = new(1f, 0.92f, 0.35f);
+    private static readonly Color PlayheadLineColor = new(1f, 0.92f, 0.35f, 0.55f);
 
     private const float VPad = 3f;   // keep the peak (1) and trough (0) just off the track edges
     private const int Samples = 128; // polyline resolution across the bar
@@ -70,7 +70,7 @@ internal static class WaveformPlot
         for (var i = 0; i <= Samples; i++)
         {
             var p = i / (float)Samples;
-            var y = Mathf.Lerp(bottom, top, Mathf.Clamp01(wf.Sample(p)));
+            var y = Mathf.Clamp01(wf.Sample(p)).Lerp(bottom, top);
             CurvePoints[i] = new Vector3(rect.x + (rect.width * p), y, 0f);
         }
 
@@ -89,7 +89,7 @@ internal static class WaveformPlot
         EditorGUI.DrawRect(new Rect(Mathf.Floor(px), rect.y, 1f, rect.height), PlayheadLineColor);
 
         var emitted = Mathf.Clamp01(wf.Sample(playheadPhase.Value));
-        var dotY = Mathf.Lerp(bottom, top, emitted);
+        var dotY = emitted.Lerp(bottom, top);
         EditorGUI.DrawRect(new Rect(px - 3f, dotY - 3f, 6f, 6f), PlayheadColor);
     }
 }

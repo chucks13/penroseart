@@ -5,8 +5,8 @@
 /// <summary>
 /// The shared musical ladder of note values: how much musical time something occupies, named by
 /// note value rather than a count. One ladder serves both sides of the vocabulary — a Hump's width
-/// <em>occupies</em> a Duration, and a Duration Pulse or Gate <em>runs every</em> Duration
-/// (<see cref="PulsesView.Every"/>). Sixteenth is the fastest allowed; finer rates are deliberately
+/// <em>occupies</em> a Duration, and a tempo-based pulse <em>runs every</em> Duration
+/// (<see cref="PulsesValues.Every"/>). Sixteenth is the fastest allowed; finer rates are deliberately
 /// excluded — musically unneeded and a full-wall flicker hazard (ADR-0001). Backbeat/offbeat
 /// placements are implementation spelling, not rungs on this ladder.
 /// </summary>

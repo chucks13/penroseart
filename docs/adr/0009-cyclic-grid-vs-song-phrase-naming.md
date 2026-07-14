@@ -22,10 +22,10 @@ The `GridSyncState` renamed here died with GridSync (ADR-0010): grid confidence 
 
 Now that grid state and grid position are wire-sourced, the surface types carry RaveSystem's own `timing_grid` field names verbatim: `GridConfidence` → `GridState`, `GridInfo.Confidence` → `GridInfo.State` (wire `state`), and `GridInfo.Count` → `GridInfo.Beat` (wire `beat`, 1..16). `GridInfo.Bar` already matched the wire; `GridInfo.Progress` stays as BeatManager's documented enrichment (wire beat plus the intra-beat fraction from one snapshot). The **Grid Confidence** / **Grid Count** vocabulary in `CONTEXT.md` becomes **Grid State** / **Grid Beat** to match. The rule this records: wire vocabulary is law at the surface — a boundary like BeatManager may type, validate, and enrich the lane, but it never re-words the wire's own field names. Members Locked/Coasting/Disputed are unchanged; this is a rename only, no behavior change.
 
-### Amendment (2026-07-11, beat-data-interface effort)
+### Amendment (2026-07-13, shallow BeatManager surface)
 
-The effect-facing Grid read later reshaped: the doorway is always present with the facts
-(State, Beat, Bar, Progress) nullable inside, so its wrap Edge and Stock Envelopes stay
-readable when the wire places no grid — the `GridInfo?` spelling is retired. Both rules
-this ADR records are unchanged: the cyclic side is named **Grid**, and wire vocabulary is
-law at the surface.
+ADR-0018 removed the public doorway, wrap-Edge, and generic Span layers. The
+effect-facing `Grid` value group now exposes `State`, `Beat`, `Bar`, `Progress`, `Build`,
+and `Decay` directly. Consumers compare prior Grid beats locally when they need a wrap
+event. Both rules this ADR records are unchanged: the cyclic side is named **Grid**, and
+wire vocabulary is law at the surface.

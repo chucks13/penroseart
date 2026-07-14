@@ -66,7 +66,7 @@ public enum CueLockVia
 public static class CueLogFormat
 {
     /// <summary>Renders the shared grid-position token: <c>grid=&lt;beat&gt;/16 bar=&lt;bar&gt;</c>, or <c>grid=off</c> when off the Grid.</summary>
-    public static string GridPosition(GridFacts? grid) =>
+    public static string GridPosition(GridValues? grid) =>
         grid is { Beat: { } beat, Bar: { } bar } ? $"grid={beat}/16 bar={bar}" : "grid=off";
 
     /// <summary>Renders the Phrase-label token: <c>phrase="&lt;label&gt;"</c>, or <c>phrase=?</c> when the wire carried no label.</summary>
@@ -89,7 +89,7 @@ public static class CueLogFormat
     /// sides of the boundary. A same-(label, length) turnover reads plainly as its own line.
     /// </summary>
     public static string PhraseTurnover(
-        GridFacts? grid,
+        GridValues? grid,
         string outgoingLabel,
         int outgoingLength,
         string incomingLabel,
@@ -103,7 +103,7 @@ public static class CueLogFormat
     /// wrap ordinal the announced Phrase is tracked as (the coming instance the next slot is keyed to).
     /// </summary>
     public static string NextPhrase(
-        GridFacts? grid,
+        GridValues? grid,
         string newLabel,
         int newLength,
         string replacedLabel,
@@ -116,7 +116,7 @@ public static class CueLogFormat
     public static string SheetBuilt(
         CueLogSlot slot,
         CueLogBuildReason reason,
-        GridFacts? grid,
+        GridValues? grid,
         string phrase,
         int start,
         int length,
@@ -126,7 +126,7 @@ public static class CueLogFormat
 
     /// <summary>Formats a <c>CUE_CAST</c> line: one Director cast offered to the Switcher, with its answer.</summary>
     public static string CueCast(
-        GridFacts? grid,
+        GridValues? grid,
         string phrase,
         int cueMarkBeat,
         int phraseRelativeOffset,
@@ -140,7 +140,7 @@ public static class CueLogFormat
 
     /// <summary>Formats a <c>CUE_KEPT</c> line: the keep-guard holds a workable loaded cue when a new Grid carries a mark.</summary>
     public static string CueKept(
-        GridFacts? grid,
+        GridValues? grid,
         string phrase,
         int offeredCueMarkBeat,
         int loadedCueMarkBeat,
@@ -154,7 +154,7 @@ public static class CueLogFormat
 
     /// <summary>Formats a <c>CUE_LOADED</c> line: the Switcher accepted a cue (fresh or upsert-replace).</summary>
     public static string CueLoaded(
-        GridFacts? grid,
+        GridValues? grid,
         string phrase,
         int cueMarkBeat,
         int phraseRelativeOffset,
@@ -176,7 +176,7 @@ public static class CueLogFormat
 
     /// <summary>Formats a <c>CUE_LOCKED</c> line: the monotonic lock latched for a loaded cue (once per cue).</summary>
     public static string CueLocked(
-        GridFacts? grid,
+        GridValues? grid,
         string phrase,
         int cueMarkBeat,
         int phraseRelativeOffset,
@@ -229,7 +229,7 @@ public sealed class CueLog : IDisposable
 
     private readonly Func<TextWriter> writerFactory;
     /// <summary>Reads canonical Grid facts at the instant an operator-facing line is written.</summary>
-    private readonly Func<GridFacts?> gridProbe;
+    private readonly Func<GridValues?> gridProbe;
     private readonly bool ownsWriter;
     private TextWriter writer;
     private bool writerFailed;
@@ -248,7 +248,7 @@ public sealed class CueLog : IDisposable
     /// live at write time. Test callers pass an in-memory writer and a fixed probe; <paramref name="ownsWriter"/>
     /// controls whether <see cref="Dispose"/> disposes the writer.
     /// </summary>
-    public CueLog(Func<TextWriter> writerFactory, Func<GridFacts?> gridProbe, bool ownsWriter = true)
+    public CueLog(Func<TextWriter> writerFactory, Func<GridValues?> gridProbe, bool ownsWriter = true)
     {
         this.writerFactory = writerFactory ?? throw new ArgumentNullException(nameof(writerFactory));
         this.gridProbe = gridProbe ?? (() => null);
@@ -260,7 +260,7 @@ public sealed class CueLog : IDisposable
     /// <see cref="MaxSessionLogs"/> existing logs first. The session file <c>penrose-&lt;yyyyMMdd-HHmmss&gt;.log</c>
     /// is created lazily on the first event so an idle session leaves no file behind.
     /// </summary>
-    public static CueLog CreateForSession(string logsDir, Func<GridFacts?> gridProbe)
+    public static CueLog CreateForSession(string logsDir, Func<GridValues?> gridProbe)
     {
         RotateSessionLogs(logsDir, MaxSessionLogs - 1);
         var fileName = $"penrose-{DateTime.Now:yyyyMMdd-HHmmss}.log";

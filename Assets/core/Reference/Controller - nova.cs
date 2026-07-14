@@ -501,7 +501,7 @@ public class Controller : Singleton<Controller>
     {
         if (om.address == "/1/vscroll1")       // brightness
         {
-            brightness = (int)Mathf.Lerp(255f, 0f, om.GetFloat(0));
+            brightness = (int)om.GetFloat(0).Lerp(255f, 0f);
         }
         if (om.address.StartsWith("/1/nav1"))
         {

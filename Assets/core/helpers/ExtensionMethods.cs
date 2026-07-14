@@ -5,16 +5,6 @@
 /// </summary>
 public static class ExtensionMethods
 {
-    #region ints
-
-    public static int ReMap(this int value, int inMin, int inMax, int outMin, int outMax)
-    {
-        return (int)((outMin + ((float)outMax - outMin) * ((float)value - inMin) /
-                     ((float)inMax - inMin)) + 0.5f);
-    }
-
-    #endregion
-
     #region Floats
 
     public static float Abs(this float v) => v < 0f ? v *= -1 : v;
@@ -34,19 +24,22 @@ public static class ExtensionMethods
 
     public static float Clamp01(this float value) { return value.Clamp(0f, 1f); }
 
-    public static float Map(
-      this float value, float inMin = 0f, float inMax = 1f, float outMin = 0f, float outMax = 1f,
-      bool clamp = false
-    )
+    /// <summary>Interpolates between two values using this normalized amount.</summary>
+    public static float Lerp(this float amount, float from, float to)
     {
-        var v = outMin + (outMax - outMin) * (value - inMin) / (inMax - inMin);
-        return clamp ? Clamp(v, outMin, outMax) : v;
+        return Mathf.Lerp(from, to, amount);
     }
 
-    /// <summary>Maps a float into 0..1 based on an input range.</summary>
-    public static float Map01(this float value, float inMin, float inMax, bool clamp = false)
+    /// <summary>Maps this value from one range to another, optionally clamping it to the input range.</summary>
+    public static float Remap(
+      this float value, float inMin, float inMax, float outMin, float outMax, bool clamp = false
+    )
     {
-        return value.Map(inMin, inMax, 0f, 1f, clamp);
+        if (Mathf.Approximately(inMin, inMax)) return outMin;
+
+        var amount = (value - inMin) / (inMax - inMin);
+        if (clamp) amount = Mathf.Clamp01(amount);
+        return Mathf.LerpUnclamped(outMin, outMax, amount);
     }
 
     #endregion
@@ -68,21 +61,6 @@ public static class ExtensionMethods
     /// <summary>Clamps a double to 0..1.</summary>
     public static double Clamp01(this double value) { return value.Clamp(0d, 1d); }
 
-    public static double Map(
-      this double value, double inMin = 0f, double inMax = 1f, double outMin = 0f, double outMax = 1f,
-      bool clamp = false
-    )
-    {
-        var v = outMin + (outMax - outMin) * (value - inMin) / (inMax - inMin);
-        return clamp ? Clamp(v, outMin, outMax) : v;
-    }
-
-    /// <summary>Maps a double into 0..1 based on an input range.</summary>
-    public static double Map01(this double value, double inMin, double inMax, bool clamp = false)
-    {
-        return value.Map(inMin, inMax, 0f, 1f, clamp);
-    }
-
     #endregion
 
     #region Float Arrays
@@ -102,8 +80,8 @@ public static class ExtensionMethods
     /// <summary>Returns the same color at full saturation and value.</summary>
     public static Color MaxHue(this Color color)
     {
-        Color.RGBToHSV(color, out var h, out var s, out var v);
-        return Color.HSVToRGB(h, 1f, 1f);
+        Color.RGBToHSV(color, out var hue, out _, out _);
+        return Color.HSVToRGB(hue, 1f, 1f);
     }
 
     /// <summary>Offsets a color hue by delta while preserving saturation and value.</summary>

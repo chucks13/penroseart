@@ -19,10 +19,10 @@ using UnityEngine;
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
 {
-    private static readonly Color CueMarkColor = new Color(0.25f, 0.95f, 1f);
-    private static readonly Color LiveBeatColor = new Color(1f, 0.9f, 0.35f);
-    private static readonly Color PassedMarkColor = new Color(0.42f, 0.42f, 0.42f);
-    private static readonly Color UpcomingMarkColor = new Color(0.18f, 0.5f, 0.55f);
+    private static readonly Color CueMarkColor = new(0.25f, 0.95f, 1f);
+    private static readonly Color LiveBeatColor = new(1f, 0.9f, 0.35f);
+    private static readonly Color PassedMarkColor = new(0.42f, 0.42f, 0.42f);
+    private static readonly Color UpcomingMarkColor = new(0.18f, 0.5f, 0.55f);
 
     private static bool showDirectorObservatory = false;
     private static bool showAdvancedTiming = false;
@@ -38,7 +38,7 @@ public sealed class ControllerEditor : Editor
         DrawDefaultInspector();
     }
 
-    /// <summary>Repaints continuously only while playing, where BeatData and Director status change every frame.</summary>
+    /// <summary>Repaints continuously only while playing, where BeatManager and Director status change every frame.</summary>
     public override bool RequiresConstantRepaint()
     {
         return Application.isPlaying;
@@ -73,7 +73,7 @@ public sealed class ControllerEditor : Editor
         var directorStatus = controller.DirectorStatus;
         var switcherStatus = controller.SwitcherStatus;
         var cueStatus = controller.SwitcherLoadedCueStatus;
-        var elapsed = ElapsedPhraseBeats(controller.beatManager?.Phrase.Span.Current);
+        var elapsed = ElapsedPhraseBeats(controller.beatManager != null ? controller.beatManager.Phrase : default);
 
         DrawDirectorIntent(controller, directorStatus);
         EditorGUILayout.Space(6f);
@@ -87,7 +87,7 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.Space(6f);
         DrawSwitcherExecution(switcherStatus);
         EditorGUILayout.Space(6f);
-        DrawAdvancedTiming(controller, directorStatus);
+        DrawAdvancedTiming(controller);
 
         EditorGUILayout.EndVertical();
     }
@@ -95,7 +95,7 @@ public sealed class ControllerEditor : Editor
     /// <summary>Draws the Director's current mode, hub position, staged choices, and hold flags.</summary>
     private static void DrawDirectorIntent(Controller controller, DirectorStatus status)
     {
-        var gridCount = controller.beatManager?.Grid.Current?.Beat ?? -1;
+        var gridCount = controller.beatManager?.Grid.Beat ?? -1;
         EditorGUILayout.LabelField("DIRECTOR", EditorStyles.boldLabel);
         DrawRow("Mode", status.Mode.ToString());
         DrawRow("Now", $"Beat {FormatBeat(status.CurrentBeat)} · Grid Count {FormatGridCount(gridCount)}");
@@ -120,7 +120,7 @@ public sealed class ControllerEditor : Editor
     {
         EditorGUILayout.LabelField("GRID", EditorStyles.boldLabel);
 
-        var liveBeat = controller.beatManager?.Grid.Current?.Beat ?? -1;
+        var liveBeat = controller.beatManager?.Grid.Beat ?? -1;
         var cueSlots = CueMarkGridSlots(status.CurrentSheet, liveBeat, elapsed);
 
         EditorGUILayout.BeginHorizontal();
@@ -199,8 +199,8 @@ public sealed class ControllerEditor : Editor
             DrawRow("Next Cue", "no upcoming cue");
         }
 
-        var phrase = controller.beatManager?.Phrase.Span.Current;
-        DrawRow("Phrase Remaining", phrase is { BeatsRemaining: { } left } ? $"{left}b" : "—");
+        var phrase = controller.beatManager != null ? controller.beatManager.Phrase : default;
+        DrawRow("Phrase Remaining", phrase.BeatsRemaining is { } left ? $"{left}b" : "—");
     }
 
     private static void DrawLoadedCue(Controller controller, DirectorStatus directorStatus, SwitcherCueStatus cueStatus)
@@ -239,8 +239,8 @@ public sealed class ControllerEditor : Editor
         DrawProgress("Transition Progress", switcherStatus.TransitionProgress);
     }
 
-    /// <summary>Draws optional timing detail directly from the canonical rhythm doorways.</summary>
-    private static void DrawAdvancedTiming(Controller controller, DirectorStatus status)
+    /// <summary>Draws optional timing detail directly from the canonical rhythm values.</summary>
+    private static void DrawAdvancedTiming(Controller controller)
     {
         showAdvancedTiming = EditorGUILayout.Foldout(showAdvancedTiming, "Advanced Wire Timing", true);
         if (!showAdvancedTiming)
@@ -249,26 +249,26 @@ public sealed class ControllerEditor : Editor
         }
 
         var beatManager = controller.beatManager;
-        var grid = beatManager?.Grid.Current;
-        DrawRow("Grid State", grid is { } g ? g.State.ToString() : "unlocked");
-        DrawRow("Grid Beat", grid is { Beat: { } gridBeat } ? $"{gridBeat}/{CueSheet.GridBeats}" : "—");
-        DrawRow("Grid Bar", grid is { Bar: { } gridBar } ? $"{gridBar}/4" : "—");
-        DrawRow("Phrase", FormatPhraseRow(beatManager?.Phrase.Span.Current));
-        DrawRow("Next Phrase", FormatNextPhraseRow(beatManager != null ? beatManager.Phrase : default));
-        DrawRow("Irregular Phrase", beatManager?.Phrase.Span.Current?.Irregular == true ? "yes" : "no");
-        DrawRow("Energy", FormatEnergyRow(beatManager != null ? beatManager.Energy : default));
+        var grid = beatManager != null ? beatManager.Grid : default;
+        DrawRow("Grid State", grid.State is { } state ? state.ToString() : "unlocked");
+        DrawRow("Grid Beat", grid.Beat is { } gridBeat ? $"{gridBeat}/{CueSheet.GridBeats}" : "—");
+        DrawRow("Grid Bar", grid.Bar is { } gridBar ? $"{gridBar}/4" : "—");
+        DrawRow("Phrase", FormatPhraseRow(beatManager != null ? beatManager.Phrase : default));
+        DrawRow("Next Phrase", FormatNextPhraseRow(beatManager != null ? beatManager.NextPhrase : default));
+        DrawRow("Irregular Phrase", beatManager?.Phrase.Irregular == true ? "yes" : "no");
+        DrawRow("Energy", FormatEnergyRow(beatManager));
         DrawRow("Loop", FormatLoopRow(beatManager != null ? beatManager.Loop : default));
     }
 
-    /// <summary>Current phrase as <c>label · elapsed/length</c>, from the canonical Phrase doorway.</summary>
-    private static string FormatPhraseRow(PhraseFacts? info)
+    /// <summary>Current phrase as <c>label · elapsed/length</c>, from the canonical Phrase values.</summary>
+    private static string FormatPhraseRow(PhraseValues phrase)
     {
-        if (!(info is { } phrase))
+        if (phrase.Name == null)
         {
             return "—";
         }
 
-        var span = ElapsedPhraseBeats(info) is { } elapsed && phrase.LengthBeats is { } length
+        var span = ElapsedPhraseBeats(phrase) is { } elapsed && phrase.LengthBeats is { } length
             ? $" · {elapsed}/{length}"
             : string.Empty;
         return $"{phrase.Name}{span}";
@@ -280,11 +280,11 @@ public sealed class ControllerEditor : Editor
     /// timing into an elapsed position; the Grid Strip overlay, Cue Mark states, and the beats-until-cue
     /// countdown all read from it.
     /// </summary>
-    private static int? ElapsedPhraseBeats(PhraseFacts? info)
+    private static int? ElapsedPhraseBeats(PhraseValues info)
     {
         return info is { LengthBeats: { } length, BeatsRemaining: { } untilNext }
             ? Mathf.Max(0, length - untilNext)
-            : (int?)null;
+            : null;
     }
 
     /// <summary>
@@ -346,38 +346,38 @@ public sealed class ControllerEditor : Editor
         return slots;
     }
 
-    /// <summary>Upcoming phrase as <c>label · in Nb · Nb long</c>, from the canonical Phrase doorway.</summary>
-    private static string FormatNextPhraseRow(PhraseView phrase)
+    /// <summary>Upcoming phrase as <c>label · in Nb · Nb long</c>, from the canonical NextPhrase values.</summary>
+    private static string FormatNextPhraseRow(NextPhraseValues phrase)
     {
-        if (!(phrase.NextName is { } nextName))
+        if (!(phrase.Name is { } nextName))
         {
             return "—";
         }
 
-        var untilChange = phrase.NextInBeats is { } beats ? $" · in {beats}b" : string.Empty;
-        var length = phrase.NextLengthBeats is { } len ? $" · {len}b long" : string.Empty;
+        var untilChange = phrase.BeatsUntil is { } beats ? $" · in {beats}b" : string.Empty;
+        var length = phrase.LengthBeats is { } len ? $" · {len}b long" : string.Empty;
         return $"{nextName}{untilChange}{length}";
     }
 
-    /// <summary>Energy as <c>level (→ next in Nb)</c>, from the canonical Energy doorway.</summary>
-    private static string FormatEnergyRow(EnergyView energy)
+    /// <summary>Energy as <c>level (→ next in Nb)</c>, from the canonical Energy values.</summary>
+    private static string FormatEnergyRow(BeatManager beatManager)
     {
-        if (!(energy.Run.Current is { } current))
+        if (beatManager == null || beatManager.Energy.Level is not { } level)
         {
             return "—";
         }
 
-        if (energy.NextLevel is { } next)
+        if (beatManager.NextEnergy.Level is { } next)
         {
-            var untilChange = energy.NextChangeInBeats is { } beats ? $" in {beats}b" : string.Empty;
-            return $"{current.Level} (→ {next}{untilChange})";
+            var untilChange = beatManager.NextEnergy.BeatsUntil is { } beats ? $" in {beats}b" : string.Empty;
+            return $"{level} (→ {next}{untilChange})";
         }
 
-        return current.Level.ToString();
+        return level.ToString();
     }
 
-    /// <summary>Loop as <c>rolling/set/off · Nb</c>, from the canonical Loop doorway.</summary>
-    private static string FormatLoopRow(LoopView loop)
+    /// <summary>Loop as <c>rolling/set/off · Nb</c>, from the canonical Loop values.</summary>
+    private static string FormatLoopRow(LoopValues loop)
     {
         if (loop.Rolling == null && loop.RegionSet == null && loop.LengthBeats == null)
         {

@@ -19,8 +19,8 @@ using UnityEngine;
 /// <code>DEFINE_WAVEFORM(name){ sequence | amplitude | rounding | offset }</code>
 /// <para>
 /// with <c>//</c> line comments and blank lines ignored, in the spirit of <c>palettedata.txt</c>. Every
-/// defect (a broken macro, a wrong field count, an unparseable number) is logged; nothing is silently
-/// dropped or substituted. <see cref="Serialize"/> does not preserve hand-authored comments or formatting —
+/// defect (a broken macro, a wrong field count, an unparseable number) is reported; no record loss or
+/// numeric substitution is silent. <see cref="Serialize"/> does not preserve hand-authored comments or formatting —
 /// only <c>DEFINE_WAVEFORM</c> records survive a save, replaced under a fresh canonical header.
 /// </para>
 /// </remarks>
@@ -79,14 +79,33 @@ public static class WaveformPool
     /// </summary>
     /// <remarks>
     /// Line comments are stripped first (see <see cref="StripLineComments"/>) so the canonical header comment
-    /// — which itself spells out the macro — is not parsed as a bogus Preset. Each defect is logged;
-    /// <see cref="Waveform.Parse"/> logs its own notation defects. Nothing is silently dropped.
+    /// — which itself spells out the macro — is not parsed as a bogus Preset. This runtime-facing overload
+    /// logs every returned diagnostic; no skipped record is silent.
     /// </remarks>
     public static List<Entry> Parse(string fileText)
     {
+        var entries = Parse(fileText, out var diagnostics);
+        for (var i = 0; i < diagnostics.Length; i++)
+        {
+            Debug.LogWarning($"[Waveform] {diagnostics[i]}");
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// Parses the Pool and returns every codec/notation diagnostic without writing to the Console.
+    /// </summary>
+    /// <param name="fileText">The complete Pool file content.</param>
+    /// <param name="diagnostics">Every defect found while scanning records and parsing Waveforms.</param>
+    /// <returns>All records that could be recovered in source order.</returns>
+    public static List<Entry> Parse(string fileText, out string[] diagnostics)
+    {
         var entries = new List<Entry>();
+        var messages = new List<string>();
         if (string.IsNullOrEmpty(fileText))
         {
+            diagnostics = Array.Empty<string>();
             return entries;
         }
 
@@ -106,32 +125,57 @@ public static class WaveformPool
             var braceClose = braceOpen >= 0 ? text.IndexOf('}', braceOpen) : -1;
             if (nameEnd < 0 || braceOpen < 0 || braceClose < 0)
             {
-                Debug.LogWarning($"[Waveform] Malformed DEFINE_WAVEFORM near offset {def} in {FileName} — " +
-                                 "expected name(){ seq | amp | round | offset }. Stopping parse here.");
+                messages.Add($"Malformed DEFINE_WAVEFORM near offset {def} in {FileName} — " +
+                             "expected name(){ seq | amp | round | offset }. Stopping parse here.");
                 break; // cannot reliably advance past a broken macro
             }
 
             var name = text.Substring(nameStart, nameEnd - nameStart).Trim();
+            if (!IsValidName(name))
+            {
+                messages.Add($"Preset name \"{name}\" is empty or contains a reserved delimiter.");
+            }
+
             var body = text.Substring(braceOpen + 1, braceClose - braceOpen - 1);
             cursor = braceClose + 1;
 
             var parts = body.Split('|');
             if (parts.Length != 4)
             {
-                Debug.LogWarning($"[Waveform] Preset \"{name}\" has {parts.Length} field(s), expected 4 " +
-                                 "(seq | amp | round | offset) — skipped.");
+                messages.Add($"Preset \"{name}\" has {parts.Length} field(s), expected 4 " +
+                             "(seq | amp | round | offset) — skipped.");
                 continue;
             }
 
             var seq = parts[0].Trim();
             var amp = parts[1].Trim();
-            var rounding = ParseFloatField(parts[2], Waveform.BeatPulseRounding, name, "rounding");
-            var offset = ParseFloatField(parts[3], 0f, name, "offset");
+            var rounding = ParseFloatField(parts[2], Waveform.BeatPulseRounding, name, "rounding", messages);
+            var offset = ParseFloatField(parts[3], 0f, name, "offset", messages);
+            var waveform = Waveform.Parse(seq, amp, rounding, offset, out var waveformDiagnostics);
+            for (var i = 0; i < waveformDiagnostics.Length; i++)
+            {
+                messages.Add($"Preset \"{name}\": {waveformDiagnostics[i]}");
+            }
 
-            entries.Add(new Entry(name, Waveform.Parse(seq, amp, rounding, offset)));
+            entries.Add(new Entry(name, waveform));
         }
 
+        diagnostics = messages.ToArray();
         return entries;
+    }
+
+    /// <summary>Whether a Preset name can be serialized without changing the Pool record structure.</summary>
+    /// <remarks>Names are display labels. They need not be unique, but they cannot be blank or contain macro delimiters.</remarks>
+    /// <param name="name">The proposed display name.</param>
+    /// <returns><see langword="true"/> when the name is safe to serialize.</returns>
+    public static bool IsValidName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        return name.IndexOfAny(new[] { '(', ')', '{', '}', '|', '\r', '\n' }) < 0;
     }
 
     /// <summary>
@@ -150,6 +194,11 @@ public static class WaveformPool
         var ampWidth = 0;
         for (var i = 0; i < entries.Count; i++)
         {
+            if (!IsValidName(entries[i].name))
+            {
+                throw new ArgumentException($"Waveform Pool entry {i} has an empty or delimiter-containing name.", nameof(entries));
+            }
+
             nameWidth = Mathf.Max(nameWidth, (entries[i].name ?? "").Length);
             seqWidth = Mathf.Max(seqWidth, (entries[i].waveform.sequence ?? "").Length);
             ampWidth = Mathf.Max(ampWidth, (entries[i].waveform.amplitude ?? "").Length);
@@ -195,17 +244,28 @@ public static class WaveformPool
         "// the whole Pool; no performer stores a row index.\n" +
         "\n";
 
-    /// <summary>Parses a Pool numeric field with invariant culture, logging and defaulting on a bad value.</summary>
+    /// <summary>Parses a Pool numeric field with invariant culture, reporting and defaulting on a bad value.</summary>
     /// <remarks>Invariant culture is required so <c>0.5</c> reads the same on comma-decimal locales.</remarks>
-    private static float ParseFloatField(string raw, float fallback, string presetName, string fieldName)
+    /// <param name="raw">The raw field text.</param>
+    /// <param name="fallback">The safe replacement used when parsing fails.</param>
+    /// <param name="presetName">The containing Preset display name.</param>
+    /// <param name="fieldName">The field label used in diagnostics.</param>
+    /// <param name="diagnostics">The parse report receiving any substitution.</param>
+    private static float ParseFloatField(
+        string raw,
+        float fallback,
+        string presetName,
+        string fieldName,
+        ICollection<string> diagnostics)
     {
-        if (float.TryParse(raw.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        var text = raw.Trim();
+        if (float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) &&
+            !float.IsNaN(value) && !float.IsInfinity(value))
         {
             return value;
         }
 
-        Debug.LogWarning($"[Waveform] Preset \"{presetName}\" has an unparseable {fieldName} \"{raw.Trim()}\" — " +
-                         $"defaulting to {fallback}.");
+        diagnostics.Add($"Preset \"{presetName}\" has an unparseable {fieldName} \"{text}\" — defaulting to {fallback}.");
         return fallback;
     }
 

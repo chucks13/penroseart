@@ -342,7 +342,7 @@ public class AnimPalette
             float max = source[y].i;
             if ((min <= f) && (max >= f))                 // is this in the bracket
             {
-                float tween = f.Map(min, max, 0f, 1f);          // do the LERP
+                float tween = f.Remap(min, max, 0f, 1f);
                 return Color.Lerp(source[y - 1].c, source[y].c, tween);
             }
         }

@@ -39,7 +39,6 @@ internal readonly struct BeatManagerDashboardModel
     public readonly EnergyRowView Energy;
     public readonly PhraseRowView Phrase;
     public readonly LevelsRowView Levels;
-    public readonly ColorBankRowView ColorBank;
 
     /// <summary>Captures one immutable set of downstream Inspector display facts.</summary>
     private BeatManagerDashboardModel(
@@ -63,8 +62,7 @@ internal readonly struct BeatManagerDashboardModel
         PhraseEventRowView drop,
         EnergyRowView energy,
         PhraseRowView phrase,
-        LevelsRowView levels,
-        ColorBankRowView colorBank)
+        LevelsRowView levels)
     {
         Synced = synced;
         BadgeText = badgeText;
@@ -87,7 +85,6 @@ internal readonly struct BeatManagerDashboardModel
         Energy = energy;
         Phrase = phrase;
         Levels = levels;
-        ColorBank = colorBank;
     }
 
     /// <summary>
@@ -98,45 +95,48 @@ internal readonly struct BeatManagerDashboardModel
     public static BeatManagerDashboardModel From(BeatManager beatManager, Waveform previewWaveform)
     {
         var synced = beatManager != null && beatManager.IsSynced;
-        var clock = beatManager != null ? beatManager.Clock : default;
-        var position = beatManager != null ? beatManager.Position : default;
+        var timing = beatManager != null ? beatManager.Timing : default;
         var beats = beatManager != null ? beatManager.Beats : default;
-        var offBeats = beatManager != null ? beatManager.OffBeats : default;
+        var offbeats = beatManager != null ? beatManager.Offbeats : default;
         var pulses = beatManager != null ? beatManager.Pulses : default;
         var track = beatManager != null ? beatManager.Track : default;
-        var bpmText = clock.Bpm is { } bpm ? $"{bpm:0.##} BPM" : "-- BPM";
+        var bpmText = timing.Bpm is { } bpm ? $"{bpm:0.##} BPM" : "-- BPM";
         var rightText = track.PlayersLive is { Count: > 0 } players ? $"{string.Join(",", players)} · {bpmText}" : bpmText;
         var beatPulse = Mathf.Clamp01(pulses.Beat ?? 0f);
         var offBeatPulse = Mathf.Clamp01(pulses.OffBeat ?? 0f);
         var offBeatGates = new bool[BeatSlotCount];
         for (var slot = 0; slot < offBeatGates.Length; slot++)
         {
-            offBeatGates[slot] = offBeats.Gate(slot + 1) == true;
+            offBeatGates[slot] = offbeats.OffBeat(slot + 1) == true;
         }
+
+        var count = timing.BeatInBar ?? UnavailableBeat;
+        var nextCount = count is >= 1 and <= BeatSlotCount ? (count % BeatSlotCount) + 1 : UnavailableBeat;
+        var nextBeatMs = nextCount > 0 ? beats.OnBeatMs(nextCount) : null;
+        var nextOffbeatMs = MinimumOffbeatMilliseconds(offbeats);
 
         return new BeatManagerDashboardModel(
             synced,
             synced ? "SYNCED" : "STANDALONE",
-            track.TrackTitle ?? "—",
+            track.Title ?? "—",
             rightText,
-            position.BeatInBar ?? UnavailableBeat,
-            beats.OnBeat ?? false,
+            count,
+            count > 0 && beats.OnBeat(count) == true,
             beatPulse,
             offBeatGates,
             offBeatPulse,
             GetClampedEighthPulseValue(beatPulse, offBeatPulse),
-            new CountdownChipView("NEXT BEAT", FormatMs(beats.NextBeatMs), alignValueRight: true),
-            new CountdownChipView("ON BEAT", beats.OnBeat == true ? "YES" : "NO"),
-            new CountdownChipView("NEXT OFF BEAT", FormatMs(offBeats.NextOffBeatMs), alignValueRight: true),
-            new CountdownChipView("OFF BEAT", offBeats.OffBeat == true ? "YES" : "NO"),
-            synced ? clock.BarPhase ?? 0f : 0f,
+            new CountdownChipView("NEXT BEAT", FormatMs(nextBeatMs), alignValueRight: true),
+            new CountdownChipView("ON BEAT", count > 0 && beats.OnBeat(count) == true ? "YES" : "NO"),
+            new CountdownChipView("NEXT OFF BEAT", FormatMs(nextOffbeatMs), alignValueRight: true),
+            new CountdownChipView("OFF BEAT", count > 0 && offbeats.OffBeat(count) == true ? "YES" : "NO"),
+            synced ? timing.BarProgress ?? 0f : 0f,
             BuildEnvelopeRow(beatManager, previewWaveform),
             BuildPhraseEventRow(beatManager != null ? beatManager.Fill : default),
             BuildPhraseEventRow(beatManager != null ? beatManager.Drop : default),
-            BuildEnergyRow(beatManager != null ? beatManager.Energy : default),
-            BuildPhraseRow(beatManager != null ? beatManager.Phrase : default),
-            BuildLevelsRow(beatManager?.Levels),
-            BuildColorBankRow(beatManager?.Levels));
+            BuildEnergyRow(beatManager),
+            BuildPhraseRow(beatManager),
+            BuildLevelsRow(beatManager));
     }
 
     /// <summary>Classifies one beat label against the current synchronized bar position.</summary>
@@ -199,6 +199,20 @@ internal readonly struct BeatManagerDashboardModel
         return value is { } ms ? $"{ms:0}ms" : "--";
     }
 
+    /// <summary>Returns the nearest available offbeat countdown across musical labels one through four.</summary>
+    private static int? MinimumOffbeatMilliseconds(OffbeatsValues offbeats)
+    {
+        int? minimum = null;
+        for (var count = 1; count <= BeatSlotCount; count++)
+        {
+            if (offbeats.OffBeatMs(count) is { } value && (minimum == null || value < minimum))
+            {
+                minimum = value;
+            }
+        }
+        return minimum;
+    }
+
     /// <summary>Builds the live-clock envelope row for the editor-previewed Pool entry.</summary>
     private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, Waveform previewWaveform)
     {
@@ -211,70 +225,64 @@ internal readonly struct BeatManagerDashboardModel
         return new EnvelopeRowView(true, envelope, $"{envelope:0.00} · preview");
     }
 
-    /// <summary>Builds one Fill row from its canonical doorway.</summary>
-    private static PhraseEventRowView BuildPhraseEventRow(FillView fill)
+    /// <summary>Builds one Fill row from its canonical value group.</summary>
+    private static PhraseEventRowView BuildPhraseEventRow(FillValues fill)
     {
-        return fill.Span.Current.HasValue || fill.NextInBeats.HasValue || fill.RemainingOnTrack.HasValue
+        return fill.Active.HasValue || fill.BeatsUntil.HasValue || fill.Remaining.HasValue
             ? new PhraseEventRowView(true, PhraseEventView.Of(fill))
             : PhraseEventRowView.Null;
     }
 
-    /// <summary>Builds one Drop row from its canonical doorway.</summary>
-    private static PhraseEventRowView BuildPhraseEventRow(DropView drop)
+    /// <summary>Builds one Drop row from its canonical value group.</summary>
+    private static PhraseEventRowView BuildPhraseEventRow(DropValues drop)
     {
-        return drop.Span.Current.HasValue || drop.NextInBeats.HasValue || drop.RemainingOnTrack.HasValue
+        return drop.Active.HasValue || drop.BeatsUntil.HasValue || drop.Remaining.HasValue
             ? new PhraseEventRowView(true, PhraseEventView.Of(drop))
             : PhraseEventRowView.Null;
     }
 
     /// <summary>Builds the Energy row from its canonical run and anticipation facts.</summary>
-    private static EnergyRowView BuildEnergyRow(EnergyView energy)
+    private static EnergyRowView BuildEnergyRow(BeatManager beatManager)
     {
-        if (!(energy.Run.Current is { } current))
+        if (beatManager == null || beatManager.Energy.Level is not { } level)
         {
             return EnergyRowView.Null;
         }
 
+        var energy = beatManager.Energy;
         var arrow = energy.Trend == EnergyTrend.Rising ? "↗" : energy.Trend == EnergyTrend.Falling ? "↘" : "→";
-        var heading = energy.NextLevel is { } next
-            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {RhythmText.Beats(energy.NextChangeInBeats)}"
+        var heading = beatManager.NextEnergy.Level is { } next
+            ? $"{arrow} {next.ToString().ToUpperInvariant()} in {RhythmText.Beats(beatManager.NextEnergy.BeatsUntil)}"
             : "steady";
         return new EnergyRowView(
             true,
-            current.Level.ToString().ToUpperInvariant(),
-            current.Level,
-            energy.Run.Progress ?? 0f,
+            level.ToString().ToUpperInvariant(),
+            level,
+            energy.Progress ?? 0f,
             heading);
     }
 
-    /// <summary>Builds the current and upcoming Phrase row from the canonical doorway.</summary>
-    private static PhraseRowView BuildPhraseRow(PhraseView phrase)
+    /// <summary>Builds the current and upcoming Phrase row from the canonical value groups.</summary>
+    private static PhraseRowView BuildPhraseRow(BeatManager beatManager)
     {
-        if (!(phrase.Span.Current is { } current))
+        if (beatManager == null || beatManager.Phrase.Name is not { } name)
         {
             return PhraseRowView.Null;
         }
 
-        var heading = phrase.NextName is { } nextName
-            ? $"→ {nextName} in {RhythmText.Beats(phrase.NextInBeats)}"
-            : $"len {RhythmText.Count(current.LengthBeats)}";
-        return new PhraseRowView(true, current.Name, phrase.Span.Progress ?? 0f, heading);
+        var phrase = beatManager.Phrase;
+        var heading = beatManager.NextPhrase.Name is { } nextName
+            ? $"→ {nextName} in {RhythmText.Beats(beatManager.NextPhrase.BeatsUntil)}"
+            : $"len {RhythmText.Count(phrase.LengthBeats)}";
+        return new PhraseRowView(true, name, phrase.Progress ?? 0f, heading);
     }
 
     /// <summary>Builds the band-meter row from smoothed canonical Levels.</summary>
-    private static LevelsRowView BuildLevelsRow(LevelsView? info)
+    private static LevelsRowView BuildLevelsRow(BeatManager beatManager)
     {
-        return info is { } levels
-            ? new LevelsRowView(true, levels.Smoothed.Low, levels.Smoothed.Mid, levels.Smoothed.High)
+        return beatManager != null
+            ? new LevelsRowView(true, beatManager.Levels.Smoothed.Low, beatManager.Levels.Smoothed.Mid, beatManager.Levels.Smoothed.High)
             : LevelsRowView.Null;
-    }
-
-    /// <summary>Builds RGB and HSV swatches from the same smoothed Levels triple.</summary>
-    private static ColorBankRowView BuildColorBankRow(LevelsView? info)
-    {
-        return info is { } levels
-            ? new ColorBankRowView(levels.Smoothed.Rgb(), levels.Smoothed.Hsv(), null)
-            : new ColorBankRowView(null, null, null);
     }
 }
 
@@ -302,7 +310,7 @@ internal readonly struct CountdownChipView
 
 internal readonly struct EnvelopeRowView
 {
-    public static readonly EnvelopeRowView Null = new EnvelopeRowView(false, 0f, string.Empty);
+    public static readonly EnvelopeRowView Null = new(false, 0f, string.Empty);
 
     public readonly bool HasValue;
     public readonly float Meter;
@@ -318,7 +326,7 @@ internal readonly struct EnvelopeRowView
 
 internal readonly struct PhraseEventRowView
 {
-    public static readonly PhraseEventRowView Null = new PhraseEventRowView(false, default);
+    public static readonly PhraseEventRowView Null = new(false, default);
 
     public readonly bool HasValue;
     public readonly PhraseEventView View;
@@ -333,17 +341,17 @@ internal readonly struct PhraseEventRowView
 internal readonly struct EnergyRowView
 {
     /// <summary>The unavailable Energy row.</summary>
-    public static readonly EnergyRowView Null = new EnergyRowView(false, string.Empty, global::Energy.Low, 0f, string.Empty);
+    public static readonly EnergyRowView Null = new(false, string.Empty, Energy.Low, 0f, string.Empty);
 
     public readonly bool HasValue;
     public readonly string Chip;
     /// <summary>The current canonical Energy level used to color the status chip.</summary>
-    public readonly global::Energy Level;
+    public readonly Energy Level;
     public readonly float Meter;
     public readonly string Readout;
 
     /// <summary>Captures one Energy row's display facts.</summary>
-    public EnergyRowView(bool hasValue, string chip, global::Energy level, float meter, string readout)
+    public EnergyRowView(bool hasValue, string chip, Energy level, float meter, string readout)
     {
         HasValue = hasValue;
         Chip = chip;
@@ -355,7 +363,7 @@ internal readonly struct EnergyRowView
 
 internal readonly struct PhraseRowView
 {
-    public static readonly PhraseRowView Null = new PhraseRowView(false, string.Empty, 0f, string.Empty);
+    public static readonly PhraseRowView Null = new(false, string.Empty, 0f, string.Empty);
 
     public readonly bool HasValue;
     public readonly string Label;
@@ -373,7 +381,7 @@ internal readonly struct PhraseRowView
 
 internal readonly struct LevelsRowView
 {
-    public static readonly LevelsRowView Null = new LevelsRowView(false, 0f, 0f, 0f);
+    public static readonly LevelsRowView Null = new(false, 0f, 0f, 0f);
 
     public readonly bool HasValue;
     public readonly float Low;
@@ -386,20 +394,6 @@ internal readonly struct LevelsRowView
         Low = low;
         Mid = mid;
         High = high;
-    }
-}
-
-internal readonly struct ColorBankRowView
-{
-    public readonly Color? Rgb;
-    public readonly Color? Hue;
-    public readonly Color? Palette;
-
-    public ColorBankRowView(Color? rgb, Color? hue, Color? palette)
-    {
-        Rgb = rgb;
-        Hue = hue;
-        Palette = palette;
     }
 }
 
@@ -424,7 +418,7 @@ internal readonly struct WaveformSelectorView
 
 internal readonly struct BeatManagerDashboardActions
 {
-    public static readonly BeatManagerDashboardActions None = new BeatManagerDashboardActions(-1, false);
+    public static readonly BeatManagerDashboardActions None = new(-1, false);
 
     public readonly int SelectedWaveformIndex;
     public readonly bool OpenWaveformPoolEditor;

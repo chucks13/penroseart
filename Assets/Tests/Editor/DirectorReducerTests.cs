@@ -251,12 +251,12 @@ public sealed class DirectorReducerTests
 
     /// <summary>A backward mid-Grid reading remains position data and does not cast a Cue.</summary>
     [Test]
-    public void ABackwardMidGridReadingIsNotTheHubWrapEdge()
+    public void ABackwardMidGridReadingIsNotALocalReturnToOne()
     {
         FeedBeat(beat: 615, gridBeat: 16, phraseStartBeat: 600, phraseLengthBeats: 32);
 
-        // The hub owns Grid identity: only an observed return to the One is its wrap edge. A backward
-        // mid-Grid reading after a dropped One is served as position, but does not invent a boundary.
+        // The Director compares its own prior Grid beat: a backward mid-Grid reading after a dropped One
+        // remains position data and does not invent a boundary.
         FeedBeat(beat: 617, gridBeat: 2, phraseStartBeat: 600, phraseLengthBeats: 32);
 
         Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
@@ -387,11 +387,11 @@ public sealed class DirectorReducerTests
         StringAssert.Contains("phrase=\"Break\"", log.ToString(), "Display context is lane-sourced.");
     }
 
-    /// <summary>The starvation guard waits through mid-Grid motion and casts on the next hub wrap.</summary>
+    /// <summary>The starvation guard waits through mid-Grid motion and casts on the next observed return to one.</summary>
     [Test]
-    public void AStarvationGuardCastsOnlyOnTheHubWrapEdge()
+    public void AStarvationGuardCastsOnlyOnAnObservedReturnToOne()
     {
-        // A dropped One followed by a backward mid-Grid reading is not the hub's wrap edge. The guard waits;
+        // A dropped One followed by a backward mid-Grid reading is not a local return to One. The guard waits;
         // the next observed return to One supplies the fourth wake and the real boundary.
         var log = WireCueLogDirector();
 
@@ -461,13 +461,13 @@ public sealed class DirectorReducerTests
         StringAssert.Contains("cue=632[48/96]", log.ToString(), "The cast carries the sheet mark, not a guard offer.");
     }
 
-    /// <summary>A sheet mark present at the fourth hub wrap supplies the accepted Cue identity.</summary>
+    /// <summary>A sheet mark present at the fourth observed Grid return supplies the accepted Cue identity.</summary>
     [Test]
     public void ASheetProvidingAtTheGuardCeilingCastsItsOwnMarkNotTheGuard()
     {
         // The carried mark is checked before the guard, so a legal 64-gap sheet is never overridden. Hook/96's
         // first mark sits a full four Grids (64 beats) past the Phrase start — the maximum legal gap — and lands
-        // exactly on the hub wrap where the counter reaches four. The sheet remains the first source considered
+        // exactly on the observed Grid return where the counter reaches four. The sheet remains the first source considered
         // at that wake and carries its own mark identity into the accepted cue.
         var log = WireCueLogDirector();
 
@@ -484,7 +484,7 @@ public sealed class DirectorReducerTests
         FeedBeat(beat: 563, gridBeat: 16, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");
         FeedBeat(beat: 564, gridBeat: 1, phraseStartBeat: 516, phraseLengthBeats: 96, phraseLabel: "Hook");     // wrap 4, position 48, mark 64 is 16 out
 
-        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(580), "The carried mark 64 casts from the fourth hub wrap.");
+        Assert.That(switcher.LoadedCueStatus.CueMarkBeat, Is.EqualTo(580), "The carried mark 64 casts from the fourth observed Grid return.");
         StringAssert.Contains("cue=580[64/96]", log.ToString(), "The sheet's own mark 64 is carried into the cue.");
     }
 
@@ -965,34 +965,36 @@ public sealed class DirectorReducerTests
         string phraseLabel = "Phrase",
         string nextPhraseLabel = "Next")
     {
-        var snapshot = new RaveOnAirSnapshot();
-        snapshot.bpm = 120f;
-        snapshot.beat = new BeatPosition { current = beat, total = -1 };
-        snapshot.beatInBar = ((beat - 1) % 4) + 1;
-        snapshot.timingGrid = gridBeat >= 1
-            ? new TimingGrid { beat = gridBeat, bar = ((gridBeat - 1) / 4) + 1, state = "locked" }
-            : TimingGrid.Unavailable;
-        snapshot.phraseState = new PhraseState
+        var snapshot = new RaveOnAirSnapshot
         {
-            label = phraseLabel,
-            countBeats = phraseStartBeat + phraseLengthBeats - beat,
-            lengthBeats = phraseLengthBeats,
-            irregular = 0,
+            bpm = 120f,
+            beat = new BeatPosition { current = beat, total = -1 },
+            beatInBar = ((beat - 1) % 4) + 1,
+            timingGrid = gridBeat >= 1
+                ? new TimingGrid { beat = gridBeat, bar = ((gridBeat - 1) / 4) + 1, state = "locked" }
+                : TimingGrid.Unavailable,
+            phraseState = new PhraseState
+            {
+                label = phraseLabel,
+                countBeats = phraseStartBeat + phraseLengthBeats - beat,
+                lengthBeats = phraseLengthBeats,
+                irregular = 0,
+            },
+            nextPhraseState = nextPhraseStartBeat is { } nextStart && nextPhraseLengthBeats is { } nextLength
+                ? new LabeledCountdown { label = nextPhraseLabel, countBeats = nextStart - beat, lengthBeats = nextLength }
+                : LabeledCountdown.Unavailable,
+            dropState = dropBeatsUntilStart is { } dropStart
+                ? new CountdownState { active = 0, countBeats = dropStart, lengthBeats = 16, remaining = 1 }
+                : CountdownState.Unavailable,
+            fillState = fillBeatsUntilStart is { } fillStart
+                ? new CountdownState { active = 0, countBeats = fillStart, lengthBeats = 8, remaining = 1 }
+                : CountdownState.Unavailable,
+            // An energy lane the reducer must never consult for casting (ADR-0011): present so tests can prove the
+            // cast outcome is invariant to it, not because the Director reads it.
+            energyState = energyBeatsUntilChange is { } energyChange
+                ? new LabeledCountdown { label = "Energy", countBeats = energyChange, lengthBeats = 16 }
+                : LabeledCountdown.Unavailable,
         };
-        snapshot.nextPhraseState = nextPhraseStartBeat is { } nextStart && nextPhraseLengthBeats is { } nextLength
-            ? new LabeledCountdown { label = nextPhraseLabel, countBeats = nextStart - beat, lengthBeats = nextLength }
-            : LabeledCountdown.Unavailable;
-        snapshot.dropState = dropBeatsUntilStart is { } dropStart
-            ? new CountdownState { active = 0, countBeats = dropStart, lengthBeats = 16, remaining = 1 }
-            : CountdownState.Unavailable;
-        snapshot.fillState = fillBeatsUntilStart is { } fillStart
-            ? new CountdownState { active = 0, countBeats = fillStart, lengthBeats = 8, remaining = 1 }
-            : CountdownState.Unavailable;
-        // An energy lane the reducer must never consult for casting (ADR-0011): present so tests can prove the
-        // cast outcome is invariant to it, not because the Director reads it.
-        snapshot.energyState = energyBeatsUntilChange is { } energyChange
-            ? new LabeledCountdown { label = "Energy", countBeats = energyChange, lengthBeats = 16 }
-            : LabeledCountdown.Unavailable;
         controller.beatManager.FeedWireSnapshot(snapshot);
         controller.beatManager.Update(0f);
         director.Tick(0f);

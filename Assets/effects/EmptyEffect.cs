@@ -5,7 +5,7 @@ using UnityEngine;
 /// </summary>
 /// <remarks>
 /// Authoring orientation:
-/// - Effects and Transitions receive the live Data Surface as <see cref="EffectBase.beatManager"/> or <see cref="TransitionBase.beatManager"/>.
+/// - Effects and Transitions receive live read-only musical values through <see cref="EffectBase.beatManager"/> or <see cref="TransitionBase.beatManager"/>.
 /// - They receive Waveform acquisition tools as <see cref="EffectBase.waveforms"/> or <see cref="TransitionBase.waveforms"/>.
 /// - <see cref="EffectBase.waveform"/> is neutral public artistic configuration that an owning Performer may replace.
 /// - Transitions declare only the public artistic configuration they actually use.
@@ -78,14 +78,14 @@ public class EmptyEffect : EffectBase
         // EXAMPLE — the second endpoint is the no-placement fallback.
         float brightness = waveform.Lerp(0.35f, 1f);
 
-        // EXAMPLE — facts are nullable; Edges and Stock Envelopes are total values.
-        float gridProgress = beatManager.Grid.Current?.Progress ?? 0f;
-        float fillBuild = beatManager.Fill.Span.Build();
-        bool dropStarted = beatManager.Drop.Span.Started;
-        Energy? energy = beatManager.Energy.Run.Current?.Level;
+        // EXAMPLE — wire facts and direct derived values live together in shallow groups.
+        float gridProgress = beatManager.Grid.Progress ?? 0f;
+        float fillBuild = beatManager.Fill.Build();
+        bool dropActive = beatManager.Drop.Active == true;
+        Energy? energy = beatManager.Energy.Level;
 
         // EXAMPLE — audio bands and their color mappings begin at beatManager.Levels.
-        _ = (brightness, gridProgress, fillBuild, dropStarted, energy);
+        _ = (brightness, gridProgress, fillBuild, dropActive, energy);
 
         for (int i = 0; i < buffer.Length; i++)
             buffer[i] = Color.black;

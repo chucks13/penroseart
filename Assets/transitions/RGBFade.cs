@@ -51,18 +51,16 @@ public class RGBFade : TransitionBase
     /// </summary>
     private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2)
     {
-        float d2 = 1f - V2;
+        var remaining = 1f - V2;
+        var redBlend = 1f - Mathf.Clamp01(remaining * 3f);
+        var greenBlend = 1f - Mathf.Clamp01(Mathf.Clamp01(remaining - 0.333f) * 3f);
+        var blueBlend = 1f - Mathf.Clamp01(Mathf.Clamp01(remaining - 0.666f) * 3f);
+
         for (int i = 0; i < buffer.Length; i++)
         {
-            var DR = Mathf.Clamp01(d2 * 3);
-            var VR = 1f - DR;
-            var DG = Mathf.Clamp01(Mathf.Clamp01(d2 - 0.333f) * 3);
-            var VG = 1f - DG;
-            var DB = Mathf.Clamp01(Mathf.Clamp01(d2 - 0.666f) * 3);
-            var VB = 1f - DB;
-            dest[i].r = src1[i].r * DR + src2[i].r * VR;
-            dest[i].g = src1[i].g * DG + src2[i].g * VG;
-            dest[i].b = src1[i].b * DB + src2[i].b * VB;
+            dest[i].r = redBlend.Lerp(src1[i].r, src2[i].r);
+            dest[i].g = greenBlend.Lerp(src1[i].g, src2[i].g);
+            dest[i].b = blueBlend.Lerp(src1[i].b, src2[i].b);
         }
 
     }

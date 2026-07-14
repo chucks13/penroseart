@@ -394,6 +394,7 @@ public class Controller : Singleton<Controller>
 
     /// <summary>Per-session operator-facing Cue Log sink; a downstream view, created in <see cref="Start"/> and closed in <see cref="OnDestroy"/>.</summary>
     [HideInInspector]
+    [NonSerialized]
     public CueLog cueLog;
 
     /// <summary>Scene Penrose model and preview mesh component.</summary>
@@ -892,7 +893,7 @@ public class Controller : Singleton<Controller>
     {
         if (om.address == "/1/vscroll1")       // brightness
         {
-            brightness = (byte)Mathf.Lerp(255f, 0f, om.GetFloat(0));
+            brightness = (byte)om.GetFloat(0).Lerp(255f, 0f);
         }
         if (om.address.StartsWith("/1/nav1"))
         {
@@ -1309,32 +1310,32 @@ public class Controller : Singleton<Controller>
     /// <summary>Wire-fed Grid state for the HUD, annotated when the current Phrase is irregular.</summary>
     private string FormatGridState()
     {
-        if (!(beatManager != null && beatManager.Grid.Current is { } grid))
+        if (!(beatManager != null && beatManager.Grid.State is { } state))
         {
             return "unlocked";
         }
 
-        return beatManager.Phrase.Span.Current?.Irregular == true
-            ? $"{grid.State} (irregular)"
-            : grid.State.ToString();
+        return beatManager.Phrase.Irregular == true
+            ? $"{state} (irregular)"
+            : state.ToString();
     }
 
     /// <summary>Formats the placed Grid beat, or the no-grid HUD fallback for unavailable/partial facts.</summary>
     private string FormatGridPosition()
     {
-        return beatManager != null && beatManager.Grid.Current is { Beat: { } beat } ? $"{beat}/16" : "no grid";
+        return beatManager != null && beatManager.Grid.Beat is { } beat ? $"{beat}/16" : "no grid";
     }
 
-    /// <summary>Formats the current or upcoming Drop directly from the canonical doorway.</summary>
+    /// <summary>Formats the current or upcoming Drop directly from the canonical values.</summary>
     private string FormatDropCue()
     {
         var drop = beatManager.Drop;
-        if (drop.Span.Current.HasValue)
+        if (drop.Active == true)
         {
             return "Drop now";
         }
 
-        if (drop.NextInBeats is { } beatsUntilStart)
+        if (drop.BeatsUntil is { } beatsUntilStart)
         {
             return $"Drop +{beatsUntilStart}b";
         }
@@ -1474,7 +1475,7 @@ public class Controller : Singleton<Controller>
         timer = new Timer(effectTime, false);
         cueLog = CueLog.CreateForSession(
             Path.Combine(Application.persistentDataPath, "Logs"),
-            () => beatManager != null ? beatManager.Grid.Current : null);
+            () => beatManager != null ? beatManager.Grid : (GridValues?)null);
         switcher = new Switcher(this, effects, transitions, cueLog);
         switcher.SetInitialEffect(currentEffect, currentTransition);
         director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition, cueLog);

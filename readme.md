@@ -7,6 +7,7 @@ Unity is the host and simulator. The effect system itself is mostly plain C# so 
 ## Start here
 
 - [`docs/runtime-architecture.md`](docs/runtime-architecture.md) — how the Controller, catalogs, buffers, transitions, inputs, and outputs fit together.
+- [`docs/beat-manager.md`](docs/beat-manager.md) — the read-only wire and derived musical-data interface.
 - [`docs/effect-authoring.md`](docs/effect-authoring.md) — how to create Effects and Transitions, use their lifecycles, and work with buffers.
 - [`docs/code-map.md`](docs/code-map.md) — file-by-file map of the project-authored runtime code.
 - [`CONTEXT.md`](CONTEXT.md) — operational project context and platform/output notes.
@@ -61,7 +62,7 @@ Indexes are not permanent IDs. Adding, removing, or renaming classes can shift s
 
 `BeatManager` is the one read-only gateway to musical state. `RaveOscReceiver` applies live RaveSystem data before the frame is captured; without a usable live clock, `IsSynced` is false and the wall renders its intentional Standalone behavior.
 
-- Read facts through concept doorways such as `Clock`, `Beats`, `Phrase`, `Fill`, `Drop`, `Energy`, `Grid`, and `Levels`. Unavailable facts are `null`; doorway Edges and Stock Envelopes remain readable.
+- Read wire and derived values through shallow groups such as `Timing`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `Fill`, `Drop`, `Energy`, `Grid`, and `Levels`. Optional facts are `null`; `Levels` is always present and reads missing wire bands as zero.
 - Use the sibling `waveforms` root to acquire an immutable `Waveform` explicitly, then read `Envelope` or call `Lerp(from, to)`. A `Routine` composes four held Waveforms over one Grid with the same playback spelling.
 - Concrete Effects and Transitions own acquisition timing, endpoints, fallback, and local artistic response. The base classes provide access but never acquire or replace a value automatically.
 - A Mixer remains one public Effect. It owns and configures child Effects privately, using `waveforms.None` when it intentionally suppresses a child's Waveform response.

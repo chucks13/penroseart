@@ -109,9 +109,9 @@ public sealed class BeatManagerDrawer : PropertyDrawer
         return target != null ? fieldInfo?.GetValue(target) as BeatManager : null;
     }
 
-    /// <summary>Draws the serialized BeatManager fields (beatData and smoothing tunables) normally.</summary>
+    /// <summary>Draws the serialized BeatManager wire snapshot and smoothing tunables normally.</summary>
     /// <remarks>Children are enumerated rather than listed by name so future fields appear without touching
-    /// this drawer; beatData renders through Unity's plain default foldout — that is the raw-values debug view,
+    /// this drawer; wireSnapshot renders through Unity's plain default foldout — that is the raw-values debug view,
     /// intentionally plain.</remarks>
     private static void DrawChildFields(Rect line, SerializedProperty property)
     {
