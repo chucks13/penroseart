@@ -12,12 +12,12 @@ internal readonly struct LiveTimelineInput
         bool isSynced,
         int? currentAbsoluteBeat,
         int? currentGridBeat,
-        SwitcherCueStatus loadedCue)
+        SwitcherCueStatus cue)
     {
         IsSynced = isSynced;
         CurrentAbsoluteBeat = currentAbsoluteBeat;
         CurrentGridBeat = currentGridBeat;
-        LoadedCue = loadedCue;
+        Cue = cue;
     }
 
     /// <summary>Whether the runtime has a usable live beat clock.</summary>
@@ -29,8 +29,8 @@ internal readonly struct LiveTimelineInput
     /// <summary>The current one-based beat within the Grid, when available.</summary>
     public int? CurrentGridBeat { get; }
 
-    /// <summary>The Switcher's currently loaded Cue.</summary>
-    public SwitcherCueStatus LoadedCue { get; }
+    /// <summary>The Switcher's pending or currently executing Cue.</summary>
+    public SwitcherCueStatus Cue { get; }
 }
 
 /// <summary>Display-ready rolling Grid rows and Transition countdowns for one editor frame.</summary>
@@ -40,9 +40,9 @@ internal sealed class LiveTimelineModel
     public LiveTimelineModel(
         bool isSynced,
         bool currentPositionAvailable,
-        bool hasLoadedCue,
+        bool hasCue,
         bool isCueLocked,
-        bool loadedCueTimingAvailable,
+        bool cueTimingAvailable,
         IReadOnlyList<LiveTimelineGrid> grids,
         int? lockBeatsUntil,
         int? startBeatsUntil,
@@ -50,9 +50,9 @@ internal sealed class LiveTimelineModel
     {
         IsSynced = isSynced;
         CurrentPositionAvailable = currentPositionAvailable;
-        HasLoadedCue = hasLoadedCue;
+        HasCue = hasCue;
         IsCueLocked = isCueLocked;
-        LoadedCueTimingAvailable = loadedCueTimingAvailable;
+        CueTimingAvailable = cueTimingAvailable;
         Grids = grids ?? throw new ArgumentNullException(nameof(grids));
         LockBeatsUntil = lockBeatsUntil;
         StartBeatsUntil = startBeatsUntil;
@@ -65,30 +65,30 @@ internal sealed class LiveTimelineModel
     /// <summary>Whether live absolute and Grid beats identify one current cell.</summary>
     public bool CurrentPositionAvailable { get; }
 
-    /// <summary>Whether the Switcher reports a Loaded Cue.</summary>
-    public bool HasLoadedCue { get; }
+    /// <summary>Whether the Switcher reports a pending or active Cue.</summary>
+    public bool HasCue { get; }
 
     /// <summary>Whether the Switcher reports that the Loaded Cue is locked.</summary>
     public bool IsCueLocked { get; }
 
-    /// <summary>Whether the Loaded Cue exposes one self-consistent timing window.</summary>
-    public bool LoadedCueTimingAvailable { get; }
+    /// <summary>Whether the Cue exposes one self-consistent timing window.</summary>
+    public bool CueTimingAvailable { get; }
 
     /// <summary>The rolling current and immediately following Grid rows.</summary>
     public IReadOnlyList<LiveTimelineGrid> Grids { get; }
 
-    /// <summary>Signed beats from now to the loaded Cue's Lock Point.</summary>
+    /// <summary>Signed beats from now to the Cue's Lock Point.</summary>
     public int? LockBeatsUntil { get; }
 
-    /// <summary>Signed beats from now to the loaded Cue's Transition Start.</summary>
+    /// <summary>Signed beats from now to the Cue's Transition Start.</summary>
     public int? StartBeatsUntil { get; }
 
-    /// <summary>Signed beats from now to the loaded Cue's Transition End.</summary>
+    /// <summary>Signed beats from now to the Cue's Transition End.</summary>
     public int? EndBeatsUntil { get; }
 
     /// <summary>Whether the live beat lies from Transition Start through End.</summary>
     public bool IsActive =>
-        LoadedCueTimingAvailable &&
+        CueTimingAvailable &&
         StartBeatsUntil is <= 0 &&
         EndBeatsUntil is >= 0;
 }
@@ -210,29 +210,29 @@ internal static class LiveTimelineProjection
             input.IsSynced &&
             input.CurrentAbsoluteBeat is >= 1 &&
             input.CurrentGridBeat is >= 1 and <= CueSheet.GridBeats;
-        var hasLoadedCue = input.IsSynced && input.LoadedCue.HasCue;
-        var loadedCueTimingAvailable = hasLoadedCue && HasConsistentTiming(input.LoadedCue);
-        var loadedCue = loadedCueTimingAvailable
-            ? input.LoadedCue
+        var hasCue = input.IsSynced && input.Cue.HasCue;
+        var cueTimingAvailable = hasCue && HasConsistentTiming(input.Cue);
+        var cue = cueTimingAvailable
+            ? input.Cue
             : SwitcherCueStatus.Empty;
 
         int? lockBeatsUntil = null;
         int? startBeatsUntil = null;
         int? endBeatsUntil = null;
-        if (loadedCueTimingAvailable && input.CurrentAbsoluteBeat is { } currentBeat)
+        if (cueTimingAvailable && input.CurrentAbsoluteBeat is { } currentBeat)
         {
-            lockBeatsUntil = loadedCue.LockPointBeat - currentBeat;
-            startBeatsUntil = loadedCue.StartBeat - currentBeat;
-            endBeatsUntil = loadedCue.CompleteBeat - currentBeat;
+            lockBeatsUntil = cue.LockPointBeat - currentBeat;
+            startBeatsUntil = cue.StartBeat - currentBeat;
+            endBeatsUntil = cue.CompleteBeat - currentBeat;
         }
 
         return new LiveTimelineModel(
             input.IsSynced,
             currentPositionAvailable,
-            hasLoadedCue,
-            hasLoadedCue && input.LoadedCue.IsLocked,
-            loadedCueTimingAvailable,
-            BuildRollingGrids(input, currentPositionAvailable, loadedCue),
+            hasCue,
+            hasCue && input.Cue.IsLocked,
+            cueTimingAvailable,
+            BuildRollingGrids(input, currentPositionAvailable, cue),
             lockBeatsUntil,
             startBeatsUntil,
             endBeatsUntil);

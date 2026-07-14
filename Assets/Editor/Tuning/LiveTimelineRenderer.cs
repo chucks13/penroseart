@@ -39,8 +39,8 @@ internal static class LiveTimelineRenderer
     /// <summary>Ordinary cell content color.</summary>
     private static readonly Color CellContent = new(0.95f, 0.95f, 0.95f);
 
-    /// <summary>Draws next-Cue identity, timing state, legend, and the two rolling Grid rows.</summary>
-    public static void Draw(LiveTimelineModel model, string nextCueLabel)
+    /// <summary>Draws pending-or-active Cue identity, timing state, legend, and two rolling Grid rows.</summary>
+    public static void Draw(LiveTimelineModel model, string cueLabel)
     {
         if (model == null)
         {
@@ -48,7 +48,9 @@ internal static class LiveTimelineRenderer
         }
 
         EnsureStyles();
-        EditorGUILayout.LabelField("NEXT", string.IsNullOrWhiteSpace(nextCueLabel) ? "—" : nextCueLabel);
+        EditorGUILayout.LabelField(
+            model.IsActive ? "ACTIVE" : "NEXT",
+            string.IsNullOrWhiteSpace(cueLabel) ? "—" : cueLabel);
         EditorGUILayout.LabelField(FormatTimingStatus(model), EditorStyles.boldLabel);
         EditorGUILayout.LabelField(
             "L Lock  ·  S Start / Runway  ·  X Impact  ·  T Tail / E End  ·  Yellow Current",
@@ -67,9 +69,9 @@ internal static class LiveTimelineRenderer
             return;
         }
 
-        if (model.HasLoadedCue && !model.LoadedCueTimingAvailable)
+        if (model.HasCue && !model.CueTimingAvailable)
         {
-            EditorGUILayout.HelpBox("Loaded Cue timing unavailable.", MessageType.None);
+            EditorGUILayout.HelpBox("Cue timing unavailable.", MessageType.None);
         }
 
         if (model.Grids.Count != 2)
@@ -96,14 +98,14 @@ internal static class LiveTimelineRenderer
             return "TIMING UNAVAILABLE";
         }
 
-        if (!model.HasLoadedCue)
+        if (!model.HasCue)
         {
-            return "NO LOADED CUE";
+            return "NO CUE";
         }
 
-        if (!model.LoadedCueTimingAvailable)
+        if (!model.CueTimingAvailable)
         {
-            return "LOADED CUE TIMING UNAVAILABLE";
+            return "CUE TIMING UNAVAILABLE";
         }
 
         var lockStatus = model.IsCueLocked

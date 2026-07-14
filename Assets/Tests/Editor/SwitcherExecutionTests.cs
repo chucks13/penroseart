@@ -69,6 +69,49 @@ public sealed class SwitcherExecutionTests
         Assert.That(buffer[0], Is.EqualTo(Color.Lerp(Color.red, Color.blue, 0.5f)));
     }
 
+    /// <summary>The performance Cue remains observable while executing, ahead of any newly loaded Cue.</summary>
+    [Test]
+    public void PendingOrActiveCueStatusRidesThroughExecutionBeforeRevealingTheNextLoadedCue()
+    {
+        var activeCue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+        switcher.UpsertLoadedCue(activeCue, new SwitcherClockSnapshot(7, 0f, 0.5f, 10f));
+
+        switcher.RenderAtTime(11.25f, out _);
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False);
+        Assert.That(switcher.PendingOrActiveCueStatus.HasCue, Is.True);
+        Assert.That(switcher.PendingOrActiveCueStatus.IsLocked, Is.True);
+        Assert.That(switcher.PendingOrActiveCueStatus.TargetEffectIndex, Is.EqualTo(1));
+        Assert.That(switcher.PendingOrActiveCueStatus.StartBeat, Is.EqualTo(9));
+        Assert.That(switcher.PendingOrActiveCueStatus.CueMarkBeat, Is.EqualTo(10));
+        Assert.That(switcher.PendingOrActiveCueStatus.CompleteBeat, Is.EqualTo(10));
+
+        var nextCue = new SwitcherCueDirection(
+            cueMarkBeat: 20,
+            targetEffectIndex: 0,
+            transitionIndex: 1,
+            transitionRepertoire: hardCutTransition.Repertoire);
+        switcher.UpsertLoadedCue(nextCue, new SwitcherClockSnapshot(9, 0.5f, 0.5f, 11.25f));
+
+        Assert.That(switcher.LoadedCueStatus.TargetEffectIndex, Is.EqualTo(0));
+        Assert.That(
+            switcher.PendingOrActiveCueStatus.TargetEffectIndex,
+            Is.EqualTo(1),
+            "The executing Cue remains the Live identity while a later Cue stages.");
+
+        switcher.RenderAtTime(11.5f, out _);
+
+        Assert.That(switcher.PendingOrActiveCueStatus.HasCue, Is.True);
+        Assert.That(
+            switcher.PendingOrActiveCueStatus.TargetEffectIndex,
+            Is.EqualTo(0),
+            "After completion, the next loaded Cue becomes the Live identity.");
+    }
+
     [Test]
     public void SameMarkOfferBeforeLockIsKeptAndRidesUnchanged()
     {

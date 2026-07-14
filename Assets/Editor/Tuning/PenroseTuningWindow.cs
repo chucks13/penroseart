@@ -168,14 +168,14 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        var director = liveController.DirectorStatus;
         using var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll);
         liveTimelineScroll = scroll.scrollPosition;
 
+        var timelineInput = CaptureTimelineInput(liveController);
         EditorGUILayout.LabelField("LIVE TRANSITION", EditorStyles.boldLabel);
         LiveTimelineRenderer.Draw(
-            LiveTimelineProjection.Build(CaptureTimelineInput(liveController)),
-            ControllerStatusText.FormatDirectorNext(director));
+            LiveTimelineProjection.Build(timelineInput),
+            ControllerStatusText.FormatSwitcherCue(liveController, timelineInput.Cue));
     }
 
     /// <summary>Captures one frame-coherent set of facts for the rolling live Transition display.</summary>
@@ -187,7 +187,7 @@ public sealed class PenroseTuningWindow : EditorWindow
             director.IsSyncedMode,
             beatManager?.Timing.Beat,
             beatManager?.Grid.Beat,
-            controller.SwitcherLoadedCueStatus);
+            controller.SwitcherPendingOrActiveCueStatus);
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>

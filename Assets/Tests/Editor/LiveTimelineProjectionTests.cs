@@ -14,7 +14,7 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 114,
             currentGridBeat: 14,
-            loadedCue: SwitcherCueStatus.Empty));
+            cue: SwitcherCueStatus.Empty));
 
         Assert.That(model.Grids, Has.Count.EqualTo(2));
         Assert.That(model.Grids[0].StartAbsoluteBeat, Is.EqualTo(101));
@@ -30,7 +30,7 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 112,
             currentGridBeat: 12,
-            loadedCue: WrappedCue(isLocked: false)));
+            cue: WrappedCue(isLocked: false)));
         var lockPoint = model.Grids[0].Cells[12];
         var start = model.Grids[0].Cells[13];
         var impact = model.Grids[1].Cells[0];
@@ -60,12 +60,12 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 116,
             currentGridBeat: 16,
-            loadedCue: SwitcherCueStatus.Empty));
+            cue: SwitcherCueStatus.Empty));
         var after = LiveTimelineProjection.Build(new LiveTimelineInput(
             isSynced: true,
             currentAbsoluteBeat: 117,
             currentGridBeat: 1,
-            loadedCue: SwitcherCueStatus.Empty));
+            cue: SwitcherCueStatus.Empty));
 
         Assert.That(before.Grids[1].StartAbsoluteBeat, Is.EqualTo(117));
         Assert.That(after.Grids[0].StartAbsoluteBeat, Is.EqualTo(117));
@@ -81,7 +81,7 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 115,
             currentGridBeat: 15,
-            loadedCue: WrappedCue(isLocked: true)));
+            cue: WrappedCue(isLocked: true)));
         var current = model.Grids[0].Cells[14];
 
         Assert.That(model.IsActive, Is.True);
@@ -100,7 +100,7 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 117,
             currentGridBeat: 1,
-            loadedCue: WrappedCue(isLocked: true)));
+            cue: WrappedCue(isLocked: true)));
         var current = model.Grids[0].Cells[0];
 
         Assert.That(current.IsImpactPoint, Is.True);
@@ -127,7 +127,7 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 116,
             currentGridBeat: 16,
-            loadedCue: cue));
+            cue: cue));
         var boundary = model.Grids[1].Cells[0];
 
         Assert.That(boundary.IsStart, Is.True);
@@ -146,10 +146,10 @@ public sealed class LiveTimelineProjectionTests
             isSynced: false,
             currentAbsoluteBeat: 112,
             currentGridBeat: 12,
-            loadedCue: WrappedCue(isLocked: true)));
+            cue: WrappedCue(isLocked: true)));
 
         Assert.That(model.Grids, Is.Empty);
-        Assert.That(model.HasLoadedCue, Is.False);
+        Assert.That(model.HasCue, Is.False);
         Assert.That(model.LockBeatsUntil, Is.Null);
         Assert.That(model.StartBeatsUntil, Is.Null);
         Assert.That(model.EndBeatsUntil, Is.Null);
@@ -165,15 +165,15 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 112,
             currentGridBeat: gridBeat,
-            loadedCue: SwitcherCueStatus.Empty));
+            cue: SwitcherCueStatus.Empty));
 
         Assert.That(model.CurrentPositionAvailable, Is.False);
         Assert.That(model.Grids, Is.Empty);
     }
 
-    /// <summary>Inconsistent loaded timing is reported but never repaired into colored cells or countdowns.</summary>
+    /// <summary>Inconsistent Cue timing is reported but never repaired into colored cells or countdowns.</summary>
     [Test]
-    public void InconsistentLoadedCueTimingIsUnavailable()
+    public void InconsistentCueTimingIsUnavailable()
     {
         var cue = new SwitcherCueStatus(
             true,
@@ -190,10 +190,10 @@ public sealed class LiveTimelineProjectionTests
             isSynced: true,
             currentAbsoluteBeat: 112,
             currentGridBeat: 12,
-            loadedCue: cue));
+            cue: cue));
 
-        Assert.That(model.HasLoadedCue, Is.True);
-        Assert.That(model.LoadedCueTimingAvailable, Is.False);
+        Assert.That(model.HasCue, Is.True);
+        Assert.That(model.CueTimingAvailable, Is.False);
         Assert.That(model.StartBeatsUntil, Is.Null);
         Assert.That(model.Grids[0].Cells[13].IsStart, Is.False);
         Assert.That(model.Grids[1].Cells[0].IsImpactPoint, Is.False);

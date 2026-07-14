@@ -69,6 +69,24 @@ public sealed class TuningWorkspaceLayoutTests
             Is.EqualTo("LOCKED · START NOW · END IN 5"));
     }
 
+    /// <summary>The Live identity comes from the Cue whose timing is rendered, not newly staged Director choices.</summary>
+    [Test]
+    public void LiveTimelineFormatsIdentityFromTheSwitcherCueSnapshot()
+    {
+        var gameObject = new GameObject("Live Cue Identity Test");
+        var controller = gameObject.AddComponent<Controller>();
+        try
+        {
+            var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
+
+            Assert.That(ControllerStatusText.FormatSwitcherCue(controller, cue), Is.EqualTo("#2 · #1"));
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
     /// <summary>Narrow and wide Tuning Window layouts survive real Editor repaint events without exceptions.</summary>
     [UnityTest]
     public IEnumerator TuningWindowRendersNarrowAndWideWithoutExceptions()

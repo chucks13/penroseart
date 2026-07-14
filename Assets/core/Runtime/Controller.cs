@@ -217,8 +217,9 @@ public class Controller : Singleton<Controller>
     /// <summary>Read-only Mechanical Switcher stage snapshot for inspectors and status displays.</summary>
     public SwitcherStatus SwitcherStatus => switcher != null ? switcher.Status : SwitcherStatus.NotReady;
 
-    /// <summary>Read-only Switcher-held Loaded Cue snapshot for inspectors and status displays.</summary>
-    public SwitcherCueStatus SwitcherLoadedCueStatus => switcher != null ? switcher.LoadedCueStatus : SwitcherCueStatus.Empty;
+    /// <summary>Read-only active-or-pending Switcher Cue snapshot for live status displays.</summary>
+    public SwitcherCueStatus SwitcherPendingOrActiveCueStatus =>
+        switcher != null ? switcher.PendingOrActiveCueStatus : SwitcherCueStatus.Empty;
 
     /// <summary>Latest render-pipeline debug text captured before HUD filtering.</summary>
     public string LastRenderDebugText => lastRenderDebugText;

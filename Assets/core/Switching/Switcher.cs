@@ -245,6 +245,9 @@ public sealed class Switcher
     private float loadedCueStartTime;
     private float loadedCueSecondsPerBeat;
 
+    /// <summary>The Cue whose Transition currently owns the stage, or Empty outside Cue execution.</summary>
+    private SwitcherCueStatus activeCueStatus = SwitcherCueStatus.Empty;
+
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
 
@@ -262,6 +265,10 @@ public sealed class Switcher
 
     /// <summary>Current read-only Loaded Cue lifecycle snapshot.</summary>
     public SwitcherCueStatus LoadedCueStatus => BuildLoadedCueStatus();
+
+    /// <summary>The active Cue while executing; otherwise the Cue waiting to start.</summary>
+    public SwitcherCueStatus PendingOrActiveCueStatus =>
+        activeCueStatus.HasCue ? activeCueStatus : BuildLoadedCueStatus();
 
     public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions, CueLog cueLog = null)
     {
@@ -288,6 +295,7 @@ public sealed class Switcher
         currentTransitionIndex = transitionIndex;
         isTransitioning = false;
         transitionProgress = 0f;
+        activeCueStatus = SwitcherCueStatus.Empty;
         ClearLoadedCue();
         Trace(() => $"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
@@ -300,6 +308,7 @@ public sealed class Switcher
         EffectBase.APalette.Change();
         isTransitioning = false;
         transitionProgress = 0f;
+        activeCueStatus = SwitcherCueStatus.Empty;
         ClearLoadedCue();
         currentEffectIndex = effectIndex;
         StartEffect(effectIndex);
@@ -434,6 +443,7 @@ public sealed class Switcher
     public void StartTransition(int targetEffectIndex, int transitionIndex, TransitionStartTiming timing)
     {
         ValidateTransitionIndex(transitionIndex);
+        activeCueStatus = SwitcherCueStatus.Empty;
         ClearLoadedCue();
         StartTransition(targetEffectIndex, transitionIndex, timing, Time.time, transitions[transitionIndex].Repertoire);
     }
@@ -563,6 +573,7 @@ public sealed class Switcher
         var startTime = loadedCueStartTime;
         var secondsPerBeat = loadedCueSecondsPerBeat;
         var elapsedBeats = Mathf.Max(0f, (nowSeconds - startTime) / secondsPerBeat);
+        activeCueStatus = BuildLoadedCueStatus();
         ClearLoadedCue();
         StartTransition(
             cue.TargetEffectIndex,
@@ -632,6 +643,7 @@ public sealed class Switcher
         currentEffectIndex = targetEffectIndex;
         isTransitioning = false;
         transitionProgress = 0f;
+        activeCueStatus = SwitcherCueStatus.Empty;
         Trace(() => $"SWITCHER_COMPLETE transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}");
     }
 

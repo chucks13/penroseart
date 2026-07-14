@@ -38,6 +38,31 @@ internal static class ControllerStatusText
             FormatCatalogChoice(status.NextTransitionIndex, status.NextTransitionName);
     }
 
+    /// <summary>Formats the pending-or-active Cue from the same Switcher snapshot used for its timing.</summary>
+    internal static string FormatSwitcherCue(Controller controller, SwitcherCueStatus status)
+    {
+        if (!status.HasCue)
+        {
+            return "Unavailable";
+        }
+
+        var effectName = controller.effects != null &&
+            status.TargetEffectIndex >= 0 &&
+            status.TargetEffectIndex < controller.effects.Length &&
+            controller.effects[status.TargetEffectIndex] != null
+                ? controller.effects[status.TargetEffectIndex].GetType().Name
+                : string.Empty;
+        var transitionName = controller.transitions != null &&
+            status.TransitionIndex >= 0 &&
+            status.TransitionIndex < controller.transitions.Length &&
+            controller.transitions[status.TransitionIndex] != null
+                ? controller.transitions[status.TransitionIndex].GetType().Name
+                : string.Empty;
+
+        return $"{FormatCatalogChoice(status.TargetEffectIndex, effectName)} · " +
+            FormatCatalogChoice(status.TransitionIndex, transitionName);
+    }
+
     /// <summary>Formats the current Effect hold independently from the editor's Hold Selected behavior.</summary>
     internal static string FormatHeldEffect(Controller controller)
     {
