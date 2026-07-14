@@ -22,44 +22,30 @@ public static class TransitionSettingsAssetUtility
         return $"{assetFolder}/{transitionType.Name}Settings.asset";
     }
 
-    /// <summary>
-    /// Clamps editable Runway and Tail values so saved settings never exceed the transition duration limit.
-    /// </summary>
-    public static bool ConstrainDuration(TransitionSettings settings)
+    /// <summary>Loads an existing Transition Settings asset without creating folders, assets, or dirty state.</summary>
+    public static TransitionSettingsAsset LoadAsset(Type transitionType, string assetFolder = DefaultAssetFolder)
     {
-        if (settings == null)
+        return AssetDatabase.LoadAssetAtPath<TransitionSettingsAsset>(AssetPathFor(transitionType, assetFolder));
+    }
+
+    /// <summary>
+    /// Constrains pending serialized Runway and Tail edits and applies the complete asset change as one Undo transaction.
+    /// </summary>
+    public static bool ApplyConstrainedSettings(SerializedObject serializedAsset)
+    {
+        if (serializedAsset == null)
         {
-            throw new ArgumentNullException(nameof(settings));
+            throw new ArgumentNullException(nameof(serializedAsset));
         }
 
-        var changed = false;
-        if (settings.RunwayBeats < 0)
-        {
-            settings.RunwayBeats = 0;
-            changed = true;
-        }
-
-        if (settings.TailBeats < 0)
-        {
-            settings.TailBeats = 0;
-            changed = true;
-        }
-
-        if (settings.RunwayBeats > TransitionRepertoire.MaxDurationBeats)
-        {
-            settings.RunwayBeats = TransitionRepertoire.MaxDurationBeats;
-            settings.TailBeats = 0;
-            return true;
-        }
-
-        var maxTailBeats = TransitionRepertoire.MaxDurationBeats - settings.RunwayBeats;
-        if (settings.TailBeats > maxTailBeats)
-        {
-            settings.TailBeats = maxTailBeats;
-            changed = true;
-        }
-
-        return changed;
+        var settings = serializedAsset.FindProperty("settings")
+            ?? throw new InvalidOperationException("Transition Settings asset is missing its serialized settings field.");
+        var runway = settings.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
+        var tail = settings.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
+        var constrainedRunway = Mathf.Clamp(runway.intValue, 0, TransitionRepertoire.MaxDurationBeats);
+        runway.intValue = constrainedRunway;
+        tail.intValue = Mathf.Clamp(tail.intValue, 0, TransitionRepertoire.MaxDurationBeats - constrainedRunway);
+        return serializedAsset.ApplyModifiedProperties();
     }
 
     /// <summary>Creates the settings asset if missing, initialized from Code Defaults; existing assets are returned unchanged.</summary>
@@ -80,7 +66,7 @@ public static class TransitionSettingsAssetUtility
 
         EnsureFolder(assetFolder);
         var assetPath = AssetPathFor(transitionType, assetFolder);
-        var asset = AssetDatabase.LoadAssetAtPath<TransitionSettingsAsset>(assetPath);
+        var asset = LoadAsset(transitionType, assetFolder);
         if (asset != null)
         {
             return asset;
@@ -101,11 +87,23 @@ public static class TransitionSettingsAssetUtility
         string assetFolder = DefaultAssetFolder)
     {
         var asset = EnsureAsset(transitionType, codeDefaults, assetFolder);
-        Undo.RecordObject(asset, $"Restore {transitionType.Name} Transition Settings Defaults");
-        asset.RestoreDefaults(codeDefaults);
-        EditorUtility.SetDirty(asset);
-        AssetDatabase.SaveAssets();
-        return asset;
+        var defaultsAsset = ScriptableObject.CreateInstance<TransitionSettingsAsset>();
+        try
+        {
+            defaultsAsset.Initialize(transitionType.FullName ?? transitionType.Name, codeDefaults);
+            var serializedAsset = new SerializedObject(asset);
+            var serializedDefaults = new SerializedObject(defaultsAsset);
+            serializedAsset.Update();
+            serializedDefaults.Update();
+            serializedAsset.CopyFromSerializedProperty(serializedDefaults.FindProperty("settings"));
+            serializedAsset.ApplyModifiedProperties();
+            AssetDatabase.SaveAssets();
+            return asset;
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(defaultsAsset);
+        }
     }
 
     /// <summary>Creates any missing settings assets for the reflected Transition catalog.</summary>

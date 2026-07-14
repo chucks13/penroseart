@@ -143,6 +143,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
+    /// <summary>Draws the selected saved Transition Settings asset without creating one during observation.</summary>
     private void DrawSelectedTransitionSettings(Controller liveController)
     {
         using (new EditorGUILayout.VerticalScope())
@@ -164,10 +165,17 @@ public sealed class PenroseTuningWindow : EditorWindow
                 return;
             }
 
-            EnsureSelectedAsset();
+            LoadSelectedAsset();
             if (selectedAsset == null || selectedSerializedObject == null)
             {
-                EditorGUILayout.HelpBox("Could not create or load the selected Transition Settings asset.", MessageType.Error);
+                EditorGUILayout.HelpBox(
+                    "No saved Transition Settings asset exists for this Transition. Observation never creates one.",
+                    MessageType.Warning);
+                if (GUILayout.Button("Create Settings Asset", GUILayout.Width(160f)))
+                {
+                    CreateSelectedSettingsAsset();
+                }
+
                 return;
             }
 
@@ -191,20 +199,16 @@ public sealed class PenroseTuningWindow : EditorWindow
                 settingsScroll = scroll.scrollPosition;
                 selectedSerializedObject.Update();
                 var settingsProperty = selectedSerializedObject.FindProperty("settings");
+                var runwayProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
+                var tailProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
                 EditorGUI.BeginChangeCheck();
                 EditorGUILayout.PropertyField(settingsProperty, includeChildren: true);
                 EditorGUILayout.HelpBox(
-                    TransitionSettings.DurationValidationMessage(selectedAsset.Settings.RunwayBeats, selectedAsset.Settings.TailBeats),
+                    TransitionSettings.DurationValidationMessage(runwayProperty.intValue, tailProperty.intValue),
                     MessageType.Info);
                 if (EditorGUI.EndChangeCheck())
                 {
-                    selectedSerializedObject.ApplyModifiedProperties();
-                    if (TransitionSettingsAssetUtility.ConstrainDuration(selectedAsset.Settings))
-                    {
-                        selectedSerializedObject.Update();
-                    }
-
-                    EditorUtility.SetDirty(selectedAsset);
+                    TransitionSettingsAssetUtility.ApplyConstrainedSettings(selectedSerializedObject);
                     settingsChangedSinceLastSave = true;
                 }
             }
@@ -290,13 +294,14 @@ public sealed class PenroseTuningWindow : EditorWindow
         SetSelectedTransitionIndex(index);
     }
 
+    /// <summary>Changes the observed Transition selection and loads only an already-saved settings asset.</summary>
     private void SetSelectedTransitionIndex(int index)
     {
         selectedTransitionIndex = index;
         settingsScroll = Vector2.zero;
         selectedAsset = null;
         selectedSerializedObject = null;
-        EnsureSelectedAsset();
+        LoadSelectedAsset();
     }
 
     private void SyncSelectedTransitionFromDirector(Controller liveController)
@@ -338,6 +343,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
+    /// <summary>Persists serialized Transition Settings edits that are already constrained and dirty.</summary>
     private void SavePendingSettingsAssets()
     {
         if (!settingsChangedSinceLastSave)
@@ -345,22 +351,30 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        if (selectedAsset != null && TransitionSettingsAssetUtility.ConstrainDuration(selectedAsset.Settings))
-        {
-            EditorUtility.SetDirty(selectedAsset);
-        }
-
         AssetDatabase.SaveAssets();
         settingsChangedSinceLastSave = false;
     }
 
-    private void EnsureSelectedAsset()
+    /// <summary>Loads the selected Transition's saved settings asset without creating project state.</summary>
+    private void LoadSelectedAsset()
     {
         if (selectedAsset != null && selectedSerializedObject != null)
         {
             return;
         }
 
+        if (!IsValidTransitionIndex(selectedTransitionIndex))
+        {
+            return;
+        }
+
+        selectedAsset = TransitionSettingsAssetUtility.LoadAsset(transitionTypes[selectedTransitionIndex]);
+        selectedSerializedObject = selectedAsset == null ? null : new SerializedObject(selectedAsset);
+    }
+
+    /// <summary>Creates the selected Transition's missing settings asset after an explicit author action.</summary>
+    private void CreateSelectedSettingsAsset()
+    {
         var transition = CreateSelectedTransition();
         if (transition == null)
         {
@@ -371,8 +385,10 @@ public sealed class PenroseTuningWindow : EditorWindow
             transitionTypes[selectedTransitionIndex],
             transition.CodeDefaults);
         selectedSerializedObject = new SerializedObject(selectedAsset);
+        Repaint();
     }
 
+    /// <summary>Restores every saved field on the selected Transition Settings asset through Unity serialization.</summary>
     private void RestoreSelectedDefaults()
     {
         var transition = CreateSelectedTransition();
