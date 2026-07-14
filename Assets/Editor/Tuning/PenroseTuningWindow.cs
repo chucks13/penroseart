@@ -12,6 +12,114 @@ internal enum TuningWorkspaceFlow
     Split,
 }
 
+/// <summary>Chooses whether Transition authoring follows live Director intent or a stable saved selection.</summary>
+internal enum TransitionSelectionMode
+{
+    /// <summary>Tracks the Director's staged Next Transition when one is available.</summary>
+    FollowDirector,
+
+    /// <summary>Keeps the author's saved Transition Settings selection stable.</summary>
+    PinSelection,
+}
+
+/// <summary>Pure selection policy separating authoring state from Director and Switcher runtime state.</summary>
+internal readonly struct TransitionAuthoringSelection
+{
+    /// <summary>Creates one immutable authoring selection state.</summary>
+    private TransitionAuthoringSelection(
+        TransitionSelectionMode mode,
+        int authoringIndex,
+        int pinnedIndex)
+    {
+        Mode = mode;
+        AuthoringIndex = authoringIndex;
+        PinnedIndex = pinnedIndex;
+    }
+
+    /// <summary>The active authoring selection mode.</summary>
+    public TransitionSelectionMode Mode { get; }
+
+    /// <summary>The catalog index whose saved settings are currently being edited.</summary>
+    public int AuthoringIndex { get; }
+
+    /// <summary>The stable author choice retained independently of Director observation.</summary>
+    public int PinnedIndex { get; }
+
+    /// <summary>Restores serialized Editor window state and normalizes it to the current catalog.</summary>
+    public static TransitionAuthoringSelection Restore(
+        TransitionSelectionMode mode,
+        int authoringIndex,
+        int pinnedIndex,
+        int catalogCount)
+    {
+        return new TransitionAuthoringSelection(mode, authoringIndex, pinnedIndex)
+            .WithCatalogCount(catalogCount);
+    }
+
+    /// <summary>Switches modes without mutating any runtime or settings asset.</summary>
+    public TransitionAuthoringSelection SetMode(
+        TransitionSelectionMode mode,
+        int directorNextIndex,
+        int catalogCount)
+    {
+        var normalized = WithCatalogCount(catalogCount);
+        if (mode == TransitionSelectionMode.PinSelection)
+        {
+            return new TransitionAuthoringSelection(mode, normalized.AuthoringIndex, normalized.AuthoringIndex);
+        }
+
+        var followedIndex = IsValidIndex(directorNextIndex, catalogCount)
+            ? directorNextIndex
+            : normalized.AuthoringIndex;
+        return new TransitionAuthoringSelection(mode, followedIndex, normalized.PinnedIndex);
+    }
+
+    /// <summary>Updates the authoring target only while Follow Director is active.</summary>
+    public TransitionAuthoringSelection ObserveDirector(int directorNextIndex, int catalogCount)
+    {
+        var normalized = WithCatalogCount(catalogCount);
+        if (normalized.Mode != TransitionSelectionMode.FollowDirector ||
+            !IsValidIndex(directorNextIndex, catalogCount))
+        {
+            return normalized;
+        }
+
+        return new TransitionAuthoringSelection(normalized.Mode, directorNextIndex, normalized.PinnedIndex);
+    }
+
+    /// <summary>Changes the authoring target only through the explicit Pin Selection mode.</summary>
+    public TransitionAuthoringSelection SelectPinned(int authoringIndex, int catalogCount)
+    {
+        var normalized = WithCatalogCount(catalogCount);
+        if (normalized.Mode != TransitionSelectionMode.PinSelection ||
+            !IsValidIndex(authoringIndex, catalogCount))
+        {
+            return normalized;
+        }
+
+        return new TransitionAuthoringSelection(normalized.Mode, authoringIndex, authoringIndex);
+    }
+
+    /// <summary>Normalizes retained indices after catalog reload without choosing runtime behavior.</summary>
+    public TransitionAuthoringSelection WithCatalogCount(int catalogCount)
+    {
+        if (catalogCount <= 0)
+        {
+            return new TransitionAuthoringSelection(Mode, -1, -1);
+        }
+
+        var authoringIndex = IsValidIndex(AuthoringIndex, catalogCount) ? AuthoringIndex : 0;
+        var pinnedIndex = IsValidIndex(PinnedIndex, catalogCount) ? PinnedIndex : authoringIndex;
+        return new TransitionAuthoringSelection(Mode, authoringIndex, pinnedIndex);
+    }
+
+    /// <summary>Reports whether an index belongs to the current Transition catalog.</summary>
+    private static bool IsValidIndex(int index, int catalogCount)
+    {
+        return index >= 0 && index < catalogCount;
+    }
+}
+
 /// <summary>
 /// Canonical authoring window for live sequencing, rhythm observation, and saved Transition tuning.
 /// </summary>
@@ -23,9 +131,20 @@ public sealed class PenroseTuningWindow : EditorWindow
     /// <summary>The focused workspaces presented by the canonical Tuning Window.</summary>
     internal static readonly string[] WorkspaceTabs = { "Live", "Rhythm", "Transitions" };
 
+    /// <summary>Labels for the explicit Transition authoring selection modes.</summary>
+    private static readonly string[] TransitionSelectionModeLabels = { "Follow Director", "Pin Selection" };
+
     private Type[] transitionTypes = Array.Empty<Type>();
     private string[] transitionNames = Array.Empty<string>();
+    /// <summary>The catalog index whose saved Transition Settings are currently being edited.</summary>
+    [SerializeField]
     private int selectedTransitionIndex = -1;
+    /// <summary>The explicit authoring mode retained across Editor window reloads.</summary>
+    [SerializeField]
+    private TransitionSelectionMode transitionSelectionMode;
+    /// <summary>The author's stable Transition catalog choice retained independently of live intent.</summary>
+    [SerializeField]
+    private int pinnedTransitionIndex = -1;
     private int selectedTab;
     private Vector2 transitionListScroll;
     /// <summary>Scroll position for the selected Transition Settings editor.</summary>
@@ -214,7 +333,7 @@ public sealed class PenroseTuningWindow : EditorWindow
             SyncSelectedTransitionFromDirector(liveController);
         }
 
-        DrawTransitionToolbar();
+        DrawTransitionToolbar(liveController);
         if (FlowForWidth(position.width) == TuningWorkspaceFlow.Split)
         {
             using var row = new EditorGUILayout.HorizontalScope();
@@ -235,10 +354,20 @@ public sealed class PenroseTuningWindow : EditorWindow
         return width >= SplitViewWidth ? TuningWorkspaceFlow.Split : TuningWorkspaceFlow.Stacked;
     }
 
-    /// <summary>Draws Transition-specific catalog actions inside the Transitions workspace.</summary>
-    private void DrawTransitionToolbar()
+    /// <summary>Draws explicit authoring selection modes and Transition catalog actions.</summary>
+    private void DrawTransitionToolbar(Controller liveController)
     {
         using var toolbar = new EditorGUILayout.HorizontalScope(EditorStyles.toolbar);
+        var requestedMode = (TransitionSelectionMode)GUILayout.Toolbar(
+            (int)transitionSelectionMode,
+            TransitionSelectionModeLabels,
+            EditorStyles.toolbarButton,
+            GUILayout.Width(220f));
+        if (requestedMode != transitionSelectionMode)
+        {
+            SetTransitionSelectionMode(requestedMode, liveController);
+        }
+
         if (GUILayout.Button("Reload", EditorStyles.toolbarButton, GUILayout.Width(64f)))
         {
             ReloadTransitions();
@@ -260,22 +389,37 @@ public sealed class PenroseTuningWindow : EditorWindow
         using (new EditorGUILayout.VerticalScope(layoutOptions))
         {
             EditorGUILayout.LabelField("Transitions", EditorStyles.boldLabel);
-            if (liveController != null && liveController.director != null)
+            if (transitionSelectionMode == TransitionSelectionMode.FollowDirector &&
+                liveController != null &&
+                liveController.director != null)
             {
-                EditorGUILayout.HelpBox("Play Mode: selection mirrors Director Next Transition. Click a Transition to stage it through the Director.", MessageType.None);
+                EditorGUILayout.HelpBox(
+                    "Follow Director: the authoring selection mirrors Director Next. Switch to Pin Selection to choose a stable settings asset.",
+                    MessageType.None);
+            }
+            else if (transitionSelectionMode == TransitionSelectionMode.PinSelection)
+            {
+                EditorGUILayout.HelpBox(
+                    "Pin Selection: choose one saved settings asset while Director Next and Switcher Active continue updating separately.",
+                    MessageType.None);
             }
             else if (Application.isPlaying)
             {
-                EditorGUILayout.HelpBox("Play Mode is running, but the live Director is not ready yet. Settings authoring still works.", MessageType.Warning);
+                EditorGUILayout.HelpBox(
+                    "Follow Director is waiting for the live Director. Switch to Pin Selection to author settings now.",
+                    MessageType.Warning);
             }
             else
             {
-                EditorGUILayout.HelpBox("Edit Mode: select a Transition to edit its saved settings asset.", MessageType.None);
+                EditorGUILayout.HelpBox(
+                    "Follow Director has no live source in Edit Mode. Switch to Pin Selection to choose a saved settings asset.",
+                    MessageType.None);
             }
 
-            using (var scroll = new EditorGUILayout.ScrollViewScope(transitionListScroll, GUI.skin.box))
+            using var scroll = new EditorGUILayout.ScrollViewScope(transitionListScroll, GUI.skin.box);
+            transitionListScroll = scroll.scrollPosition;
+            using (new EditorGUI.DisabledScope(transitionSelectionMode != TransitionSelectionMode.PinSelection))
             {
-                transitionListScroll = scroll.scrollPosition;
                 for (var i = 0; i < transitionTypes.Length; i++)
                 {
                     var isSelected = i == selectedTransitionIndex;
@@ -288,7 +432,7 @@ public sealed class PenroseTuningWindow : EditorWindow
                     var label = isSelected ? $"▶ {transitionNames[i]}" : transitionNames[i];
                     if (GUILayout.Button(label, EditorStyles.miniButton))
                     {
-                        SelectTransition(i, liveController);
+                        SelectTransition(i);
                         GUI.FocusControl(null);
                     }
 
@@ -303,6 +447,8 @@ public sealed class PenroseTuningWindow : EditorWindow
     {
         using (new EditorGUILayout.VerticalScope())
         {
+            DrawTransitionSelectionSummary(liveController);
+            EditorGUILayout.Space();
             if (liveController != null)
             {
                 DrawPlayModeTransitionSteering(liveController);
@@ -334,12 +480,12 @@ public sealed class PenroseTuningWindow : EditorWindow
                 return;
             }
 
-            EditorGUILayout.LabelField(transitionNames[selectedTransitionIndex], EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Saved Transition Settings", EditorStyles.boldLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
                 using (new EditorGUI.DisabledScope(true))
                 {
-                    EditorGUILayout.ObjectField("Settings Asset", selectedAsset, typeof(TransitionSettingsAsset), false);
+                    EditorGUILayout.ObjectField("Authoring Asset", selectedAsset, typeof(TransitionSettingsAsset), false);
                 }
 
                 if (GUILayout.Button("Restore Defaults", GUILayout.Width(130f)))
@@ -349,48 +495,137 @@ public sealed class PenroseTuningWindow : EditorWindow
             }
 
             EditorGUILayout.Space();
-            using (var scroll = new EditorGUILayout.ScrollViewScope(settingsScroll))
+            using var scroll = new EditorGUILayout.ScrollViewScope(settingsScroll);
+            settingsScroll = scroll.scrollPosition;
+            selectedSerializedObject.Update();
+            var settingsProperty = selectedSerializedObject.FindProperty("settings");
+            var runwayProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
+            var tailProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.LabelField("Shared Timing", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(runwayProperty, new GUIContent("Runway (beats)"));
+            EditorGUILayout.PropertyField(tailProperty, new GUIContent("Tail (beats)"));
+            EditorGUILayout.HelpBox(
+                TransitionSettings.DurationValidationMessage(runwayProperty.intValue, tailProperty.intValue),
+                MessageType.Info);
+            EditorGUILayout.Space(6f);
+            EditorGUILayout.LabelField("Transition-Specific Settings", EditorStyles.boldLabel);
+            DrawTransitionSpecificProperties(settingsProperty);
+            if (EditorGUI.EndChangeCheck())
             {
-                settingsScroll = scroll.scrollPosition;
+                TransitionSettingsAssetUtility.ApplyConstrainedSettings(selectedSerializedObject);
+                settingsChangedSinceLastSave = true;
                 selectedSerializedObject.Update();
-                var settingsProperty = selectedSerializedObject.FindProperty("settings");
-                var runwayProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
-                var tailProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
-                EditorGUI.BeginChangeCheck();
-                EditorGUILayout.PropertyField(settingsProperty, includeChildren: true);
-                EditorGUILayout.HelpBox(
-                    TransitionSettings.DurationValidationMessage(runwayProperty.intValue, tailProperty.intValue),
-                    MessageType.Info);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    TransitionSettingsAssetUtility.ApplyConstrainedSettings(selectedSerializedObject);
-                    settingsChangedSinceLastSave = true;
-                }
+                settingsProperty = selectedSerializedObject.FindProperty("settings");
+                runwayProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
+                tailProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
             }
+
+            EditorGUILayout.Space(8f);
+            DrawTransitionTimingPreview(liveController, runwayProperty.intValue, tailProperty.intValue);
         }
     }
 
-    /// <summary>Draws distinct Director Next, Switcher Active, Hold Selected, and Held Effect state.</summary>
+    /// <summary>Draws the distinct authoring, pinned, Director Next, and Switcher Active identities.</summary>
+    private void DrawTransitionSelectionSummary(Controller liveController)
+    {
+        using var panel = new EditorGUILayout.VerticalScope(GUI.skin.box);
+        EditorGUILayout.LabelField("Selection and Live Status", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Authoring Selection", FormatTransitionName(selectedTransitionIndex));
+        var pinnedLabel = FormatTransitionName(pinnedTransitionIndex);
+        EditorGUILayout.LabelField(
+            "Pinned Selection",
+            transitionSelectionMode == TransitionSelectionMode.PinSelection
+                ? pinnedLabel
+                : $"Inactive · {pinnedLabel}");
+
+        if (liveController == null)
+        {
+            EditorGUILayout.LabelField("Director Next", "Unavailable outside live Play Mode");
+            EditorGUILayout.LabelField("Switcher Active", "Unavailable outside live Play Mode");
+            return;
+        }
+
+        var directorStatus = liveController.DirectorStatus;
+        var switcherStatus = liveController.SwitcherStatus;
+        EditorGUILayout.LabelField("Director Next", ControllerStatusText.FormatDirectorNext(directorStatus));
+        EditorGUILayout.LabelField("Switcher Active", ControllerStatusText.FormatSwitcherActive(switcherStatus));
+        EditorGUILayout.LabelField(
+            "Switcher Stage",
+            string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
+        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(liveController));
+    }
+
+    /// <summary>Draws every serialized Transition setting except the shared Runway and Tail controls.</summary>
+    private static void DrawTransitionSpecificProperties(SerializedProperty settingsProperty)
+    {
+        var property = settingsProperty.Copy();
+        var endProperty = property.GetEndProperty();
+        var enterChildren = true;
+        while (property.NextVisible(enterChildren) && !SerializedProperty.EqualContents(property, endProperty))
+        {
+            enterChildren = false;
+            if (property.name == nameof(TransitionSettings.RunwayBeats) ||
+                property.name == nameof(TransitionSettings.TailBeats))
+            {
+                continue;
+            }
+
+            EditorGUILayout.PropertyField(property, includeChildren: true);
+        }
+    }
+
+    /// <summary>Draws saved timing on real live placement through the shared timeline projection and renderer.</summary>
+    private static void DrawTransitionTimingPreview(
+        Controller liveController,
+        int runwayBeats,
+        int tailBeats)
+    {
+        EditorGUILayout.LabelField("Timing Preview", EditorStyles.boldLabel);
+        if (liveController == null)
+        {
+            EditorGUILayout.HelpBox(
+                "Enter Play Mode with a live Controller to place saved timing on a real Cue.",
+                MessageType.None);
+            return;
+        }
+
+        var input = CaptureTimelineInput(liveController);
+        if (!LiveTimelineProjection.TryBuildTimingPreview(input, runwayBeats, tailBeats, out var preview))
+        {
+            var reason = !input.IsSynced
+                ? "Synced Grid timing is unavailable."
+                : input.CurrentGridBeat is not (>= 1 and <= CueSheet.GridBeats)
+                    ? "Current Grid position is unavailable."
+                    : !input.PendingCue.HasCue && !input.ActiveCue.HasCue
+                        ? "No Loaded Cue or active Transition provides a real Impact Point."
+                        : "Live Cue timing is unavailable.";
+            EditorGUILayout.HelpBox(reason, MessageType.None);
+            return;
+        }
+
+        LiveTimelineRenderer.DrawTimingPreview(
+            preview,
+            input.PendingCue.HasCue ? "Loaded Cue" : "Active Transition");
+    }
+
+    /// <summary>Draws explicit Director staging and Hold Selected controls.</summary>
     private void DrawPlayModeTransitionSteering(Controller liveController)
     {
         var directorReady = liveController.director != null;
         var directorStatus = liveController.DirectorStatus;
-        var switcherStatus = liveController.SwitcherStatus;
 
-        EditorGUILayout.LabelField("Play Mode Steering", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Director Steering", EditorStyles.boldLabel);
         using (new EditorGUILayout.VerticalScope(GUI.skin.box))
         {
-            EditorGUILayout.LabelField(
-                "Director Next",
-                ControllerStatusText.FormatDirectorNext(directorStatus));
-
-            var switcherShowingTransition = switcherStatus.Ready && switcherStatus.CurrentEffectIndex < 0;
-            EditorGUILayout.LabelField("Switcher Active", ControllerStatusText.FormatSwitcherActive(switcherStatus));
-            EditorGUILayout.LabelField("Switcher Stage", string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
-            EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(liveController));
-            if (switcherShowingTransition)
+            using (new EditorGUI.DisabledScope(!directorReady || !IsValidTransitionIndex(selectedTransitionIndex)))
             {
-                EditorGUILayout.LabelField("Switcher Target", ControllerStatusText.FormatCatalogChoice(switcherStatus.TargetEffectIndex, switcherStatus.TargetEffectName));
+                if (GUILayout.Button("Stage Authoring Selection as Director Next"))
+                {
+                    liveController.director.SetNextTransition(selectedTransitionIndex);
+                    Repaint();
+                }
             }
 
             using (new EditorGUI.DisabledScope(!directorReady || !IsValidTransitionIndex(selectedTransitionIndex)))
@@ -413,30 +648,28 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
+    /// <summary>Formats a Transition catalog index without inventing a missing selection.</summary>
+    private string FormatTransitionName(int index)
+    {
+        return IsValidTransitionIndex(index) ? transitionNames[index] : "Unavailable";
+    }
+
+    /// <summary>Reloads the runtime Transition catalog and restores normalized authoring selection state.</summary>
     private void ReloadTransitions()
     {
         var factory = new Factory<TransitionBase>();
         transitionTypes = factory.Types;
         transitionNames = factory.Names;
-        if (transitionTypes.Length == 0)
-        {
-            selectedTransitionIndex = -1;
-            selectedAsset = null;
-            selectedSerializedObject = null;
-            return;
-        }
-
-        SetSelectedTransitionIndex(Mathf.Clamp(selectedTransitionIndex, 0, transitionTypes.Length - 1));
+        var selection = CurrentSelection();
+        transitionSelectionMode = selection.Mode;
+        pinnedTransitionIndex = selection.PinnedIndex;
+        SetSelectedTransitionIndex(selection.AuthoringIndex);
     }
 
-    private void SelectTransition(int index, Controller liveController)
+    /// <summary>Changes the authoring target only when the author has explicitly chosen Pin Selection.</summary>
+    private void SelectTransition(int index)
     {
-        if (liveController != null && liveController.director != null)
-        {
-            liveController.director.SetNextTransition(index);
-        }
-
-        SetSelectedTransitionIndex(index);
+        ApplySelection(CurrentSelection().SelectPinned(index, transitionTypes.Length));
     }
 
     /// <summary>Changes the observed Transition selection and loads only an already-saved settings asset.</summary>
@@ -449,6 +682,35 @@ public sealed class PenroseTuningWindow : EditorWindow
         LoadSelectedAsset();
     }
 
+    /// <summary>Switches the explicit authoring mode without changing Director or settings state.</summary>
+    private void SetTransitionSelectionMode(TransitionSelectionMode mode, Controller liveController)
+    {
+        var directorNextIndex = liveController == null ? -1 : liveController.DirectorStatus.NextTransitionIndex;
+        ApplySelection(CurrentSelection().SetMode(mode, directorNextIndex, transitionTypes.Length));
+    }
+
+    /// <summary>Restores the pure selection state from the Editor window's serialized fields.</summary>
+    private TransitionAuthoringSelection CurrentSelection()
+    {
+        return TransitionAuthoringSelection.Restore(
+            transitionSelectionMode,
+            selectedTransitionIndex,
+            pinnedTransitionIndex,
+            transitionTypes.Length);
+    }
+
+    /// <summary>Applies pure selection output and reloads only the observed saved asset.</summary>
+    private void ApplySelection(TransitionAuthoringSelection selection)
+    {
+        transitionSelectionMode = selection.Mode;
+        pinnedTransitionIndex = selection.PinnedIndex;
+        if (selection.AuthoringIndex != selectedTransitionIndex)
+        {
+            SetSelectedTransitionIndex(selection.AuthoringIndex);
+        }
+    }
+
+    /// <summary>Observes Director Next only while Follow Director is active.</summary>
     private void SyncSelectedTransitionFromDirector(Controller liveController)
     {
         if (liveController.director == null)
@@ -456,13 +718,9 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        var nextTransitionIndex = liveController.DirectorStatus.NextTransitionIndex;
-        if (!IsValidTransitionIndex(nextTransitionIndex) || nextTransitionIndex == selectedTransitionIndex)
-        {
-            return;
-        }
-
-        SetSelectedTransitionIndex(nextTransitionIndex);
+        ApplySelection(CurrentSelection().ObserveDirector(
+            liveController.DirectorStatus.NextTransitionIndex,
+            transitionTypes.Length));
     }
 
     private bool IsValidTransitionIndex(int index)

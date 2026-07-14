@@ -98,6 +98,31 @@ internal static class LiveTimelineRenderer
         DrawActiveTransition(switcher, model.Active);
     }
 
+    /// <summary>Draws a compact authoring preview through the same Grid cells and visual precedence as Live.</summary>
+    public static void DrawTimingPreview(LiveTimelineModel model, string placementLabel)
+    {
+        if (model == null)
+        {
+            throw new ArgumentNullException(nameof(model));
+        }
+
+        EnsureStyles();
+        DrawIdentity("PLACEMENT", string.IsNullOrWhiteSpace(placementLabel) ? "—" : placementLabel);
+        EditorGUILayout.LabelField(
+            "L Lock  ·  S Start / pink Runway  ·  X Impact  ·  green Tail / E End  ·  Yellow Current",
+            EditorStyles.wordWrappedMiniLabel);
+        EditorGUILayout.Space(4f);
+        if (model.Grids.Count != 2)
+        {
+            EditorGUILayout.HelpBox("Timing preview unavailable.", MessageType.None);
+            return;
+        }
+
+        DrawGrid("CURRENT", model.Grids[0]);
+        EditorGUILayout.Space(3f);
+        DrawGrid("NEXT", model.Grids[1]);
+    }
+
     /// <summary>Formats the current Cue Sheet's next Cue Mark countdown.</summary>
     internal static string FormatNextCueCountdown(int? beatsUntil)
     {
@@ -177,7 +202,7 @@ internal static class LiveTimelineRenderer
     private static void DrawIdentity(string heading, string value)
     {
         EditorGUILayout.LabelField(heading, EditorStyles.miniBoldLabel);
-        EditorGUILayout.LabelField(value, identityStyle!);
+        EditorGUILayout.LabelField(value, identityStyle);
     }
 
     /// <summary>Formats one runtime catalog name compactly, retaining an index fallback.</summary>

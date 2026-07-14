@@ -227,6 +227,62 @@ internal readonly struct LiveTimelineCell
 /// <summary>Builds a rolling two-Grid view without owning runtime scheduling policy.</summary>
 internal static class LiveTimelineProjection
 {
+    /// <summary>
+    /// Projects saved authoring timing onto a real Loaded Cue or active Transition without inventing placement.
+    /// </summary>
+    public static bool TryBuildTimingPreview(
+        LiveTimelineInput input,
+        int runwayBeats,
+        int tailBeats,
+        out LiveTimelineModel model)
+    {
+        model = null!;
+        if (!input.IsSynced ||
+            input.CurrentGridBeat is not (>= 1 and <= CueSheet.GridBeats) ||
+            !TransitionSettings.IsValidDuration(runwayBeats, tailBeats))
+        {
+            return false;
+        }
+
+        var usesLoadedCue = input.PendingCue.HasCue;
+        var placement = usesLoadedCue ? input.PendingCue : input.ActiveCue;
+        if (!placement.HasCue || !HasConsistentTiming(placement))
+        {
+            return false;
+        }
+
+        var previewCue = WithTiming(placement, runwayBeats, tailBeats);
+        model = Build(new LiveTimelineInput(
+            input.IsSynced,
+            input.CurrentGridBeat,
+            usesLoadedCue ? SwitcherCueStatus.Empty : previewCue,
+            usesLoadedCue ? previewCue : SwitcherCueStatus.Empty,
+            usesLoadedCue ? input.NextCueBeatsUntil : null,
+            usesLoadedCue ? input.NextCueGridLengthBeats : null));
+        var timing = usesLoadedCue ? model.Pending : model.Active;
+        return timing.CueTimingAvailable && model.Grids.Count == 2;
+    }
+
+    /// <summary>Copies a real Cue placement while replacing only its authoring timing.</summary>
+    private static SwitcherCueStatus WithTiming(
+        SwitcherCueStatus placement,
+        int runwayBeats,
+        int tailBeats)
+    {
+        var startBeat = placement.CueMarkBeat - runwayBeats;
+        return new SwitcherCueStatus(
+            placement.HasCue,
+            placement.IsLocked,
+            placement.CueMarkBeat,
+            placement.TargetEffectIndex,
+            placement.TransitionIndex,
+            startBeat - 1,
+            startBeat,
+            placement.CueMarkBeat + tailBeats,
+            runwayBeats,
+            tailBeats);
+    }
+
     /// <summary>Projects one runtime snapshot into two adjacent Grid rows and signed timing deltas.</summary>
     public static LiveTimelineModel Build(LiveTimelineInput input)
     {

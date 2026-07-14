@@ -33,6 +33,57 @@ public sealed class TuningWorkspaceLayoutTests
         Assert.That(layout, Is.EqualTo(TuningWorkspaceFlow.Split));
     }
 
+    /// <summary>Follow Director moves the authoring target while preserving the last pinned choice.</summary>
+    [Test]
+    public void FollowDirectorTracksStagedTransitions()
+    {
+        var selection = TransitionAuthoringSelection.Restore(
+                TransitionSelectionMode.FollowDirector,
+                authoringIndex: 0,
+                pinnedIndex: 0,
+                catalogCount: 3)
+            .SetMode(TransitionSelectionMode.FollowDirector, directorNextIndex: 1, catalogCount: 3)
+            .ObserveDirector(directorNextIndex: 2, catalogCount: 3);
+
+        Assert.That(selection.Mode, Is.EqualTo(TransitionSelectionMode.FollowDirector));
+        Assert.That(selection.AuthoringIndex, Is.EqualTo(2));
+        Assert.That(selection.PinnedIndex, Is.EqualTo(0));
+    }
+
+    /// <summary>Pin Selection freezes the authoring target while Director observation continues separately.</summary>
+    [Test]
+    public void PinSelectionRemainsStableAcrossDirectorChanges()
+    {
+        var selection = TransitionAuthoringSelection.Restore(
+                TransitionSelectionMode.FollowDirector,
+                authoringIndex: 0,
+                pinnedIndex: 0,
+                catalogCount: 3)
+            .SetMode(TransitionSelectionMode.FollowDirector, directorNextIndex: 1, catalogCount: 3)
+            .SetMode(TransitionSelectionMode.PinSelection, directorNextIndex: 1, catalogCount: 3)
+            .ObserveDirector(directorNextIndex: 2, catalogCount: 3);
+
+        Assert.That(selection.Mode, Is.EqualTo(TransitionSelectionMode.PinSelection));
+        Assert.That(selection.AuthoringIndex, Is.EqualTo(1));
+        Assert.That(selection.PinnedIndex, Is.EqualTo(1));
+    }
+
+    /// <summary>An explicit pinned choice changes only the authoring selection, not any live runtime choice.</summary>
+    [Test]
+    public void ExplicitPinnedChoiceUpdatesTheAuthoringTarget()
+    {
+        var selection = TransitionAuthoringSelection.Restore(
+                TransitionSelectionMode.FollowDirector,
+                authoringIndex: 0,
+                pinnedIndex: 0,
+                catalogCount: 3)
+            .SetMode(TransitionSelectionMode.PinSelection, directorNextIndex: 2, catalogCount: 3)
+            .SelectPinned(authoringIndex: 2, catalogCount: 3);
+
+        Assert.That(selection.AuthoringIndex, Is.EqualTo(2));
+        Assert.That(selection.PinnedIndex, Is.EqualTo(2));
+    }
+
     /// <summary>Before Start, the live header counts down Lock, Start, and End from the current beat.</summary>
     [Test]
     public void LiveTimelineFormatsUpcomingTransitionCountdowns()

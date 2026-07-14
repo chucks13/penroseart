@@ -410,6 +410,105 @@ public sealed class LiveTimelineProjectionTests
         Assert.That(model.Grids[1].Cells[0].IsImpactPoint, Is.False);
     }
 
+    /// <summary>The authoring preview reuses live placement while applying the saved Runway and Tail.</summary>
+    [Test]
+    public void TimingPreviewProjectsSavedTimingOntoTheLoadedCue()
+    {
+        var input = new LiveTimelineInput(
+            isSynced: true,
+            currentGridBeat: 12,
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: WrappedCue(isLocked: false));
+
+        var available = LiveTimelineProjection.TryBuildTimingPreview(
+            input,
+            runwayBeats: 1,
+            tailBeats: 4,
+            out var preview);
+
+        Assert.That(available, Is.True);
+        Assert.That(preview.Grids[0].Cells[15].IsStart, Is.True);
+        Assert.That(preview.Grids[0].Cells[15].IsRunway, Is.True);
+        Assert.That(preview.Grids[1].Cells[0].IsImpactPoint, Is.True);
+        Assert.That(preview.Grids[1].Cells[4].IsTail, Is.True);
+        Assert.That(preview.Grids[1].Cells[4].IsEnd, Is.True);
+    }
+
+    /// <summary>A hard-cut authoring preview keeps Start, Impact Point, and End on one real Cue Mark.</summary>
+    [Test]
+    public void TimingPreviewRepresentsHardCutsWithoutInventingDuration()
+    {
+        var input = new LiveTimelineInput(
+            isSynced: true,
+            currentGridBeat: 16,
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: WrappedCue(isLocked: true));
+
+        var available = LiveTimelineProjection.TryBuildTimingPreview(
+            input,
+            runwayBeats: 0,
+            tailBeats: 0,
+            out var preview);
+        var boundary = preview.Grids[1].Cells[0];
+
+        Assert.That(available, Is.True);
+        Assert.That(boundary.IsStart, Is.True);
+        Assert.That(boundary.IsImpactPoint, Is.True);
+        Assert.That(boundary.IsEnd, Is.True);
+        Assert.That(boundary.IsRunway, Is.False);
+        Assert.That(boundary.IsTail, Is.False);
+    }
+
+    /// <summary>The authoring preview preserves the live model's current-beat visual precedence.</summary>
+    [Test]
+    public void TimingPreviewKeepsCurrentBeatAboveRunwayFill()
+    {
+        var input = new LiveTimelineInput(
+            isSynced: true,
+            currentGridBeat: 16,
+            activeCue: SwitcherCueStatus.Empty,
+            pendingCue: WrappedCue(isLocked: false));
+
+        var available = LiveTimelineProjection.TryBuildTimingPreview(
+            input,
+            runwayBeats: 3,
+            tailBeats: 2,
+            out var preview);
+        var currentBeat = preview.Grids[0].Cells[15];
+
+        Assert.That(available, Is.True);
+        Assert.That(currentBeat.IsRunway, Is.True);
+        Assert.That(currentBeat.IsCurrentBeat, Is.True);
+        Assert.That(currentBeat.Fill, Is.EqualTo(LiveTimelineFill.CurrentBeat));
+    }
+
+    /// <summary>Missing sync, Grid, or Cue placement leaves the timing preview unavailable.</summary>
+    [Test]
+    public void TimingPreviewDoesNotInventMissingRuntimePlacement()
+    {
+        Assert.That(
+            LiveTimelineProjection.TryBuildTimingPreview(
+                new LiveTimelineInput(false, 8, SwitcherCueStatus.Empty, WrappedCue(false)),
+                3,
+                2,
+                out _),
+            Is.False);
+        Assert.That(
+            LiveTimelineProjection.TryBuildTimingPreview(
+                new LiveTimelineInput(true, null, SwitcherCueStatus.Empty, WrappedCue(false)),
+                3,
+                2,
+                out _),
+            Is.False);
+        Assert.That(
+            LiveTimelineProjection.TryBuildTimingPreview(
+                new LiveTimelineInput(true, 8, SwitcherCueStatus.Empty, SwitcherCueStatus.Empty),
+                3,
+                2,
+                out _),
+            Is.False);
+    }
+
     /// <summary>Returns one valid Cue whose Runway ends and Tail begins across a Grid boundary.</summary>
     private static SwitcherCueStatus WrappedCue(bool isLocked)
     {
