@@ -83,8 +83,8 @@ Unity Editor state where the wall runtime is not running. Authoring changes made
 _Avoid_: assuming Edit Mode authoring is the only durable authoring path; forcing creative tuning to happen without seeing the wall in motion.
 
 **Tuning Window**:
-The Unity authoring window used to watch and adjust Performers while the wall is running or stopped. It shows Effects and Transitions as lists, displays the selected Performer's Settings, and can steer the Director's Next Effect or Next Transition without taking timing ownership away from the Director.
-_Avoid_: burying live creative tuning in ordinary Inspector fields; making a fake preview path that does not exercise the Director and Switcher.
+The canonical Unity workspace for detailed wall observation and Transition tuning. Its focused Live, Rhythm, and Transitions tabs show the sequencing timeline, musical state, and saved Transition Settings; the compact Controller Inspector opens it directly. It may steer the Director's Next Transition without taking timing ownership away from the Director. Effect authoring has no dedicated window surface yet.
+_Avoid_: burying detailed observability in the narrow Controller Inspector; presenting unfinished Effect authoring as a real workspace; making a fake preview path that does not exercise the Director and Switcher.
 
 **Hold Selected**:
 A Tuning Window mode where the selected Effect or Transition remains the Director's next choice after each move completes. Turning it off returns that choice to normal random selection.

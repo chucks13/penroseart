@@ -129,7 +129,8 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     /// <summary>Draws the live rhythm facts beside an editor-only Waveform preview.</summary>
     /// <param name="rect">The dashboard rectangle allocated by the property drawer.</param>
     /// <param name="beatManager">The live runtime source, or null when it cannot be resolved.</param>
-    private static void DrawDashboard(Rect rect, BeatManager beatManager)
+    /// <summary>Draws the read-only BeatManager dashboard without exposing serialized transport fields.</summary>
+    internal static void DrawDashboard(Rect rect, BeatManager beatManager)
     {
         EnsureWaveformPool();
 

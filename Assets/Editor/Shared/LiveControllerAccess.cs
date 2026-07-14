@@ -27,3 +27,51 @@ internal static class LiveControllerAccess
         }
     }
 }
+
+/// <summary>Formats canonical Controller status labels without duplicating runtime interpretation across editor views.</summary>
+internal static class ControllerStatusText
+{
+    /// <summary>Formats the Director's staged Effect and Transition as one concise future-intent row.</summary>
+    internal static string FormatDirectorNext(DirectorStatus status)
+    {
+        return $"{FormatCatalogChoice(status.NextEffectIndex, status.NextEffectName)} · " +
+            FormatCatalogChoice(status.NextTransitionIndex, status.NextTransitionName);
+    }
+
+    /// <summary>Formats the current Effect hold independently from the editor's Hold Selected behavior.</summary>
+    internal static string FormatHeldEffect(Controller controller)
+    {
+        if (!controller.TryGetHeldEffectIndex(out var effectIndex))
+        {
+            return "Random";
+        }
+
+        return controller.effects != null && effectIndex < controller.effects.Length && controller.effects[effectIndex] != null
+            ? controller.effects[effectIndex].GetType().Name
+            : $"Effect {effectIndex}";
+    }
+
+    /// <summary>Formats the Switcher's current Effect or active Transition without implying future intent.</summary>
+    internal static string FormatSwitcherActive(SwitcherStatus status)
+    {
+        if (!status.Ready)
+        {
+            return "Unavailable";
+        }
+
+        return status.CurrentTransitionIndex >= 0
+            ? $"{FormatCatalogChoice(status.CurrentTransitionIndex, status.CurrentTransitionName)} · {status.TransitionProgress:P0}"
+            : FormatCatalogChoice(status.CurrentEffectIndex, status.CurrentEffectName);
+    }
+
+    /// <summary>Formats a catalog identity while retaining its stable runtime index.</summary>
+    internal static string FormatCatalogChoice(int index, string name)
+    {
+        if (index < 0)
+        {
+            return "Unavailable";
+        }
+
+        return string.IsNullOrWhiteSpace(name) ? $"#{index}" : $"{name} (#{index})";
+    }
+}

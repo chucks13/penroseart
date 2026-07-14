@@ -75,55 +75,11 @@ public sealed class ControllerEditor : Editor
         }
 
         EditorGUILayout.LabelField("Mode", director.IsSyncedMode ? "Synced Mode" : "Standalone Mode");
-        EditorGUILayout.LabelField("Director Next", FormatDirectorNext(director));
+        EditorGUILayout.LabelField("Director Next", ControllerStatusText.FormatDirectorNext(director));
         EditorGUILayout.LabelField(
             "Hold Selected",
             $"Effect {(director.HoldSelectedEffect ? "On" : "Off")} · Transition {(director.HoldSelectedTransition ? "On" : "Off")}");
-        EditorGUILayout.LabelField("Held Effect", FormatHeldEffect(liveController));
-        EditorGUILayout.LabelField("Switcher Active", FormatSwitcherActive(switcher));
-    }
-
-    /// <summary>Formats the Director's staged Effect and Transition as one concise future-intent row.</summary>
-    private static string FormatDirectorNext(DirectorStatus status)
-    {
-        return $"{FormatCatalogChoice(status.NextEffectIndex, status.NextEffectName)} · " +
-            FormatCatalogChoice(status.NextTransitionIndex, status.NextTransitionName);
-    }
-
-    /// <summary>Formats the current Effect hold independently from the editor's Hold Selected behavior.</summary>
-    private static string FormatHeldEffect(Controller controller)
-    {
-        if (!controller.TryGetHeldEffectIndex(out var effectIndex))
-        {
-            return "Random";
-        }
-
-        return controller.effects != null && effectIndex < controller.effects.Length && controller.effects[effectIndex] != null
-            ? controller.effects[effectIndex].GetType().Name
-            : $"Effect {effectIndex}";
-    }
-
-    /// <summary>Formats the Switcher's current Effect or active Transition without implying future intent.</summary>
-    private static string FormatSwitcherActive(SwitcherStatus status)
-    {
-        if (!status.Ready)
-        {
-            return "Unavailable";
-        }
-
-        return status.CurrentTransitionIndex >= 0
-            ? $"{FormatCatalogChoice(status.CurrentTransitionIndex, status.CurrentTransitionName)} · {status.TransitionProgress:P0}"
-            : FormatCatalogChoice(status.CurrentEffectIndex, status.CurrentEffectName);
-    }
-
-    /// <summary>Formats a catalog identity while retaining its stable runtime index.</summary>
-    private static string FormatCatalogChoice(int index, string name)
-    {
-        if (index < 0)
-        {
-            return "Unavailable";
-        }
-
-        return string.IsNullOrWhiteSpace(name) ? $"#{index}" : $"{name} (#{index})";
+        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(liveController));
+        EditorGUILayout.LabelField("Switcher Active", ControllerStatusText.FormatSwitcherActive(switcher));
     }
 }
