@@ -2,6 +2,7 @@
 
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
+using UnityEngine;
 
 /// <summary>
 /// Pins the pure BeatManager dashboard seam: authoritative mode, independent availability, required-Pool
@@ -137,10 +138,10 @@ public sealed class BeatManagerDrawerVisualModelTests
         var model = BeatManagerDashboardModel.From(null, default, error);
         var healthy = BeatManagerDashboardModel.From(null, Waveform.Parse("QQQQ", "8888"), "");
 
-        Assert.That(model.PoolHealthy, Is.False);
-        Assert.That(model.PoolError, Is.EqualTo(error));
-        Assert.That(healthy.PoolHealthy, Is.True);
-        Assert.That(healthy.PoolError, Is.Empty);
+        Assert.That(model.WaveformAvailable, Is.False);
+        Assert.That(model.WaveformMessage, Is.EqualTo(error));
+        Assert.That(healthy.WaveformAvailable, Is.True);
+        Assert.That(healthy.WaveformMessage, Is.Empty);
     }
 
     /// <summary>Dashboard groups expose the scan order and responsive flow used by the renderer.</summary>
@@ -177,7 +178,117 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(model.Grid.Readout, Is.EqualTo("Bar 2 · Beat 5"));
     }
 
-    /// <summary>Four editor-only selections preserve bar order and sample the placed bar through Waveform.</summary>
+    /// <summary>The dashboard follows the staged Effect and refuses to invent an ambiguous Pool label.</summary>
+    [Test]
+    public void EffectRhythmSelectionFollowsCurrentEffectAndRejectsAmbiguousPoolIdentity()
+    {
+        var entries = new[]
+        {
+            new WaveformPool.Entry("One", Waveform.Parse("QQQQ", "2222")),
+            new WaveformPool.Entry("Two", Waveform.Parse("QQQQ", "4444")),
+            new WaveformPool.Entry("Three", Waveform.Parse("QQQQ", "6666")),
+            new WaveformPool.Entry("Four", Waveform.Parse("QQQQ", "8888")),
+        };
+        var names = new[] { "One", "Two", "Three", "Four" };
+        var beatManager = new BeatManager();
+        var waveformEffect = new RhythmTestEffect
+        {
+            waveform = entries[2].waveform.Bind(beatManager),
+        };
+        var routineEffect = new RhythmTestEffect();
+        routineEffect.SetRoutine(
+            Routine.Of(
+                entries[3].waveform.Bind(beatManager),
+                entries[1].waveform.Bind(beatManager),
+                entries[2].waveform.Bind(beatManager),
+                entries[0].waveform.Bind(beatManager)));
+        var effects = new EffectBase[] { waveformEffect, routineEffect };
+        var transitions = new TransitionBase[] { new Fade() };
+        var gameObject = new GameObject("Effect rhythm selection test");
+
+        try
+        {
+            var controller = gameObject.AddComponent<Controller>();
+            controller.effects = effects;
+            controller.transitions = transitions;
+            controller.switcher = new Switcher(controller, effects, transitions);
+            controller.switcher.SetInitialEffect(0, 0);
+
+            var waveformSelection = EffectRhythmSelectionView.From(
+                controller,
+                entries,
+                names,
+                poolError: "",
+                gridBar: null,
+                gridProgress: null);
+
+            Assert.That(waveformSelection.EffectName, Is.EqualTo(nameof(RhythmTestEffect)));
+            Assert.That(waveformSelection.WaveformSelector.ShownIndex, Is.EqualTo(2));
+            Assert.That(waveformSelection.Waveform?.sequence, Is.EqualTo("QQQQ"));
+            Assert.That(waveformSelection.Waveform?.amplitude, Is.EqualTo("6666"));
+            Assert.That(waveformSelection.Routine.IsUsable, Is.False);
+            Assert.That(waveformSelection.Routine.IsError, Is.False);
+
+            controller.switcher.SetInitialEffect(1, 0);
+            var routineSelection = EffectRhythmSelectionView.From(
+                controller,
+                entries,
+                names,
+                poolError: "",
+                gridBar: null,
+                gridProgress: null);
+
+            Assert.That(routineSelection.Routine.IsUsable, Is.True);
+            Assert.That(routineSelection.Routine.EntryAt(0)?.name, Is.EqualTo("Four"));
+            Assert.That(routineSelection.Routine.EntryAt(1)?.name, Is.EqualTo("Two"));
+            Assert.That(routineSelection.Routine.EntryAt(2)?.name, Is.EqualTo("Three"));
+            Assert.That(routineSelection.Routine.EntryAt(3)?.name, Is.EqualTo("One"));
+            Assert.That(routineSelection.WaveformSelector.IsError, Is.False);
+
+            controller.switcher.SetInitialEffect(0, 0);
+            var ambiguousEntries = new[]
+            {
+                new WaveformPool.Entry("Three A", entries[2].waveform),
+                new WaveformPool.Entry("Three B", entries[2].waveform),
+            };
+            var ambiguousSelection = EffectRhythmSelectionView.From(
+                controller,
+                ambiguousEntries,
+                new[] { "Three A", "Three B" },
+                poolError: "",
+                gridBar: null,
+                gridProgress: null);
+
+            Assert.That(ambiguousSelection.WaveformSelector.ShownIndex, Is.EqualTo(-1));
+            Assert.That(ambiguousSelection.WaveformSelector.IsError, Is.True);
+            Assert.That(ambiguousSelection.WaveformSelector.Error, Does.Contain("multiple Pool entries"));
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    /// <summary>A required Pool failure remains an error even before an Effect owns the Switcher stage.</summary>
+    [Test]
+    public void RequiredPoolFailureOutranksMissingEffectStage()
+    {
+        const string error = "Required Waveform Pool is missing.";
+        var selection = EffectRhythmSelectionView.From(
+            controller: null,
+            poolEntries: null,
+            poolNames: System.Array.Empty<string>(),
+            poolError: error,
+            gridBar: null,
+            gridProgress: null);
+
+        Assert.That(selection.WaveformSelector.Error, Is.EqualTo(error));
+        Assert.That(selection.WaveformSelector.IsError, Is.True);
+        Assert.That(selection.Routine.Error, Is.EqualTo(error));
+        Assert.That(selection.Routine.IsError, Is.True);
+    }
+
+    /// <summary>Four Pool-matched Routine bars preserve order and sample the placed bar through Waveform.</summary>
     [Test]
     public void RoutineStoryboardOrdersSelectionsAndSamplesThePlacedGridBar()
     {
@@ -259,7 +370,7 @@ public sealed class BeatManagerDrawerVisualModelTests
         Assert.That(storyboard.Envelope, Is.Zero);
     }
 
-    /// <summary>Changing editor-only Routine choices leaves the serialized Pool document byte-for-byte unchanged.</summary>
+    /// <summary>Projecting Effect-owned Routine choices leaves the serialized Pool document byte-for-byte unchanged.</summary>
     [Test]
     public void RoutineStoryboardSelectionDoesNotMutatePoolDocument()
     {
@@ -292,5 +403,37 @@ public sealed class BeatManagerDrawerVisualModelTests
         beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0f);
         return beatManager;
+    }
+
+    /// <summary>Minimal Effect carrying both supported rhythm configuration forms.</summary>
+    private sealed class RhythmTestEffect : EffectBase
+    {
+        /// <summary>The optional four-bar choreography observed through the same private field shape as Angles.</summary>
+        private Routine? routine;
+
+        /// <summary>Allocates the Effect buffer required by the base contract.</summary>
+        public RhythmTestEffect()
+        {
+            buffer = new Color[Penrose.Total];
+        }
+
+        /// <summary>Assigns the concrete Effect-owned Routine used by the dashboard regression.</summary>
+        /// <param name="value">The exact four-bar Routine the Effect holds.</param>
+        public void SetRoutine(Routine value)
+        {
+            routine = value;
+        }
+
+        /// <summary>Returns the held Routine so the test field is ordinary observed state.</summary>
+        public Routine? GetRoutine() => routine;
+
+        /// <summary>Returns no additional debug text.</summary>
+        public override string DebugText() => string.Empty;
+
+        /// <summary>Performs no deactivation work.</summary>
+        public override void OnEnd() { }
+
+        /// <summary>Performs no drawing; this test observes rhythm configuration only.</summary>
+        public override void Draw() { }
     }
 }

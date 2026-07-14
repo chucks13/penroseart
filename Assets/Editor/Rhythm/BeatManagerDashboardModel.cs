@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 /// <summary>
@@ -56,10 +57,10 @@ internal readonly struct BeatManagerDashboardModel
     public readonly EnvelopeRowView Envelope;
     /// <summary>The sender-provided one-based Grid position.</summary>
     public readonly GridRowView Grid;
-    /// <summary>Whether the required Waveform Pool can provide an honest preview.</summary>
-    public readonly bool PoolHealthy;
-    /// <summary>The required-Pool configuration failure, or empty when healthy.</summary>
-    public readonly string PoolError;
+    /// <summary>Whether the staged Effect's Waveform resolves honestly against the required Pool.</summary>
+    public readonly bool WaveformAvailable;
+    /// <summary>The Waveform selection or configuration message, or empty when available.</summary>
+    public readonly string WaveformMessage;
     /// <summary>The semantic section order rendered by both responsive flows.</summary>
     public readonly IReadOnlyList<RhythmDashboardGroup> Groups;
 
@@ -82,8 +83,8 @@ internal readonly struct BeatManagerDashboardModel
         float? barPhase,
         EnvelopeRowView envelope,
         GridRowView grid,
-        bool poolHealthy,
-        string poolError)
+        bool waveformAvailable,
+        string waveformMessage)
     {
         Synced = synced;
         BadgeText = badgeText;
@@ -102,21 +103,24 @@ internal readonly struct BeatManagerDashboardModel
         BarPhase = barPhase;
         Envelope = envelope;
         Grid = grid;
-        PoolHealthy = poolHealthy;
-        PoolError = poolError;
+        WaveformAvailable = waveformAvailable;
+        WaveformMessage = waveformMessage;
         Groups = DisplayGroups;
     }
 
     /// <summary>
-    /// Builds the dashboard display model from the live runtime object and the previewed Pool entry.
+    /// Builds the dashboard display model from the live runtime object and staged Effect selection.
     /// </summary>
     /// <param name="beatManager">Runtime beat manager, or <c>null</c> when the property cannot resolve one.</param>
-    /// <param name="previewWaveform">The parsed Pool entry selected for editor-only preview, or null when unusable.</param>
-    /// <param name="poolError">The required-Pool failure, or empty when the Pool is usable.</param>
-    public static BeatManagerDashboardModel From(BeatManager beatManager, Waveform? previewWaveform, string poolError)
+    /// <param name="selectedWaveform">The staged Effect's Pool-matched Waveform, or null when unavailable.</param>
+    /// <param name="waveformMessage">The selection or required-Pool message, or empty when available.</param>
+    public static BeatManagerDashboardModel From(
+        BeatManager beatManager,
+        Waveform? selectedWaveform,
+        string waveformMessage)
     {
         var synced = beatManager != null && beatManager.IsSynced;
-        var poolHealthy = previewWaveform.HasValue && string.IsNullOrEmpty(poolError);
+        var waveformAvailable = selectedWaveform.HasValue && string.IsNullOrEmpty(waveformMessage);
         if (!synced)
         {
             return new BeatManagerDashboardModel(
@@ -137,8 +141,8 @@ internal readonly struct BeatManagerDashboardModel
                 null,
                 EnvelopeRowView.Null,
                 GridRowView.Null,
-                poolHealthy,
-                poolError ?? string.Empty);
+                waveformAvailable,
+                waveformMessage ?? string.Empty);
         }
 
         var timing = beatManager != null ? beatManager.Timing : default;
@@ -180,10 +184,10 @@ internal readonly struct BeatManagerDashboardModel
             new CountdownChipView("NEXT OFF BEAT", FormatMs(nextOffbeatMs), alignValueRight: true),
             new CountdownChipView("OFF BEAT", FormatGate(offBeat)),
             barPhase,
-            BuildEnvelopeRow(beatManager, previewWaveform),
+            BuildEnvelopeRow(beatManager, selectedWaveform),
             BuildGridRow(beatManager),
-            poolHealthy,
-            poolError ?? string.Empty);
+            waveformAvailable,
+            waveformMessage ?? string.Empty);
     }
 
     /// <summary>Selects stacked content below the practical split-layout width.</summary>
@@ -294,18 +298,18 @@ internal readonly struct BeatManagerDashboardModel
         return minimum;
     }
 
-    /// <summary>Builds the live-clock envelope row for the editor-previewed Pool entry.</summary>
+    /// <summary>Builds the live-clock envelope row for the staged Effect's selected Waveform.</summary>
     /// <param name="beatManager">The live runtime source, or null when unavailable.</param>
-    /// <param name="previewWaveform">The valid editor preview, or null for a required-Pool failure.</param>
-    private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, Waveform? previewWaveform)
+    /// <param name="selectedWaveform">The staged Effect's valid Pool-matched Waveform, or null when unavailable.</param>
+    private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, Waveform? selectedWaveform)
     {
-        if (beatManager == null || previewWaveform is not { } waveform)
+        if (beatManager == null || selectedWaveform is not { } waveform)
         {
             return EnvelopeRowView.Null;
         }
 
         var envelope = waveform.Bind(beatManager).Envelope;
-        return new EnvelopeRowView(true, envelope, $"{envelope:0.00} · preview");
+        return new EnvelopeRowView(true, envelope, $"{envelope:0.00} · effect");
     }
 
     /// <summary>Builds the sender-provided one-based Grid position without synthesizing placement.</summary>
@@ -339,9 +343,9 @@ internal enum RhythmDashboardGroup
 {
     /// <summary>Track, tempo, beat/offbeat timing, and Grid placement.</summary>
     Timing,
-    /// <summary>Required-Pool selection, plot, and emitted envelope.</summary>
+    /// <summary>Staged Effect Waveform label, plot, and emitted envelope.</summary>
     Waveform,
-    /// <summary>Four selected Waveforms arranged and previewed as one 16-beat Routine.</summary>
+    /// <summary>The staged Effect's four Waveforms arranged as one 16-beat Routine.</summary>
     Routine,
 }
 
@@ -412,32 +416,281 @@ internal readonly struct GridRowView
     }
 }
 
-/// <summary>Immutable editor-only Waveform Pool preview selection.</summary>
+/// <summary>Immutable Waveform Pool label resolved for the current Effect.</summary>
 internal readonly struct WaveformSelectorView
 {
-    /// <summary>The zero-based Pool entry shown in the preview.</summary>
+    /// <summary>The zero-based Pool entry matching the staged Effect's Waveform.</summary>
     public readonly int ShownIndex;
 
-    /// <summary>The Pool names offered by the preview popup.</summary>
+    /// <summary>The Pool names used by the read-only selection label.</summary>
     public readonly string[] Options;
 
-    /// <summary>The required-Pool failure shown when no honest preview is available.</summary>
+    /// <summary>The inspection failure shown when no honest Effect selection is available.</summary>
     public readonly string Error;
 
-    /// <summary>Captures one preview selection and its available Pool names.</summary>
-    /// <param name="shownIndex">The zero-based Pool entry shown in the preview.</param>
-    /// <param name="options">The Pool names offered by the preview popup.</param>
-    /// <param name="error">The required-Pool failure, or empty when selection is available.</param>
-    public WaveformSelectorView(int shownIndex, string[] options, string error)
+    /// <summary>Whether <see cref="Error"/> is a broken configuration rather than a valid Effect omission.</summary>
+    public readonly bool IsError;
+
+    /// <summary>Captures one Effect selection and its available Pool names.</summary>
+    /// <param name="shownIndex">The zero-based Pool entry matching the Effect selection.</param>
+    /// <param name="options">The Pool names used by the read-only label.</param>
+    /// <param name="error">The inspection message, or empty when selection is available.</param>
+    /// <param name="isError">Whether the message represents broken configuration.</param>
+    public WaveformSelectorView(int shownIndex, string[] options, string error, bool isError = false)
     {
         ShownIndex = shownIndex;
         Options = options;
         Error = error;
+        IsError = isError;
+    }
+}
+
+/// <summary>Read-only rhythm configuration resolved from the Effect currently staged by the Switcher.</summary>
+internal readonly struct EffectRhythmSelectionView
+{
+    /// <summary>The private immutable bar storage inside <see cref="Routine"/>, observed only by this Editor adapter.</summary>
+    private static readonly FieldInfo RoutineWaveformsField = typeof(Routine).GetField(
+        "waveforms",
+        BindingFlags.Instance | BindingFlags.NonPublic);
+
+    /// <summary>The staged Effect's type name, or an unavailable label when no Effect owns the stage.</summary>
+    public readonly string EffectName;
+
+    /// <summary>The staged Effect's selected single Waveform, or null when it uses no single Waveform.</summary>
+    public readonly Waveform? Waveform;
+
+    /// <summary>The Pool label corresponding to <see cref="Waveform"/>, or its truthful unavailable state.</summary>
+    public readonly WaveformSelectorView WaveformSelector;
+
+    /// <summary>The staged Effect's four-bar Routine, or its truthful unavailable state.</summary>
+    public readonly RoutineStoryboardView Routine;
+
+    /// <summary>Captures the complete read-only Effect rhythm selection shown by the dashboard.</summary>
+    private EffectRhythmSelectionView(
+        string effectName,
+        Waveform? waveform,
+        WaveformSelectorView waveformSelector,
+        RoutineStoryboardView routine)
+    {
+        EffectName = effectName;
+        Waveform = waveform;
+        WaveformSelector = waveformSelector;
+        Routine = routine;
+    }
+
+    /// <summary>Resolves the current Switcher Effect and matches its held rhythm values to Pool labels.</summary>
+    /// <param name="controller">The live Controller whose Switcher owns the active stage.</param>
+    /// <param name="poolEntries">The current parsed Pool entries in document order.</param>
+    /// <param name="poolNames">The cached Pool labels in the same document order.</param>
+    /// <param name="poolError">The current required-Pool failure, or empty when usable.</param>
+    /// <param name="gridBar">The live one-based Grid bar, or null without placement.</param>
+    /// <param name="gridProgress">Progress across the complete Grid, or null without placement.</param>
+    /// <returns>The staged Effect's exact Waveform and Routine selections without mutating runtime state.</returns>
+    public static EffectRhythmSelectionView From(
+        Controller controller,
+        IReadOnlyList<WaveformPool.Entry> poolEntries,
+        string[] poolNames,
+        string poolError,
+        int? gridBar,
+        float? gridProgress)
+    {
+        if (!string.IsNullOrEmpty(poolError))
+        {
+            return Unavailable(poolError, poolNames, isError: true);
+        }
+
+        var effect = ResolveCurrentEffect(controller);
+        if (effect == null)
+        {
+            const string error = "No Effect currently owns the Switcher stage.";
+            return Unavailable(error, poolNames, isError: false);
+        }
+
+        var effectName = effect.GetType().Name;
+        Waveform? waveform = null;
+        WaveformSelectorView selector;
+        if (TryFindUniqueWaveform(
+            poolEntries,
+            effect.waveform,
+            out var waveformIndex,
+            out var waveformMatchIsAmbiguous))
+        {
+            waveform = poolEntries[waveformIndex].waveform;
+            selector = new WaveformSelectorView(waveformIndex, poolNames, string.Empty);
+        }
+        else if (waveformMatchIsAmbiguous)
+        {
+            selector = new WaveformSelectorView(
+                -1,
+                poolNames,
+                $"Effect '{effectName}' has a Waveform matching multiple Pool entries.",
+                isError: true);
+        }
+        else if (string.IsNullOrEmpty(effect.waveform.sequence))
+        {
+            selector = new WaveformSelectorView(
+                -1,
+                poolNames,
+                $"Effect '{effectName}' has no selected single Waveform.");
+        }
+        else
+        {
+            selector = new WaveformSelectorView(
+                -1,
+                poolNames,
+                $"Effect '{effectName}' has a Waveform missing from the current Pool.",
+                isError: true);
+        }
+
+        var storyboard = BuildRoutineStoryboard(
+            effectName,
+            ResolveRoutine(effect),
+            poolEntries,
+            gridBar,
+            gridProgress);
+        return new EffectRhythmSelectionView(effectName, waveform, selector, storyboard);
+    }
+
+    /// <summary>Resolves the top-level Effect currently staged outside a Transition.</summary>
+    private static EffectBase ResolveCurrentEffect(Controller controller)
+    {
+        if (controller == null || controller.effects == null)
+        {
+            return null;
+        }
+
+        var index = controller.SwitcherStatus.CurrentEffectIndex;
+        return index >= 0 && index < controller.effects.Length ? controller.effects[index] : null;
+    }
+
+    /// <summary>Finds the first concrete Routine held by an Effect without requiring runtime inspection API.</summary>
+    private static Routine ResolveRoutine(EffectBase effect)
+    {
+        for (var type = effect.GetType(); type != null && type != typeof(object); type = type.BaseType)
+        {
+            var fields = type.GetFields(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            for (var index = 0; index < fields.Length; index++)
+            {
+                if (fields[index].FieldType == typeof(Routine)
+                    && fields[index].GetValue(effect) is Routine routine)
+                {
+                    return routine;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Builds the storyboard from the exact Waveforms retained by the staged Effect's Routine.</summary>
+    private static RoutineStoryboardView BuildRoutineStoryboard(
+        string effectName,
+        Routine routine,
+        IReadOnlyList<WaveformPool.Entry> poolEntries,
+        int? gridBar,
+        float? gridProgress)
+    {
+        if (routine == null)
+        {
+            return UnavailableRoutine(
+                $"Effect '{effectName}' has no selected Routine.",
+                isError: false);
+        }
+
+        if (RoutineWaveformsField?.GetValue(routine) is not Waveform[] bars || bars.Length != 4)
+        {
+            return UnavailableRoutine(
+                $"Effect '{effectName}' has an unreadable Routine.",
+                isError: true);
+        }
+
+        var selection = RoutineStoryboardSelection.Default(poolEntries?.Count ?? 0);
+        for (var barIndex = 0; barIndex < bars.Length; barIndex++)
+        {
+            if (!TryFindUniqueWaveform(
+                poolEntries,
+                bars[barIndex],
+                out var poolIndex,
+                out var waveformMatchIsAmbiguous))
+            {
+                return UnavailableRoutine(
+                    waveformMatchIsAmbiguous
+                        ? $"Effect '{effectName}' has a Routine Waveform matching multiple Pool entries."
+                        : $"Effect '{effectName}' has a Routine Waveform missing from the current Pool.",
+                    isError: true);
+            }
+
+            selection = selection.Select(barIndex, poolIndex, poolEntries.Count);
+        }
+
+        return RoutineStoryboardView.From(poolEntries, selection, string.Empty, gridBar, gridProgress);
+    }
+
+    /// <summary>Builds one unavailable Routine view with the exact inspection failure.</summary>
+    private static RoutineStoryboardView UnavailableRoutine(
+        string error,
+        bool isError)
+    {
+        return RoutineStoryboardView.Unavailable(
+            RoutineStoryboardSelection.Default(0),
+            error,
+            isError);
+    }
+
+    /// <summary>Matches one runtime-bound Waveform only when its immutable Pool definition is unique.</summary>
+    private static bool TryFindUniqueWaveform(
+        IReadOnlyList<WaveformPool.Entry> poolEntries,
+        Waveform waveform,
+        out int matchingIndex,
+        out bool isAmbiguous)
+    {
+        matchingIndex = -1;
+        isAmbiguous = false;
+        if (poolEntries != null && !string.IsNullOrEmpty(waveform.sequence))
+        {
+            for (var index = 0; index < poolEntries.Count; index++)
+            {
+                var candidate = poolEntries[index].waveform;
+                if (candidate.sequence == waveform.sequence
+                    && candidate.amplitude == waveform.amplitude
+                    && Mathf.Approximately(candidate.rounding, waveform.rounding)
+                    && Mathf.Approximately(candidate.offset, waveform.offset))
+                {
+                    if (matchingIndex >= 0)
+                    {
+                        matchingIndex = -1;
+                        isAmbiguous = true;
+                        return false;
+                    }
+
+                    matchingIndex = index;
+                }
+            }
+        }
+
+        return matchingIndex >= 0;
+    }
+
+    /// <summary>Builds matching unavailable Waveform and Routine views for one shared inspection failure.</summary>
+    /// <param name="error">The truthful failure rendered by both views.</param>
+    /// <param name="poolNames">The cached Pool labels, when available.</param>
+    /// <param name="isError">Whether the failure represents broken configuration.</param>
+    private static EffectRhythmSelectionView Unavailable(
+        string error,
+        string[] poolNames,
+        bool isError)
+    {
+        return new EffectRhythmSelectionView(
+            BeatManagerDashboardModel.UnavailableText,
+            null,
+            new WaveformSelectorView(-1, poolNames, error, isError),
+            UnavailableRoutine(error, isError));
     }
 }
 
 /// <summary>
-/// Four editor-only Pool choices in one-based Grid bar order.
+/// Four Pool indices matched from one Effect-owned Routine in one-based Grid bar order.
 /// </summary>
 internal readonly struct RoutineStoryboardSelection
 {
@@ -466,7 +719,7 @@ internal readonly struct RoutineStoryboardSelection
         this.bar4 = bar4;
     }
 
-    /// <summary>Starts with the first four Pool entries, repeating the last entry only when the Pool is smaller.</summary>
+    /// <summary>Starts with the first four Pool entries before exact Effect-owned matches are applied.</summary>
     /// <param name="poolCount">Number of usable entries in the required Pool.</param>
     /// <returns>Four valid selections, or four unavailable indices when the Pool is empty.</returns>
     public static RoutineStoryboardSelection Default(int poolCount)
@@ -478,29 +731,7 @@ internal readonly struct RoutineStoryboardSelection
             InitialIndex(3, poolCount));
     }
 
-    /// <summary>Clamps existing preview choices after the required Pool changes.</summary>
-    /// <param name="poolCount">Number of usable entries in the required Pool.</param>
-    /// <returns>Selections valid for the current Pool.</returns>
-    public RoutineStoryboardSelection WithPoolCount(int poolCount)
-    {
-        if (poolCount <= 0)
-        {
-            return Default(0);
-        }
-
-        if (bar1 < 0 || bar2 < 0 || bar3 < 0 || bar4 < 0)
-        {
-            return Default(poolCount);
-        }
-
-        return new RoutineStoryboardSelection(
-            Mathf.Clamp(bar1, 0, poolCount - 1),
-            Mathf.Clamp(bar2, 0, poolCount - 1),
-            Mathf.Clamp(bar3, 0, poolCount - 1),
-            Mathf.Clamp(bar4, 0, poolCount - 1));
-    }
-
-    /// <summary>Returns a copy with one bar assigned to a usable Pool entry.</summary>
+    /// <summary>Returns a copy with one Effect-owned bar matched to a usable Pool entry.</summary>
     /// <param name="barIndex">Zero-based Routine bar index.</param>
     /// <param name="waveformIndex">Zero-based Pool entry index.</param>
     /// <param name="poolCount">Number of usable entries in the required Pool.</param>
@@ -552,7 +783,7 @@ internal readonly struct RoutineStoryboardSelection
 }
 
 /// <summary>
-/// Pure editor display state for four selected Waveforms arranged as one 16-beat Routine.
+/// Pure editor display state for four Effect-owned Waveforms arranged as one 16-beat Routine.
 /// </summary>
 internal readonly struct RoutineStoryboardView
 {
@@ -564,7 +795,7 @@ internal readonly struct RoutineStoryboardView
     private readonly WaveformPool.Entry bar3;
     /// <summary>Resolved Pool entry for Routine bar four.</summary>
     private readonly WaveformPool.Entry bar4;
-    /// <summary>The four editor-only Pool indices used to resolve the entries.</summary>
+    /// <summary>The four Pool indices matched from the Effect-owned Routine.</summary>
     private readonly RoutineStoryboardSelection selection;
 
     /// <summary>Whether all four selected Pool entries are usable.</summary>
@@ -572,6 +803,9 @@ internal readonly struct RoutineStoryboardView
 
     /// <summary>The required-Pool or selection failure, or empty when usable.</summary>
     public readonly string Error;
+
+    /// <summary>Whether <see cref="Error"/> is broken configuration rather than a valid Effect omission.</summary>
+    public readonly bool IsError;
 
     /// <summary>The active one-based Grid bar, or null when placement is unavailable.</summary>
     public readonly int? ActiveBar;
@@ -587,9 +821,10 @@ internal readonly struct RoutineStoryboardView
     /// <param name="bar2">Resolved entry for Routine bar two.</param>
     /// <param name="bar3">Resolved entry for Routine bar three.</param>
     /// <param name="bar4">Resolved entry for Routine bar four.</param>
-    /// <param name="selection">The editor-only Pool indices used to resolve the entries.</param>
+    /// <param name="selection">The Pool indices matched from the Effect-owned Routine.</param>
     /// <param name="isUsable">Whether all four entries resolved.</param>
     /// <param name="error">The required-Pool or selection failure.</param>
+    /// <param name="isError">Whether the message represents broken configuration.</param>
     /// <param name="activeBar">The active one-based Grid bar, if placed.</param>
     /// <param name="activeBarPhase">The active bar's phase, if placed.</param>
     /// <param name="envelope">The sampled Routine envelope.</param>
@@ -601,6 +836,7 @@ internal readonly struct RoutineStoryboardView
         RoutineStoryboardSelection selection,
         bool isUsable,
         string error,
+        bool isError,
         int? activeBar,
         float? activeBarPhase,
         float envelope)
@@ -612,6 +848,7 @@ internal readonly struct RoutineStoryboardView
         this.selection = selection;
         IsUsable = isUsable;
         Error = error;
+        IsError = isError;
         ActiveBar = activeBar;
         ActiveBarPhase = activeBarPhase;
         Envelope = envelope;
@@ -619,7 +856,7 @@ internal readonly struct RoutineStoryboardView
 
     /// <summary>Resolves four selected Pool entries and samples the live Grid bar through <see cref="Waveform.Sample(float)"/>.</summary>
     /// <param name="poolEntries">Usable Pool entries in document order.</param>
-    /// <param name="selection">Four editor-only Pool selections.</param>
+    /// <param name="selection">Four Pool indices matched from the Effect-owned Routine.</param>
     /// <param name="poolError">The truthful required-Pool failure, or empty when usable.</param>
     /// <param name="gridBar">The sender-provided one-based Grid bar.</param>
     /// <param name="gridProgress">The sender-provided progress across the complete 16-beat Grid.</param>
@@ -633,7 +870,7 @@ internal readonly struct RoutineStoryboardView
     {
         if (!string.IsNullOrEmpty(poolError) || poolEntries == null || poolEntries.Count == 0)
         {
-            return Unavailable(selection, poolError);
+            return Unavailable(selection, poolError, isError: true);
         }
 
         if (!TryResolve(poolEntries, selection.IndexAt(0), out var bar1)
@@ -641,7 +878,7 @@ internal readonly struct RoutineStoryboardView
             || !TryResolve(poolEntries, selection.IndexAt(2), out var bar3)
             || !TryResolve(poolEntries, selection.IndexAt(3), out var bar4))
         {
-            return Unavailable(selection, "Routine storyboard selection is unavailable.");
+            return Unavailable(selection, "Routine storyboard selection is unavailable.", isError: true);
         }
 
         if (gridBar is >= 1 and <= RoutineStoryboardSelection.BarCount && gridProgress.HasValue)
@@ -662,6 +899,7 @@ internal readonly struct RoutineStoryboardView
                 selection,
                 true,
                 string.Empty,
+                false,
                 gridBar,
                 barPhase,
                 activeWaveform.Sample(barPhase));
@@ -675,6 +913,7 @@ internal readonly struct RoutineStoryboardView
             selection,
             true,
             string.Empty,
+            false,
             null,
             null,
             0f);
@@ -729,10 +968,14 @@ internal readonly struct RoutineStoryboardView
     }
 
     /// <summary>Builds an unavailable view without substituting storyboard content.</summary>
-    /// <param name="selection">The editor-only selections retained for error display.</param>
+    /// <param name="selection">The matched selections retained for error display.</param>
     /// <param name="error">The truthful required-Pool or selection failure.</param>
+    /// <param name="isError">Whether the message represents broken configuration.</param>
     /// <returns>An unavailable, resting storyboard.</returns>
-    private static RoutineStoryboardView Unavailable(RoutineStoryboardSelection selection, string error)
+    internal static RoutineStoryboardView Unavailable(
+        RoutineStoryboardSelection selection,
+        string error,
+        bool isError)
     {
         var message = string.IsNullOrEmpty(error)
             ? "Required Waveform Pool contains no Waveforms."
@@ -745,63 +988,26 @@ internal readonly struct RoutineStoryboardView
             selection,
             false,
             message,
+            isError,
             null,
             null,
             0f);
     }
 }
 
-/// <summary>Editor-only selections and explicit document actions emitted by one dashboard draw.</summary>
+/// <summary>Explicit document action emitted by one dashboard draw.</summary>
 internal readonly struct BeatManagerDashboardActions
 {
-    /// <summary>No waveform, Routine, or document action occurred this IMGUI pass.</summary>
-    public static readonly BeatManagerDashboardActions None = new(-1, false, -1, -1);
-
-    /// <summary>The selected single-Waveform preview index, or -1 when unchanged.</summary>
-    public readonly int SelectedWaveformIndex;
+    /// <summary>No document action occurred this IMGUI pass.</summary>
+    public static readonly BeatManagerDashboardActions None = new(false);
 
     /// <summary>Whether the author deliberately requested the Waveform Pool editor.</summary>
     public readonly bool OpenWaveformPoolEditor;
 
-    /// <summary>The zero-based Routine bar whose editor-only selection changed, or -1.</summary>
-    public readonly int RoutineBarIndex;
-
-    /// <summary>The selected Pool entry for <see cref="RoutineBarIndex"/>, or -1.</summary>
-    public readonly int RoutineWaveformIndex;
-
-    /// <summary>Captures all editor-only actions emitted by one dashboard draw.</summary>
-    /// <param name="selectedWaveformIndex">The changed single-preview Pool index, or -1.</param>
+    /// <summary>Captures the explicit Pool-editor action emitted by one dashboard draw.</summary>
     /// <param name="openWaveformPoolEditor">Whether the Pool editor was explicitly requested.</param>
-    /// <param name="routineBarIndex">The changed zero-based Routine bar, or -1.</param>
-    /// <param name="routineWaveformIndex">The changed Routine Pool index, or -1.</param>
-    public BeatManagerDashboardActions(
-        int selectedWaveformIndex,
-        bool openWaveformPoolEditor,
-        int routineBarIndex = -1,
-        int routineWaveformIndex = -1)
+    public BeatManagerDashboardActions(bool openWaveformPoolEditor)
     {
-        SelectedWaveformIndex = selectedWaveformIndex;
         OpenWaveformPoolEditor = openWaveformPoolEditor;
-        RoutineBarIndex = routineBarIndex;
-        RoutineWaveformIndex = routineWaveformIndex;
-    }
-
-    /// <summary>Whether the single-Waveform preview selection changed.</summary>
-    public bool HasWaveformSelection => SelectedWaveformIndex >= 0;
-
-    /// <summary>Whether one Routine bar's editor-only selection changed.</summary>
-    public bool HasRoutineSelection => RoutineBarIndex >= 0 && RoutineWaveformIndex >= 0;
-
-    /// <summary>Returns a copy carrying one changed Routine selector.</summary>
-    /// <param name="barIndex">The changed zero-based Routine bar.</param>
-    /// <param name="waveformIndex">The selected zero-based Pool entry.</param>
-    /// <returns>A combined action value retaining any other action from this draw.</returns>
-    public BeatManagerDashboardActions WithRoutineSelection(int barIndex, int waveformIndex)
-    {
-        return new BeatManagerDashboardActions(
-            SelectedWaveformIndex,
-            OpenWaveformPoolEditor,
-            barIndex,
-            waveformIndex);
     }
 }

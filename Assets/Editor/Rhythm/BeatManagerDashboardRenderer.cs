@@ -7,8 +7,8 @@ using UnityEngine;
 /// <remarks>
 /// This module owns layout, colors, styles, and widgets. It consumes <see cref="BeatManagerDashboardModel"/>
 /// instead of reading runtime state directly, keeping Unity drawing separate from the dashboard's display
-/// decisions. The Tuning Window and legacy drawer share this renderer; user actions return to the drawer adapter
-/// so editor-only preview selection stays outside the runtime.
+/// decisions. The Tuning Window and legacy drawer share this renderer; the only returned action opens the
+/// Waveform Pool editor, while displayed selections remain downstream mirrors of the staged Effect.
 /// </remarks>
 internal static class BeatManagerDashboardRenderer
 {
@@ -93,19 +93,18 @@ internal static class BeatManagerDashboardRenderer
     private const string OffBeatActive = "◆";
     private const string OffBeatInactive = "◇";
 
-    /// <summary>Explains that the waveform strip is a downstream, editor-only preview.</summary>
+    /// <summary>Explains that the waveform strip mirrors the staged Effect's selected Waveform.</summary>
     private const string EnvelopeTooltip =
-        "Waveform.Envelope: the selected Pool shape evaluated against the current Bar Phase. " +
-        "Preview only; selection does not mutate runtime state.";
+        "Waveform.Envelope: the staged Effect's selected Waveform evaluated against the current Bar Phase.";
     private static readonly GUIContent EnvelopeLabel = new("ENVELOPE", EnvelopeTooltip);
     /// <summary>Label and availability guidance for sender-provided Grid placement.</summary>
     private static readonly GUIContent GridLabel = new(
         "GRID",
         "Grid: the sender-provided one-based Bar and Beat placement. Unavailable means no complete Grid fact was broadcast.");
-    /// <summary>Label and behavior guidance for the editor-only Routine storyboard.</summary>
+    /// <summary>Label and behavior guidance for the staged Effect's Routine.</summary>
     private static readonly GUIContent RoutineLabel = new(
         "ROUTINE",
-        "Four editor-only Pool choices arranged as one 16-beat Grid. Live placement highlights the active Bar; " +
+        "The staged Effect's four selected Waveforms arranged as one 16-beat Grid. Live placement highlights the active Bar; " +
         "without placement the Routine rests at zero.");
 
     private static readonly Color PanelBackgroundColor = new(0.035f, 0.04f, 0.055f);
@@ -156,12 +155,12 @@ internal static class BeatManagerDashboardRenderer
     /// <summary>Draws the full dashboard and returns user actions for the drawer adapter to apply.</summary>
     /// <param name="rect">The complete dashboard bounds.</param>
     /// <param name="model">The immutable live rhythm display facts.</param>
-    /// <param name="selector">The valid preview choices or required-Pool failure.</param>
-    /// <param name="waveform">The selected runtime Waveform, or null when preview is unavailable.</param>
-    /// <param name="storyboard">Four editor-only selections plus their read-only live Grid placement.</param>
-    /// <param name="waveformOptions">The required Pool names offered by every Routine selector.</param>
+    /// <param name="selector">The staged Effect's Pool-matched Waveform selection or truthful failure.</param>
+    /// <param name="waveform">The staged Effect's selected Waveform, or null when it has none.</param>
+    /// <param name="storyboard">The staged Effect's selected Routine plus its live Grid placement.</param>
+    /// <param name="waveformOptions">The required Pool names used to label Routine bars.</param>
     /// <param name="layoutWidth">The available workspace width used to select one responsive flow.</param>
-    /// <returns>Any editor-only preview selection made while drawing.</returns>
+    /// <returns>The explicit Pool-editor action, if requested.</returns>
     public static BeatManagerDashboardActions Draw(
         Rect rect,
         BeatManagerDashboardModel model,
@@ -210,33 +209,32 @@ internal static class BeatManagerDashboardRenderer
         DrawGridRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Grid);
         y += QueryRowHeight + GroupGap;
 
-        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "WAVEFORM PREVIEW");
+        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "WAVEFORM");
         y += GroupHeaderHeight + GroupHeaderGap;
 
         var selectorRect = new Rect(content.x, y, content.width, WaveformSelectorHeight);
         var actions = DrawWaveformSelector(selectorRect, selector);
 
         var stripRect = new Rect(content.x, selectorRect.yMax + WaveformSelectorGap, content.width, WaveformStripHeight);
-        DrawWaveformStrip(stripRect, model, model.PoolHealthy ? waveform : null, model.PoolError);
+        DrawWaveformStrip(
+            stripRect,
+            model,
+            model.WaveformAvailable ? waveform : null,
+            model.WaveformMessage,
+            selector.IsError);
         y = stripRect.yMax + QueryRowGap;
         DrawEnvelopeRow(new Rect(content.x, y, content.width, QueryRowHeight), model.Envelope);
         y += QueryRowHeight + GroupGap;
 
-        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "ROUTINE STORYBOARD");
+        DrawGroupHeader(new Rect(content.x, y, content.width, GroupHeaderHeight), "ROUTINE");
         y += GroupHeaderHeight + GroupHeaderGap;
 
         var routineHeight = flow == RhythmDashboardFlow.Split ? RoutineWideHeight : RoutineStackedHeight;
-        var routineActions = DrawRoutineStoryboard(
+        DrawRoutineStoryboard(
             new Rect(content.x, y, content.width, routineHeight),
             storyboard,
             waveformOptions,
             flow);
-        if (routineActions.HasRoutineSelection)
-        {
-            actions = actions.WithRoutineSelection(
-                routineActions.RoutineBarIndex,
-                routineActions.RoutineWaveformIndex);
-        }
 
         return actions;
     }
@@ -402,52 +400,55 @@ internal static class BeatManagerDashboardRenderer
         DrawCountdownChip(new Rect(secondColumn, secondRow, narrowWidth, ChipHeight), model.OffBeatGate, OffBeatGateChipColor);
     }
 
-    /// <summary>Draws the editor-only Waveform preview selector and reports any chosen action.</summary>
+    /// <summary>Draws the staged Effect's selected Waveform label and the explicit Pool editor action.</summary>
     /// <param name="rect">The selector row bounds.</param>
-    /// <param name="selector">The valid preview choices or required-Pool failure.</param>
+    /// <param name="selector">The Pool-matched Effect selection or truthful failure.</param>
     private static BeatManagerDashboardActions DrawWaveformSelector(Rect rect, WaveformSelectorView selector)
     {
         const float editButtonWidth = 90f;
         const float gap = 6f;
 
-        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), "PREVIEW", rowLabelStyle);
+        GUI.Label(new Rect(rect.x, rect.y, RowLabelWidth, rect.height), "EFFECT", rowLabelStyle);
 
         var popupX = rect.x + RowLabelWidth;
         var popupRight = rect.xMax - editButtonWidth - gap;
         var popupRect = new Rect(popupX, rect.y, Mathf.Max(0f, popupRight - popupX), rect.height);
 
-        var selectedIndex = -1;
-        if (selector.Options.Length > 0)
+        if (selector.ShownIndex >= 0 && selector.Options.Length > 0)
         {
-            var chosen = EditorGUI.Popup(popupRect, selector.ShownIndex, selector.Options);
-            selectedIndex = chosen != selector.ShownIndex ? chosen : -1;
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUI.Popup(popupRect, selector.ShownIndex, selector.Options);
+            }
         }
         else
         {
-            EditorGUI.HelpBox(popupRect, selector.Error, MessageType.Error);
+            EditorGUI.HelpBox(popupRect, selector.Error, selector.IsError ? MessageType.Error : MessageType.Info);
         }
 
         var buttonRect = new Rect(rect.xMax - editButtonWidth, rect.y, editButtonWidth, rect.height);
         var openPoolEditor = GUI.Button(buttonRect, "Edit Pool…");
-        return selectedIndex >= 0 || openPoolEditor
-            ? new BeatManagerDashboardActions(selectedIndex, openPoolEditor)
+        return openPoolEditor
+            ? new BeatManagerDashboardActions(true)
             : BeatManagerDashboardActions.None;
     }
 
-    /// <summary>Draws the editor-selected Waveform and live playhead, or the exact required-Pool failure.</summary>
-    /// <param name="rect">The preview strip bounds.</param>
+    /// <summary>Draws the staged Effect's Waveform and live playhead, or the exact inspection failure.</summary>
+    /// <param name="rect">The Waveform strip bounds.</param>
     /// <param name="model">The immutable live rhythm display facts.</param>
     /// <param name="waveform">The selected runtime Waveform, or null when unavailable.</param>
     /// <param name="configurationError">The exact failure drawn when <paramref name="waveform"/> is null.</param>
+    /// <param name="isError">Whether the unavailable message represents broken configuration.</param>
     private static void DrawWaveformStrip(
         Rect rect,
         BeatManagerDashboardModel model,
         Waveform? waveform,
-        string configurationError)
+        string configurationError,
+        bool isError)
     {
         if (waveform is not { } availableWaveform)
         {
-            EditorGUI.HelpBox(rect, configurationError, MessageType.Error);
+            EditorGUI.HelpBox(rect, configurationError, isError ? MessageType.Error : MessageType.Info);
             return;
         }
 
@@ -469,13 +470,12 @@ internal static class BeatManagerDashboardRenderer
         }
     }
 
-    /// <summary>Draws four ordered Waveform selectors and plots as one responsive 16-beat storyboard.</summary>
+    /// <summary>Draws the staged Effect's four ordered Routine Waveforms as one responsive 16-beat storyboard.</summary>
     /// <param name="rect">The complete storyboard bounds.</param>
-    /// <param name="storyboard">The selected Waveforms and read-only Grid placement.</param>
-    /// <param name="waveformOptions">The required Pool names offered by each selector.</param>
+    /// <param name="storyboard">The Effect-selected Waveforms and read-only Grid placement.</param>
+    /// <param name="waveformOptions">The required Pool names used by each read-only label.</param>
     /// <param name="flow">The responsive card arrangement.</param>
-    /// <returns>Any editor-only storyboard selection made while drawing.</returns>
-    private static BeatManagerDashboardActions DrawRoutineStoryboard(
+    private static void DrawRoutineStoryboard(
         Rect rect,
         RoutineStoryboardView storyboard,
         string[] waveformOptions,
@@ -483,8 +483,8 @@ internal static class BeatManagerDashboardRenderer
     {
         if (!storyboard.IsUsable || waveformOptions == null || waveformOptions.Length == 0)
         {
-            EditorGUI.HelpBox(rect, storyboard.Error, MessageType.Error);
-            return BeatManagerDashboardActions.None;
+            EditorGUI.HelpBox(rect, storyboard.Error, storyboard.IsError ? MessageType.Error : MessageType.Info);
+            return;
         }
 
         var readout = new Rect(rect.x, rect.yMax - RoutineReadoutHeight, rect.width, RoutineReadoutHeight);
@@ -495,8 +495,6 @@ internal static class BeatManagerDashboardRenderer
         var cardHeight = Mathf.Max(
             0f,
             (cardAreaBottom - rect.y - (RoutineCardGap * (rows - 1))) / rows);
-        var actions = BeatManagerDashboardActions.None;
-
         for (var barIndex = 0; barIndex < RoutineStoryboardSelection.BarCount; barIndex++)
         {
             var row = barIndex / columns;
@@ -526,10 +524,9 @@ internal static class BeatManagerDashboardRenderer
                 Mathf.Max(0f, selectorRect.width - barLabelWidth),
                 selectorRect.height);
             var shownIndex = storyboard.SelectedIndexAt(barIndex);
-            var chosenIndex = EditorGUI.Popup(popup, shownIndex, waveformOptions);
-            if (chosenIndex != shownIndex)
+            using (new EditorGUI.DisabledScope(true))
             {
-                actions = actions.WithRoutineSelection(barIndex, chosenIndex);
+                EditorGUI.Popup(popup, shownIndex, waveformOptions);
             }
 
             if (storyboard.EntryAt(barIndex) is not { } entry)
@@ -556,12 +553,11 @@ internal static class BeatManagerDashboardRenderer
             ? $"{storyboard.Envelope:0.00} · Bar {activeBar}"
             : $"{storyboard.Envelope:0.00} · resting";
         GUI.Label(right, placement, valueStyle);
-        return actions;
     }
 
     /// <summary>Draws the selected single-Waveform envelope against live placement.</summary>
     /// <param name="row">The envelope row bounds.</param>
-    /// <param name="envelope">The available preview sample and readout.</param>
+    /// <param name="envelope">The available staged-Effect sample and readout.</param>
     private static void DrawEnvelopeRow(Rect row, EnvelopeRowView envelope)
     {
         var content = DrawQueryRowLabel(row, EnvelopeLabel);

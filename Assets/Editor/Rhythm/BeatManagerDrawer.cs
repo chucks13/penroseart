@@ -6,8 +6,8 @@ using UnityEngine;
 /// Unity adapter for the BeatManager Inspector dashboard.
 /// </summary>
 /// <remarks>
-/// This drawer owns the Unity <see cref="SerializedProperty"/> lifecycle, resolves the live runtime object behind
-/// the serialized field, keeps editor-only Waveform Pool selector state, and applies returned dashboard actions.
+/// This drawer owns the Unity <see cref="SerializedProperty"/> lifecycle, resolves the live Controller behind
+/// the serialized field, and mirrors the staged Effect's Waveform or Routine selection.
 /// Display decisions live in <see cref="BeatManagerDashboardModel"/>; IMGUI layout and widgets live in
 /// <see cref="BeatManagerDashboardRenderer"/>. That leaves the property drawer as a small adapter over one deep
 /// dashboard module instead of a monolith that mixes runtime reads, display rules, and drawing.
@@ -19,19 +19,14 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     // re-reading every frame would re-run Waveform.Parse (which logs malformations) on a constantly-repainting
     // Play Mode inspector. The file's last-write time is the cache key, so an external save (the Pool editor's
     // AssetDatabase.Refresh) is picked up automatically without parsing — and therefore without log spam — in between.
-    // BeatManager and this preview parse the same file through the same codec.
+    // Runtime acquisition and this read-only label cache parse the same file through the same codec.
     private static WaveformPool.Entry[] waveformPoolEntries;
     private static string[] waveformPoolNames;
 
-    /// <summary>The required-Pool configuration failure shown instead of a synthetic preview.</summary>
+    /// <summary>The required-Pool configuration failure shown instead of synthetic selection labels.</summary>
     private static string waveformPoolError;
 
-    // Editor-only Pool preview. It never writes musical runtime state.
-    private static int selectedWaveformIndex;
     private static long waveformPoolStampTicks = long.MinValue; // sentinel: nothing loaded yet
-
-    /// <summary>Four editor-only Pool choices; never written back to the Pool document or runtime.</summary>
-    private static RoutineStoryboardSelection routineSelection = RoutineStoryboardSelection.Default(0);
 
     /// <summary>Draws the foldout, the unified rhythm dashboard, and the regular serialized child fields.</summary>
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -53,7 +48,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
                 line.y += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 var panelRect = EditorGUI.IndentedRect(new Rect(line.x, line.y, line.width, BeatManagerDashboardRenderer.DashboardHeight));
-                DrawDashboard(panelRect, ResolveBeatManager(property), panelRect.width);
+                DrawDashboard(panelRect, ResolveController(property), panelRect.width);
                 line.y += BeatManagerDashboardRenderer.DashboardHeight + EditorGUIUtility.standardVerticalSpacing;
 
                 DrawChildFields(line, property);
@@ -95,10 +90,10 @@ public sealed class BeatManagerDrawer : PropertyDrawer
     }
 
     /// <summary>
-    /// Resolves the live BeatManager instance behind this property so the panel can call the real rhythm
-    /// queries instead of reconstructing them from serialized fields. Null during multi-object editing.
+    /// Resolves the live Controller that owns this BeatManager so the panel can follow its staged Effect.
+    /// Returns null during multi-object editing or when the property belongs to another host type.
     /// </summary>
-    private BeatManager ResolveBeatManager(SerializedProperty property)
+    private static Controller ResolveController(SerializedProperty property)
     {
         var serializedObject = property.serializedObject;
         if (serializedObject.isEditingMultipleObjects)
@@ -106,8 +101,7 @@ public sealed class BeatManagerDrawer : PropertyDrawer
             return null;
         }
 
-        var target = serializedObject.targetObject;
-        return target != null ? fieldInfo?.GetValue(target) as BeatManager : null;
+        return serializedObject.targetObject as Controller;
     }
 
     /// <summary>Draws the serialized BeatManager wire snapshot and smoothing tunables normally.</summary>
@@ -131,28 +125,37 @@ public sealed class BeatManagerDrawer : PropertyDrawer
 
     /// <summary>Draws the read-only BeatManager dashboard without exposing serialized transport fields.</summary>
     /// <param name="rect">The dashboard rectangle allocated by the property drawer.</param>
-    /// <param name="beatManager">The live runtime source, or null when it cannot be resolved.</param>
+    /// <param name="controller">The live runtime source, or null when it cannot be resolved.</param>
     /// <param name="layoutWidth">The available workspace width that selects the responsive flow.</param>
-    internal static void DrawDashboard(Rect rect, BeatManager beatManager, float layoutWidth)
+    internal static void DrawDashboard(Rect rect, Controller controller, float layoutWidth)
     {
         EnsureWaveformPool();
 
-        var selectedWaveform = SelectedWaveform();
-        var model = BeatManagerDashboardModel.From(beatManager, selectedWaveform, waveformPoolError);
-        var selector = BuildWaveformSelector();
-        var storyboard = BuildRoutineStoryboard(beatManager);
+        var beatManager = controller != null ? controller.beatManager : null;
+        var grid = beatManager != null ? beatManager.Grid : default;
+        var selection = EffectRhythmSelectionView.From(
+            controller,
+            waveformPoolEntries,
+            waveformPoolNames,
+            waveformPoolError,
+            grid.Bar,
+            grid.Progress);
+        var model = BeatManagerDashboardModel.From(
+            beatManager,
+            selection.Waveform,
+            selection.WaveformSelector.Error);
         var actions = BeatManagerDashboardRenderer.Draw(
             rect,
             model,
-            selector,
-            selectedWaveform,
-            storyboard,
+            selection.WaveformSelector,
+            selection.Waveform,
+            selection.Routine,
             waveformPoolNames,
             layoutWidth);
         ApplyDashboardActions(actions);
     }
 
-    /// <summary>(Re)loads the Waveform Pool for the preview dropdown, keyed on the file's last-write time so an
+    /// <summary>(Re)loads the Waveform Pool for read-only Effect selection labels, keyed on the file's last-write time so an
     /// external save is reflected without re-parsing — and so without re-running <see cref="Waveform.Parse"/>'s
     /// malformation logging — on every repaint. Required-configuration failures remain unavailable and visible.</summary>
     private static void EnsureWaveformPool()
@@ -195,65 +198,13 @@ public sealed class BeatManagerDrawer : PropertyDrawer
             waveformPoolNames[i] = waveformPoolEntries[i].name;
         }
 
-        selectedWaveformIndex = waveformPoolEntries.Length > 0
-            ? Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolEntries.Length - 1)
-            : -1;
-        routineSelection = routineSelection.WithPoolCount(waveformPoolEntries.Length);
         waveformPoolStampTicks = stamp;
     }
 
-    /// <summary>The runtime Waveform the strip plots, or null when required Pool configuration is unusable.</summary>
-    private static Waveform? SelectedWaveform()
-    {
-        if (waveformPoolEntries == null || waveformPoolEntries.Length == 0)
-        {
-            return null;
-        }
-
-        var index = Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolEntries.Length - 1);
-        return waveformPoolEntries[index].waveform;
-    }
-
-    /// <summary>Builds the preview selector from the cached Pool without exposing runtime control.</summary>
-    private static WaveformSelectorView BuildWaveformSelector()
-    {
-        var shownIndex = waveformPoolNames.Length > 0
-            ? Mathf.Clamp(selectedWaveformIndex, 0, waveformPoolNames.Length - 1)
-            : -1;
-        return new WaveformSelectorView(shownIndex, waveformPoolNames, waveformPoolError);
-    }
-
-    /// <summary>Builds the four-bar editor storyboard from Pool choices and read-only live Grid placement.</summary>
-    /// <param name="beatManager">The live runtime source, or null when placement is unavailable.</param>
-    /// <returns>The complete editor-only storyboard view.</returns>
-    private static RoutineStoryboardView BuildRoutineStoryboard(BeatManager beatManager)
-    {
-        var grid = beatManager != null ? beatManager.Grid : default;
-        return RoutineStoryboardView.From(
-            waveformPoolEntries,
-            routineSelection,
-            waveformPoolError,
-            grid.Bar,
-            grid.Progress);
-    }
-
-    /// <summary>Applies preview and Pool-editor actions without writing musical runtime state.</summary>
-    /// <param name="actions">Editor-only selections and explicit Pool-editor requests.</param>
+    /// <summary>Applies the explicit Pool-editor action without writing musical runtime state.</summary>
+    /// <param name="actions">The explicit Pool-editor request from this draw.</param>
     private static void ApplyDashboardActions(BeatManagerDashboardActions actions)
     {
-        if (actions.HasWaveformSelection)
-        {
-            selectedWaveformIndex = actions.SelectedWaveformIndex;
-        }
-
-        if (actions.HasRoutineSelection)
-        {
-            routineSelection = routineSelection.Select(
-                actions.RoutineBarIndex,
-                actions.RoutineWaveformIndex,
-                waveformPoolEntries.Length);
-        }
-
         if (actions.OpenWaveformPoolEditor)
         {
             WaveformPoolEditor.Open();
