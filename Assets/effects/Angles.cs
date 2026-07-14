@@ -40,6 +40,9 @@ public class Angles : EffectBase
 
     private float speed;
 
+    /// <summary>Four-bar waveform choreography sampled as High, Low, Mid, then Low energy.</summary>
+    private Routine routine;
+
     /// <summary>Width, in normalized rank space (0..1), of the collapsing wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float FrontSoftness = 0.12f;
 
@@ -191,18 +194,22 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Re-rolls the per-activation look: sweep speed, held Waveform, and shading light direction. Called
+    /// Re-rolls the per-activation look: sweep speed, four-bar Waveform routine, and shading light direction. Called
     /// once at activation and again on each new Grid, so the look takes a fresh character every 16 beats.
     /// </summary>
     private void Reroll()
     {
         speed = Random.Range(MinSpeed, MaxSpeed);
-        waveform = waveforms.Random(Energy.Low, Energy.Mid);
+        routine = Routine.Of(
+            waveforms.Random(Energy.High),
+            waveforms.Random(Energy.Low),
+            waveforms.Random(Energy.Mid),
+            waveforms.Random(Energy.Low));
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
     }
 
     /// <summary>
-    /// On each new Grid the sweep takes a fresh speed and held Waveform.
+    /// On each new Grid the sweep takes a fresh speed and four-bar Waveform routine.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -221,7 +228,7 @@ public class Angles : EffectBase
         (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
     /// <summary>
-    /// Updates the Fill wavefront from the stock Build, next-Fill anticipation, and continuous Waveform lift.
+    /// Updates the Fill wavefront from the stock Build, next-Fill anticipation, and continuous Routine lift.
     /// </summary>
     private void UpdateFillEnvelope()
     {
@@ -235,7 +242,7 @@ public class Angles : EffectBase
 
         if (filling)
         {
-            fillEnv = Mathf.Min(1f, fillEnv + (BeatKick * waveform.Envelope));
+            fillEnv = Mathf.Min(1f, fillEnv + (BeatKick * routine.Envelope));
         }
     }
 
@@ -260,8 +267,8 @@ public class Angles : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse narrows/widens the angle-to-hue mapping without changing the underlying tile-angle pattern.
-        float rhythmHueOffset = waveform.Lerp(0.9f, 1f);
+        // The Routine rotates the full angle-to-hue pattern without changing the tiles' relative hues.
+        float rhythmHueOffset = routine.Lerp(0.8f, 1f);
         UpdateFillEnvelope();
         var drop = beatManager.Drop;
         bool inDrop = drop.Active == true;
