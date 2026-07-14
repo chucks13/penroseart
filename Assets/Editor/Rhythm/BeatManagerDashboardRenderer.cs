@@ -155,8 +155,12 @@ internal static class BeatManagerDashboardRenderer
     private static GUIStyle bandLabelStyle;
 
     /// <summary>Draws the full dashboard and returns user actions for the drawer adapter to apply.</summary>
+    /// <param name="rect">The complete dashboard bounds.</param>
+    /// <param name="model">The immutable live rhythm display facts.</param>
+    /// <param name="selector">The valid preview choices or required-Pool failure.</param>
+    /// <param name="waveform">The selected runtime Waveform, or null when preview is unavailable.</param>
     public static BeatManagerDashboardActions Draw(Rect rect, BeatManagerDashboardModel model,
-        WaveformSelectorView selector, Waveform waveform)
+        WaveformSelectorView selector, Waveform? waveform)
     {
         EnsureStyles();
 
@@ -189,7 +193,7 @@ internal static class BeatManagerDashboardRenderer
         var actions = DrawWaveformSelector(selectorRect, selector);
 
         var stripRect = new Rect(content.x, selectorRect.yMax + WaveformSelectorGap, content.width, WaveformStripHeight);
-        DrawWaveformStrip(stripRect, model, waveform);
+        DrawWaveformStrip(stripRect, model, waveform, selector.Error);
 
         var queriesY = stripRect.yMax + SectionGap;
         GUI.Label(new Rect(content.x, queriesY, content.width * 0.5f, QueriesHeaderHeight), "RHYTHM QUERIES", queriesHeaderStyle);
@@ -335,6 +339,8 @@ internal static class BeatManagerDashboardRenderer
     }
 
     /// <summary>Draws the editor-only Waveform preview selector and reports any chosen action.</summary>
+    /// <param name="rect">The selector row bounds.</param>
+    /// <param name="selector">The valid preview choices or required-Pool failure.</param>
     private static BeatManagerDashboardActions DrawWaveformSelector(Rect rect, WaveformSelectorView selector)
     {
         const float editButtonWidth = 90f;
@@ -346,8 +352,16 @@ internal static class BeatManagerDashboardRenderer
         var popupRight = rect.xMax - editButtonWidth - gap;
         var popupRect = new Rect(popupX, rect.y, Mathf.Max(0f, popupRight - popupX), rect.height);
 
-        var chosen = EditorGUI.Popup(popupRect, selector.ShownIndex, selector.Options);
-        var selectedIndex = chosen != selector.ShownIndex ? chosen : -1;
+        var selectedIndex = -1;
+        if (selector.Options.Length > 0)
+        {
+            var chosen = EditorGUI.Popup(popupRect, selector.ShownIndex, selector.Options);
+            selectedIndex = chosen != selector.ShownIndex ? chosen : -1;
+        }
+        else
+        {
+            EditorGUI.HelpBox(popupRect, "Pool configuration error", MessageType.Error);
+        }
 
         var buttonRect = new Rect(rect.xMax - editButtonWidth, rect.y, editButtonWidth, rect.height);
         var openPoolEditor = GUI.Button(buttonRect, "Edit Pool…");
@@ -356,19 +370,33 @@ internal static class BeatManagerDashboardRenderer
             : BeatManagerDashboardActions.None;
     }
 
-    /// <summary>Draws the editor-selected Waveform and its downstream live playhead.</summary>
-    private static void DrawWaveformStrip(Rect rect, BeatManagerDashboardModel model, Waveform waveform)
+    /// <summary>Draws the editor-selected Waveform and live playhead, or the exact required-Pool failure.</summary>
+    /// <param name="rect">The preview strip bounds.</param>
+    /// <param name="model">The immutable live rhythm display facts.</param>
+    /// <param name="waveform">The selected runtime Waveform, or null when unavailable.</param>
+    /// <param name="configurationError">The exact failure drawn when <paramref name="waveform"/> is null.</param>
+    private static void DrawWaveformStrip(
+        Rect rect,
+        BeatManagerDashboardModel model,
+        Waveform? waveform,
+        string configurationError)
     {
+        if (waveform is not { } availableWaveform)
+        {
+            EditorGUI.HelpBox(rect, configurationError, MessageType.Error);
+            return;
+        }
+
         var plotRight = rect.xMax - WaveformValueWidth - 6f;
         var plot = new Rect(rect.x, rect.y + 2f, Mathf.Max(0f, plotRight - rect.x), rect.height - 4f);
 
-        WaveformPlot.Draw(plot, waveform, model.Synced ? WaveformPlot.Curve : WaveformCurveIdleColor,
+        WaveformPlot.Draw(plot, availableWaveform, model.Synced ? WaveformPlot.Curve : WaveformCurveIdleColor,
             model.Synced ? model.BarPhase : null);
 
         var readout = new Rect(rect.xMax - WaveformValueWidth, rect.y, WaveformValueWidth, rect.height);
         if (model.Synced)
         {
-            var emitted = Mathf.Clamp01(waveform.Sample(model.BarPhase));
+            var emitted = Mathf.Clamp01(availableWaveform.Sample(model.BarPhase));
             GUI.Label(readout, $"{emitted:0.00}", valueStyle);
         }
         else

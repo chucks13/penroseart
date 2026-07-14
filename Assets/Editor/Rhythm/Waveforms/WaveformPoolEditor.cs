@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -14,7 +13,8 @@ using UnityEngine;
 /// <para>
 /// Both this window and the runtime go through <see cref="WaveformPool"/> for parse and serialize. The window is a
 /// real Unity document: drafts survive domain reload, native close prompts protect unsaved work, and the window is
-/// the Undo target. A content hash prevents stale drafts from overwriting external hand edits.
+/// the Undo target. <see cref="WaveformPoolDocument"/> owns the persisted baseline outside those Undo snapshots,
+/// so restored drafts cannot masquerade as saved content and stale drafts cannot overwrite external hand edits.
 /// </para>
 /// <para>
 /// List order is authoring presentation only. Runtime performers acquire Waveforms by Energy or uniformly from the
@@ -90,11 +90,8 @@ public sealed class WaveformPoolEditor : EditorWindow
     /// <summary>Whether this window already owns a loaded document rather than needing an initial disk read.</summary>
     [SerializeField] private bool documentLoaded;
 
-    /// <summary>The exact disk-content hash used to detect external edits.</summary>
-    [SerializeField] private string loadedFileHash = "";
-
-    /// <summary>The editable-value fingerprint at the last successful load or save.</summary>
-    [SerializeField] private string cleanDraftFingerprint = "";
+    /// <summary>The non-Undoable disk and persisted-baseline lifecycle for the external Pool file.</summary>
+    [NonSerialized] private WaveformPoolDocument document;
 
     /// <summary>A file read failure that prevents saving until a later successful reload.</summary>
     [SerializeField] private string loadError = "";
@@ -104,6 +101,12 @@ public sealed class WaveformPoolEditor : EditorWindow
 
     /// <summary>Whether the loaded source required a recoverable value substitution or precision normalization.</summary>
     [SerializeField] private bool recoveredValuesNeedSave;
+
+    /// <summary>Whether the last adopted disk source was absent rather than an existing empty file.</summary>
+    [SerializeField] private bool loadedSourceWasMissing;
+
+    /// <summary>The current required-Pool failure shown without blocking edits that repair it.</summary>
+    [SerializeField] private string configurationError = "";
 
     private static readonly Color MalformedCurveColor = new(1f, 0.55f, 0.3f);
 
@@ -120,8 +123,9 @@ public sealed class WaveformPoolEditor : EditorWindow
         saveChangesMessage = "The Waveform Pool has unsaved changes. Save them before closing?";
         Undo.undoRedoPerformed -= OnUndoRedo;
         Undo.undoRedoPerformed += OnUndoRedo;
+        document = new WaveformPoolDocument(WaveformPool.FilePath);
 
-        if (documentLoaded)
+        if (documentLoaded && document.HasBaseline)
         {
             RebuildPreviews();
             RefreshUnsavedState();
@@ -171,6 +175,11 @@ public sealed class WaveformPoolEditor : EditorWindow
         if (!string.IsNullOrEmpty(loadError))
         {
             EditorGUILayout.HelpBox(loadError, MessageType.Error);
+        }
+
+        if (!string.IsNullOrEmpty(configurationError))
+        {
+            EditorGUILayout.HelpBox(configurationError, MessageType.Error);
         }
 
         if (loadDiagnostics.Count > 0)
@@ -420,17 +429,21 @@ public sealed class WaveformPoolEditor : EditorWindow
         Undo.RecordObject(this, label);
     }
 
-    /// <summary>Reads and parses the file without replacing the current Drafts when I/O fails.</summary>
+    /// <summary>Transactionally reloads the file, replacing Drafts only after the complete source is representable.</summary>
     private bool ReloadFromDisk()
     {
-        if (!TryReadFile(out var text, out var exists, out var error))
+        document ??= new WaveformPoolDocument(WaveformPool.FilePath);
+        var loaded = document.Load();
+        if (loaded.Status != WaveformPoolDocumentLoadStatus.Loaded)
         {
-            loadError = error;
+            loadError = loaded.Error;
+            loadDiagnostics = new List<string>(loaded.Diagnostics);
             Repaint();
             return false;
         }
 
-        var entries = WaveformPool.Parse(text, out var diagnostics);
+        var entries = loaded.Entries;
+        var diagnostics = loaded.Diagnostics;
         var replacement = new List<Draft>(entries.Count);
         var requiresCanonicalRewrite = HasRecoverableNumericSubstitution(diagnostics);
         for (var i = 0; i < entries.Count; i++)
@@ -462,12 +475,12 @@ public sealed class WaveformPoolEditor : EditorWindow
             selected = 0;
         }
 
-        loadedFileHash = HashFileContent(text, exists);
         loadError = "";
         loadDiagnostics = new List<string>(diagnostics);
-        recoveredValuesNeedSave = requiresCanonicalRewrite && !HasUnrecoverableRecord(diagnostics);
+        recoveredValuesNeedSave = requiresCanonicalRewrite;
+        loadedSourceWasMissing = !loaded.FileExists;
         documentLoaded = true;
-        cleanDraftFingerprint = DraftFingerprint();
+        document.AcceptLoad(loaded, DraftFingerprint());
         RefreshUnsavedState();
         Repaint();
         return true;
@@ -484,12 +497,17 @@ public sealed class WaveformPoolEditor : EditorWindow
             return SaveResult.Failed;
         }
 
-        if (!TryReadFile(out var currentText, out var currentExists, out error))
+        error = "";
+        var entries = new List<WaveformPool.Entry>(drafts.Count);
+        for (var i = 0; i < drafts.Count; i++)
         {
-            return SaveResult.Failed;
+            entries.Add(new WaveformPool.Entry(drafts[i].name, drafts[i].preview));
         }
 
-        if (HashFileContent(currentText, currentExists) != loadedFileHash)
+        document ??= new WaveformPoolDocument(WaveformPool.FilePath);
+        var fingerprint = DraftFingerprint();
+        var result = document.Save(entries, fingerprint, overwriteExternalChange: false);
+        if (result.Status == WaveformPoolDocumentSaveStatus.ExternalChange)
         {
             var choice = EditorUtility.DisplayDialogComplex(
                 "Waveform Pool changed on disk",
@@ -507,34 +525,23 @@ public sealed class WaveformPoolEditor : EditorWindow
             {
                 return SaveResult.Cancelled;
             }
+
+            result = document.Save(entries, fingerprint, overwriteExternalChange: true);
         }
 
-        var entries = new List<WaveformPool.Entry>(drafts.Count);
-        for (var i = 0; i < drafts.Count; i++)
+        if (result.Status != WaveformPoolDocumentSaveStatus.Saved)
         {
-            entries.Add(new WaveformPool.Entry(drafts[i].name, drafts[i].preview));
-        }
-
-        string serialized;
-        try
-        {
-            serialized = WaveformPool.Serialize(entries);
-            File.WriteAllText(WaveformPool.FilePath, serialized);
-        }
-        catch (Exception exception)
-        {
-            error = $"Failed to write {WaveformPool.FileName}: {exception.Message}";
+            error = result.Error;
             return SaveResult.Failed;
         }
 
         AssetDatabase.Refresh();
-        loadedFileHash = HashFileContent(serialized, exists: true);
-        cleanDraftFingerprint = DraftFingerprint();
         loadDiagnostics.Clear();
         loadError = "";
         recoveredValuesNeedSave = false;
+        loadedSourceWasMissing = false;
         documentLoaded = true;
-        hasUnsavedChanges = false;
+        RefreshUnsavedState();
         Debug.Log($"[Waveform] Saved {entries.Count} Preset(s) to {WaveformPool.FileName}. " +
                   "The runtime picks them up on its next Pool load.");
         return SaveResult.Saved;
@@ -551,7 +558,7 @@ public sealed class WaveformPoolEditor : EditorWindow
 
         for (var i = 0; i < loadDiagnostics.Count; i++)
         {
-            if (LoadDiagnosticBlocksSave(loadDiagnostics[i]))
+            if (WaveformPoolDocument.DiagnosticBlocksSave(loadDiagnostics[i]))
             {
                 errors.Add(loadDiagnostics[i]);
             }
@@ -585,33 +592,12 @@ public sealed class WaveformPoolEditor : EditorWindow
         return errors;
     }
 
-    /// <summary>Whether a codec diagnostic means some source record could not be represented as a Draft.</summary>
-    private static bool LoadDiagnosticBlocksSave(string diagnostic)
-    {
-        return diagnostic.StartsWith("Malformed DEFINE_WAVEFORM", StringComparison.Ordinal) ||
-               diagnostic.Contains("field(s), expected 4");
-    }
-
     /// <summary>Whether parsing replaced at least one invalid number with its documented fallback.</summary>
     private static bool HasRecoverableNumericSubstitution(IReadOnlyList<string> diagnostics)
     {
         for (var i = 0; i < diagnostics.Count; i++)
         {
             if (diagnostics[i].Contains("— defaulting to"))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>Whether parsing skipped source content that cannot be reconstructed from the recovered Drafts.</summary>
-    private static bool HasUnrecoverableRecord(IReadOnlyList<string> diagnostics)
-    {
-        for (var i = 0; i < diagnostics.Count; i++)
-        {
-            if (LoadDiagnosticBlocksSave(diagnostics[i]))
             {
                 return true;
             }
@@ -632,8 +618,33 @@ public sealed class WaveformPoolEditor : EditorWindow
     /// <summary>Derives native document dirty state from the serialized Draft content.</summary>
     private void RefreshUnsavedState()
     {
-        hasUnsavedChanges = documentLoaded &&
-                            (recoveredValuesNeedSave || DraftFingerprint() != cleanDraftFingerprint);
+        hasUnsavedChanges = documentLoaded && document != null &&
+                            document.IsDirty(DraftFingerprint(), recoveredValuesNeedSave);
+        RefreshConfigurationError();
+    }
+
+    /// <summary>Derives the visible required-Pool failure from the current repairable Draft collection.</summary>
+    private void RefreshConfigurationError()
+    {
+        if (drafts.Count == 0)
+        {
+            configurationError = loadedSourceWasMissing
+                ? $"Required Waveform Pool '{WaveformPool.FileName}' is missing. Add a Preset and save to repair it."
+                : $"Required Waveform Pool '{WaveformPool.FileName}' contains no Waveforms. Add a Preset before runtime startup.";
+            return;
+        }
+
+        for (var i = 0; i < drafts.Count; i++)
+        {
+            if (!WaveformPool.IsValidName(drafts[i].name) || drafts[i].diagnostics.Length > 0)
+            {
+                configurationError = "The required Waveform Pool contains invalid Presets. " +
+                                     "Runtime startup will fail until the highlighted diagnostics are fixed.";
+                return;
+            }
+        }
+
+        configurationError = "";
     }
 
     /// <summary>Builds a collision-resistant length-prefixed representation of the editable Draft fields.</summary>
@@ -657,38 +668,6 @@ public sealed class WaveformPoolEditor : EditorWindow
     {
         value ??= "";
         builder.Append(value.Length).Append(':').Append(value).Append(';');
-    }
-
-    /// <summary>Reads the exact disk content while distinguishing a missing file from an empty file.</summary>
-    private static bool TryReadFile(out string text, out bool exists, out string error)
-    {
-        var path = WaveformPool.FilePath;
-        exists = File.Exists(path);
-        if (!exists)
-        {
-            text = "";
-            error = "";
-            return true;
-        }
-
-        try
-        {
-            text = File.ReadAllText(path);
-            error = "";
-            return true;
-        }
-        catch (Exception exception)
-        {
-            text = "";
-            error = $"Could not read {WaveformPool.FileName}; the current Drafts were preserved. {exception.Message}";
-            return false;
-        }
-    }
-
-    /// <summary>Hashes exact file content together with file existence for external-change detection.</summary>
-    private static string HashFileContent(string text, bool exists)
-    {
-        return Hash128.Compute((exists ? "present:" : "missing:") + (text ?? "")).ToString();
     }
 
     /// <summary>Rounds one authoring scalar to the exact precision emitted by the Pool codec.</summary>

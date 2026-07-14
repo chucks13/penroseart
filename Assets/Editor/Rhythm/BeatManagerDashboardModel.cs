@@ -91,8 +91,8 @@ internal readonly struct BeatManagerDashboardModel
     /// Builds the dashboard display model from the live runtime object and the previewed Pool entry.
     /// </summary>
     /// <param name="beatManager">Runtime beat manager, or <c>null</c> when the property cannot resolve one.</param>
-    /// <param name="previewWaveform">The parsed Pool entry selected for editor-only preview.</param>
-    public static BeatManagerDashboardModel From(BeatManager beatManager, Waveform previewWaveform)
+    /// <param name="previewWaveform">The parsed Pool entry selected for editor-only preview, or null when unusable.</param>
+    public static BeatManagerDashboardModel From(BeatManager beatManager, Waveform? previewWaveform)
     {
         var synced = beatManager != null && beatManager.IsSynced;
         var timing = beatManager != null ? beatManager.Timing : default;
@@ -214,14 +214,16 @@ internal readonly struct BeatManagerDashboardModel
     }
 
     /// <summary>Builds the live-clock envelope row for the editor-previewed Pool entry.</summary>
-    private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, Waveform previewWaveform)
+    /// <param name="beatManager">The live runtime source, or null when unavailable.</param>
+    /// <param name="previewWaveform">The valid editor preview, or null for a required-Pool failure.</param>
+    private static EnvelopeRowView BuildEnvelopeRow(BeatManager beatManager, Waveform? previewWaveform)
     {
-        if (beatManager == null)
+        if (beatManager == null || previewWaveform is not { } waveform)
         {
             return EnvelopeRowView.Null;
         }
 
-        var envelope = previewWaveform.Bind(beatManager).Envelope;
+        var envelope = waveform.Bind(beatManager).Envelope;
         return new EnvelopeRowView(true, envelope, $"{envelope:0.00} · preview");
     }
 
@@ -406,13 +408,18 @@ internal readonly struct WaveformSelectorView
     /// <summary>The Pool names offered by the preview popup.</summary>
     public readonly string[] Options;
 
+    /// <summary>The required-Pool failure shown when no honest preview is available.</summary>
+    public readonly string Error;
+
     /// <summary>Captures one preview selection and its available Pool names.</summary>
     /// <param name="shownIndex">The zero-based Pool entry shown in the preview.</param>
     /// <param name="options">The Pool names offered by the preview popup.</param>
-    public WaveformSelectorView(int shownIndex, string[] options)
+    /// <param name="error">The required-Pool failure, or empty when selection is available.</param>
+    public WaveformSelectorView(int shownIndex, string[] options, string error)
     {
         ShownIndex = shownIndex;
         Options = options;
+        Error = error;
     }
 }
 
