@@ -201,7 +201,7 @@ public class Angles : EffectBase
     {
         speed = Random.Range(MinSpeed, MaxSpeed);
         routine = Routine.Of(
-            waveforms.Random(Energy.High),
+            waveforms.Random(Energy.Mid),
             waveforms.Random(Energy.Low),
             waveforms.Random(Energy.Mid),
             waveforms.Random(Energy.Low));
