@@ -12,6 +12,12 @@ Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. 
 
 `EmptyEffect` itself is intentionally ignored by the runtime catalog. It exists only as a documented starter template.
 
+[`Flock`](../Assets/effects/Flock.cs) is the advanced reference for a production music-reactive effect. Its source is organized in
+reading order—signal hierarchy, artistic tuning, runtime state, lifecycle, frame pipeline, musical mappings,
+and simulation—and documents why each musical source controls its particular visual consequence. Start from
+`EmptyEffect`; consult `Flock` when adding Routines, calibrated levels, Standalone behavior, Fill/Drop
+choreography, persistent trails, or a stateful simulation.
+
 ## Create a new transition
 
 1. Copy `Assets/transitions/EmptyTransition.cs`.
