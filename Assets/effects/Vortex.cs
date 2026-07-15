@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿//using System.Drawing;
+using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
@@ -8,12 +9,13 @@ public class Vortex : EffectBase
 {
     /// <summary>Vortex's swirling motion suits Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.EnergyLow |Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private int count;
     private float speed;
     private float angle;
+    private int distortionMode; // 0: Brightness, 1: Color, 2: Time
 
 
     public spinner[] spinners;
@@ -55,6 +57,8 @@ public class Vortex : EffectBase
             spinners[i] = sample;
             //            spinners[i].palette = spinners[0].palette;          // make palettes the same
         }
+        distortionMode = Random.Range(0, 2)*2;      // 0 or 2
+
         buffer.Clear();
     }
 
@@ -62,10 +66,10 @@ public class Vortex : EffectBase
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
     public override void OnEnd() { }
-    public void Update()
+    public void Update(float delta)
     {
         float deg2rad = (Mathf.PI * 2f) / 360f;
-        angle += speed * effectDelta;
+        angle += speed * delta;
         for (int i = 0; i < count; i++)
         {
             spinner sample = spinners[i];
@@ -82,9 +86,21 @@ public class Vortex : EffectBase
     /// </summary>
     public override void Draw()
     {
+        float beatBrightness = 1.0f;
+        float hueShift = 0.0f;
+        float sampleeDelta = effectDelta;
+
+        float rhythm = waveform.Envelope;
+        if (distortionMode == 0)
+            beatBrightness = waveform.Lerp(0.65f, 1f);
+        else if (distortionMode == 1)
+            hueShift = 0.25f * rhythm;
+        else if (distortionMode == 2)
+            sampleeDelta = (effectDelta*0.15f) + (0.025f * rhythm);
+
         // Beat pulse scales the nearest-spinner palette result for each tile.
-        float beatBrightness = waveform.Lerp(0.5f, 1f);
-        Update();
+        //        float beatBrightness = waveform.Lerp(0.5f, 1f);
+        Update(sampleeDelta);
         for (int i = 0; i < buffer.Length; i++)
         {
             int which = 0;
@@ -100,8 +116,15 @@ public class Vortex : EffectBase
                     which = j;
                 }
             }
+            Color c = spinners[which].Draw(i, tiles[i].position) * beatBrightness;
+            if (hueShift > 0)
+            {
+                float h, s, v_col;
+                Color.RGBToHSV(c, out h, out s, out v_col);
+                c = Color.HSVToRGB((h + hueShift) % 1f, s, v_col);
+            }
+            buffer[i] = c * beatBrightness;
             // Draw the point
-            buffer[i] = spinners[which].Draw(i, tiles[i].position) * beatBrightness;
         }
     }
 
