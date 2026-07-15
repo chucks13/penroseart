@@ -5,11 +5,10 @@
 internal readonly struct CountdownValues
 {
     /// <summary>Creates the shared direct and interpreted countdown values.</summary>
-    internal CountdownValues(bool active, int? countBeats, int? lengthBeats, int? remaining,
+    internal CountdownValues(bool active, int? lengthBeats, int? remaining,
         int? beatsRemaining, int? beatsUntil, float? progress, float? elapsedBeats)
     {
         Active = active;
-        CountBeats = countBeats;
         LengthBeats = lengthBeats;
         Remaining = remaining;
         BeatsRemaining = beatsRemaining;
@@ -20,8 +19,6 @@ internal readonly struct CountdownValues
 
     /// <summary>Whether the event is active now; false when upcoming or unavailable.</summary>
     internal bool Active { get; }
-    /// <summary>The wire's context-dependent beat count.</summary>
-    internal int? CountBeats { get; }
     /// <summary>The current or upcoming event length.</summary>
     internal int? LengthBeats { get; }
     /// <summary>Occurrences whose marker has not passed.</summary>
@@ -46,7 +43,6 @@ public readonly struct DropValues
     internal DropValues(CountdownValues values)
     {
         Active = values.Active;
-        CountBeats = values.CountBeats;
         LengthBeats = values.LengthBeats;
         Remaining = values.Remaining;
         BeatsRemaining = values.BeatsRemaining;
@@ -60,9 +56,6 @@ public readonly struct DropValues
     /// <see cref="BeatsUntil"/> is non-null only while a real drop is upcoming.
     /// </summary>
     public bool Active { get; }
-
-    /// <summary>The wire count: beats remaining while active, otherwise beats until the drop.</summary>
-    public int? CountBeats { get; }
 
     /// <summary>The current or upcoming drop length from the wire.</summary>
     public int? LengthBeats { get; }
@@ -109,7 +102,6 @@ public partial class BeatManager
         var elapsed = active ? ElapsedInDuration(state.countBeats, state.lengthBeats) : null;
         return new CountdownValues(
             active,
-            NonNegativeOrNull(state.countBeats),
             NonNegativeOrNull(state.lengthBeats),
             NonNegativeOrNull(state.remaining),
             active ? NonNegativeOrNull(state.countBeats) : null,

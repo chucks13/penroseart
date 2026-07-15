@@ -11,7 +11,6 @@ public readonly struct FillValues
     internal FillValues(CountdownValues values)
     {
         Active = values.Active;
-        CountBeats = values.CountBeats;
         LengthBeats = values.LengthBeats;
         Remaining = values.Remaining;
         BeatsRemaining = values.BeatsRemaining;
@@ -25,9 +24,6 @@ public readonly struct FillValues
     /// <see cref="BeatsUntil"/> is non-null only while a real fill is upcoming.
     /// </summary>
     public bool Active { get; }
-
-    /// <summary>The wire count: beats remaining while active, otherwise beats until the fill.</summary>
-    public int? CountBeats { get; }
 
     /// <summary>The current or upcoming fill length from the wire.</summary>
     public int? LengthBeats { get; }

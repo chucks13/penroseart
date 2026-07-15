@@ -155,7 +155,7 @@ wire, sentinels never crossing the surface).
 - **Boolean questions are total, resting at false**: `Drop.Active`, `Fill.Active`,
   `Loop.Rolling`, `Loop.RegionSet`, `Phrase.Irregular`, `Pulses.On`, `Beats.OnBeat`,
   `Offbeats.OffBeat`. A countdown flag's false covers both "upcoming" and "no data";
-  the sibling nullable counts (`BeatsUntil`, `CountBeats`) say which, so the tri-state
+  the sibling nullable counts (`BeatsUntil`, `BeatsRemaining`) say which, so the tri-state
   carried no information the facts didn't already hold.
 - **Pulse drive signals are total, resting at zero**: `Pulses.Beat`, `Pulses.OffBeat`,
   `Pulses.Every` — matching `Waveform.Envelope` and `Build()`/`Decay()`.

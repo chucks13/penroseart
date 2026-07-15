@@ -50,12 +50,11 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.NextPhrase.LengthBeats, Is.EqualTo(16));
 
         Assert.That(beatManager.Drop.Active, Is.True);
-        Assert.That(beatManager.Drop.CountBeats, Is.Zero);
         Assert.That(beatManager.Drop.LengthBeats, Is.EqualTo(32));
         Assert.That(beatManager.Drop.Remaining, Is.EqualTo(2));
         Assert.That(beatManager.Drop.BeatsRemaining, Is.Zero);
         Assert.That(beatManager.Fill.Active, Is.False);
-        Assert.That(beatManager.Fill.CountBeats, Is.EqualTo(16));
+        Assert.That(beatManager.Fill.BeatsUntil, Is.EqualTo(16));
         Assert.That(beatManager.Fill.LengthBeats, Is.EqualTo(8));
         Assert.That(beatManager.Fill.Remaining, Is.EqualTo(1));
         Assert.That(beatManager.Fill.BeatsUntil, Is.EqualTo(16));

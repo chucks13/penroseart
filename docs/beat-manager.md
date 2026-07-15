@@ -81,11 +81,10 @@ beatManager.NextPhrase.BeatsUntil;
 beatManager.NextPhrase.LengthBeats;
 ```
 
-Drop and Fill each arrive as one wire lane. `Active` is a plain bool: true while the event is happening, false otherwise — false covers both "upcoming" and "no data," and the nullable counts say which (`BeatsUntil` is non-null only while a real event is upcoming). `Active` determines whether `CountBeats` means beats remaining or beats until the upcoming event; BeatManager preserves the raw count and also gives it the readable name:
+Drop and Fill each arrive as one wire lane. `Active` is a plain bool: true while the event is happening, false otherwise — false covers both "upcoming" and "no data," and the nullable counts say which. The wire's context-dependent count is served only under its readable names: `BeatsRemaining` is non-null while active, `BeatsUntil` while a real event is upcoming.
 
 ```csharp
 beatManager.Drop.Active;
-beatManager.Drop.CountBeats;
 beatManager.Drop.LengthBeats;
 beatManager.Drop.Remaining;
 beatManager.Drop.BeatsRemaining;

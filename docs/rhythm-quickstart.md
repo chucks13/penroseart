@@ -85,7 +85,7 @@ if (beatManager.Drop.Active)      // "a drop is happening right now"
 One subtlety: `Drop.Active == false` covers both "a drop is coming" and "no drop
 data at all." When that difference matters (landing a look *on* the drop), the
 nullable counts carry it — `Drop.BeatsUntil` is non-null only while a real drop
-is upcoming, and `CountBeats` counts down to it.
+is upcoming, counting down to it.
 
 And you often don't need the null at all: `Build()`/`Decay()` return plain
 floats, and `waveform.Lerp(from, to)` already folds the no-beat state into your

@@ -316,10 +316,10 @@ The live sixteen-beat Grid as one shallow value group: nullable `State`, `Beat`,
 _Avoid_: reaching into `Director` from an effect; `Grid.Current`; hub-owned wrap identity; treating absent grid facts as an error.
 
 **Fill**:
-A one-to-four-beat musical section at the end of a Phrase, described by `BeatManager.Fill`. The wire's one lane changes meaning with `Active`: `CountBeats` is beats remaining while active and beats until the fill while inactive; `LengthBeats` is the current or upcoming length. BeatManager keeps those raw facts and adds `BeatsRemaining`, `BeatsUntil`, `Progress`, `Build()`, and `Decay()` for readability. The selected Effect or Transition owns how it responds.
+A one-to-four-beat musical section at the end of a Phrase, described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats`, `Progress`, `Build()`, and `Decay()`. The selected Effect or Transition owns how it responds.
 
 **Drop**:
-The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. `BeatManager.Drop` has the same direct shape as Fill: `Active`, raw `CountBeats`/`LengthBeats`/`Remaining`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, `Build()`, and `Decay()`. There is no separate “next drop” wire lane; the same lane describes the current or upcoming drop according to `Active`.
+The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`/`Remaining`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, `Build()`, and `Decay()`. There is no separate “next drop” wire lane; the same lane describes the current or upcoming drop according to `Active`.
 
 **Phrase Event View** (`PhraseEventView`):
 The editor-side display model of a phrase event (a **Fill** or a **Drop**): its status chip, meter fill, one-line readout, and a Now/Soon/Idle state, derived from the direct Fill or Drop values. It never feeds state back into BeatManager.

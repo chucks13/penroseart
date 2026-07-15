@@ -33,7 +33,6 @@ public sealed class BeatManagerStructureTests
             snapshot.dropState = new CountdownState { active = 1, countBeats = 20, lengthBeats = 32, remaining = 2 });
 
         Assert.That(beatManager.Drop.Active, Is.True);
-        Assert.That(beatManager.Drop.CountBeats, Is.EqualTo(20));
         Assert.That(beatManager.Drop.BeatsRemaining, Is.EqualTo(20));
         Assert.That(beatManager.Drop.BeatsUntil, Is.Null);
         Assert.That(beatManager.Drop.Remaining, Is.EqualTo(2));
@@ -48,7 +47,6 @@ public sealed class BeatManagerStructureTests
             snapshot.fillState = new CountdownState { active = 0, countBeats = 7, lengthBeats = 4, remaining = 3 });
 
         Assert.That(beatManager.Fill.Active, Is.False);
-        Assert.That(beatManager.Fill.CountBeats, Is.EqualTo(7));
         Assert.That(beatManager.Fill.BeatsRemaining, Is.Null);
         Assert.That(beatManager.Fill.BeatsUntil, Is.EqualTo(7));
         Assert.That(beatManager.Fill.LengthBeats, Is.EqualTo(4));
