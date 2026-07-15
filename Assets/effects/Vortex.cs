@@ -9,7 +9,7 @@ public class Vortex : EffectBase
 {
     /// <summary>Vortex's swirling motion suits Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private int count;
@@ -140,16 +140,19 @@ public class Vortex : EffectBase
                 }
             }
             Color c = spinners[which].Draw(i, tiles[i].position) * beatBrightness;
+            float h, s, v_col;
+            Color.RGBToHSV(c, out h, out s, out v_col);
             if (hueShift > 0)
-            {
-                float h, s, v_col;
-                Color.RGBToHSV(c, out h, out s, out v_col);
-                c = Color.HSVToRGB((h + hueShift) % 1f, s, v_col);
-            }
+                h = (h + hueShift) % 1f;
+            if (beatManager.Fill.Active != null)
+                if ((bool)beatManager.Fill.Active)                // go to black and while in a fill
+                    s = 0f;
+            c = Color.HSVToRGB(h, s, v_col);
             buffer[i] = c * beatBrightness;
             // Draw the point
         }
     }
+
 
     [System.Serializable]
     /// <summary>
