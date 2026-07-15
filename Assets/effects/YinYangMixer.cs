@@ -85,7 +85,7 @@ public class YinYangMixer : MixerBase
             effects[i].Draw();
         }
         // Parent beat pulse scales the final split/masked child-effect output.
-        float beatBrightness = waveform.Lerp(0.5f, 1f);
+        float beatBrightness = waveform.Lerp(0.0f, 1f);
         Color ribbon = APalette.read(0.5f, true) * beatBrightness;
 
         for (int i = 0; i < buffer.Length; i++)
@@ -111,12 +111,12 @@ public class YinYangMixer : MixerBase
             }
             if (a < (180f - w))
             {
-                buffer[i] = effects[0].buffer[i] * beatBrightness;
+                buffer[i] = effects[0].buffer[i];
                 continue;
             }
             if (a > (180f + w))
             {
-                buffer[i] = effects[1].buffer[i] * beatBrightness;
+                buffer[i] = effects[1].buffer[i];
                 continue;
             }
             buffer[i] = ribbon;
