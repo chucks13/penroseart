@@ -9,13 +9,15 @@ public class Vortex : EffectBase
 {
     /// <summary>Vortex's swirling motion suits Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow |Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private int count;
     private float speed;
     private float angle;
     private int distortionMode; // 0: Brightness, 1: Color, 2: Time
+
+    private float ringScale = 1.0f;
 
 
     public spinner[] spinners;
@@ -42,6 +44,7 @@ public class Vortex : EffectBase
     public override void OnStart()
     {
         waveform = waveforms.Random();
+        ringScale = 1.0f;
         count = Random.Range(1, 5);
         angle = 0f;
         speed = Random.Range(50, 100);
@@ -57,7 +60,7 @@ public class Vortex : EffectBase
             spinners[i] = sample;
             //            spinners[i].palette = spinners[0].palette;          // make palettes the same
         }
-        distortionMode = Random.Range(0, 2)*2;      // 0 or 2
+        distortionMode = Random.Range(0, 2) * 2;      // 0 or 2
 
         buffer.Clear();
     }
@@ -69,14 +72,25 @@ public class Vortex : EffectBase
     public void Update(float delta)
     {
         float deg2rad = (Mathf.PI * 2f) / 360f;
-        angle += speed * delta;
+        float spinSpeed = speed * delta;
+        if (beatManager.Drop.Active != null)
+        {
+            bool inDrop = (bool)beatManager.Drop.Active;
+            if (inDrop)
+            {
+                spinSpeed = beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, spinSpeed);
+            }
+
+        }
+        angle += spinSpeed;
+
         for (int i = 0; i < count; i++)
         {
             spinner sample = spinners[i];
             float local = angle + (i * 360 / count);
             local *= deg2rad;
-            sample.center.x = Mathf.Sin(local) * 16f;
-            sample.center.y = Mathf.Cos(local) * 8f;
+            sample.center.x = Mathf.Sin(local) * 16f * ringScale;
+            sample.center.y = Mathf.Cos(local) * 8f * ringScale;
             sample.angle = local;
         }
     }
@@ -86,6 +100,15 @@ public class Vortex : EffectBase
     /// </summary>
     public override void Draw()
     {
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 5f;
+
+        if (beatManager.Drop.BeatsUntil < 5)
+        {
+            ringScale = beatsTilDrop.Remap(5f, 0f, 1f, 0f);
+        }
+        else
+            ringScale = 1f;
+
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;
         float sampleeDelta = effectDelta;
@@ -96,7 +119,7 @@ public class Vortex : EffectBase
         else if (distortionMode == 1)
             hueShift = 0.25f * rhythm;
         else if (distortionMode == 2)
-            sampleeDelta = (effectDelta*0.15f) + (0.025f * rhythm);
+            sampleeDelta = (effectDelta * 0.15f) + (0.025f * rhythm);
 
         // Beat pulse scales the nearest-spinner palette result for each tile.
         //        float beatBrightness = waveform.Lerp(0.5f, 1f);
