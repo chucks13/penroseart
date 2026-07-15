@@ -5,6 +5,7 @@
 /// </summary>
 public class RandomEffectsMixer : MixerBase
 {
+    // This mixer is intentionally not beat awaire. It's meant to be used with beat-aware effects
     /// <summary>RandomEffectsMixer's shifting mix accents Fills and suits Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
