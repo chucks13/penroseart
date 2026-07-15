@@ -157,15 +157,15 @@ internal readonly struct BeatManagerDashboardModel
         var offBeatGates = new bool?[BeatSlotCount];
         for (var slot = 0; slot < offBeatGates.Length; slot++)
         {
-            offBeatGates[slot] = offbeats.OffBeat(slot + 1);
+            offBeatGates[slot] = GateOrUnavailable(offbeats.OffBeatMs(slot + 1), offbeats.OffBeat(slot + 1));
         }
 
         var count = timing.BeatInBar ?? UnavailableBeat;
         var nextCount = count is >= 1 and <= BeatSlotCount ? (count % BeatSlotCount) + 1 : UnavailableBeat;
         var nextBeatMs = nextCount > 0 ? beats.OnBeatMs(nextCount) : null;
         var nextOffbeatMs = MinimumOffbeatMilliseconds(offbeats);
-        var onBeat = count > 0 ? beats.OnBeat(count) : null;
-        var offBeat = count > 0 ? offbeats.OffBeat(count) : null;
+        bool? onBeat = count > 0 ? GateOrUnavailable(beats.OnBeatMs(count), beats.OnBeat(count)) : null;
+        bool? offBeat = count > 0 ? GateOrUnavailable(offbeats.OffBeatMs(count), offbeats.OffBeat(count)) : null;
         var barPhase = timing.BarProgress;
 
         return new BeatManagerDashboardModel(
@@ -194,6 +194,15 @@ internal readonly struct BeatManagerDashboardModel
     public static RhythmDashboardFlow FlowForWidth(float width)
     {
         return width >= SplitLayoutMinWidth ? RhythmDashboardFlow.Split : RhythmDashboardFlow.Stacked;
+    }
+
+    /// <summary>
+    /// Presents a resting gate as unavailable (null) when its countdown lane is absent, so the
+    /// dashboard keeps distinguishing "lane missing" from a genuinely closed gate.
+    /// </summary>
+    private static bool? GateOrUnavailable(int? laneMilliseconds, bool gate)
+    {
+        return laneMilliseconds != null ? gate : null;
     }
 
     /// <summary>Creates an unavailable timing chip without implying a false negative gate.</summary>

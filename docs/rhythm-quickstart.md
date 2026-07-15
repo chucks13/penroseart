@@ -40,31 +40,33 @@ beatManager.Timing.BarProgress    // float? — 0 on the downbeat → 1 at the n
 beatManager.Grid.Bar              // int? — 1..4 within the shared 16-beat Grid
 beatManager.Grid.Progress         // float? — 0..1 through the whole Grid
 
-beatManager.Fill.Active           // bool? — is a fill happening right now?
-beatManager.Drop.Active           // bool? — is a drop happening right now?
+beatManager.Fill.Active           // bool — is a fill happening right now?
+beatManager.Drop.Active           // bool — is a drop happening right now?
 beatManager.Energy.Level          // Energy? — Low, Mid, or High
 beatManager.Levels.Smoothed       // audio bands: .Low .Mid .High .Average ...
 ```
 
-Optional values are nullable — `null` means "the wire doesn't know right now."
-It's a normal musical state (a track may simply have no drop data), not an error.
+Three kinds of values, three rest states:
 
-### Dealing with nulls
+- **Yes/no questions** (`Drop.Active`, `Fill.Active`, `Pulses.On(...)`) are plain
+  bools. No music or no data simply reads **false**.
+- **Pulse envelopes** (`Pulses.Beat`, `Pulses.Every(...)`) are plain floats that
+  rest at **0**, like `waveform.Envelope`.
+- **Facts** (BPM, `Grid.Bar`, progress values, phrase names, `Energy.Level`) are
+  nullable — `null` means "the wire doesn't know right now." It's a normal
+  musical state (a track may simply have no drop data), not an error.
 
-The compiler won't let you use a `bool?` or `float?` directly — that's deliberate:
-it forces every effect to choose its no-music look instead of glitching. In
-practice each call site is one extra token:
+### Dealing with nullable facts
+
+The compiler won't let you use a `float?` directly — that's deliberate: it forces
+every effect to choose its no-music look instead of glitching. Each call site is
+one extra token:
 
 ```csharp
-// Nullable bool — compare against true. null and false both fall through.
-if (beatManager.Drop.Active == true)      // "a drop is happening right now"
-    ...
-
-bool inDrop = beatManager.Drop.Active ?? false;   // same thing, stored as a plain bool
-
-// Nullable float/int — pick a fallback with ??
+// Pick a fallback with ??
 float progress = beatManager.Grid.Progress ?? 0f;
 float bpm      = beatManager.Timing.Bpm ?? 120f;
+Energy energy  = beatManager.Energy.Level ?? Energy.Mid;
 
 // Or branch when you want a different code path with no beat:
 if (beatManager.Timing.BarProgress is { } barPhase)
@@ -73,27 +75,21 @@ else
     ScrollSteadily();         // Standalone: your explicit no-music behavior
 ```
 
-For the rare effect where all three states of a `bool?` matter, spell them out —
-for Drop/Fill, `false` genuinely means "one is coming" (`CountBeats` counts down
-to it), which is how you land a look *on* the drop:
+Bools need none of this — read them directly:
 
 ```csharp
-switch (beatManager.Drop.Active)
-{
-    case true:  /* in the drop    — CountBeats = beats remaining */ break;
-    case false: /* drop upcoming  — CountBeats = beats until it  */ break;
-    case null:  /* no drop data   — Standalone look              */ break;
-}
+if (beatManager.Drop.Active)      // "a drop is happening right now"
+    ...
 ```
 
-Two things to remember:
+One subtlety: `Drop.Active == false` covers both "a drop is coming" and "no drop
+data at all." When that difference matters (landing a look *on* the drop), the
+nullable counts carry it — `Drop.BeatsUntil` is non-null only while a real drop
+is upcoming, and `CountBeats` counts down to it.
 
-- **`!= false` is a trap.** `null != false` is `true`, so it reads "active *or
-  unknown*." Compare `== true` for the active case and `== false` for "known
-  upcoming" — never `!= false`.
-- **You often don't need the null at all.** `Build()`/`Decay()` return plain
-  floats, and `waveform.Lerp(from, to)` already folds the no-beat state into
-  your `to` endpoint. Reach for those before hand-rolling null checks.
+And you often don't need the null at all: `Build()`/`Decay()` return plain
+floats, and `waveform.Lerp(from, to)` already folds the no-beat state into your
+`to` endpoint. Reach for those before hand-rolling null checks.
 
 Three helpers turn raw values into visuals:
 
@@ -113,7 +109,7 @@ BeatManager has **no event flags** ("drop just started"). If you need an onset,
 remember last frame's value yourself:
 
 ```csharp
-bool dropActive = beatManager.Drop.Active == true;
+bool dropActive = beatManager.Drop.Active;
 if (dropActive && !previousDropActive)
     TriggerDropHit();
 previousDropActive = dropActive;
@@ -291,5 +287,5 @@ worked example: Routines, energy recipes, audio levels, and Standalone behavior.
 | A flash that fades after the drop | `beatManager.Drop.Decay(beats)` |
 | React to actual audio loudness | `beatManager.Levels.Smoothed` / `.Peak` |
 | Know if there's a live beat at all | `beatManager.IsSynced` |
-| Handle a nullable value | `== true` for `bool?`, `?? fallback` for numbers, `is { } x` to branch |
+| Handle a nullable fact | `?? fallback`, or `is { } x` to branch (bools and pulses are never null) |
 | A sane look with no music | pick your `to` endpoint — it's the fallback |

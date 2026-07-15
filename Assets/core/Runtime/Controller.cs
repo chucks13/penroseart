@@ -1320,7 +1320,7 @@ public class Controller : Singleton<Controller>
             return "unlocked";
         }
 
-        return beatManager.Phrase.Irregular == true
+        return beatManager.Phrase.Irregular
             ? $"{state} (irregular)"
             : state.ToString();
     }
@@ -1335,7 +1335,7 @@ public class Controller : Singleton<Controller>
     private string FormatDropCue()
     {
         var drop = beatManager.Drop;
-        if (drop.Active == true)
+        if (drop.Active)
         {
             return "Drop now";
         }

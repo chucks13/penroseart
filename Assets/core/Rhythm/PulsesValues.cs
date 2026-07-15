@@ -16,29 +16,29 @@ public readonly struct PulsesValues
     internal PulsesValues(bool live, bool synced, float beat, float offBeat, float barProgress)
     {
         this.synced = synced;
-        Beat = live ? beat : null;
-        OffBeat = synced ? offBeat : null;
+        Beat = live ? beat : 0f;
+        OffBeat = synced ? offBeat : 0f;
         this.barProgress = barProgress;
     }
 
-    /// <summary>The wire's own analyzed beat pulse.</summary>
-    public float? Beat { get; }
+    /// <summary>The wire's own analyzed beat pulse; rests at zero with no live wire.</summary>
+    public float Beat { get; }
 
-    /// <summary>Tempo-derived pulse centered on each Offbeat.</summary>
-    public float? OffBeat { get; }
+    /// <summary>Tempo-derived pulse centered on each Offbeat; rests at zero without synchronization.</summary>
+    public float OffBeat { get; }
 
-    /// <summary>Returns a tempo-based 1→0 pulse for every selected musical duration.</summary>
-    public float? Every(Duration duration)
+    /// <summary>Returns a tempo-based 1→0 pulse for every selected musical duration; rests at zero without synchronization.</summary>
+    public float Every(Duration duration)
     {
         var phase = synced ? DurationClock.Phase(barProgress, duration) : null;
-        return phase is { } value ? DurationClock.Pulse(value) : null;
+        return phase is { } value ? DurationClock.Pulse(value) : 0f;
     }
 
-    /// <summary>Returns true for the first <paramref name="activeFor"/> fraction of every duration.</summary>
-    public bool? On(Duration duration, float activeFor = 0.25f)
+    /// <summary>Returns true for the first <paramref name="activeFor"/> fraction of every duration; false without synchronization.</summary>
+    public bool On(Duration duration, float activeFor = 0.25f)
     {
         var phase = synced ? DurationClock.Phase(barProgress, duration) : null;
-        return phase is { } value ? value < Mathf.Clamp01(activeFor) : null;
+        return phase is { } value && value < Mathf.Clamp01(activeFor);
     }
 }
 

@@ -20,8 +20,11 @@ public readonly struct FillValues
         elapsedBeats = values.ElapsedBeats;
     }
 
-    /// <summary>Whether the fill is active now.</summary>
-    public bool? Active { get; }
+    /// <summary>
+    /// Whether the fill is active now. False covers both "upcoming" and "no fill data";
+    /// <see cref="BeatsUntil"/> is non-null only while a real fill is upcoming.
+    /// </summary>
+    public bool Active { get; }
 
     /// <summary>The wire count: beats remaining while active, otherwise beats until the fill.</summary>
     public int? CountBeats { get; }

@@ -5,7 +5,7 @@
 public readonly struct LoopValues
 {
     /// <summary>Captures all direct loop wire values and the nominal beat length.</summary>
-    internal LoopValues(bool? rolling, bool? regionSet, float? lengthBeats, int? lengthMilliseconds,
+    internal LoopValues(bool rolling, bool regionSet, float? lengthBeats, int? lengthMilliseconds,
         int? sizeNumerator, int? sizeDenominator, float? nominalSizeBeats)
     {
         Rolling = rolling;
@@ -17,10 +17,10 @@ public readonly struct LoopValues
         NominalSizeBeats = nominalSizeBeats;
     }
 
-    /// <summary>Whether the focus deck's loop is rolling.</summary>
-    public bool? Rolling { get; }
-    /// <summary>Whether a loop region is set.</summary>
-    public bool? RegionSet { get; }
+    /// <summary>Whether the focus deck's loop is rolling; false when no loop lane is available.</summary>
+    public bool Rolling { get; }
+    /// <summary>Whether a loop region is set; false when no loop lane is available.</summary>
+    public bool RegionSet { get; }
     /// <summary>Measured loop length in beats.</summary>
     public float? LengthBeats { get; }
     /// <summary>Measured loop length in milliseconds.</summary>
@@ -45,8 +45,8 @@ public partial class BeatManager
         var numerator = NonNegativeOrNull(state.sizeNumerator);
         var denominator = NonNegativeOrNull(state.sizeDenominator);
         return new LoopValues(
-            TriStateOrNull(state.active),
-            TriStateOrNull(state.set),
+            TriStateTrue(state.active),
+            TriStateTrue(state.set),
             state.lengthBeats >= 0f ? state.lengthBeats : null,
             NonNegativeOrNull(state.lengthMs),
             numerator,

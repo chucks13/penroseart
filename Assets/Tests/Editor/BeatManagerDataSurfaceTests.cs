@@ -19,8 +19,8 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.IsSynced, Is.False);
         Assert.That(beatManager.Timing.Bpm, Is.Null);
         Assert.That(beatManager.Beats.OnBeatMs(1), Is.Null);
-        Assert.That(beatManager.Offbeats.OffBeat(1), Is.Null);
-        Assert.That(beatManager.Pulses.Every(Duration.Quarter), Is.Null);
+        Assert.That(beatManager.Offbeats.OffBeat(1), Is.False);
+        Assert.That(beatManager.Pulses.Every(Duration.Quarter), Is.Zero);
         Assert.That(beatManager.Levels.Normalized.Average, Is.Zero);
     }
 
@@ -52,8 +52,8 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Beats.OnBeatMs(1), Is.Zero);
         Assert.That(beatManager.Beats.OnBeat(1), Is.True);
         Assert.That(beatManager.Pulses.Beat, Is.EqualTo(0.75f));
-        Assert.That(beatManager.Pulses.OffBeat, Is.Null);
-        Assert.That(beatManager.Pulses.Every(Duration.Quarter), Is.Null);
+        Assert.That(beatManager.Pulses.OffBeat, Is.Zero);
+        Assert.That(beatManager.Pulses.Every(Duration.Quarter), Is.Zero);
         Assert.That(beatManager.Grid.State, Is.EqualTo(GridState.Locked));
         Assert.That(beatManager.Grid.Beat, Is.EqualTo(9));
         Assert.That(beatManager.Grid.Progress, Is.Null);
@@ -65,7 +65,7 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Timing.Beat, Is.Null);
         Assert.That(beatManager.Timing.Bar, Is.Null);
         Assert.That(beatManager.Beats.OnBeatMs(1), Is.Null);
-        Assert.That(beatManager.Pulses.Beat, Is.Null);
+        Assert.That(beatManager.Pulses.Beat, Is.Zero);
         Assert.That(beatManager.Grid.State, Is.Null);
     }
 
@@ -106,8 +106,8 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Beats.OnBeatMs(1), Is.EqualTo(800));
         Assert.That(beatManager.Beats.OnBeatMs(3), Is.Zero);
         Assert.That(beatManager.Beats.OnBeat(3), Is.True);
-        Assert.That(beatManager.Beats.OnBeat(0), Is.Null);
-        Assert.That(beatManager.Beats.OnBeat(5), Is.Null);
+        Assert.That(beatManager.Beats.OnBeat(0), Is.False);
+        Assert.That(beatManager.Beats.OnBeat(5), Is.False);
     }
 
     /// <summary>Offbeats provide the same countdown and active-window reads at derived midpoints.</summary>

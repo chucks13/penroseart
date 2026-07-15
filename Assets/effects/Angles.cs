@@ -122,7 +122,7 @@ public class Angles : EffectBase
         "Angles" +
         $"\nEN {smoothedEnergy:0.00}" +
         (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
-        (beatManager.Drop.Active == true
+        (beatManager.Drop.Active
             ? $"\nDROP {1f - beatManager.Drop.Decay(DropBeats):0.00}"
             : "");
 
@@ -233,7 +233,7 @@ public class Angles : EffectBase
     private void UpdateFillEnvelope()
     {
         var fill = beatManager.Fill;
-        bool filling = fill.Active == true;
+        bool filling = fill.Active;
         float anticipation = !filling && fill.BeatsUntil is { } next
             ? ((float)next).Remap(0f, 32f, 1f, 0f, clamp: true)
             : 0f;
@@ -271,7 +271,7 @@ public class Angles : EffectBase
         float rhythmHueOffset = routine.Lerp(0.8f, 1f);
         UpdateFillEnvelope();
         var drop = beatManager.Drop;
-        bool inDrop = drop.Active == true;
+        bool inDrop = drop.Active;
         float cascade = inDrop
             ? (1f - drop.Decay(DropBeats)).Remap(BlackHold, 1f, 0f, 1f, clamp: true)
             : 1f;

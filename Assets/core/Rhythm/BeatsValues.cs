@@ -19,8 +19,8 @@ public readonly struct BeatsValues
     /// <summary>Milliseconds until musical count 1..4 next lands.</summary>
     public int? OnBeatMs(int count) => lanes.Milliseconds(count);
 
-    /// <summary>Whether musical count 1..4 is inside its quarter-beat wire trigger window.</summary>
-    public bool? OnBeat(int count) => lanes.Active(count);
+    /// <summary>Whether musical count 1..4 is inside its quarter-beat wire trigger window; false when unavailable or out of range.</summary>
+    public bool OnBeat(int count) => lanes.Active(count);
 }
 
 /// <summary>Immutable storage shared by the wire On Beat lanes and derived Offbeat lanes.</summary>
@@ -48,13 +48,11 @@ internal readonly struct BeatCountLanes
             : null;
     }
 
-    /// <summary>Reads one musical count's active window, using one-based addressing.</summary>
-    internal bool? Active(int count)
+    /// <summary>Reads one musical count's active window, using one-based addressing; false when unavailable or out of range.</summary>
+    internal bool Active(int count)
     {
         var slot = count - 1;
-        return Milliseconds(count) != null && active != null && slot < active.Length
-            ? active[slot]
-            : null;
+        return Milliseconds(count) != null && active != null && slot < active.Length && active[slot];
     }
 }
 

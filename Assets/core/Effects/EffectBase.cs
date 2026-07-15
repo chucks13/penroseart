@@ -30,9 +30,6 @@ public abstract class EffectBase
     /// <summary>The live BeatManager owned by the bound Controller.</summary>
     public BeatManager beatManager => controller.beatManager;
 
-    public bool fillActive => (beatManager.Fill.Active==null?false:(bool)beatManager.Fill.Active);
-    public bool dropActive => (beatManager.Drop.Active==null?false:(bool)beatManager.Drop.Active);
-
     /// <summary>The live Waveform acquisition surface owned by the bound Controller.</summary>
     public Waveforms waveforms => controller.waveforms;
 

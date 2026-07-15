@@ -176,8 +176,8 @@ public class Lightning : EffectBase
     /// </summary>
     private void UpdateHeldBolt()
     {
-        heldActive = beatManager.Fill.Active == true;
-        var eighthOn = beatManager.Pulses.On(Duration.Eighth) == true;
+        heldActive = beatManager.Fill.Active;
+        var eighthOn = beatManager.Pulses.On(Duration.Eighth);
         if (heldActive)
         {
             if ((eighthOn && !previousEighthOn) || heldRays == null)
@@ -203,7 +203,7 @@ public class Lightning : EffectBase
             return 1f;
         }
 
-        return (beatManager.Pulses.On(Duration.Sixteenth, FillStrobeDuty) ?? false)
+        return beatManager.Pulses.On(Duration.Sixteenth, FillStrobeDuty)
             ? 1f
             : FillStrobeFloor;
     }

@@ -66,9 +66,9 @@ public sealed class LoopValuesTests
         Assert.That(loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
     }
 
-    /// <summary>The complete all-sentinel lane translates every flat Loop fact to null.</summary>
+    /// <summary>The complete all-sentinel lane rests the flags at false and translates every numeric fact to null.</summary>
     [Test]
-    public void AllSentinelLoopServesAllNull()
+    public void AllSentinelLoopServesRestingValues()
     {
         var beatManager = new BeatManager();
         beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
@@ -84,8 +84,8 @@ public sealed class LoopValuesTests
         beatManager.Update(0f);
 
         var loop = beatManager.Loop;
-        Assert.That(loop.Rolling, Is.Null);
-        Assert.That(loop.RegionSet, Is.Null);
+        Assert.That(loop.Rolling, Is.False);
+        Assert.That(loop.RegionSet, Is.False);
         Assert.That(loop.LengthBeats, Is.Null);
         Assert.That(loop.LengthMilliseconds, Is.Null);
         Assert.That(loop.SizeNumerator, Is.Null);

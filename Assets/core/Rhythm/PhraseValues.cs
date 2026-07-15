@@ -8,7 +8,7 @@ public readonly struct PhraseValues
     private readonly float? elapsedBeats;
 
     /// <summary>Captures the current Phrase and its direct derived values.</summary>
-    internal PhraseValues(string? name, int? beatsRemaining, int? lengthBeats, bool? irregular,
+    internal PhraseValues(string? name, int? beatsRemaining, int? lengthBeats, bool irregular,
         float? progress, float? elapsedBeats)
     {
         Name = name;
@@ -28,8 +28,8 @@ public readonly struct PhraseValues
     /// <summary>Total phrase length in beats.</summary>
     public int? LengthBeats { get; }
 
-    /// <summary>Whether the phrase length breaks the sender's sixteen-beat grid.</summary>
-    public bool? Irregular { get; }
+    /// <summary>Whether the phrase length breaks the sender's sixteen-beat grid; false when unknown.</summary>
+    public bool Irregular { get; }
 
     /// <summary>Derived 0..1 position through the phrase.</summary>
     public float? Progress { get; }
@@ -82,7 +82,7 @@ public partial class BeatManager
             name,
             name != null ? NonNegativeOrNull(state.countBeats) : null,
             name != null ? NonNegativeOrNull(state.lengthBeats) : null,
-            name != null ? TriStateOrNull(state.irregular) : null,
+            name != null && TriStateTrue(state.irregular),
             ProgressOverLength(elapsed, state.lengthBeats),
             elapsed);
 

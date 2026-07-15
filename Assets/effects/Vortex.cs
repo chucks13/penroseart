@@ -73,7 +73,7 @@ public class Vortex : EffectBase
     {
         float deg2rad = (Mathf.PI * 2f) / 360f;
         float spinSpeed = speed * delta;
-        if (dropActive)
+        if (beatManager.Drop.Active)
             spinSpeed = beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, spinSpeed);
         angle += spinSpeed;
 
@@ -137,7 +137,7 @@ public class Vortex : EffectBase
             Color.RGBToHSV(c, out h, out s, out v_col);
             if (hueShift > 0)
                 h = (h + hueShift) % 1f;
-            if (fillActive)
+            if (beatManager.Fill.Active)
                 s = 0f;
             c = Color.HSVToRGB(h, s, v_col);
             buffer[i] = c * beatBrightness;

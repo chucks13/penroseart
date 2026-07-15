@@ -37,6 +37,9 @@ public partial class BeatManager
         };
     }
 
+    /// <summary>Translates a wire tri-state integer to a resting bool: true only when reported active.</summary>
+    private static bool TriStateTrue(int value) => value == 1;
+
     /// <summary>The private OSC-shaped transport state serialized for the raw Inspector debug foldout.</summary>
     [SerializeField]
     private RaveOnAirSnapshot wireSnapshot = new();

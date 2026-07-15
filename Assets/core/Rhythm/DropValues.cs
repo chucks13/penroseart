@@ -5,7 +5,7 @@
 internal readonly struct CountdownValues
 {
     /// <summary>Creates the shared direct and interpreted countdown values.</summary>
-    internal CountdownValues(bool? active, int? countBeats, int? lengthBeats, int? remaining,
+    internal CountdownValues(bool active, int? countBeats, int? lengthBeats, int? remaining,
         int? beatsRemaining, int? beatsUntil, float? progress, float? elapsedBeats)
     {
         Active = active;
@@ -18,8 +18,8 @@ internal readonly struct CountdownValues
         ElapsedBeats = elapsedBeats;
     }
 
-    /// <summary>Whether the event is active now.</summary>
-    internal bool? Active { get; }
+    /// <summary>Whether the event is active now; false when upcoming or unavailable.</summary>
+    internal bool Active { get; }
     /// <summary>The wire's context-dependent beat count.</summary>
     internal int? CountBeats { get; }
     /// <summary>The current or upcoming event length.</summary>
@@ -55,8 +55,11 @@ public readonly struct DropValues
         elapsedBeats = values.ElapsedBeats;
     }
 
-    /// <summary>Whether the drop is active now.</summary>
-    public bool? Active { get; }
+    /// <summary>
+    /// Whether the drop is active now. False covers both "upcoming" and "no drop data";
+    /// <see cref="BeatsUntil"/> is non-null only while a real drop is upcoming.
+    /// </summary>
+    public bool Active { get; }
 
     /// <summary>The wire count: beats remaining while active, otherwise beats until the drop.</summary>
     public int? CountBeats { get; }
@@ -96,20 +99,21 @@ public partial class BeatManager
     /// <summary>Translates the shared Drop/Fill wire shape once for either public group.</summary>
     private CountdownValues CaptureCountdown(PenroseArt.RaveOsc.CountdownState state)
     {
-        var active = TriStateOrNull(state.active);
-        if (active is null)
+        var lane = TriStateOrNull(state.active);
+        if (lane is null)
         {
             return default;
         }
 
-        var elapsed = active.Value ? ElapsedInDuration(state.countBeats, state.lengthBeats) : null;
+        var active = lane.Value;
+        var elapsed = active ? ElapsedInDuration(state.countBeats, state.lengthBeats) : null;
         return new CountdownValues(
             active,
             NonNegativeOrNull(state.countBeats),
             NonNegativeOrNull(state.lengthBeats),
             NonNegativeOrNull(state.remaining),
-            active.Value ? NonNegativeOrNull(state.countBeats) : null,
-            active.Value ? null : NonNegativeOrNull(state.countBeats),
+            active ? NonNegativeOrNull(state.countBeats) : null,
+            active ? null : NonNegativeOrNull(state.countBeats),
             ProgressOverLength(elapsed, state.lengthBeats),
             elapsed);
     }

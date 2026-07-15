@@ -248,8 +248,8 @@ public class CrystalGrowth : EffectBase
         fillActive = false;
         fillLevel = 0f;
         dropFlash = 0f;
-        previousDropActive = beatManager.Drop.Active == true;
-        previousSixteenthOn = beatManager.Pulses.On(Duration.Sixteenth) == true;
+        previousDropActive = beatManager.Drop.Active;
+        previousSixteenthOn = beatManager.Pulses.On(Duration.Sixteenth);
 
         // Seed the very first crystal so Standalone Mode has something growing immediately.
         PlantSeed();
@@ -292,15 +292,15 @@ public class CrystalGrowth : EffectBase
         // Because the stock Fill Build is normalized to the fill's length, the arc scales with it — short fills snap,
         // long fills lean in.
         var fill = beatManager.Fill;
-        bool inFill = fill.Active == true;
+        bool inFill = fill.Active;
         float fillAmount = fill.Build();
-        var sixteenthOn = beatManager.Pulses.On(Duration.Sixteenth) == true;
+        var sixteenthOn = beatManager.Pulses.On(Duration.Sixteenth);
         float ratchet = sixteenthOn ? 1f : 0f;
         fillActive = inFill;
         fillLevel = fillAmount;
 
         var drop = beatManager.Drop;
-        var dropActive = drop.Active == true;
+        var dropActive = drop.Active;
         if (dropActive && !previousDropActive)
         {
             generation++;
@@ -321,7 +321,7 @@ public class CrystalGrowth : EffectBase
         // back to the self-driven surge. The surge is scaled by 'activity' so the front stops lunging to an
         // inaudible beat during a quiet break. A fill reins the whole thing in (tension); a Drop washes the
         // fresh layer across the wall and machine-gun lunges on every sixteenth for the drop's whole window.
-        float pulse = (beatManager.Pulses.Beat ?? selfPulse) * activity;
+        float pulse = (beatManager.IsSynced ? beatManager.Pulses.Beat : selfPulse) * activity;
         float spread = spreadPerSec
             * (1f + (beatSurge * pulse))
             * fillAmount.Lerp(1f, 1f - FillHoldback)

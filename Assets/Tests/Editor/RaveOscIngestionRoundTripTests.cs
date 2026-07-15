@@ -94,7 +94,7 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.Phrase.Name, Is.Null);
         Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
         Assert.That(beatManager.Energy.Level, Is.Not.Null);
-        Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.True);
         Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
@@ -107,7 +107,7 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.NextPhrase.Name, Is.Null);
         Assert.That(beatManager.Phrase.Name, Is.Not.Null);
         Assert.That(beatManager.Energy.Level, Is.Not.Null);
-        Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.True);
         Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
@@ -120,7 +120,7 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.Energy.Level, Is.Null);
         Assert.That(beatManager.Phrase.Name, Is.Not.Null);
         Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
-        Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.True);
         Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
@@ -134,7 +134,7 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.NextEnergy.Level, Is.Null);
         Assert.That(beatManager.Phrase.Name, Is.Not.Null);
         Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
-        Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.True);
         Assert.That(beatManager.Track.Id, Is.Not.Null);
     }
 
@@ -144,7 +144,8 @@ public sealed class RaveOscIngestionRoundTripTests
     {
         var beatManager = BuildLiveBeatManagerFromFullPacket(BuildFullOnAirPacket("/rave/onair/loop_state"));
 
-        Assert.That(beatManager.Loop.Rolling, Is.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.False);
+        Assert.That(beatManager.Loop.LengthBeats, Is.Null);
         Assert.That(beatManager.Phrase.Name, Is.Not.Null);
         Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
         Assert.That(beatManager.Energy.Level, Is.Not.Null);
@@ -161,7 +162,7 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.Phrase.Name, Is.Not.Null);
         Assert.That(beatManager.NextPhrase.Name, Is.Not.Null);
         Assert.That(beatManager.Energy.Level, Is.Not.Null);
-        Assert.That(beatManager.Loop.Rolling, Is.Not.Null);
+        Assert.That(beatManager.Loop.Rolling, Is.True);
     }
 
     /// <summary>Dispatches the packet, takes the snapshot, and feeds it into a live-sourced BeatManager.</summary>

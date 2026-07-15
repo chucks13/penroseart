@@ -149,7 +149,7 @@ public class Julia : EffectBase
         fillEnv = 0f;
         dropEnv = 0f;
         rotation = 0f;
-        previousDropActive = beatManager.Drop.Active == true;
+        previousDropActive = beatManager.Drop.Active;
         buffer.Clear();
     }
 
@@ -194,7 +194,7 @@ public class Julia : EffectBase
     /// </summary>
     private void UpdateDropSlam()
     {
-        var dropActive = beatManager.Drop.Active == true;
+        var dropActive = beatManager.Drop.Active;
         if (dropActive && !previousDropActive)
         {
             ApplyDropHit();

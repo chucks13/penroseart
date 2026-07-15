@@ -58,16 +58,16 @@ public sealed class DataSurfaceHygieneTests
         Assert.That(beatManager.Beats.OnBeat(1), Is.False);
     }
 
-    /// <summary>An out-of-range Duration serves unavailable pulse facts.</summary>
+    /// <summary>An out-of-range Duration serves resting pulse values.</summary>
     [Test]
-    public void InvalidDurationReadsNullFacts()
+    public void InvalidDurationReadsRestingFacts()
     {
         var beatManager = BeatClockFixture.CreateSeeded(bpm: 120f, timeSeconds: 0.25f);
         beatManager.Update(0.25f);
         var invalidDuration = (Duration)99;
 
-        Assert.That(beatManager.Pulses.Every(invalidDuration), Is.Null);
-        Assert.That(beatManager.Pulses.On(invalidDuration), Is.Null);
+        Assert.That(beatManager.Pulses.Every(invalidDuration), Is.Zero);
+        Assert.That(beatManager.Pulses.On(invalidDuration), Is.False);
         Assert.That(typeof(PulsesValues).GetMethod("GateOpenedEvery"), Is.Null);
     }
 }

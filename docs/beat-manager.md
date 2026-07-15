@@ -23,7 +23,7 @@ beatManager.Grid
 beatManager.Levels
 ```
 
-All groups are captured structs with getters only. Snapshot-owned arrays and the live-player collection are copied before exposure. Optional wire facts use nullable values; `Levels` is always present.
+All groups are captured structs with getters only. Snapshot-owned arrays and the live-player collection are copied before exposure. Optional wire facts (tempo, positions, counts, lengths, names) use nullable values. Boolean questions and pulses are total responses: flags such as `Drop.Active` rest at false and pulse envelopes rest at zero when their signal is unavailable. `Levels` is always present.
 
 `IsSynced` means the current frame has the wire's usable 1-through-4 beat count. It does not hide other valid wire facts: for example, BPM and absolute track position remain readable while that count is temporarily unavailable. Only calculations that require the running count, such as beat progress and subdivision pulses, wait for synchronization.
 
@@ -60,9 +60,9 @@ beatManager.Offbeats.OffBeat(3);
 `Pulses.Beat` is the wire beat pulse and `Pulses.OffBeat` is derived. Musical subdivisions are tempo-based:
 
 ```csharp
-float? pulse = beatManager.Pulses.Every(Duration.Sixteenth); // 1 → 0 every sixteenth
-bool? on = beatManager.Pulses.On(Duration.Eighth);           // first quarter is active
-bool? wider = beatManager.Pulses.On(Duration.Eighth, activeFor: 0.5f);
+float pulse = beatManager.Pulses.Every(Duration.Sixteenth); // 1 → 0 every sixteenth; rests at 0
+bool on = beatManager.Pulses.On(Duration.Eighth);           // first quarter is active
+bool wider = beatManager.Pulses.On(Duration.Eighth, activeFor: 0.5f);
 ```
 
 ## Musical structure
@@ -81,7 +81,7 @@ beatManager.NextPhrase.BeatsUntil;
 beatManager.NextPhrase.LengthBeats;
 ```
 
-Drop and Fill each arrive as one wire lane. `Active` determines whether `CountBeats` means beats remaining or beats until the upcoming event; BeatManager preserves the raw count and also gives it the readable name:
+Drop and Fill each arrive as one wire lane. `Active` is a plain bool: true while the event is happening, false otherwise — false covers both "upcoming" and "no data," and the nullable counts say which (`BeatsUntil` is non-null only while a real event is upcoming). `Active` determines whether `CountBeats` means beats remaining or beats until the upcoming event; BeatManager preserves the raw count and also gives it the readable name:
 
 ```csharp
 beatManager.Drop.Active;
@@ -130,7 +130,7 @@ Every form is a `LevelBands` value with `Low`, `Mid`, `High`, `Average`, `Strong
 BeatManager exposes current state, not `Started`, `Ended`, `Changed`, `Wrapped`, or gate-opened frame flags. A consumer that needs an onset stores the prior value it cares about:
 
 ```csharp
-bool dropActive = beatManager.Drop.Active == true;
+bool dropActive = beatManager.Drop.Active;
 if (dropActive && !previousDropActive)
 {
     TriggerDropHit();

@@ -81,7 +81,7 @@ public class EmptyEffect : EffectBase
         // EXAMPLE — wire facts and direct derived values live together in shallow groups.
         float gridProgress = beatManager.Grid.Progress ?? 0f;
         float fillBuild = beatManager.Fill.Build();
-        bool dropActive = beatManager.Drop.Active == true;
+        bool dropActive = beatManager.Drop.Active;
         Energy? energy = beatManager.Energy.Level;
 
         // EXAMPLE — audio bands and their color mappings begin at beatManager.Levels.

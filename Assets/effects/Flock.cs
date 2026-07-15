@@ -398,8 +398,8 @@ public class Flock : EffectBase
         dropRelease = 0f;
 
         // Starting during an active event joins its sustained motion without inventing a false onset impulse.
-        previousFillActive = beatManager.Fill.Active == true;
-        previousDropActive = beatManager.Drop.Active == true;
+        previousFillActive = beatManager.Fill.Active;
+        previousDropActive = beatManager.Drop.Active;
     }
 
     /// <summary>Creates the fixed-size flock and gives every boid access to the completed shared array.</summary>
@@ -447,7 +447,7 @@ public class Flock : EffectBase
     private void UpdateFillMotion()
     {
         var fill = beatManager.Fill;
-        bool fillActive = fill.Active == true;
+        bool fillActive = fill.Active;
         fillOrbitDrive = GetFillApproach(
             fillActive,
             fill.BeatsUntil,
@@ -470,7 +470,7 @@ public class Flock : EffectBase
     private void UpdateDropMotion()
     {
         var drop = beatManager.Drop;
-        bool dropActive = drop.Active == true;
+        bool dropActive = drop.Active;
         dropGather = GetDropApproach(dropActive, drop.BeatsUntil, beatManager.Timing.BeatProgress);
 
         if (dropActive && !previousDropActive)

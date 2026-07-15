@@ -19,8 +19,8 @@ public readonly struct OffbeatsValues
     /// <summary>Milliseconds until the selected 1..4 Offbeat next lands.</summary>
     public int? OffBeatMs(int count) => lanes.Milliseconds(count);
 
-    /// <summary>Whether the selected 1..4 Offbeat is inside its quarter-interval window.</summary>
-    public bool? OffBeat(int count) => lanes.Active(count);
+    /// <summary>Whether the selected 1..4 Offbeat is inside its quarter-interval window; false when unavailable or out of range.</summary>
+    public bool OffBeat(int count) => lanes.Active(count);
 }
 
 public partial class BeatManager

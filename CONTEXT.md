@@ -163,7 +163,7 @@ A per-waveform scalar in `[0..1]` controlling hump shape. At 0 the peak is sharp
 _Avoid_: "smoothing", "easing" (overloaded); treating it as a true low-pass filter.
 
 **Contrived Value**:
-A reusable value BeatManager derives from wire state, time, or multiple lanes: offbeats, progress, pulses, envelopes, energy trend, and level shaping. A **Wire Value** is passed through after sentinel translation. Both live side by side in the shallow musical group where a caller expects them; provenance never creates another navigation layer. Optional facts use `null`; `Levels` is the deliberate exception because silence and missing input both have a useful zero value while its followers fall according to their algorithms.
+A reusable value BeatManager derives from wire state, time, or multiple lanes: offbeats, progress, pulses, envelopes, energy trend, and level shaping. A **Wire Value** is passed through after sentinel translation. Both live side by side in the shallow musical group where a caller expects them; provenance never creates another navigation layer. Optional facts use `null`. Boolean questions (`Active`, `Rolling`, `On`, …) and pulse envelopes are total responses resting at false and zero — like `Levels`, whose silence and missing input share a useful zero while its followers fall according to their algorithms. Absence a caller must distinguish stays on the nullable sibling facts (counts, lengths, positions).
 _Avoid_: "cooked"; effects reading the private wire snapshot directly; sentinel values crossing into effect math; separate raw/derived public trees.
 
 **Data Surface**:

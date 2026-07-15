@@ -46,7 +46,7 @@ public readonly struct PhraseEventView
     public static PhraseEventView Of(FillValues fill)
     {
         return Of(
-            fill.Active == true,
+            fill.Active,
             fill.BeatsUntil,
             fill.LengthBeats,
             fill.Remaining,
@@ -59,7 +59,7 @@ public readonly struct PhraseEventView
     public static PhraseEventView Of(DropValues drop)
     {
         return Of(
-            drop.Active == true,
+            drop.Active,
             drop.BeatsUntil,
             drop.LengthBeats,
             drop.Remaining,

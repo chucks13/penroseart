@@ -144,3 +144,27 @@ consumer owns its Standalone response.
   `beatData` field goes private and is no longer anyone's Inspector contract — dashboards
   mirror the core downstream (ADR-0016), never read transport state through a public
   field.
+
+### Amendment (2026-07-15, Hunter, resting-bools revision)
+
+The query layer no longer serves nullable bools or nullable pulse envelopes; the
+"requests return nullables" contract is refined by value kind, and "Preserve the wire's
+tri-state" is narrowed to the parser/transport (that defect fix stands: `-1/0/1` on the
+wire, sentinels never crossing the surface).
+
+- **Boolean questions are total, resting at false**: `Drop.Active`, `Fill.Active`,
+  `Loop.Rolling`, `Loop.RegionSet`, `Phrase.Irregular`, `Pulses.On`, `Beats.OnBeat`,
+  `Offbeats.OffBeat`. A countdown flag's false covers both "upcoming" and "no data";
+  the sibling nullable counts (`BeatsUntil`, `CountBeats`) say which, so the tri-state
+  carried no information the facts didn't already hold.
+- **Pulse drive signals are total, resting at zero**: `Pulses.Beat`, `Pulses.OffBeat`,
+  `Pulses.Every` — matching `Waveform.Envelope` and `Build()`/`Decay()`.
+- **Optional facts stay nullable**: tempo, positions, counts, lengths, names,
+  `Energy.Level`, `Grid.State` — where zero would be a lie and absence is a state the
+  caller distinguishes.
+
+Rationale: after the full migration, zero production consumers read a flag's null state —
+every call site folded it to false. That is ADR-0012's "total response with a documented
+rest" case, not its "absence the caller may need to distinguish" case; this ADR had
+overgeneralized nullability onto yes/no questions. Editor dashboards that still display
+"unavailable" derive it from the nullable sibling facts (ADR-0016), not from the flags.
