@@ -6,6 +6,7 @@
 public class ShapeGlitch : MixerBase
 {
     /// <summary>ShapeGlitch's stutter/glitch bursts accent Fills and suit Mid/High-energy sections.</summary>
+    /// This is a filter. it intentionall isnt beat awaire. It's meant to be used with beat-aware effects
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
