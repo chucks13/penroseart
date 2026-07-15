@@ -1,4 +1,4 @@
-﻿using System;
+﻿//using System;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -9,13 +9,18 @@ public class Waterfall : ScreenEffect
 {
     /// <summary>Waterfall's falling drops suit Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.EnergyLow |Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private Drop[] drops;
     private int numDrops;
     private float backgrounStretch;
     private float backgroundSpeed;
+    float pulseMultipler;
+    private float[] wave = new float[400];
+    float pulseScale;
+    int beatMode;
+    int pulseDirection;
 
     /// <summary>
     /// Called ever frame to update the debug UI text element 
@@ -42,6 +47,11 @@ public class Waterfall : ScreenEffect
     public override void OnStart()
     {
         waveform = waveforms.Random();
+        beatMode = Random.Range(0, 2);
+        pulseDirection =Random.Range(0,2);
+        pulseMultipler = Random.value * 0.125f + 0.125f;
+        pulseScale = waveform.ShortestPeakSpacingMs / 200f;
+        wave = new float[400];      // clear array
         numDrops = Random.Range(70, 100);
         backgrounStretch = Random.Range(0.001f, 0.025f);
         backgroundSpeed = Random.Range(0.01f, 0.3f);
@@ -66,11 +76,21 @@ public class Waterfall : ScreenEffect
     public override void Draw()
     {
         // Beat pulse scales the waterfall colors after droplet/background sampling.
-        float beatBrightness = waveform.Lerp(0.5f, 1f);
+        float waveHeight = waveform.Lerp(1f, 0f);
+        for (int i = wave.Length - 1; i > 0; i--)
+            wave[i] = wave[i - 1];
+        wave[0] = waveHeight;
+
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
+                float pulseY=(pulseDirection==0)?y:height-y;
+                float waveidxf = pulseY * pulseScale;
+                int waveidx = (int)waveidxf;
+                if (waveidx > (wave.Length - 1))
+                    waveidx = wave.Length - 1;
+
                 var screen = new Vector2();
                 screen.x = x;
                 screen.y = y;
@@ -92,7 +112,23 @@ public class Waterfall : ScreenEffect
                         color += 25 * drop.intensity / (25 + (y - drop.position.y));
                     }
                 }
-                screenBuffer[x + (y * width)] = APalette.read(color % 1f, true) * beatBrightness;
+                Color color2 = APalette.read(color % 1f, true);
+                Color.RGBToHSV(color2, out float h, out float s, out float v);
+
+                switch (beatMode)
+                {
+                    case 0:
+                        h += wave[waveidx] * pulseMultipler;
+                        break;
+                    case 1:
+                        s += wave[waveidx] * pulseMultipler * 2f;
+                        break;
+                    case 2:
+                        v += wave[waveidx] * (1f - pulseMultipler);
+                        break;
+                }
+
+                screenBuffer[x + (y * width)] = Color.HSVToRGB(h % 1f, s, v); ;
             }
         }
         // convert the 2D Matrix buffer to a tile buffer
