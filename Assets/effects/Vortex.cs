@@ -73,15 +73,8 @@ public class Vortex : EffectBase
     {
         float deg2rad = (Mathf.PI * 2f) / 360f;
         float spinSpeed = speed * delta;
-        if (beatManager.Drop.Active != null)
-        {
-            bool inDrop = (bool)beatManager.Drop.Active;
-            if (inDrop)
-            {
-                spinSpeed = beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, spinSpeed);
-            }
-
-        }
+        if (dropActive)
+            spinSpeed = beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, spinSpeed);
         angle += spinSpeed;
 
         for (int i = 0; i < count; i++)
@@ -144,9 +137,8 @@ public class Vortex : EffectBase
             Color.RGBToHSV(c, out h, out s, out v_col);
             if (hueShift > 0)
                 h = (h + hueShift) % 1f;
-            if (beatManager.Fill.Active != null)
-                if ((bool)beatManager.Fill.Active)                // go to black and while in a fill
-                    s = 0f;
+            if (fillActive)
+                s = 0f;
             c = Color.HSVToRGB(h, s, v_col);
             buffer[i] = c * beatBrightness;
             // Draw the point
