@@ -11,6 +11,7 @@ public class ColorSparkle : EffectBase
 
     /// <summary>The activation's base sparkle hue.</summary>
     private float hue;
+    public float dropHue;
 
     /// <summary>ColorSparkle's fading sparkle bursts can accent short Fill moments without new behavior;
     /// its gentle shimmer suits Low/Mid-energy sections.</summary>
@@ -30,6 +31,7 @@ public class ColorSparkle : EffectBase
         waveform = waveforms.Random();
         randomColor = Random.value > 0.5f;
         hue = Random.value;
+        dropHue = Random.value;
 
         var text = randomColor ? "random " : hue.ToString();
         controller.debugText.text = $"Color: {text}";
@@ -47,17 +49,24 @@ public class ColorSparkle : EffectBase
     public override void Draw()
     {
         // The Waveform offsets newly generated sparkle hues; clockless rendering stays steady.
-        float hueOffset = waveform.Lerp(0.5f, 1f);
+        float hueOffset = (hue + waveform.Lerp(0.5f, 1f)) % 0.15f;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
-        Color drawColor = Color.HSVToRGB((hue + hueOffset) % 1f, 1f, 1f);
+        if (beatManager.Drop.Active)
+            count /= 2;                           // half the sparkles in drop
         for (int i = 0; i < count; i++)
         {
+            float drawHue = hueOffset;
+            float drawSaturation = 1f;
             // Without a beat clock, preserve this activation's original per-sparkle color variation.
             if (randomColor && !beatManager.IsSynced)
-                drawColor = Color.HSVToRGB(Random.value, 1f, 1f);
+                drawHue = Random.value;
+            if (beatManager.Drop.Active )
+                drawHue = dropHue;                  // solid color in drop 
+            if (beatManager.Fill.Active)
+                drawSaturation = Random.value > 0.5f ? 1f : 0f;     // fil is 50% white
 
-            buffer[Random.Range(0, buffer.Length)] = drawColor;
+            buffer[Random.Range(0, buffer.Length)] = Color.HSVToRGB(drawHue, drawSaturation, 1f);
         }
     }
 }
