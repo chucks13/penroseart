@@ -96,9 +96,9 @@ public class Vortex : EffectBase
     {
         var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 5f;
 
-        if (beatManager.Drop.BeatsUntil < 5)
+        if (beatManager.Drop.BeatsUntil < 8)
         {
-            ringScale = beatsTilDrop.Remap(5f, 0f, 1f, 0f);
+            ringScale = beatsTilDrop.Remap(8f, 1f, 1f, 0f);
         }
         else
             ringScale = 1f;
@@ -140,8 +140,8 @@ public class Vortex : EffectBase
                 h = (h + hueShift) % 1f;
             if (beatManager.Fill.Active)                // go to black and while in a fill
             {
+                v_col=(h+s+v_col)%1f;                   // assure there is brightness variation
                 s = 0f;
-                v_col=h;
             }
              c = Color.HSVToRGB(h, s, v_col);
             buffer[i] = c * beatBrightness;
