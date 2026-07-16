@@ -1,6 +1,7 @@
 ﻿using Random = UnityEngine.Random;
 using UnityEngine;
 
+
 /// <summary>
 /// Animates packed Penrose loop shape groups over a background color.
 /// </summary>
@@ -8,7 +9,7 @@ public class AnimateLoops : EffectBase
 {
     /// <summary>AnimateLoops' looping motion suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
     /// <summary>Per-loop colors advanced across the packed shape data.</summary>
@@ -26,6 +27,8 @@ public class AnimateLoops : EffectBase
     /// <summary>Which beat response this activation applies: color or time.</summary>
     private int distortionMode; // 1: Color, 2: Time
 
+    float dropDensity = 0.001f;// Random.Range(0.0004f, 0.003f);
+    float dropSpeed = 0.5f;//Random.Range(0.1f, 1f);
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
@@ -78,7 +81,14 @@ public class AnimateLoops : EffectBase
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = Color.HSVToRGB((background + beatOffset * 0.1f + hueShift) % 1f, 1f, 1f);
+            Color color = Color.HSVToRGB((background + beatOffset * 0.1f + hueShift) % 1f, 1f, 1f);
+            // drop mode stole part of tunnel for the backbround color
+            if (beatManager.Drop.Active)
+            {
+                float phase = (i * dropDensity + (effectTime * dropSpeed)) % 1f;
+                color = Color.HSVToRGB(phase, 1f, 10f);
+            }
+            buffer[i] = color;
         }
         for (int i = 0; i < shape[0]; i++)
         {
@@ -86,6 +96,9 @@ public class AnimateLoops : EffectBase
             int start = list + 1;
             int end = start + shape[list];
             Color.RGBToHSV(colors[i], out float hue, out float sat, out float bri);
+            if (beatManager.Fill.Active)
+                sat = Random.value < 0.125f ? 0f : 1f;                // B&W on fills
+
             for (int j = start; j < end; j++)
             {
                 int idx = shape[j];
