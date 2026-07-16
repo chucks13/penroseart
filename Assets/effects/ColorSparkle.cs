@@ -16,7 +16,7 @@ public class ColorSparkle : EffectBase
     /// <summary>ColorSparkle's fading sparkle bursts can accent short Fill moments without new behavior;
     /// its gentle shimmer suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.HandlesFill | Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop| Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
