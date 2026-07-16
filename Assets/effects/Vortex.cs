@@ -139,8 +139,11 @@ public class Vortex : EffectBase
             if (hueShift > 0)
                 h = (h + hueShift) % 1f;
             if (beatManager.Fill.Active)                // go to black and while in a fill
+            {
                 s = 0f;
-            c = Color.HSVToRGB(h, s, v_col);
+                v_col=h;
+            }
+             c = Color.HSVToRGB(h, s, v_col);
             buffer[i] = c * beatBrightness;
             // Draw the point
         }
