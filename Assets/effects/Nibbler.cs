@@ -8,7 +8,7 @@ public class Nibbler : EffectBase
 {
     /// <summary>Nibbler's roaming eaters suit Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
     private const int Count = 10;
@@ -74,7 +74,23 @@ public class Nibbler : EffectBase
         float beatBrightness = waveform.Lerp(1f, 0.75f);
         float beatHue = 0.5f * rhythm;
         buffer.Fade(fade);
-        int count = (int)(effectDelta * 300f);
+
+        float localDelta = effectDelta;
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+
+        int count = (int)(localDelta * 300f);
+
         for (int y = 0; y < Count; y++)
         {
             for (var x = 0; x < count; x++)
@@ -86,7 +102,16 @@ public class Nibbler : EffectBase
                 {
                     Color.RGBToHSV(color, out float h, out float s, out float v);
                     h += beatHue;
-                    color = Color.HSVToRGB(h % 1f, s, v);
+                    c = Color.HSVToRGB(h % 1f, s, v);
+                }
+
+                if (beatManager.Fill.Active)            // blak and whire on fill
+                {
+                    float h, s, v_col;
+                    Color.RGBToHSV(c, out h, out s, out v_col);
+                    v_col = (h + s + v_col) % 1f;                   // assure there is brightness variation
+                    s = 0f;
+                    c = Color.HSVToRGB(h, s, v_col);
                 }
 
                 buffer[current[y]] = c * beatBrightness;
