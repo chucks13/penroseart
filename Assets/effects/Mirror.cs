@@ -7,9 +7,9 @@ using UnityEngine;
 /// </summary>
 public class Mirror : MixerBase
 {
-    /// <summary>Mirror's reflected imagery suits Low/Mid-energy sections.</summary>
+    /// Mirror hands all meta effects to its children, so i report is handles evrtything here
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private EffectBase sourceEffect;
