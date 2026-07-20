@@ -9,11 +9,13 @@ public class Petals : ScreenEffect
 {
     /// <summary>Petals' gentle bloom suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     private Color[] colors;
     private float background;
 
+    float dropDensity = 0.001f;// Random.Range(0.0004f, 0.003f);
+    float dropSpeed = 0.5f;//Random.Range(0.1f, 1f);
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
@@ -47,13 +49,24 @@ public class Petals : ScreenEffect
         float rhythm = waveform.Envelope;
         float beatBrightness = waveform.Lerp(0.85f, 1f);
         float hueShift = 0.001f * rhythm;
-        int bitMask=Random.Range(0, 256);       // randomly select shape layers with bit masks
+        int bitMask = Random.Range(0, 256);       // randomly select shape layers with bit masks
         background += effectDelta * 0.1f;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
         {
-            buffer[i] = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
+            Color color = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
+            // drop mode stole part of tunnel for the backbround color
+            if (beatManager.Drop.Active)
+            {
+                if (Random.value < 0.25f)
+                {
+                    float phase = (i * dropDensity + (effectTime * dropSpeed)) % 1f;
+                    color = Color.HSVToRGB(phase, 1f, 10f);
+                }
+            }
+            buffer[i] = color;
         }
+
         for (int shapeIdx = 0; shapeIdx < 3; shapeIdx++)
         {
             int[] shape = penrose.Layout.shapes.loops;
@@ -71,17 +84,27 @@ public class Petals : ScreenEffect
             }
             for (int i = 0; i < shape[0]; i++)
             {
-                int thisBit=1<<1;
+                int thisBit = 1 << 1;
                 int list = shape[i + 1];
                 int start = list + 1;
                 int end = start + shape[list];
                 Color.RGBToHSV(colors[shapeIdx], out float hue, out float sat, out float bri);
-                if((thisBit&bitMask)==0)
-                    hue+=hueShift;
+                if ((thisBit & bitMask) == 0)
+                    hue += hueShift;
                 for (int j = start; j < end; j++)
                 {
                     int idx = shape[j];
-                    buffer[idx] = Color.HSVToRGB((hue + 0.002f * j) % 1f, sat, bri) * beatBrightness;
+                    Color color = Color.HSVToRGB((hue + 0.002f * j) % 1f, sat, bri) * beatBrightness;
+                    if (beatManager.Fill.Active)
+                    {
+                        if (Random.value < 0.25f)
+                        {
+                            float phase = (idx * dropDensity + (effectTime * dropSpeed)) % 1f;
+                            color = Color.HSVToRGB(phase, 1f, 10f);
+
+                        }
+                    }
+                    buffer[idx] = color;
                 }
                 colors[shapeIdx] = Color.HSVToRGB((hue + 0.00004f) % 1f, sat, bri);
             }
@@ -89,3 +112,5 @@ public class Petals : ScreenEffect
     }
 
 }
+
+
