@@ -8,7 +8,7 @@ public class Fluid : ScreenEffect
 {
     /// <summary>Fluid's smooth flow suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     /// <summary>The diffusion field rendered on the current frame.</summary>
     private float[] currentState;
@@ -30,6 +30,9 @@ public class Fluid : ScreenEffect
 
     /// <summary>Multiplier applied before wrapping field values into palette space.</summary>
     public float scale = 10f;
+    bool dropComing = false;
+
+    private bool lastDropActive;
 
     /// <summary>Weight applied to the average neighboring field value.</summary>
     public float fneighbors = 2f;
@@ -37,7 +40,10 @@ public class Fluid : ScreenEffect
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-    public override string DebugText() => string.Empty;
+    public override string DebugText()
+    {
+        return $"drop coming: {dropComing}\n";
+    }
 
     /// <summary>Acquires this activation's Waveform and resets the diffusion buffers.</summary>
     public override void OnStart()
@@ -94,21 +100,53 @@ public class Fluid : ScreenEffect
     /// </summary>
     public override void Draw()
     {
+        dropComing = false;
+        bool dropJustStarted = !lastDropActive && beatManager.Drop.Active;
+        lastDropActive = beatManager.Drop.Active;
+        if (beatManager.IsSynced)
+        {
+            var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 6f;
+            // if we are expecting a drop, we are going to set the fluid settle fast 
+            if (beatsTilDrop < 6)
+            {
+                dropComing = true;
+                fdamping = 0.7f;
+                if (dropJustStarted)
+                {
+                    activity = 1;                 // force an inpulse
+                    AdvanceSimulation();                // bump the animation
+                    AdvanceSimulation();
+
+                }
+            }
+            else
+            {
+                fdamping = 0.95f;       // default dampining
+                activity = 50;       // defalut
+            }
+        }
+
         frameCount++;
         if (frameCount % 2 == 0)
         {
             AdvanceSimulation();
         }
 
-        InjectEnergy();
+        // look if we are expection drops
+        if (!dropComing)
+            InjectEnergy();
         // The Waveform offsets the palette lookup; clockless rendering keeps the previous steady offset.
         float paletteOffset = waveform.Lerp(0.5f, 1f);
+        if (!dropComing)
+            paletteOffset = 0f;
         for (int i = 0; i < currentState.Length; i++)
         {
             float v = currentState[i] * scale;
             v += 1000.5f;
             v %= 1f;
             buffer[i] = APalette.read(v + paletteOffset);
+            if (beatManager.Fill.Active)            // rotate the color on filll
+                 buffer[i] = new Color(buffer[i].g, buffer[i].b, buffer[i].r,buffer[i].a);
         }
     }
 }
