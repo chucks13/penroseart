@@ -57,8 +57,8 @@ public class MetaBalls : ScreenEffect
         float rhythm = waveform.Envelope;
         float beatBrightness = waveform.Lerp(1f, 0.75f);
         float beatHue = 0.5f * rhythm;
-        float localDelta = effectDelta + (0.05f * rhythm);
-
+        float localDelta = beatMode < 2 ? effectDelta + (0.05f * rhythm) : effectDelta;
+        
         var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
         if (beatsTilDrop < 8)                   // slow down leading to drop
         {
