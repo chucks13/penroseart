@@ -63,8 +63,29 @@ public class Noise : EffectBase
         float hueShift = 0.0f;
         float sampleTime = effectTime;
 
+        // we are going to hack the local time with our own local delta
+        effectTime -= effectDelta;            // remove the currelt delta
+        // calculate our drop modified time delta
+        float localDelta = effectDelta;
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+        // change the effect time by this updated delta
+        effectTime += localDelta;
+
+
         // This Effect owns all three response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;
+        hueShift = 0f;
         if (distortionMode == 0)
             beatBrightness = waveform.Lerp(0.85f, 1f);
         else if (distortionMode == 1)
@@ -86,12 +107,18 @@ public class Noise : EffectBase
             if ((v & 1) == 0)
             {
                 Color c = APalette.read((n + colorDelta) % 1f, true);
-                if (hueShift > 0)
+                float h, s, v_col;
+                Color.RGBToHSV(c, out h, out s, out v_col);
+                h = (h + hueShift) % 1f;
+
+                if (beatManager.Fill.Active)            // blak and whire on fill
                 {
-                    float h, s, v_col;
-                    Color.RGBToHSV(c, out h, out s, out v_col);
-                    c = Color.HSVToRGB((h + hueShift) % 1f, s, v_col);
+                    v_col = (h + s + v_col) % 1f;                   // assure there is brightness variation
+                    s = 0f;
                 }
+                
+                c = Color.HSVToRGB(h, s, v_col);
+
                 buffer[i] = c * beatBrightness;
             }
             else
