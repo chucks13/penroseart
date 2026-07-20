@@ -7,7 +7,7 @@ public class NoiseMixer : MixerBase
 {
     /// <summary>NoiseMixer's blended noise suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
     private EffectBase[] effects;
@@ -79,6 +79,27 @@ public class NoiseMixer : MixerBase
             effects[i].Draw();
         }
         float rhythm = waveform.Envelope;
+
+        // we are going to hack the local time with our own local delta
+        effectTime -= effectDelta;            // remove the currelt delta
+        // calculate our drop modified time delta
+        float localDelta = effectDelta;
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+        // change the effect time by this updated delta
+        effectTime += localDelta;
+
+
         float sampleTime = effectTime + (0.5f * rhythm);
         float width = 0.1f;
         if (distortionMode == 1)
