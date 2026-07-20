@@ -11,7 +11,7 @@ public class NoiseTunnel : EffectBase
 {
     /// <summary>NoiseTunnel's driving noise flow suits Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyMid | Repertoire.EnergyHigh;
+         Repertoire.HandlesFill |  Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private float n;
@@ -52,7 +52,7 @@ public class NoiseTunnel : EffectBase
         style = Random.Range(0, 3);
         direction = Random.Range(0, 2);
         buffer.Clear();
-        beatMode = Random.Range(0,3);
+        beatMode = Random.Range(0, 3);
     }
 
     /// <summary>
@@ -65,6 +65,26 @@ public class NoiseTunnel : EffectBase
     /// </summary>
     public override void Draw()
     {
+        // we are going to hack the local time with our own local delta
+        effectTime -= effectDelta;            // remove the currelt delta
+        // calculate our drop modified time delta
+        float localDelta = effectDelta;
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+        // change the effect time by this updated delta
+        effectTime += localDelta;
+        effectDelta = localDelta;
+
         // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
         float rhythm = waveform.Envelope;
         float beatBrightness = waveform.Lerp(1f, 0.75f);
@@ -111,13 +131,18 @@ public class NoiseTunnel : EffectBase
             if ((v1 & 1) == 0)
             {
                 color = Color.HSVToRGB((n + colorDelta) % 1f, 1f, 1);
+                Color.RGBToHSV(color, out float h, out float s, out float v);
                 if (beatMode > 0)
                 {
-                    Color.RGBToHSV(color, out float h, out float s, out float v);
                     h += beatHue;
                     v *= beatBrightness;
-                    color = Color.HSVToRGB(h % 1f, s, v);
                 }
+                if (beatManager.Fill.Active)            // blak and whire on fill
+                {
+                    v = (h + s + v) % 1f;                   // assure there is brightness variation
+                    s = 0f;
+                }
+                color = Color.HSVToRGB(h % 1f, s, v);
             }
             else
                 color = Color.black;
@@ -125,3 +150,5 @@ public class NoiseTunnel : EffectBase
         }
     }
 }
+
+
