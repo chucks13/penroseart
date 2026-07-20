@@ -320,7 +320,8 @@ public class Kscope : ScreenEffect
         }
         float rhythm = waveform.Envelope;
         float beatHue = 0.5f * rhythm;
-        float localDelta = effectDelta + (0.002f * rhythm);
+        float localDelta = beatMode < 2 ? effectDelta + (0.002f * rhythm) : effectDelta;
+
 
         var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
         if (beatsTilDrop < 8)                   // slow down leading to drop
