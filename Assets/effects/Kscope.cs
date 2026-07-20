@@ -17,7 +17,7 @@ public class Kscope : ScreenEffect
 {
     /// <summary>Kscope's slow kaleidoscopic imagery suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     public class picture
     {
@@ -320,7 +320,21 @@ public class Kscope : ScreenEffect
         }
         float rhythm = waveform.Envelope;
         float beatHue = 0.5f * rhythm;
-        float localDelta = beatMode < 2 ? effectDelta + (0.002f * rhythm) : effectDelta;
+        float localDelta = effectDelta + (0.002f * rhythm);
+
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+
 
         positionX += motionX * localDelta * 60f;
         positionY += motionY * localDelta * 60f;
@@ -385,6 +399,14 @@ public class Kscope : ScreenEffect
             Color tileColor = buffer[mirrorList[groupPointer + 1]];
             for (int j = 0; j < groupsize; j++)
             {
+                if (beatManager.Fill.Active)            // blak and whire on fill
+                {
+                    float h, s, v_col;
+                    Color.RGBToHSV(tileColor, out h, out s, out v_col);
+                    v_col = (h + s + v_col) % 1f;                   // assure there is brightness variation
+                    s = 0f;
+                    tileColor = Color.HSVToRGB(h, s, v_col);
+                }
                 buffer[mirrorList[groupPointer + 1 + j]] = tileColor;
             }
         }
