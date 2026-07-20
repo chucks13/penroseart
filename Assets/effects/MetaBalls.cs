@@ -9,7 +9,7 @@ public class MetaBalls : ScreenEffect
 {
     /// <summary>MetaBalls' soft blobs suit Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+       Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     private Ball[] balls;
     private Vector2 screen;
@@ -57,7 +57,21 @@ public class MetaBalls : ScreenEffect
         float rhythm = waveform.Envelope;
         float beatBrightness = waveform.Lerp(1f, 0.75f);
         float beatHue = 0.5f * rhythm;
-        float localDelta = beatMode < 2 ? effectDelta + (0.05f * rhythm) : effectDelta;
+        float localDelta = effectDelta + (0.05f * rhythm);
+
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+
 
         buffer.Fade();
 
@@ -87,6 +101,14 @@ public class MetaBalls : ScreenEffect
                     color = Color.HSVToRGB(h % 1f, s, v);
                 }
 
+                if (beatManager.Fill.Active)            // blak and whire on fill
+                {
+                    float h, s, v_col;
+                    Color.RGBToHSV(color, out h, out s, out v_col);
+                    v_col = (h + s + v_col) % 1f;                   // assure there is brightness variation
+                    s = 0f;
+                    color = Color.HSVToRGB(h, s, v_col);
+                }
                 screenBuffer[idx] = color;
             }
         }
