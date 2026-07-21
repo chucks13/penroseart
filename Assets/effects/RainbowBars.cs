@@ -8,7 +8,7 @@ public class RainbowBars : ScreenEffect
 {
     /// <summary>RainbowBars' scrolling bands suit Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
 
     /// <summary>The screen-space direction used to sample the palette bands.</summary>
@@ -50,6 +50,26 @@ public class RainbowBars : ScreenEffect
     /// </summary>
     public override void Draw()
     {
+        // we are going to hack the local time with our own local delta
+        effectTime -= effectDelta;            // remove the currelt delta
+        // calculate our drop modified time delta
+        float localDelta = effectDelta;
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localDelta *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            if (rampDown > localDelta)
+                localDelta = rampDown;
+        }
+        // change the effect time by this updated delta
+        effectTime += localDelta;
+        effectDelta = localDelta;
+
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;
         float sampleTime = effectTime;
@@ -80,11 +100,17 @@ public class RainbowBars : ScreenEffect
                 };
 
                 Color color = GetColor(samplePosition, sampleTime);
+                Color.RGBToHSV(color, out float hue, out float saturation, out float value);
                 if (hueShift > 0)
                 {
-                    Color.RGBToHSV(color, out float hue, out float saturation, out float value);
-                    color = Color.HSVToRGB((hue + hueShift) % 1f, saturation, value);
+                    hue += hueShift;
                 }
+                if (beatManager.Fill.Active)            // blak and whire on fill
+                {
+                    value = (hue + saturation + value) % 1f;                   // assure there is brightness variation
+                    saturation = 0f;
+                }
+                color = Color.HSVToRGB(hue % 1f, saturation, value);
 
                 screenBuffer[x + (y * width)] = color * beatBrightness;
             }
@@ -94,3 +120,4 @@ public class RainbowBars : ScreenEffect
         ConvertScreenBuffer(ref screenBuffer, in buffer);
     }
 }
+
