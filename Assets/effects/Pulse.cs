@@ -8,7 +8,7 @@ public class Pulse : EffectBase
 {
     /// <summary>Pulse's throbbing accents suit Fills and Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
-        Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
 
     private Color startColor;
@@ -73,6 +73,22 @@ public class Pulse : EffectBase
     /// </summary>
     public override void Draw()
     {
+        float localPulseMultiplier = pulseMultipler;
+
+        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
+        if (beatsTilDrop < 8)                   // slow down leading to drop
+        {
+            localPulseMultiplier *= ((float)beatsTilDrop) / 8f;
+        }
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = localPulseMultiplier * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localPulseMultiplier);
+            if (rampDown > localPulseMultiplier)
+                localPulseMultiplier = rampDown;
+        }
+
+
         var t = Mathf.PingPong(effectTime, seconds).Remap(0f, seconds, 0f, 1f, clamp: true);
         float waveHeight = waveform.Lerp(1f, 0f);
         for (int i = wave.Length - 1; i > 0; i--)
@@ -81,6 +97,9 @@ public class Pulse : EffectBase
 
         var color1 = Color.Lerp(color, endColor, t);
         var color2 = Color.Lerp(endColor, color, t);
+        float fillBoost = 0f;
+        if (beatManager.Fill.Active)
+            fillBoost = 0.5f;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -92,16 +111,20 @@ public class Pulse : EffectBase
             Color color = tiles[i].type == 0 ? color1 : color2;
             Color.RGBToHSV(color, out float h, out float s, out float v);
 
+
             switch (beatMode)
             {
                 case 0:
-                    h += wave[waveidx] * pulseMultipler;
+                    h += wave[waveidx] * localPulseMultiplier;
+                    h += fillBoost;
                     break;
                 case 1:
-                    s += wave[waveidx] * pulseMultipler * 2f;
+                    s += wave[waveidx] * localPulseMultiplier * 2f;
+                    s += fillBoost;
                     break;
                 case 2:
-                    v += wave[waveidx] * (1f - pulseMultipler);
+                    v += wave[waveidx] * (1f - localPulseMultiplier);
+                    v += fillBoost;
                     break;
             }
 
