@@ -4,7 +4,18 @@ using System.Collections.Generic;
 public class MazeFlyer : EffectBase
 {
     private const int GRID_SIZE = 16;
-    private const float MAX_RAY_DIST = 20.0f; // Limit ray distance (beyond this is black)
+    private const float MAX_RAY_DIST = 20.0f;
+
+    // Color generation modes
+    private enum ColorMode
+    {
+        PureRandom,
+        SpatialWaves,
+        BlockRegions,
+        CuratedPalette
+    }
+
+    private ColorMode activeColorMode = ColorMode.PureRandom;
 
     // 16x16x16 Voxel grid colors. Color.clear (alpha=0) indicates an empty voxel.
     private Color[,,] voxelGrid = new Color[GRID_SIZE, GRID_SIZE, GRID_SIZE];
@@ -14,35 +25,49 @@ public class MazeFlyer : EffectBase
     private Vector3Int targetCell = new Vector3Int(1, 1, 1);
     private Vector3Int moveDir = Vector3Int.forward;
     
-    // Smooth interpolation variables
     private Vector3 cameraPos;
     private Quaternion cameraRot = Quaternion.identity;
     private Quaternion targetRot = Quaternion.identity;
-    private float moveProgress = 1.0f; // 0.0 to 1.0 step transition
-    private float flySpeed = 4.0f;      // Cells per second
+    private float moveProgress = 1.0f;
+    private float flySpeed = 4.0f;
+
+    // Pre-defined palette for CuratedPalette mode
+    private Color[] curatedPalette = new Color[]
+    {
+        Color.HSVToRGB(0.78f, 0.9f, 0.95f), // Purple/Magenta
+        Color.HSVToRGB(0.55f, 0.9f, 0.95f), // Cyan/Blue
+        Color.HSVToRGB(0.18f, 0.9f, 0.95f), // Yellow/Gold
+        Color.HSVToRGB(0.38f, 0.9f, 0.95f)  // Lime Green
+    };
 
     public override void Init()
     {
         base.Init();
-        GenerateVoxelGrid();
-        InitializeCameraPosition();
+        OnStart();
     }
 
     public override void OnStart()
     {
         base.OnStart();
+
+        // 1. Randomly choose one of the 4 color modes
+        activeColorMode = (ColorMode)Random.Range(0, 4);
+
+        // 2. Generate the grid with the selected color style
         GenerateVoxelGrid();
+
+        // 3. Place camera in a valid empty spot
         InitializeCameraPosition();
     }
 
     /// <summary>
-    /// Generates the 16x16x16 voxel grid:
-    /// - Even locations (x, y, z % 2 == 0) are ALWAYS filled.
-    /// - In-between locations have a random probability of being filled.
+    /// Populates the 16x16x16 voxel grid based on activeColorMode.
     /// </summary>
     private void GenerateVoxelGrid()
     {
-        float fillProbability = 0.25f; // Probability for non-even locations
+        float fillProbability = 0.25f;
+        float spatialScale = 0.15f;
+        int blockSize = 4;
 
         for (int x = 0; x < GRID_SIZE; x++)
         {
@@ -51,10 +76,10 @@ public class MazeFlyer : EffectBase
                 for (int z = 0; z < GRID_SIZE; z++)
                 {
                     bool isEvenIndex = (x % 2 == 0) && (y % 2 == 0) && (z % 2 == 0);
-                    
+
                     if (isEvenIndex || Random.value < fillProbability)
                     {
-                        voxelGrid[x, y, z] = Color.HSVToRGB(Random.value, 0.9f, 0.95f);
+                        voxelGrid[x, y, z] = GetVoxelColor(x, y, z, spatialScale, blockSize);
                     }
                     else
                     {
@@ -66,11 +91,39 @@ public class MazeFlyer : EffectBase
     }
 
     /// <summary>
-    /// Finds a guaranteed empty starting cell and aligns the camera.
+    /// Evaluates color according to the active mode selected on Start.
     /// </summary>
+    private Color GetVoxelColor(int x, int y, int z, float spatialScale, int blockSize)
+    {
+        switch (activeColorMode)
+        {
+            case ColorMode.PureRandom:
+                return Color.HSVToRGB(Random.value, 0.9f, 0.95f);
+
+            case ColorMode.SpatialWaves:
+                float waveHue = (Mathf.Sin(x * spatialScale) + Mathf.Cos(y * spatialScale) + Mathf.Sin(z * spatialScale) + 3f) / 6f;
+                return Color.HSVToRGB(waveHue, 0.85f, 0.95f);
+
+            case ColorMode.BlockRegions:
+                int blockX = x / blockSize;
+                int blockY = y / blockSize;
+                int blockZ = z / blockSize;
+                int blockHash = blockX * 73 + blockY * 179 + blockZ * 283;
+
+                float baseHue = (Mathf.Abs(blockHash) % 100) / 100.0f;
+                float blockHue = (baseHue + Random.Range(-0.05f, 0.05f) + 1.0f) % 1.0f;
+                return Color.HSVToRGB(blockHue, 0.88f, 0.95f);
+
+            case ColorMode.CuratedPalette:
+                return curatedPalette[Random.Range(0, curatedPalette.Length)];
+
+            default:
+                return Color.white;
+        }
+    }
+
     private void InitializeCameraPosition()
     {
-        // Search for an empty cell in the grid to spawn into
         for (int x = 0; x < GRID_SIZE; x++)
         {
             for (int y = 0; y < GRID_SIZE; y++)
@@ -83,7 +136,6 @@ public class MazeFlyer : EffectBase
                         targetCell = currentCell;
                         cameraPos = GetCellCenter(currentCell);
                         
-                        // Pick initial valid move direction
                         SelectNextMoveDirection();
                         return;
                     }
@@ -92,57 +144,43 @@ public class MazeFlyer : EffectBase
         }
     }
 
-    public override string DebugText() => "Maze Flyer (Smart Navigator)";
+    public override string DebugText() => $"Maze Flyer [{activeColorMode}]";
 
     public override void Draw()
     {
-        // 1. Update camera movement and turning navigation
         UpdateCameraNavigation(Time.deltaTime);
 
-        // Compute camera coordinate vectors from current smooth rotation
         Vector3 cameraForward = cameraRot * Vector3.forward;
         Vector3 cameraRight = cameraRot * Vector3.right;
         Vector3 cameraUp = cameraRot * Vector3.up;
 
-        float focalLength = 18.0f; // Perspective strength relative to tile bounds
+        float focalLength = 18.0f;
 
-        // 2. Cast a ray for each Penrose tile pixel
         for (int i = 0; i < buffer.Length; i++)
         {
             float px = tiles[i].center.x;
             float py = tiles[i].center.y;
 
-            // Screen-space ray direction based on tile coordinates
             Vector3 rayDir = (cameraForward * focalLength + cameraRight * px + cameraUp * py).normalized;
-
-            // Trace ray through the tiled infinite voxel grid
             buffer[i] = TraceVoxelRay(cameraPos, rayDir);
         }
     }
 
-    /// <summary>
-    /// Handles collision avoidance, step interpolation, and 90-degree turning decisions.
-    /// </summary>
     private void UpdateCameraNavigation(float deltaTime)
     {
         moveProgress += deltaTime * flySpeed;
 
         if (moveProgress >= 1.0f)
         {
-            // Arrived at target cell
             currentCell = targetCell;
             moveProgress = 0.0f;
-
-            // Choose next valid direction
             SelectNextMoveDirection();
         }
 
-        // Interpolate position between current cell center and target cell center
         Vector3 startPos = GetCellCenter(currentCell);
         Vector3 endPos = GetCellCenter(targetCell);
         cameraPos = Vector3.Lerp(startPos, endPos, moveProgress);
 
-        // Smoothly rotate toward the current movement direction
         if (moveDir != Vector3Int.zero)
         {
             targetRot = Quaternion.LookRotation(new Vector3(moveDir.x, moveDir.y, moveDir.z));
@@ -150,21 +188,16 @@ public class MazeFlyer : EffectBase
         cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * 8.0f);
     }
 
-    /// <summary>
-    /// Evaluates adjacent cells and chooses an open path, prioritizing forward motion.
-    /// </summary>
     private void SelectNextMoveDirection()
     {
         List<Vector3Int> openDirections = GetOpenDirectionsFrom(currentCell);
 
         if (openDirections.Count == 0)
         {
-            // Emergency fallback if completely trapped
             targetCell = currentCell;
             return;
         }
 
-        // 1. Try to keep moving forward if possible (with occasional random turns at open junctions)
         bool keepGoingForward = openDirections.Contains(moveDir) && (Random.value > 0.35f || openDirections.Count == 1);
 
         if (keepGoingForward)
@@ -173,7 +206,6 @@ public class MazeFlyer : EffectBase
         }
         else
         {
-            // 2. Pick a new open direction (preferring non-reversing directions if available)
             Vector3Int reverseDir = -moveDir;
             List<Vector3Int> nonReversingDirs = openDirections.FindAll(d => d != reverseDir);
 
@@ -183,7 +215,6 @@ public class MazeFlyer : EffectBase
             }
             else
             {
-                // Must backtrack
                 moveDir = reverseDir;
             }
 
@@ -191,21 +222,15 @@ public class MazeFlyer : EffectBase
         }
     }
 
-    /// <summary>
-    /// Returns all orthogonal neighbor directions (X, Y, Z) that lead to empty cells.
-    /// </summary>
     private List<Vector3Int> GetOpenDirectionsFrom(Vector3Int cell)
     {
         List<Vector3Int> openDirs = new List<Vector3Int>();
 
         Vector3Int[] neighbors = new Vector3Int[]
         {
-            Vector3Int.forward,
-            Vector3Int.back,
-            Vector3Int.left,
-            Vector3Int.right,
-            Vector3Int.up,
-            Vector3Int.down
+            Vector3Int.forward, Vector3Int.back,
+            Vector3Int.left, Vector3Int.right,
+            Vector3Int.up, Vector3Int.down
         };
 
         foreach (var dir in neighbors)
@@ -219,9 +244,6 @@ public class MazeFlyer : EffectBase
         return openDirs;
     }
 
-    /// <summary>
-    /// Checks if a cell is empty in the wrapped infinite voxel space.
-    /// </summary>
     private bool IsCellEmpty(Vector3Int cell)
     {
         int vx = PositiveModulo(cell.x, GRID_SIZE);
@@ -236,9 +258,6 @@ public class MazeFlyer : EffectBase
         return new Vector3(cell.x + 0.5f, cell.y + 0.5f, cell.z + 0.5f);
     }
 
-    /// <summary>
-    /// Fast Voxel Traversal (3D DDA) through infinite 16x16x16 tiled voxel space.
-    /// </summary>
     private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir)
     {
         float rx = Mathf.Abs(rayDir.x) < 1e-6f ? 1e-6f : rayDir.x;
