@@ -88,8 +88,10 @@ public class Pulse : EffectBase
                 localPulseMultiplier = rampDown;
         }
 
-
-        var t = Mathf.PingPong(effectTime, seconds).Remap(0f, seconds, 0f, 1f, clamp: true);
+        float localTime = effectTime;
+        if (beatManager.Fill.Active)        // go fast in fill       
+            localTime *= 3;
+        var t = Mathf.PingPong(localTime, seconds).Remap(0f, seconds, 0f, 1f, clamp: true);
         float waveHeight = waveform.Lerp(1f, 0f);
         for (int i = wave.Length - 1; i > 0; i--)
             wave[i] = wave[i - 1];
@@ -97,9 +99,6 @@ public class Pulse : EffectBase
 
         var color1 = Color.Lerp(color, endColor, t);
         var color2 = Color.Lerp(endColor, color, t);
-        float fillBoost = 0f;
-        if (beatManager.Fill.Active)
-            fillBoost = 0.5f;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -109,6 +108,13 @@ public class Pulse : EffectBase
                 waveidx = wave.Length - 1;
 
             Color color = tiles[i].type == 0 ? color1 : color2;
+
+            // sync removes the pulse effect when fill is active and synced
+            if (beatManager.Fill.Active && beatManager.IsSynced)
+            {
+                buffer[i] = color;
+                continue;
+            }
             Color.RGBToHSV(color, out float h, out float s, out float v);
 
 
@@ -116,15 +122,12 @@ public class Pulse : EffectBase
             {
                 case 0:
                     h += wave[waveidx] * localPulseMultiplier;
-                    h += fillBoost;
                     break;
                 case 1:
                     s += wave[waveidx] * localPulseMultiplier * 2f;
-                    s += fillBoost;
                     break;
                 case 2:
                     v += wave[waveidx] * (1f - localPulseMultiplier);
-                    v += fillBoost;
                     break;
             }
 
