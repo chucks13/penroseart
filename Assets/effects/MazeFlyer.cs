@@ -6,6 +6,10 @@ public class MazeFlyer : EffectBase
     private const int GRID_SIZE = 16;
     private const float MAX_RAY_DIST = 20.0f;
 
+    public override Repertoire Repertoire =>
+     Repertoire.HandlesFill | Repertoire.HandlesDrop;
+
+
     // Color generation modes
     private enum ColorMode
     {
@@ -24,12 +28,13 @@ public class MazeFlyer : EffectBase
     private Vector3Int currentCell = new Vector3Int(1, 1, 1);
     private Vector3Int targetCell = new Vector3Int(1, 1, 1);
     private Vector3Int moveDir = Vector3Int.forward;
-    
+
     private Vector3 cameraPos;
     private Quaternion cameraRot = Quaternion.identity;
     private Quaternion targetRot = Quaternion.identity;
     private float moveProgress = 1.0f;
-    private float flySpeed = 4.0f;
+    private float flySpeed = 2.0f;
+    private float turnSpeed = 4.0f;   // Look rotation speed (Slerp factor)
 
     // Pre-defined palette for CuratedPalette mode
     private Color[] curatedPalette = new Color[]
@@ -49,6 +54,10 @@ public class MazeFlyer : EffectBase
     public override void OnStart()
     {
         base.OnStart();
+
+        float overallSpeed = (float)Random.Range(1, 5);
+        flySpeed = overallSpeed;
+        turnSpeed = overallSpeed * 2;
 
         // 1. Randomly choose one of the 4 color modes
         activeColorMode = (ColorMode)Random.Range(0, 4);
@@ -135,7 +144,7 @@ public class MazeFlyer : EffectBase
                         currentCell = new Vector3Int(x, y, z);
                         targetCell = currentCell;
                         cameraPos = GetCellCenter(currentCell);
-                        
+
                         SelectNextMoveDirection();
                         return;
                     }
@@ -185,7 +194,7 @@ public class MazeFlyer : EffectBase
         {
             targetRot = Quaternion.LookRotation(new Vector3(moveDir.x, moveDir.y, moveDir.z));
         }
-        cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * 8.0f);
+        cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed);
     }
 
     private void SelectNextMoveDirection()
@@ -265,7 +274,7 @@ public class MazeFlyer : EffectBase
         float rz = Mathf.Abs(rayDir.z) < 1e-6f ? 1e-6f : rayDir.z;
 
         Vector3 currentPos = rayOrigin;
-        
+
         int mapX = Mathf.FloorToInt(currentPos.x);
         int mapY = Mathf.FloorToInt(currentPos.y);
         int mapZ = Mathf.FloorToInt(currentPos.z);
@@ -295,6 +304,25 @@ public class MazeFlyer : EffectBase
 
             if (voxelColor.a > 0.0f)
             {
+                if (beatManager.Drop.Active)
+                {
+                    int checker = (vx + vy + vz) % 4;
+                    if (checker == 0)
+                    {
+                        var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
+                        voxelColor = Color.HSVToRGB(0f, 0f, t);
+                    }
+                }
+                if (beatManager.Fill.Active)
+                {
+                    int checker = (vx + vy + vz) % 4;
+                    if (checker == 0)
+                    {
+                        var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
+                        voxelColor = Color.HSVToRGB(t, 1f, 1f);
+                    }
+                }
+
                 float shade = hitSide == 0 ? 0.75f : (hitSide == 1 ? 0.95f : 0.60f);
                 float fog = 1.0f - Mathf.Clamp01(distanceTraveled / MAX_RAY_DIST);
 
