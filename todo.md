@@ -1,6 +1,6 @@
 crystal growth- fill weak
 julia - beat weak
-maze flyer - no support
+maze flyer - drop and fill only
 rippple - drop and fill weak if there at all
 tile shapes - drop and fill weak if there at all
 waterfall - drop and fill weak if there at all
