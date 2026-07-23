@@ -8,20 +8,21 @@ public class MazeFlyer : EffectBase
 
     // ========================================================================
     // AUDIO REACTIVITY SETTINGS (Tweak these to adjust beat feel)
+    // temporarily disables with 0f values
     // ========================================================================
     [Header("Audio Reactivity Settings")]
     [Tooltip("Maximum ray displacement on heavy beat hits. High values = bigger wall recoil.")]
-    private float pulseStrength = 0.20f; // Recommended: 0.05f to 0.40f
+    private float pulseStrength = 0f;//0.20f; // Recommended: 0.05f to 0.40f
 
     [Tooltip("Extra brightness boost added to voxel faces on audio peaks.")]
-    private float peakBrightnessBoost = 0.25f; // Recommended: 0.00f to 0.50f
+    private float peakBrightnessBoost =0f;// 0.25f; // Recommended: 0.00f to 0.50f
 
     [Tooltip("How much the fog distance contracts/expands with the rhythm (0 = off).")]
-    private float dynamicFogAmount = 3.0f; // Recommended: 0.0f to 6.0f
+    private float dynamicFogAmount = 0f;//3.0f; // Recommended: 0.0f to 6.0f
     // ========================================================================
 
     public override Repertoire Repertoire =>
-     Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
+     Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow;
 
     // Color generation modes
     private enum ColorMode
