@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 
+// designed by Chuck, coded by Gemini
+
 public class MazeFlyer : EffectBase
 {
     private const int GRID_SIZE = 16;
@@ -8,7 +10,6 @@ public class MazeFlyer : EffectBase
 
     public override Repertoire Repertoire =>
      Repertoire.HandlesFill | Repertoire.HandlesDrop;
-
 
     // Color generation modes
     private enum ColorMode
@@ -28,13 +29,16 @@ public class MazeFlyer : EffectBase
     private Vector3Int currentCell = new Vector3Int(1, 1, 1);
     private Vector3Int targetCell = new Vector3Int(1, 1, 1);
     private Vector3Int moveDir = Vector3Int.forward;
+    
+    // Look-Ahead Navigation: Next move direction peeked 1 step ahead for turn anticipation
+    private Vector3Int nextMoveDir = Vector3Int.forward; 
 
     private Vector3 cameraPos;
     private Quaternion cameraRot = Quaternion.identity;
     private Quaternion targetRot = Quaternion.identity;
     private float moveProgress = 1.0f;
     private float flySpeed = 2.0f;
-    private float turnSpeed = 4.0f;   // Look rotation speed (Slerp factor)
+    private float turnSpeed = 4.0f;
 
     // Pre-defined palette for CuratedPalette mode
     private Color[] curatedPalette = new Color[]
@@ -57,7 +61,7 @@ public class MazeFlyer : EffectBase
 
         float overallSpeed = (float)Random.Range(1, 5);
         flySpeed = overallSpeed;
-        turnSpeed = overallSpeed * 2;
+        turnSpeed = overallSpeed * 2.5f;
 
         // 1. Randomly choose one of the 4 color modes
         activeColorMode = (ColorMode)Random.Range(0, 4);
@@ -175,59 +179,78 @@ public class MazeFlyer : EffectBase
         }
     }
 
+    /// <summary>
+    /// Handles camera movement along the grid path and smooth look-ahead rotation blending.
+    /// </summary>
     private void UpdateCameraNavigation(float deltaTime)
     {
         moveProgress += deltaTime * flySpeed;
 
+        // When reaching the target cell, advance state and pick next turn ahead of time
         if (moveProgress >= 1.0f)
         {
             currentCell = targetCell;
+            moveDir = nextMoveDir; // Carry over the previously predicted direction
             moveProgress = 0.0f;
             SelectNextMoveDirection();
         }
 
+        // Linear position interpolation ensures the camera stays strictly inside open corridors
         Vector3 startPos = GetCellCenter(currentCell);
         Vector3 endPos = GetCellCenter(targetCell);
         cameraPos = Vector3.Lerp(startPos, endPos, moveProgress);
 
-        if (moveDir != Vector3Int.zero)
+        // Smoothly lead rotation into upcoming turns before reaching the intersection
+        Vector3 currentDirVec = new Vector3(moveDir.x, moveDir.y, moveDir.z);
+        Vector3 nextDirVec = new Vector3(nextMoveDir.x, nextMoveDir.y, nextMoveDir.z);
+
+        // Blend looking direction toward nextMoveDir in the latter portion of the cell traversal
+        Vector3 blendedForward = Vector3.Lerp(currentDirVec, nextDirVec, Mathf.SmoothStep(0.2f, 1.0f, moveProgress)).normalized;
+
+        if (blendedForward != Vector3.zero)
         {
-            targetRot = Quaternion.LookRotation(new Vector3(moveDir.x, moveDir.y, moveDir.z));
+            targetRot = Quaternion.LookRotation(blendedForward);
         }
+
         cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed);
     }
 
+    /// <summary>
+    /// Pathfinding step: Sets immediate target cell and peeks one cell ahead to predict upcoming turns.
+    /// </summary>
     private void SelectNextMoveDirection()
     {
-        List<Vector3Int> openDirections = GetOpenDirectionsFrom(currentCell);
+        // 1. Advance target cell along current move direction
+        targetCell = currentCell + moveDir;
 
-        if (openDirections.Count == 0)
+        // 2. Look ahead from targetCell to predict the turn after this one
+        List<Vector3Int> nextOpenDirs = GetOpenDirectionsFrom(targetCell);
+
+        if (nextOpenDirs.Count == 0)
         {
-            targetCell = currentCell;
+            nextMoveDir = -moveDir; // Dead end — prepare to turn around
             return;
         }
 
-        bool keepGoingForward = openDirections.Contains(moveDir) && (Random.value > 0.35f || openDirections.Count == 1);
+        bool canContinueAhead = nextOpenDirs.Contains(moveDir);
 
-        if (keepGoingForward)
+        if (canContinueAhead && (Random.value > 0.35f || nextOpenDirs.Count == 1))
         {
-            targetCell = currentCell + moveDir;
+            nextMoveDir = moveDir;
         }
         else
         {
             Vector3Int reverseDir = -moveDir;
-            List<Vector3Int> nonReversingDirs = openDirections.FindAll(d => d != reverseDir);
+            List<Vector3Int> nonReversingDirs = nextOpenDirs.FindAll(d => d != reverseDir);
 
             if (nonReversingDirs.Count > 0)
             {
-                moveDir = nonReversingDirs[Random.Range(0, nonReversingDirs.Count)];
+                nextMoveDir = nonReversingDirs[Random.Range(0, nonReversingDirs.Count)];
             }
             else
             {
-                moveDir = reverseDir;
+                nextMoveDir = canContinueAhead ? moveDir : reverseDir;
             }
-
-            targetCell = currentCell + moveDir;
         }
     }
 
