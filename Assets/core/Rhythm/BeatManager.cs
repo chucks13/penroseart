@@ -129,6 +129,7 @@ public partial class BeatManager
         Loop = CaptureLoop();
         Grid = CaptureGrid();
         Levels = CaptureLevels();
+        Players = CapturePlayers();
     }
 
     // ---- Shared duration math -----------------------------------------------------------------
@@ -227,6 +228,7 @@ public partial class BeatManager
         wireSnapshot.beatsCountMs = CreateUnavailableCountdowns();
         wireSnapshot.onBeats = new bool[BeatSlotCount];
         ClearPhraseAndLevelState();
+        ClearPlayersToNoBeat();
     }
 
     /// <summary>Creates a four-slot countdown array where every value is unavailable.</summary>

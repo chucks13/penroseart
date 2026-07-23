@@ -167,7 +167,7 @@ A reusable value BeatManager derives from wire state, time, or multiple lanes: o
 _Avoid_: "cooked"; effects reading the private wire snapshot directly; sentinel values crossing into effect math; separate raw/derived public trees.
 
 **Data Surface**:
-The read-only face of BeatManager through which effects, transitions, Waveforms, and other systems pull musical data. It is deliberately shallow: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, and `Levels`. Each group places related wire facts and derived values together. Captured structs and owned collections prevent write-back; wire sentinels never cross the boundary. BeatManager exposes state and reusable math, not commands, consumer policy, or one-frame event identity.
+The read-only face of BeatManager through which effects, transitions, Waveforms, and other systems pull musical data. It is deliberately shallow: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Levels`, and `Players`. Each group places related wire facts and derived values together. Captured structs and owned collections prevent write-back; wire sentinels never cross the boundary. BeatManager exposes state and reusable math, not commands, consumer policy, or one-frame event identity.
 _Avoid_: `View`/`Facts`/`Span`/`Current`/`Run` navigation; a separate raw tree; duplicate aliases; hub-owned `Started`, `Ended`, `Changed`, `Wrapped`, or gate-opened flags; color policy; dropping wire lanes because nothing reads them yet.
 
 **Standalone Mode / Synced Mode**:
@@ -348,6 +348,26 @@ _Avoid_: a generic public envelope hierarchy; naming curves after artistic gestu
 **Levels**:
 The live low/mid/high audio band triple in three forms: **Normalized** (wire values), **Smoothed** (attack/release follower), and **Peak** (instant rise with tempo-based fall). `Levels` is never null. When the wire lane is unavailable, Normalized becomes zero immediately while Smoothed and Peak fall toward zero according to their algorithms. Every form has the same `Low`, `Mid`, `High`, `Average`, `Strongest`, `StrongestBand`, `Centroid`, and `Dominance` reads.
 _Avoid_: nullable Levels; unequal capabilities between forms; treating track-relative levels as absolute loudness meters.
+
+**Wire Snapshot**:
+The latest complete set of values decoded from the RaveSystem OSC broadcast — the On-Air Surface and the Per-Player Surface together — held privately as the source BeatManager translates into its Data Surface groups each frame. Wire sentinels live here and never cross onto the Data Surface.
+_Avoid_: effects or the Director reading the Wire Snapshot directly; treating it as a public surface; letting sentinel values leak past it.
+
+**On-Air Surface**:
+The part of the RaveSystem broadcast describing the single on-air focus — the program the audience is hearing right now: beat clock, track, phrase, fill, drop, energy, levels, loop, and timing grid. This is the surface the wall has always synced to.
+_Avoid_: calling it "the OSC data" as if it were the whole broadcast; assuming a value is on-air when it belongs to one specific player.
+
+**Per-Player Surface**:
+The part of the RaveSystem broadcast describing each of the six physical players (ProLink device numbers 1–6) independently of the on-air focus: its own clock, transport, loop, timing grid, song structure, and structure cursor. Exposed as the `Players` group — always six entries ordered by player number.
+_Avoid_: confusing a player's values with the On-Air Surface; assuming a silent or absent player disappears from the group (it reads as unavailable, not missing).
+
+**Structure Generation**:
+The per-player change detector for song structure: an identifier that differs whenever the held structure changes — track load, eject, or an analysis refinement of the same track. Compared for inequality only, never for ordering, and zero means never loaded. The track id is a recognition hint, never a change signal.
+_Avoid_: using the track id to detect structure change; comparing generations with less-than/greater-than; treating an identical track as an unchanged structure.
+
+**Phrase Ordinal**:
+A structure phrase's identity: its one-based position in the assembled phrase list. Repeated and immediately adjacent identical phrase types are distinct phrases, and the structure cursor names its current phrase by ordinal.
+_Avoid_: keying phrases by type or name; deduplicating adjacent identical types; zero-based phrase counting.
 
 **Color Bank**:
 Retired. Color mapping is artistic policy owned by the Effect or Transition using the level data. BeatManager exposes musical values only.
