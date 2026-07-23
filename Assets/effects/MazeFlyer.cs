@@ -6,6 +6,8 @@ public class MazeFlyer : EffectBase
     private const int GRID_SIZE = 16;
     private const float MAX_RAY_DIST = 20.0f;
 
+    private float currentRollAngle = 0.0f;
+
     // ========================================================================
     // AUDIO REACTIVITY SETTINGS (Tweak these to adjust beat feel)
     // temporarily disables with 0f values
@@ -15,7 +17,7 @@ public class MazeFlyer : EffectBase
     private float pulseStrength = 0f;//0.20f; // Recommended: 0.05f to 0.40f
 
     [Tooltip("Extra brightness boost added to voxel faces on audio peaks.")]
-    private float peakBrightnessBoost =0f;// 0.25f; // Recommended: 0.00f to 0.50f
+    private float peakBrightnessBoost = 0f;// 0.25f; // Recommended: 0.00f to 0.50f
 
     [Tooltip("How much the fog distance contracts/expands with the rhythm (0 = off).")]
     private float dynamicFogAmount = 0f;//3.0f; // Recommended: 0.0f to 6.0f
@@ -42,9 +44,9 @@ public class MazeFlyer : EffectBase
     private Vector3Int currentCell = new Vector3Int(1, 1, 1);
     private Vector3Int targetCell = new Vector3Int(1, 1, 1);
     private Vector3Int moveDir = Vector3Int.forward;
-    
+
     // Look-Ahead Navigation: Next move direction peeked 1 step ahead for turn anticipation
-    private Vector3Int nextMoveDir = Vector3Int.forward; 
+    private Vector3Int nextMoveDir = Vector3Int.forward;
 
     private Vector3 cameraPos;
     private Quaternion cameraRot = Quaternion.identity;
@@ -206,25 +208,21 @@ public class MazeFlyer : EffectBase
     {
         moveProgress += deltaTime * flySpeed;
 
-        // When reaching the target cell, advance state and pick next turn ahead of time
         if (moveProgress >= 1.0f)
         {
             currentCell = targetCell;
-            moveDir = nextMoveDir; // Carry over the previously predicted direction
+            moveDir = nextMoveDir;
             moveProgress = 0.0f;
             SelectNextMoveDirection();
         }
 
-        // Linear position interpolation ensures the camera stays strictly inside open corridors
         Vector3 startPos = GetCellCenter(currentCell);
         Vector3 endPos = GetCellCenter(targetCell);
         cameraPos = Vector3.Lerp(startPos, endPos, moveProgress);
 
-        // Smoothly lead rotation into upcoming turns before reaching the intersection
         Vector3 currentDirVec = new Vector3(moveDir.x, moveDir.y, moveDir.z);
         Vector3 nextDirVec = new Vector3(nextMoveDir.x, nextMoveDir.y, nextMoveDir.z);
 
-        // Blend looking direction toward nextMoveDir in the latter portion of the cell traversal
         Vector3 blendedForward = Vector3.Lerp(currentDirVec, nextDirVec, Mathf.SmoothStep(0.2f, 1.0f, moveProgress)).normalized;
 
         if (blendedForward != Vector3.zero)
@@ -232,9 +230,23 @@ public class MazeFlyer : EffectBase
             targetRot = Quaternion.LookRotation(blendedForward);
         }
 
-        cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed);
-    }
+        // ========================================================================
+        // FILL EVENT: DYNAMIC CAMERA ROLL (Continuous with smoothing)
+        // ========================================================================
+        if (beatManager.IsSynced && (beatManager.Fill.Active))
+        {
+            // Directly add degrees per frame to currentRollAngle
+            // Modify 30.0f to change the continuous spin speed
+            currentRollAngle = 5f;//45f;//+= 2f;//30.0f * localDelta;
+        }
+        else
+        {
+            currentRollAngle = Mathf.LerpAngle(currentRollAngle, 0.0f, deltaTime * 3.0f);
+        }
 
+        cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed)
+                  * Quaternion.AngleAxis(currentRollAngle, Vector3.forward);
+    }
     /// <summary>
     /// Pathfinding step: Sets immediate target cell and peeks one cell ahead to predict upcoming turns.
     /// </summary>
