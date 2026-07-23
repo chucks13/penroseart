@@ -143,11 +143,77 @@ public struct CountdownState {
 }
 
 /// <summary>
+/// 60 Hz clock of one physical player from <c>/rave/player/{N}/clock</c> (<c>fiiif</c>).
+/// Fields follow the same meaning and formulas as the on-air bpm/beat/bar/beat-in-bar/pulse lanes.
+/// </summary>
+[Serializable]
+public struct PlayerClock {
+    public float bpm;
+    public int beat;
+    public int bar;
+    public int beatInBar;
+
+    /// <summary>
+    /// Triangle wave: 1.0 on each beat, 0.0 halfway between. On the wire 0.0 is both the mid-beat
+    /// trough and the at-rest/unavailable value, so it alone cannot signal a missing clock.
+    /// </summary>
+    public float beatPulse;
+
+    /// <summary>Player clock whose fields are all unavailable (-1 sentinels, at-rest pulse).</summary>
+    public static PlayerClock Unavailable =>
+        new PlayerClock { bpm = -1f, beat = -1, bar = -1, beatInBar = -1, beatPulse = 0f };
+}
+
+/// <summary>
+/// Capture-proven transport predicates of one physical player from
+/// <c>/rave/player/{N}/transport</c> (<c>iiiii</c>). Every field is a RaveSystem tri-state:
+/// <c>1</c> = yes, <c>0</c> = no, <c>-1</c> = unavailable. Do not collapse any of them to a bool.
+/// "Live" is not transmitted; clients derive it as <c>playing == 1 &amp;&amp; onAir == 1</c>.
+/// </summary>
+[Serializable]
+public struct PlayerTransport {
+    public int playing;
+    public int cued;
+    public int onAir;
+    public int master;
+    public int synced;
+
+    /// <summary>Player transport whose predicates are all unavailable (-1 sentinels).</summary>
+    public static PlayerTransport Unavailable => new PlayerTransport {
+        playing = -1, cued = -1, onAir = -1, master = -1, synced = -1,
+    };
+}
+
+/// <summary>
+/// Bundled per-player wire lanes of one physical player (<c>/rave/player/{N}/…</c>).
+/// Loop and timing grid reuse the on-air wire shapes verbatim; per the contract the argument
+/// meanings and sentinels are identical, only the scope differs.
+/// </summary>
+[Serializable]
+public struct PlayerState {
+    public PlayerClock clock;
+    public PlayerTransport transport;
+    public LoopState loopState;
+    public TimingGrid timingGrid;
+
+    /// <summary>Player state whose four lanes are all unavailable.</summary>
+    public static PlayerState Unavailable => new PlayerState {
+        clock = PlayerClock.Unavailable,
+        transport = PlayerTransport.Unavailable,
+        loopState = LoopState.Unavailable,
+        timingGrid = TimingGrid.Unavailable,
+    };
+}
+
+/// <summary>
 /// Latest known RaveSystem OSC wire values decoded from UDP broadcasts.
 /// The fields intentionally mirror the compact OSC payload groups.
 /// </summary>
 [Serializable]
 public sealed class RaveWireSnapshot {
+    /// <summary>Number of per-player slots: ProLink device numbers 1..6.</summary>
+    public const int PlayerCount = 6;
+
     public string playersLive = "";
     public string track = "";
     public float bpm = -1f;
@@ -169,16 +235,21 @@ public sealed class RaveWireSnapshot {
     public TimingGrid timingGrid = TimingGrid.Unavailable;
     public int trackId = -1;
 
+    /// <summary>Per-player wire state indexed by ProLink device number minus one (players 1..6).</summary>
+    public PlayerState[] players = NewUnavailablePlayers();
+
     /// <summary>Creates a deep copy so background OSC updates cannot mutate a returned snapshot.</summary>
     /// <remarks>
-    /// All scalar/struct fields copy via <see cref="object.MemberwiseClone"/>; only the two array fields are
+    /// All scalar/struct fields copy via <see cref="object.MemberwiseClone"/>; only the array fields are
     /// then re-copied so the clone is independent for thread-safety. Keeping the per-field list out of here
-    /// is deliberate — it stops Clone from silently dropping a newly added scalar field.
+    /// is deliberate — it stops Clone from silently dropping a newly added scalar field. <see cref="players"/>
+    /// holds structs whose only reference-typed content is immutable strings, so an element copy is a deep copy.
     /// </remarks>
     public RaveWireSnapshot Clone() {
         var copy = (RaveWireSnapshot)MemberwiseClone();
         copy.beatsCountMs = CopyFour(beatsCountMs);
         copy.onBeats = CopyFour(onBeats);
+        copy.players = CopyPlayers(players);
         return copy;
     }
 
@@ -218,6 +289,24 @@ public sealed class RaveWireSnapshot {
 
     private static bool[] CopyFour(bool[] source) {
         var copy = new bool[4];
+        if (source != null) {
+            Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
+        }
+        return copy;
+    }
+
+    /// <summary>Returns a fixed six-slot player array with every lane at its unavailable sentinel.</summary>
+    private static PlayerState[] NewUnavailablePlayers() {
+        var players = new PlayerState[PlayerCount];
+        for (var i = 0; i < players.Length; i++) {
+            players[i] = PlayerState.Unavailable;
+        }
+        return players;
+    }
+
+    /// <summary>Copies the per-player slots into a fresh fixed-size array for <see cref="Clone"/>.</summary>
+    private static PlayerState[] CopyPlayers(PlayerState[] source) {
+        var copy = NewUnavailablePlayers();
         if (source != null) {
             Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
         }

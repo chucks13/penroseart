@@ -10,7 +10,8 @@ using RaveSystem.Osc;
 namespace PenroseArt.RaveOsc {
 
 /// <summary>
-/// Decodes the RaveSystem on-air OSC broadcast schema into a thread-safe snapshot.
+/// Decodes the RaveSystem OSC broadcast schema — the on-air surface and the keyed
+/// per-player surface — into a thread-safe snapshot.
 /// </summary>
 public sealed class RaveOscPacketParser : IDisposable {
     private readonly OscDispatcher _dispatcher = new OscDispatcher();
@@ -57,6 +58,23 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterLoopState("/rave/onair/loop_state", (snapshot, value) => snapshot.loopState = value);
         RegisterTimingGrid("/rave/onair/timing_grid", (snapshot, value) => snapshot.timingGrid = value);
         RegisterInt("/rave/onair/track_id", (snapshot, value) => snapshot.trackId = value);
+        for (var playerNumber = 1; playerNumber <= RaveWireSnapshot.PlayerCount; playerNumber++) {
+            RegisterPlayerLanes(playerNumber);
+        }
+    }
+
+    /// <summary>
+    /// Registers the four bundled wire lanes of physical player <paramref name="playerNumber"/>
+    /// (ProLink device number 1..6), each routed to that player's snapshot slot only. Loop and
+    /// timing grid reuse the on-air readers because the contract declares the shapes identical.
+    /// </summary>
+    private void RegisterPlayerLanes(int playerNumber) {
+        var index = playerNumber - 1;
+        var prefix = "/rave/player/" + playerNumber;
+        RegisterPlayerClock(prefix + "/clock", (snapshot, value) => snapshot.players[index].clock = value);
+        RegisterPlayerTransport(prefix + "/transport", (snapshot, value) => snapshot.players[index].transport = value);
+        RegisterLoopState(prefix + "/loop_state", (snapshot, value) => snapshot.players[index].loopState = value);
+        RegisterTimingGrid(prefix + "/timing_grid", (snapshot, value) => snapshot.players[index].timingGrid = value);
     }
 
     /// <summary>
@@ -130,6 +148,10 @@ public sealed class RaveOscPacketParser : IDisposable {
     private delegate void SnapshotTimingGridSetter(RaveWireSnapshot snapshot, TimingGrid value);
 
     private delegate void SnapshotCountdownStateSetter(RaveWireSnapshot snapshot, CountdownState value);
+
+    private delegate void SnapshotPlayerClockSetter(RaveWireSnapshot snapshot, PlayerClock value);
+
+    private delegate void SnapshotPlayerTransportSetter(RaveWireSnapshot snapshot, PlayerTransport value);
 
     private delegate void SnapshotUpdater(RaveWireSnapshot snapshot);
 
@@ -255,6 +277,34 @@ public sealed class RaveOscPacketParser : IDisposable {
                 countBeats = ReadNextInt(address, ref reader),
                 lengthBeats = ReadNextInt(address, ref reader),
                 remaining = ReadNextInt(address, ref reader),
+            };
+            UpdateSnapshot(snapshot => setter(snapshot, value));
+        });
+    }
+
+    private void RegisterPlayerClock(string address, SnapshotPlayerClockSetter setter) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var value = new PlayerClock {
+                bpm = ReadNextFloat(address, ref reader),
+                beat = ReadNextInt(address, ref reader),
+                bar = ReadNextInt(address, ref reader),
+                beatInBar = ReadNextInt(address, ref reader),
+                beatPulse = ReadNextFloat(address, ref reader),
+            };
+            UpdateSnapshot(snapshot => setter(snapshot, value));
+        });
+    }
+
+    private void RegisterPlayerTransport(string address, SnapshotPlayerTransportSetter setter) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var value = new PlayerTransport {
+                // Tri-state passthrough: -1 unavailable / 0 no / 1 yes. A != 0 collapse here
+                // would turn "unavailable" into "yes".
+                playing = ReadNextInt(address, ref reader),
+                cued = ReadNextInt(address, ref reader),
+                onAir = ReadNextInt(address, ref reader),
+                master = ReadNextInt(address, ref reader),
+                synced = ReadNextInt(address, ref reader),
             };
             UpdateSnapshot(snapshot => setter(snapshot, value));
         });

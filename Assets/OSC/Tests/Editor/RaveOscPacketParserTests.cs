@@ -208,6 +208,289 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(snapshot.levels.low, Is.EqualTo(-1f));
     }
 
+    /// <summary>Verifies every player clock address updates its indexed slot and no other player.</summary>
+    [Test]
+    public void DispatchRoutesPlayerClockToEachPlayerSlot() {
+        for (var playerNumber = 1; playerNumber <= RaveWireSnapshot.PlayerCount; playerNumber++) {
+            var packet = new byte[512];
+            var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+            WritePlayerClock(
+                ref bundle,
+                $"/rave/player/{playerNumber}/clock",
+                120f + playerNumber,
+                100 + playerNumber,
+                10 + playerNumber,
+                (playerNumber - 1) % 4 + 1,
+                0.1f * playerNumber);
+
+            using var parser = new RaveOscPacketParser();
+            var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+            Assert.That(dispatched, Is.EqualTo(1));
+            Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+
+            var player = snapshot.players[playerNumber - 1];
+            Assert.That(player.clock.bpm, Is.EqualTo(120f + playerNumber));
+            Assert.That(player.clock.beat, Is.EqualTo(100 + playerNumber));
+            Assert.That(player.clock.bar, Is.EqualTo(10 + playerNumber));
+            Assert.That(player.clock.beatInBar, Is.EqualTo((playerNumber - 1) % 4 + 1));
+            Assert.That(player.clock.beatPulse, Is.EqualTo(0.1f * playerNumber));
+
+            player.clock = PlayerClock.Unavailable;
+            AssertPlayerStateUnavailable(player);
+            for (var slot = 0; slot < snapshot.players.Length; slot++) {
+                if (slot != playerNumber - 1) {
+                    AssertPlayerStateUnavailable(snapshot.players[slot]);
+                }
+            }
+        }
+    }
+
+    /// <summary>Verifies every player transport address updates its indexed slot and no other player.</summary>
+    [Test]
+    public void DispatchRoutesPlayerTransportToEachPlayerSlot() {
+        for (var playerNumber = 1; playerNumber <= RaveWireSnapshot.PlayerCount; playerNumber++) {
+            var playing = playerNumber % 3 - 1;
+            var cued = (playerNumber + 1) % 3 - 1;
+            var onAir = (playerNumber + 2) % 3 - 1;
+            var master = playerNumber % 2;
+            var synced = (playerNumber + 1) % 2;
+            var packet = new byte[512];
+            var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+            WritePlayerTransport(
+                ref bundle,
+                $"/rave/player/{playerNumber}/transport",
+                playing,
+                cued,
+                onAir,
+                master,
+                synced);
+
+            using var parser = new RaveOscPacketParser();
+            var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+            Assert.That(dispatched, Is.EqualTo(1));
+            Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+
+            var player = snapshot.players[playerNumber - 1];
+            Assert.That(player.transport.playing, Is.EqualTo(playing));
+            Assert.That(player.transport.cued, Is.EqualTo(cued));
+            Assert.That(player.transport.onAir, Is.EqualTo(onAir));
+            Assert.That(player.transport.master, Is.EqualTo(master));
+            Assert.That(player.transport.synced, Is.EqualTo(synced));
+
+            player.transport = PlayerTransport.Unavailable;
+            AssertPlayerStateUnavailable(player);
+            for (var slot = 0; slot < snapshot.players.Length; slot++) {
+                if (slot != playerNumber - 1) {
+                    AssertPlayerStateUnavailable(snapshot.players[slot]);
+                }
+            }
+        }
+    }
+
+    /// <summary>Verifies every player loop-state address updates its indexed slot and no other player.</summary>
+    [Test]
+    public void DispatchRoutesPlayerLoopStateToEachPlayerSlot() {
+        for (var playerNumber = 1; playerNumber <= RaveWireSnapshot.PlayerCount; playerNumber++) {
+            var active = playerNumber % 2;
+            var set = (playerNumber + 1) % 2;
+            var packet = new byte[512];
+            var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+            WriteLoopState(
+                ref bundle,
+                $"/rave/player/{playerNumber}/loop_state",
+                active,
+                set,
+                playerNumber + 0.5f,
+                900 + playerNumber,
+                playerNumber,
+                8);
+
+            using var parser = new RaveOscPacketParser();
+            var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+            Assert.That(dispatched, Is.EqualTo(1));
+            Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+
+            var player = snapshot.players[playerNumber - 1];
+            Assert.That(player.loopState.active, Is.EqualTo(active));
+            Assert.That(player.loopState.set, Is.EqualTo(set));
+            Assert.That(player.loopState.lengthBeats, Is.EqualTo(playerNumber + 0.5f));
+            Assert.That(player.loopState.lengthMs, Is.EqualTo(900 + playerNumber));
+            Assert.That(player.loopState.sizeNumerator, Is.EqualTo(playerNumber));
+            Assert.That(player.loopState.sizeDenominator, Is.EqualTo(8));
+
+            player.loopState = LoopState.Unavailable;
+            AssertPlayerStateUnavailable(player);
+            for (var slot = 0; slot < snapshot.players.Length; slot++) {
+                if (slot != playerNumber - 1) {
+                    AssertPlayerStateUnavailable(snapshot.players[slot]);
+                }
+            }
+        }
+    }
+
+    /// <summary>Verifies every player timing-grid address updates its indexed slot and no other player.</summary>
+    [Test]
+    public void DispatchRoutesPlayerTimingGridToEachPlayerSlot() {
+        for (var playerNumber = 1; playerNumber <= RaveWireSnapshot.PlayerCount; playerNumber++) {
+            var state = playerNumber % 3 == 1 ? "locked" : playerNumber % 3 == 2 ? "coasting" : "disputed";
+            var packet = new byte[512];
+            var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+            WriteTimingGrid(
+                ref bundle,
+                $"/rave/player/{playerNumber}/timing_grid",
+                4 + playerNumber,
+                (playerNumber - 1) % 4 + 1,
+                state);
+
+            using var parser = new RaveOscPacketParser();
+            var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+            Assert.That(dispatched, Is.EqualTo(1));
+            Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+
+            var player = snapshot.players[playerNumber - 1];
+            Assert.That(player.timingGrid.beat, Is.EqualTo(4 + playerNumber));
+            Assert.That(player.timingGrid.bar, Is.EqualTo((playerNumber - 1) % 4 + 1));
+            Assert.That(player.timingGrid.state, Is.EqualTo(state));
+
+            player.timingGrid = TimingGrid.Unavailable;
+            AssertPlayerStateUnavailable(player);
+            for (var slot = 0; slot < snapshot.players.Length; slot++) {
+                if (slot != playerNumber - 1) {
+                    AssertPlayerStateUnavailable(snapshot.players[slot]);
+                }
+            }
+        }
+    }
+
+    /// <summary>Verifies mixed player transport tri-states pass through without boolean collapse.</summary>
+    [Test]
+    public void DispatchPreservesPlayerTransportTriStates() {
+        var packet = new byte[512];
+        var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+        WritePlayerTransport(ref bundle, "/rave/player/3/transport", -1, 0, 1, -1, 1);
+
+        using var parser = new RaveOscPacketParser();
+        parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        Assert.That(snapshot.players[2].transport.playing, Is.EqualTo(-1));
+        Assert.That(snapshot.players[2].transport.cued, Is.EqualTo(0));
+        Assert.That(snapshot.players[2].transport.onAir, Is.EqualTo(1));
+        Assert.That(snapshot.players[2].transport.master, Is.EqualTo(-1));
+        Assert.That(snapshot.players[2].transport.synced, Is.EqualTo(1));
+    }
+
+    /// <summary>Verifies every unavailable player-lane sentinel lands exactly as transmitted.</summary>
+    [Test]
+    public void DispatchPreservesUnavailablePlayerLaneSentinels() {
+        var packet = new byte[1024];
+        var bundle = new OscBundleWriter(packet, OscTimeTag.Immediately);
+        WritePlayerClock(ref bundle, "/rave/player/4/clock", -1f, -1, -1, -1, 0f);
+        WritePlayerTransport(ref bundle, "/rave/player/4/transport", -1, -1, -1, -1, -1);
+        WriteLoopState(ref bundle, "/rave/player/4/loop_state", -1, -1, -1f, -1, -1, -1);
+        WriteTimingGrid(ref bundle, "/rave/player/4/timing_grid", -1, -1, "");
+
+        using var parser = new RaveOscPacketParser();
+        var dispatched = parser.Dispatch(packet.AsSpan(0, bundle.Finish()));
+
+        Assert.That(dispatched, Is.EqualTo(4));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+
+        var player = snapshot.players[3];
+        Assert.That(player.clock.bpm, Is.EqualTo(-1f));
+        Assert.That(player.clock.beat, Is.EqualTo(-1));
+        Assert.That(player.clock.bar, Is.EqualTo(-1));
+        Assert.That(player.clock.beatInBar, Is.EqualTo(-1));
+        Assert.That(player.clock.beatPulse, Is.EqualTo(0f));
+        Assert.That(player.transport.playing, Is.EqualTo(-1));
+        Assert.That(player.transport.cued, Is.EqualTo(-1));
+        Assert.That(player.transport.onAir, Is.EqualTo(-1));
+        Assert.That(player.transport.master, Is.EqualTo(-1));
+        Assert.That(player.transport.synced, Is.EqualTo(-1));
+        Assert.That(player.loopState.active, Is.EqualTo(-1));
+        Assert.That(player.loopState.set, Is.EqualTo(-1));
+        Assert.That(player.loopState.lengthBeats, Is.EqualTo(-1f));
+        Assert.That(player.loopState.lengthMs, Is.EqualTo(-1));
+        Assert.That(player.loopState.sizeNumerator, Is.EqualTo(-1));
+        Assert.That(player.loopState.sizeDenominator, Is.EqualTo(-1));
+        Assert.That(player.timingGrid.beat, Is.EqualTo(-1));
+        Assert.That(player.timingGrid.bar, Is.EqualTo(-1));
+        Assert.That(player.timingGrid.state, Is.EqualTo(""));
+    }
+
+    /// <summary>Verifies a registered player lane contributes one recognized dispatch.</summary>
+    [Test]
+    public void DispatchCountsPlayerMessageAsRecognized() {
+        var packet = new byte[256];
+        var writer = new OscWriter(packet);
+        writer.WriteAddress("/rave/player/2/timing_grid");
+        writer.WriteInt32(5);
+        writer.WriteInt32(2);
+        writer.WriteString("locked");
+
+        var length = writer.Finish();
+        using var parser = new RaveOscPacketParser();
+
+        var dispatched = parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(dispatched, Is.EqualTo(1));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        Assert.That(snapshot.players[1].timingGrid.beat, Is.EqualTo(5));
+        Assert.That(snapshot.players[1].timingGrid.bar, Is.EqualTo(2));
+        Assert.That(snapshot.players[1].timingGrid.state, Is.EqualTo("locked"));
+    }
+
+    /// <summary>Verifies a taken snapshot owns an independent copy of its per-player slots.</summary>
+    [Test]
+    public void DispatchDoesNotMutateTakenPlayerSnapshot() {
+        var firstPacket = new byte[512];
+        var firstBundle = new OscBundleWriter(firstPacket, OscTimeTag.Immediately);
+        WritePlayerTransport(ref firstBundle, "/rave/player/1/transport", 1, 0, 1, 0, 1);
+
+        using var parser = new RaveOscPacketParser();
+        parser.Dispatch(firstPacket.AsSpan(0, firstBundle.Finish()));
+        Assert.That(parser.TryTakeSnapshot(out var firstSnapshot), Is.True);
+
+        var secondPacket = new byte[512];
+        var secondBundle = new OscBundleWriter(secondPacket, OscTimeTag.Immediately);
+        WritePlayerTransport(ref secondBundle, "/rave/player/1/transport", 0, 1, 0, 1, 0);
+        parser.Dispatch(secondPacket.AsSpan(0, secondBundle.Finish()));
+
+        Assert.That(parser.TryTakeSnapshot(out var secondSnapshot), Is.True);
+        Assert.That(firstSnapshot.players[0].transport.playing, Is.EqualTo(1));
+        Assert.That(firstSnapshot.players[0].transport.cued, Is.EqualTo(0));
+        Assert.That(firstSnapshot.players[0].transport.onAir, Is.EqualTo(1));
+        Assert.That(firstSnapshot.players[0].transport.master, Is.EqualTo(0));
+        Assert.That(firstSnapshot.players[0].transport.synced, Is.EqualTo(1));
+        Assert.That(secondSnapshot.players[0].transport.playing, Is.EqualTo(0));
+        Assert.That(secondSnapshot.players[0].transport.cued, Is.EqualTo(1));
+        Assert.That(secondSnapshot.players[0].transport.onAir, Is.EqualTo(0));
+        Assert.That(secondSnapshot.players[0].transport.master, Is.EqualTo(1));
+        Assert.That(secondSnapshot.players[0].transport.synced, Is.EqualTo(0));
+    }
+
+    /// <summary>Verifies a player clock rejects a non-float BPM type tag.</summary>
+    [Test]
+    public void DispatchRejectsWrongTypeForPlayerClock() {
+        var packet = new byte[256];
+        var writer = new OscWriter(packet);
+        writer.WriteAddress("/rave/player/1/clock");
+        writer.WriteInt32(128);
+        writer.WriteInt32(64);
+        writer.WriteInt32(16);
+        writer.WriteInt32(1);
+        writer.WriteFloat32(0.5f);
+
+        var length = writer.Finish();
+        using var parser = new RaveOscPacketParser();
+
+        Assert.Throws<OscFormatException>(() => parser.Dispatch(packet.AsSpan(0, length)));
+    }
+
     [Test]
     public void DispatchRejectsWrongTypeForKnownRaveAddress() {
         var packet = new byte[256];
@@ -260,6 +543,69 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(dispatched, Is.EqualTo(0));
         Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.False);
         Assert.That(snapshot.phraseState.label, Is.Null);
+    }
+
+    /// <summary>Asserts all four lanes of one player remain at their unavailable defaults.</summary>
+    private static void AssertPlayerStateUnavailable(PlayerState player) {
+        Assert.That(player.clock.bpm, Is.EqualTo(-1f));
+        Assert.That(player.clock.beat, Is.EqualTo(-1));
+        Assert.That(player.clock.bar, Is.EqualTo(-1));
+        Assert.That(player.clock.beatInBar, Is.EqualTo(-1));
+        Assert.That(player.clock.beatPulse, Is.EqualTo(0f));
+        Assert.That(player.transport.playing, Is.EqualTo(-1));
+        Assert.That(player.transport.cued, Is.EqualTo(-1));
+        Assert.That(player.transport.onAir, Is.EqualTo(-1));
+        Assert.That(player.transport.master, Is.EqualTo(-1));
+        Assert.That(player.transport.synced, Is.EqualTo(-1));
+        Assert.That(player.loopState.active, Is.EqualTo(-1));
+        Assert.That(player.loopState.set, Is.EqualTo(-1));
+        Assert.That(player.loopState.lengthBeats, Is.EqualTo(-1f));
+        Assert.That(player.loopState.lengthMs, Is.EqualTo(-1));
+        Assert.That(player.loopState.sizeNumerator, Is.EqualTo(-1));
+        Assert.That(player.loopState.sizeDenominator, Is.EqualTo(-1));
+        Assert.That(player.timingGrid.beat, Is.EqualTo(-1));
+        Assert.That(player.timingGrid.bar, Is.EqualTo(-1));
+        Assert.That(player.timingGrid.state, Is.Null);
+    }
+
+    /// <summary>Writes an <c>fiiif</c> per-player clock lane.</summary>
+    private static void WritePlayerClock(
+        ref OscBundleWriter bundle,
+        string address,
+        float bpm,
+        int beat,
+        int bar,
+        int beatInBar,
+        float beatPulse) {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteFloat32(bpm);
+        writer.WriteInt32(beat);
+        writer.WriteInt32(bar);
+        writer.WriteInt32(beatInBar);
+        writer.WriteFloat32(beatPulse);
+        bundle.EndElement(writer.Finish());
+    }
+
+    /// <summary>Writes an <c>iiiii</c> per-player transport lane without collapsing tri-states.</summary>
+    private static void WritePlayerTransport(
+        ref OscBundleWriter bundle,
+        string address,
+        int playing,
+        int cued,
+        int onAir,
+        int master,
+        int synced) {
+        var element = bundle.BeginElement();
+        var writer = new OscWriter(element);
+        writer.WriteAddress(address);
+        writer.WriteInt32(playing);
+        writer.WriteInt32(cued);
+        writer.WriteInt32(onAir);
+        writer.WriteInt32(master);
+        writer.WriteInt32(synced);
+        bundle.EndElement(writer.Finish());
     }
 
     private static void WriteInt(ref OscBundleWriter bundle, string address, int value) {
