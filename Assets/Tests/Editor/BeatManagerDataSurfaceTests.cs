@@ -28,7 +28,7 @@ public sealed class BeatManagerDataSurfaceTests
     [Test]
     public void RawWireFactsDoNotDependOnTheDerivedSyncState()
     {
-        var snapshot = new RaveOnAirSnapshot
+        var snapshot = new RaveWireSnapshot
         {
             bpm = 128f,
             beat = new BeatPosition { current = 32, total = 256 },

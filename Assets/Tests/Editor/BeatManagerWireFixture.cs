@@ -13,10 +13,10 @@ using PenroseArt.RaveOsc;
 internal static class BeatManagerWireFixture
 {
     /// <summary>Per-manager staging snapshots; production BeatManager state never leaves the hub.</summary>
-    private static readonly ConditionalWeakTable<BeatManager, RaveOnAirSnapshot> Snapshots = new();
+    private static readonly ConditionalWeakTable<BeatManager, RaveWireSnapshot> Snapshots = new();
 
     /// <summary>Applies a staging mutation and immediately feeds its deep-copied result into the hub.</summary>
-    internal static void Feed(BeatManager beatManager, Action<RaveOnAirSnapshot> mutate)
+    internal static void Feed(BeatManager beatManager, Action<RaveWireSnapshot> mutate)
     {
         var snapshot = Snapshots.GetOrCreateValue(beatManager);
         mutate(snapshot);

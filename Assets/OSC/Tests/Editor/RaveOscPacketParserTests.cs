@@ -176,7 +176,7 @@ public sealed class RaveOscPacketParserTests {
 
     [Test]
     public void SnapshotDefaultsToUnavailableStatesBeforeAnyStatePacketArrives() {
-        var snapshot = new RaveOnAirSnapshot();
+        var snapshot = new RaveWireSnapshot();
 
         Assert.That(snapshot.phraseState.label, Is.Null);
         Assert.That(snapshot.phraseState.countBeats, Is.EqualTo(-1));

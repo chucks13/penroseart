@@ -17,7 +17,7 @@ public sealed class LoopValuesTests
     public void RollingSetLoopServesAllFacts()
     {
         var beatManager = new BeatManager();
-        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveWireSnapshot { loopState = new LoopState
         {
             active = 1,
             set = 1,
@@ -44,7 +44,7 @@ public sealed class LoopValuesTests
     public void IdleSetLoopPreservesLengthsAndNominalSize()
     {
         var beatManager = new BeatManager();
-        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveWireSnapshot { loopState = new LoopState
         {
             active = 0,
             set = 1,
@@ -71,7 +71,7 @@ public sealed class LoopValuesTests
     public void AllSentinelLoopServesRestingValues()
     {
         var beatManager = new BeatManager();
-        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveWireSnapshot { loopState = new LoopState
         {
             active = -1,
             set = -1,
@@ -98,7 +98,7 @@ public sealed class LoopValuesTests
     public void RealZerosRemainZeroWithoutInventingANominalSize()
     {
         var beatManager = new BeatManager();
-        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot { loopState = new LoopState
+        beatManager.FeedWireSnapshot(new RaveWireSnapshot { loopState = new LoopState
         {
             active = 0,
             set = 0,

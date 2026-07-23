@@ -62,7 +62,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     public void FromUsesTheFollowingMusicalLabelForNextBeat()
     {
         var beatManager = new BeatManager();
-        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot
+        beatManager.FeedWireSnapshot(new RaveWireSnapshot
         {
             beatInBar = 2,
             beatAverageMs = 400,
@@ -80,7 +80,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void FromUsesIsSyncedAsTheOnlyModeAuthority()
     {
-        var beatManager = LiveManager(new RaveOnAirSnapshot { beatInBar = 1 });
+        var beatManager = LiveManager(new RaveWireSnapshot { beatInBar = 1 });
 
         var model = BeatManagerDashboardModel.From(beatManager, default, "");
 
@@ -101,7 +101,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void FromMakesEveryLiveFactUnavailableInStandaloneMode()
     {
-        var beatManager = LiveManager(new RaveOnAirSnapshot
+        var beatManager = LiveManager(new RaveWireSnapshot
         {
             beatInBar = 2,
             bpm = 128f,
@@ -166,7 +166,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     [Test]
     public void FromKeepsGridCountsOneBased()
     {
-        var beatManager = LiveManager(new RaveOnAirSnapshot
+        var beatManager = LiveManager(new RaveWireSnapshot
         {
             beatInBar = 2,
             bpm = 128f,
@@ -397,7 +397,7 @@ public sealed class BeatManagerDrawerVisualModelTests
     }
 
     /// <summary>Captures one live BeatManager frame from an exact OSC-shaped snapshot.</summary>
-    private static BeatManager LiveManager(RaveOnAirSnapshot snapshot)
+    private static BeatManager LiveManager(RaveWireSnapshot snapshot)
     {
         var beatManager = new BeatManager();
         beatManager.FeedWireSnapshot(snapshot);

@@ -109,7 +109,7 @@ public sealed class BeatManagerStructureTests
     }
 
     /// <summary>Captures one live frame after applying a focused mutation to a deterministic snapshot.</summary>
-    private static BeatManager LiveManager(System.Action<RaveOnAirSnapshot> mutate)
+    private static BeatManager LiveManager(System.Action<RaveWireSnapshot> mutate)
     {
         var snapshot = BeatClockFixture.CreateSnapshot(120f, 0f);
         mutate(snapshot);

@@ -15,7 +15,7 @@ namespace PenroseArt.RaveOsc {
 public sealed class RaveOscPacketParser : IDisposable {
     private readonly OscDispatcher _dispatcher = new OscDispatcher();
     private readonly object _lock = new object();
-    private RaveOnAirSnapshot _snapshot = new RaveOnAirSnapshot();
+    private RaveWireSnapshot _snapshot = new RaveWireSnapshot();
     private bool _hasUpdate;
 
     public RaveOscPacketParser() {
@@ -87,7 +87,7 @@ public sealed class RaveOscPacketParser : IDisposable {
     }
 
     /// <summary>Returns the latest snapshot without clearing the pending-update flag.</summary>
-    public RaveOnAirSnapshot Snapshot {
+    public RaveWireSnapshot Snapshot {
         get {
             lock (_lock) {
                 return _snapshot.Clone();
@@ -96,7 +96,7 @@ public sealed class RaveOscPacketParser : IDisposable {
     }
 
     /// <summary>Returns and clears the latest snapshot when at least one registered value changed.</summary>
-    public bool TryTakeSnapshot(out RaveOnAirSnapshot snapshot) {
+    public bool TryTakeSnapshot(out RaveWireSnapshot snapshot) {
         lock (_lock) {
             snapshot = _snapshot.Clone();
             if (!_hasUpdate) {
@@ -109,29 +109,29 @@ public sealed class RaveOscPacketParser : IDisposable {
 
     public void Dispose() => _dispatcher.Dispose();
 
-    private delegate void SnapshotFloatSetter(RaveOnAirSnapshot snapshot, float value);
+    private delegate void SnapshotFloatSetter(RaveWireSnapshot snapshot, float value);
 
-    private delegate void SnapshotIntSetter(RaveOnAirSnapshot snapshot, int value);
+    private delegate void SnapshotIntSetter(RaveWireSnapshot snapshot, int value);
 
-    private delegate void SnapshotStringSetter(RaveOnAirSnapshot snapshot, string value);
+    private delegate void SnapshotStringSetter(RaveWireSnapshot snapshot, string value);
 
-    private delegate void SnapshotIntArraySetter(RaveOnAirSnapshot snapshot, int[] value);
+    private delegate void SnapshotIntArraySetter(RaveWireSnapshot snapshot, int[] value);
 
-    private delegate void SnapshotBoolArraySetter(RaveOnAirSnapshot snapshot, bool[] value);
+    private delegate void SnapshotBoolArraySetter(RaveWireSnapshot snapshot, bool[] value);
 
-    private delegate void SnapshotLevelsSetter(RaveOnAirSnapshot snapshot, Levels value);
+    private delegate void SnapshotLevelsSetter(RaveWireSnapshot snapshot, Levels value);
 
-    private delegate void SnapshotPhraseStateSetter(RaveOnAirSnapshot snapshot, PhraseState value);
+    private delegate void SnapshotPhraseStateSetter(RaveWireSnapshot snapshot, PhraseState value);
 
-    private delegate void SnapshotLabeledCountdownSetter(RaveOnAirSnapshot snapshot, LabeledCountdown value);
+    private delegate void SnapshotLabeledCountdownSetter(RaveWireSnapshot snapshot, LabeledCountdown value);
 
-    private delegate void SnapshotLoopStateSetter(RaveOnAirSnapshot snapshot, LoopState value);
+    private delegate void SnapshotLoopStateSetter(RaveWireSnapshot snapshot, LoopState value);
 
-    private delegate void SnapshotTimingGridSetter(RaveOnAirSnapshot snapshot, TimingGrid value);
+    private delegate void SnapshotTimingGridSetter(RaveWireSnapshot snapshot, TimingGrid value);
 
-    private delegate void SnapshotCountdownStateSetter(RaveOnAirSnapshot snapshot, CountdownState value);
+    private delegate void SnapshotCountdownStateSetter(RaveWireSnapshot snapshot, CountdownState value);
 
-    private delegate void SnapshotUpdater(RaveOnAirSnapshot snapshot);
+    private delegate void SnapshotUpdater(RaveWireSnapshot snapshot);
 
     private void RegisterFloat(string address, SnapshotFloatSetter setter) {
         _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {

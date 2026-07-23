@@ -28,7 +28,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     private readonly object errorLock = new();
     private OscUdpSocket socket;
     private RaveOscPacketParser parser;
-    private RaveOnAirSnapshot latest = new();
+    private RaveWireSnapshot latest = new();
     private Exception pendingError;
     private bool hasPendingError;
     private bool hasSnapshot;
@@ -52,7 +52,7 @@ public sealed class RaveOscReceiver : MonoBehaviour
     public bool HasSnapshot => hasSnapshot;
 
     /// <summary>The latest decoded Rave on-air values.</summary>
-    public RaveOnAirSnapshot Latest => latest;
+    public RaveWireSnapshot Latest => latest;
 
     /// <summary>True while recognized RaveSystem OSC is arriving on UDP 7000.</summary>
     public bool IsBroadcasting => IsBroadcastingAt(hasSnapshot, SecondsSinceLastRecognizedPacket());

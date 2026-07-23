@@ -33,7 +33,7 @@ internal static class BeatClockFixture
     }
 
     /// <summary>Builds the deterministic live transport snapshot used by <see cref="SeedBeatClock"/>.</summary>
-    public static RaveOnAirSnapshot CreateSnapshot(float bpm, float timeSeconds)
+    public static RaveWireSnapshot CreateSnapshot(float bpm, float timeSeconds)
     {
         var beatDurationSeconds = 60f / bpm;
         var measureDurationSeconds = beatDurationSeconds * BeatSlotCount;
@@ -44,7 +44,7 @@ internal static class BeatClockFixture
         var elapsedSinceBeatSeconds = positionSeconds - beatStartSeconds;
         var onBeat = elapsedSinceBeatSeconds < gateDurationSeconds;
 
-        return new RaveOnAirSnapshot
+        return new RaveWireSnapshot
         {
             bpm = bpm,
             beatInBar = beatIndex + 1,

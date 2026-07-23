@@ -399,7 +399,7 @@ public sealed class CueLogSeamTests
         string phraseLabel = "Phrase",
         string nextPhraseLabel = "Next")
     {
-        var snapshot = new RaveOnAirSnapshot
+        var snapshot = new RaveWireSnapshot
         {
             bpm = 120f,
             beat = new BeatPosition { current = beat, total = -1 },

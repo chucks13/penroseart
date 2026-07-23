@@ -24,7 +24,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
     public void UpdateDoesNotOverwriteLiveWireValues()
     {
         var beatManager = new BeatManager();
-        beatManager.FeedWireSnapshot(new RaveOnAirSnapshot
+        beatManager.FeedWireSnapshot(new RaveWireSnapshot
         {
             bpm = 128f,
             beatInBar = 3,
@@ -42,7 +42,7 @@ public sealed class BeatManagerRaveOscIntegrationTests
     [Test]
     public void SnapshotIngressOwnsADeepCopy()
     {
-        var snapshot = new RaveOnAirSnapshot
+        var snapshot = new RaveWireSnapshot
         {
             beatInBar = 1,
             beatsCountMs = new[] { 0, 500, 1000, 1500 },

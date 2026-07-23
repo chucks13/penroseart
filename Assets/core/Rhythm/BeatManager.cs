@@ -42,13 +42,13 @@ public partial class BeatManager
 
     /// <summary>The private OSC-shaped transport state serialized for the raw Inspector debug foldout.</summary>
     [SerializeField]
-    private RaveOnAirSnapshot wireSnapshot = new();
+    private RaveWireSnapshot wireSnapshot = new();
 
     /// <summary>
     /// Applies the latest live transport snapshot and owns a deep copy before public values are
     /// captured. This is the one wire-in seam used by the OSC adapter and transport-level tests.
     /// </summary>
-    internal void FeedWireSnapshot(RaveOnAirSnapshot snapshot)
+    internal void FeedWireSnapshot(RaveWireSnapshot snapshot)
     {
         SetLiveBeatSource(true);
         wireSnapshot = snapshot.Clone();

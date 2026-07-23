@@ -143,11 +143,11 @@ public struct CountdownState {
 }
 
 /// <summary>
-/// Latest known RaveSystem on-air OSC values decoded from UDP broadcasts.
+/// Latest known RaveSystem OSC wire values decoded from UDP broadcasts.
 /// The fields intentionally mirror the compact OSC payload groups.
 /// </summary>
 [Serializable]
-public sealed class RaveOnAirSnapshot {
+public sealed class RaveWireSnapshot {
     public string playersLive = "";
     public string track = "";
     public float bpm = -1f;
@@ -175,8 +175,8 @@ public sealed class RaveOnAirSnapshot {
     /// then re-copied so the clone is independent for thread-safety. Keeping the per-field list out of here
     /// is deliberate — it stops Clone from silently dropping a newly added scalar field.
     /// </remarks>
-    public RaveOnAirSnapshot Clone() {
-        var copy = (RaveOnAirSnapshot)MemberwiseClone();
+    public RaveWireSnapshot Clone() {
+        var copy = (RaveWireSnapshot)MemberwiseClone();
         copy.beatsCountMs = CopyFour(beatsCountMs);
         copy.onBeats = CopyFour(onBeats);
         return copy;
