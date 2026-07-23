@@ -4,6 +4,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Text;
 using RaveSystem.Osc;
 
@@ -18,6 +19,14 @@ public sealed class RaveOscPacketParser : IDisposable {
     private readonly object _lock = new object();
     private RaveWireSnapshot _snapshot = new RaveWireSnapshot();
     private bool _hasUpdate;
+
+    /// <summary>
+    /// Per-player structure chunk-slot buffers, indexed by device number minus one. A null entry
+    /// means no generation is held for that player; inside a buffer, a slot is null until its
+    /// chunk arrives. Every access runs inside <see cref="UpdateSnapshot"/> and is therefore
+    /// guarded by <see cref="_lock"/>; the buffers are never exposed outside the parser.
+    /// </summary>
+    private readonly StructurePhrase[]?[]?[] _structureChunks = new StructurePhrase[RaveWireSnapshot.PlayerCount][][];
 
     public RaveOscPacketParser() {
         RegisterString("/rave/onair/players_live", (snapshot, value) => snapshot.playersLive = value);
@@ -64,9 +73,10 @@ public sealed class RaveOscPacketParser : IDisposable {
     }
 
     /// <summary>
-    /// Registers the four bundled wire lanes of physical player <paramref name="playerNumber"/>
-    /// (ProLink device number 1..6), each routed to that player's snapshot slot only. Loop and
-    /// timing grid reuse the on-air readers because the contract declares the shapes identical.
+    /// Registers the wire lanes of physical player <paramref name="playerNumber"/> (ProLink
+    /// device number 1..6), each routed to that player's snapshot slot only: the four bundled
+    /// lanes plus the bare structure datagram and its cursor. Loop and timing grid reuse the
+    /// on-air readers because the contract declares the shapes identical.
     /// </summary>
     private void RegisterPlayerLanes(int playerNumber) {
         var index = playerNumber - 1;
@@ -75,6 +85,8 @@ public sealed class RaveOscPacketParser : IDisposable {
         RegisterPlayerTransport(prefix + "/transport", (snapshot, value) => snapshot.players[index].transport = value);
         RegisterLoopState(prefix + "/loop_state", (snapshot, value) => snapshot.players[index].loopState = value);
         RegisterTimingGrid(prefix + "/timing_grid", (snapshot, value) => snapshot.players[index].timingGrid = value);
+        RegisterPlayerStructure(prefix + "/structure", index);
+        RegisterStructureCursor(prefix + "/structure_state", index);
     }
 
     /// <summary>
@@ -307,6 +319,126 @@ public sealed class RaveOscPacketParser : IDisposable {
                 synced = ReadNextInt(address, ref reader),
             };
             UpdateSnapshot(snapshot => setter(snapshot, value));
+        });
+    }
+
+    /// <summary>
+    /// Registers the bare <c>/rave/player/{N}/structure</c> datagram for one player slot: reads
+    /// the <c>sisiiii</c> header (track_id, structure_generation, source, total_beats,
+    /// phrase_count, chunk_index, chunk_count) plus the repeating <c>iisiii</c> phrase tuples,
+    /// then applies chunk assembly under the snapshot lock.
+    /// </summary>
+    private void RegisterPlayerStructure(string address, int index) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var header = new PlayerStructure {
+                trackId = ReadNextString(address, ref reader),
+                generation = ReadNextInt(address, ref reader),
+                source = ReadNextString(address, ref reader),
+                totalBeats = ReadNextInt(address, ref reader),
+                phraseCount = ReadNextInt(address, ref reader),
+            };
+            var chunkIndex = ReadNextInt(address, ref reader);
+            var chunkCount = ReadNextInt(address, ref reader);
+            if (chunkCount < 1 || chunkIndex < 0 || chunkIndex >= chunkCount) {
+                throw new OscFormatException($"Rave OSC address {address} structure chunk must identify an index within a positive chunk count, received chunk {chunkIndex} of {chunkCount}");
+            }
+            var chunk = ReadPhraseTuples(address, ref reader);
+            UpdateSnapshot(snapshot => ApplyStructureChunk(snapshot, index, header, chunkIndex, chunkCount, chunk));
+        });
+    }
+
+    /// <summary>
+    /// Reads the datagram's remaining <c>iisiii</c> phrase tuples in wire order. Tuple order is
+    /// phrase identity (ordinal); nothing is keyed or deduplicated by type. A truncated tuple
+    /// throws <see cref="OscFormatException"/> like every other typed lane.
+    /// </summary>
+    private static StructurePhrase[] ReadPhraseTuples(string address, ref OscReader reader) {
+        var phrases = new List<StructurePhrase>();
+        while (reader.MoveNext()) {
+            if (reader.CurrentTag != OscToken.I32) {
+                throw UnexpectedType(address, "int32", reader.CurrentTag);
+            }
+            phrases.Add(new StructurePhrase {
+                startBeat = reader.ReadInt32(),
+                endBeat = ReadNextInt(address, ref reader),
+                type = ReadNextString(address, ref reader),
+                variant = ReadNextInt(address, ref reader),
+                fillStartBeat = ReadNextInt(address, ref reader),
+                dropLandingBeat = ReadNextInt(address, ref reader),
+            });
+        }
+        return phrases.ToArray();
+    }
+
+    /// <summary>
+    /// Applies one parsed structure chunk to a player slot, mirroring RaveSystem's reference
+    /// client: a header-only zero-phrase chunk 0-of-1 clears structure, cursor, and buffer; a
+    /// datagram whose generation differs from the held one (inequality, never ordering) replaces
+    /// the whole chunk buffer and clears the cursor; each chunk overwrites its indexed slot; the
+    /// visible phrase list is the filled slots concatenated in ascending chunk order, exposed
+    /// even while slots are still missing. Runs inside <see cref="UpdateSnapshot"/>, whose lock
+    /// also guards <see cref="_structureChunks"/>. The rebuilt phrase array is freshly allocated
+    /// on every visible change and never mutated after being assigned to the slot, which keeps
+    /// cloned snapshots deep copies in effect.
+    /// </summary>
+    private void ApplyStructureChunk(RaveWireSnapshot snapshot, int index, PlayerStructure header, int chunkIndex, int chunkCount, StructurePhrase[] chunk) {
+        if (chunk.Length == 0 && chunkIndex == 0 && chunkCount == 1) {
+            _structureChunks[index] = null;
+            snapshot.players[index].structure = PlayerStructure.Unavailable;
+            snapshot.players[index].cursor = StructureCursor.Unavailable;
+            return;
+        }
+
+        var buffer = _structureChunks[index];
+        var newGeneration = buffer is null || snapshot.players[index].structure.generation != header.generation;
+        if (!newGeneration && buffer!.Length != chunkCount) {
+            throw new OscFormatException($"Rave OSC structure generation {header.generation} chunks must share one chunk count, held {buffer!.Length} received {chunkCount}");
+        }
+        if (newGeneration) {
+            buffer = new StructurePhrase[chunkCount][];
+            _structureChunks[index] = buffer;
+            snapshot.players[index].cursor = StructureCursor.Unavailable;
+        }
+        buffer![chunkIndex] = chunk;
+
+        var assembledCount = 0;
+        foreach (var slot in buffer) {
+            if (slot is not null) {
+                assembledCount += slot.Length;
+            }
+        }
+        var phrases = new StructurePhrase[assembledCount];
+        var offset = 0;
+        foreach (var slot in buffer) {
+            if (slot is not null) {
+                Array.Copy(slot, 0, phrases, offset, slot.Length);
+                offset += slot.Length;
+            }
+        }
+        header.phrases = phrases;
+        snapshot.players[index].structure = header;
+    }
+
+    /// <summary>
+    /// Registers the <c>/rave/player/{N}/structure_state</c> cursor (<c>iiii</c>: generation,
+    /// current_phrase, beat_in_phrase, beats_to_next_phrase) for one player slot. The cursor is
+    /// applied only when its generation equals the held structure's generation; a mismatched
+    /// cursor is dropped silently and the prior cursor holds, so an ordinal never lands on the
+    /// wrong phrase list.
+    /// </summary>
+    private void RegisterStructureCursor(string address, int index) {
+        _dispatcher.Register(address, (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) => {
+            var value = new StructureCursor {
+                generation = ReadNextInt(address, ref reader),
+                currentPhrase = ReadNextInt(address, ref reader),
+                beatInPhrase = ReadNextInt(address, ref reader),
+                beatsToNextPhrase = ReadNextInt(address, ref reader),
+            };
+            UpdateSnapshot(snapshot => {
+                if (value.generation == snapshot.players[index].structure.generation) {
+                    snapshot.players[index].cursor = value;
+                }
+            });
         });
     }
 

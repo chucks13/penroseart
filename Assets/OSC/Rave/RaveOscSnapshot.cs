@@ -185,9 +185,101 @@ public struct PlayerTransport {
 }
 
 /// <summary>
-/// Bundled per-player wire lanes of one physical player (<c>/rave/player/{N}/…</c>).
-/// Loop and timing grid reuse the on-air wire shapes verbatim; per the contract the argument
-/// meanings and sentinels are identical, only the scope differs.
+/// One analyzed phrase from <c>/rave/player/{N}/structure</c> (one <c>iisiii</c> repeating tuple).
+/// A phrase's identity is its position in the assembled list (ordinal), never its type or name;
+/// repeated and immediately adjacent identical types are distinct phrases.
+/// </summary>
+[Serializable]
+public struct StructurePhrase {
+    /// <summary>Inclusive one-based phrase start beat.</summary>
+    public int startBeat;
+
+    /// <summary>Inclusive phrase end beat.</summary>
+    public int endBeat;
+
+    /// <summary>Lowercase phrase kind from the per-player vocabulary; <c>unknown</c> is a legal opaque kind.</summary>
+    public string? type;
+
+    /// <summary>Rekordbox phrase variant; <c>0</c> when variantless.</summary>
+    public int variant;
+
+    /// <summary>One-based fill start beat within the phrase; <c>0</c> when the phrase has no fill.</summary>
+    public int fillStartBeat;
+
+    /// <summary>Pinned drop landing beat; <c>0</c> when none.</summary>
+    public int dropLandingBeat;
+}
+
+/// <summary>
+/// Assembled song structure of one physical player from chunked <c>/rave/player/{N}/structure</c>
+/// datagrams (header <c>sisiiii</c>, then one <c>iisiii</c> tuple per phrase). <c>generation</c> is the
+/// sole change detector; <c>trackId</c> is an opaque recognition hint only. <c>phrases</c> may hold
+/// fewer entries than <c>phraseCount</c> while chunks are still converging — partial structures are
+/// visible by contract.
+/// </summary>
+[Serializable]
+public struct PlayerStructure {
+    /// <summary>Structure generation this snapshot belongs to; <c>0</c> = never loaded (sentinel, never on the wire).</summary>
+    public int generation;
+
+    /// <summary>Opaque decimal rekordbox track id string; recognition hint only, never a change signal. Empty/null = no track.</summary>
+    public string? trackId;
+
+    /// <summary>Structure source: "analyzed" / "synthesized" / "fused" / "unavailable"; empty/null = unavailable.</summary>
+    public string? source;
+
+    /// <summary>Total musical beats in the loaded track; <c>-1</c> when unavailable.</summary>
+    public int totalBeats;
+
+    /// <summary>Full-track phrase count across all chunks of this generation; <c>0</c> when there are no phrases.</summary>
+    public int phraseCount;
+
+    /// <summary>
+    /// Ordered phrase list; a phrase's one-based ordinal is its position + 1. Null when no structure
+    /// is held. IMMUTABLE ONCE PUBLISHED: the parser's assembler assigns a freshly built array
+    /// whenever the visible list changes and never mutates a published array, so the per-element
+    /// player copy in <see cref="RaveWireSnapshot.Clone"/> stays a deep copy in effect even though
+    /// clones share this reference.
+    /// </summary>
+    public StructurePhrase[]? phrases;
+
+    /// <summary>Structure whose fields are all unavailable (never-loaded generation <c>0</c>, no phrases).</summary>
+    public static PlayerStructure Unavailable => new PlayerStructure {
+        generation = 0, trackId = null, source = null, totalBeats = -1, phraseCount = 0, phrases = null,
+    };
+}
+
+/// <summary>
+/// Live structure cursor of one physical player from <c>/rave/player/{N}/structure_state</c>
+/// (<c>iiii</c>). The parser applies a cursor only when <c>generation</c> equals the held
+/// <see cref="PlayerStructure.generation"/>; a mismatched cursor is dropped silently and the
+/// prior cursor holds, so <c>currentPhrase</c> is always an ordinal into the held phrase list.
+/// </summary>
+[Serializable]
+public struct StructureCursor {
+    /// <summary>Generation of the structure this cursor belongs to; <c>0</c> when no structure is held.</summary>
+    public int generation;
+
+    /// <summary>One-based ordinal (position + 1) of the phrase covering the current beat; <c>-1</c> when none covers it.</summary>
+    public int currentPhrase;
+
+    /// <summary>One-based beat position within that phrase; <c>-1</c> in the same no-coverage case.</summary>
+    public int beatInPhrase;
+
+    /// <summary>Beats remaining to the next phrase boundary; <c>-1</c> in the same no-coverage case.</summary>
+    public int beatsToNextPhrase;
+
+    /// <summary>Cursor bound to no structure (generation <c>0</c>, no-coverage <c>-1</c> sentinels).</summary>
+    public static StructureCursor Unavailable => new StructureCursor {
+        generation = 0, currentPhrase = -1, beatInPhrase = -1, beatsToNextPhrase = -1,
+    };
+}
+
+/// <summary>
+/// Per-player wire lanes of one physical player (<c>/rave/player/{N}/…</c>): the four bundled
+/// lanes plus the assembled structure and its generation-bound cursor. Loop and timing grid
+/// reuse the on-air wire shapes verbatim; per the contract the argument meanings and sentinels
+/// are identical, only the scope differs.
 /// </summary>
 [Serializable]
 public struct PlayerState {
@@ -196,12 +288,20 @@ public struct PlayerState {
     public LoopState loopState;
     public TimingGrid timingGrid;
 
-    /// <summary>Player state whose four lanes are all unavailable.</summary>
+    /// <summary>Assembled song structure; exposed even while chunks are still converging.</summary>
+    public PlayerStructure structure;
+
+    /// <summary>Structure cursor; either unavailable or generation-matched to <see cref="structure"/>.</summary>
+    public StructureCursor cursor;
+
+    /// <summary>Player state whose lanes are all unavailable.</summary>
     public static PlayerState Unavailable => new PlayerState {
         clock = PlayerClock.Unavailable,
         transport = PlayerTransport.Unavailable,
         loopState = LoopState.Unavailable,
         timingGrid = TimingGrid.Unavailable,
+        structure = PlayerStructure.Unavailable,
+        cursor = StructureCursor.Unavailable,
     };
 }
 
@@ -243,7 +343,10 @@ public sealed class RaveWireSnapshot {
     /// All scalar/struct fields copy via <see cref="object.MemberwiseClone"/>; only the array fields are
     /// then re-copied so the clone is independent for thread-safety. Keeping the per-field list out of here
     /// is deliberate — it stops Clone from silently dropping a newly added scalar field. <see cref="players"/>
-    /// holds structs whose only reference-typed content is immutable strings, so an element copy is a deep copy.
+    /// holds structs whose reference-typed content is immutable strings and the
+    /// <see cref="PlayerStructure.phrases"/> array, which is immutable once published (the parser's
+    /// assembler always assigns a fresh array, never mutating a published one), so an element copy
+    /// is a deep copy in effect.
     /// </remarks>
     public RaveWireSnapshot Clone() {
         var copy = (RaveWireSnapshot)MemberwiseClone();
@@ -305,10 +408,20 @@ public sealed class RaveWireSnapshot {
     }
 
     /// <summary>Copies the per-player slots into a fresh fixed-size array for <see cref="Clone"/>.</summary>
+    /// <remarks>
+    /// Phrase arrays are also cloned so the deep-copy contract holds unconditionally — a caller
+    /// writing into a taken snapshot's phrases can never reach the parser's held state.
+    /// </remarks>
     private static PlayerState[] CopyPlayers(PlayerState[] source) {
         var copy = NewUnavailablePlayers();
         if (source != null) {
             Array.Copy(source, copy, Math.Min(source.Length, copy.Length));
+            for (var i = 0; i < copy.Length; i++) {
+                var phrases = copy[i].structure.phrases;
+                if (phrases != null) {
+                    copy[i].structure.phrases = (StructurePhrase[])phrases.Clone();
+                }
+            }
         }
         return copy;
     }

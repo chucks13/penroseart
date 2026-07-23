@@ -473,6 +473,337 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(secondSnapshot.players[0].transport.synced, Is.EqualTo(0));
     }
 
+    [Test]
+    public void MutatingTakenSnapshotPhrasesDoesNotReachParserState() {
+        var packet = new byte[1024];
+        var length = WriteStructure(packet, 2, generation: 5, phraseCount: 2, chunkIndex: 0, chunkCount: 1,
+            new[] { Phrase(0, 32, "intro"), Phrase(32, 64, "chorus") });
+
+        using var parser = new RaveOscPacketParser();
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var taken), Is.True);
+
+        taken.players[1].structure.phrases![0] = Phrase(999, 1000, "corrupted");
+
+        Assert.That(parser.Snapshot.players[1].structure.phrases![0].startBeat, Is.EqualTo(0));
+        Assert.That(parser.Snapshot.players[1].structure.phrases![0].type, Is.EqualTo("intro"));
+    }
+
+    /// <summary>Verifies a bare structure datagram updates only its addressed player slot.</summary>
+    [Test]
+    public void DispatchRoutesPlayerStructureToCorrectPlayerSlotOnly() {
+        var packet = new byte[1024];
+        var phrase = Phrase(1, 32, "intro", variant: 2, fillStartBeat: 25, dropLandingBeat: 1);
+        var length = WriteStructure(
+            packet,
+            playerNumber: 3,
+            generation: 7,
+            phraseCount: 1,
+            chunkIndex: 0,
+            chunkCount: 1,
+            phrases: new[] { phrase },
+            trackId: "328123",
+            source: "fused",
+            totalBeats: 512);
+
+        using var parser = new RaveOscPacketParser();
+        var dispatched = parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(dispatched, Is.EqualTo(1));
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        var structure = snapshot.players[2].structure;
+        Assert.That(structure.generation, Is.EqualTo(7));
+        Assert.That(structure.trackId, Is.EqualTo("328123"));
+        Assert.That(structure.source, Is.EqualTo("fused"));
+        Assert.That(structure.totalBeats, Is.EqualTo(512));
+        Assert.That(structure.phraseCount, Is.EqualTo(1));
+        Assert.That(structure.phrases, Has.Length.EqualTo(1));
+        AssertStructurePhrase(structure.phrases![0], phrase);
+
+        foreach (var slot in new[] { 0, 1, 3, 4, 5 }) {
+            AssertPlayerStateUnavailable(snapshot.players[slot]);
+        }
+    }
+
+    /// <summary>Verifies adjacent phrases with the same type retain distinct ordinal positions.</summary>
+    [Test]
+    public void DispatchPreservesRepeatedStructurePhraseTypesAsDistinctOrdinals() {
+        var packet = new byte[1024];
+        var expected = new[] {
+            Phrase(1, 32, "chorus"),
+            Phrase(33, 64, "chorus"),
+            Phrase(65, 96, "chorus"),
+        };
+        var length = WriteStructure(packet, 1, 4, 3, 0, 1, expected);
+
+        using var parser = new RaveOscPacketParser();
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var snapshot), Is.True);
+        var phrases = snapshot.players[0].structure.phrases!;
+        Assert.That(phrases, Has.Length.EqualTo(3));
+        for (var ordinal = 0; ordinal < expected.Length; ordinal++) {
+            AssertStructurePhrase(phrases[ordinal], expected[ordinal]);
+        }
+    }
+
+    /// <summary>Verifies partial chunks are exposed and assembled in chunk-index order, not arrival order.</summary>
+    [Test]
+    public void DispatchConcatenatesStructureChunksInChunkIndexOrder() {
+        var chunkZero = new[] {
+            Phrase(1, 32, "intro"),
+            Phrase(33, 64, "verse"),
+        };
+        var chunkOne = new[] { Phrase(65, 96, "chorus") };
+        var packet = new byte[1024];
+
+        using var parser = new RaveOscPacketParser();
+        var length = WriteStructure(packet, 2, 9, 3, 1, 2, chunkOne);
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var partialSnapshot), Is.True);
+        var partial = partialSnapshot.players[1].structure.phrases!;
+        Assert.That(partial, Has.Length.EqualTo(1));
+        AssertStructurePhrase(partial[0], chunkOne[0]);
+
+        length = WriteStructure(packet, 2, 9, 3, 0, 2, chunkZero);
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var completeSnapshot), Is.True);
+        var complete = completeSnapshot.players[1].structure.phrases!;
+        Assert.That(complete, Has.Length.EqualTo(3));
+        AssertStructurePhrase(complete[0], chunkZero[0]);
+        AssertStructurePhrase(complete[1], chunkZero[1]);
+        AssertStructurePhrase(complete[2], chunkOne[0]);
+    }
+
+    /// <summary>Verifies any unequal generation replaces the held structure, regardless of ordering.</summary>
+    [Test]
+    public void DispatchReplacesHeldStructureWheneverGenerationDiffers() {
+        var packet = new byte[1024];
+        using var parser = new RaveOscPacketParser();
+
+        var generationSevenPhrase = Phrase(1, 32, "intro");
+        var length = WriteStructure(
+            packet,
+            4,
+            7,
+            2,
+            0,
+            2,
+            new[] { generationSevenPhrase },
+            trackId: "700",
+            source: "synthesized",
+            totalBeats: 64);
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var generationSeven), Is.True);
+        Assert.That(generationSeven.players[3].structure.phrases, Has.Length.EqualTo(1));
+
+        var generationEightPhrase = Phrase(97, 128, "drop", variant: 1, dropLandingBeat: 97);
+        length = WriteStructure(
+            packet,
+            4,
+            8,
+            1,
+            0,
+            1,
+            new[] { generationEightPhrase },
+            trackId: "800",
+            source: "fused",
+            totalBeats: 128);
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var generationEight), Is.True);
+        var higher = generationEight.players[3].structure;
+        Assert.That(higher.generation, Is.EqualTo(8));
+        Assert.That(higher.trackId, Is.EqualTo("800"));
+        Assert.That(higher.source, Is.EqualTo("fused"));
+        Assert.That(higher.totalBeats, Is.EqualTo(128));
+        Assert.That(higher.phraseCount, Is.EqualTo(1));
+        Assert.That(higher.phrases, Has.Length.EqualTo(1));
+        AssertStructurePhrase(higher.phrases![0], generationEightPhrase);
+
+        var generationThreePhrase = Phrase(257, 288, "outro");
+        length = WriteStructure(
+            packet,
+            4,
+            3,
+            1,
+            0,
+            1,
+            new[] { generationThreePhrase },
+            trackId: "300",
+            source: "analyzed",
+            totalBeats: 288);
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var generationThree), Is.True);
+        var lower = generationThree.players[3].structure;
+        Assert.That(lower.generation, Is.EqualTo(3));
+        Assert.That(lower.trackId, Is.EqualTo("300"));
+        Assert.That(lower.source, Is.EqualTo("analyzed"));
+        Assert.That(lower.totalBeats, Is.EqualTo(288));
+        Assert.That(lower.phraseCount, Is.EqualTo(1));
+        Assert.That(lower.phrases, Has.Length.EqualTo(1));
+        AssertStructurePhrase(lower.phrases![0], generationThreePhrase);
+    }
+
+    /// <summary>Verifies the header-only zero-phrase shape clears both structure and cursor.</summary>
+    [Test]
+    public void DispatchClearsStructureAndCursorForZeroPhraseDatagram() {
+        var packet = new byte[1024];
+        using var parser = new RaveOscPacketParser();
+
+        var length = WriteStructure(packet, 5, 5, 1, 0, 1, new[] { Phrase(1, 32, "verse") });
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out _), Is.True);
+
+        length = WriteStructureState(packet, 5, 5, 1, 4, 28);
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var populated), Is.True);
+        Assert.That(populated.players[4].cursor.generation, Is.EqualTo(5));
+
+        length = WriteStructure(
+            packet,
+            5,
+            6,
+            0,
+            0,
+            1,
+            Array.Empty<StructurePhrase>(),
+            trackId: "",
+            source: "unavailable",
+            totalBeats: -1);
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var cleared), Is.True);
+        var structure = cleared.players[4].structure;
+        Assert.That(structure.generation, Is.EqualTo(0));
+        Assert.That(structure.trackId, Is.Null);
+        Assert.That(structure.source, Is.Null);
+        Assert.That(structure.totalBeats, Is.EqualTo(-1));
+        Assert.That(structure.phraseCount, Is.EqualTo(0));
+        Assert.That(structure.phrases, Is.Null);
+        var cursor = cleared.players[4].cursor;
+        Assert.That(cursor.generation, Is.EqualTo(0));
+        Assert.That(cursor.currentPhrase, Is.EqualTo(-1));
+        Assert.That(cursor.beatInPhrase, Is.EqualTo(-1));
+        Assert.That(cursor.beatsToNextPhrase, Is.EqualTo(-1));
+    }
+
+    /// <summary>Verifies structure cursors apply only when their generation matches the held structure.</summary>
+    [Test]
+    public void DispatchAppliesOnlyStructureCursorMatchingHeldGeneration() {
+        var packet = new byte[1024];
+        using var parser = new RaveOscPacketParser();
+
+        var length = WriteStructure(packet, 6, 5, 1, 0, 1, new[] { Phrase(1, 32, "bridge") });
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out _), Is.True);
+
+        length = WriteStructureState(packet, 6, 5, 1, 7, 25);
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var matched), Is.True);
+        Assert.That(matched.players[5].cursor.generation, Is.EqualTo(5));
+        Assert.That(matched.players[5].cursor.currentPhrase, Is.EqualTo(1));
+        Assert.That(matched.players[5].cursor.beatInPhrase, Is.EqualTo(7));
+        Assert.That(matched.players[5].cursor.beatsToNextPhrase, Is.EqualTo(25));
+
+        length = WriteStructureState(packet, 6, 6, 9, 9, 9);
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var mismatched), Is.True);
+        Assert.That(mismatched.players[5].cursor.generation, Is.EqualTo(5));
+        Assert.That(mismatched.players[5].cursor.currentPhrase, Is.EqualTo(1));
+        Assert.That(mismatched.players[5].cursor.beatInPhrase, Is.EqualTo(7));
+        Assert.That(mismatched.players[5].cursor.beatsToNextPhrase, Is.EqualTo(25));
+    }
+
+    /// <summary>Verifies 32 phrases fit one datagram and 33 assemble from 32-plus-1 chunks.</summary>
+    [Test]
+    public void DispatchAcceptsStructureChunkBoundaryOfThirtyTwoPhrases() {
+        var thirtyTwo = new StructurePhrase[32];
+        for (var i = 0; i < thirtyTwo.Length; i++) {
+            thirtyTwo[i] = Phrase(i * 16 + 1, (i + 1) * 16, "verse", variant: i);
+        }
+
+        var packet = new byte[4096];
+        using var parser = new RaveOscPacketParser();
+        var length = WriteStructure(packet, 1, 11, 32, 0, 1, thirtyTwo);
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var unchunkedSnapshot), Is.True);
+        var unchunked = unchunkedSnapshot.players[0].structure.phrases!;
+        Assert.That(unchunked, Has.Length.EqualTo(32));
+        for (var i = 0; i < thirtyTwo.Length; i++) {
+            AssertStructurePhrase(unchunked[i], thirtyTwo[i]);
+        }
+
+        var thirtyThree = new StructurePhrase[33];
+        Array.Copy(thirtyTwo, thirtyThree, thirtyTwo.Length);
+        thirtyThree[32] = Phrase(513, 528, "outro", variant: 32);
+        var finalChunk = new[] { thirtyThree[32] };
+
+        length = WriteStructure(packet, 1, 12, 33, 0, 2, thirtyTwo);
+        parser.Dispatch(packet.AsSpan(0, length));
+        Assert.That(parser.TryTakeSnapshot(out var partialSnapshot), Is.True);
+        Assert.That(partialSnapshot.players[0].structure.phrases, Has.Length.EqualTo(32));
+
+        length = WriteStructure(packet, 1, 12, 33, 1, 2, finalChunk);
+        parser.Dispatch(packet.AsSpan(0, length));
+
+        Assert.That(parser.TryTakeSnapshot(out var chunkedSnapshot), Is.True);
+        var chunked = chunkedSnapshot.players[0].structure.phrases!;
+        Assert.That(chunked, Has.Length.EqualTo(33));
+        for (var i = 0; i < thirtyThree.Length; i++) {
+            AssertStructurePhrase(chunked[i], thirtyThree[i]);
+        }
+    }
+
+    /// <summary>Verifies a structure header rejects a wrong type tag.</summary>
+    [Test]
+    public void DispatchRejectsWrongTypeInPlayerStructureHeader() {
+        var packet = new byte[256];
+        var writer = new OscWriter(packet);
+        writer.WriteAddress("/rave/player/1/structure");
+        writer.WriteInt32(328123);
+        writer.WriteInt32(7);
+        writer.WriteString("fused");
+        writer.WriteInt32(512);
+        writer.WriteInt32(0);
+        writer.WriteInt32(0);
+        writer.WriteInt32(1);
+
+        var length = writer.Finish();
+        using var parser = new RaveOscPacketParser();
+
+        Assert.Throws<OscFormatException>(() => parser.Dispatch(packet.AsSpan(0, length)));
+    }
+
+    /// <summary>Verifies a structure phrase tuple rejects a wrong type tag.</summary>
+    [Test]
+    public void DispatchRejectsWrongTypeInPlayerStructurePhraseTuple() {
+        var packet = new byte[512];
+        var writer = new OscWriter(packet);
+        writer.WriteAddress("/rave/player/1/structure");
+        writer.WriteString("328123");
+        writer.WriteInt32(7);
+        writer.WriteString("fused");
+        writer.WriteInt32(512);
+        writer.WriteInt32(1);
+        writer.WriteInt32(0);
+        writer.WriteInt32(1);
+        writer.WriteString("one");
+        writer.WriteInt32(32);
+        writer.WriteString("intro");
+        writer.WriteInt32(0);
+        writer.WriteInt32(0);
+        writer.WriteInt32(0);
+
+        var length = writer.Finish();
+        using var parser = new RaveOscPacketParser();
+
+        Assert.Throws<OscFormatException>(() => parser.Dispatch(packet.AsSpan(0, length)));
+    }
+
     /// <summary>Verifies a player clock rejects a non-float BPM type tag.</summary>
     [Test]
     public void DispatchRejectsWrongTypeForPlayerClock() {
@@ -545,7 +876,87 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(snapshot.phraseState.label, Is.Null);
     }
 
-    /// <summary>Asserts all four lanes of one player remain at their unavailable defaults.</summary>
+    /// <summary>Creates one structure phrase tuple for readable parser assertions.</summary>
+    private static StructurePhrase Phrase(
+        int startBeat,
+        int endBeat,
+        string type,
+        int variant = 0,
+        int fillStartBeat = 0,
+        int dropLandingBeat = 0) {
+        return new StructurePhrase {
+            startBeat = startBeat,
+            endBeat = endBeat,
+            type = type,
+            variant = variant,
+            fillStartBeat = fillStartBeat,
+            dropLandingBeat = dropLandingBeat,
+        };
+    }
+
+    /// <summary>Writes one bare per-player structure datagram and returns its byte length.</summary>
+    private static int WriteStructure(
+        byte[] packet,
+        int playerNumber,
+        int generation,
+        int phraseCount,
+        int chunkIndex,
+        int chunkCount,
+        StructurePhrase[] phrases,
+        string trackId = "328123",
+        string source = "fused",
+        int totalBeats = 512) {
+        // A full 32-phrase chunk carries 7 + 32*6 type tags, past the writer's inline scratch,
+        // so use the external-scratch overload the library provides for oversized messages.
+        Span<byte> tagScratch = stackalloc byte[256];
+        var writer = new OscWriter(packet, tagScratch);
+        writer.WriteAddress($"/rave/player/{playerNumber}/structure");
+        writer.WriteString(trackId);
+        writer.WriteInt32(generation);
+        writer.WriteString(source);
+        writer.WriteInt32(totalBeats);
+        writer.WriteInt32(phraseCount);
+        writer.WriteInt32(chunkIndex);
+        writer.WriteInt32(chunkCount);
+        foreach (var phrase in phrases) {
+            writer.WriteInt32(phrase.startBeat);
+            writer.WriteInt32(phrase.endBeat);
+            writer.WriteString(phrase.type);
+            writer.WriteInt32(phrase.variant);
+            writer.WriteInt32(phrase.fillStartBeat);
+            writer.WriteInt32(phrase.dropLandingBeat);
+        }
+        return writer.Finish();
+    }
+
+    /// <summary>Writes one bare per-player structure cursor datagram and returns its byte length.</summary>
+    private static int WriteStructureState(
+        byte[] packet,
+        int playerNumber,
+        int generation,
+        int currentPhrase,
+        int beatInPhrase,
+        int beatsToNextPhrase) {
+        var writer = new OscWriter(packet);
+        writer.WriteAddress($"/rave/player/{playerNumber}/structure_state");
+        writer.WriteInt32(generation);
+        writer.WriteInt32(currentPhrase);
+        writer.WriteInt32(beatInPhrase);
+        writer.WriteInt32(beatsToNextPhrase);
+        return writer.Finish();
+    }
+
+    /// <summary>Asserts every field of one parsed structure phrase.</summary>
+    private static void AssertStructurePhrase(StructurePhrase actual, StructurePhrase expected) {
+        Assert.That(actual.startBeat, Is.EqualTo(expected.startBeat));
+        Assert.That(actual.endBeat, Is.EqualTo(expected.endBeat));
+        Assert.That(actual.type, Is.EqualTo(expected.type));
+        Assert.That(actual.variant, Is.EqualTo(expected.variant));
+        Assert.That(actual.fillStartBeat, Is.EqualTo(expected.fillStartBeat));
+        Assert.That(actual.dropLandingBeat, Is.EqualTo(expected.dropLandingBeat));
+    }
+
+    /// <summary>Asserts every lane of one player remains at its unavailable defaults.</summary>
     private static void AssertPlayerStateUnavailable(PlayerState player) {
         Assert.That(player.clock.bpm, Is.EqualTo(-1f));
         Assert.That(player.clock.beat, Is.EqualTo(-1));
@@ -566,6 +977,16 @@ public sealed class RaveOscPacketParserTests {
         Assert.That(player.timingGrid.beat, Is.EqualTo(-1));
         Assert.That(player.timingGrid.bar, Is.EqualTo(-1));
         Assert.That(player.timingGrid.state, Is.Null);
+        Assert.That(player.structure.generation, Is.EqualTo(0));
+        Assert.That(player.structure.trackId, Is.Null);
+        Assert.That(player.structure.source, Is.Null);
+        Assert.That(player.structure.totalBeats, Is.EqualTo(-1));
+        Assert.That(player.structure.phraseCount, Is.EqualTo(0));
+        Assert.That(player.structure.phrases, Is.Null);
+        Assert.That(player.cursor.generation, Is.EqualTo(0));
+        Assert.That(player.cursor.currentPhrase, Is.EqualTo(-1));
+        Assert.That(player.cursor.beatInPhrase, Is.EqualTo(-1));
+        Assert.That(player.cursor.beatsToNextPhrase, Is.EqualTo(-1));
     }
 
     /// <summary>Writes an <c>fiiif</c> per-player clock lane.</summary>
