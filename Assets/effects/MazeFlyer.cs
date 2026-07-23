@@ -1,15 +1,27 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-// designed by Chuck, coded by Gemini
-
 public class MazeFlyer : EffectBase
 {
     private const int GRID_SIZE = 16;
     private const float MAX_RAY_DIST = 20.0f;
 
+    // ========================================================================
+    // AUDIO REACTIVITY SETTINGS (Tweak these to adjust beat feel)
+    // ========================================================================
+    [Header("Audio Reactivity Settings")]
+    [Tooltip("Maximum ray displacement on heavy beat hits. High values = bigger wall recoil.")]
+    private float pulseStrength = 0.20f; // Recommended: 0.05f to 0.40f
+
+    [Tooltip("Extra brightness boost added to voxel faces on audio peaks.")]
+    private float peakBrightnessBoost = 0.25f; // Recommended: 0.00f to 0.50f
+
+    [Tooltip("How much the fog distance contracts/expands with the rhythm (0 = off).")]
+    private float dynamicFogAmount = 3.0f; // Recommended: 0.0f to 6.0f
+    // ========================================================================
+
     public override Repertoire Repertoire =>
-     Repertoire.HandlesFill | Repertoire.HandlesDrop;
+     Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     // Color generation modes
     private enum ColorMode
@@ -58,6 +70,7 @@ public class MazeFlyer : EffectBase
     public override void OnStart()
     {
         base.OnStart();
+        waveform = waveforms.Random();
 
         float overallSpeed = (float)Random.Range(1, 5);
         flySpeed = overallSpeed;
@@ -163,6 +176,12 @@ public class MazeFlyer : EffectBase
     {
         UpdateCameraNavigation(Time.deltaTime);
 
+        // Check if beat tracking is active via the boolean flag
+        bool isBeatSynced = beatManager.IsSynced;
+
+        // Sample waveform envelope only when synced
+        float rhythm = isBeatSynced ? waveform.Envelope : 0.0f;
+
         Vector3 cameraForward = cameraRot * Vector3.forward;
         Vector3 cameraRight = cameraRot * Vector3.right;
         Vector3 cameraUp = cameraRot * Vector3.up;
@@ -175,7 +194,7 @@ public class MazeFlyer : EffectBase
             float py = tiles[i].center.y;
 
             Vector3 rayDir = (cameraForward * focalLength + cameraRight * px + cameraUp * py).normalized;
-            buffer[i] = TraceVoxelRay(cameraPos, rayDir);
+            buffer[i] = TraceVoxelRay(cameraPos, rayDir, rhythm, isBeatSynced);
         }
     }
 
@@ -290,13 +309,19 @@ public class MazeFlyer : EffectBase
         return new Vector3(cell.x + 0.5f, cell.y + 0.5f, cell.z + 0.5f);
     }
 
-    private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir)
+    /// <summary>
+    /// Executes 3D DDA voxel ray stepping with audio-driven spatial recoil.
+    /// </summary>
+    private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir, float rhythm, bool isBeatSynced)
     {
+        // Apply spatial pulse along ray direction when audio is present and synced
+        Vector3 pulsedOrigin = rayOrigin + (rayDir * (rhythm * pulseStrength));
+
         float rx = Mathf.Abs(rayDir.x) < 1e-6f ? 1e-6f : rayDir.x;
         float ry = Mathf.Abs(rayDir.y) < 1e-6f ? 1e-6f : rayDir.y;
         float rz = Mathf.Abs(rayDir.z) < 1e-6f ? 1e-6f : rayDir.z;
 
-        Vector3 currentPos = rayOrigin;
+        Vector3 currentPos = pulsedOrigin;
 
         int mapX = Mathf.FloorToInt(currentPos.x);
         int mapY = Mathf.FloorToInt(currentPos.y);
@@ -317,7 +342,10 @@ public class MazeFlyer : EffectBase
         float distanceTraveled = 0f;
         int hitSide = 0;
 
-        while (distanceTraveled < MAX_RAY_DIST)
+        // Dynamic max fog distance modulation on beats
+        float currentMaxDist = MAX_RAY_DIST + (rhythm * dynamicFogAmount);
+
+        while (distanceTraveled < currentMaxDist)
         {
             int vx = PositiveModulo(mapX, GRID_SIZE);
             int vy = PositiveModulo(mapY, GRID_SIZE);
@@ -327,32 +355,39 @@ public class MazeFlyer : EffectBase
 
             if (voxelColor.a > 0.0f)
             {
-                if (beatManager.Drop.Active)
+                // Gate Drop and Fill checks using the boolean flag
+                if (isBeatSynced)
                 {
-                    int checker = (vx + vy + vz) % 4;
-                    if (checker == 0)
+                    if (beatManager.Drop.Active)
                     {
-                        var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
-                        voxelColor = Color.HSVToRGB(0f, 0f, t);
+                        int checker = (vx + vy + vz) % 4;
+                        if (checker == 0)
+                        {
+                            var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
+                            voxelColor = Color.HSVToRGB(0f, 0f, t);
+                        }
                     }
-                }
-                if (beatManager.Fill.Active)
-                {
-                    int checker = (vx + vy + vz) % 4;
-                    if (checker == 0)
+
+                    if (beatManager.Fill.Active)
                     {
-                        var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
-                        voxelColor = Color.HSVToRGB(t, 1f, 1f);
+                        int checker = (vx + vy + vz) % 4;
+                        if (checker == 0)
+                        {
+                            var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
+                            voxelColor = Color.HSVToRGB(t, 1f, 1f);
+                        }
                     }
                 }
 
-                float shade = hitSide == 0 ? 0.75f : (hitSide == 1 ? 0.95f : 0.60f);
-                float fog = 1.0f - Mathf.Clamp01(distanceTraveled / MAX_RAY_DIST);
+                // Shading calculations with audio peak boost
+                float baseShade = hitSide == 0 ? 0.75f : (hitSide == 1 ? 0.95f : 0.60f);
+                float shade = baseShade + (rhythm * peakBrightnessBoost);
+                float fog = 1.0f - Mathf.Clamp01(distanceTraveled / currentMaxDist);
 
                 return new Color(
-                    voxelColor.r * shade * fog,
-                    voxelColor.g * shade * fog,
-                    voxelColor.b * shade * fog,
+                    Mathf.Clamp01(voxelColor.r * shade * fog),
+                    Mathf.Clamp01(voxelColor.g * shade * fog),
+                    Mathf.Clamp01(voxelColor.b * shade * fog),
                     1.0f
                 );
             }
