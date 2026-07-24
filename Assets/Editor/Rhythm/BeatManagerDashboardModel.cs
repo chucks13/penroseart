@@ -150,8 +150,11 @@ internal readonly struct BeatManagerDashboardModel
         var offbeats = beatManager != null ? beatManager.Offbeats : default;
         var pulses = beatManager != null ? beatManager.Pulses : default;
         var track = beatManager != null ? beatManager.Track : default;
+        var liveOrder = beatManager != null ? beatManager.LiveOrder : default;
         var bpmText = timing.Bpm is { } bpm ? $"{bpm:0.##} BPM" : UnavailableText;
-        var rightText = track.PlayersLive is { Count: > 0 } players ? $"{string.Join(",", players)} · {bpmText}" : bpmText;
+        var rightText = liveOrder.Players.Count > 0
+            ? $"{string.Join(",", liveOrder.Players)} · {bpmText}"
+            : bpmText;
         var beatPulse = ClampPulse(pulses.Beat);
         var offBeatPulse = ClampPulse(pulses.OffBeat);
         var offBeatGates = new bool?[BeatSlotCount];

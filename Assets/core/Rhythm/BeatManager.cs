@@ -119,6 +119,7 @@ public partial class BeatManager
     {
         Timing = CaptureTiming();
         Track = CaptureTrack();
+        LiveOrder = CaptureLiveOrder();
         Beats = CaptureBeats();
         Offbeats = CaptureOffbeats();
         Pulses = CapturePulses();
