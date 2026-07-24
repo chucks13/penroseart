@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -151,6 +152,12 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 settingsScroll;
     /// <summary>Scroll position for the live sequencing timeline.</summary>
     private Vector2 liveTimelineScroll;
+    /// <summary>Player slot pinned in the Cue Sheet tracker; -1 follows the on-air focus player.</summary>
+    private int selectedSheetSlot = -1;
+    /// <summary>Playhead row the tracker last saw, so auto-scroll reacts only to row changes.</summary>
+    private int lastPlayheadRow = -1;
+    /// <summary>Visible height of the tracker scroll view, measured on the last repaint.</summary>
+    private float liveViewHeight;
     /// <summary>Scroll position for the rhythm workspace.</summary>
     private Vector2 rhythmScroll;
     private TransitionSettingsAsset selectedAsset;
@@ -276,26 +283,170 @@ public sealed class PenroseTuningWindow : EditorWindow
         return false;
     }
 
-    /// <summary>Draws active A-to-B progress, next-Cue countdowns, and rolling Grid rows.</summary>
+    /// <summary>Draws the Cue Sheet tracker: the selected player's full track plan and live fire state.</summary>
     private void DrawLiveTab()
     {
-        if (!LiveControllerAccess.TryGet(out _))
+        if (!LiveControllerAccess.TryGet(out var controller))
         {
             EditorGUILayout.HelpBox(
-                "Live timeline unavailable. Enter Play Mode and wait for the Controller to initialize.",
+                "Cue Sheet tracker unavailable. Enter Play Mode and wait for the Controller to initialize.",
                 MessageType.Info);
             return;
         }
 
-        using var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll);
-        liveTimelineScroll = scroll.scrollPosition;
+        var director = controller.director;
+        var switcher = controller.switcher;
+        var beatManager = controller.beatManager;
+        if (director == null || switcher == null || beatManager == null)
+        {
+            EditorGUILayout.HelpBox("Sequencing runtime is still initializing.", MessageType.Info);
+            return;
+        }
 
-        EditorGUILayout.LabelField("LIVE TRANSITION", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox(
-            "The live Transition timeline visualized the retired loaded-cue window. Under track-scoped Cue "
-            + "Sheets (ADR-0019) casting is fire-and-forget with no loaded-cue lifecycle, so this view is a "
-            + "separate follow-up.",
-            MessageType.Info);
+        var viewWidth = position.width - 20f;
+        var activeSlot = DrawSheetSlotToolbar(director.Sheets, beatManager, switcher);
+        CueSheetTimelineRenderer.DrawHeader(viewWidth);
+
+        IReadOnlyList<CueSheetGridRow> rows = Array.Empty<CueSheetGridRow>();
+        int? playheadRow = null;
+        if (activeSlot >= 0)
+        {
+            var sheet = director.Sheets[activeSlot];
+            var player = beatManager.Players[activeSlot];
+            // Fired state exists only for the sheet the Switcher is performing; any other slot
+            // shows its whole plan pending.
+            var onAir = switcher.Sheet.PlayerNumber == sheet.PlayerNumber
+                && switcher.Sheet.StructureGeneration == sheet.StructureGeneration;
+            var fired = onAir ? switcher.FiredMarks : Array.Empty<bool>();
+            rows = CueSheetTimeline.Build(
+                sheet, fired, player.Structure, TransitionRepertoiresOf(controller), player.Beat);
+            if (player.Beat is { } beat && beat >= 1 && CueSheetTimeline.RowContaining(beat) < rows.Count)
+            {
+                playheadRow = CueSheetTimeline.RowContaining(beat);
+            }
+        }
+
+        liveTimelineScroll = CueSheetTimelineRenderer.AutoScroll(
+            liveTimelineScroll,
+            playheadRow,
+            lastPlayheadRow >= 0 ? lastPlayheadRow : (int?)null,
+            liveViewHeight);
+        lastPlayheadRow = playheadRow ?? -1;
+
+        using (var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll))
+        {
+            liveTimelineScroll = scroll.scrollPosition;
+            if (rows.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No Cue Sheet to present. Sheets build once a live player holds a complete track structure.",
+                    MessageType.Info);
+            }
+            else
+            {
+                CueSheetTimelineRenderer.DrawRows(
+                    rows, EffectNamesOf(controller), TransitionNamesOf(controller), viewWidth);
+            }
+        }
+
+        if (Event.current.type == EventType.Repaint)
+        {
+            liveViewHeight = GUILayoutUtility.GetLastRect().height;
+        }
+    }
+
+    /// <summary>
+    /// Draws the slot selector for every player slot holding a sheet, plus the unobtrusive
+    /// starvation counter, and returns the slot whose sheet the tracker presents (-1 when none).
+    /// Defaults to the on-air focus player until the user pins a slot.
+    /// </summary>
+    private int DrawSheetSlotToolbar(IReadOnlyList<TrackCueSheet> sheets, BeatManager beatManager, Switcher switcher)
+    {
+        var slots = new List<int>();
+        for (var slot = 0; slot < sheets.Count; slot++)
+        {
+            if (sheets[slot].StructureGeneration != 0)
+            {
+                slots.Add(slot);
+            }
+        }
+
+        var activeSlot = -1;
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (slots.Count == 0)
+            {
+                GUILayout.Label("No Cue Sheets", EditorStyles.miniLabel);
+            }
+            else
+            {
+                var labels = new string[slots.Count];
+                for (var i = 0; i < slots.Count; i++)
+                {
+                    var sheet = sheets[slots[i]];
+                    labels[i] = $"P{sheet.PlayerNumber} · g{sheet.StructureGeneration}";
+                }
+
+                var focusSlot = beatManager.LiveOrder.Focus is { } focus ? focus - 1 : -1;
+                var current = slots.Contains(selectedSheetSlot) ? selectedSheetSlot
+                    : slots.Contains(focusSlot) ? focusSlot
+                    : slots[0];
+                var clicked = GUILayout.Toolbar(
+                    slots.IndexOf(current), labels, EditorStyles.miniButton, GUILayout.ExpandWidth(false));
+                activeSlot = slots[clicked];
+                if (activeSlot != current)
+                {
+                    selectedSheetSlot = activeSlot;
+                }
+            }
+
+            GUILayout.FlexibleSpace();
+            // Context for a one-off firing out of nowhere: consecutive starved Grid starts.
+            GUILayout.Label(
+                $"starve {switcher.StarvedGridStarts}/{Switcher.StarvationGridStartCeiling}",
+                EditorStyles.miniLabel);
+        }
+
+        return activeSlot;
+    }
+
+    /// <summary>The Transition catalog's repertoires by catalog index, for Runway/Tail lengths.</summary>
+    private static TransitionRepertoire[] TransitionRepertoiresOf(Controller controller)
+    {
+        var transitions = controller.transitions ?? Array.Empty<TransitionBase>();
+        var repertoires = new TransitionRepertoire[transitions.Length];
+        for (var i = 0; i < transitions.Length; i++)
+        {
+            repertoires[i] = transitions[i] != null ? transitions[i].Repertoire : default;
+        }
+
+        return repertoires;
+    }
+
+    /// <summary>Effect catalog display names by catalog index.</summary>
+    private static string[] EffectNamesOf(Controller controller)
+    {
+        var effects = controller.effects ?? Array.Empty<EffectBase>();
+        var names = new string[effects.Length];
+        for (var i = 0; i < effects.Length; i++)
+        {
+            names[i] = effects[i] != null ? effects[i].Name : "?";
+        }
+
+        return names;
+    }
+
+    /// <summary>Transition catalog display names by catalog index.</summary>
+    private static string[] TransitionNamesOf(Controller controller)
+    {
+        var transitions = controller.transitions ?? Array.Empty<TransitionBase>();
+        var names = new string[transitions.Length];
+        for (var i = 0; i < transitions.Length; i++)
+        {
+            names[i] = transitions[i] != null ? transitions[i].Name : "?";
+        }
+
+        return names;
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>

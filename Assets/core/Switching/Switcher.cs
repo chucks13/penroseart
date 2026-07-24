@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -148,8 +149,27 @@ public sealed class Switcher
     // Consecutive on-air Grid starts with nothing performed. At the ceiling — the maximum Cue Mark gap
     // expressed in Grids — a loop pinned inside one segment has never crossed a plan mark, so the
     // Switcher asks the Director for a one-off so the wall never goes stale. Any performed cue resets it.
-    private const int StarvationGridStartCeiling = TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats;
+    public const int StarvationGridStartCeiling = TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats;
     private int starvedGridStarts;
+
+    /// <summary>
+    /// The Cue Sheet in force — the plan this Switcher is performing. A default sheet
+    /// (<see cref="TrackCueSheet.StructureGeneration"/> of zero) means no plan is in force.
+    /// </summary>
+    public TrackCueSheet Sheet => sheet;
+
+    /// <summary>
+    /// One check-off per <see cref="TrackCueSheet.Marks"/> entry, by index: true once that Cue Mark has been
+    /// performed. Exposed read-only so debug views can show what actually happened against what was planned;
+    /// writing check-offs is Switcher execution state and stays private.
+    /// </summary>
+    public IReadOnlyList<bool> FiredMarks => firedMarks;
+
+    /// <summary>
+    /// Consecutive on-air Grid starts with nothing performed. At <see cref="StarvationGridStartCeiling"/> the
+    /// Switcher asks the Director for a one-off.
+    /// </summary>
+    public int StarvedGridStarts => starvedGridStarts;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;

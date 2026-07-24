@@ -142,6 +142,13 @@ public sealed class Director
     private readonly TrackCueSheet[] sheets = new TrackCueSheet[PlayerCount];
     private readonly int[] sheetGeneration = new int[PlayerCount];
 
+    /// <summary>
+    /// The Cue Sheet built for each physical player slot, indexed by player number minus one. A slot whose
+    /// <see cref="TrackCueSheet.StructureGeneration"/> is zero has no sheet. Exposed read-only so debug views
+    /// can show what the Director planned for every loaded track, not just the one on air.
+    /// </summary>
+    public IReadOnlyList<TrackCueSheet> Sheets => sheets;
+
     public Director(
         Controller controller,
         Switcher switcher,
