@@ -279,7 +279,7 @@ public sealed class PenroseTuningWindow : EditorWindow
     /// <summary>Draws active A-to-B progress, next-Cue countdowns, and rolling Grid rows.</summary>
     private void DrawLiveTab()
     {
-        if (!LiveControllerAccess.TryGet(out var liveController))
+        if (!LiveControllerAccess.TryGet(out _))
         {
             EditorGUILayout.HelpBox(
                 "Live timeline unavailable. Enter Play Mode and wait for the Controller to initialize.",
@@ -290,38 +290,12 @@ public sealed class PenroseTuningWindow : EditorWindow
         using var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll);
         liveTimelineScroll = scroll.scrollPosition;
 
-        var timelineInput = CaptureTimelineInput(liveController);
         EditorGUILayout.LabelField("LIVE TRANSITION", EditorStyles.boldLabel);
-        LiveTimelineRenderer.Draw(
-            LiveTimelineProjection.Build(timelineInput),
-            liveController.SwitcherStatus,
-            ControllerStatusText.FormatSwitcherCue(liveController, timelineInput.PendingCue));
-    }
-
-    /// <summary>Captures one frame-coherent set of facts for the rolling live Transition display.</summary>
-    private static LiveTimelineInput CaptureTimelineInput(Controller controller)
-    {
-        var director = controller.DirectorStatus;
-        var beatManager = controller.beatManager;
-        var nextCueBeatsUntil = beatManager == null
-            ? null
-            : LiveTimelineProjection.FindNextCueBeatsUntil(
-                director.CurrentSheet,
-                beatManager.Phrase.LengthBeats,
-                beatManager.Phrase.BeatsRemaining);
-        var nextCueGridLengthBeats = beatManager == null
-            ? null
-            : LiveTimelineProjection.FindNextCueGridLengthBeats(
-                director.CurrentSheet,
-                beatManager.Phrase.LengthBeats,
-                beatManager.Phrase.BeatsRemaining);
-        return new LiveTimelineInput(
-            director.IsSyncedMode,
-            beatManager?.Grid.Beat,
-            controller.SwitcherActiveCueStatus,
-            controller.SwitcherLoadedCueStatus,
-            nextCueBeatsUntil,
-            nextCueGridLengthBeats);
+        EditorGUILayout.HelpBox(
+            "The live Transition timeline visualized the retired loaded-cue window. Under track-scoped Cue "
+            + "Sheets (ADR-0019) casting is fire-and-forget with no loaded-cue lifecycle, so this view is a "
+            + "separate follow-up.",
+            MessageType.Info);
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>
@@ -576,38 +550,24 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
-    /// <summary>Draws saved timing on real live placement through the shared timeline projection and renderer.</summary>
+    /// <summary>
+    /// Draws a placeholder for the retired Transition timing preview. The preview projected the deleted
+    /// loaded-cue window (ADR-0019); a track-sheet preview is a separate follow-up. Runway and Tail are still
+    /// authored on the Transition through the normal settings fields above.
+    /// </summary>
     private static void DrawTransitionTimingPreview(
         Controller liveController,
         int runwayBeats,
         int tailBeats)
     {
+        _ = liveController;
+        _ = runwayBeats;
+        _ = tailBeats;
         EditorGUILayout.LabelField("Timing Preview", EditorStyles.boldLabel);
-        if (liveController == null)
-        {
-            EditorGUILayout.HelpBox(
-                "Enter Play Mode with a live Controller to place saved timing on a real Cue.",
-                MessageType.None);
-            return;
-        }
-
-        var input = CaptureTimelineInput(liveController);
-        if (!LiveTimelineProjection.TryBuildTimingPreview(input, runwayBeats, tailBeats, out var preview))
-        {
-            var reason = !input.IsSynced
-                ? "Synced Grid timing is unavailable."
-                : input.CurrentGridBeat is not (>= 1 and <= CueSheet.GridBeats)
-                    ? "Current Grid position is unavailable."
-                    : !input.PendingCue.HasCue && !input.ActiveCue.HasCue
-                        ? "No Loaded Cue or active Transition provides a real Impact Point."
-                        : "Live Cue timing is unavailable.";
-            EditorGUILayout.HelpBox(reason, MessageType.None);
-            return;
-        }
-
-        LiveTimelineRenderer.DrawTimingPreview(
-            preview,
-            input.PendingCue.HasCue ? "Loaded Cue" : "Active Transition");
+        EditorGUILayout.HelpBox(
+            "Timing preview is unavailable: it projected the retired loaded-cue window. Runway and Tail are "
+            + "still authored on the Transition above; a track-sheet preview is a follow-up.",
+            MessageType.None);
     }
 
     /// <summary>Draws explicit Director staging and Hold Selected controls.</summary>

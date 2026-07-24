@@ -217,14 +217,6 @@ public class Controller : Singleton<Controller>
     /// <summary>Read-only Mechanical Switcher stage snapshot for inspectors and status displays.</summary>
     public SwitcherStatus SwitcherStatus => switcher != null ? switcher.Status : SwitcherStatus.NotReady;
 
-    /// <summary>Read-only Switcher Cue currently executing on stage.</summary>
-    public SwitcherCueStatus SwitcherActiveCueStatus =>
-        switcher != null ? switcher.ActiveCueStatus : SwitcherCueStatus.Empty;
-
-    /// <summary>Read-only Switcher Cue loaded and waiting to start.</summary>
-    public SwitcherCueStatus SwitcherLoadedCueStatus =>
-        switcher != null ? switcher.LoadedCueStatus : SwitcherCueStatus.Empty;
-
     /// <summary>Latest render-pipeline debug text captured before HUD filtering.</summary>
     public string LastRenderDebugText => lastRenderDebugText;
 
@@ -396,11 +388,6 @@ public class Controller : Singleton<Controller>
     /// <summary>Decision layer that owns sequencing cadence and stage-directed cues.</summary>
     [HideInInspector]
     public Director director;
-
-    /// <summary>Per-session operator-facing Cue Log sink; a downstream view, created in <see cref="Start"/> and closed in <see cref="OnDestroy"/>.</summary>
-    [HideInInspector]
-    [NonSerialized]
-    public CueLog cueLog;
 
     /// <summary>Scene Penrose model and preview mesh component.</summary>
     [HideInInspector]
@@ -1376,12 +1363,6 @@ public class Controller : Singleton<Controller>
         return color;
     }
 
-    /// <summary>Unity teardown hook. Closes the per-session Cue Log so its buffered writer flushes and releases the file.</summary>
-    void OnDestroy()
-    {
-        cueLog?.Dispose();
-    }
-
     /// <summary>Writes a tagged sequencing diagnostic line to the Unity log when enabled.</summary>
     /// <param name="message">Deferred trace text, evaluated only when diagnostics are enabled.</param>
     public void LogDirectorSwitching(Func<string> message)
@@ -1475,15 +1456,10 @@ public class Controller : Singleton<Controller>
         }
 
         // Director owns sequencing cadence; Switcher owns only the mechanical in-flight stage state.
-        // The Cue Log is a downstream operator-facing sink (like the Observatory): its session file is created
-        // lazily on the first Cue event and closed in OnDestroy. Grid position is read live off the BeatManager.
         timer = new Timer(effectTime, false);
-        cueLog = CueLog.CreateForSession(
-            Path.Combine(Application.persistentDataPath, "Logs"),
-            () => beatManager != null ? beatManager.Grid : (GridValues?)null);
-        switcher = new Switcher(this, effects, transitions, cueLog);
+        switcher = new Switcher(this, effects, transitions);
         switcher.SetInitialEffect(currentEffect, currentTransition);
-        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition, cueLog);
+        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
         timer.onFinished += director.OnTimerFinished;
 
         ConfigureRuntimeHud();

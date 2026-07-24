@@ -149,9 +149,8 @@ public readonly struct AnchorResolution
 /// the same load always rebuilds the identical sheet.
 /// </summary>
 /// <remarks>
-/// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec. It is a distinct type from the
-/// phrase-scoped <see cref="CueSheet"/> (an index of empty marks over one Phrase) while both coexist; the
-/// spec supersedes the phrase-scoped definition in a later hard cut.
+/// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0019): it superseded and replaced
+/// the phrase-scoped index of empty Cue Marks over a single Phrase.
 ///
 /// The mark placement absorbs the phrase-scoped builder's Grid walk — interior marks on Grid Boundaries,
 /// bounded 16-to-64-beat gaps, a mandatory Phrase-end mark, one run-out Grid absorbing an irregular tail —

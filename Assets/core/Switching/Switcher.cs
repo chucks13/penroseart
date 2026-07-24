@@ -109,7 +109,7 @@ public readonly struct TransitionStartTiming
 }
 
 /// <summary>
-/// Beat-domain cue direction inserted into the Mechanical Switcher by the Director.
+/// Beat-domain cue direction cast into the Mechanical Switcher by the Director.
 /// </summary>
 public readonly struct SwitcherCueDirection
 {
@@ -132,7 +132,7 @@ public readonly struct SwitcherCueDirection
 }
 
 /// <summary>
-/// Plain beat-clock facts the Switcher needs to lock and execute an inserted cue.
+/// Plain beat-clock facts the Switcher needs to time a cast cue against the wall clock.
 /// </summary>
 public readonly struct SwitcherClockSnapshot
 {
@@ -156,71 +156,10 @@ public readonly struct SwitcherClockSnapshot
 }
 
 /// <summary>
-/// Read-only snapshot of the Switcher-held cue lifecycle.
-/// </summary>
-public readonly struct SwitcherCueStatus
-{
-    public static SwitcherCueStatus Empty { get; } = new SwitcherCueStatus(false, false, -1, -1, -1, -1, -1, -1, 0, 0);
-
-    public readonly bool HasCue;
-    public readonly bool IsLocked;
-    public readonly int CueMarkBeat;
-    public readonly int TargetEffectIndex;
-    public readonly int TransitionIndex;
-    public readonly int LockPointBeat;
-    public readonly int StartBeat;
-    public readonly int CompleteBeat;
-    public readonly int RunwayBeats;
-    public readonly int TailBeats;
-
-    public SwitcherCueStatus(
-        bool hasCue,
-        bool isLocked,
-        int cueMarkBeat,
-        int targetEffectIndex,
-        int transitionIndex,
-        int lockPointBeat,
-        int startBeat,
-        int completeBeat,
-        int runwayBeats,
-        int tailBeats)
-    {
-        HasCue = hasCue;
-        IsLocked = isLocked;
-        CueMarkBeat = cueMarkBeat;
-        TargetEffectIndex = targetEffectIndex;
-        TransitionIndex = transitionIndex;
-        LockPointBeat = lockPointBeat;
-        StartBeat = startBeat;
-        CompleteBeat = completeBeat;
-        RunwayBeats = runwayBeats;
-        TailBeats = tailBeats;
-    }
-
-    public bool CanUpdate => HasCue && !IsLocked;
-}
-
-/// <summary>
-/// The Switcher's one answer to a cue offer, so the Director never mirrors commitment: the loaded cue was
-/// <see cref="Kept"/> unchanged (a same-Cue-Mark offer), <see cref="Loaded"/> (a fresh load or a different-mark
-/// replacement), or <see cref="Rejected"/> (too late, or a different-mark offer after the lock).
-/// </summary>
-public enum CueUpsertResult
-{
-    /// <summary>A same-Cue-Mark offer: the loaded cue rides unchanged and is never re-flavored.</summary>
-    Kept,
-
-    /// <summary>The offer was loaded — a fresh cue, or a different-mark cue replacing an unlocked one.</summary>
-    Loaded,
-
-    /// <summary>The offer was refused; the loaded cue and stage are untouched.</summary>
-    Rejected,
-}
-
-/// <summary>
-/// Mechanical stage switcher for Penrose performers.
-/// The Switcher owns Loaded Cue scheduling plus in-flight effect/transition execution,
-/// renders progress, and promotes B on completion.
+/// Mechanical stage switcher for Penrose performers. Its contract is one sentence: take a cast cue and
+/// execute it at its beats, then promote the destination on completion (ADR-0019). The Switcher renders
+/// in-flight effect/transition progress and owns Runway/impact/tail timing; it holds no loaded-cue lifecycle,
+/// no Lock Point, and no accept/reject verdict — a cast fires unconditionally.
 /// </summary>
 [Serializable]
 public sealed class Switcher
@@ -228,7 +167,6 @@ public sealed class Switcher
     private readonly Controller controller;
     private readonly EffectBase[] effects;
     private readonly TransitionBase[] transitions;
-    private readonly CueLog cueLog;
 
     private int currentEffectIndex = -1;
     private int currentTransitionIndex = -1;
@@ -236,17 +174,6 @@ public sealed class Switcher
     private float transitionStartTime;
     private float transitionDurationSeconds = 1f;
     private float transitionProgress;
-    private bool hasLoadedCue;
-    private SwitcherCueDirection loadedCue;
-    private int loadedCueStartBeat;
-    private int loadedCueCompleteBeat;
-    private int loadedCueLockPointBeat;
-    private bool loadedCueLocked;
-    private float loadedCueStartTime;
-    private float loadedCueSecondsPerBeat;
-
-    /// <summary>The Cue whose Transition currently owns the stage, or Empty outside Cue execution.</summary>
-    private SwitcherCueStatus activeCueStatus = SwitcherCueStatus.Empty;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
@@ -263,13 +190,7 @@ public sealed class Switcher
     /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
     public SwitcherStatus Status => BuildStatus();
 
-    /// <summary>Current read-only Loaded Cue lifecycle snapshot.</summary>
-    public SwitcherCueStatus LoadedCueStatus => BuildLoadedCueStatus();
-
-    /// <summary>The Cue whose Transition currently owns the stage.</summary>
-    public SwitcherCueStatus ActiveCueStatus => activeCueStatus;
-
-    public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions, CueLog cueLog = null)
+    public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
     {
         if (controller == null)
         {
@@ -279,7 +200,6 @@ public sealed class Switcher
         this.controller = controller;
         this.effects = effects ?? throw new ArgumentNullException(nameof(effects));
         this.transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
-        this.cueLog = cueLog;
     }
 
     /// <summary>
@@ -294,8 +214,6 @@ public sealed class Switcher
         currentTransitionIndex = transitionIndex;
         isTransitioning = false;
         transitionProgress = 0f;
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
         Trace(() => $"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
@@ -307,66 +225,15 @@ public sealed class Switcher
         EffectBase.APalette.Change();
         isTransitioning = false;
         transitionProgress = 0f;
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
         currentEffectIndex = effectIndex;
         StartEffect(effectIndex);
         Trace(() => $"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
     }
 
     /// <summary>
-    /// Inserts one beat-domain cue direction for fire-and-forget Switcher execution and answers what the
-    /// Switcher did with it. Identity on this seam is the Cue Mark alone: an offer at the <b>same</b> Cue Mark
-    /// as the loaded cue is a keep — the loaded cue rides unchanged and is never re-flavored. A different-mark
-    /// offer replaces the loaded cue when it can still commit (strictly before its Lock Point, one beat before
-    /// the Runway start) and the loaded cue is not locked; otherwise it is rejected and the loaded cue and
-    /// stage are untouched. Callers therefore never mirror or guess commitment state — the Switcher alone
-    /// owns it and answers in one call.
-    /// </summary>
-    /// <returns>
-    /// <see cref="CueUpsertResult.Kept"/>, <see cref="CueUpsertResult.Loaded"/>, or
-    /// <see cref="CueUpsertResult.Rejected"/>.
-    /// </returns>
-    public CueUpsertResult UpsertLoadedCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
-    {
-        ValidateEffectIndex(cue.TargetEffectIndex);
-        ValidateTransitionIndex(cue.TransitionIndex);
-
-        StartLoadedCueIfDue(clock.NowSeconds);
-
-        if (hasLoadedCue)
-        {
-            LatchLockAtBeat(clock.CurrentBeat);
-
-            // Same Cue Mark: the loaded cue is already aimed here, so it rides unchanged. A keep never
-            // re-reads the fresh cast, so a cue the design says must not move cannot be re-flavored.
-            if (cue.CueMarkBeat == loadedCue.CueMarkBeat)
-            {
-                return CueUpsertResult.Kept;
-            }
-
-            // A different-mark offer after the lock is refused; the locked cue rides.
-            if (loadedCueLocked)
-            {
-                Trace(() => $"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
-                return CueUpsertResult.Rejected;
-            }
-        }
-
-        if (!CanCommitCue(cue.CueMarkBeat, cue.TransitionRepertoire, clock.CurrentBeat))
-        {
-            Trace(() => $"SWITCHER_REJECT_LATE_CUE beat={clock.CurrentBeat} cueMark={cue.CueMarkBeat} lock={LockPointBeatFor(cue.CueMarkBeat, cue.TransitionRepertoire)} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-            return CueUpsertResult.Rejected;
-        }
-
-        LoadCue(cue, clock);
-        return CueUpsertResult.Loaded;
-    }
-
-    /// <summary>
     /// Casts one beat-domain cue for fire-and-forget execution, unconditionally. The cue's Transition
     /// starts on its Runway beat (<c>Cue Mark − Runway</c>), its Impact Point lands on the Cue Mark beat,
-    /// and its Tail completes after. There is no Lock Point, no verdict, and no revocation: a cast arriving
+    /// and its Tail completes after. There is no loaded cue, no Lock Point, and no verdict: a cast arriving
     /// at Runway start runs the full Runway; a late cast still fires, beginning already underway so its
     /// Impact still lands on the mark — a compressed Runway. The Switcher never holds the cue to wait: the
     /// Runway begins now, or is already past, never in the future. Decide-at-cast callers read the current
@@ -385,8 +252,6 @@ public sealed class Switcher
         // underway (Runway compressed); the cue is never parked to wait for a future beat.
         var runwayStartTime = Mathf.Min(TimeAtBeat(clock, runwayStartBeat), clock.NowSeconds);
 
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
         StartTransition(
             cue.TargetEffectIndex,
             cue.TransitionIndex,
@@ -397,77 +262,6 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Whether a cue for this Cue Mark and transition can still commit on this beat: strictly before its
-    /// Lock Point. Runway/tail/lock arithmetic is the Switcher's alone; callers ask, they do not compute.
-    /// </summary>
-    public static bool CanCommitCue(int cueMarkBeat, TransitionRepertoire repertoire, int beat)
-    {
-        return beat < LockPointBeatFor(cueMarkBeat, repertoire);
-    }
-
-    /// <summary>
-    /// Projects the beat-domain window a cue for this Cue Mark and transition would occupy. Runway/tail/lock
-    /// arithmetic is the Switcher's alone, so this stays private; the loaded cue's window is published for
-    /// diagnostics through <see cref="SwitcherCueStatus"/>, not by projecting arbitrary candidates.
-    /// </summary>
-    private static void ProjectCueWindow(
-        int cueMarkBeat,
-        TransitionRepertoire repertoire,
-        out int startBeat,
-        out int lockPointBeat,
-        out int completeBeat)
-    {
-        lockPointBeat = LockPointBeatFor(cueMarkBeat, repertoire);
-        startBeat = lockPointBeat + 1;
-        completeBeat = cueMarkBeat + repertoire.TailBeats;
-    }
-
-    private static int LockPointBeatFor(int cueMarkBeat, TransitionRepertoire repertoire)
-    {
-        return cueMarkBeat - repertoire.RunwayBeats - 1;
-    }
-
-    /// <summary>
-    /// Whether the loaded cue has reached its Lock Point and can no longer be changed. A one-way latch:
-    /// once the Switcher's own clock (an offer's beat or the render clock's wall time) reaches the Lock
-    /// Point the cue rides until it starts, clears, or is aborted — a later backstep cannot reopen it.
-    /// </summary>
-    private bool IsLoadedCueLocked => loadedCueLocked;
-
-    /// <summary>Wall time of the Lock Point beat: one beat before the Runway Start Time the loaded cue carries.</summary>
-    private float LoadedCueLockTime => loadedCueStartTime - loadedCueSecondsPerBeat;
-
-    /// <summary>Latches the lock once a beat at or past the Lock Point is observed; never unlatches.</summary>
-    private void LatchLockAtBeat(int beat)
-    {
-        if (hasLoadedCue && !loadedCueLocked && beat >= loadedCueLockPointBeat)
-        {
-            loadedCueLocked = true;
-            NotifyLocked(CueLockVia.Beat);
-        }
-    }
-
-    /// <summary>Latches the lock once the render clock's wall time reaches the Lock Point; never unlatches.</summary>
-    private void LatchLockAtTime(float nowSeconds)
-    {
-        if (hasLoadedCue && !loadedCueLocked && nowSeconds >= LoadedCueLockTime)
-        {
-            loadedCueLocked = true;
-            NotifyLocked(CueLockVia.Render);
-        }
-    }
-
-    /// <summary>
-    /// Raises the minimal lock notification the Cue Log sink joins with its remembered display context.
-    /// Fires exactly once per loaded cue — the false→true latch guard above admits only the first crossing —
-    /// and carries no Phrase or name context, which the Switcher does not hold.
-    /// </summary>
-    private void NotifyLocked(CueLockVia via)
-    {
-        cueLog?.CueLocked(loadedCue.CueMarkBeat, loadedCueLockPointBeat, via);
-    }
-
-    /// <summary>
     /// Starts or replaces a transition from the current stage destination to the target effect.
     /// The Switcher owns progress and completion after this call; if another transition is still
     /// rendering, the previous destination becomes the source for this new last-command-wins move.
@@ -475,8 +269,6 @@ public sealed class Switcher
     public void StartTransition(int targetEffectIndex, int transitionIndex, TransitionStartTiming timing)
     {
         ValidateTransitionIndex(transitionIndex);
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
         StartTransition(targetEffectIndex, transitionIndex, timing, Time.time, transitions[transitionIndex].Repertoire);
     }
 
@@ -521,8 +313,6 @@ public sealed class Switcher
     /// </summary>
     public Color[] RenderAtTime(float nowSeconds, out string debugText)
     {
-        StartLoadedCueIfDue(nowSeconds);
-
         if (isTransitioning)
         {
             transitionProgress = ProgressAt(nowSeconds);
@@ -560,109 +350,10 @@ public sealed class Switcher
         return (Color[])effect.buffer.Clone();
     }
 
-    /// <summary>Projects and stores one accepted Cue against the supplied canonical beat clock.</summary>
-    private void LoadCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
-    {
-        ProjectCueWindow(
-            cue.CueMarkBeat,
-            cue.TransitionRepertoire,
-            out loadedCueStartBeat,
-            out loadedCueLockPointBeat,
-            out loadedCueCompleteBeat);
-        loadedCue = cue;
-        loadedCueStartTime = TimeAtBeat(clock, loadedCueStartBeat);
-        loadedCueSecondsPerBeat = clock.SecondsPerBeat;
-        loadedCueLocked = false;
-        hasLoadedCue = true;
-        Trace(() => $"SWITCHER_LOAD_CUE cueMark={cue.CueMarkBeat} lock={loadedCueLockPointBeat} start={loadedCueStartBeat} startTime={loadedCueStartTime:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-    }
-
     private static float TimeAtBeat(SwitcherClockSnapshot clock, int beat)
     {
         var beatsUntil = beat - clock.CurrentBeat - clock.BeatFraction;
         return clock.NowSeconds + (beatsUntil * clock.SecondsPerBeat);
-    }
-
-    private void StartLoadedCueIfDue(float nowSeconds)
-    {
-        if (!hasLoadedCue)
-        {
-            return;
-        }
-
-        LatchLockAtTime(nowSeconds);
-        if (nowSeconds >= loadedCueStartTime)
-        {
-            StartLoadedCue(nowSeconds);
-        }
-    }
-
-    /// <summary>Starts the loaded Cue's transition at the projected beat-domain time.</summary>
-    private void StartLoadedCue(float nowSeconds)
-    {
-        var cue = loadedCue;
-        var startBeat = loadedCueStartBeat;
-        var startTime = loadedCueStartTime;
-        var secondsPerBeat = loadedCueSecondsPerBeat;
-        var elapsedBeats = Mathf.Max(0f, (nowSeconds - startTime) / secondsPerBeat);
-        activeCueStatus = BuildLoadedCueStatus();
-        ClearLoadedCue();
-        StartTransition(
-            cue.TargetEffectIndex,
-            cue.TransitionIndex,
-            TransitionStartTiming.FromBeatClock(startTime, secondsPerBeat),
-            nowSeconds,
-            cue.TransitionRepertoire);
-        Trace(() => $"SWITCHER_START_CUE now={nowSeconds:0.###} elapsedBeats={elapsedBeats:0.###} start={startBeat} cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-    }
-
-    /// <summary>
-    /// Discards the Switcher-held Loaded Cue, even one already locked. The Director calls this when the
-    /// clock drops and the mode boundary crosses into Standalone: a beat-domain cue carries a Unity-time
-    /// start and would otherwise fire from Unity time into a dead clock (ADR-0007).
-    /// </summary>
-    /// <remarks>
-    /// A fire-and-forget command on the Director → Switcher seam, not lifecycle observation: idempotent,
-    /// safe to call every Standalone frame, and a no-op when no cue is loaded.
-    /// </remarks>
-    public void AbortLoadedCue()
-    {
-        if (!hasLoadedCue)
-        {
-            return;
-        }
-
-        Trace(() => $"SWITCHER_ABORT_CUE cueMark={loadedCue.CueMarkBeat} locked={IsLoadedCueLocked} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
-        ClearLoadedCue();
-    }
-
-    private void ClearLoadedCue()
-    {
-        hasLoadedCue = false;
-        loadedCue = default;
-        loadedCueStartBeat = -1;
-        loadedCueCompleteBeat = -1;
-        loadedCueLockPointBeat = -1;
-        loadedCueLocked = false;
-        loadedCueStartTime = 0f;
-        loadedCueSecondsPerBeat = 0f;
-    }
-
-    private SwitcherCueStatus BuildLoadedCueStatus()
-    {
-        return hasLoadedCue
-            ? new SwitcherCueStatus(
-                true,
-                IsLoadedCueLocked,
-                loadedCue.CueMarkBeat,
-                loadedCue.TargetEffectIndex,
-                loadedCue.TransitionIndex,
-                loadedCueLockPointBeat,
-                loadedCueStartBeat,
-                loadedCueCompleteBeat,
-                loadedCue.TransitionRepertoire.RunwayBeats,
-                loadedCue.TransitionRepertoire.TailBeats)
-            : SwitcherCueStatus.Empty;
     }
 
     /// <summary>Promotes the transition target and emits the deferred completion trace.</summary>
@@ -675,7 +366,6 @@ public sealed class Switcher
         currentEffectIndex = targetEffectIndex;
         isTransitioning = false;
         transitionProgress = 0f;
-        activeCueStatus = SwitcherCueStatus.Empty;
         Trace(() => $"SWITCHER_COMPLETE transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}");
     }
 

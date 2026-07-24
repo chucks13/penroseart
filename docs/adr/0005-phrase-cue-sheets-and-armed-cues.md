@@ -35,6 +35,10 @@ The length-identity reuse from the 2026-07-01 amendment (`CueSheet.Matches`, the
 
 The CuePlanner and its lifecycle amendments above (2026-07-01's one-live-sheet rules, 2026-07-04's rebuild-per-phrase-change) are superseded by the wire-change Director: two announcement-keyed Cue Sheet slots (current and next) repaired on every beat, marks empty until Cast at Grid entry, and no pass-local consumption memory — the Director records no decisions. This ADR's ownership split is what survives and still governs: the Cue Sheet is a Phrase timing plan holding no Effect/Transition choices, the Director casts one Cue at a time and sends it fire-and-forget, and the Switcher alone owns Loaded → Locked → Executing.
 
+## Amendment 2026-07-24 — the empty phrase-scoped Cue Sheet is superseded by ADR-0019
+
+The phrase-scoped Cue Sheet this ADR defined — an index of empty Cue Marks over one Phrase, with Effect/Transition choices made one cue at a time — is superseded by ADR-0019's track-scoped Cue Sheet, which bakes Effect and Transition assignments into a full-length plan built once per track load. The Switcher's Loaded → Locked → Executing lifecycle is retired with it: casting is fire-and-forget with no loaded-cue lock protocol. What survives conceptually is the ownership split — planning is not the Switcher's job, and mechanical Runway/Impact/Tail timing is not the Director's.
+
 ## Considered options
 
 - **Keep Selected Phase Boundary planning as the canonical model** — rejected because the name makes a Phrase-level cue plan sound like a Phase implementation detail, and it encourages transition timing mechanics to leak back into the Director.
