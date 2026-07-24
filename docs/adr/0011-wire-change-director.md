@@ -50,7 +50,7 @@ The re-check narrows back to a single fire-and-forget seam. Identity on the Dire
 
 ## Amendment 2026-07-24 — announcement-keyed empty sheets and the loaded-cue lock are superseded by ADR-0019
 
-The two announcement-keyed Cue Sheet slots (current and next, repaired every wake with empty marks Cast at Grid entry), the lazy preference-based casting, and the `UpsertLoadedCue` keep/loaded/rejected lock seam are all superseded by ADR-0019. With the complete per-player song structure on the wire, the Director builds one track-scoped Cue Sheet per player with Effect and Transition assignments baked in, follows the on-air focus by pure wire position, and Casts fire-and-forget — no loaded cue, no lock, no verdict. What survives from this ADR is its thesis and is now total: the Director reads position from the wire only and holds no self-ticked count, so the drift this ADR set out to kill cannot return.
+The two announcement-keyed Cue Sheet slots (current and next, repaired every wake with empty marks Cast at Grid entry), the lazy preference-based casting, and the `UpsertLoadedCue` keep/loaded/rejected lock seam are all superseded by ADR-0019, whose Director/Switcher split is in turn revised by ADR-0020. With the complete per-player song structure on the wire, the Director builds one track-scoped Cue Sheet per player with Effect and Transition assignments baked in and hands the on-air sheet to the Switcher, which performs it — no loaded cue, no lock, no verdict. What survives from this ADR is its thesis, and it is now total: position comes from the wire and nothing keeps a self-ticked count of its own, so the drift this ADR set out to kill cannot return.
 
 ## Amendment 2026-07-05 — irregular phrase lengths are first-class; the boundary read is wire-first
 

@@ -1,5 +1,9 @@
 # Track-scoped Cue Sheets with baked-in assignments drive Synced Mode
 
+Status: superseded in part by ADR-0020
+
+The track-scoped Cue Sheet, its deterministic builder, and selection-behind-the-builder all stand. The Director/Switcher split below does not: "Position is wire-only" and "Decide-at-cast at the last responsible moment" describe a Director that times casts from Runway arithmetic, which ADR-0020 replaces with a handed-over sheet the Switcher executes.
+
 The per-player OSC surface (schema 4) delivers a track's complete song structure the moment it loads on any player, so the Director no longer has to plan reactively from the current and announced-next Phrase. We decide that Synced Mode is driven end to end by a track-scoped **Cue Sheet**: on each track load, `TrackCueSheet.Build` produces one complete, full-length show plan — every Cue Mark placed against the real Phrase map with its Effect and Transition assignment baked in — as a pure, deterministic function of (structure, seed, catalogs), seeded by (structure generation, player number). The Director holds one sheet per physical player (six slots, no cache), follows the on-air focus player's sheet by pure wire position, and Casts its Cue Marks to the Switcher fire-and-forget. This redefines "Cue Sheet" from the phrase-scoped index of empty Cue Marks (ADR-0005, ADR-0011) to a track-scoped plan with assignments baked in at build time; the reactive phrase machinery is deleted, not kept as a fallback.
 
 ## Position is wire-only; there is no self-ticked count
