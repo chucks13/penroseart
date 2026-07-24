@@ -12,9 +12,9 @@ The older ACN/E1.31 UDP output path still exists in `Controller.sendUDPFrame()` 
 
 Hosts the Unity frame loop, catalogs, overlays, input, preview, and hardware output. It creates the Director and Mechanical Switcher, then calls them in the correct order; it is no longer the sequencing state machine itself.
 
-- **Deck System**: Effects/transitions are drawn from rotating decks for variety. The Director owns when those staged choices are consumed.
-- **Sequencing**: In Standalone Mode, the Director uses the timer as its self-running cadence. In Synced Mode, the Director wakes once per beat on live Rave OSC / BeatManager state, keeps two Cue Sheets repaired, and casts a Cue when a Grid carrying a Cue Mark begins. The Mechanical Switcher executes the chosen move.
-- **Transition Timing**: Transition Settings declare Runway and Tail. The Director chooses the Cue Mark, Effect, and Transition; the Mechanical Switcher uses that Transition's timing shape to start and progress the move so its Impact Point lands on the Cue Mark. Tail completion is visual execution, not a musical scheduling input.
+- **Deck System**: Effects/transitions are drawn from rotating decks for variety in Standalone Mode; in Synced Mode selection is baked into each track's Cue Sheet when it is built.
+- **Sequencing**: In Standalone Mode, the Director uses the timer as its self-running cadence. In Synced Mode, the Director keeps one track-scoped Cue Sheet per player, follows the on-air focus player by wire position, and Casts each Cue Mark's baked assignment at its Runway start. The Mechanical Switcher executes the move fire-and-forget.
+- **Transition Timing**: Transition Settings declare Runway and Tail. The Cue Sheet assigns the Cue Mark, Effect, and Transition; the Mechanical Switcher uses that Transition's timing shape to start and progress the move so its Impact Point lands on the Cue Mark. Tail completion is visual execution, not a musical scheduling input.
 - **Held Effect**: A single selection that either lets the wall rotate or pins it to one effect. The **Random** state lets the Deck System rotate normally; choosing a specific effect *holds* it, suppressing both rotation and transitions until Random is chosen again. Selected from the Inspector's effect dropdown (Random is the default first entry); the `Escape` key always returns to Random. The blank effect template is never offered, since it is excluded from the runtime effect catalog.
 
 ### 2. Beat Manager (Synchronization)
@@ -65,7 +65,7 @@ Android, iOS, and WebGL serial support are not covered by the desktop `System.IO
 ## Operational Logic
 
 1. **Initialization**: `Controller` initializes `Penrose`, discovers effects/transitions/blenders through `Factory<T>`, configures UI fields, starts OSC/control helpers, creates the Director and Mechanical Switcher, and initializes serial output when enabled.
-2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior, repairs its two Cue Sheets and casts the Cue for a beginning Grid's Cue Mark, and sends fire-and-forget cue directions to the Switcher when a stage-directed Cue should commit.
+2. **Timing and sequencing**: Each frame applies live Rave OSC to `BeatManager`, updates `BeatManager`, then ticks the Director. The Director chooses Standalone, Synced, or Hold behavior; in Synced Mode it rebuilds any player's Cue Sheet whose Structure Generation changed, follows the on-air focus player's sheet by wire position, and sends the next Cue Mark's cue to the Switcher fire-and-forget at its Runway start.
 3. **Rendering**: The Switcher renders the active Effect or A-to-B Transition into a 900-color buffer; overlays/blenders can modify it.
 4. **Output**: The active serial path maps the Penrose buffer to physical LED order and sends frames through `SerialOut`; the legacy UDP path maps the same data into ACN/E1.31 universes.
 5. **Scene update**: `Penrose.UpdateModelColors()` applies the current buffer to the Unity mesh for visualization.
@@ -83,7 +83,7 @@ Unity Editor state where the wall runtime is not running. Authoring changes made
 _Avoid_: assuming Edit Mode authoring is the only durable authoring path; forcing creative tuning to happen without seeing the wall in motion.
 
 **Tuning Window**:
-The canonical Unity workspace for detailed wall observation and Transition tuning. Its focused Live, Rhythm, and Transitions tabs show the sequencing timeline, musical state, and saved Transition Settings; the compact Controller Inspector opens it directly. It may steer the Director's Next Transition without taking timing ownership away from the Director. Effect authoring has no dedicated window surface yet.
+The canonical Unity workspace for detailed wall observation and Transition tuning. Its focused Live, Rhythm, and Transitions tabs show live sequencing state, musical state, and saved Transition Settings (the retired loaded-cue timeline awaits a track-sheet replacement); the compact Controller Inspector opens it directly. It may steer the Director's Next Transition without taking timing ownership away from the Director. Effect authoring has no dedicated window surface yet.
 _Avoid_: burying detailed observability in the narrow Controller Inspector; presenting unfinished Effect authoring as a real workspace; making a fake preview path that does not exercise the Director and Switcher.
 
 **Hold Selected**:
@@ -175,47 +175,59 @@ The two intentional personalities for rhythm-aware behavior. The dividing line i
 _Avoid_: deciding mode from transport connectivity or tempo instead of the running 4-count; multiple consumers each re-deriving the mode; `IsActive` (retired alias of `IsSynced`); effects that freeze, glitch, or go dark when the clock is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase (clock still running) as Standalone Mode.
 
 **Director**:
-The decision layer that owns *what* plays on the wall. Its whole job in Synced Mode: keep the current and next Phrases' Cue Sheets in existence, Cast the Cue when a Grid carrying a Cue Mark begins, and hand that Cue to the Switcher fire-and-forget. It wakes only on a new beat, reads musical truth only from BeatManager, and holds no state beyond its Cue Sheets.
-_Avoid_: "choreographer" (the earlier name, retired); per-frame decision loops; reading OSC directly instead of BeatManager; mirroring Switcher state or remembering past decisions; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
+The decision layer that owns *what* plays on the wall. Its whole job in Synced Mode: keep one track-scoped Cue Sheet per player (rebuilt when that player's Structure Generation changes), follow the on-air focus player's sheet by pure wire position, and Cast each Cue Mark fire-and-forget at its Runway start. It reads musical truth only from BeatManager and keeps no beat count of its own.
+_Avoid_: "choreographer" (the earlier name, retired); self-ticked beat counts or private cursors (the old Director drifted exactly this way); reading OSC directly instead of BeatManager; mirroring Switcher state or remembering past decisions; making the Director draw buffers, run transitions, or own transition start/progress mechanics.
 
 **Cue Sheet**:
-A per-Phrase index of Cue Marks generated once from the Phrase's announced beat length: marks sit on Grid Boundaries, consecutive marks (and the run-in to the first) are at least 16 and at most 64 beats apart, and the final phrase boundary always carries one. Layout within those constraints is a creative roll — random today, energy-weighted later. Marks are empty: no Effect or Transition is chosen until Cast.
-_Avoid_: putting Effect or Transition choices in the Cue Sheet; treating it as a queue of loaded Cues; rerolling just because same-length phrase timing shifted.
+A track-scoped show plan built the moment a track's song structure arrives: every Cue Mark placed against the real Phrase map with its Effect and Transition assignment baked in. It is a pure, deterministic function of the structure and its seed — (Structure Generation, player number) — so the same load rebuilds identically and a fresh load deals a fresh show. Each player holds its own sheet; nothing is cached by track id.
+_Avoid_: the retired per-Phrase empty-marks sheet (marks now carry assignments); treating it as a queue of pending cues; mutating it for overrides or starvation (masks and one-off deals leave the plan untouched); caching or keying sheets by track id.
 
 **Cue Mark**:
-A beat position on a Cue Sheet where a stage-directed Cue should musically land. A Cue Mark belongs to Phrase structure; marks include selected 16-beat Grid Boundaries and the mandatory final phrase boundary. Fill/Drop state does not create or move Cue Marks; it only informs which Effect and Transition the Director should cast for an existing Cue Mark.
-_Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Grid Boundary when speaking about the Phrase plan.
+A beat position in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment. Marks sit on Grid Boundaries 16 to 64 beats apart; phrase boundaries are preferred positions, not mandates. Where a Drop or Fill owns a boundary, the Anchor decides how the moment is performed.
+_Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Grid Boundary; empty marks awaiting cast-time selection (retired).
 
 **Cast**:
-Choosing the Effect and Transition for a Cue Mark's Cue. Casting happens lazily — when the Grid that loads the Cue begins, not when the Cue Sheet is built — so it reads the freshest wire truth. A Fill on this Grid or a Drop on the next Grid makes Fill/Drop-capable Repertoire *preferred*, never mandatory; a mandate would collapse variety onto the same few capable Performers.
-_Avoid_: casting at Cue Sheet build time; consulting energy or other wire lanes when casting (Performers and Transitions read those themselves); treating the Fill/Drop preference as a hard filter.
+The Director's act of sending a Cue Mark's cue to the Switcher at the Runway-start beat, reading the then-current focus sheet — decide-at-cast, the last responsible moment. What is cast is the mark's baked assignment, masked by any active override; once cast it executes unconditionally.
+_Avoid_: cast-time selection (retired — selection happens at sheet build); a lock or revocation window after casting; casting from a self-ticked clock instead of the wire.
 
-**Loaded Cue**:
-The Switcher-held stage-directed Cue for the next Cue Mark: which destination Performer, which Transition, and which musical mark the move should hit. It is mutable only inside the Switcher before its Lock Point; the Director sends cue directions fire-and-forget and does not inspect Loaded Cue state.
-_Avoid_: loading multiple future Cues; treating a Loaded Cue as Switcher transition progress; putting pixel-level Effect commands in it.
+**Anchor**:
+A moment in a Cue Sheet that a Drop landing or Fill window owns. Each Anchor is resolved at build time so a capable performer owns the moment — a seeded flip between Ride-through and a Performed Transition; a catalog that can serve only one treatment degenerates the flip to that side.
+_Avoid_: treating every phrase boundary as an Anchor; resolving Anchors at cast time; an error path for a one-sided catalog.
 
-**Armed Cue**:
-A Loaded Cue that has crossed its Lock Point and is committed to Switcher execution. Phrase changes may still be observed, but they no longer change the armed Transition, destination Performer, or target Cue Mark.
-_Avoid_: treating an Armed Cue as a Cue Sheet entry, a Director decision still in flux, or a multi-item queue.
+**Ride-through**:
+One of the two Anchor treatments: a Drop/Fill-capable Effect is already on the wall before the moment and simply plays through it — the boundary mark is suppressed and the Effect's own live Drop/Fill response carries the hit.
+_Avoid_: cutting to a new Effect on the landing beat and calling it a ride-through; suppressing marks at boundaries no Anchor owns.
 
-**Lock Point**:
-The beat after which a Loaded Cue can no longer change. The Lock Point depends on the chosen Transition's Runway so the Switcher has one committed beat before it must trigger the Transition.
-_Avoid_: one global lock beat for every Transition; locking at the Impact Point; putting transition start math into the Cue Sheet.
+**Performed Transition**:
+The other Anchor treatment: a Drop/Fill-capable Transition scheduled so its Impact Point lands exactly on the landing beat, moving into a normally dealt Effect. This is the purpose of Transition Repertoire's Fill/Drop tags.
+_Avoid_: using an untagged Transition at an Anchor; landing the Impact Point anywhere but the landing beat.
+
+**Bag**:
+The seeded fairness mechanism sheet building deals from: one shuffled bag per catalog (Effects, Transitions), dealt top-card so the full catalog shows before any repeat, reshuffled when empty. Capability and soft energy scans may dig into the bag; a discard-pile encore is allowed only when an Anchor finds no capable card left.
+_Avoid_: weights or scoring (the bag *is* the fairness); per-cast random picks; sharing one bag across sheets or players.
+
+**Live Order**:
+The newest-first list of players currently in the live set, from the wire's live-order lane; its first entry is the on-air focus the wall follows. Surfaced as `BeatManager.LiveOrder`.
+_Avoid_: treating the lowest player number as the focus; inferring the focus from clocks or levels; following any player other than the focus.
+
+**Loaded Cue / Armed Cue / Lock Point**:
+Retired. Decide-at-cast removed the pending-cue lifecycle: nothing is cast early, so nothing needs loading, locking, or revoking — the Switcher executes a Cast cue unconditionally.
+_Avoid_: reintroducing a pending-cue protocol; if a future Performer needs warm-up, the fix is "cast one beat early," never a lock protocol.
 
 **Next Transition**:
-The Transition already chosen for the Director's next cue command. Selecting it early lets authoring tools show and tune what is coming before it starts, while the Switcher still honors that Transition's Runway, Tail, and Impact Point when the Cue is loaded and armed.
-_Avoid_: choosing the Transition at the last moment; treating the selected next Transition as permission to bypass Runway, Tail, or Impact Point timing.
+A staged override for the Transition of the very next Cast: a one-shot pick that replaces exactly the next dealt card, after which the plan resumes verbatim; with Hold Selected it trumps every deal until released. Overrides mask the Cue Sheet, never edit it.
+_Avoid_: treating a staged pick as permission to bypass Runway, Tail, or Impact Point timing; mutating the sheet; expecting the displaced card to play later.
 
 **Next Effect**:
-The Effect already chosen as the destination for the Director's next A-to-B move. It lets a person know what the wall is moving toward and gives tuning tools something concrete to show before the move begins.
-_Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to preview or tune the next destination.
+A staged override for the destination Effect of the very next Cast — the same one-shot mask semantics as Next Transition. It lets a person steer what the wall moves toward without disturbing the plan.
+_Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to steer the next destination; mutating the sheet.
 
 **Grid State**:
 How much to trust where the one sits on the 16-beat Grid this frame, expressed as the three `GridState` values (the wire's `state`): **Locked** (the one is trusted), **Coasting** (the last good offset is held), and **Disputed** (a fresh offset disagrees with the held one). Effects read `BeatManager.Grid.State`; position may still be absent in the wire's partial coasting shape. Losing the clock makes the group's nullable facts read null; it is not a fourth state. BeatManager types the wire vocabulary without renaming it.
 _Avoid_: describing Grid State as a five-level evidence ladder (retired); treating Coasting or Disputed as off-grid.
 
 **Loop**:
-A live repeated section of the current music, surfaced display-only as `BeatManager.Loop`. Loops are powers of four and usually preserve Grid, but they can rewind or repeat beat numbers so absolute beat progress goes stale. The Director keeps no loop-specific machinery: a loop's backward jump is just another grid-reading move: when it re-presents a Grid whose Cue Mark equals the Loaded Cue's, the Switcher answers "kept" and the cue rides unchanged; when it re-presents a different mark, the Switcher replaces the loaded cue if it is unlocked, or the locked cue rides. Sheets are keyed to their Phrase announcement (label and length), so a loop within the same Phrase never re-rolls a Cue Sheet.
+A live repeated section of the current music, surfaced display-only as `BeatManager.Loop`. Loops are powers of four and usually preserve Grid, but they can rewind or repeat beat numbers so absolute beat progress goes stale. The Director keeps no loop-specific machinery: a backward jump just makes the next Grid-boundary lookup answer from an earlier segment of the sheet, and if marks stop being crossed the starvation guard deals one fresh card after four cast-less Grid starts. Sheets are track-scoped, so a loop never re-rolls one.
 _Avoid_: assuming a Loop means the wall is out of phase; assuming old absolute progress remains valid after a loop rewind; modeling a loop as its own scheduler or a Director cursor.
 
 **Performer**:
@@ -279,8 +291,8 @@ The Director's directive for a musical change. A Cue is not the change itself �
 _Avoid_: "call" (collides with calling a Performer on stage); treating a Cue as the change itself rather than the directive that triggers it; a Cue that micromanages a Performer's internal parameters.
 
 **Mechanical Switcher** (a.k.a. **Switcher**):
-The fire-and-forget mechanism that executes the Director's armed stage-directed Cues. It owns the Armed Cue, transition start/progress/completion, and the in-flight move between leaving and arriving Performers; it uses Runway and Tail to make the Transition's Impact Point land on the Cue Mark, but never chooses the Cue Sheet, Cue Mark, Performer, or Transition.
-_Avoid_: putting musical or casting decisions in the Switcher; making it read Track Phase/Phrase data; the Director drawing buffers or running transitions itself; using Switcher progress, completion, or busy state as a scheduling input; calling it "dumb" instead of describing it as execution-only.
+The fire-and-forget mechanism that executes the Director's Cast cues unconditionally. It owns transition start/progress/completion and the in-flight move between leaving and arriving Performers; it uses Runway and Tail to make the Transition's Impact Point land on the Cue Mark, but never chooses the Cue Mark, Performer, or Transition, and holds no pending-cue state.
+_Avoid_: putting musical or casting decisions in the Switcher; making it read Track Phase/Phrase data; using Switcher progress, completion, or busy state as a scheduling input; a loaded/armed cue surface (retired); calling it "dumb" instead of describing it as execution-only.
 
 **Hold**:
 An inspection freeze that suspends the Director so a developer can sit on one effect, watch it, and tweak its settings live — a Unity Editor development affordance, not normal show operation. It is not a selection input and not a second decider: while held, the Director stops advancing entirely (no rotation, no Cues, no transitions) and simply keeps the chosen Performer on screen; releasing it resumes directing.
@@ -291,7 +303,7 @@ RaveSystem's name for the analyzed phrase signal: current/next phrase labels, ac
 _Avoid_: confusing Track Phase with **Bar Phase** or the wall's **Grid**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Phrase**:
-The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Grids, and is usually at least 8 bars / 32 beats while often doubling or extending from there. Its announced beat length is the source for its Cue Sheet.
+The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Grids, and is usually at least 8 bars / 32 beats while often doubling or extending from there. The track's Phrase map is what the Cue Sheet lays its marks against.
 _Avoid_: treating a Phrase as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase.
 
 **Grid** (a.k.a. **16-Beat Grid**):

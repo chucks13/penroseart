@@ -22,16 +22,16 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Transitions/TransitionBase.cs` | Base for effect-to-effect transitions and transition-as-blender behavior. |
 | `Assets/core/Reference/Transition.cs` | Legacy/orphaned transition shape inheriting `EffectBase`; not used by the current controller. |
 | `Assets/core/Rhythm/BeatManager.cs` | Private Rave snapshot ownership, live/Standalone source handling, `IsSynced`, per-frame derivation, and frame-coherent Data Surface capture. |
-| `Assets/core/Rhythm/TimingValues.cs`, `TrackValues.cs` | Captured route, timing, playhead-position, and track-identity values. |
+| `Assets/core/Rhythm/TimingValues.cs`, `TrackValues.cs`, `LiveOrderValues.cs` | Captured route, timing, playhead-position, track-identity, and ordered live-player focus values. |
 | `Assets/core/Rhythm/BeatsValues.cs`, `OffbeatsValues.cs`, `PulsesValues.cs`, `Duration.cs` | Beat/offbeat wire countdowns and triggers, plus tempo-based musical pulses. |
 | `Assets/core/Rhythm/PhraseValues.cs`, `FillValues.cs`, `DropValues.cs`, `EnergyValues.cs`, `GridValues.cs`, `StockEnvelopes.cs` | Phrase-structure wire values, direct progress facts, and Build/Decay calculations. |
 | `Assets/core/Rhythm/LoopValues.cs`, `LevelsValues.cs` | Loop wire values and always-available normalized/smoothed/peak audio-band values. |
 | `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Explicit immutable Waveform acquisition, clock-bound playback, Pool codec/load path, and four-bar Routine composition. |
 | `Assets/core/IO/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
-| `Assets/core/Switching/Director.cs` | Wire-change reducer (ADR-0011) for Standalone/Synced/Hold sequencing: holds two Cue Sheets repaired by invariant on each new-beat wake, casts a Cue lazily and preference-based when a Grid carrying a Cue Mark begins, and hands it to the Switcher fire-and-forget. Records no decision memory. Plus staged choices and read-only status. |
-| `Assets/core/Switching/CueSheet.cs` | Builds a Cue Sheet: an index of Cue Marks over an announced phrase length, marks on Grid Boundaries, gaps of one to four Grids, phrase end always marked; layout is an announcement-seeded random roll. |
-| `Assets/core/Switching/Deck.cs` | The rotating card deck behind effect and transition casting: rotate-to-back pulls, draw-window random draws, and read-only preferred finds pulled only on Switcher acceptance. |
-| `Assets/core/Switching/Switcher.cs` | Mechanical execution of ShowNow/StartTransition/RenderAtTime and sole owner of cue commitment (one beat-domain lock, private runway/tail/lock math; loading a cue returns accepted-or-not), Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
+| `Assets/core/Switching/Director.cs` | Standalone cadence plus Synced focus following: maintains six track-sheet slots, resolves the focus player's wire position at Grid boundaries, applies one-shot/held override masks, casts at Runway start, and injects a fresh deal after four starved Grid starts. |
+| `Assets/core/Switching/TrackCueSheet.cs` | Pure full-track Cue Sheet builder: seeded Effect/Transition bags, baked assignments, drop/fill Anchors, ride-through/performed-transition treatment, post-drop hold, and deterministic `DealAt(...)` starvation deals. |
+| `Assets/core/Switching/Deck.cs` | Rotating card deck used by Standalone effect and transition selection. |
+| `Assets/core/Switching/Switcher.cs` | Fire-and-forget Cast plus ShowNow/StartTransition/RenderAtTime mechanical execution and active A-to-B progress; no loaded-cue or lock lifecycle. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
 | `Assets/core/ReactiveInputs/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
 | `Assets/core/Hardware/SerialOut.cs` | USB serial hardware discovery and frame sending for S2 Mini / ESP32 boards. |
@@ -70,6 +70,8 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Transitions/TransitionSettingsAssetUtility.cs` | Transition settings asset creation/restoration utility. |
 | `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Tuning window for transitions and related authoring controls. |
 | `Assets/Editor/Shared/LiveControllerAccess.cs` | Shared editor helper for resolving live Controller state and play-mode repaint. |
+
+`CueSheet.cs`, `CueLog.cs`, and the Live Timeline files have been removed. Track-scoped Cue Sheet visualization has no current implementation and is a planned follow-up.
 
 ## Effects
 

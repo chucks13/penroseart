@@ -13,9 +13,9 @@ Unity scene
        ├─ blender catalog: BlenderBase[]
        ├─ musical state/tools: BeatManager + sibling Waveforms
        ├─ rhythm inputs: RaveOscReceiver, OSCReader
-       ├─ sequencing: Director (wire-change reducer) -> two Cue Sheets -> cast Cue
-       ├─ cue handoff: fire-and-forget SwitcherCueDirection
-       ├─ execution: Mechanical Switcher loaded cue -> locked cue -> transition
+       ├─ planning: six track-scoped TrackCueSheet slots
+       ├─ sequencing: Director follows BeatManager.LiveOrder focus by wire position
+       ├─ execution: fire-and-forget Switcher.Cast -> transition
        ├─ overlays/blending: drums, optional camera, optional PixelReceiver
        └─ outputs: serial hardware path or legacy UDP/ACN path
 ```
@@ -44,11 +44,11 @@ The active runtime frame flow is:
 1. `Controller.Update()` advances local frame time and optional command systems.
 2. `RaveOscReceiver.ApplyTo(beatManager)` applies the newest live Rave OSC state before any sequencing decision.
 3. `BeatManager.Update()` settles the live or Standalone source, derives shared values, and captures every public value group once so the frame sees one coherent musical snapshot.
-4. `Director.Tick(deltaTime)` chooses Standalone, Synced, or Hold behavior.
-5. In Synced Mode, the Director wakes only on a new beat; it reads Grid and Phrase truth from `BeatManager` (wire-decoded) and repairs its two Cue Sheets by invariant.
-6. When a Grid carrying a Cue Mark begins, the Director casts a Cue lazily — a Fill on this Grid or a Drop on the next Grid makes capable Repertoire *preferred*, never required — reading the freshest wire truth.
-7. The Director issues stage commands only: `Switcher.ShowNow(...)` or a fire-and-forget `Switcher.UpsertLoadedCue(...)` with a beat-domain `SwitcherCueDirection` and tiny `SwitcherClockSnapshot`.
-8. `Switcher.RenderAtTime(...)` internally locks/starts due Loaded Cues, then renders the current Effect or active A-to-B Transition into `penrose.buffer`.
+4. `Director.Tick(deltaTime)` chooses Standalone or Synced behavior and keeps one `TrackCueSheet` slot per physical player current with that player's complete structure generation.
+5. In Synced Mode, the Director follows `BeatManager.LiveOrder.Focus`, reads that player's absolute beat and the on-air Grid, and looks up the corresponding planned segment.
+6. When the focus position reaches the next mark's Runway start, the Director reads the current focus sheet, masks its baked Effect or Transition with any one-shot or held override, and calls `Switcher.Cast(...)` fire-and-forget.
+7. If four on-air Grid starts pass without a segment change, the Director uses `TrackCueSheet.DealAt(...)` for one fresh cast at that boundary; the sheet itself does not change.
+8. `Switcher.RenderAtTime(...)` renders the current Effect or active A-to-B Transition into `penrose.buffer`.
 9. Filters, drums, camera, and external pixel blending may modify `penrose.buffer`.
 10. The active serial path or legacy UDP/ACN path sends the frame to hardware.
 11. `Penrose.UpdateModelColors()` applies the buffer to the Unity preview mesh and HUD/OSC status is updated.
@@ -57,7 +57,7 @@ The active runtime frame flow is:
 
 ADR-0004 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
 
-The Director owns the decision layer: which Performer should be on stage, which Transition should move between A and B, and when that move should be cued. The Switcher owns only the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion.
+The Director owns the decision layer: which Performer should be on stage, which Transition should move between A and B, and when that move should be cued. The Switcher owns only the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion. It does not own a pending or loaded-cue lifecycle.
 
 ### Standalone Mode
 
@@ -65,15 +65,13 @@ Standalone Mode is the intentional self-running behavior when no live OSC source
 
 ### Synced Mode
 
-Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. Grid and Phrase truth come from the wire (RaveSystem OSC schema v2) decoded into BeatManager's shallow read-only groups; the Director does not re-derive timing from arithmetic. The Director is a wire-change reducer (ADR-0011): it wakes once per new beat — nothing in the decision path runs per frame — and does three things.
+Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. Position is wire-only: `BeatManager.LiveOrder.Focus` selects the player, that player's absolute beat locates the plan, and the on-air Grid supplies boundaries. The Director never self-ticks a musical count.
 
-On each wake the Director:
+`TrackCueSheet.Build(...)` is the single creative planning seam. When a player's complete structure generation changes, it builds one full-track plan into that player's slot, seeded by structure generation plus player number. The plan contains every Cue Mark with its Effect and Transition indexes already assigned. Its seeded Effect and Transition bags, energy fit, drop/fill Anchors, ride-through versus performed-transition choice, and post-drop hold all live behind the builder. Phrase boundaries are preferred mark positions, not mandatory transitions.
 
-- **repairs two Cue Sheets by invariant** (`RepairSheets`): it holds exactly a current and a next `CueSheet`, keyed to the announced **label and length** read from `BeatManager` — nothing else. It watches the phrase_state lane by expectation: the expected countdown wrap is the turnover (next promotes to current and the emptied slot refills), and an unexpected label/length change rebuilds only the affected sheet. A sheet captures its absolute anchor once, at build or shift, so timing wobble on an unchanged announcement is absorbed against that anchor and cannot re-roll a sheet — only a changed announcement can;
-- **casts a Cue lazily** (`CastOnNewGrid`) when a Grid carrying a Cue Mark begins, reading the freshest wire truth. A Fill on this Grid or a Drop on the next Grid makes capable Repertoire *preferred*, never required; energy and every other wire lane are Performer/Transition inputs read from `BeatManager` by the Performers themselves, not Director casting inputs;
-- **offers the Cue fire-and-forget** to the Switcher (`UpsertLoadedCue`) and acts on its one answer. The Director makes no keep/recast decision of its own: identity on the seam is the Cue Mark alone, so a same-mark offer the Switcher answers *kept* rides the loaded cue unchanged, a *rejected* offer touches nothing, and only a *loaded* answer pulls the peeked deck cards and re-stages.
+At runtime the Director resolves the focus player's next mark and waits until its Transition Runway must begin. It then re-reads the current focus sheet and casts that baked assignment. Focus handover, needle-drop, and loop exit use the same lookup: when wire position resolves to a different segment or sheet, a normal cast takes over. A loop pinned inside one segment changes nothing until the starvation guard injects a fresh `DealAt(...)` cast after four on-air Grid starts.
 
-The Director records no verdicts and holds no decision memory. It hands each Cue to the Switcher fire-and-forget and never mirrors commitment state; the Switcher alone owns commitment.
+Staged and held Effect/Transition choices mask the assignment at cast time; they never mutate the sheet. The Switcher accepts `Cast(...)` unconditionally and holds no loaded-cue, lock, rejection, or revocation lifecycle.
 
 ### Transition timing
 
@@ -84,7 +82,7 @@ A Transition's `TransitionRepertoire` declares its beat timing:
 - **Tail**: visual resolution after the Impact Point.
 - **Tags**: Fill/Drop event suitability. Timing shape makes a Transition schedulable; tags make it artistically suitable for an event.
 
-Runway/Tail/Lock arithmetic is private Switcher math (`Switcher.ProjectCueWindow` / `LockPointBeatFor`), not a shared public type. The Director chooses the Cue Mark, destination Performer, and Transition; the Switcher derives the Loaded Cue Lock Point, start, progress, and completion so the Transition's impact lands on that Cue Mark. Tail completion and Switcher progress are execution facts only; they are not musical scheduling inputs. Saved `Assets/transitions/Resources/TransitionSettings/*.asset` values participate in the live Transition Repertoire through `TransitionSettingsProvider`, so code defaults alone are not the full runtime truth.
+The Director uses Runway to choose the last responsible cast beat. `Switcher.Cast(...)` starts the Transition immediately from that beat-domain direction; a late cast compresses the Runway while keeping Impact on the Cue Mark. Tail completion and Switcher progress are execution facts only, not musical scheduling inputs. Saved `Assets/transitions/Resources/TransitionSettings/*.asset` values participate in the live Transition Repertoire through `TransitionSettingsProvider`, so code defaults alone are not the full runtime truth.
 
 ## Catalog discovery and indexing
 
@@ -126,20 +124,22 @@ Transitions blend two effect indexes:
 - `V`: progress from `0` to `1`;
 - `D`: remaining progress, `1 - V`.
 
-Standalone/manual paths can still call `Switcher.StartTransition(...)` explicitly. Synced cue handoff uses `Switcher.UpsertLoadedCue(...)`, whose identity is the Cue Mark alone: an offer at the same Cue Mark is a **keep** (the loaded cue rides unchanged and is never re-flavored), a different-mark offer replaces the loaded cue when it can still commit and is not locked, and otherwise the offer is rejected. The Switcher answers in one call — kept, loaded, or rejected — so the Director never mirrors commitment. The Switcher holds one Loaded Cue, derives its Transition-specific Lock Point from Runway, starts due cues from `RenderAtTime(...)`, and promotes the destination Effect after the Transition completes. If an explicit transition is issued while one is still rendering, the Switcher replaces the mechanical move using the previous destination as the new source.
+Standalone/manual paths can still call `Switcher.StartTransition(...)` explicitly. Synced handoff calls `Switcher.Cast(...)` with the Cue Mark, target Effect, Transition, and current beat clock. Cast starts the move unconditionally and the Switcher promotes the destination Effect after the Transition completes. If an explicit transition is issued while one is still rendering, the Switcher replaces the mechanical move using the previous destination as the new source.
 
 ## Deck selection and staging
 
-Effects and transitions use rotating integer decks.
+Standalone selection uses rotating integer decks.
 
 1. Initialize a deck as `[0, 1, 2, ... count - 1]`.
 2. Pick a random index from the top half of the deck.
 3. Remove that entry.
 4. Move it to the bottom.
 
-This gives variety without immediate repeats while still eventually cycling through the catalog. Repertoire-aware casting uses the same deck rules, so a preferred Fill/Drop-capable Effect or Transition is still reserved by rotating its card rather than by bypassing the deck. Transition event casting first inspects candidates without mutation, then rotates the selected transition only when a cue command is sent.
+This gives variety without immediate repeats while still eventually cycling through the catalog.
 
-The Director keeps staged **Next Effect** and **Next Transition** choices so the Tuning Window can show what is coming. Manual staging is one-shot by default. Hold Selected keeps the staged choice after each move while still allowing the Director/Switcher path to run.
+Synced selection is separate: `TrackCueSheet.Build(...)` deals seeded shuffle bags over the complete Effect and Transition catalogs and bakes the results into the plan. Drop/fill Anchors scan those bags for capable performers and choose either ride-through or a performed Transition. `TrackCueSheet.DealAt(...)` provides a deterministic fresh deal only for the starvation guard.
+
+The Director keeps staged **Next Effect** and **Next Transition** choices as override masks. `SetNextEffect(...)` and `SetNextTransition(...)` replace exactly the next planned assignment; their Hold variants keep replacing that side on later casts. Releasing a hold returns to the unchanged plan.
 
 ## Held Effect override
 
@@ -166,17 +166,17 @@ Switcher-rendered Effect or Transition buffer
 | Runtime hub | `Assets/core/Runtime/Controller.cs` | Unity host for catalogs, lifecycle, input routing, output routing, overlays, preview update, and the per-frame call order. |
 | Geometry/model | `Assets/core/Runtime/Penrose.cs` | Layout data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
 | Wall data files | `Assets/core/Runtime/WallData.cs` | `LayoutData`/`WiringData` contracts for the `Assets/StreamingAssets/` text files; layout is fixed, wiring is selected per art piece on the Controller. |
-| Sequencing decision | `Assets/core/Switching/Director.cs` | Wire-change reducer (ADR-0011): Standalone/Synced/Hold decision layer, two Cue Sheets repaired by invariant each new-beat wake, lazy preference-based casting, staged choices, and fire-and-forget cue handoff. Holds no decision memory. |
-| Cue Sheets | `Assets/core/Switching/CueSheet.cs` | Index of Cue Marks over an announced phrase length: marks on Grid Boundaries, gaps of one to four Grids, phrase end always marked; layout is an announcement-seeded random roll. Grid and Phrase truth themselves come from the wire via `BeatManager`. |
-| Cue/casting | `Assets/core/Switching/Deck.cs`, `Assets/core/Effects/Repertoire.cs` | Rotating card decks and Effect/Transition Repertoire behind lazy, preference-based casting when a Grid carrying a Cue Mark begins; cards are pulled only on Switcher acceptance. |
-| Mechanical execution | `Assets/core/Switching/Switcher.cs` | ShowNow/StartTransition/RenderAtTime execution, sole owner of cue commitment (one beat-domain lock; private runway/tail/lock math; loading a cue returns accepted-or-not), Switcher-held Loaded Cue scheduling, and active A-to-B progress. |
+| Sequencing decision | `Assets/core/Switching/Director.cs` | Standalone cadence plus Synced focus following: maintains six track-sheet slots, resolves the focus player's wire position, applies override masks, casts at Runway start, and guards against segment starvation. |
+| Track Cue Sheets | `Assets/core/Switching/TrackCueSheet.cs` | Pure full-track plan builder with baked Effect/Transition assignments, seeded bags, drop/fill Anchors, ride-through/performed-transition treatment, post-drop hold, and deterministic starvation deals. |
+| Cue/casting | `Assets/core/Switching/Deck.cs`, `Assets/core/Effects/Repertoire.cs` | Rotating Standalone decks plus the capability and timing declarations consumed by track-sheet planning and Switcher execution. |
+| Mechanical execution | `Assets/core/Switching/Switcher.cs` | Fire-and-forget Cast, ShowNow/StartTransition/RenderAtTime execution, and active A-to-B progress; no loaded-cue or lock lifecycle. |
 | Effects | `Assets/core/Effects/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames; concrete Effects own Repertoire, Waveform acquisition, and every artistic mapping from shared musical facts/tools. |
 | Screen effects | `Assets/core/Effects/ScreenEffect.cs` | Map rectangular screen buffers onto the Penrose tile layout. |
 | Mixers/wrappers | `Assets/core/Effects/MixerBase.cs`, mixer effects | Remain one Effect publicly; privately own/configure child Effects and combine or transform their buffers. |
 | Transitions/settings | `Assets/core/Transitions/TransitionBase.cs`, `Assets/core/Transitions/TransitionSettings*.cs`, `Assets/transitions/*.cs` | Blend effect A to effect B; concrete Transitions own musical response while settings declare Runway/Tail/Shape/Intensity defaults and saved tuning. |
 | External blenders | `Assets/core/Blending/BlenderBase.cs`, `Assets/blenders/*.cs` | Mix incoming pixel-source data with the native Penrose buffer. |
 | Palette | `Assets/core/helpers/GPalette.cs` | Global palette sampling and animated palette transitions. |
-| Rhythm Data Surface | `Assets/core/Rhythm/BeatManager.cs`, `*Values.cs`, `StockEnvelopes.cs`, `Duration.cs` | One live/Standalone musical gateway exposing shallow, frame-coherent wire values and derived musical values. |
+| Rhythm Data Surface | `Assets/core/Rhythm/BeatManager.cs`, `LiveOrderValues.cs`, other `*Values.cs`, `StockEnvelopes.cs`, `Duration.cs` | One live/Standalone musical gateway exposing shallow, frame-coherent wire values and derived musical values, including the live-order focus used by Synced Mode. |
 | Waveform tools | `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Sibling acquisition surface, immutable clock-bound values, Pool loading/codec, and direct four-bar choreography composition. |
 | Rave OSC | `Assets/core/IO/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
 | Drum overlay | `Assets/core/ReactiveInputs/drums.cs` | Drum/ring overlay triggers and drawing. |
@@ -190,5 +190,6 @@ These are documented facts, not requests to change behavior during documentation
 - `Controller` owns many responsibilities and is the primary future refactor target.
 - Several numeric scene fields still depend on catalog indexes; name-based controls are safer.
 - `OnEnd()` exists on effects/transitions but is not called by the current controller.
+- Track-scoped Cue Sheet visualization is not present; a replacement for the deleted Live Timeline is a planned follow-up.
 - `Controller - nova.cs` is inactive reference code under `#if false` and references missing/incompatible concepts.
 - Optional telnet code is inactive by default and should be revisited before re-enabling.
