@@ -100,6 +100,12 @@ public sealed class Director
     private bool holdSelectedEffect;
     private bool holdSelectedTransition;
 
+    // One-shot override masks (ADR-0017): a manual SetNext* stages a pick that replaces exactly the next synced
+    // cast's dealt card and is then consumed, so the plan resumes verbatim. Auto-staging and enabling a Hold
+    // both clear it. Overrides mask, never mutate — the sheet stays a pure function of (structure, seed).
+    private bool overrideEffectPending;
+    private bool overrideTransitionPending;
+
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
 
     // One track-scoped Cue Sheet per physical player, mirroring the Players group. A slot is (re)built when
@@ -116,9 +122,10 @@ public sealed class Director
     private int lastCastMarkBeat = int.MinValue;
 
     // Consecutive on-air Grid starts with no Cast, counted from observed Grid-lane wraps — never a self-ticked
-    // beat. At the ceiling (four Grid starts, 64 beats) the Director re-asserts the focus segment so a loop
-    // pinned inside one segment never leaves the wall stale. Any Cast resets the count.
-    private const int StarvationGridStartCeiling = 4;
+    // beat. At the ceiling — the maximum Cue Mark gap expressed in Grids (64 beats / 16) — a loop pinned inside
+    // one segment has never crossed a plan mark, so the Director injects one fresh dealt cast so the wall never
+    // goes stale. Any Cast resets the count.
+    private const int StarvationGridStartCeiling = TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats;
     private int starvedGridStarts;
 
     /// <summary>Last on-air Grid beat observed while recognizing a return to beat one; null before the first read.</summary>
@@ -144,6 +151,8 @@ public sealed class Director
         this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
         currentEffectIndexForSelection = switcher.CurrentEffectIndex;
         SetNextTransition(initialTransitionIndex);
+        // Initial seeding is not an operator override: clear the pending mask SetNextTransition just raised.
+        overrideTransitionPending = false;
         StageNextEffect(currentEffectIndexForSelection);
     }
 
@@ -178,34 +187,60 @@ public sealed class Director
     /// <summary>Whether the staged Transition should be kept after each completed move.</summary>
     public bool HoldSelectedTransition => holdSelectedTransition;
 
-    /// <summary>Stages the Effect that the next Standalone A-to-B move should target.</summary>
+    /// <summary>
+    /// Stages the Effect for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0017
+    /// override — exactly the next synced plan cast, which plays this pick instead of its dealt card before the
+    /// plan resumes verbatim. Masks, never mutates the sheet.
+    /// </summary>
     public void SetNextEffect(int effectIndex)
     {
         ValidateEffectIndex(effectIndex);
         nextEffectIndex = effectIndex;
+        overrideEffectPending = true;
         Trace(() => $"NEXT_EFFECT_SET nextEffect={FormatEffect(nextEffectIndex)} hold={holdSelectedEffect}");
     }
 
-    /// <summary>Stages the Transition that the next Standalone A-to-B move should use.</summary>
+    /// <summary>
+    /// Stages the Transition for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0017
+    /// override — exactly the next synced plan cast, before the plan resumes verbatim. Masks, never mutates.
+    /// </summary>
     public void SetNextTransition(int transitionIndex)
     {
         ValidateTransitionIndex(transitionIndex);
         nextTransitionIndex = transitionIndex;
+        overrideTransitionPending = true;
         controller.currentTransition = nextTransitionIndex;
         Trace(() => $"NEXT_TRANSITION_SET nextTransition={FormatTransition(nextTransitionIndex)} hold={holdSelectedTransition}");
     }
 
-    /// <summary>When enabled, the currently staged Effect is staged again after each completed Standalone move.</summary>
+    /// <summary>
+    /// Holds the staged Effect: it is re-staged after each Standalone move, and in Synced Mode it trumps every
+    /// dealt card while held (marks keep firing on cadence with the held pick). Enabling a Hold clears any
+    /// pending one-shot override so releasing it lands on exactly what the sheet says.
+    /// </summary>
     public void SetHoldSelectedEffect(bool hold)
     {
         holdSelectedEffect = hold;
+        if (hold)
+        {
+            overrideEffectPending = false;
+        }
+
         Trace(() => $"NEXT_EFFECT_HOLD_SET hold={holdSelectedEffect} nextEffect={FormatEffect(nextEffectIndex)}");
     }
 
-    /// <summary>When enabled, the currently staged Transition is staged again after each completed Standalone move.</summary>
+    /// <summary>
+    /// Holds the staged Transition: re-staged after each Standalone move, and in Synced Mode it trumps every
+    /// dealt card while held. Enabling a Hold clears any pending one-shot override so release lands on the plan.
+    /// </summary>
     public void SetHoldSelectedTransition(bool hold)
     {
         holdSelectedTransition = hold;
+        if (hold)
+        {
+            overrideTransitionPending = false;
+        }
+
         Trace(() => $"NEXT_TRANSITION_HOLD_SET hold={holdSelectedTransition} nextTransition={FormatTransition(nextTransitionIndex)}");
     }
 
@@ -334,11 +369,12 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Follows the on-air focus player's sheet by pure wire position and Casts due Cue Marks. A held Effect
-    /// suspends casting (ADR-0017: Hold trumps). The target mark is the upcoming mark once the focus beat
-    /// reaches its Transition's Runway start, otherwise the mark owning the current segment — so a normal
-    /// forward crossing Casts on time and a jump (handover, needle-drop, loop) re-asserts the current segment.
-    /// A mark is Cast only when its (focus, beat) key differs from the last Cast.
+    /// Follows the on-air focus player's sheet by pure wire position and Casts due Cue Marks. The Controller's
+    /// Effect hold freezes casting entirely (an inspection freeze); the ADR-0017 Hold Selected masks the dealt
+    /// card instead and is applied at the cast, so marks keep firing. The target mark is the upcoming mark once
+    /// the focus beat reaches its Transition's Runway start, otherwise the mark owning the current segment — so
+    /// a normal forward crossing Casts on time and a jump (handover, needle-drop, loop) re-asserts the current
+    /// segment. A mark is Cast only when its (focus, beat) key differs from the last Cast.
     /// </summary>
     private void FollowFocus(bool gridStarted)
     {
@@ -360,7 +396,7 @@ public sealed class Director
         if (ResolveTargetMark(sheet, focusBeat) is { } mark
             && !(lastCastFocusPlayer == focusPlayer && lastCastMarkBeat == mark.Beat))
         {
-            CastMark(focusPlayer, mark, focusBeat);
+            CastCue(focusPlayer, mark.Beat, mark.EffectIndex, mark.TransitionIndex, focusBeat, mark.Beat);
             return;
         }
 
@@ -370,21 +406,19 @@ public sealed class Director
         }
 
         // Starvation guard: a loop pinned inside one segment never changes the target mark, so no Cast fires.
-        // Count on-air Grid starts and, at the ceiling, re-assert the owning mark so the wall never goes stale.
+        // Count on-air Grid starts and, at the ceiling, inject one cast dealt fresh from the sheet's bags at this
+        // boundary — not the same owning mark re-fired, which would change nothing on the wall. The plan position
+        // (the owning mark) is recorded as the last Cast so the plan resumes at the next real crossing; the
+        // sheet never mutates.
         starvedGridStarts++;
         if (starvedGridStarts < StarvationGridStartCeiling)
         {
             return;
         }
 
-        if (OwningMark(sheet, focusBeat) is { } owning)
-        {
-            CastMark(focusPlayer, owning, focusBeat);
-        }
-        else
-        {
-            starvedGridStarts = 0;
-        }
+        var injected = sheet.DealAt(focusBeat);
+        var planMarkBeat = OwningMark(sheet, focusBeat) is { } owning ? owning.Beat : focusBeat;
+        CastCue(focusPlayer, focusBeat, injected.EffectIndex, injected.TransitionIndex, focusBeat, planMarkBeat);
     }
 
     /// <summary>
@@ -478,18 +512,66 @@ public sealed class Director
     /// mark's absolute beat against the focus player's clock. The Switcher owns all Runway/impact/tail timing;
     /// the Director only decides which mark, and when, from wire facts. Any Cast resets the starvation count.
     /// </summary>
-    private void CastMark(int focusPlayer, CuePlanMark mark, int focusBeat)
+    /// <summary>
+    /// Casts one cue to the Switcher fire-and-forget, applying ADR-0017 override masks to the plan-dealt cards.
+    /// <paramref name="cueMarkBeat"/> is the impact beat the cast aims at; <paramref name="planMarkBeat"/> is
+    /// the plan position recorded as the last Cast (equal to the mark for a normal cast; the owning mark for a
+    /// starvation injection whose impact beat is the boundary). Any Cast resets the starvation count.
+    /// </summary>
+    private void CastCue(int focusPlayer, int cueMarkBeat, int planEffectIndex, int planTransitionIndex, int focusBeat, int planMarkBeat)
     {
-        var transition = controller.transitions[mark.TransitionIndex];
-        var cue = new SwitcherCueDirection(mark.Beat, mark.EffectIndex, mark.TransitionIndex, transition.Repertoire);
-        switcher.Cast(cue, FocusClockSnapshot(focusBeat));
+        var effectIndex = ResolveEffectOverride(planEffectIndex);
+        var transitionIndex = ResolveTransitionOverride(planTransitionIndex);
+        var transition = controller.transitions[transitionIndex];
+        switcher.Cast(new SwitcherCueDirection(cueMarkBeat, effectIndex, transitionIndex, transition.Repertoire), FocusClockSnapshot(focusBeat));
 
-        controller.currentTransition = mark.TransitionIndex;
-        currentEffectIndexForSelection = mark.EffectIndex;
+        controller.currentTransition = transitionIndex;
+        currentEffectIndexForSelection = effectIndex;
         lastCastFocusPlayer = focusPlayer;
-        lastCastMarkBeat = mark.Beat;
+        lastCastMarkBeat = planMarkBeat;
         starvedGridStarts = 0;
-        Trace(() => $"SYNC_CAST focus={focusPlayer} focusBeat={focusBeat} mark={mark.Beat} transition={FormatTransition(mark.TransitionIndex)} target={FormatEffect(mark.EffectIndex)}");
+        Trace(() => $"SYNC_CAST focus={focusPlayer} focusBeat={focusBeat} cueMark={cueMarkBeat} plan={planMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(effectIndex)}");
+    }
+
+    /// <summary>
+    /// Applies ADR-0017 override masking to a plan-dealt Effect: a Hold trumps every deal and returns the held
+    /// pick; otherwise a one-shot staged pick replaces exactly this cast and is then consumed; with neither, the
+    /// plan's card plays. A masking read only — the sheet is never mutated.
+    /// </summary>
+    private int ResolveEffectOverride(int planEffectIndex)
+    {
+        if (holdSelectedEffect)
+        {
+            return nextEffectIndex;
+        }
+
+        if (overrideEffectPending)
+        {
+            overrideEffectPending = false;
+            return nextEffectIndex;
+        }
+
+        return planEffectIndex;
+    }
+
+    /// <summary>
+    /// Applies ADR-0017 override masking to a plan-dealt Transition: a Hold trumps every deal; otherwise a
+    /// one-shot staged pick replaces exactly this cast and is then consumed; with neither, the plan's card plays.
+    /// </summary>
+    private int ResolveTransitionOverride(int planTransitionIndex)
+    {
+        if (holdSelectedTransition)
+        {
+            return nextTransitionIndex;
+        }
+
+        if (overrideTransitionPending)
+        {
+            overrideTransitionPending = false;
+            return nextTransitionIndex;
+        }
+
+        return planTransitionIndex;
     }
 
     /// <summary>Observes the on-air Grid lane and reports whether it wrapped back to beat one this frame.</summary>
@@ -651,6 +733,8 @@ public sealed class Director
             effectDeck,
             candidateIndex => currentEffectIndex < 0 || candidateIndex != currentEffectIndex,
             (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
+        // An auto-staged pick is not an operator override, so it never masks a synced cast.
+        overrideEffectPending = false;
         Trace(() => $"NEXT_EFFECT_STAGED nextEffect={FormatEffect(nextEffectIndex)}");
     }
 
@@ -668,6 +752,8 @@ public sealed class Director
             transitionDeck,
             _ => true,
             (minInclusive, maxExclusive) => UnityEngine.Random.Range(minInclusive, maxExclusive));
+        // An auto-staged pick is not an operator override, so it never masks a synced cast.
+        overrideTransitionPending = false;
         controller.currentTransition = nextTransitionIndex;
         Trace(() => $"NEXT_TRANSITION_STAGED nextTransition={FormatTransition(nextTransitionIndex)}");
     }

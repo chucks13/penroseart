@@ -177,10 +177,28 @@ public readonly struct TrackCueSheet
     private static readonly IReadOnlyList<CuePlanMark> NoMarks = Array.Empty<CuePlanMark>();
     private static readonly IReadOnlyList<AnchorResolution> NoAnchors = Array.Empty<AnchorResolution>();
 
-    private TrackCueSheet(IReadOnlyList<CuePlanMark> marks, IReadOnlyList<AnchorResolution> anchors)
+    // Retained so the sheet can deal one off-plan card deterministically without the live build-time bags: the
+    // catalogs it dealt from and its seed pair. These keep the value pure — descriptors are index+repertoire
+    // structs with no engine references — and let the starvation deal be seeded from the sheet's own seed.
+    private readonly IReadOnlyList<EffectDescriptor> effects;
+    private readonly IReadOnlyList<TransitionDescriptor> transitions;
+    private readonly int structureGeneration;
+    private readonly int playerNumber;
+
+    private TrackCueSheet(
+        IReadOnlyList<CuePlanMark> marks,
+        IReadOnlyList<AnchorResolution> anchors,
+        IReadOnlyList<EffectDescriptor> effects,
+        IReadOnlyList<TransitionDescriptor> transitions,
+        int structureGeneration,
+        int playerNumber)
     {
         Marks = marks;
         Anchors = anchors;
+        this.effects = effects;
+        this.transitions = transitions;
+        this.structureGeneration = structureGeneration;
+        this.playerNumber = playerNumber;
     }
 
     /// <summary>Every placed Cue Mark, ascending by beat; the complete fire schedule the Director runs.</summary>
@@ -188,6 +206,26 @@ public readonly struct TrackCueSheet
 
     /// <summary>Every owned drop or fill Anchor, ascending by landing beat; how each protected moment is performed.</summary>
     public IReadOnlyList<AnchorResolution> Anchors { get; }
+
+    /// <summary>
+    /// Deterministically deals one off-plan Cue Mark at <paramref name="boundaryBeat"/> from fresh bags over
+    /// this sheet's catalogs, without mutating the sheet. Seeded from the sheet's own seed pair and the
+    /// boundary beat, so the identical situation always deals the identical card and nothing observable
+    /// re-rolls. The Director uses this for the starvation guard: a loop pinned inside one segment never
+    /// crosses a plan mark, so at the maximum-gap ceiling it injects one fresh cast here rather than re-firing
+    /// the same mark (which would change nothing on the wall). Valid on any <see cref="Build"/>-produced sheet.
+    /// </summary>
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat the injected cast lands on; also the deal seed's third dimension.</param>
+    /// <returns>A Cue Mark at <paramref name="boundaryBeat"/> carrying one freshly dealt Effect and Transition index.</returns>
+    public CuePlanMark DealAt(int boundaryBeat)
+    {
+        var rng = new Rng(structureGeneration, playerNumber, boundaryBeat);
+        var effectBag = new Bag(effects.Count, rng);
+        var transitionBag = new Bag(transitions.Count, rng);
+        var effectIndex = effects[effectBag.DealTop()].Index;
+        var transitionIndex = transitions[transitionBag.DealTop()].Index;
+        return new CuePlanMark(boundaryBeat, effectIndex, transitionIndex);
+    }
 
     /// <summary>
     /// Builds a track's complete Cue Sheet as a pure function of its structure, a seed, and the two
@@ -239,7 +277,7 @@ public readonly struct TrackCueSheet
         var phrases = structure.Phrases;
         if (phrases.Count == 0)
         {
-            return new TrackCueSheet(NoMarks, NoAnchors);
+            return new TrackCueSheet(NoMarks, NoAnchors, effects, transitions, structureGeneration, playerNumber);
         }
 
         var rng = new Rng(structureGeneration, playerNumber);
@@ -248,7 +286,7 @@ public readonly struct TrackCueSheet
 
         var baseMarks = WalkTrack(phrases, rng);
         var anchors = CollectAnchors(phrases);
-        var plan = ResolveAndDeal(phrases, baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng);
+        var plan = ResolveAndDeal(phrases, baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng, structureGeneration, playerNumber);
         return plan;
     }
 
@@ -362,7 +400,9 @@ public readonly struct TrackCueSheet
         IReadOnlyList<TransitionDescriptor> transitions,
         Bag effectBag,
         Bag transitionBag,
-        Rng rng)
+        Rng rng,
+        int structureGeneration,
+        int playerNumber)
     {
         var suppressed = new HashSet<int>();
         var rideCarriers = new Dictionary<int, List<Anchor>>();
@@ -488,7 +528,7 @@ public readonly struct TrackCueSheet
 
         var anchorList = new AnchorResolution[resolutions.Count];
         resolutions.Values.CopyTo(anchorList, 0);
-        return new TrackCueSheet(marks, anchorList);
+        return new TrackCueSheet(marks, anchorList, effects, transitions, structureGeneration, playerNumber);
     }
 
     /// <summary>Suppresses any base mark inside the post-drop hold window, keeping an owned mark intact.</summary>
@@ -673,6 +713,23 @@ public readonly struct TrackCueSheet
                 var folded = 2166136261u;
                 folded = (folded ^ (uint)first) * 16777619u;
                 folded = (folded ^ (uint)second) * 16777619u;
+                state = folded == 0u ? 0x9E3779B9u : folded;
+            }
+        }
+
+        /// <summary>
+        /// Folds a third dimension into the seed for a one-off deterministic deal (the starvation boundary
+        /// beat). A distinct stream from the two-argument build seed, so the off-plan deal never disturbs the
+        /// sheet's own roll.
+        /// </summary>
+        public Rng(int first, int second, int third)
+        {
+            unchecked
+            {
+                var folded = 2166136261u;
+                folded = (folded ^ (uint)first) * 16777619u;
+                folded = (folded ^ (uint)second) * 16777619u;
+                folded = (folded ^ (uint)third) * 16777619u;
                 state = folded == 0u ? 0x9E3779B9u : folded;
             }
         }

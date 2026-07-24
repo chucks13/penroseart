@@ -185,7 +185,150 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(second.EffectIndex), "A forward jump into a later segment re-asserts its mark.");
     }
 
+    // ---- Starvation guard -----------------------------------------------------------------------
+
+    [Test]
+    public void StarvationInjectsAFreshDealtCastAtTheGridStartCeiling()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        // Focus beat 4 sits in the run-in before the first mark's Runway, so no plan cast ever fires here.
+        FeedFrame(focusBeat: 4, phrases, generation: 1);
+        var sheet = ExpectedSheet(playerSlot: 0, generation: 1);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "Run-in: no cast yet.");
+
+        // Three on-air Grid starts stay under the ceiling: still no cast.
+        FeedGridStarts(3, focusBeat: 4, phrases, generation: 1);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "Three Grid starts stay under the ceiling.");
+
+        // The fourth Grid start injects exactly one cast dealt fresh from the sheet's bags at this boundary.
+        FeedGridStarts(1, focusBeat: 4, phrases, generation: 1);
+        var injected = sheet.DealAt(4);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The ceiling injects a cast.");
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(injected.EffectIndex), "The injection is dealt fresh from the sheet's bags, not the plan.");
+        Assert.That(controller.currentTransition, Is.EqualTo(injected.TransitionIndex));
+    }
+
+    [Test]
+    public void ANormalPlanCastResetsTheStarvationCount()
+    {
+        var phrases = new[] { Phrase(1, 48, "verse"), Phrase(49, 96, "chorus") };
+        FeedFrame(focusBeat: 4, phrases, generation: 1);
+        var sheet = ExpectedSheet(playerSlot: 0, generation: 1);
+        Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: at least two marks.");
+        var mark0 = sheet.Marks[0];
+
+        // Three Grid starts accumulate in the run-in (under the ceiling).
+        FeedGridStarts(3, focusBeat: 4, phrases, generation: 1);
+
+        // A normal plan cast crossing the first mark resets the count.
+        FeedFrame(focusBeat: mark0.Beat, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark0.EffectIndex), "Crossing the first mark casts its plan card.");
+
+        // Three more Grid starts within the first segment: had the count not reset, 3 + 3 would exceed the
+        // ceiling and inject. Because it reset, the wall still shows the first mark's plan card.
+        FeedGridStarts(3, focusBeat: mark0.Beat + 1, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark0.EffectIndex), "A normal cast reset the count; no injection within three more Grid starts.");
+        Assert.That(controller.currentTransition, Is.EqualTo(mark0.TransitionIndex), "No injection changed the Transition either.");
+    }
+
+    [Test]
+    public void StarvationSurvivesAFocusHandoverAndAHandoverCastResetsIt()
+    {
+        var phrases1 = new[] { Phrase(1, 128, "intro") };
+        FeedFrame(focusBeat: 4, phrases1, generation: 1, focusPlayer: 1);
+
+        // Accumulate three Grid starts on player 1 (under the ceiling).
+        FeedGridStarts(3, focusBeat: 4, phrases1, generation: 1, focusPlayer: 1);
+
+        // Player 2 comes on air as focus at one of its marks: a normal handover cast fires and resets the count.
+        var phrases2 = new[] { Phrase(1, 96, "chorus") };
+        FeedFrame(focusBeat: 4, phrases2, generation: 2, focusPlayer: 2);
+        var sheet2 = ExpectedSheet(playerSlot: 1, generation: 2, playerNumber: 2);
+        var mark2 = sheet2.Marks[0];
+        FeedFrame(focusBeat: mark2.Beat, phrases2, generation: 2, focusPlayer: 2);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark2.EffectIndex), "The handover casts player 2's plan card.");
+
+        // Only three Grid starts on player 2's held position: the reset means no injection yet.
+        FeedGridStarts(3, focusBeat: mark2.Beat + 1, phrases2, generation: 2, focusPlayer: 2);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark2.EffectIndex), "The handover cast reset the count across the focus change.");
+    }
+
+    // ---- Override masks (ADR-0017) --------------------------------------------------------------
+
+    [Test]
+    public void AStagedEffectPickWinsExactlyOneCastThenThePlanResumes()
+    {
+        var phrases = new[] { Phrase(1, 48, "verse"), Phrase(49, 96, "chorus") };
+        FeedFrame(focusBeat: 1, phrases, generation: 1);
+        var sheet = ExpectedSheet(playerSlot: 0, generation: 1);
+        Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: at least two marks.");
+        var mark0 = sheet.Marks[0];
+        var mark1 = sheet.Marks[1];
+        var stagedEffect = EffectIndexOtherThan(mark0.EffectIndex, mark1.EffectIndex);
+
+        director.SetNextEffect(stagedEffect);
+
+        // The next cast plays the staged pick, not the mark's dealt Effect; the plan's Transition is untouched.
+        FeedFrame(focusBeat: mark0.Beat, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(stagedEffect), "The staged pick wins exactly the next cast.");
+        Assert.That(controller.currentTransition, Is.EqualTo(mark0.TransitionIndex), "A staged Effect override leaves the plan's Transition intact.");
+
+        // The following mark resumes the plan verbatim.
+        FeedFrame(focusBeat: mark1.Beat, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark1.EffectIndex), "The plan resumes at the following mark.");
+    }
+
+    [Test]
+    public void AHoldTrumpsEveryDealUntilReleasedThenThePlanResumes()
+    {
+        var phrases = new[] { Phrase(1, 48, "verse"), Phrase(49, 96, "chorus") };
+        FeedFrame(focusBeat: 1, phrases, generation: 1);
+        var sheet = ExpectedSheet(playerSlot: 0, generation: 1);
+        Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: at least two marks.");
+        var mark0 = sheet.Marks[0];
+        var mark1 = sheet.Marks[1];
+        var heldEffect = EffectIndexOtherThan(mark0.EffectIndex, mark1.EffectIndex);
+
+        director.SetNextEffect(heldEffect);
+        director.SetHoldSelectedEffect(true);
+
+        // Marks keep firing on cadence, each with the held pick.
+        FeedFrame(focusBeat: mark0.Beat, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(heldEffect), "The held pick trumps the first mark's deal.");
+        FeedFrame(focusBeat: mark1.Beat, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(heldEffect), "The held pick trumps every deal while held.");
+
+        // Release: the very next mark plays exactly what the sheet says.
+        director.SetHoldSelectedEffect(false);
+        FeedFrame(focusBeat: mark0.Beat + 1, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark0.EffectIndex), "Release lands on the plan deterministically.");
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------
+
+    /// <summary>Feeds <paramref name="count"/> on-air Grid starts (a 16→1 wrap each) while the focus beat holds still.</summary>
+    private void FeedGridStarts(int count, int focusBeat, StructurePhrase[] phrases, int generation, int focusPlayer = 1)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            FeedFrame(focusBeat, phrases, generation, focusPlayer, gridBeat: 16);
+            FeedFrame(focusBeat, phrases, generation, focusPlayer, gridBeat: 1);
+        }
+    }
+
+    /// <summary>The first Effect catalog index not in <paramref name="avoid"/>; used to pick a distinct override pick.</summary>
+    private int EffectIndexOtherThan(params int[] avoid)
+    {
+        for (var i = 0; i < controller.effects.Length; i++)
+        {
+            if (System.Array.IndexOf(avoid, i) < 0)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
 
     /// <summary>Drives the focus beat to a mark's Runway start so the Director casts exactly that mark.</summary>
     private void CastMark(CuePlanMark mark, StructurePhrase[] phrases, int generation, int focusPlayer = 1)
@@ -223,15 +366,20 @@ public sealed class DirectorReducerTests
         return descriptors;
     }
 
-    /// <summary>Feeds one wire frame: on-air clock plus one focus player with a complete structure, then ticks.</summary>
-    private void FeedFrame(int focusBeat, StructurePhrase[] phrases, int generation, int focusPlayer = 1)
+    /// <summary>
+    /// Feeds one wire frame: on-air clock plus one focus player with a complete structure, then ticks. The
+    /// on-air Grid beat defaults to the focus beat's position within its Grid; tests pass <paramref name="gridBeat"/>
+    /// explicitly to drive on-air Grid starts (wraps to 1) independently of the focus beat.
+    /// </summary>
+    private void FeedFrame(int focusBeat, StructurePhrase[] phrases, int generation, int focusPlayer = 1, int? gridBeat = null)
     {
+        var onAirGridBeat = gridBeat ?? (((focusBeat - 1) % 16) + 1);
         BeatManagerWireFixture.Feed(controller.beatManager, snapshot =>
         {
             snapshot.beatInBar = ((focusBeat - 1) % 4) + 1;
             snapshot.beat = new BeatPosition { current = focusBeat, total = -1 };
             snapshot.bpm = 120f;
-            snapshot.timingGrid = new TimingGrid { beat = ((focusBeat - 1) % 16) + 1, bar = 1, state = "locked" };
+            snapshot.timingGrid = new TimingGrid { beat = onAirGridBeat, bar = ((onAirGridBeat - 1) / 4) + 1, state = "locked" };
             snapshot.playersLive = focusPlayer.ToString();
             snapshot.players ??= new PlayerState[RaveWireSnapshot.PlayerCount];
             var player = PlayerState.Unavailable;

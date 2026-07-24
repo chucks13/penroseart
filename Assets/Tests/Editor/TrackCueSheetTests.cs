@@ -66,6 +66,51 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
+    public void DealAtIsDeterministicForTheSameSeedAndBoundaryBeat()
+    {
+        // The starvation one-off deal is a pure function of (sheet seed, boundary beat): the same situation
+        // deals the identical card, both on a repeat call and on a fresh rebuild of the same sheet.
+        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
+        var first = sheet.DealAt(200);
+        var again = sheet.DealAt(200);
+        var rebuilt = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2).DealAt(200);
+
+        Assert.That(first.Beat, Is.EqualTo(200), "The dealt mark lands on the boundary beat.");
+        Assert.That(again.EffectIndex, Is.EqualTo(first.EffectIndex));
+        Assert.That(again.TransitionIndex, Is.EqualTo(first.TransitionIndex));
+        Assert.That(rebuilt.EffectIndex, Is.EqualTo(first.EffectIndex), "A rebuilt sheet deals identically.");
+        Assert.That(rebuilt.TransitionIndex, Is.EqualTo(first.TransitionIndex));
+    }
+
+    [Test]
+    public void DealAtNeverMutatesThePlan()
+    {
+        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
+        var before = sheet.Marks.Select(m => (m.Beat, m.EffectIndex, m.TransitionIndex)).ToArray();
+
+        sheet.DealAt(200);
+        sheet.DealAt(48);
+        sheet.DealAt(415);
+
+        var after = sheet.Marks.Select(m => (m.Beat, m.EffectIndex, m.TransitionIndex)).ToArray();
+        Assert.That(after, Is.EqualTo(before), "DealAt deals from fresh local bags and never touches the sheet's plan.");
+    }
+
+    [Test]
+    public void DealAtYieldsIndicesInsideBothCatalogs()
+    {
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var sheet = TrackCueSheet.Build(MixedTrack(), effects, transitions, 7, 2);
+        foreach (var boundaryBeat in new[] { 16, 97, 200, 370, 456 })
+        {
+            var dealt = sheet.DealAt(boundaryBeat);
+            Assert.That(dealt.EffectIndex, Is.InRange(0, effects.Count - 1));
+            Assert.That(dealt.TransitionIndex, Is.InRange(0, transitions.Count - 1));
+        }
+    }
+
+    [Test]
     public void EveryInteriorMarkSitsOnAGridBoundary()
     {
         // Interior marks are Grid multiples relative to their Phrase start; because Phrase starts are Grid
