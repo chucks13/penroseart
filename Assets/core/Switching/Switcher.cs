@@ -364,6 +364,39 @@ public sealed class Switcher
     }
 
     /// <summary>
+    /// Casts one beat-domain cue for fire-and-forget execution, unconditionally. The cue's Transition
+    /// starts on its Runway beat (<c>Cue Mark − Runway</c>), its Impact Point lands on the Cue Mark beat,
+    /// and its Tail completes after. There is no Lock Point, no verdict, and no revocation: a cast arriving
+    /// at Runway start runs the full Runway; a late cast still fires, beginning already underway so its
+    /// Impact still lands on the mark — a compressed Runway. The Switcher never holds the cue to wait: the
+    /// Runway begins now, or is already past, never in the future. Decide-at-cast callers read the current
+    /// sheet and cast at the last responsible moment; the Switcher trusts the cast and executes it.
+    /// </summary>
+    /// <param name="cue">The impact-beat cue: target effect, transition, and that transition's repertoire.</param>
+    /// <param name="clock">The canonical beat clock the Runway start is timed against.</param>
+    public void Cast(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
+    {
+        ValidateEffectIndex(cue.TargetEffectIndex);
+        ValidateTransitionIndex(cue.TransitionIndex);
+
+        var repertoire = cue.TransitionRepertoire;
+        var runwayStartBeat = cue.CueMarkBeat - repertoire.RunwayBeats;
+        // Never later than now: an on-time cast starts on its Runway beat; a late cast starts already
+        // underway (Runway compressed); the cue is never parked to wait for a future beat.
+        var runwayStartTime = Mathf.Min(TimeAtBeat(clock, runwayStartBeat), clock.NowSeconds);
+
+        activeCueStatus = SwitcherCueStatus.Empty;
+        ClearLoadedCue();
+        StartTransition(
+            cue.TargetEffectIndex,
+            cue.TransitionIndex,
+            TransitionStartTiming.FromBeatClock(runwayStartTime, clock.SecondsPerBeat),
+            clock.NowSeconds,
+            repertoire);
+        Trace(() => $"SWITCHER_CAST cueMark={cue.CueMarkBeat} runwayStart={runwayStartBeat} startTime={runwayStartTime:0.###} now={clock.NowSeconds:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+    }
+
+    /// <summary>
     /// Whether a cue for this Cue Mark and transition can still commit on this beat: strictly before its
     /// Lock Point. Runway/tail/lock arithmetic is the Switcher's alone; callers ask, they do not compute.
     /// </summary>

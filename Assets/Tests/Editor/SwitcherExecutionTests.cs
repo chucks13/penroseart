@@ -409,6 +409,144 @@ public sealed class SwitcherExecutionTests
         Assert.That(buffer[0], Is.EqualTo(Color.Lerp(Color.blue, Color.red, 0.5f)));
     }
 
+    #region Fire-and-forget cast (decide-at-cast)
+
+    /// <summary>
+    /// On-time cast: the Runway begins now, the Impact Point lands on the Cue Mark beat, and the Tail
+    /// completes after — the whole fire-and-forget contract in one flight.
+    /// </summary>
+    [Test]
+    public void CastRunsFullRunwayImpactOnMarkThenCompletesAfterTail()
+    {
+        // Runway 2, Tail 2 (Duration 4 beats): Impact Point sits at progress 0.5. Cue Mark 10 means the
+        // Runway beat is 8; the Director casts exactly there.
+        var repertoire = RepertoireFor(runwayBeats: 2, tailBeats: 2);
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: repertoire);
+
+        switcher.Cast(cue, new SwitcherClockSnapshot(currentBeat: 8, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+
+        // Runway begins now: the transition is live and starts from the top of its Runway.
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The Runway is under way the instant the cast lands.");
+        Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0f).Within(0.001f), "An on-time cast runs the full Runway from zero.");
+
+        // Cue Mark beat 10 is two beats after the Runway beat: 10f + 2 * 0.5f = 11f.
+        switcher.RenderAtTime(11f, out _);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The Impact Point is mid-flight, not completion.");
+        Assert.That(
+            switcher.Status.TransitionProgress,
+            Is.EqualTo(repertoire.ImpactPoint).Within(0.001f),
+            "The Impact Point lands exactly on the Cue Mark beat.");
+
+        // Completion beat is Cue Mark + Tail = 12: 10f + 4 * 0.5f = 12f.
+        var buffer = switcher.RenderAtTime(12f, out _);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1), "The Tail completes after the Impact.");
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
+        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+    }
+
+    /// <summary>
+    /// A late cast still fires: it begins already under way (a compressed Runway) rather than being
+    /// refused, and its Impact still lands on the Cue Mark beat.
+    /// </summary>
+    [Test]
+    public void LateCastFiresAsCompressedRunwayWithImpactStillOnMark()
+    {
+        var repertoire = RepertoireFor(runwayBeats: 2, tailBeats: 2);
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: repertoire);
+
+        // Runway beat is 8, but the Director is a beat late and casts on beat 9 (wall time 10.5f). The
+        // transition starts from the Runway beat's time (10f), already 0.25 of the way in at cast.
+        switcher.Cast(cue, new SwitcherClockSnapshot(currentBeat: 9, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10.5f));
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "A late cast fires rather than being refused.");
+        Assert.That(
+            switcher.Status.TransitionProgress,
+            Is.EqualTo(0.25f).Within(0.001f),
+            "The Runway is compressed: the transition is already under way at cast.");
+
+        // Cue Mark beat 10 is still wall time 11f; the Impact still lands there despite the late cast.
+        switcher.RenderAtTime(11f, out _);
+        Assert.That(
+            switcher.Status.TransitionProgress,
+            Is.EqualTo(repertoire.ImpactPoint).Within(0.001f),
+            "Compression preserves the Impact on the Cue Mark beat.");
+
+        var buffer = switcher.RenderAtTime(12f, out _);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1));
+        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+    }
+
+    /// <summary>A hard cut (zero Runway, zero Tail) promotes its destination immediately on the Cue Mark.</summary>
+    [Test]
+    public void HardCutCastPromotesDestinationImmediatelyOnTheMark()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 1,
+            transitionRepertoire: hardCutTransition.Repertoire);
+
+        // Zero Runway means the Runway beat is the Cue Mark itself; the Director casts on beat 10.
+        switcher.Cast(cue, new SwitcherClockSnapshot(currentBeat: 10, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1), "A zero-duration cast promotes without a render tick.");
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
+
+        var buffer = switcher.RenderAtTime(10f, out _);
+        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+    }
+
+    /// <summary>
+    /// The fire-and-forget path exposes no cue-lifecycle surface: no loaded cue, no Lock Point, no
+    /// kept/rejected/loaded verdict — the method returns void and executes unconditionally.
+    /// </summary>
+    [Test]
+    public void CastLeavesNoLoadedCueOrLockSurface()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 0,
+            transitionRepertoire: transition.Repertoire);
+
+        switcher.Cast(cue, new SwitcherClockSnapshot(currentBeat: 9, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+
+        Assert.That(switcher.LoadedCueStatus.HasCue, Is.False, "A cast parks nothing; there is no loaded cue to lock or revoke.");
+        Assert.That(switcher.ActiveCueStatus.HasCue, Is.False, "The fire-and-forget path publishes no cue-lifecycle window.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The cast fired: a transition owns the stage.");
+    }
+
+    /// <summary>The Standalone seconds-based transition path still runs on its default duration after a cast.</summary>
+    [Test]
+    public void StandaloneSecondsPathIsUnaffectedByCast()
+    {
+        var cue = new SwitcherCueDirection(
+            cueMarkBeat: 10,
+            targetEffectIndex: 1,
+            transitionIndex: 1,
+            transitionRepertoire: hardCutTransition.Repertoire);
+        switcher.Cast(cue, new SwitcherClockSnapshot(currentBeat: 10, beatFraction: 0f, secondsPerBeat: 0.5f, nowSeconds: 10f));
+
+        // A Standalone-mode transition uses the repertoire's default seconds, untouched by the prior
+        // beat-domain cast: TimedTransition's one-second duration promotes at 21.1f.
+        switcher.StartTransition(0, 0, TransitionStartTiming.FromDefaultDuration(startTime: 20f));
+        var buffer = switcher.RenderAtTime(21.1f, out _);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
+        Assert.That(buffer[0], Is.EqualTo(Color.red));
+    }
+
+    #endregion
+
     private sealed class SolidEffect : EffectBase
     {
         private readonly Color color;
