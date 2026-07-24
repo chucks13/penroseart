@@ -109,57 +109,12 @@ public readonly struct TransitionStartTiming
 }
 
 /// <summary>
-/// Beat-domain cue direction cast into the Mechanical Switcher by the Director.
-/// </summary>
-public readonly struct SwitcherCueDirection
-{
-    public readonly int CueMarkBeat;
-    public readonly int TargetEffectIndex;
-    public readonly int TransitionIndex;
-    public readonly TransitionRepertoire TransitionRepertoire;
-
-    public SwitcherCueDirection(
-        int cueMarkBeat,
-        int targetEffectIndex,
-        int transitionIndex,
-        TransitionRepertoire transitionRepertoire)
-    {
-        CueMarkBeat = cueMarkBeat;
-        TargetEffectIndex = targetEffectIndex;
-        TransitionIndex = transitionIndex;
-        TransitionRepertoire = transitionRepertoire;
-    }
-}
-
-/// <summary>
-/// Plain beat-clock facts the Switcher needs to time a cast cue against the wall clock.
-/// </summary>
-public readonly struct SwitcherClockSnapshot
-{
-    public readonly int CurrentBeat;
-    public readonly float BeatFraction;
-    public readonly float SecondsPerBeat;
-    public readonly float NowSeconds;
-
-    public SwitcherClockSnapshot(int currentBeat, float beatFraction, float secondsPerBeat, float nowSeconds)
-    {
-        if (secondsPerBeat <= 0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(secondsPerBeat), secondsPerBeat, "Seconds per beat must be positive.");
-        }
-
-        CurrentBeat = currentBeat;
-        BeatFraction = Mathf.Clamp01(beatFraction);
-        SecondsPerBeat = secondsPerBeat;
-        NowSeconds = nowSeconds;
-    }
-}
-
-/// <summary>
-/// Mechanical stage switcher for Penrose performers. Its contract is one sentence: take a cast cue and
-/// execute it at its beats, then promote the destination on completion (ADR-0019). The Switcher renders
-/// in-flight effect/transition progress and owns Runway/impact/tail timing; it holds no loaded-cue lifecycle,
-/// no Lock Point, and no accept/reject verdict — a cast fires unconditionally.
+/// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
+/// Director (ADR-0020): each tick it reads BeatManager directly for the sheet player's beat, performs
+/// due Cue Marks so each Impact Point lands on its mark, and checks marks off so a rolling loop never
+/// re-fires one. It owns all Runway/Impact/Tail timing and selects nothing — every decision is asked
+/// of the bound <see cref="Director"/>. It holds no loaded-cue lifecycle, no Lock Point, and no
+/// accept/reject verdict.
 /// </summary>
 [Serializable]
 public sealed class Switcher
@@ -174,6 +129,27 @@ public sealed class Switcher
     private float transitionStartTime;
     private float transitionDurationSeconds = 1f;
     private float transitionProgress;
+
+    // The one decider (ADR-0020): commands come down (ShowNow, Standalone StartTransition, the sheet
+    // handover); questions go up through director.Decide*. Bound once at startup.
+    private Director director;
+
+    // The plan in force and its check-offs. The sheet is immutable and never written to; firedMarks is
+    // Switcher execution state only, parallel to sheet.Marks, and lives and dies with the handover.
+    private TrackCueSheet sheet;
+    private bool[] firedMarks = Array.Empty<bool>();
+
+    /// <summary>Sheet player's beat last tick, for backward-motion detection; null before the first read.</summary>
+    private int? previousSheetPlayerBeat;
+
+    /// <summary>Last on-air Grid beat observed while recognizing a return to beat one; null before the first read.</summary>
+    private int? previousGridBeat;
+
+    // Consecutive on-air Grid starts with nothing performed. At the ceiling — the maximum Cue Mark gap
+    // expressed in Grids — a loop pinned inside one segment has never crossed a plan mark, so the
+    // Switcher asks the Director for a one-off so the wall never goes stale. Any performed cue resets it.
+    private const int StarvationGridStartCeiling = TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats;
+    private int starvedGridStarts;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
@@ -200,6 +176,21 @@ public sealed class Switcher
         this.controller = controller;
         this.effects = effects ?? throw new ArgumentNullException(nameof(effects));
         this.transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
+    }
+
+    /// <summary>
+    /// Binds the one decider the Switcher asks before performing anything. Separate from construction
+    /// because the reference is genuinely mutual: the Director also pushes <see cref="ShowNow"/> and the
+    /// Standalone <see cref="StartTransition(int, int, TransitionStartTiming)"/> down into the Switcher.
+    /// </summary>
+    public void BindDirector(Director director)
+    {
+        if (director == null)
+        {
+            throw new ArgumentNullException(nameof(director));
+        }
+
+        this.director = director;
     }
 
     /// <summary>
@@ -231,34 +222,74 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Casts one beat-domain cue for fire-and-forget execution, unconditionally. The cue's Transition
-    /// starts on its Runway beat (<c>Cue Mark − Runway</c>), its Impact Point lands on the Cue Mark beat,
-    /// and its Tail completes after. There is no loaded cue, no Lock Point, and no verdict: a cast arriving
-    /// at Runway start runs the full Runway; a late cast still fires, beginning already underway so its
-    /// Impact still lands on the mark — a compressed Runway. The Switcher never holds the cue to wait: the
-    /// Runway begins now, or is already past, never in the future. Decide-at-cast callers read the current
-    /// sheet and cast at the last responsible moment; the Switcher trusts the cast and executes it.
+    /// The handover (ADR-0020): takes the Cue Sheet now in force and resets its check-offs. "Cast" hands
+    /// over the plan — it does not time a fire; <see cref="Tick"/> performs the marks. Idempotent on the
+    /// sheet's (<see cref="TrackCueSheet.PlayerNumber"/>, <see cref="TrackCueSheet.StructureGeneration"/>)
+    /// identity, so the Director calls it every synced tick and keeps zero handover state.
+    /// <c>Cast(default)</c> clears the plan (generation 0, player 0) and is how Standalone Mode turns
+    /// sheet execution off.
     /// </summary>
-    /// <param name="cue">The impact-beat cue: target effect, transition, and that transition's repertoire.</param>
-    /// <param name="clock">The canonical beat clock the Runway start is timed against.</param>
-    public void Cast(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
+    public void Cast(TrackCueSheet sheet)
     {
-        ValidateEffectIndex(cue.TargetEffectIndex);
-        ValidateTransitionIndex(cue.TransitionIndex);
+        if (sheet.PlayerNumber == this.sheet.PlayerNumber
+            && sheet.StructureGeneration == this.sheet.StructureGeneration)
+        {
+            return;
+        }
 
-        var repertoire = cue.TransitionRepertoire;
-        var runwayStartBeat = cue.CueMarkBeat - repertoire.RunwayBeats;
-        // Never later than now: an on-time cast starts on its Runway beat; a late cast starts already
-        // underway (Runway compressed); the cue is never parked to wait for a future beat.
-        var runwayStartTime = Mathf.Min(TimeAtBeat(clock, runwayStartBeat), clock.NowSeconds);
+        this.sheet = sheet;
+        firedMarks = sheet.Marks is { Count: > 0 } marks ? new bool[marks.Count] : Array.Empty<bool>();
+        previousSheetPlayerBeat = null;
+        previousGridBeat = null;
+        starvedGridStarts = 0;
+    }
 
-        StartTransition(
-            cue.TargetEffectIndex,
-            cue.TransitionIndex,
-            TransitionStartTiming.FromBeatClock(runwayStartTime, clock.SecondsPerBeat),
-            clock.NowSeconds,
-            repertoire);
-        Trace(() => $"SWITCHER_CAST cueMark={cue.CueMarkBeat} runwayStart={runwayStartBeat} startTime={runwayStartTime:0.###} now={clock.NowSeconds:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
+    /// <summary>
+    /// Executes the plan in force for one frame: performs the due Cue Mark, clears check-offs on a
+    /// back-cue, and escalates staleness to the Director. Called by the Controller each frame after
+    /// <see cref="Director.Tick"/> so a handover always precedes execution in the same frame.
+    /// </summary>
+    public void Tick()
+    {
+        if (sheet.Marks == null || sheet.Marks.Count == 0)
+        {
+            return;
+        }
+
+        // The Switcher performs the plan it holds against that plan's own player — never the focus
+        // player, which it does not know about. PlayerNumber is 1-based.
+        var slot = sheet.PlayerNumber - 1;
+        var players = controller.beatManager.Players;
+        if (slot < 0 || slot >= players.Count || players[slot].Beat is not { } beat)
+        {
+            return;
+        }
+
+        // Observed unconditionally so the previous-frame comparison stays coherent even on a frame that fires.
+        var gridStarted = ObserveGridStart();
+        ClearCheckOffsOnBackCue(beat, players[slot].Loop.Rolling);
+
+        if (TryPerformDueMark(beat))
+        {
+            return;
+        }
+
+        if (!gridStarted)
+        {
+            return;
+        }
+
+        starvedGridStarts++;
+        if (starvedGridStarts < StarvationGridStartCeiling)
+        {
+            return;
+        }
+
+        var decision = director.DecideOneOff(beat);
+        if (decision.Perform)
+        {
+            PerformCue(beat, beat, decision);
+        }
     }
 
     /// <summary>
@@ -350,10 +381,117 @@ public sealed class Switcher
         return (Color[])effect.buffer.Clone();
     }
 
-    private static float TimeAtBeat(SwitcherClockSnapshot clock, int beat)
+    /// <summary>
+    /// The one firing rule (ADR-0020): performs the last unfired mark whose Runway has started and
+    /// silently checks off every mark before it. This single rule covers a normal forward crossing, a
+    /// mid-track focus handover, a needle-drop jump, and a late entry with no special cases. The whole
+    /// list is scanned — Runway lengths vary per transition, so the window starts are not monotonic in
+    /// mark order; when windows overlap the plan conflicts with itself, and taking the later mark is the
+    /// accepted resolution. Returns whether a cue was performed this frame.
+    /// </summary>
+    private bool TryPerformDueMark(int beat)
     {
-        var beatsUntil = beat - clock.CurrentBeat - clock.BeatFraction;
-        return clock.NowSeconds + (beatsUntil * clock.SecondsPerBeat);
+        var marks = sheet.Marks;
+        var due = -1;
+        for (var i = 0; i < marks.Count; i++)
+        {
+            if (firedMarks[i])
+            {
+                continue;
+            }
+
+            if (beat >= marks[i].Beat - transitions[marks[i].TransitionIndex].Repertoire.RunwayBeats)
+            {
+                due = i;
+            }
+        }
+
+        if (due < 0)
+        {
+            return false;
+        }
+
+        var mark = marks[due];
+        var decision = director.DecideCue(mark);
+        if (!decision.Perform)
+        {
+            // Frozen (Hold): check nothing off, so the mark still performs on release.
+            return false;
+        }
+
+        for (var i = 0; i <= due; i++)
+        {
+            firedMarks[i] = true;
+        }
+
+        PerformCue(beat, mark.Beat, decision);
+        return true;
+    }
+
+    /// <summary>
+    /// Clears every check-off when the sheet player's beat moves backward while its loop is not rolling —
+    /// a needle-drop or back-cue, whose arrival re-performs. Rolling backward is a loop, so check-offs are
+    /// kept and the transition does not re-fire. This is the whole loop mechanism (ADR-0020).
+    /// </summary>
+    private void ClearCheckOffsOnBackCue(int beat, bool loopRolling)
+    {
+        var movedBackward = previousSheetPlayerBeat is { } previous && beat < previous;
+        previousSheetPlayerBeat = beat;
+        if (!movedBackward || loopRolling)
+        {
+            return;
+        }
+
+        Array.Clear(firedMarks, 0, firedMarks.Length);
+    }
+
+    /// <summary>Observes the on-air Grid lane and reports whether it wrapped back to beat one this frame.</summary>
+    private bool ObserveGridStart()
+    {
+        var gridBeat = controller.beatManager.Grid.Beat;
+        var started = gridBeat is 1 && previousGridBeat is { } previous && previous != 1;
+        previousGridBeat = gridBeat;
+        return started;
+    }
+
+    /// <summary>
+    /// Performs one decided cue: its Transition starts on its Runway beat (<c>Impact − Runway</c>), its
+    /// Impact Point lands on <paramref name="impactBeat"/>, and its Tail completes after. Never later
+    /// than now: an on-time cue starts on its Runway beat; a late cue starts already underway with a
+    /// compressed Runway; a cue is never parked to wait for a future beat.
+    /// </summary>
+    private void PerformCue(int currentBeat, int impactBeat, CueDecision decision)
+    {
+        var repertoire = transitions[decision.TransitionIndex].Repertoire;
+        var runwayStartBeat = impactBeat - repertoire.RunwayBeats;
+        var secondsPerBeat = SecondsPerBeat();
+        var nowSeconds = Time.time;
+        var startTime = Mathf.Min(TimeAtBeat(runwayStartBeat, currentBeat, secondsPerBeat, nowSeconds), nowSeconds);
+
+        StartTransition(
+            decision.EffectIndex,
+            decision.TransitionIndex,
+            TransitionStartTiming.FromBeatClock(startTime, secondsPerBeat),
+            nowSeconds,
+            repertoire);
+        // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
+        controller.currentTransition = decision.TransitionIndex;
+        starvedGridStarts = 0;
+        Trace(() => $"SWITCHER_PERFORM impact={impactBeat} runwayStart={runwayStartBeat} startTime={startTime:0.###} now={nowSeconds:0.###} transition={FormatTransition(decision.TransitionIndex)} target={FormatEffect(decision.EffectIndex)}");
+    }
+
+    /// <summary>Converts an absolute sheet beat to Unity time against the live beat clock.</summary>
+    private float TimeAtBeat(int targetBeat, int currentBeat, float secondsPerBeat, float nowSeconds)
+    {
+        var beatFraction = Mathf.Clamp01(controller.beatManager.Timing.BeatProgress ?? 0f);
+        var beatsUntil = targetBeat - currentBeat - beatFraction;
+        return nowSeconds + (beatsUntil * secondsPerBeat);
+    }
+
+    /// <summary>Live seconds per beat, falling back to the established 120-BPM cadence.</summary>
+    private float SecondsPerBeat()
+    {
+        return controller.beatManager.Timing.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
     }
 
     /// <summary>Promotes the transition target and emits the deferred completion trace.</summary>

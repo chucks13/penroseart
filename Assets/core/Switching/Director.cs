@@ -77,13 +77,41 @@ public readonly struct DirectorStatus
 }
 
 /// <summary>
-/// Decides what plays and when it changes as a wire-change reducer (ADR-0011, ADR-0019). In Synced Mode the
-/// wall runs the track-scoped <see cref="TrackCueSheet"/> of the on-air focus player: one complete show plan
-/// is built per player the moment that player's structure generation changes, and the Director follows the
-/// wire — the focus player's live order, that player's absolute beat, and the on-air Grid — to Cast the plan's
-/// Cue Marks fire-and-forget through the <see cref="Switcher"/>. It keeps no self-ticked beat count: position
-/// is read from the wire only, so the drift bugs of the old reactive Director cannot return. Standalone Mode
-/// (timer-driven, no wire) is unchanged.
+/// The Director's answer to a Switcher question (ADR-0020): whether to perform at all, and with which
+/// Effect and Transition after override masking. Commands go down, questions go up — the Switcher asks,
+/// the Director answers, and the Switcher executes the answer on its own timeline.
+/// </summary>
+public readonly struct CueDecision
+{
+    /// <summary>The frozen answer: the wall is under Hold (an inspection freeze) and nothing is performed.</summary>
+    public static CueDecision Frozen => default;
+
+    /// <summary>Whether the Switcher should perform this cue at all.</summary>
+    public readonly bool Perform;
+
+    /// <summary>Effect catalog index to perform, after override masking; meaningless unless <see cref="Perform"/>.</summary>
+    public readonly int EffectIndex;
+
+    /// <summary>Transition catalog index to perform, after override masking; meaningless unless <see cref="Perform"/>.</summary>
+    public readonly int TransitionIndex;
+
+    /// <summary>A performing decision carrying the masked Effect and Transition indices.</summary>
+    public CueDecision(int effectIndex, int transitionIndex)
+    {
+        Perform = true;
+        EffectIndex = effectIndex;
+        TransitionIndex = transitionIndex;
+    }
+}
+
+/// <summary>
+/// Decides what plays; it never times a fire (ADR-0011, ADR-0020). In Synced Mode it builds one
+/// track-scoped <see cref="TrackCueSheet"/> per player the moment that player's structure generation
+/// changes, hands the on-air focus player's sheet to the <see cref="Switcher"/> every tick (an idempotent
+/// Cast), and answers the Switcher's questions — a planned mark's masked cards, or a fresh one-off deal
+/// when the wall has gone stale. It holds no Runway arithmetic, follows no position, observes no Grid,
+/// and keeps no cast memory: execution belongs wholly to the Switcher. Standalone Mode (timer-driven,
+/// no wire) is unchanged.
 /// </summary>
 [Serializable]
 public sealed class Director
@@ -94,7 +122,6 @@ public sealed class Director
     private readonly int[] effectDeck;
     private readonly int[] transitionDeck;
 
-    private int currentEffectIndexForSelection = -1;
     private int nextEffectIndex = -1;
     private int nextTransitionIndex;
     private bool holdSelectedEffect;
@@ -115,27 +142,6 @@ public sealed class Director
     private readonly TrackCueSheet[] sheets = new TrackCueSheet[PlayerCount];
     private readonly int[] sheetGeneration = new int[PlayerCount];
 
-    // The last Cast, keyed by (focus player, Cue Mark beat). A mark is Cast when this key changes, so focus
-    // handover, needle-drop and loop-exit are one mechanism: the focus position resolves to a different mark
-    // and a normal Cast takes over. A steady position never re-casts the same mark.
-    private int lastCastFocusPlayer = -1;
-    private int lastCastMarkBeat = int.MinValue;
-
-    // Whether the last Cast was an early runway-window cast whose Cue Mark the wire has not yet reached. Only
-    // such a cast can produce loop-straddle flicker; it is cleared the moment the focus beat reaches that mark,
-    // after which a backward jump re-asserts the prior segment normally (the designed one-mechanism behavior).
-    private bool lastCastWasEarly;
-
-    // Consecutive on-air Grid starts with no Cast, counted from observed Grid-lane wraps — never a self-ticked
-    // beat. At the ceiling — the maximum Cue Mark gap expressed in Grids (64 beats / 16) — a loop pinned inside
-    // one segment has never crossed a plan mark, so the Director injects one fresh dealt cast so the wall never
-    // goes stale. Any Cast resets the count.
-    private const int StarvationGridStartCeiling = TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats;
-    private int starvedGridStarts;
-
-    /// <summary>Last on-air Grid beat observed while recognizing a return to beat one; null before the first read.</summary>
-    private int? previousOnAirGridBeat;
-
     public Director(
         Controller controller,
         Switcher switcher,
@@ -154,11 +160,10 @@ public sealed class Director
         this.standaloneTimer = standaloneTimer ?? throw new ArgumentNullException(nameof(standaloneTimer));
         this.effectDeck = effectDeck ?? throw new ArgumentNullException(nameof(effectDeck));
         this.transitionDeck = transitionDeck ?? throw new ArgumentNullException(nameof(transitionDeck));
-        currentEffectIndexForSelection = switcher.CurrentEffectIndex;
         SetNextTransition(initialTransitionIndex);
         // Initial seeding is not an operator override: clear the pending mask SetNextTransition just raised.
         overrideTransitionPending = false;
-        StageNextEffect(currentEffectIndexForSelection);
+        StageNextEffect(switcher.TransitionTargetEffectIndex);
     }
 
     /// <summary>
@@ -270,7 +275,6 @@ public sealed class Director
     {
         Trace(() => $"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
         switcher.ShowNow(effectIndex);
-        currentEffectIndexForSelection = effectIndex;
         ResetReducerMemory();
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
@@ -285,7 +289,7 @@ public sealed class Director
             return;
         }
 
-        if (currentEffectIndexForSelection != heldEffectIndex)
+        if (switcher.TransitionTargetEffectIndex != heldEffectIndex)
         {
             ShowNow(heldEffectIndex, controller.effectTime);
         }
@@ -311,22 +315,22 @@ public sealed class Director
     /// <summary>Advances Standalone cadence after clearing synchronized reducer state.</summary>
     private void TickStandaloneMode(float deltaTime)
     {
-        // The mode boundary clears the plan-follow state so no stale sheet or Grid observation crosses a
-        // Standalone gap. Idempotent every frame (ADR-0007). The Switcher's fire-and-forget Cast parks
-        // nothing, so there is no beat-domain cue to abort.
+        // The mode boundary clears the sheet slots and the Switcher's in-force sheet so no stale plan
+        // crosses a Standalone gap. Idempotent every frame (ADR-0007).
         ResetReducerMemory();
         standaloneTimer.Update(deltaTime);
     }
 
     /// <summary>
-    /// Runs the plan-driven reducer for one frame: maintains the six sheet slots, observes the on-air Grid,
-    /// and follows the on-air focus player's sheet to Cast Cue Marks at their Runway starts.
+    /// Runs the decider for one frame: maintains the six sheet slots, then hands the on-air focus
+    /// player's sheet over. <see cref="Switcher.Cast"/> is idempotent on the sheet's identity, so casting
+    /// every tick keeps the Director free of handover memory; no focus or no built sheet casts a default
+    /// sheet, which clears the plan in force.
     /// </summary>
     private void TickSyncedMode()
     {
         MaintainSheets();
-        var gridStarted = ObserveOnAirGridStart();
-        FollowFocus(gridStarted);
+        switcher.Cast(TryResolveFocusSheet(out var sheet) ? sheet : default);
     }
 
     /// <summary>
@@ -374,180 +378,12 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Follows the on-air focus player's sheet by pure wire position and Casts due Cue Marks. The Controller's
-    /// Effect hold freezes casting entirely (an inspection freeze); the ADR-0017 Hold Selected masks the dealt
-    /// card instead and is applied at the cast, so marks keep firing. The target mark is the upcoming mark once
-    /// the focus beat reaches its Transition's Runway start, otherwise the mark owning the current segment — so
-    /// a normal forward crossing Casts on time and a jump (handover, needle-drop, loop) re-asserts the current
-    /// segment. A mark is Cast only when its (focus, beat) key differs from the last Cast.
+    /// Resolves the on-air focus player's built Cue Sheet. False when there is no focus or no built sheet
+    /// for it, each degraded silently (the wall keeps playing); <paramref name="sheet"/> is then default.
     /// </summary>
-    private void FollowFocus(bool gridStarted)
+    private bool TryResolveFocusSheet(out TrackCueSheet sheet)
     {
-        if (controller.TryGetHeldEffectIndex(out _))
-        {
-            return;
-        }
-
-        if (!TryResolveFocus(out var focusPlayer, out var sheet, out var focusBeat))
-        {
-            return;
-        }
-
-        if (sheet.Marks == null || sheet.Marks.Count == 0)
-        {
-            return;
-        }
-
-        // Once the focus beat reaches the last Cast's mark, an early runway-window cast is no longer "unreached":
-        // clear the flag so a later backward jump re-asserts the prior segment normally. Wire observation only.
-        if (lastCastFocusPlayer == focusPlayer && focusBeat >= lastCastMarkBeat)
-        {
-            lastCastWasEarly = false;
-        }
-
-        // A loop straddling the last mark's Runway start would otherwise flip the target between that next mark
-        // and the prior owning mark each pass and re-cast every time; IsLoopStraddleReCast suppresses the
-        // backward-adjacent owning-branch pass so a suppressed loop self-heals through the starvation guard below.
-        var target = ResolveTargetMark(sheet, focusBeat, out var fromRunwayWindow);
-        if (target is { } mark
-            && !(lastCastFocusPlayer == focusPlayer && lastCastMarkBeat == mark.Beat)
-            && !IsLoopStraddleReCast(sheet, mark, fromRunwayWindow, focusPlayer))
-        {
-            CastCue(focusPlayer, mark.Beat, mark.EffectIndex, mark.TransitionIndex, focusBeat, mark.Beat);
-            return;
-        }
-
-        if (!gridStarted)
-        {
-            return;
-        }
-
-        // Starvation guard: a loop pinned inside one segment never changes the target mark, so no Cast fires.
-        // Count on-air Grid starts and, at the ceiling, inject one cast dealt fresh from the sheet's bags at this
-        // boundary — not the same owning mark re-fired, which would change nothing on the wall. The plan position
-        // (the owning mark) is recorded as the last Cast so the plan resumes at the next real crossing; the
-        // sheet never mutates.
-        starvedGridStarts++;
-        if (starvedGridStarts < StarvationGridStartCeiling)
-        {
-            return;
-        }
-
-        var injected = sheet.DealAt(focusBeat);
-        var planMarkBeat = OwningMark(sheet, focusBeat) is { } owning ? owning.Beat : focusBeat;
-        CastCue(focusPlayer, focusBeat, injected.EffectIndex, injected.TransitionIndex, focusBeat, planMarkBeat);
-    }
-
-    /// <summary>
-    /// The mark the wall should currently be performing: the next mark once the focus beat has reached its
-    /// Runway start (decide-at-cast at the last responsible moment), otherwise the mark owning the segment the
-    /// focus beat sits in. Null before the first mark when it is not yet within Runway.
-    /// </summary>
-    /// <summary>
-    /// The mark the wall should currently be performing: the next mark once the focus beat has reached its
-    /// Runway start (decide-at-cast at the last responsible moment), otherwise the mark owning the segment the
-    /// focus beat sits in. Null before the first mark when it is not yet within Runway. <paramref name="fromRunwayWindow"/>
-    /// reports which branch produced the mark — true for the Runway-window (next-mark) branch, false for the
-    /// owning-mark branch — so the caller can suppress only the owning-branch loop-straddle re-cast.
-    /// </summary>
-    private CuePlanMark? ResolveTargetMark(TrackCueSheet sheet, int focusBeat, out bool fromRunwayWindow)
-    {
-        if (FirstMarkAtOrAfter(sheet, focusBeat) is { } next)
-        {
-            var runwayBeats = controller.transitions[next.TransitionIndex].Repertoire.RunwayBeats;
-            if (focusBeat >= next.Beat - runwayBeats)
-            {
-                fromRunwayWindow = true;
-                return next;
-            }
-        }
-
-        fromRunwayWindow = false;
-        return OwningMark(sheet, focusBeat);
-    }
-
-    /// <summary>
-    /// Whether an owning-branch target is a loop-straddle re-cast to suppress. Suppression is narrow: it covers
-    /// only a loop straddling a Runway start where the last Cast was an <em>early</em> runway-window cast whose
-    /// Cue Mark the wire never reached (<see cref="lastCastWasEarly"/>). Such a loop flips
-    /// <see cref="ResolveTargetMark"/> between that next mark (Runway-window branch) on the forward pass and the
-    /// prior owning mark on the backward pass; without suppression the (focus, beat) key alternates and re-casts
-    /// the transition every pass — visible flicker. Suppress only when the target came from the owning branch,
-    /// for the same focus player, the last Cast was early, and the target is exactly one segment below the last
-    /// Cast (the sheet's first mark strictly after it is the last-cast mark). Once the wire actually reaches a
-    /// mark the flag clears, so a backward jump re-asserts the prior segment normally — the designed
-    /// one-mechanism behavior. Runway-window casts are never suppressed.
-    /// </summary>
-    private bool IsLoopStraddleReCast(TrackCueSheet sheet, CuePlanMark target, bool fromRunwayWindow, int focusPlayer)
-    {
-        if (fromRunwayWindow || lastCastFocusPlayer != focusPlayer || !lastCastWasEarly)
-        {
-            return false;
-        }
-
-        return FirstMarkStrictlyAfter(sheet, target.Beat) is { } next && next.Beat == lastCastMarkBeat;
-    }
-
-    /// <summary>The first Cue Mark whose beat is strictly after <paramref name="beat"/>, or null past the last mark.</summary>
-    private static CuePlanMark? FirstMarkStrictlyAfter(TrackCueSheet sheet, int beat)
-    {
-        var marks = sheet.Marks;
-        for (var i = 0; i < marks.Count; i++)
-        {
-            if (marks[i].Beat > beat)
-            {
-                return marks[i];
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>The first Cue Mark whose beat is at or after <paramref name="focusBeat"/>, or null past the last mark.</summary>
-    private static CuePlanMark? FirstMarkAtOrAfter(TrackCueSheet sheet, int focusBeat)
-    {
-        var marks = sheet.Marks;
-        for (var i = 0; i < marks.Count; i++)
-        {
-            if (marks[i].Beat >= focusBeat)
-            {
-                return marks[i];
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>The greatest Cue Mark whose beat is at or before <paramref name="focusBeat"/>, or null in the run-in.</summary>
-    private static CuePlanMark? OwningMark(TrackCueSheet sheet, int focusBeat)
-    {
-        var marks = sheet.Marks;
-        CuePlanMark? owning = null;
-        for (var i = 0; i < marks.Count; i++)
-        {
-            if (marks[i].Beat <= focusBeat)
-            {
-                owning = marks[i];
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        return owning;
-    }
-
-    /// <summary>
-    /// Resolves the on-air focus player, its live Cue Sheet, and its absolute wire beat. False when there is no
-    /// focus, no built sheet for that player, or no usable beat — each degraded silently (the wall keeps playing).
-    /// </summary>
-    private bool TryResolveFocus(out int focusPlayer, out TrackCueSheet sheet, out int focusBeat)
-    {
-        focusPlayer = -1;
         sheet = default;
-        focusBeat = 0;
-
         if (controller.beatManager.LiveOrder.Focus is not { } focus)
         {
             return false;
@@ -559,43 +395,49 @@ public sealed class Director
             return false;
         }
 
-        if (controller.beatManager.Players[slot].Beat is not { } beat)
-        {
-            return false;
-        }
-
-        focusPlayer = focus;
         sheet = sheets[slot];
-        focusBeat = beat;
         return true;
     }
 
     /// <summary>
-    /// Casts one Cue Mark to the Switcher fire-and-forget: the mark's baked Effect and Transition, aimed at the
-    /// mark's absolute beat against the focus player's clock. The Switcher owns all Runway/impact/tail timing;
-    /// the Director only decides which mark, and when, from wire facts. Any Cast resets the starvation count.
+    /// Answers what the Switcher should perform for a planned Cue Mark (ADR-0020): frozen under Hold —
+    /// an inspection freeze, so the mark performs on release — otherwise the mark's baked cards with the
+    /// ADR-0017 override masks applied. The sheet is never mutated; overrides mask.
     /// </summary>
-    /// <summary>
-    /// Casts one cue to the Switcher fire-and-forget, applying ADR-0017 override masks to the plan-dealt cards.
-    /// <paramref name="cueMarkBeat"/> is the impact beat the cast aims at; <paramref name="planMarkBeat"/> is
-    /// the plan position recorded as the last Cast (equal to the mark for a normal cast; the owning mark for a
-    /// starvation injection whose impact beat is the boundary). Any Cast resets the starvation count.
-    /// </summary>
-    private void CastCue(int focusPlayer, int cueMarkBeat, int planEffectIndex, int planTransitionIndex, int focusBeat, int planMarkBeat)
+    public CueDecision DecideCue(CuePlanMark mark)
     {
-        var effectIndex = ResolveEffectOverride(planEffectIndex);
-        var transitionIndex = ResolveTransitionOverride(planTransitionIndex);
-        var transition = controller.transitions[transitionIndex];
-        switcher.Cast(new SwitcherCueDirection(cueMarkBeat, effectIndex, transitionIndex, transition.Repertoire), FocusClockSnapshot(focusBeat));
+        return Decide(mark.EffectIndex, mark.TransitionIndex);
+    }
 
-        controller.currentTransition = transitionIndex;
-        currentEffectIndexForSelection = effectIndex;
-        lastCastFocusPlayer = focusPlayer;
-        lastCastMarkBeat = planMarkBeat;
-        // Early = a runway-window cast fired before the wire reached its Cue Mark (focus beat still behind it).
-        lastCastWasEarly = focusBeat < cueMarkBeat;
-        starvedGridStarts = 0;
-        Trace(() => $"SYNC_CAST focus={focusPlayer} focusBeat={focusBeat} cueMark={cueMarkBeat} plan={planMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(effectIndex)}");
+    /// <summary>
+    /// Answers the Switcher's staleness escalation: nothing has performed for the whole starvation
+    /// window, so deal one fresh off-plan card from the on-air focus player's sheet at
+    /// <paramref name="beat"/> and mask it like any other deal. Frozen under Hold, and when there is no
+    /// focus or no built sheet.
+    /// </summary>
+    public CueDecision DecideOneOff(int beat)
+    {
+        if (!TryResolveFocusSheet(out var sheet))
+        {
+            return CueDecision.Frozen;
+        }
+
+        var dealt = sheet.DealAt(beat);
+        return Decide(dealt.EffectIndex, dealt.TransitionIndex);
+    }
+
+    /// <summary>
+    /// The one decision policy behind both questions (ADR-0020): Hold freezes the wall and answers
+    /// no-perform; otherwise the plan-dealt cards pass through the ADR-0017 override masks.
+    /// </summary>
+    private CueDecision Decide(int planEffectIndex, int planTransitionIndex)
+    {
+        if (controller.TryGetHeldEffectIndex(out _))
+        {
+            return CueDecision.Frozen;
+        }
+
+        return new CueDecision(ResolveEffectOverride(planEffectIndex), ResolveTransitionOverride(planTransitionIndex));
     }
 
     /// <summary>
@@ -639,15 +481,6 @@ public sealed class Director
         return planTransitionIndex;
     }
 
-    /// <summary>Observes the on-air Grid lane and reports whether it wrapped back to beat one this frame.</summary>
-    private bool ObserveOnAirGridStart()
-    {
-        var gridBeat = controller.beatManager.Grid.Beat;
-        var started = gridBeat is 1 && previousOnAirGridBeat is { } previous && previous != 1;
-        previousOnAirGridBeat = gridBeat;
-        return started;
-    }
-
     /// <summary>Builds the Effect catalog as descriptors (index + live effective repertoire) for the sheet builder.</summary>
     private IReadOnlyList<EffectDescriptor> BuildEffectDescriptors()
     {
@@ -674,31 +507,14 @@ public sealed class Director
         return descriptors;
     }
 
-    /// <summary>Captures the beat-clock facts the Switcher Cast needs, timed against the focus player's beat.</summary>
-    private SwitcherClockSnapshot FocusClockSnapshot(int focusBeat)
-    {
-        return new SwitcherClockSnapshot(
-            focusBeat,
-            controller.beatManager.Timing.BeatProgress ?? 0f,
-            CurrentSecondsPerBeat(),
-            Time.time);
-    }
-
-    /// <summary>Returns live seconds per beat, falling back to the established 120-BPM cadence.</summary>
-    private float CurrentSecondsPerBeat()
-    {
-        return controller.beatManager.Timing.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
-    }
-
-    /// <summary>Clears the plan-follow reducer state across a mode boundary, forcing a fresh sheet build on return.</summary>
+    /// <summary>
+    /// Clears the sheet slots and the Switcher's in-force sheet across a mode boundary, forcing a fresh
+    /// build and handover on return to Synced Mode.
+    /// </summary>
     private void ResetReducerMemory()
     {
         Array.Clear(sheetGeneration, 0, sheetGeneration.Length);
-        lastCastFocusPlayer = -1;
-        lastCastMarkBeat = int.MinValue;
-        lastCastWasEarly = false;
-        starvedGridStarts = 0;
-        previousOnAirGridBeat = null;
+        switcher.Cast(default);
     }
 
     /// <summary>Builds the downstream read-only view of the Director's current state.</summary>
@@ -744,8 +560,8 @@ public sealed class Director
     {
         if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
         {
-            Trace(() => $"STANDALONE_HOLD held={FormatEffect(heldEffectIndex)} current={FormatEffect(currentEffectIndexForSelection)}");
-            if (currentEffectIndexForSelection != heldEffectIndex)
+            Trace(() => $"STANDALONE_HOLD held={FormatEffect(heldEffectIndex)} current={FormatEffect(switcher.TransitionTargetEffectIndex)}");
+            if (switcher.TransitionTargetEffectIndex != heldEffectIndex)
             {
                 ShowNow(heldEffectIndex, controller.effectTime);
             }
@@ -769,20 +585,15 @@ public sealed class Director
             transitionIndex,
             TransitionStartTiming.FromDefaultDuration(Time.time));
         controller.currentTransition = transitionIndex;
-        currentEffectIndexForSelection = targetEffectIndex;
-        StageNextChoices(currentEffectIndexForSelection);
+        StageNextChoices();
         standaloneTimer.Set(transitionDurationSeconds + controller.effectTime);
         standaloneTimer.Reset();
     }
 
+    /// <summary>Stages the next Standalone choices from the stage's current destination effect.</summary>
     private void StageNextChoices()
     {
-        StageNextChoices(currentEffectIndexForSelection);
-    }
-
-    private void StageNextChoices(int currentEffectIndex)
-    {
-        StageNextEffect(currentEffectIndex);
+        StageNextEffect(switcher.TransitionTargetEffectIndex);
         StageNextTransition();
     }
 

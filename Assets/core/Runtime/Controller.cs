@@ -489,13 +489,17 @@ public class Controller : Singleton<Controller>
         return builder.ToString();
     }
 
-    /// <summary>Advances BeatManager, Waveforms, and Director in their required per-frame observation order.</summary>
+    /// <summary>
+    /// Advances BeatManager, Waveforms, Director, and Switcher in their required per-frame observation
+    /// order: the Director's sheet handover always precedes the Switcher's execution in the same frame.
+    /// </summary>
     /// <param name="timeSeconds">Absolute Unity time captured for the current frame.</param>
     /// <param name="deltaTime">Unity frame delta consumed by Standalone Director timing.</param>
     internal void AdvanceFrameTiming(float timeSeconds, float deltaTime)
     {
         beatManager.Update(timeSeconds);
         director.Tick(deltaTime);
+        switcher.Tick();
     }
 
     /// <summary>
@@ -1455,11 +1459,12 @@ public class Controller : Singleton<Controller>
             cameraOverlay.Init((int)penrose.Bounds.size.x, (int)penrose.Bounds.size.y, Penrose.Total);
         }
 
-        // Director owns sequencing cadence; Switcher owns only the mechanical in-flight stage state.
+        // Director decides and hands over the Cue Sheet; Switcher executes it and owns transition timing.
         timer = new Timer(effectTime, false);
         switcher = new Switcher(this, effects, transitions);
         switcher.SetInitialEffect(currentEffect, currentTransition);
         director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
+        switcher.BindDirector(director);
         timer.onFinished += director.OnTimerFinished;
 
         ConfigureRuntimeHud();

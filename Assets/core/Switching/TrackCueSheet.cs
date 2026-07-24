@@ -182,8 +182,6 @@ public readonly struct TrackCueSheet
     // structs with no engine references — and let the starvation deal be seeded from the sheet's own seed.
     private readonly IReadOnlyList<EffectDescriptor> effects;
     private readonly IReadOnlyList<TransitionDescriptor> transitions;
-    private readonly int structureGeneration;
-    private readonly int playerNumber;
 
     private TrackCueSheet(
         IReadOnlyList<CuePlanMark> marks,
@@ -197,15 +195,28 @@ public readonly struct TrackCueSheet
         Anchors = anchors;
         this.effects = effects;
         this.transitions = transitions;
-        this.structureGeneration = structureGeneration;
-        this.playerNumber = playerNumber;
+        StructureGeneration = structureGeneration;
+        PlayerNumber = playerNumber;
     }
 
-    /// <summary>Every placed Cue Mark, ascending by beat; the complete fire schedule the Director runs.</summary>
+    /// <summary>Every placed Cue Mark, ascending by beat; the complete fire schedule the Switcher performs.</summary>
     public IReadOnlyList<CuePlanMark> Marks { get; }
 
     /// <summary>Every owned drop or fill Anchor, ascending by landing beat; how each protected moment is performed.</summary>
     public IReadOnlyList<AnchorResolution> Anchors { get; }
+
+    /// <summary>
+    /// Structure generation this sheet was built from — the first half of its deal seed. With
+    /// <see cref="PlayerNumber"/> it is the sheet's identity: the Switcher compares the pair to make the
+    /// handover idempotent. Zero in a default (no-plan) sheet.
+    /// </summary>
+    public int StructureGeneration { get; }
+
+    /// <summary>
+    /// One-based physical player whose track this sheet plans — the second half of its deal seed and of
+    /// the sheet's identity. Zero in a default (no-plan) sheet.
+    /// </summary>
+    public int PlayerNumber { get; }
 
     /// <summary>
     /// Deterministically deals one off-plan Cue Mark at <paramref name="boundaryBeat"/> from fresh bags over
@@ -219,7 +230,7 @@ public readonly struct TrackCueSheet
     /// <returns>A Cue Mark at <paramref name="boundaryBeat"/> carrying one freshly dealt Effect and Transition index.</returns>
     public CuePlanMark DealAt(int boundaryBeat)
     {
-        var rng = new Rng(structureGeneration, playerNumber, boundaryBeat);
+        var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat);
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
         var effectIndex = effects[effectBag.DealTop()].Index;
