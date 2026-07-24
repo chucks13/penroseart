@@ -185,6 +185,39 @@ public sealed class DirectorReducerTests
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(second.EffectIndex), "A forward jump into a later segment re-asserts its mark.");
     }
 
+    [Test]
+    public void ALoopStraddlingARunwayStartDoesNotReCastEachPass()
+    {
+        var phrases = new[] { Phrase(1, 48, "verse"), Phrase(49, 96, "chorus") };
+        FeedFrame(focusBeat: 1, phrases, generation: 1);
+        var sheet = ExpectedSheet(playerSlot: 0, generation: 1);
+        Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: at least two marks.");
+        var mark1 = sheet.Marks[0];
+        var mark2 = sheet.Marks[1];
+        var runwayStart = mark2.Beat - controller.transitions[mark2.TransitionIndex].Repertoire.RunwayBeats;
+        Assert.That(runwayStart, Is.GreaterThan(mark1.Beat + 1), "Setup: room in the prior segment below the Runway start.");
+
+        // Forward past the Runway start: the next mark casts once. Settle the transition so any later re-cast
+        // flips the stage back to a transition and is unambiguously observable.
+        FeedFrame(focusBeat: runwayStart, phrases, generation: 1);
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark2.EffectIndex), "The next mark casts on its Runway start.");
+        switcher.RenderAtTime(1_000_000f, out _);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark2.EffectIndex), "The cast transition settles onto the next mark's Effect.");
+
+        // Backward into the prior segment (below the Runway start): the loop-straddle pass is suppressed — a
+        // re-cast would put a transition back on the stage (CurrentEffectIndex < 0); it stays settled.
+        FeedFrame(focusBeat: mark1.Beat + 1, phrases, generation: 1);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark2.EffectIndex), "A backward loop pass casts nothing (no flicker).");
+
+        // Forward across the Runway start again: the same mark is already the last Cast, so still no new cast.
+        FeedFrame(focusBeat: runwayStart, phrases, generation: 1);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark2.EffectIndex), "Re-crossing the Runway start does not re-cast the same mark.");
+
+        // One more backward pass: still suppressed.
+        FeedFrame(focusBeat: mark1.Beat + 1, phrases, generation: 1);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark2.EffectIndex), "The loop keeps riding the cast Effect without flicker.");
+    }
+
     // ---- Starvation guard -----------------------------------------------------------------------
 
     [Test]

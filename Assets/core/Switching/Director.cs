@@ -121,6 +121,11 @@ public sealed class Director
     private int lastCastFocusPlayer = -1;
     private int lastCastMarkBeat = int.MinValue;
 
+    // Whether the last Cast was an early runway-window cast whose Cue Mark the wire has not yet reached. Only
+    // such a cast can produce loop-straddle flicker; it is cleared the moment the focus beat reaches that mark,
+    // after which a backward jump re-asserts the prior segment normally (the designed one-mechanism behavior).
+    private bool lastCastWasEarly;
+
     // Consecutive on-air Grid starts with no Cast, counted from observed Grid-lane wraps — never a self-ticked
     // beat. At the ceiling — the maximum Cue Mark gap expressed in Grids (64 beats / 16) — a loop pinned inside
     // one segment has never crossed a plan mark, so the Director injects one fresh dealt cast so the wall never
@@ -393,8 +398,20 @@ public sealed class Director
             return;
         }
 
-        if (ResolveTargetMark(sheet, focusBeat) is { } mark
-            && !(lastCastFocusPlayer == focusPlayer && lastCastMarkBeat == mark.Beat))
+        // Once the focus beat reaches the last Cast's mark, an early runway-window cast is no longer "unreached":
+        // clear the flag so a later backward jump re-asserts the prior segment normally. Wire observation only.
+        if (lastCastFocusPlayer == focusPlayer && focusBeat >= lastCastMarkBeat)
+        {
+            lastCastWasEarly = false;
+        }
+
+        // A loop straddling the last mark's Runway start would otherwise flip the target between that next mark
+        // and the prior owning mark each pass and re-cast every time; IsLoopStraddleReCast suppresses the
+        // backward-adjacent owning-branch pass so a suppressed loop self-heals through the starvation guard below.
+        var target = ResolveTargetMark(sheet, focusBeat, out var fromRunwayWindow);
+        if (target is { } mark
+            && !(lastCastFocusPlayer == focusPlayer && lastCastMarkBeat == mark.Beat)
+            && !IsLoopStraddleReCast(sheet, mark, fromRunwayWindow, focusPlayer))
         {
             CastCue(focusPlayer, mark.Beat, mark.EffectIndex, mark.TransitionIndex, focusBeat, mark.Beat);
             return;
@@ -426,18 +443,64 @@ public sealed class Director
     /// Runway start (decide-at-cast at the last responsible moment), otherwise the mark owning the segment the
     /// focus beat sits in. Null before the first mark when it is not yet within Runway.
     /// </summary>
-    private CuePlanMark? ResolveTargetMark(TrackCueSheet sheet, int focusBeat)
+    /// <summary>
+    /// The mark the wall should currently be performing: the next mark once the focus beat has reached its
+    /// Runway start (decide-at-cast at the last responsible moment), otherwise the mark owning the segment the
+    /// focus beat sits in. Null before the first mark when it is not yet within Runway. <paramref name="fromRunwayWindow"/>
+    /// reports which branch produced the mark — true for the Runway-window (next-mark) branch, false for the
+    /// owning-mark branch — so the caller can suppress only the owning-branch loop-straddle re-cast.
+    /// </summary>
+    private CuePlanMark? ResolveTargetMark(TrackCueSheet sheet, int focusBeat, out bool fromRunwayWindow)
     {
         if (FirstMarkAtOrAfter(sheet, focusBeat) is { } next)
         {
             var runwayBeats = controller.transitions[next.TransitionIndex].Repertoire.RunwayBeats;
             if (focusBeat >= next.Beat - runwayBeats)
             {
+                fromRunwayWindow = true;
                 return next;
             }
         }
 
+        fromRunwayWindow = false;
         return OwningMark(sheet, focusBeat);
+    }
+
+    /// <summary>
+    /// Whether an owning-branch target is a loop-straddle re-cast to suppress. Suppression is narrow: it covers
+    /// only a loop straddling a Runway start where the last Cast was an <em>early</em> runway-window cast whose
+    /// Cue Mark the wire never reached (<see cref="lastCastWasEarly"/>). Such a loop flips
+    /// <see cref="ResolveTargetMark"/> between that next mark (Runway-window branch) on the forward pass and the
+    /// prior owning mark on the backward pass; without suppression the (focus, beat) key alternates and re-casts
+    /// the transition every pass — visible flicker. Suppress only when the target came from the owning branch,
+    /// for the same focus player, the last Cast was early, and the target is exactly one segment below the last
+    /// Cast (the sheet's first mark strictly after it is the last-cast mark). Once the wire actually reaches a
+    /// mark the flag clears, so a backward jump re-asserts the prior segment normally — the designed
+    /// one-mechanism behavior. Runway-window casts are never suppressed.
+    /// </summary>
+    private bool IsLoopStraddleReCast(TrackCueSheet sheet, CuePlanMark target, bool fromRunwayWindow, int focusPlayer)
+    {
+        if (fromRunwayWindow || lastCastFocusPlayer != focusPlayer || !lastCastWasEarly)
+        {
+            return false;
+        }
+
+        return FirstMarkStrictlyAfter(sheet, target.Beat) is { } next && next.Beat == lastCastMarkBeat;
+    }
+
+    /// <summary>The first Cue Mark whose beat is strictly after <paramref name="beat"/>, or null past the last mark.</summary>
+    private static CuePlanMark? FirstMarkStrictlyAfter(TrackCueSheet sheet, int beat)
+    {
+        var marks = sheet.Marks;
+        for (var i = 0; i < marks.Count; i++)
+        {
+            if (marks[i].Beat > beat)
+            {
+                return marks[i];
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The first Cue Mark whose beat is at or after <paramref name="focusBeat"/>, or null past the last mark.</summary>
@@ -529,6 +592,8 @@ public sealed class Director
         currentEffectIndexForSelection = effectIndex;
         lastCastFocusPlayer = focusPlayer;
         lastCastMarkBeat = planMarkBeat;
+        // Early = a runway-window cast fired before the wire reached its Cue Mark (focus beat still behind it).
+        lastCastWasEarly = focusBeat < cueMarkBeat;
         starvedGridStarts = 0;
         Trace(() => $"SYNC_CAST focus={focusPlayer} focusBeat={focusBeat} cueMark={cueMarkBeat} plan={planMarkBeat} transition={FormatTransition(transitionIndex)} target={FormatEffect(effectIndex)}");
     }
@@ -631,6 +696,7 @@ public sealed class Director
         Array.Clear(sheetGeneration, 0, sheetGeneration.Length);
         lastCastFocusPlayer = -1;
         lastCastMarkBeat = int.MinValue;
+        lastCastWasEarly = false;
         starvedGridStarts = 0;
         previousOnAirGridBeat = null;
     }
