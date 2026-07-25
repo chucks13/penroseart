@@ -71,3 +71,37 @@ fires once the playhead has reached its Runway beat, so the anchored start time 
 
 This is not the retired loaded-cue protocol returning. There is no lock, no verdict, and no revocation window;
 holding a beat to wait for is not a lifecycle.
+
+## Amendment 2026-07-25 — boundaries are counted, and an off-plan cue fires where it is asked
+
+Two claims above are now wrong, and one name with them.
+
+The first is the claim that a re-approached fired mark is signal enough: "a loop sitting inside a legal gap
+contains no mark to approach at all, which the Grid-start deficit already covers." It did not cover it, because
+after the Standby Cue amendment there was no deficit count left — the ask happened only where a fired mark was
+re-crossed. A DJ looping a stretch the plan left empty, and an inspection freeze whose release leaves every
+covered mark behind the playhead, both hold the wall still indefinitely. That breaks the plan's own spacing
+rule, which is the promise that the wall changes at least every four Grids.
+
+The Switcher therefore counts **Grid Boundaries crossed since the last Impact Point**, and asks at the boundary
+that spends the fourth. Boundaries rather than beats, because a loop re-crosses the same beat numbers and only
+crossings measure elapsed music; a Grid Boundary is the Grid lane returning to one, which is phrase-relative,
+so a shortened phrase restarts the count and the ceiling follows the music. Below the ceiling nothing is asked
+except at a re-crossed mark, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
+Both counters — this one and the running ask count that seeds the deal — belong to the handover and restart with
+it.
+
+The second wrong claim is that the deal needs a card at all costs: "the second ask of a rolling loop
+transitioned the on-air Effect to itself." That defect outlived its own fix, because the ceiling deal is
+*certain* and a certain deal can still hand back the Effect already on the wall — a live run at the ceiling
+dealt A→A and bought another four Grids of stasis. The deal now excludes whatever the wall is showing or moving
+toward, using the bag's existing preferred-card dig rather than a retry loop.
+
+That also retires the two-counts distinction drawn above. How far the deficit has run and how many times the
+handover has asked are still both passed, but the first is now the Switcher's boundary count rather than a
+Director-side ride tally, and the Director keeps no state between asks at all: it declines by rolling the
+sheet's own stream, so nothing has to be remembered to escalate.
+
+Finally, **staleness** is retired as vocabulary. It named the deficit counter that no longer exists and
+described a symptom on the wall; the cue is now named for what it is — an **Off-Plan Cue**, the one cue that
+does not come from the sheet.

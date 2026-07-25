@@ -1,6 +1,10 @@
 # Data sources serve immutable, availability-honest data
 
-Any system that makes data available to other systems serves it **immutable** (reads cannot write), **availability-honest**, and **unrestricted** (consumers may read and combine it freely). `null` is appropriate when absence is a real, ordinary state the caller may need to distinguish, as with optional wire facts. A usable signal may instead expose a total response with a documented rest/default, while required configuration fails visibly when absent. This corrects the 2026-07-10 decision's overgeneralization of ADR-0002: its nullable-query pattern belongs to optional musical facts, not every value or API in the application.
+A **data source** — a system whose job is to publish observations for any consumer to read, as BeatManager publishes musical truth — serves them **immutable** (reads cannot write), **availability-honest**, and **unrestricted** (consumers may read and combine them freely). `null` is appropriate when absence is a real, ordinary state the caller may need to distinguish, as with optional wire facts. A usable signal may instead expose a total response with a documented rest/default, while required configuration fails visibly when absent. This corrects the 2026-07-10 decision's overgeneralization of ADR-0002: its nullable-query pattern belongs to optional musical facts, not every value or API in the application.
+
+## Scope (2026-07-25)
+
+This governs *published* data, not every object one system hands to another. Two collaborators may share working state: the Cue Sheet the Director hands the Switcher carries a mutable fired flag on each Cue Mark, because the mark is the natural place to record that it fired and the two systems are deliberately tightly coupled — the Switcher exists to execute the Director's plan. Read as originally written, this ADR forbade that, which it was never meant to. BeatManager is the data source the rule is for: its consumers are arbitrary and must not be able to write back.
 
 ## Considered Options
 

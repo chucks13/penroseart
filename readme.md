@@ -19,7 +19,7 @@ Unity is the host and simulator. The effect system itself is mostly plain C# so 
 The runtime has two sequencing paths:
 
 - **Standalone Mode:** select an effect from the rotating deck, play it for `effectTime` seconds, then select a destination effect and transition and repeat.
-- **Synced Mode:** build one complete `TrackCueSheet` for each player's loaded structure, follow `BeatManager.LiveOrder.Focus`, and look up the focus player's plan from wire position. At each planned runway start the Director masks the baked assignment with any one-shot or held override, then calls `Switcher.Cast(...)` fire-and-forget. If four on-air Grid starts pass without a segment change, `TrackCueSheet.DealAt(...)` supplies one fresh starvation-guard cast without mutating the plan.
+- **Synced Mode:** build one complete `TrackCueSheet` for each player's loaded structure, follow `BeatManager.LiveOrder.Focus`, and hand that player's plan to the Switcher with `Switcher.Cast(...)`, which is a handover and fires nothing. The Switcher owns every fire: it asks the Director what the mark whose Runway begins on this beat should play, and the Director masks the baked assignment with any one-shot or held override. If the wall holds still for four Grid Boundaries, or the playhead re-crosses a mark that already fired, `TrackCueSheet.DealOffPlanCueAt(...)` supplies one fresh card without mutating the plan.
 
 Both paths render through the same Switcher, overlays, hardware output, and Unity preview.
 

@@ -32,5 +32,6 @@ only ADR-0019, leaving that sentence reading as though it were still in force.
 The beat-denominated timing rule in the consequences above is unchanged, and is now literally what the Switcher
 runs: fire when the beat countdown equals the selected Transition's Runway, or on the boundary when Runway is
 zero. The firing decision is beat-counted, exactly as this ADR required — sub-beat position only places the
-start instant within the beat that fires, and never decides whether to fire. See ADR-0020's 2026-07-24
-amendment for the Standby Cue that waits for that beat rather than testing whether it has gone by.
+start instant within the beat that fires, and never decides whether to fire. See ADR-0020's 2026-07-24 and
+2026-07-25 amendments for waiting on that beat rather than testing whether it has gone by, and for the Grid
+Boundary count that keeps the wall moving when the plan has nothing left to fire.
