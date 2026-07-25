@@ -24,23 +24,23 @@ public sealed class CueLog : IDisposable
     /// <summary>Newest session log files kept on startup; older ones are deleted.</summary>
     public const int MaxSessionLogs = 20;
 
-    private readonly Func<TextWriter> writerFactory;
-    private readonly bool ownsWriter;
+    /// <summary>Where this session's log will be written; the file itself is created on the first line.</summary>
+    private readonly string sessionPath;
+
+    /// <summary>The open writer, or null until the first line forces it open.</summary>
     private TextWriter writer;
+
+    /// <summary>Set once opening the file has failed, so the sink stays quiet instead of retrying every line.</summary>
     private bool writerFailed;
+
+    /// <summary>Set once a failure has been reported, so a broken sink warns once rather than every frame.</summary>
     private bool warned;
 
-    /// <summary>
-    /// Creates a sink over an injected writer factory, opened lazily on the first line. Test callers
-    /// pass an in-memory writer; <paramref name="ownsWriter"/> controls whether <see cref="Dispose"/>
-    /// disposes it.
-    /// </summary>
-    /// <param name="writerFactory">Opens the backing writer; called at most once.</param>
-    /// <param name="ownsWriter">When true, <see cref="Dispose"/> closes the writer as well as flushing it.</param>
-    public CueLog(Func<TextWriter> writerFactory, bool ownsWriter = true)
+    /// <summary>Names this session's file. Private because <see cref="CreateForSession"/> owns rotation.</summary>
+    /// <param name="sessionPath">Full path of the session log file.</param>
+    private CueLog(string sessionPath)
     {
-        this.writerFactory = writerFactory ?? throw new ArgumentNullException(nameof(writerFactory));
-        this.ownsWriter = ownsWriter;
+        this.sessionPath = sessionPath;
     }
 
     /// <summary>
@@ -53,18 +53,13 @@ public sealed class CueLog : IDisposable
     public static CueLog CreateForSession(string logsDir)
     {
         RotateSessionLogs(logsDir, MaxSessionLogs - 1);
-        var path = Path.Combine(logsDir, $"penrose-{DateTime.Now:yyyyMMdd-HHmmss}.log");
-        return new CueLog(() =>
-        {
-            Directory.CreateDirectory(logsDir);
-            return new StreamWriter(path, append: false);
-        });
+        return new CueLog(Path.Combine(logsDir, $"penrose-{DateTime.Now:yyyyMMdd-HHmmss}.log"));
     }
 
     /// <summary>Deletes oldest <c>penrose-*.log</c> files in <paramref name="logsDir"/> beyond the newest <paramref name="keep"/>.</summary>
     /// <param name="logsDir">Directory to rotate; a missing directory is a no-op.</param>
     /// <param name="keep">How many of the newest session files survive.</param>
-    public static void RotateSessionLogs(string logsDir, int keep)
+    private static void RotateSessionLogs(string logsDir, int keep)
     {
         try
         {
@@ -111,7 +106,7 @@ public sealed class CueLog : IDisposable
         }
     }
 
-    /// <summary>Flushes and, when the sink owns the writer, closes the backing file.</summary>
+    /// <summary>Flushes and closes the session file. A session that never wrote a line has nothing to close.</summary>
     public void Dispose()
     {
         if (writer == null)
@@ -122,10 +117,7 @@ public sealed class CueLog : IDisposable
         try
         {
             writer.Flush();
-            if (ownsWriter)
-            {
-                writer.Dispose();
-            }
+            writer.Dispose();
         }
         catch (Exception ex)
         {
@@ -133,6 +125,8 @@ public sealed class CueLog : IDisposable
         }
     }
 
+    /// <summary>Opens the session file on first use, disabling the sink for good if it cannot be opened.</summary>
+    /// <returns>The open writer, or null once opening has failed.</returns>
     private TextWriter EnsureWriter()
     {
         if (writer != null || writerFailed)
@@ -142,7 +136,8 @@ public sealed class CueLog : IDisposable
 
         try
         {
-            writer = writerFactory();
+            Directory.CreateDirectory(Path.GetDirectoryName(sessionPath));
+            writer = new StreamWriter(sessionPath, append: false);
         }
         catch (Exception ex)
         {
@@ -153,6 +148,8 @@ public sealed class CueLog : IDisposable
         return writer;
     }
 
+    /// <summary>Reports the first I/O failure and stays silent afterwards.</summary>
+    /// <param name="ex">The failure that disabled or interrupted the sink.</param>
     private void WarnOnce(Exception ex)
     {
         if (warned)
