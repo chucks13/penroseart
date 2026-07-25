@@ -73,6 +73,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Shared/LiveControllerAccess.cs` | Shared editor helper for resolving live Controller state and play-mode repaint. |
 | `Assets/Editor/Tuning/CueSheetTimeline.cs` | Pure Unity-free projection of a Cue Sheet into Grid rows: `CueSheetBeatMark` flags, `CueSheetGridRow`, and `Build`. |
 | `Assets/Editor/Tuning/CueSheetTimelineRenderer.cs` | IMGUI tracker rendering of the Cue Sheet: one row per Grid, 16 columns, hollow pending marks and solid fired ones. |
+| `Assets/Editor/Tuning/TransitionBarRenderer.cs` | Always-on fixed-height Live tab strip showing the running A-to-B Transition and its progress, or the on-air Effect at rest. Achromatic so it never borrows tracker plan colours. |
 
 `CueSheet.cs` and the Live Timeline files have been removed. Track-scoped Cue Sheet visualization is the Grid tracker on the Tuning window's Live tab.
 
