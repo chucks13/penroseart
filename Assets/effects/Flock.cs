@@ -35,10 +35,10 @@ public class Flock : EffectBase
     // Effect identity and author-facing switches
 
     /// <summary>
-    /// Advertises that the effect handles Fill and Drop structure and suits Mid/High-energy casting.
+    /// Advertises that the effect handles Fill and Drop structure and suits any energy level.
     /// </summary>
     public override Repertoire Repertoire =>
-        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>
     /// Master switch for Routine-controlled trails. Set to <see langword="false"/> to render only current boid positions.
