@@ -74,7 +74,6 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.Loop.LengthMilliseconds, Is.EqualTo(938));
         Assert.That(beatManager.Loop.SizeNumerator, Is.EqualTo(1));
         Assert.That(beatManager.Loop.SizeDenominator, Is.EqualTo(2));
-        Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
 
         Assert.That(beatManager.Grid.State, Is.EqualTo(GridState.Locked));
         Assert.That(beatManager.Grid.Beat, Is.EqualTo(5));

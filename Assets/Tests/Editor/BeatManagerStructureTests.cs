@@ -81,9 +81,9 @@ public sealed class BeatManagerStructureTests
         Assert.That(beatManager.NextEnergy.BeatsUntil, Is.EqualTo(48));
     }
 
-    /// <summary>Verifies Loop exposes both raw size fields and their derived nominal beat length.</summary>
+    /// <summary>Verifies Loop exposes the raw quantized size fields from the wire lane.</summary>
     [Test]
-    public void LoopExposesItsRawSizeFractionAndDerivedNominalBeats()
+    public void LoopExposesItsRawSizeFraction()
     {
         var beatManager = LiveManager(snapshot => snapshot.loopState = new LoopState
         {
@@ -92,7 +92,6 @@ public sealed class BeatManagerStructureTests
 
         Assert.That(beatManager.Loop.SizeNumerator, Is.EqualTo(1));
         Assert.That(beatManager.Loop.SizeDenominator, Is.EqualTo(2));
-        Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f));
     }
 
     /// <summary>Verifies Grid exposes durable placement without manufacturing a hub-owned wrap event.</summary>

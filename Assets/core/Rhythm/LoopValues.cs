@@ -4,9 +4,9 @@
 /// <summary>Immutable mirror of one deck's loop wire state — the on-air focus (<see cref="BeatManager.Loop"/>) or a physical player (<see cref="PlayerValues.Loop"/>).</summary>
 public readonly struct LoopValues
 {
-    /// <summary>Captures all direct loop wire values and the nominal beat length.</summary>
+    /// <summary>Captures all direct loop wire values.</summary>
     internal LoopValues(bool rolling, bool regionSet, float? lengthBeats, int? lengthMilliseconds,
-        int? sizeNumerator, int? sizeDenominator, float? nominalSizeBeats)
+        int? sizeNumerator, int? sizeDenominator)
     {
         Rolling = rolling;
         RegionSet = regionSet;
@@ -14,7 +14,6 @@ public readonly struct LoopValues
         LengthMilliseconds = lengthMilliseconds;
         SizeNumerator = sizeNumerator;
         SizeDenominator = sizeDenominator;
-        NominalSizeBeats = nominalSizeBeats;
     }
 
     /// <summary>Whether the deck's loop is rolling; false when no loop lane is available.</summary>
@@ -29,8 +28,6 @@ public readonly struct LoopValues
     public int? SizeNumerator { get; }
     /// <summary>Wire denominator of the nominal quantized loop size.</summary>
     public int? SizeDenominator { get; }
-    /// <summary>Derived nominal quantized loop size in beats.</summary>
-    public float? NominalSizeBeats { get; }
 }
 
 public partial class BeatManager
@@ -42,20 +39,17 @@ public partial class BeatManager
     private LoopValues CaptureLoop() => TranslateLoop(wireSnapshot.loopState);
 
     /// <summary>
-    /// Translates one loop wire lane — raw non-negative values, nominal size only from a positive
-    /// denominator — shared by the on-air capture and the per-player captures.
+    /// Translates one loop wire lane — raw non-negative values only — shared by the on-air capture and the
+    /// per-player captures.
     /// </summary>
     private static LoopValues TranslateLoop(in PenroseArt.RaveOsc.LoopState state)
     {
-        var numerator = NonNegativeOrNull(state.sizeNumerator);
-        var denominator = NonNegativeOrNull(state.sizeDenominator);
         return new LoopValues(
             TriStateTrue(state.active),
             TriStateTrue(state.set),
             state.lengthBeats >= 0f ? state.lengthBeats : null,
             NonNegativeOrNull(state.lengthMs),
-            numerator,
-            denominator,
-            numerator is { } n && denominator is { } d && d > 0 ? n / (float)d : null);
+            NonNegativeOrNull(state.sizeNumerator),
+            NonNegativeOrNull(state.sizeDenominator));
     }
 }

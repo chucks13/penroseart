@@ -98,7 +98,6 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(player.Loop.LengthMilliseconds, Is.EqualTo(3750));
         Assert.That(player.Loop.SizeNumerator, Is.EqualTo(8));
         Assert.That(player.Loop.SizeDenominator, Is.EqualTo(1));
-        Assert.That(player.Loop.NominalSizeBeats, Is.EqualTo(8f));
         Assert.That(player.GridState, Is.EqualTo(GridState.Coasting));
         Assert.That(player.GridBeat, Is.EqualTo(13));
         Assert.That(player.GridBar, Is.EqualTo(4));
@@ -340,7 +339,6 @@ public sealed class BeatManagerRaveOscIntegrationTests
         Assert.That(player.Loop.LengthMilliseconds, Is.Null);
         Assert.That(player.Loop.SizeNumerator, Is.Null);
         Assert.That(player.Loop.SizeDenominator, Is.Null);
-        Assert.That(player.Loop.NominalSizeBeats, Is.Null);
         Assert.That(player.GridState, Is.Null);
         Assert.That(player.GridBeat, Is.Null);
         Assert.That(player.GridBar, Is.Null);
