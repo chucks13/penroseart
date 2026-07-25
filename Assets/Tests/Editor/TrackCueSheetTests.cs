@@ -371,8 +371,8 @@ public sealed class TrackCueSheetTests
     public void EveryEffectIsDealtBeforeAnyRepeats()
     {
         // A no-Anchor track deals only top cards, so each shuffled cycle is a full permutation: the whole
-        // catalog is shown before any effect repeats. Untagged effects and a plain track keep the energy
-        // scan a no-op, isolating the top-deal cadence.
+        // catalog is shown before any effect repeats. Untagged effects and a plain track keep capability out
+        // of it too, isolating the top-deal cadence.
         const int catalogSize = 6;
         var effects = UntaggedEffects(catalogSize);
         var transitions = PlainTransitions(2);
@@ -410,6 +410,44 @@ public sealed class TrackCueSheetTests
                 Assert.That(sheet.Marks[i].EffectIndex, Is.Not.EqualTo(sheet.Marks[i - 1].EffectIndex),
                     $"generation {generation} dealt effect {sheet.Marks[i].EffectIndex} to marks {i - 1} and {i}");
             }
+        }
+    }
+
+    [Test]
+    public void EnergyAffinityDoesNotInfluenceThePlan()
+    {
+        // ADR-0011 took energy out of casting: it is a Performer input read from BeatManager, not a Director
+        // one. The bag deals Effects freely and capability is asked only of a ride-through carrier, which has
+        // to play the moment itself. So two catalogs identical in capability and differing only in energy
+        // affinity must plan the same show from the same seed — mark for mark, anchor for anchor.
+        var capabilities = new[]
+        {
+            Repertoire.HandlesFill | Repertoire.HandlesDrop,
+            Repertoire.HandlesFill | Repertoire.HandlesDrop,
+            Repertoire.HandlesDrop,
+            Repertoire.HandlesFill,
+            Repertoire.None,
+            Repertoire.None,
+        };
+        var affinities = new[]
+        {
+            Repertoire.EnergyLow,
+            Repertoire.EnergyHigh,
+            Repertoire.EnergyHigh,
+            Repertoire.EnergyMid,
+            Repertoire.EnergyHigh,
+            Repertoire.EnergyLow,
+        };
+        var untagged = Effects(capabilities);
+        var tagged = Effects(capabilities.Select((c, i) => c | affinities[i]).ToArray());
+        var transitions = MixedTransitions();
+
+        foreach (var generation in Generations)
+        {
+            var withoutAffinity = TrackCueSheet.Build(MixedTrack(), untagged, transitions, generation, 1);
+            var withAffinity = TrackCueSheet.Build(MixedTrack(), tagged, transitions, generation, 1);
+            Assert.That(Serialize(withAffinity), Is.EqualTo(Serialize(withoutAffinity)),
+                $"generation {generation}: energy affinity changed the plan");
         }
     }
 

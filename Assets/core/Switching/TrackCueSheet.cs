@@ -335,7 +335,7 @@ public readonly struct TrackCueSheet
 
         var baseMarks = WalkTrack(phrases, rng);
         var anchors = CollectAnchors(phrases);
-        var plan = ResolveAndDeal(phrases, baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng, structureGeneration, playerNumber);
+        var plan = ResolveAndDeal(baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng, structureGeneration, playerNumber);
         return plan;
     }
 
@@ -440,9 +440,11 @@ public readonly struct TrackCueSheet
     /// Resolves each Anchor by seeded flip, applies suppression, then deals Effects and Transitions to the
     /// surviving marks in beat order. The flip is consumed once per Anchor for stable determinism; the
     /// chosen treatment then degenerates to whichever side the catalogs and geometry actually support.
+    /// Effects are dealt from the bag's own order at every mark: capability is asked of a ride-through
+    /// carrier, which has to play the moment itself, and of nothing else. Nothing else filters the deal
+    /// (ADR-0011), so the plan shows the whole catalog before it repeats anything.
     /// </summary>
     private static TrackCueSheet ResolveAndDeal(
-        IReadOnlyList<StructurePhraseValues> phrases,
         List<int> baseMarks,
         List<Anchor> anchors,
         IReadOnlyList<EffectDescriptor> effects,
@@ -522,7 +524,6 @@ public readonly struct TrackCueSheet
             }
         }
 
-        var phraseStarts = PhraseStarts(phrases);
         var marks = new List<CuePlanMark>();
         foreach (var beat in baseMarks)
         {
@@ -531,12 +532,12 @@ public readonly struct TrackCueSheet
                 continue;
             }
 
-            var energyFlag = EnergyFlagFor(PhraseTypeCovering(phrases, phraseStarts, beat));
-
             if (performedMarks.TryGetValue(beat, out var performed))
             {
+                // Only the Transition has to be capable: it carries the hit, so the Effect it moves toward is
+                // dealt like any other — the bag's own order, unfiltered.
                 var transitionIndex = transitionBag.DealCapable(i => IsTransitionCapable(transitions, i, performed.Capability), out _);
-                var effectIndex = DealEffect(effectBag, effects, energyFlag);
+                var effectIndex = effectBag.DealTop();
                 marks.Add(new CuePlanMark(beat, effects[effectIndex].Index, transitions[transitionIndex].Index));
                 resolutions[performed.LandingBeat] = new AnchorResolution(
                     performed.LandingBeat, performed.Kind, AnchorTreatment.PerformedTransition, transitions[transitionIndex].Index);
@@ -570,7 +571,7 @@ public readonly struct TrackCueSheet
                 continue;
             }
 
-            var regularEffect = DealEffect(effectBag, effects, energyFlag);
+            var regularEffect = effectBag.DealTop();
             var regularTransition = transitionBag.DealTop();
             marks.Add(new CuePlanMark(beat, effects[regularEffect].Index, transitions[regularTransition].Index));
         }
@@ -596,12 +597,6 @@ public readonly struct TrackCueSheet
                 suppressed.Add(beat);
             }
         }
-    }
-
-    /// <summary>Deals one Effect with a soft energy-fit scan: the first energy-matching card, else the top card.</summary>
-    private static int DealEffect(Bag effectBag, IReadOnlyList<EffectDescriptor> effects, Repertoire energyFlag)
-    {
-        return effectBag.DealPreferred(i => (effects[i].Repertoire & energyFlag) != 0);
     }
 
     /// <summary>The greatest surviving base-mark beat strictly below <paramref name="landingBeat"/>, or -1.</summary>
@@ -642,52 +637,6 @@ public readonly struct TrackCueSheet
     private static int PhraseLength(StructurePhraseValues phrase)
     {
         return phrase.EndBeat - phrase.StartBeat + 1;
-    }
-
-    private static int[] PhraseStarts(IReadOnlyList<StructurePhraseValues> phrases)
-    {
-        var starts = new int[phrases.Count];
-        for (var i = 0; i < phrases.Count; i++)
-        {
-            starts[i] = phrases[i].StartBeat;
-        }
-
-        return starts;
-    }
-
-    /// <summary>The Phrase kind covering an absolute beat: the last Phrase whose start is at or below it.</summary>
-    private static PhraseType PhraseTypeCovering(IReadOnlyList<StructurePhraseValues> phrases, int[] phraseStarts, int beat)
-    {
-        var covering = 0;
-        for (var i = 0; i < phraseStarts.Length; i++)
-        {
-            if (phraseStarts[i] <= beat)
-            {
-                covering = i;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        return phrases[covering].Type;
-    }
-
-    /// <summary>
-    /// The soft energy class a Phrase kind prefers: Drop/Chorus lean High, Up/Verse lean Mid, and the
-    /// quieter and unknown kinds lean Low. A tunable mapping, deliberately coarse.
-    /// </summary>
-    private static Repertoire EnergyFlagFor(PhraseType type)
-    {
-        return type switch
-        {
-            PhraseType.Drop => Repertoire.EnergyHigh,
-            PhraseType.Chorus => Repertoire.EnergyHigh,
-            PhraseType.Up => Repertoire.EnergyMid,
-            PhraseType.Verse => Repertoire.EnergyMid,
-            _ => Repertoire.EnergyLow,
-        };
     }
 
     private static bool AnyEffect(IReadOnlyList<EffectDescriptor> effects, Repertoire capability)
@@ -843,8 +792,9 @@ public readonly struct TrackCueSheet
         }
 
         /// <summary>
-        /// Deals the first card matching <paramref name="preferred"/>, else the top card. Used for the soft
-        /// energy-fit scan, where no match simply falls back to the top card and never encores.
+        /// Deals the first card matching <paramref name="preferred"/>, else the top card. A soft scan: no
+        /// match simply falls back to the top card and never encores. Used for the off-plan deal's exclusion
+        /// of whatever is already on the wall.
         /// </summary>
         public int DealPreferred(Func<int, bool> preferred)
         {

@@ -52,6 +52,30 @@ The re-check narrows back to a single fire-and-forget seam. Identity on the Dire
 
 The two announcement-keyed Cue Sheet slots (current and next, repaired every wake with empty marks Cast at Grid entry), the lazy preference-based casting, and the `UpsertLoadedCue` keep/loaded/rejected lock seam are all superseded by ADR-0019, whose Director/Switcher split is in turn revised by ADR-0020. With the complete per-player song structure on the wire, the Director builds one track-scoped Cue Sheet per player with Effect and Transition assignments baked in and hands the on-air sheet to the Switcher, which performs it — no loaded cue, no lock, no verdict. What survives from this ADR is its thesis, and it is now total: position comes from the wire and nothing keeps a self-ticked count of its own, so the drift this ADR set out to kill cannot return.
 
+## Note 2026-07-25 — energy casting came back once, and has been removed again
+
+This ADR's "Casting is lazy and preference-based" rule — energy is a Performer input read from BeatManager by
+the Performers themselves, not a Director casting input — was reversed without being amended. ADR-0019's
+`TrackCueSheet.Build` (`8c8dd38f`, 2026-07-24) reintroduced an energy preference as one of the things living
+behind the builder, and because a track-scoped plan is built at load time from structure alone, it could not
+read the energy lane the deleted `EnergyCasting` had read. It substituted a phrase-label proxy instead:
+`Drop`/`Chorus` prefer High, `Up`/`Verse` prefer Mid, everything else prefers Low.
+
+That is a weaker instrument than the one this ADR deleted. `EnergyCasting` read the live level, the queued
+next level, and beats-until-change, and cast ahead so a Performer was chosen for the energy it would actually
+spend its stint in. The proxy instead asserts that a phrase *labelled* Drop is high energy, and then prefers
+the fourteen of twenty-seven Effects that claim a High affinity at every Drop and every Chorus. The result was
+the failure this ADR's own paragraph warned about one sentence earlier — variety collapsing onto the same few
+Performers — arriving through a soft preference rather than the mandate that sentence forbade.
+
+Removed. Effects are dealt from bag order at every mark; capability is asked of a ride-through carrier and of
+an Anchor's Transition, and nothing else filters a deal. `EnergyFlagFor` and the phrase-type lookups that fed
+it are deleted, and a test now pins that two catalogs differing only in energy affinity plan an identical
+show. The affinity flags stay on the Performers as advertised declarations with no casting consumer.
+
+This rule has now been undone twice by work that did not notice it. If energy should influence casting, it
+needs a decision that replaces this one, and it needs the live lane rather than a label.
+
 ## Amendment 2026-07-05 — irregular phrase lengths are first-class; the boundary read is wire-first
 
 The 15:33 cue-log session announced phrase lengths that are not Grid multiples (`Up/24`, `Down/8`, `Outro/41`, `Chorus/56`): these are sender truth — `phrase_state` carries the length verbatim and ships a tri-state `irregular` flag meaning "not divisible by 16" — yet the Director refused them, building no sheet and riding the no-sheet fallback so the wall only changed at the phrase end. The same log proved the fact that makes real support clean: the wire **re-anchors the timing grid at every phrase boundary** (the 24-beat `Up` phrase turned over at `grid=1/16`), so a phrase end is always the next phrase's downbeat — a Grid Boundary — even when the phrase's own length is not a 16-multiple. Irregular lengths are therefore first-class: `CueSheet.Build` accepts any positive length, keeping interior marks on 16-multiples (the regular roll stream is byte-identical) and letting one rolled run-out Grid absorb the odd tail before the mandatory end mark, which is a Grid Boundary by re-anchor. And the Director's next-boundary read stops extrapolating a full Grid: it is now the **min of the grid lane's extrapolation and the phrase countdown**, so on an irregular phrase's final partial grid the boundary arrives when the wire says it does — the re-anchor read straight off the lanes, never our own grid synthesis. The usability guard that skipped irregular lengths is deleted.
