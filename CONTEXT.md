@@ -210,9 +210,17 @@ _Avoid_: weights or scoring (the bag *is* the fairness); per-cast random picks; 
 The newest-first list of players currently in the live set, from the wire's live-order lane; its first entry is the on-air focus the wall follows. Surfaced as `BeatManager.LiveOrder`.
 _Avoid_: treating the lowest player number as the focus; inferring the focus from clocks or levels; following any player other than the focus.
 
-**Loaded Cue / Armed Cue / Lock Point**:
-Retired vocabulary for a retired protocol: cues that had to be loaded, armed, locked, and possibly revoked before they could execute. The Switcher holds a whole Cue Sheet ahead of time and fires from it unconditionally, which is a plan, not a lifecycle — nothing asks whether a cue may commit.
-_Avoid_: reintroducing commitment verdicts, lock latching, or a revocation window; reading the Switcher's held sheet or check-offs as an armed-cue surface; using "arm" for what the Switcher does with a Cue Mark.
+**Standby Cue**:
+The one decided cue the Switcher holds between the beat the Director answered for it and the beat its Runway begins. A Cue Mark stands by on the beat `Impact − Runway`, so it fires the same frame; a staleness cue stands by at the Grid start that asked and waits for the next Grid Boundary's Runway. Holding it is what lets a Transition start on its Runway beat instead of whenever the beat was noticed. A Cue Mark replaces a standing-by staleness cue — the plan outranks the remedy for holding still.
+_Avoid_: calling it a Loaded Cue or an Armed Cue, or attaching a lock, verdict, or revocation window to it; treating it as a queue (there is exactly one); firing it anywhere but its Runway beat.
+
+**Missed Cue**:
+A Cue Mark whose Runway beat is already behind the playhead when the Switcher reaches it. It is checked off unperformed: a cue *is* its Runway, Impact Point, and Tail, so one that cannot fly its Runway cannot be performed as written. This is what makes a fresh Cast, a mid-track focus handover, a needle-drop, and a late entry uneventful — each checks its past off instead of performing it. The gap until the next mark whose Runway is still ahead is covered by staleness.
+_Avoid_: performing a missed mark on the current beat (that was the hard cut this rule removes); compressing the Runway to catch up; leaving a missed mark unfired so it can fire later still.
+
+**Loaded Cue / Lock Point**:
+Retired vocabulary for a retired protocol: cues that had to be loaded, locked, and possibly revoked before they could execute. The Switcher holds a whole Cue Sheet ahead of time and one Standby Cue against it, which is a plan plus a beat to wait for, not a lifecycle — nothing asks whether a cue may commit.
+_Avoid_: reintroducing commitment verdicts, lock latching, or a revocation window; reading the Switcher's held sheet or check-offs as a cue-lifecycle surface.
 
 **Next Transition**:
 A staged override for the Transition of the very next Cue Mark performed: a one-shot pick that replaces exactly the next dealt card, after which the plan resumes verbatim; with Hold Selected it trumps every deal until released. Overrides mask the Cue Sheet, never edit it.

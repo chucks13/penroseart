@@ -46,3 +46,28 @@ Of those pushed paths, Show Now — a keyboard jump, an OSC button, or engaging 
 - Waiting is rolled from the sheet's own stream rather than judged from the music. The Director declines three asks in four at the first Grid start of a deficit and none at the ceiling, so the wall usually changes somewhere between half and all of the maximum spacing instead of on every boundary. Phrase and energy were the alternative and remain available; the roll was chosen because it needs no lane the Director does not already hold and keeps the escalation testable.
 - A staleness cue is a performed Transition with a Runway, because it is anchored to a beat ahead of the playhead. Show Now still has no Impact Point to fly toward and still begins at the instant it is pushed; the two paths differ deliberately.
 - Standalone Mode needs no home in the Switcher: no structure means no sheet, the Director hands over a default sheet that clears the plan in force, and it drives the cadence itself as before.
+
+## Amendment 2026-07-24 — a cue stands by for its Runway beat, and one that missed it is missed
+
+This ADR rejected ADR-0019's decide-at-cast as protecting no edge case, and treated the start-time clamp in
+the performing path as a constraint that forbids waiting for a future beat. Both were wrong, and the live logs
+showed the cost: every handover performed the furthest mark behind the playhead as an instant cut, four times
+in twenty seconds, because clearing check-offs made the whole past due again and the clamp turned an elapsed
+Runway into progress of one.
+
+What decide-at-cast protected was the guarantee that a cue's Runway begins before its Impact Point. An
+inequality — this mark's Runway beat has passed — cannot tell *beginning now* from *ended nine seconds ago*;
+only waiting for the beat can. The clamp arrived with the immediate `Cast` entry point rather than being
+derived from anything, so citing it as a law inverted a workaround into a constraint.
+
+The Switcher therefore holds one **Standby Cue**: a decided cue plus the beat its Runway begins, fired when
+the playhead reaches that beat. A Cue Mark stands by on `Impact − Runway` and so fires the same frame; a
+staleness cue stands by at the Grid start that asked it and waits for the next Grid Boundary. That retires
+this ADR's claim that a staleness cue *starts* on a Grid Boundary where a planned cue *lands* on one — both
+land on one now, and the deliberate difference between them is gone. A mark whose Runway beat is already
+behind the playhead is a **Missed Cue**: checked off unperformed, because a cue is its Runway, Impact Point,
+and Tail, and one that cannot fly its Runway cannot be performed as written. The clamp is deleted — a cue only
+fires once the playhead has reached its Runway beat, so the anchored start time is never ahead of now.
+
+This is not the retired loaded-cue protocol returning. There is no lock, no verdict, and no revocation window;
+holding a beat to wait for is not a lifecycle.

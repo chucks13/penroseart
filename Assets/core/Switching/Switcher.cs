@@ -111,11 +111,13 @@ public readonly struct TransitionStartTiming
 
 /// <summary>
 /// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
-/// Director (ADR-0020): each tick it reads BeatManager directly for the sheet player's beat, performs
-/// due Cue Marks so each Impact Point lands on its mark, and checks marks off permanently, so no
-/// re-crossing — loop, back-cue, or needle-drop — ever re-fires one. It owns all Runway/Impact/Tail
-/// timing and selects nothing — every decision is asked of the bound <see cref="Director"/>. It holds
-/// no loaded-cue lifecycle, no Lock Point, and no accept/reject verdict.
+/// Director (ADR-0020): each tick it reads BeatManager directly for the sheet player's beat, puts the Cue
+/// Mark whose Runway begins on that beat on standby, and fires it so the Transition's Impact Point lands on
+/// the mark. A mark whose Runway has already gone by is missed, not performed late. Check-offs are
+/// permanent, so no re-crossing — loop, back-cue, or needle-drop — ever re-fires a mark. It owns all
+/// Runway/Impact/Tail timing and selects nothing — every decision is asked of the bound
+/// <see cref="Director"/>. It holds one Standby Cue awaiting its Runway beat and no lifecycle around it:
+/// no Lock Point, no verdict, no revocation window.
 /// </summary>
 [Serializable]
 public sealed class Switcher
@@ -152,15 +154,49 @@ public sealed class Switcher
     // carrying this count; the Director may decline the early ones and cannot decline at the ceiling — the
     // maximum Cue Mark gap expressed in Grids — so the wall never holds longer than the widest gap the plan
     // itself would have produced. A decline leaves the count standing; only a performed cue resets it.
-    public const int StarvationGridStartCeiling = TrackCueSheet.MaximumStalenessAsks;
-    private int starvedGridStarts;
+    public const int StalenessAskCeiling = TrackCueSheet.MaximumStalenessAsks;
+    private int stalenessAsk;
 
     // Total staleness asks made, for the life of this Switcher. Monotonic on purpose, and deliberately NOT
-    // cleared by Cast: starvedGridStarts restarts at one after every performed cue, so it cannot seed the
+    // cleared by Cast: stalenessAsk restarts at one after every performed cue, so it cannot seed the
     // deal — a loop starving twice at one Grid Boundary would ask with the same number both times and be
     // dealt the same card. Surviving a handover matters too, because focus can flap away from a player and
     // back to the same sheet identity, which would otherwise replay a seed this Switcher has already used.
     private int stalenessAskSequence;
+
+    // The one cue standing by for its Runway beat, or null when nothing is waiting — most frames. Nothing
+    // performs without passing through here, which is what makes a Transition start on its Runway beat
+    // rather than whenever the Switcher first noticed that beat had gone by.
+    private StandbyCue? standbyCue;
+
+    /// <summary>
+    /// A decided cue whose Impact Point beat is settled and whose Runway has not begun yet. Both firing
+    /// paths put one here: a Cue Mark on the beat its own Runway starts, a staleness cue at a Grid start to
+    /// wait for the Runway of the boundary it aims at. This is a cue waiting for a beat and nothing more —
+    /// no lock, no verdict, no revocation window; the retired loaded-cue protocol stays retired.
+    /// </summary>
+    private readonly struct StandbyCue
+    {
+        /// <summary>Beat the Transition's Impact Point must land on.</summary>
+        public readonly int ImpactBeat;
+
+        /// <summary>Beat the Transition must start on: <see cref="ImpactBeat"/> less the Runway.</summary>
+        public readonly int StartBeat;
+
+        /// <summary>What the Director answered when this cue went on standby.</summary>
+        public readonly CueDecision Decision;
+
+        /// <summary>Index into <see cref="TrackCueSheet.Marks"/>, or -1 for a staleness cue, which has no mark.</summary>
+        public readonly int MarkIndex;
+
+        public StandbyCue(int impactBeat, int startBeat, CueDecision decision, int markIndex)
+        {
+            ImpactBeat = impactBeat;
+            StartBeat = startBeat;
+            Decision = decision;
+            MarkIndex = markIndex;
+        }
+    }
 
     /// <summary>
     /// The Cue Sheet in force — the plan this Switcher is performing. A default sheet
@@ -177,10 +213,10 @@ public sealed class Switcher
 
     /// <summary>
     /// Consecutive on-air Grid starts with nothing performed. Every one asks the Director for a cue and
-    /// carries this count, so the Director can decline early asks; at <see cref="StarvationGridStartCeiling"/>
+    /// carries this count, so the Director can decline early asks; at <see cref="StalenessAskCeiling"/>
     /// it can no longer decline. Any performed cue puts this back to zero.
     /// </summary>
-    public int StarvedGridStarts => starvedGridStarts;
+    public int StalenessAsk => stalenessAsk;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
@@ -216,12 +252,7 @@ public sealed class Switcher
     /// </summary>
     public void BindDirector(Director director)
     {
-        if (director == null)
-        {
-            throw new ArgumentNullException(nameof(director));
-        }
-
-        this.director = director;
+        this.director = director ?? throw new ArgumentNullException(nameof(director));
     }
 
     /// <summary>
@@ -259,7 +290,9 @@ public sealed class Switcher
         firedMarks = sheet.Marks is { Count: > 0 } marks ? new bool[marks.Count] : Array.Empty<bool>();
         previousGridBeat = null;
         previousSheetPlayerBeat = null;
-        starvedGridStarts = 0;
+        stalenessAsk = 0;
+        // A cue standing by against the outgoing plan has no meaning against the incoming one.
+        standbyCue = null;
         Trace(() => sheet.StructureGeneration > 0
             ? $"SWITCHER_CAST player={sheet.PlayerNumber} generation={sheet.StructureGeneration} marks={firedMarks.Length} checkOffsCleared"
             : "SWITCHER_CAST_CLEARED plan=<none>");
@@ -291,43 +324,37 @@ public sealed class Switcher
         var gridStarted = ObserveGridStart();
         TraceBackwardMotion(beat, players[slot].Loop.Rolling);
 
-        if (TryPerformDueMark(beat))
+        PutDueMarkOnStandby(beat);
+        if (TryFireStandbyCue(beat))
         {
             return;
         }
 
-        if (!gridStarted)
+        if (!gridStarted || isTransitioning || standbyCue is not null)
         {
+            // A wall mid-Transition is visibly moving, and one with a cue already standing by is about to be:
+            // neither is stale. Not counted either, or the deficit would be spent on a move already coming.
             return;
         }
 
-        if (isTransitioning)
-        {
-            // A wall mid-Transition is not stale — it is visibly moving. A Cue Mark's Impact Point is itself
-            // a Grid Boundary, so without this the mark's own arrival asks for a staleness cue and a granted
-            // one lands on top of the Runway still flying: last-command-wins replaces the in-flight move, and
-            // it reads as one transition interrupting another. Not counted either, for the same reason.
-            return;
-        }
-
-        starvedGridStarts++;
-        Trace(() => $"SWITCHER_GRID_START beat={beat} starved={starvedGridStarts}/{StarvationGridStartCeiling}");
+        stalenessAsk++;
+        Trace(() => $"SWITCHER_GRID_START beat={beat} staleness={stalenessAsk}/{StalenessAskCeiling}");
 
         stalenessAskSequence++;
-        var decision = director.DecideStalenessCue(beat, starvedGridStarts, stalenessAskSequence);
+        var decision = director.DecideStalenessCue(beat, stalenessAsk, stalenessAskSequence);
         Trace(() => decision.Perform
-            ? $"SWITCHER_STALENESS beat={beat} ask={starvedGridStarts}/{StarvationGridStartCeiling} sequence={stalenessAskSequence} cue={FormatEffect(decision.EffectIndex)} via={FormatTransition(decision.TransitionIndex)}"
-            : $"SWITCHER_STALENESS beat={beat} ask={starvedGridStarts}/{StarvationGridStartCeiling} sequence={stalenessAskSequence} cue=<wait>");
+            ? $"SWITCHER_STALENESS beat={beat} ask={stalenessAsk}/{StalenessAskCeiling} sequence={stalenessAskSequence} cue={FormatEffect(decision.EffectIndex)} via={FormatTransition(decision.TransitionIndex)}"
+            : $"SWITCHER_STALENESS beat={beat} ask={stalenessAsk}/{StalenessAskCeiling} sequence={stalenessAskSequence} cue=<wait>");
         if (!decision.Perform)
         {
             // A decline leaves the deficit standing, so the next Grid start asks again with a higher ask.
             return;
         }
 
-        // The Impact Point sits one Runway ahead so the Runway starts exactly now and the Transition plays in
-        // full. Anchoring it to the current beat — as this path used to — puts the whole Runway behind the
-        // playhead, which clamps the start time to now and lands progress at 1: a jump cut, every time.
-        PerformCue(beat, beat + transitions[decision.TransitionIndex].Repertoire.RunwayBeats, decision);
+        // Aimed at the *next* Grid Boundary rather than this one. A cue lands on a boundary, so its Runway
+        // has to begin before one; standing by here and firing at Impact − Runway is how an off-plan cue gets
+        // the same Runway, Impact Point, and Tail a planned one gets.
+        PutOnStandby(beat + TrackCueSheet.GridBeats, decision, markIndex: -1);
     }
 
     /// <summary>
@@ -420,17 +447,15 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// The one firing rule (ADR-0020): performs the last unfired mark whose Runway has started and
-    /// silently checks off every mark before it. This single rule covers a normal forward crossing, a
-    /// mid-track focus handover, a needle-drop jump, and a late entry with no special cases. The whole
-    /// list is scanned — Runway lengths vary per transition, so the window starts are not monotonic in
-    /// mark order; when windows overlap the plan conflicts with itself, and taking the later mark is the
-    /// accepted resolution. Returns whether a cue was performed this frame.
+    /// Walks to the earliest unfired Cue Mark and stands it by on the beat its Runway begins, checking off —
+    /// unperformed — every mark it passes whose Runway beat has already gone by. A cue *is* its Runway,
+    /// Impact Point, and Tail: a mark whose Runway start is behind the playhead can no longer be performed
+    /// as written, so it is missed rather than performed late. That single rule is what makes a fresh Cast,
+    /// a mid-track focus handover, a needle-drop, and a late entry uneventful instead of a hard cut.
     /// </summary>
-    private bool TryPerformDueMark(int beat)
+    private void PutDueMarkOnStandby(int beat)
     {
         var marks = sheet.Marks;
-        var due = -1;
         for (var i = 0; i < marks.Count; i++)
         {
             if (firedMarks[i])
@@ -438,40 +463,79 @@ public sealed class Switcher
                 continue;
             }
 
-            if (beat >= marks[i].Beat - transitions[marks[i].TransitionIndex].Repertoire.RunwayBeats)
+            var mark = marks[i];
+            var startBeat = mark.Beat - transitions[mark.TransitionIndex].Repertoire.RunwayBeats;
+            if (beat < startBeat)
             {
-                due = i;
-            }
-        }
-
-        if (due < 0)
-        {
-            return false;
-        }
-
-        var mark = marks[due];
-        var decision = director.DecideCue(mark);
-        if (!decision.Perform)
-        {
-            // Frozen (Hold): check nothing off, so the mark still performs on release.
-            Trace(() => $"SWITCHER_FROZEN beat={beat} mark[{due}]@{mark.Beat} planned={FormatEffect(mark.EffectIndex)} via={FormatTransition(mark.TransitionIndex)}");
-            return false;
-        }
-
-        var skipped = 0;
-        for (var i = 0; i < due; i++)
-        {
-            if (!firedMarks[i])
-            {
-                skipped++;
+                return;
             }
 
+            if (beat > startBeat)
+            {
+                // Missed: the Runway this mark was written to fly is already behind the playhead. Checked
+                // off unperformed rather than crushed onto the current beat, which is what a fresh Cast, a
+                // needle-drop, and a late entry all used to do — every one of them a hard cut.
+                firedMarks[i] = true;
+                var missed = i;
+                Trace(() => $"SWITCHER_MISSED beat={beat} mark[{missed}]@{mark.Beat} runwayStart={startBeat} planned={FormatEffect(mark.EffectIndex)}/{FormatTransition(mark.TransitionIndex)}");
+                continue;
+            }
+
+            var decision = director.DecideCue(mark);
+            if (!decision.Perform)
+            {
+                // Frozen (Hold): check nothing off, so the mark is still there to perform on release.
+                var frozen = i;
+                Trace(() => $"SWITCHER_FROZEN beat={beat} mark[{frozen}]@{mark.Beat} planned={FormatEffect(mark.EffectIndex)} via={FormatTransition(mark.TransitionIndex)}");
+                return;
+            }
+
+            // Checked off on going to standby, not on firing: the Director has answered, so the mark is spent
+            // either way. Leaving it unfired would re-ask on every frame the Standby Cue spends waiting.
             firedMarks[i] = true;
+            PutOnStandby(mark.Beat, decision, i);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Stands one decided cue by, to fire when the playhead reaches <c>Impact − Runway</c>. Replaces whatever
+    /// was already standing by, which is how a Cue Mark outranks a waiting staleness cue: the plan beats the
+    /// remedy for holding still.
+    /// </summary>
+    private void PutOnStandby(int impactBeat, CueDecision decision, int markIndex)
+    {
+        var startBeat = impactBeat - transitions[decision.TransitionIndex].Repertoire.RunwayBeats;
+        standbyCue = new StandbyCue(impactBeat, startBeat, decision, markIndex);
+        Trace(() => $"SWITCHER_STANDBY impact={impactBeat} runwayStart={startBeat} mark={markIndex} cue={FormatEffect(decision.EffectIndex)} via={FormatTransition(decision.TransitionIndex)}");
+    }
+
+    /// <summary>
+    /// Fires the Standby Cue once the playhead reaches its Runway beat, so the Transition plays out whole and
+    /// its Impact Point lands on the beat it was stood by for. Lapses it unfired if the playhead passed the
+    /// Impact Point instead — the only way a wait ends without performing. Returns whether a cue performed.
+    /// </summary>
+    private bool TryFireStandbyCue(int beat)
+    {
+        if (standbyCue is not { } standby)
+        {
+            return false;
         }
 
-        firedMarks[due] = true;
-        Trace(() => $"SWITCHER_DUE beat={beat} mark[{due}]@{mark.Beat} planned={FormatEffect(mark.EffectIndex)}/{FormatTransition(mark.TransitionIndex)} decided={FormatEffect(decision.EffectIndex)}/{FormatTransition(decision.TransitionIndex)} skippedCheckOffs={skipped}");
-        PerformCue(beat, mark.Beat, decision);
+        if (beat > standby.ImpactBeat)
+        {
+            standbyCue = null;
+            Trace(() => $"SWITCHER_STANDBY_LAPSED beat={beat} impact={standby.ImpactBeat} runwayStart={standby.StartBeat} mark={standby.MarkIndex}");
+            return false;
+        }
+
+        if (beat < standby.StartBeat)
+        {
+            return false;
+        }
+
+        standbyCue = null;
+        PerformCue(beat, standby.ImpactBeat, standby.Decision);
         return true;
     }
 
@@ -518,10 +582,12 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Performs one decided cue: its Transition starts on its Runway beat (<c>Impact − Runway</c>), its
-    /// Impact Point lands on <paramref name="impactBeat"/>, and its Tail completes after. Never later
-    /// than now: an on-time cue starts on its Runway beat; a late cue starts already underway with a
-    /// compressed Runway; a cue is never parked to wait for a future beat.
+    /// Performs one Standby Cue: its Transition starts on its Runway beat (<c>Impact − Runway</c>), its
+    /// Impact Point lands on <paramref name="impactBeat"/>, and its Tail completes after. The start time is
+    /// anchored to the Runway beat rather than to now, which is what puts the Impact Point on the beat that
+    /// was asked for. A cue only ever fires once the playhead has reached that beat, so the anchor is never
+    /// ahead of now and needs no clamping — the clamp this path used to carry existed only to absorb marks
+    /// whose Runway had already elapsed, and those are now missed instead.
     /// </summary>
     private void PerformCue(int currentBeat, int impactBeat, CueDecision decision)
     {
@@ -529,7 +595,7 @@ public sealed class Switcher
         var runwayStartBeat = impactBeat - repertoire.RunwayBeats;
         var secondsPerBeat = SecondsPerBeat();
         var nowSeconds = Time.time;
-        var startTime = Mathf.Min(TimeAtBeat(runwayStartBeat, currentBeat, secondsPerBeat, nowSeconds), nowSeconds);
+        var startTime = TimeAtBeat(runwayStartBeat, currentBeat, secondsPerBeat, nowSeconds);
 
         StartTransition(
             decision.EffectIndex,
@@ -539,7 +605,7 @@ public sealed class Switcher
             repertoire);
         // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
         controller.currentTransition = decision.TransitionIndex;
-        starvedGridStarts = 0;
+        stalenessAsk = 0;
         Trace(() => $"SWITCHER_PERFORM impact={impactBeat} runwayStart={runwayStartBeat} startTime={startTime:0.###} now={nowSeconds:0.###} transition={FormatTransition(decision.TransitionIndex)} target={FormatEffect(decision.EffectIndex)}");
     }
 

@@ -457,7 +457,7 @@ public sealed class PenroseTuningWindow : EditorWindow
             GUILayout.FlexibleSpace();
             // Context for a one-off firing out of nowhere: consecutive starved Grid starts.
             GUILayout.Label(
-                $"starve {switcher.StarvedGridStarts}/{Switcher.StarvationGridStartCeiling}",
+                $"stale {switcher.StalenessAsk}/{Switcher.StalenessAskCeiling}",
                 EditorStyles.miniLabel);
         }
 

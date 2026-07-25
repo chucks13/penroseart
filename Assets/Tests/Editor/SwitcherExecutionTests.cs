@@ -175,31 +175,26 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Pins late entry inside a Runway: execution starts already progressed while preserving the mark's Impact time.
+    /// Pins the missed-cue rule: a mark whose Runway beat is already behind the playhead is checked off
+    /// unperformed. A cue *is* its Runway, Impact Point, and Tail, so arriving after the Runway began means
+    /// the cue as written can no longer be played; performing it anyway crushed it onto the current beat,
+    /// which is the hard cut this rule removes.
     /// </summary>
     [Test]
-    public void ALateEntryCompressesTheRunwayAndStillLandsImpactOnTheCueMark()
+    public void ALateEntryMissesTheMarkRatherThanCuttingToIt()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
         var mark = sheet.Marks[0];
-        var repertoire = cueTransition.Repertoire;
-        var lateBeat = mark.Beat - repertoire.RunwayBeats + 1;
+        var lateBeat = mark.Beat - cueTransition.Repertoire.RunwayBeats + 1;
         switcher.Cast(sheet);
+        var effectBefore = switcher.Status.CurrentEffectIndex;
 
         FeedSwitcherFrame(lateBeat, phrases, generation: 1);
-        var lateTime = Time.time;
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "A late cast fires rather than being refused.");
-        Assert.That(
-            switcher.Status.TransitionProgress,
-            Is.EqualTo(0.25f).Within(0.001f),
-            "The Runway is compressed: the transition is already under way at cast.");
 
-        switcher.RenderAtTime(lateTime + ((mark.Beat - lateBeat) * 0.5f), out _);
-        Assert.That(
-            switcher.Status.TransitionProgress,
-            Is.EqualTo(repertoire.ImpactPoint).Within(0.01f),
-            "Compression preserves the Impact on the Cue Mark beat.");
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1), "A missed mark starts no Transition.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(effectBefore), "A missed mark leaves the wall alone.");
+        Assert.That(switcher.FiredMarks[0], Is.True, "A missed mark is checked off so it cannot fire later still.");
     }
 
     /// <summary>Pins the zero-duration edge: a hard-cut mark promotes its destination on the mark tick.</summary>
@@ -219,23 +214,59 @@ public sealed class SwitcherExecutionTests
         Assert.That(buffer[0], Is.EqualTo(Color.blue));
     }
 
-    /// <summary>Pins the one firing rule: a late jump performs the last due mark and checks every earlier mark off.</summary>
+    /// <summary>
+    /// Pins the missed-cue rule across a jump: landing past several marks checks all of them off and performs
+    /// none. The wall keeps what it has until a mark whose Runway is still ahead, which is the accepted gap
+    /// ADR-0020 hands to staleness rather than a burst of catch-up cuts.
+    /// </summary>
     [Test]
-    public void ALateJumpPerformsTheLastDueMarkAndChecksOffEarlierMarks()
+    public void ALateJumpChecksOffEveryPassedMarkAndPerformsNone()
     {
         var phrases = new[] { Phrase(1, 256, "intro") };
         var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
         Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: the long structure produces two marks.");
-        var first = sheet.Marks[0];
-        var second = sheet.Marks[1];
         switcher.Cast(sheet);
+        var effectBefore = switcher.Status.CurrentEffectIndex;
 
-        FeedSwitcherFrame(second.Beat, phrases, generation: 1, loopRolling: true);
-        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(second.EffectIndex), "The later due mark wins.");
-        switcher.RenderAtTime(1_000_000f, out _);
+        FeedSwitcherFrame(sheet.Marks[1].Beat, phrases, generation: 1, loopRolling: true);
 
-        FeedSwitcherFrame(first.Beat, phrases, generation: 1, loopRolling: true);
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(second.EffectIndex), "The earlier skipped mark was silently checked off.");
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1), "No catch-up cut is performed.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(effectBefore), "The wall keeps what it had.");
+        Assert.That(switcher.FiredMarks[0], Is.True, "The mark passed over is checked off.");
+        Assert.That(switcher.FiredMarks[1], Is.True, "So is the mark the jump landed past.");
+    }
+
+    /// <summary>
+    /// Pins the defect the live logs showed four times in twenty seconds: a handover clears the check-offs,
+    /// which made every mark behind the playhead due again, and the furthest one performed as an instant cut
+    /// on the Cast frame. A sheet cast mid-track checks its past off and performs none of it.
+    /// </summary>
+    [Test]
+    public void AFreshCastMidTrackPerformsNothingBehindThePlayhead()
+    {
+        var phrases = new[] { Phrase(1, 256, "intro") };
+        var outgoing = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var incoming = BuildExecutionSheet(phrases, generation: 2, transitionIndex: 2);
+        var midTrack = outgoing.Marks[1].Beat;
+        switcher.Cast(outgoing);
+        var effectBefore = switcher.Status.CurrentEffectIndex;
+        FeedSwitcherFrame(midTrack, phrases, generation: 1);
+
+        // Focus flapping between players is what re-cast a sheet mid-track on the live rig.
+        switcher.Cast(incoming);
+        FeedSwitcherFrame(midTrack, phrases, generation: 2);
+
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1), "The handover performs no cut.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(effectBefore), "The handover leaves the wall alone.");
+        for (var i = 0; i < incoming.Marks.Count; i++)
+        {
+            var mark = incoming.Marks[i];
+            var runwayStart = mark.Beat - controller.transitions[mark.TransitionIndex].Repertoire.RunwayBeats;
+            if (runwayStart < midTrack)
+            {
+                Assert.That(switcher.FiredMarks[i], Is.True, $"Mark {i} lies behind the playhead and must be checked off.");
+            }
+        }
     }
 
     /// <summary>Pins loop check-offs: rolling backward and re-crossing an already-fired mark does not re-fire it.</summary>
@@ -378,7 +409,7 @@ public sealed class SwitcherExecutionTests
         switcher.RenderAtTime(1_000_000f, out _);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "The plan mark performed.");
-        Assert.That(switcher.StarvedGridStarts, Is.Zero, "A performed plan mark resets the staleness window.");
+        Assert.That(switcher.StalenessAsk, Is.Zero, "A performed plan mark resets the staleness window.");
     }
 
     /// <summary>
@@ -407,13 +438,17 @@ public sealed class SwitcherExecutionTests
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(targetMidFlight),
             "No staleness cue replaced the in-flight Transition.");
-        Assert.That(switcher.StarvedGridStarts, Is.Zero,
+        Assert.That(switcher.StalenessAsk, Is.Zero,
             "A Grid start crossed mid-Transition is not a starved one, so it is not counted either.");
     }
 
-    /// <summary>Pins staleness ownership: the Switcher asks each Grid start, and the Director's override decides the granted cue.</summary>
+    /// <summary>
+    /// Pins staleness ownership and its Runway: the Switcher asks at each Grid start, the Director's override
+    /// decides the granted cue, and the cue stands by for the *next* Grid Boundary instead of firing on the
+    /// one that asked — so an off-plan cue lands on a boundary with a whole Runway, exactly like a planned one.
+    /// </summary>
     [Test]
-    public void StalenessMakesTheSwitcherAskTheDirectorForACue()
+    public void AGrantedStalenessCueStandsByForTheNextBoundaryAndFliesAWholeRunway()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         FeedDirectorFrame(focusBeat: 4, phrases, generation: 1);
@@ -439,9 +474,17 @@ public sealed class SwitcherExecutionTests
         director.SetNextEffect(overriddenEffect);
 
         FeedGridStarts(granting, focusBeat: 4, phrases, generation: 1);
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1),
+            "A granted cue stands by for the next boundary; it does not fire on the Grid start that asked for it.");
+
+        var impactBeat = 4 + TrackCueSheet.GridBeats;
+        var runwayStart = impactBeat - controller.transitions[dealt.TransitionIndex].Repertoire.RunwayBeats;
+        FeedSwitcherFrame(runwayStart, phrases, generation: 1);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(overriddenEffect), "The Director's one-shot answer wins; the Switcher selected nothing.");
         Assert.That(controller.currentTransition, Is.EqualTo(dealt.TransitionIndex));
+        Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0f).Within(0.001f),
+            "Firing on the Runway beat means the Transition plays out whole rather than starting part-done.");
     }
 
     /// <summary>Pins the independent Standalone seconds path after sheet execution.</summary>
