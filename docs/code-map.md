@@ -16,6 +16,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Runtime/Controller.cs` | Main runtime hub: lifecycle, catalogs, timing, input routing, output routing, overlays, preview update. |
 | `Assets/core/Runtime/Penrose.cs` | Penrose layout model, tile metadata, mesh generation, bounds, and Unity preview color updates. |
 | `Assets/core/Runtime/WallData.cs` | Data contracts for `Assets/StreamingAssets/`: `LayoutData` (the pattern, `penrose_layout.txt`) and `WiringData` (per-art-piece LED addressing, `wiring_*.txt`); comment-stripping parse + wire-map validation. |
+| `Assets/core/Runtime/CueLog.cs` | Always-on per-run diagnostic sink: one `penrose-<timestamp>.log` session file under `persistentDataPath/Logs`, rotated to the newest 20, opened lazily on the first line. Owns the file, not the record format — callers hand it finished lines. |
 | `Assets/core/Effects/EffectBase.cs` | Base contract for tile-buffer effects. |
 | `Assets/core/Effects/ScreenEffect.cs` | Base for rectangular 2D algorithms mapped onto Penrose tiles. |
 | `Assets/core/Effects/MixerBase.cs` | Base for effects that own child effects. |
@@ -70,8 +71,10 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Transitions/TransitionSettingsAssetUtility.cs` | Transition settings asset creation/restoration utility. |
 | `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Tuning window for transitions and related authoring controls. |
 | `Assets/Editor/Shared/LiveControllerAccess.cs` | Shared editor helper for resolving live Controller state and play-mode repaint. |
+| `Assets/Editor/Tuning/CueSheetTimeline.cs` | Pure Unity-free projection of a Cue Sheet into Grid rows: `CueSheetBeatMark` flags, `CueSheetGridRow`, and `Build`. |
+| `Assets/Editor/Tuning/CueSheetTimelineRenderer.cs` | IMGUI tracker rendering of the Cue Sheet: one row per Grid, 16 columns, hollow pending marks and solid fired ones. |
 
-`CueSheet.cs`, `CueLog.cs`, and the Live Timeline files have been removed. Track-scoped Cue Sheet visualization has no current implementation and is a planned follow-up.
+`CueSheet.cs` and the Live Timeline files have been removed. Track-scoped Cue Sheet visualization is the Grid tracker on the Tuning window's Live tab.
 
 ## Effects
 
