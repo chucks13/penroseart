@@ -7,6 +7,9 @@ using RepertoireFlags = Repertoire;
 // handed in, per-player wire snapshots advance execution, and assertions stay on public stage state.
 public sealed class SwitcherExecutionTests
 {
+    /// <summary>One colour per Effect catalog position, shared by the test Effects and the test Transition.</summary>
+    private static readonly Color[] EffectColors = { Color.red, Color.blue, Color.green };
+
     private GameObject controllerObject;
     private Controller controller;
     private Switcher switcher;
@@ -40,9 +43,9 @@ public sealed class SwitcherExecutionTests
         hardCutTransition = new HardCutTransition();
         var effects = new EffectBase[]
         {
-            new SolidEffect(Color.red),
-            new SolidEffect(Color.blue),
-            new SolidEffect(Color.green),
+            new SolidEffect(EffectColors[0]),
+            new SolidEffect(EffectColors[1]),
+            new SolidEffect(EffectColors[2]),
         };
         var transitions = new TransitionBase[] { transition, hardCutTransition, cueTransition };
         controller.effects = effects;
@@ -79,63 +82,61 @@ public sealed class SwitcherExecutionTests
     }
 
     [Test]
-    public void RenderAtTimeAdvancesTransitionProgressFromStartTiming()
+    public void RenderAtTimeAdvancesTransitionProgressFromItsStartTime()
     {
-        switcher.StartTransition(1, 0, TransitionStartTiming.FromBeatClock(startTime: 10f, secondsPerBeat: 0.5f));
+        switcher.StartTransition(1, 0, startTimeSeconds: 10f);
 
-        var buffer = switcher.RenderAtTime(10.25f, out _);
+        var buffer = switcher.RenderAtTime(10.5f, out _);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
         Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0.5f).Within(0.001f));
         Assert.That(transition.V, Is.EqualTo(0.5f).Within(0.001f));
-        Assert.That(buffer[0], Is.EqualTo(Color.Lerp(Color.red, Color.blue, 0.5f)));
+        Assert.That(buffer[0], Is.EqualTo(Color.Lerp(EffectColors[0], EffectColors[1], 0.5f)));
     }
 
     [Test]
     public void RenderPromotesDestinationAfterStartedTransitionDuration()
     {
-        switcher.StartTransition(1, 0, TransitionStartTiming.FromDefaultDuration(startTime: 10f));
+        switcher.StartTransition(1, 0, startTimeSeconds: 10f);
 
         var buffer = switcher.RenderAtTime(11.1f, out _);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
         Assert.That(switcher.Status.CurrentTransitionName, Is.EqualTo(string.Empty));
-        Assert.That(switcher.Status.SourceEffectIndex, Is.EqualTo(1));
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(1));
         Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0f));
-        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+        Assert.That(buffer[0], Is.EqualTo(EffectColors[1]));
     }
 
     [Test]
     public void ZeroDurationTransitionPromotesDestinationImmediately()
     {
-        switcher.StartTransition(1, 1, TransitionStartTiming.FromDefaultDuration(startTime: 10f));
+        switcher.StartTransition(1, 1, startTimeSeconds: 10f);
 
         var buffer = switcher.RenderAtTime(10f, out _);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
         Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(0f));
-        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+        Assert.That(buffer[0], Is.EqualTo(EffectColors[1]));
     }
 
     [Test]
     public void StartTransitionWhileRenderingReplacesMoveFromPreviousTarget()
     {
-        switcher.StartTransition(1, 0, TransitionStartTiming.FromDefaultDuration(startTime: 10f));
+        switcher.StartTransition(1, 0, startTimeSeconds: 10f);
         switcher.RenderAtTime(10.25f, out _);
 
-        switcher.StartTransition(0, 0, TransitionStartTiming.FromDefaultDuration(startTime: 20f));
+        switcher.StartTransition(0, 0, startTimeSeconds: 20f);
         var buffer = switcher.RenderAtTime(20.5f, out _);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0));
-        Assert.That(switcher.Status.SourceEffectIndex, Is.EqualTo(1));
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(0));
-        Assert.That(transition.A, Is.EqualTo(1));
+        Assert.That(transition.A, Is.EqualTo(1), "The previous destination became this move's source.");
         Assert.That(transition.B, Is.EqualTo(0));
         Assert.That(transition.V, Is.EqualTo(0.5f).Within(0.001f));
-        Assert.That(buffer[0], Is.EqualTo(Color.Lerp(Color.blue, Color.red, 0.5f)));
+        Assert.That(buffer[0], Is.EqualTo(Color.Lerp(EffectColors[1], EffectColors[0], 0.5f)));
     }
 
     #region Sheet execution
@@ -146,8 +147,9 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void ACueFiresSoItsImpactPointLandsOnTheCueMark()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 128, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         var mark = sheet.Marks[0];
         var repertoire = cueTransition.Repertoire;
         var runwayStart = mark.Beat - repertoire.RunwayBeats;
@@ -168,9 +170,57 @@ public sealed class SwitcherExecutionTests
         var buffer = switcher.RenderAtTime(
             runwayStartTime + ((repertoire.RunwayBeats + repertoire.TailBeats) * 0.5f),
             out _);
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1), "The Tail completes after the Impact.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "The Tail completes after the Impact.");
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
-        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+        Assert.That(buffer[0], Is.EqualTo(EffectColors[mark.EffectIndex]));
+    }
+
+    /// <summary>
+    /// Pins the Runway arithmetic against a staged override (ADR-0020). A Runway belongs to the Transition that
+    /// flies it, so counting from the plan's baked card while an override is staged would leave on the wrong beat
+    /// and land the Impact Point beside the Cue Mark. The override leaves on its own Runway beat, flies whole, and
+    /// lands on the mark; the beat the plan would have left on passes without a second fire.
+    /// </summary>
+    [Test]
+    public void AStagedOverrideLeavesOnItsOwnRunwayAndStillLandsOnTheCueMark()
+    {
+        // Baked card: the one-beat Runway. Override: the two-beat Runway, so the two leave on different beats.
+        StageSheetCatalog(transition);
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
+        var mark = sheet.Marks[0];
+        var overrideIndex = TransitionIndex(cueTransition);
+        var overrideRepertoire = cueTransition.Repertoire;
+        Assert.That(
+            overrideRepertoire.RunwayBeats,
+            Is.Not.EqualTo(transition.Repertoire.RunwayBeats),
+            "Setup: the override must differ from the baked card in its Runway.");
+        switcher.Cast(sheet);
+        director.SetNextTransition(overrideIndex);
+
+        FeedSwitcherFrame(mark.Beat - overrideRepertoire.RunwayBeats, phrases, generation: 1);
+        var runwayStartTime = Time.time;
+
+        Assert.That(mark.Fired, Is.True, "The cue leaves on the staged override's Runway beat.");
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(overrideIndex), "The override is what performs.");
+        Assert.That(
+            switcher.Status.TransitionProgress,
+            Is.EqualTo(0f).Within(0.001f),
+            "The override flies its whole Runway rather than starting part-done.");
+
+        switcher.RenderAtTime(runwayStartTime + (overrideRepertoire.RunwayBeats * 0.5f), out _);
+        Assert.That(
+            switcher.Status.TransitionProgress,
+            Is.EqualTo(overrideRepertoire.ImpactPoint).Within(0.01f),
+            "The Impact Point lands on the Cue Mark beat, not beside it.");
+
+        // The beat the baked card would have left on, now behind the cue rather than ahead of it.
+        FeedSwitcherFrame(mark.Beat - transition.Repertoire.RunwayBeats, phrases, generation: 1);
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(overrideIndex), "No second cue interrupted the first.");
+        Assert.That(
+            switcher.Status.TransitionProgress,
+            Is.EqualTo(overrideRepertoire.ImpactPoint).Within(0.01f),
+            "A re-fire would have restarted progress from zero.");
     }
 
     /// <summary>
@@ -181,8 +231,9 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void ALateEntryPerformsNothing()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 128, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         var mark = sheet.Marks[0];
         var lateBeat = mark.Beat - cueTransition.Repertoire.RunwayBeats + 1;
         switcher.Cast(sheet);
@@ -199,17 +250,18 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void AHardCutMarkPromotesItsDestinationImmediately()
     {
+        StageSheetCatalog(hardCutTransition);
         var phrases = new[] { Phrase(1, 128, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 1);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         var mark = sheet.Marks[0];
         switcher.Cast(sheet);
 
         FeedSwitcherFrame(mark.Beat, phrases, generation: 1);
 
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(1), "A zero-duration cast promotes without a render tick.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "A zero-duration cast promotes without a render tick.");
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
         var buffer = switcher.RenderAtTime(Time.time, out _);
-        Assert.That(buffer[0], Is.EqualTo(Color.blue));
+        Assert.That(buffer[0], Is.EqualTo(EffectColors[mark.EffectIndex]));
     }
 
     /// <summary>
@@ -219,13 +271,14 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void ALateJumpPerformsNoneOfThePassedMarks()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 256, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: the long structure produces two marks.");
         switcher.Cast(sheet);
         var effectBefore = switcher.Status.CurrentEffectIndex;
 
-        FeedSwitcherFrame(sheet.Marks[1].Beat, phrases, generation: 1, loopRolling: true);
+        FeedSwitcherFrame(sheet.Marks[1].Beat, phrases, generation: 1);
 
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1), "No catch-up cut is performed.");
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(effectBefore), "The wall keeps what it had.");
@@ -241,9 +294,10 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void AFreshCastMidTrackPerformsNothingBehindThePlayhead()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 256, "intro") };
-        var outgoing = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
-        var incoming = BuildExecutionSheet(phrases, generation: 2, transitionIndex: 2);
+        var outgoing = BuildExecutionSheet(phrases, generation: 1);
+        var incoming = BuildExecutionSheet(phrases, generation: 2);
         var midTrack = outgoing.Marks[1].Beat;
         switcher.Cast(outgoing);
         var effectBefore = switcher.Status.CurrentEffectIndex;
@@ -372,7 +426,6 @@ public sealed class SwitcherExecutionTests
         director.ShowNow(2, controller.effectTime);
 
         Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "A transition owns the frame, so nothing was cut.");
-        Assert.That(switcher.Status.SourceEffectIndex, Is.EqualTo(0));
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0), "The staged card performs the override.");
     }
@@ -384,8 +437,9 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void AnOperatorOverrideLeavesTheInForceSheetAndItsCheckOffsAlone()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 128, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         var mark = sheet.Marks[0];
         var runwayStart = mark.Beat - cueTransition.Repertoire.RunwayBeats;
         switcher.Cast(sheet);
@@ -410,20 +464,22 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void HoldPerformsNothingAndReleaseWaitsForTheNextBoundary()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 256, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         var held = sheet.Marks[0];
         var next = sheet.Marks[1];
         switcher.Cast(sheet);
-        controller.heldEffect = 0;
+        var onWall = switcher.Status.CurrentEffectIndex;
+        controller.heldEffect = onWall;
 
         FeedSwitcherFrame(held.Beat - cueTransition.Repertoire.RunwayBeats, phrases, generation: 1);
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "Hold freezes the Director's answer.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(onWall), "Hold freezes the Director's answer.");
         Assert.That(held.Fired, Is.False, "A frozen mark is not marked fired.");
 
         controller.heldEffect = -1;
         FeedSwitcherFrame(held.Beat + 1, phrases, generation: 1);
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "Release mid-Grid does not chase the passed mark.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(onWall), "Release mid-Grid does not chase the passed mark.");
 
         FeedSwitcherFrame(next.Beat - controller.transitions[next.TransitionIndex].Repertoire.RunwayBeats, phrases, generation: 1);
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(next.EffectIndex), "The next boundary performs normally.");
@@ -433,8 +489,9 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void RecastingTheSameSheetDoesNotResetCheckOffs()
     {
+        StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 128, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         var mark = sheet.Marks[0];
         var runwayStart = mark.Beat - cueTransition.Repertoire.RunwayBeats;
         switcher.Cast(sheet);
@@ -447,11 +504,6 @@ public sealed class SwitcherExecutionTests
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "Idempotent handover preserves the fired check-off.");
     }
 
-    /// <summary>
-    /// Pins the spacing rule under a held loop: the wall may ride a boundary through, but it can never hold
-    /// past the widest gap the plan itself would have produced. Rolls a loop over one fired mark repeatedly
-    /// and requires a fresh cue inside that window.
-    /// </summary>
     /// <summary>
     /// Pins the fired-mark half of the ceiling: a loop parked on one spent boundary keeps being given fresh
     /// cues. The count that bounds the gap is the Switcher's own (TrackCueSheetTests pins how the deal reads it);
@@ -529,61 +581,75 @@ public sealed class SwitcherExecutionTests
     [Test]
     public void StandaloneSecondsPathIsUnaffectedBySheetExecution()
     {
+        StageSheetCatalog(hardCutTransition);
         var phrases = new[] { Phrase(1, 128, "intro") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 1);
+        var sheet = BuildExecutionSheet(phrases, generation: 1);
         switcher.Cast(sheet);
         FeedSwitcherFrame(sheet.Marks[0].Beat, phrases, generation: 1);
 
-        switcher.StartTransition(0, 0, TransitionStartTiming.FromDefaultDuration(startTime: 20f));
+        switcher.StartTransition(2, TransitionIndex(transition), startTimeSeconds: 20f);
         var buffer = switcher.RenderAtTime(21.1f, out _);
 
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0));
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(2));
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
-        Assert.That(buffer[0], Is.EqualTo(Color.red));
+        Assert.That(buffer[0], Is.EqualTo(EffectColors[2]));
     }
 
     #endregion
 
-    /// <summary>Builds a deterministic sheet restricted to one target Effect and Transition for execution assertions.</summary>
-    private TrackCueSheet BuildExecutionSheet(StructurePhrase[] phrases, int generation, int transitionIndex)
+    /// <summary>
+    /// Puts <paramref name="sheetTransition"/> at Transition catalog position zero and starts the wall on
+    /// Effect 1. Catalog position is Cue Sheet identity, so the one-card catalogs
+    /// <see cref="BuildExecutionSheet"/> hands the builder name exactly this Transition and Effect 0 — and the
+    /// wall starts somewhere else, so every planned cue has somewhere to move it.
+    /// </summary>
+    private void StageSheetCatalog(TransitionBase sheetTransition)
     {
-        FeedWire(focusBeat: 1, phrases, generation, loopRolling: false, gridBeat: 1);
+        var index = TransitionIndex(sheetTransition);
+        (controller.transitions[0], controller.transitions[index]) =
+            (controller.transitions[index], controller.transitions[0]);
+        switcher.SetInitialEffect(1, 0);
+    }
+
+    /// <summary>The catalog position a Transition instance currently occupies.</summary>
+    private int TransitionIndex(TransitionBase target)
+    {
+        return System.Array.IndexOf(controller.transitions, target);
+    }
+
+    /// <summary>Builds a deterministic sheet over the one-card prefix of each catalog for execution assertions.</summary>
+    private TrackCueSheet BuildExecutionSheet(StructurePhrase[] phrases, int generation)
+    {
+        FeedWire(focusBeat: 1, phrases, generation, gridBeat: 1);
         var structure = controller.beatManager.Players[0].Structure;
         return TrackCueSheet.Build(
             structure,
-            new[] { new EffectDescriptor(1, controller.EffectiveRepertoire(1)) },
-            new[] { new TransitionDescriptor(transitionIndex, controller.transitions[transitionIndex].Repertoire) },
+            new[] { new EffectDescriptor(controller.EffectiveRepertoire(0)) },
+            new[] { new TransitionDescriptor(controller.transitions[0].Repertoire) },
             generation,
             playerNumber: 1);
     }
 
     /// <summary>Feeds one wire frame and lets only the Switcher execute its already-handed-over sheet.</summary>
-    private void FeedSwitcherFrame(
-        int focusBeat,
-        StructurePhrase[] phrases,
-        int generation,
-        bool loopRolling = false,
-        int? gridBeat = null)
+    private void FeedSwitcherFrame(int focusBeat, StructurePhrase[] phrases, int generation, int? gridBeat = null)
     {
-        FeedWire(focusBeat, phrases, generation, loopRolling, gridBeat);
+        FeedWire(focusBeat, phrases, generation, gridBeat);
         switcher.Tick();
     }
 
     /// <summary>Feeds one production-order frame so the Director maintains/hands over before Switcher execution.</summary>
     private void FeedDirectorFrame(int focusBeat, StructurePhrase[] phrases, int generation, int? gridBeat = null)
     {
-        FeedWire(focusBeat, phrases, generation, loopRolling: false, gridBeat);
+        FeedWire(focusBeat, phrases, generation, gridBeat);
         director.Tick(0f);
         switcher.Tick();
     }
 
-    /// <summary>Translates one player wire snapshot, including the per-player loop lane, into BeatManager values.</summary>
-    private void FeedWire(
-        int focusBeat,
-        StructurePhrase[] phrases,
-        int generation,
-        bool loopRolling,
-        int? gridBeat)
+    /// <summary>
+    /// Translates one player wire snapshot into BeatManager values. The Switcher reads only the Beat and Grid
+    /// lanes, so a loop is expressed as the beat sequence a loop actually produces rather than as a loop lane.
+    /// </summary>
+    private void FeedWire(int focusBeat, StructurePhrase[] phrases, int generation, int? gridBeat)
     {
         var onAirGridBeat = gridBeat ?? (((focusBeat - 1) % 16) + 1);
         BeatManagerWireFixture.Feed(controller.beatManager, snapshot =>
@@ -615,15 +681,6 @@ public sealed class SwitcherExecutionTests
                 beat = onAirGridBeat,
                 bar = ((onAirGridBeat - 1) / 4) + 1,
                 state = "locked",
-            };
-            player.loopState = new LoopState
-            {
-                active = loopRolling ? 1 : 0,
-                set = loopRolling ? 1 : 0,
-                lengthBeats = loopRolling ? 16f : 0f,
-                lengthMs = loopRolling ? 8_000 : 0,
-                sizeNumerator = loopRolling ? 16 : 0,
-                sizeDenominator = 1,
             };
             player.structure = new PlayerStructure
             {
@@ -745,9 +802,8 @@ public sealed class SwitcherExecutionTests
 
         public override void Draw()
         {
-            var colors = new[] { Color.red, Color.blue };
-            var source = colors[A];
-            var target = colors[B];
+            var source = EffectColors[A];
+            var target = EffectColors[B];
             for (var i = 0; i < buffer.Length; i++)
             {
                 buffer[i] = Color.Lerp(source, target, V);

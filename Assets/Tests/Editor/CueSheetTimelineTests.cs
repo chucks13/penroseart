@@ -4,6 +4,7 @@
 
 #nullable enable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
@@ -102,7 +103,7 @@ public sealed class CueSheetTimelineTests
         var pendingRows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
         Assert.That(pendingRows[1].CueFired, Is.False, "An unfired cue reads pending.");
 
-        sheet.Marks[0].Fired = true;
+        sheet.Marks[0].FiredAtBeat = sheet.Marks[0].Beat;
         var firedRows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(firedRows[1].CueFired, Is.True);
@@ -166,7 +167,7 @@ public sealed class CueSheetTimelineTests
         Assert.That(
             rideRows[2].Cells[0] & CueSheetBeatMark.AnchorLanding,
             Is.EqualTo(CueSheetBeatMark.AnchorLanding));
-        Assert.That(rideRows[2].CueEffectIndex, Is.EqualTo(7));
+        Assert.That(rideRows[2].CueEffectIndex, Is.EqualTo(0));
         Assert.That(rideRows[2].CueTransitionIndex, Is.Null);
         Assert.That(rideRows[2].CueIsRideThrough, Is.True);
 
@@ -184,7 +185,7 @@ public sealed class CueSheetTimelineTests
             null);
 
         // Two eight-beat phrases take a short row each, so the third phrase's row is index 2.
-        Assert.That(priorityRows[2].CueEffectIndex, Is.EqualTo(7));
+        Assert.That(priorityRows[2].CueEffectIndex, Is.EqualTo(0));
         Assert.That(priorityRows[2].CueTransitionIndex, Is.EqualTo(0));
         Assert.That(priorityRows[2].CueIsRideThrough, Is.False);
     }
@@ -273,9 +274,11 @@ public sealed class CueSheetTimelineTests
     {
         var structure = Structure(32, Phrase(1, 16, PhraseType.Intro));
         var transition = Transition(4, 4);
-        var sheet = Sheet(structure, transition, transitionIndex: 4);
+        var sheet = Sheet(structure, transition);
 
-        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
+        // An empty catalog puts every baked index out of range while still being a supplied catalog, which is
+        // what tells this apart from the null case NullTransitionsAndFiredMarksLeaveAValidPendingImpact covers.
+        var rows = CueSheetTimeline.Build(sheet, structure, Array.Empty<TransitionRepertoire>(), null);
 
         Assert.That(CountFlags(rows, CueSheetBeatMark.Runway), Is.Zero);
         Assert.That(CountFlags(rows, CueSheetBeatMark.Tail), Is.Zero);
@@ -344,13 +347,12 @@ public sealed class CueSheetTimelineTests
     private static TrackCueSheet Sheet(
         StructureValues structure,
         TransitionRepertoire transition,
-        Repertoire effectRepertoire = Repertoire.None,
-        int transitionIndex = 0)
+        Repertoire effectRepertoire = Repertoire.None)
     {
         return TrackCueSheet.Build(
             structure,
-            new[] { new EffectDescriptor(7, effectRepertoire) },
-            new[] { new TransitionDescriptor(transitionIndex, transition) },
+            new[] { new EffectDescriptor(effectRepertoire) },
+            new[] { new TransitionDescriptor(transition) },
             structure.Generation,
             playerNumber: 1);
     }

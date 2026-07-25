@@ -2,47 +2,38 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// One performer catalog entry as it enters the sheet builder: a stable catalog index paired with the
-/// musical <see cref="Repertoire"/> that index advertises. The builder deals indices, never deck slots
-/// or effect instances, so the plan it returns stays a pure value with no engine references.
+/// One performer catalog entry as it enters the sheet builder: the musical <see cref="Repertoire"/> the
+/// catalog advertises at this position. Position is identity — the builder deals list positions, never deck
+/// slots or effect instances, so the plan it returns stays a pure value with no engine references.
 /// </summary>
 public readonly struct EffectDescriptor
 {
     /// <summary>Captures one effect catalog entry.</summary>
-    /// <param name="index">Stable catalog index this descriptor stands for.</param>
-    /// <param name="repertoire">Musical capabilities and energy tags the index advertises.</param>
-    public EffectDescriptor(int index, Repertoire repertoire)
+    /// <param name="repertoire">Musical capabilities and energy tags this catalog position advertises.</param>
+    public EffectDescriptor(Repertoire repertoire)
     {
-        Index = index;
         Repertoire = repertoire;
     }
 
-    /// <summary>Stable catalog index the plan bakes into a Cue Mark.</summary>
-    public int Index { get; }
-
-    /// <summary>Musical capabilities and energy tags the index advertises.</summary>
+    /// <summary>Musical capabilities and energy tags this catalog position advertises.</summary>
     public Repertoire Repertoire { get; }
 }
 
 /// <summary>
-/// One transition catalog entry as it enters the sheet builder: a stable catalog index paired with the
-/// <see cref="TransitionRepertoire"/> timing/use contract that index advertises.
+/// One transition catalog entry as it enters the sheet builder: the <see cref="TransitionRepertoire"/>
+/// timing/use contract the catalog advertises at this position. Position is identity, as for
+/// <see cref="EffectDescriptor"/>.
 /// </summary>
 public readonly struct TransitionDescriptor
 {
     /// <summary>Captures one transition catalog entry.</summary>
-    /// <param name="index">Stable catalog index this descriptor stands for.</param>
-    /// <param name="repertoire">Timing and musical-use contract the index advertises.</param>
-    public TransitionDescriptor(int index, TransitionRepertoire repertoire)
+    /// <param name="repertoire">Timing and musical-use contract this catalog position advertises.</param>
+    public TransitionDescriptor(TransitionRepertoire repertoire)
     {
-        Index = index;
         Repertoire = repertoire;
     }
 
-    /// <summary>Stable catalog index the plan bakes into a Cue Mark.</summary>
-    public int Index { get; }
-
-    /// <summary>Timing and musical-use contract the index advertises.</summary>
+    /// <summary>Timing and musical-use contract this catalog position advertises.</summary>
     public TransitionRepertoire Repertoire { get; }
 }
 
@@ -101,11 +92,18 @@ public sealed class CuePlanMark
     public int TransitionIndex { get; }
 
     /// <summary>
-    /// Whether this cue has been performed. Set once by the Switcher when it fires. A DJ looping brings the
-    /// playhead back over a fired mark, which is how the Switcher knows to ask for a fresh cue instead of
-    /// playing the same one twice.
+    /// The beat this cue's Transition left on, or -1 while the cue is still pending. Set once by the Switcher
+    /// when it fires. The beat is recorded rather than a bare flag because a cue's Runway start is not fixed by
+    /// the plan alone — an override Transition with a different Runway leaves on a different beat — and only the
+    /// beat it actually left on identifies the one place a loop can bring the playhead back over it.
     /// </summary>
-    public bool Fired { get; set; }
+    public int FiredAtBeat { get; set; } = -1;
+
+    /// <summary>
+    /// Whether this cue has been performed. A DJ looping brings the playhead back over a fired mark, which is
+    /// how the Switcher knows to ask for a fresh cue instead of playing the same one twice.
+    /// </summary>
+    public bool Fired => FiredAtBeat >= 0;
 }
 
 /// <summary>
@@ -153,8 +151,9 @@ public readonly struct AnchorResolution
 /// A track-scoped, full-length show plan: every Cue Mark placed against a player's real Phrase map with
 /// its Effect and Transition assignment baked in, plus how each drop or fill Anchor was owned. Built once
 /// per track load by <see cref="Build"/> as a pure, deterministic function of (structure, seed, catalogs);
-/// it holds no notion of "now" and no engine references, so the Director can run it by position lookup and
-/// the same load always rebuilds the identical sheet.
+/// it holds no notion of "now" and no engine references. The Director builds it and hands it over; the
+/// Switcher performs it against the sheet player's own beat, and the same load always rebuilds the identical
+/// sheet.
 /// </summary>
 /// <remarks>
 /// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0019): it superseded and replaced
@@ -188,15 +187,29 @@ public readonly struct TrackCueSheet
     /// </summary>
     public const int PostDropHoldBeats = GridBeats;
 
+    /// <summary>The empty mark list a structure-less sheet returns, shared so no-plan sheets allocate nothing.</summary>
     private static readonly IReadOnlyList<CuePlanMark> NoMarks = Array.Empty<CuePlanMark>();
+
+    /// <summary>The empty Anchor list a structure-less sheet returns, shared for the same reason as <see cref="NoMarks"/>.</summary>
     private static readonly IReadOnlyList<AnchorResolution> NoAnchors = Array.Empty<AnchorResolution>();
 
-    // Retained so the sheet can deal one off-plan card deterministically without the live build-time bags: the
-    // catalogs it dealt from and its seed pair. These keep the value pure — descriptors are index+repertoire
-    // structs with no engine references — and let the off-plan deal be seeded from the sheet's own seed.
+    /// <summary>
+    /// The Effect catalog this sheet was dealt from, retained so <see cref="DealOffPlanCueAt"/> can deal one
+    /// more card without the live build-time bags. Descriptors are pure repertoire values with no engine
+    /// references, so keeping them leaves the sheet a value.
+    /// </summary>
     private readonly IReadOnlyList<EffectDescriptor> effects;
+
+    /// <summary>The Transition catalog this sheet was dealt from, retained for the same reason as <see cref="effects"/>.</summary>
     private readonly IReadOnlyList<TransitionDescriptor> transitions;
 
+    /// <summary>Captures one finished plan. Private because <see cref="Build"/> is the only way to make a real sheet.</summary>
+    /// <param name="marks">Every placed Cue Mark, ascending by beat.</param>
+    /// <param name="anchors">Every owned Anchor resolution, ascending by landing beat.</param>
+    /// <param name="effects">The Effect catalog this plan was dealt from.</param>
+    /// <param name="transitions">The Transition catalog this plan was dealt from.</param>
+    /// <param name="structureGeneration">First half of the deal seed and of the sheet's identity.</param>
+    /// <param name="playerNumber">Second half of the deal seed and of the sheet's identity.</param>
     private TrackCueSheet(
         IReadOnlyList<CuePlanMark> marks,
         IReadOnlyList<AnchorResolution> anchors,
@@ -263,10 +276,8 @@ public readonly struct TrackCueSheet
         var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat, ask);
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
-        // Local copy because a struct's lambda cannot reach its own fields.
-        var catalog = effects;
-        var effectIndex = catalog[effectBag.DealPreferred(card => catalog[card].Index != onWallEffectIndex)].Index;
-        var transitionIndex = transitions[transitionBag.DealTop()].Index;
+        var effectIndex = effectBag.DealPreferred(card => card != onWallEffectIndex);
+        var transitionIndex = transitionBag.DealTop();
 
         // Gaps still available before the ceiling, so one chance in that many spreads the choice evenly across
         // them: a quarter at one Grid, a third at two, a half at three, certain at four. Drawn after the cards
@@ -289,8 +300,8 @@ public readonly struct TrackCueSheet
     /// the caller supplies a complete structure (<c>Phrases.Count == PhraseCount</c>). An empty phrase list
     /// yields an empty sheet.
     /// </param>
-    /// <param name="effects">Effect catalog as descriptors (index + repertoire). Must be non-empty.</param>
-    /// <param name="transitions">Transition catalog as descriptors (index + repertoire). Must be non-empty.</param>
+    /// <param name="effects">Effect catalog as descriptors, one per catalog position. Must be non-empty.</param>
+    /// <param name="transitions">Transition catalog as descriptors, one per catalog position. Must be non-empty.</param>
     /// <param name="structureGeneration">The structure's generation — the first half of the seed.</param>
     /// <param name="playerNumber">The physical player number — the second half of the seed.</param>
     /// <returns>The complete track-scoped Cue Sheet.</returns>
@@ -538,9 +549,9 @@ public readonly struct TrackCueSheet
                 // dealt like any other — the bag's own order, unfiltered.
                 var transitionIndex = transitionBag.DealCapable(i => IsTransitionCapable(transitions, i, performed.Capability), out _);
                 var effectIndex = effectBag.DealTop();
-                marks.Add(new CuePlanMark(beat, effects[effectIndex].Index, transitions[transitionIndex].Index));
+                marks.Add(new CuePlanMark(beat, effectIndex, transitionIndex));
                 resolutions[performed.LandingBeat] = new AnchorResolution(
-                    performed.LandingBeat, performed.Kind, AnchorTreatment.PerformedTransition, transitions[transitionIndex].Index);
+                    performed.LandingBeat, performed.Kind, AnchorTreatment.PerformedTransition, transitionIndex);
                 continue;
             }
 
@@ -561,19 +572,17 @@ public readonly struct TrackCueSheet
                 }
 
                 var transitionIndex = transitionBag.DealTop();
-                marks.Add(new CuePlanMark(beat, effects[effectIndex].Index, transitions[transitionIndex].Index));
+                marks.Add(new CuePlanMark(beat, effectIndex, transitionIndex));
                 foreach (var carried in carriedAnchors)
                 {
                     resolutions[carried.LandingBeat] = new AnchorResolution(
-                        carried.LandingBeat, carried.Kind, AnchorTreatment.RideThrough, effects[effectIndex].Index);
+                        carried.LandingBeat, carried.Kind, AnchorTreatment.RideThrough, effectIndex);
                 }
 
                 continue;
             }
 
-            var regularEffect = effectBag.DealTop();
-            var regularTransition = transitionBag.DealTop();
-            marks.Add(new CuePlanMark(beat, effects[regularEffect].Index, transitions[regularTransition].Index));
+            marks.Add(new CuePlanMark(beat, effectBag.DealTop(), transitionBag.DealTop()));
         }
 
         var anchorList = new AnchorResolution[resolutions.Count];
@@ -639,6 +648,7 @@ public readonly struct TrackCueSheet
         return phrase.EndBeat - phrase.StartBeat + 1;
     }
 
+    /// <summary>Whether any Effect in the catalog carries <paramref name="capability"/>.</summary>
     private static bool AnyEffect(IReadOnlyList<EffectDescriptor> effects, Repertoire capability)
     {
         for (var i = 0; i < effects.Count; i++)
@@ -652,6 +662,7 @@ public readonly struct TrackCueSheet
         return false;
     }
 
+    /// <summary>Whether any Transition in the catalog carries <paramref name="capability"/>.</summary>
     private static bool AnyTransition(IReadOnlyList<TransitionDescriptor> transitions, Repertoire capability)
     {
         for (var i = 0; i < transitions.Count; i++)
@@ -665,11 +676,13 @@ public readonly struct TrackCueSheet
         return false;
     }
 
+    /// <summary>Whether the Effect at <paramref name="index"/> carries <paramref name="capability"/>.</summary>
     private static bool IsEffectCapable(IReadOnlyList<EffectDescriptor> effects, int index, Repertoire capability)
     {
         return (effects[index].Repertoire & capability) != 0;
     }
 
+    /// <summary>Whether the Transition at <paramref name="index"/> carries <paramref name="capability"/>.</summary>
     private static bool IsTransitionCapable(IReadOnlyList<TransitionDescriptor> transitions, int index, Repertoire capability)
     {
         return (transitions[index].Repertoire.Tags & capability) != 0;
@@ -678,6 +691,10 @@ public readonly struct TrackCueSheet
     /// <summary>A drop or fill window read from the Phrase map, before a treatment is chosen for it.</summary>
     private readonly struct Anchor
     {
+        /// <summary>Captures one Anchor read from the Phrase map.</summary>
+        /// <param name="landingBeat">Absolute Grid Boundary beat the Anchor lands on.</param>
+        /// <param name="kind">Whether this is a drop landing or a fill window.</param>
+        /// <param name="capability">The single Repertoire flag a performer must carry to own it.</param>
         public Anchor(int landingBeat, AnchorKind kind, Repertoire capability)
         {
             LandingBeat = landingBeat;
@@ -770,11 +787,21 @@ public readonly struct TrackCueSheet
     /// </summary>
     private sealed class Bag
     {
+        /// <summary>How many cards the catalog holds; every pass deals a permutation of exactly these.</summary>
         private readonly int cardCount;
+
+        /// <summary>The sheet's roll stream, shared with the Grid walk and the Anchor flips.</summary>
         private readonly Rng rng;
+
+        /// <summary>Cards not yet dealt in this pass, in the order they will come off the top.</summary>
         private readonly List<int> remaining;
+
+        /// <summary>Cards already dealt in this pass, oldest first — the encore pile for capability scans.</summary>
         private readonly List<int> discard;
 
+        /// <summary>Creates a Bag over <paramref name="cardCount"/> catalog positions and shuffles the first pass.</summary>
+        /// <param name="cardCount">Number of cards in the catalog this Bag deals.</param>
+        /// <param name="rng">The sheet's single roll stream.</param>
         public Bag(int cardCount, Rng rng)
         {
             this.cardCount = cardCount;
@@ -840,6 +867,7 @@ public readonly struct TrackCueSheet
             return -1;
         }
 
+        /// <summary>Refills the Bag when the current pass is spent, so a deal never comes up empty.</summary>
         private void EnsureCards()
         {
             if (remaining.Count == 0)
@@ -848,6 +876,9 @@ public readonly struct TrackCueSheet
             }
         }
 
+        /// <summary>Removes the card at <paramref name="index"/> from the pass and discards it.</summary>
+        /// <param name="index">Position in <see cref="remaining"/> to deal.</param>
+        /// <returns>The dealt catalog position.</returns>
         private int Take(int index)
         {
             var card = remaining[index];

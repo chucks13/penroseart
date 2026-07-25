@@ -6,106 +6,75 @@ using UnityEngine;
 /// </summary>
 public readonly struct SwitcherStatus
 {
+    /// <summary>The snapshot shown before the Switcher has anything on stage: no Effect, no Transition, no progress.</summary>
     public static SwitcherStatus NotReady { get; } = new SwitcherStatus(
-        false,
         -1,
+        string.Empty,
         string.Empty,
         -1,
         string.Empty,
         -1,
-        string.Empty,
-        -1,
-        string.Empty,
         string.Empty,
         0f);
 
-    public readonly bool Ready;
+    /// <summary>Index of the Effect on stage, or -1 while a Transition owns the frame.</summary>
     public readonly int CurrentEffectIndex;
+
+    /// <summary>Display name of the Effect on stage, or empty while a Transition owns the frame.</summary>
     public readonly string CurrentEffectName;
-    public readonly int SourceEffectIndex;
+
+    /// <summary>Display name of the Effect a running Transition is moving away from.</summary>
     public readonly string SourceEffectName;
+
+    /// <summary>Index of the Effect the stage is heading to, whether or not a Transition owns the frame.</summary>
     public readonly int TargetEffectIndex;
+
+    /// <summary>Display name of the Effect the stage is heading to.</summary>
     public readonly string TargetEffectName;
+
+    /// <summary>Index of the running Transition, or -1 when an Effect owns the frame.</summary>
     public readonly int CurrentTransitionIndex;
+
+    /// <summary>Display name of the running Transition, or empty when an Effect owns the frame.</summary>
     public readonly string CurrentTransitionName;
-    public readonly string StageName;
+
+    /// <summary>How far the running Transition has travelled, in 0-to-1; zero when none is running.</summary>
     public readonly float TransitionProgress;
 
+    /// <summary>Captures one stage snapshot.</summary>
+    /// <param name="currentEffectIndex">Effect on stage, or -1 while a Transition owns the frame.</param>
+    /// <param name="currentEffectName">Display name of the Effect on stage.</param>
+    /// <param name="sourceEffectName">Display name of the Effect a running Transition is leaving.</param>
+    /// <param name="targetEffectIndex">Effect the stage is heading to.</param>
+    /// <param name="targetEffectName">Display name of the Effect the stage is heading to.</param>
+    /// <param name="currentTransitionIndex">Running Transition, or -1 when an Effect owns the frame.</param>
+    /// <param name="currentTransitionName">Display name of the running Transition.</param>
+    /// <param name="transitionProgress">Transition progress, clamped to 0-to-1.</param>
     public SwitcherStatus(
-        bool ready,
         int currentEffectIndex,
         string currentEffectName,
-        int sourceEffectIndex,
         string sourceEffectName,
         int targetEffectIndex,
         string targetEffectName,
         int currentTransitionIndex,
         string currentTransitionName,
-        string stageName,
         float transitionProgress)
     {
-        Ready = ready;
         CurrentEffectIndex = currentEffectIndex;
         CurrentEffectName = currentEffectName;
-        SourceEffectIndex = sourceEffectIndex;
         SourceEffectName = sourceEffectName;
         TargetEffectIndex = targetEffectIndex;
         TargetEffectName = targetEffectName;
         CurrentTransitionIndex = currentTransitionIndex;
         CurrentTransitionName = currentTransitionName;
-        StageName = stageName;
         TransitionProgress = Mathf.Clamp01(transitionProgress);
     }
-}
 
-/// <summary>
-/// Timing context for a started A-to-B Transition.
-/// </summary>
-public readonly struct TransitionStartTiming
-{
-    private readonly bool useBeatDuration;
-    private readonly float secondsPerBeat;
+    /// <summary>Whether anything is on stage yet: an Effect is showing, or a Transition is running.</summary>
+    public bool Ready => CurrentEffectIndex >= 0 || CurrentTransitionIndex >= 0;
 
-    private TransitionStartTiming(float startTime, bool useBeatDuration, float secondsPerBeat)
-    {
-        if (useBeatDuration && secondsPerBeat <= 0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(secondsPerBeat), secondsPerBeat, "Seconds per beat must be positive.");
-        }
-
-        StartTime = startTime;
-        this.useBeatDuration = useBeatDuration;
-        this.secondsPerBeat = secondsPerBeat;
-    }
-
-    /// <summary>Unity time when the transition should be considered started.</summary>
-    public float StartTime { get; }
-
-    /// <summary>Creates timing for beat-denominated Synced Mode execution.</summary>
-    public static TransitionStartTiming FromBeatClock(float startTime, float secondsPerBeat)
-    {
-        return new TransitionStartTiming(startTime, true, secondsPerBeat);
-    }
-
-    /// <summary>Creates timing for Standalone Mode execution using the transition's default duration.</summary>
-    public static TransitionStartTiming FromDefaultDuration(float startTime)
-    {
-        return new TransitionStartTiming(startTime, false, 0f);
-    }
-
-    /// <summary>Resolves the active execution duration from the selected transition's repertoire.</summary>
-    public float DurationSeconds(TransitionRepertoire repertoire)
-    {
-        var durationSeconds = useBeatDuration
-            ? repertoire.DurationBeats * secondsPerBeat
-            : repertoire.DefaultDurationSeconds;
-        if (durationSeconds < 0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(repertoire), durationSeconds, "Transition duration cannot be negative.");
-        }
-
-        return durationSeconds;
-    }
+    /// <summary>What to call whatever owns the frame — the running Transition, else the Effect on stage.</summary>
+    public string StageName => CurrentTransitionIndex >= 0 ? CurrentTransitionName : CurrentEffectName;
 }
 
 /// <summary>
@@ -119,7 +88,6 @@ public readonly struct TransitionStartTiming
 /// <see cref="Director"/>. It holds no cue between beats and no lifecycle around one: no Standby Cue, no
 /// Lock Point, no verdict, no revocation window.
 /// </summary>
-[Serializable]
 public sealed class Switcher
 {
     private readonly Controller controller;
@@ -133,27 +101,43 @@ public sealed class Switcher
     private float transitionDurationSeconds = 1f;
     private float transitionProgress;
 
-    // The one decider (ADR-0020): commands come down (the immediate and Standalone StartTransition
-    // pushes, the sheet handover); questions go up through director.Decide*. Bound once at startup.
+    /// <summary>
+    /// The one decider (ADR-0020): commands come down (the immediate and Standalone
+    /// <see cref="StartTransition(int, int, float)"/> pushes, the sheet handover); questions go up through
+    /// <see cref="Director.DecideCue"/>, <see cref="Director.DecideOffPlanCue"/>, and
+    /// <see cref="Director.PeekTransitionIndex"/>. Bound once at startup.
+    /// </summary>
     private Director director;
 
-    // The plan in force. Each mark carries its own CuePlanMark.Fired, so the Switcher keeps no execution
-    // state beside the sheet: firing a cue marks the cue.
+    /// <summary>
+    /// The plan in force. Each mark records the beat it fired on, so the Switcher keeps no execution state
+    /// beside the sheet: firing a cue marks the cue.
+    /// </summary>
     private TrackCueSheet sheet;
 
-    // The beat Tick last acted on. Tick runs every frame and a beat spans many of them, so this is what makes
-    // "fire on the Runway beat" happen once rather than once per frame for the length of that beat.
+    /// <summary>
+    /// The beat <see cref="Tick"/> last acted on. Tick runs every frame and a beat spans many of them, so this
+    /// is what makes "fire on the Runway beat" happen once rather than once per frame for the length of it.
+    /// </summary>
     private int? actedBeat;
 
-    // Grid Boundaries crossed since the last Impact Point. The plan spaces its marks one to four boundaries
-    // apart, so reaching the fourth with nothing performed means the plan cannot feed the playhead: the DJ is
-    // looping a stretch the plan left empty, or an inspection freeze has just ended. Counted in boundaries
-    // rather than beats because a loop re-crosses the same beat numbers — only crossings measure elapsed music.
-    private int boundariesSinceImpact;
+    /// <summary>
+    /// Grid Boundaries of stillness — how many the wall has crossed since it last started changing. Reset in
+    /// <see cref="Perform"/> the moment a cue's Runway begins, so it measures stillness anchored at cue start.
+    /// This is the run-time backstop, and a separate rule from the plan-time one: the Director never builds a
+    /// gap wider than <see cref="TrackCueSheet.MaximumGapBeats"/>, but a DJ looping a stretch the plan left
+    /// empty, or an inspection freeze ending, can still leave the playhead with nothing to perform. Reaching
+    /// the ceiling with nothing performed means the plan cannot feed the playhead, and the boundary is asked
+    /// anyway. Counted in boundaries rather than beats because a loop re-crosses the same beat numbers — only
+    /// crossings measure elapsed music.
+    /// </summary>
+    private int boundariesSinceCue;
 
-    // How many off-plan asks this handover has made, the seed dimension that stops a loop re-crossing one
-    // boundary from being handed the same card twice. Handover-scoped like the count above: both reset on Cast,
-    // so no spacing or deal history leaks from one plan into the next.
+    /// <summary>
+    /// How many off-plan asks this handover has made, the seed dimension that stops a loop re-crossing one
+    /// boundary from being handed the same card twice. Handover-scoped like <see cref="boundariesSinceCue"/>:
+    /// both reset on <see cref="Cast"/>, so no spacing or deal history leaks from one plan into the next.
+    /// </summary>
     private int offPlanAsks;
 
     /// <summary>
@@ -165,18 +149,17 @@ public sealed class Switcher
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
 
-    /// <summary>Active transition index while a transition owns the frame; otherwise -1.</summary>
-    public int CurrentTransitionIndex => isTransitioning ? currentTransitionIndex : -1;
-
     /// <summary>The destination effect while transitioning, otherwise the currently active effect.</summary>
     public int TransitionTargetEffectIndex => isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
-
-    /// <summary>Display name for the effect or transition currently on stage.</summary>
-    public string CurrentName => isTransitioning ? transitions[currentTransitionIndex].Name : effects[currentEffectIndex].Name;
 
     /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
     public SwitcherStatus Status => BuildStatus();
 
+    /// <summary>Binds the Switcher to the runtime hub and the two performer catalogs it renders from.</summary>
+    /// <param name="controller">The runtime hub owning the beat clock, the trace sink, and the transition mirror.</param>
+    /// <param name="effects">The Effect catalog; catalog position is Effect identity throughout.</param>
+    /// <param name="transitions">The Transition catalog; catalog position is Transition identity throughout.</param>
+    /// <exception cref="ArgumentNullException">Any argument is null.</exception>
     public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
     {
         if (controller == null)
@@ -191,9 +174,11 @@ public sealed class Switcher
 
     /// <summary>
     /// Binds the one decider the Switcher asks before performing anything. Separate from construction
-    /// because the reference is genuinely mutual: the Director also pushes <see cref="ShowNow"/> and the
-    /// Standalone <see cref="StartTransition(int, int, TransitionStartTiming)"/> down into the Switcher.
+    /// because the reference is genuinely mutual: the Director also pushes its immediate and Standalone
+    /// <see cref="StartTransition(int, int, float)"/> commands down into the Switcher.
     /// </summary>
+    /// <param name="director">The one decider every question goes up to.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="director"/> is null.</exception>
     public void BindDirector(Director director)
     {
         this.director = director ?? throw new ArgumentNullException(nameof(director));
@@ -234,7 +219,7 @@ public sealed class Switcher
         // A handover is a fresh start: the incoming player is somewhere else in its own track, so neither the
         // beat already acted on nor the outgoing plan's spacing and deal history mean anything here.
         actedBeat = null;
-        boundariesSinceImpact = 0;
+        boundariesSinceCue = 0;
         offPlanAsks = 0;
         Trace(() => sheet.StructureGeneration > 0
             ? $"SWITCHER_CAST player={sheet.PlayerNumber} generation={sheet.StructureGeneration} marks={sheet.Marks.Count}"
@@ -243,12 +228,15 @@ public sealed class Switcher
 
     /// <summary>
     /// Follows the sheet player's beat and fires each cue on its Runway start — the beat a Transition has to
-    /// leave on for its Impact Point to land on the mark. Called by the Controller each frame after
-    /// <see cref="Director.Tick"/>, so a handover always precedes execution in the same frame. A mark the
-    /// playhead reaches again has already fired, which only happens when the DJ loops, so the Director is
-    /// asked for a fresh cue rather than replaying the spent one. Counting Grid Boundaries alongside the plan
-    /// is what bounds the wall: a boundary reached with the plan's widest legal gap already spent is asked
-    /// even though no mark sits on it, so no loop and no released freeze can hold the wall still forever.
+    /// leave on for its Impact Point to land on the mark. Which Runway that is belongs to the Transition that
+    /// will actually fly, not to the plan's baked card, so the Director is asked first
+    /// (<see cref="Director.PeekTransitionIndex"/>) and a staged override still lands its Impact on the mark.
+    /// Called by the Controller each frame after <see cref="Director.Tick"/>, so a handover always precedes
+    /// execution in the same frame. A mark the playhead reaches again has already fired, which only happens
+    /// when the DJ loops, so the Director is asked for a fresh cue rather than replaying the spent one.
+    /// Counting Grid Boundaries alongside the plan is what bounds the wall: a boundary reached with the plan's
+    /// widest legal gap already spent is asked even though no mark sits on it, so no loop and no released
+    /// freeze can hold the wall still forever.
     /// </summary>
     public void Tick()
     {
@@ -274,21 +262,39 @@ public sealed class Switcher
         var onBoundary = players[slot].GridBeat == 1;
         if (onBoundary)
         {
-            boundariesSinceImpact++;
+            boundariesSinceCue++;
         }
 
         foreach (var mark in sheet.Marks)
         {
-            if (beat != mark.Beat - transitions[mark.TransitionIndex].Repertoire.RunwayBeats)
+            var spent = mark.Fired;
+            CueDecision cue;
+            if (spent)
             {
-                continue;
+                // A spent cue is reachable again only by re-crossing the very beat it left on — a loop, a
+                // back-cue, a needle-drop. The beat it left on is the fact, not the beat the plan would have
+                // chosen: an override may have flown it on a different Runway. Its Impact Point would land on
+                // the next boundary, one Grid further out than the boundaries counted so far.
+                if (beat != mark.FiredAtBeat)
+                {
+                    continue;
+                }
+
+                cue = AskOffPlan(mark.Beat, boundariesSinceCue + 1);
+            }
+            else
+            {
+                // Count the Runway back from the Impact Point using the Transition that would actually perform
+                // this mark, so an override with its own Runway leaves on its own beat and still lands on the
+                // mark. Asking is free: the peek never spends the one-shot, only DecideCue below does.
+                if (beat != mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats)
+                {
+                    continue;
+                }
+
+                cue = director.DecideCue(mark);
             }
 
-            // A fired mark's Impact Point would land on the next boundary, one Grid further out than the
-            // boundaries counted so far.
-            var cue = mark.Fired
-                ? AskOffPlan(mark.Beat, boundariesSinceImpact + 1)
-                : director.DecideCue(mark);
             if (!cue.Perform)
             {
                 // Held, or a boundary the Director chose to ride through. Either way the wall stays put, and a
@@ -297,7 +303,11 @@ public sealed class Switcher
                 return;
             }
 
-            mark.Fired = true;
+            if (!spent)
+            {
+                mark.FiredAtBeat = beat;
+            }
+
             Perform(beat, cue);
             return;
         }
@@ -306,13 +316,13 @@ public sealed class Switcher
         // failed to feed the playhead, so the boundary is asked anyway; the deal is certain at that point, which
         // is what makes the wall holding still past TrackCueSheet.MaximumGapBeats impossible. Below the ceiling
         // nothing is asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
-        if (!onBoundary || boundariesSinceImpact < TrackCueSheet.MaximumGapGrids)
+        if (!onBoundary || boundariesSinceCue < TrackCueSheet.MaximumGapGrids)
         {
             return;
         }
 
         // Standing on the boundary that spent the last legal Grid, so performing now is the ceiling gap itself.
-        var offPlan = AskOffPlan(beat, boundariesSinceImpact);
+        var offPlan = AskOffPlan(beat, boundariesSinceCue);
         if (offPlan.Perform)
         {
             Perform(beat, offPlan);
@@ -332,23 +342,41 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Starts or replaces a transition from the current stage destination to the target effect.
-    /// The Switcher owns progress and completion after this call; if another transition is still
-    /// rendering, the previous destination becomes the source for this new last-command-wins move.
+    /// Starts or replaces a transition from the current stage destination to the target effect, running for the
+    /// Transition's own default duration — the seconds-denominated move Standalone Mode and every immediate
+    /// operator pick use. The Switcher owns progress and completion after this call; if another transition is
+    /// still rendering, the previous destination becomes the source for this new last-command-wins move.
     /// </summary>
-    public void StartTransition(int targetEffectIndex, int transitionIndex, TransitionStartTiming timing)
+    /// <param name="targetEffectIndex">Effect catalog index the move lands on.</param>
+    /// <param name="transitionIndex">Transition catalog index performing the move.</param>
+    /// <param name="startTimeSeconds">Unity time the move is considered to have started.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Either index is outside the runtime catalog.</exception>
+    public void StartTransition(int targetEffectIndex, int transitionIndex, float startTimeSeconds)
     {
         ValidateTransitionIndex(transitionIndex);
-        StartTransition(targetEffectIndex, transitionIndex, timing, Time.time, transitions[transitionIndex].Repertoire);
+        StartTransition(
+            targetEffectIndex,
+            transitionIndex,
+            startTimeSeconds,
+            transitions[transitionIndex].Repertoire.DefaultDurationSeconds,
+            Time.time);
     }
 
     /// <summary>Starts one fully resolved transition and defers its diagnostic display reads.</summary>
+    /// <param name="targetEffectIndex">Effect catalog index the move lands on.</param>
+    /// <param name="transitionIndex">Transition catalog index performing the move.</param>
+    /// <param name="startTimeSeconds">Unity time the move is considered to have started.</param>
+    /// <param name="durationSeconds">
+    /// How long the move runs. Resolved by the caller, because the two production paths denominate it
+    /// differently: Standalone in the Transition's own seconds, a synced cue in beats off the live clock.
+    /// </param>
+    /// <param name="progressNowSeconds">Unity time to seed the first progress reading from.</param>
     private void StartTransition(
         int targetEffectIndex,
         int transitionIndex,
-        TransitionStartTiming timing,
-        float progressNowSeconds,
-        TransitionRepertoire repertoire)
+        float startTimeSeconds,
+        float durationSeconds,
+        float progressNowSeconds)
     {
         var sourceEffectIndex = isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
         ValidateEffectIndex(sourceEffectIndex);
@@ -367,8 +395,8 @@ public sealed class Switcher
 
         currentTransitionIndex = transitionIndex;
         currentEffectIndex = -1;
-        transitionStartTime = timing.StartTime;
-        transitionDurationSeconds = timing.DurationSeconds(repertoire);
+        transitionStartTime = startTimeSeconds;
+        transitionDurationSeconds = durationSeconds;
         transitionProgress = ProgressAt(progressNowSeconds);
         isTransitioning = true;
         Trace(() => $"SWITCHER_START transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B} durationSeconds={transitionDurationSeconds:0.###} progress={transitionProgress:0.###}");
@@ -433,15 +461,17 @@ public sealed class Switcher
         var repertoire = transitions[cue.TransitionIndex].Repertoire;
         var nowSeconds = Time.time;
 
-        // The wall is changing, so the spacing rule starts counting again from this Impact Point.
-        boundariesSinceImpact = 0;
+        // The wall is changing, so the stillness count starts again from this cue.
+        boundariesSinceCue = 0;
 
+        // A synced cue is denominated in beats, so its seconds come off the live clock rather than the
+        // Transition's authored default.
         StartTransition(
             cue.EffectIndex,
             cue.TransitionIndex,
-            TransitionStartTiming.FromBeatClock(nowSeconds, SecondsPerBeat()),
             nowSeconds,
-            repertoire);
+            repertoire.DurationBeats * SecondsPerBeat(),
+            nowSeconds);
         // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
         controller.currentTransition = cue.TransitionIndex;
         Trace(() => $"SWITCHER_PERFORM impact={fireBeat + repertoire.RunwayBeats} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
@@ -473,44 +503,32 @@ public sealed class Switcher
             : Mathf.Clamp01((now - transitionStartTime) / transitionDurationSeconds);
     }
 
+    /// <summary>Builds the read-only stage snapshot from whichever performer owns the frame.</summary>
     private SwitcherStatus BuildStatus()
     {
-        if (effects == null || transitions == null)
-        {
-            return SwitcherStatus.NotReady;
-        }
-
         if (isTransitioning)
         {
             var transition = transitions[currentTransitionIndex];
-            var sourceName = EffectName(transition.A);
-            var targetName = EffectName(transition.B);
             return new SwitcherStatus(
-                true,
                 -1,
                 string.Empty,
-                transition.A,
-                sourceName,
+                EffectName(transition.A),
                 transition.B,
-                targetName,
+                EffectName(transition.B),
                 currentTransitionIndex,
-                transition.Name,
                 transition.Name,
                 transitionProgress);
         }
 
         var currentName = EffectName(currentEffectIndex);
         return new SwitcherStatus(
-            currentEffectIndex >= 0,
             currentEffectIndex,
             currentName,
-            currentEffectIndex,
             currentName,
             currentEffectIndex,
             currentName,
             -1,
             string.Empty,
-            currentName,
             0f);
     }
 

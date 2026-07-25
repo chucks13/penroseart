@@ -134,8 +134,8 @@ public sealed class TrackCueSheetTests
             dealtTransitions.Add(dealt.TransitionIndex);
         }
 
-        Assert.That(dealtEffects, Is.EquivalentTo(effects.Select(e => e.Index)));
-        Assert.That(dealtTransitions, Is.EquivalentTo(transitions.Select(t => t.Index)));
+        Assert.That(dealtEffects, Is.EquivalentTo(Enumerable.Range(0, effects.Count)));
+        Assert.That(dealtTransitions, Is.EquivalentTo(Enumerable.Range(0, transitions.Count)));
     }
 
     [Test]
@@ -145,13 +145,13 @@ public sealed class TrackCueSheetTests
         // transitioned to itself and the 64-beat rule was met on paper while nothing moved.
         var effects = MixedEffects();
         var sheet = TrackCueSheet.Build(MixedTrack(), effects, MixedTransitions(), 7, 2);
-        foreach (var descriptor in effects)
+        for (var onWall = 0; onWall < effects.Count; onWall++)
         {
             for (var ask = 1; ask <= 64; ask++)
             {
-                var dealt = sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, descriptor.Index);
-                Assert.That(dealt.EffectIndex, Is.Not.EqualTo(descriptor.Index),
-                    $"ask {ask} would transition Effect {descriptor.Index} to itself.");
+                var dealt = sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, onWall);
+                Assert.That(dealt.EffectIndex, Is.Not.EqualTo(onWall),
+                    $"ask {ask} would transition Effect {onWall} to itself.");
             }
         }
     }
@@ -503,8 +503,8 @@ public sealed class TrackCueSheetTests
         var effects = UntaggedEffects(4); // no HandlesDrop tag anywhere
         var transitions = new[]
         {
-            new TransitionDescriptor(0, Transition(Repertoire.HandlesDrop)),
-            new TransitionDescriptor(1, Transition(Repertoire.None)),
+            new TransitionDescriptor(Transition(Repertoire.HandlesDrop)),
+            new TransitionDescriptor(Transition(Repertoire.None)),
         };
 
         foreach (var generation in Generations)
@@ -537,32 +537,6 @@ public sealed class TrackCueSheetTests
                 Assert.That(anchor.PerformerIndex, Is.EqualTo(0),
                     $"gen={generation}: drop Anchor not owned by the only capable effect (encore failed)");
             }
-        }
-    }
-
-    [Test]
-    public void PlanBakesDescriptorIndicesNotBagPositions()
-    {
-        // Descriptors carry catalog indices offset from their bag position; the plan must bake the descriptor
-        // index, never the internal shuffle slot.
-        var effects = new[]
-        {
-            new EffectDescriptor(100, Repertoire.None),
-            new EffectDescriptor(101, Repertoire.None),
-            new EffectDescriptor(102, Repertoire.None),
-        };
-        var transitions = new[]
-        {
-            new TransitionDescriptor(200, Transition(Repertoire.None)),
-            new TransitionDescriptor(201, Transition(Repertoire.None)),
-        };
-
-        var sheet = TrackCueSheet.Build(PlainTrack(6), effects, transitions, 3, 1);
-        Assert.That(sheet.Marks, Is.Not.Empty);
-        foreach (var mark in sheet.Marks)
-        {
-            Assert.That(mark.EffectIndex, Is.InRange(100, 102), $"effect index {mark.EffectIndex} is a bag position, not a descriptor index");
-            Assert.That(mark.TransitionIndex, Is.InRange(200, 201), $"transition index {mark.TransitionIndex} is a bag position, not a descriptor index");
         }
     }
 
@@ -624,10 +598,10 @@ public sealed class TrackCueSheetTests
     {
         return new[]
         {
-            new TransitionDescriptor(0, Transition(Repertoire.None)),
-            new TransitionDescriptor(1, Transition(Repertoire.HandlesDrop)),
-            new TransitionDescriptor(2, Transition(Repertoire.HandlesFill)),
-            new TransitionDescriptor(3, Transition(Repertoire.HandlesDrop | Repertoire.HandlesFill)),
+            new TransitionDescriptor(Transition(Repertoire.None)),
+            new TransitionDescriptor(Transition(Repertoire.HandlesDrop)),
+            new TransitionDescriptor(Transition(Repertoire.HandlesFill)),
+            new TransitionDescriptor(Transition(Repertoire.HandlesDrop | Repertoire.HandlesFill)),
         };
     }
 
@@ -642,7 +616,7 @@ public sealed class TrackCueSheetTests
         var list = new EffectDescriptor[reps.Length];
         for (var i = 0; i < reps.Length; i++)
         {
-            list[i] = new EffectDescriptor(i, reps[i]);
+            list[i] = new EffectDescriptor(reps[i]);
         }
 
         return list;
@@ -653,7 +627,7 @@ public sealed class TrackCueSheetTests
         var list = new TransitionDescriptor[count];
         for (var i = 0; i < count; i++)
         {
-            list[i] = new TransitionDescriptor(i, Transition(Repertoire.None));
+            list[i] = new TransitionDescriptor(Transition(Repertoire.None));
         }
 
         return list;
@@ -696,28 +670,12 @@ public sealed class TrackCueSheetTests
 
     private static Repertoire EffectCapability(IReadOnlyList<EffectDescriptor> effects, int index)
     {
-        foreach (var effect in effects)
-        {
-            if (effect.Index == index)
-            {
-                return effect.Repertoire;
-            }
-        }
-
-        return Repertoire.None;
+        return index >= 0 && index < effects.Count ? effects[index].Repertoire : Repertoire.None;
     }
 
     private static Repertoire TransitionCapability(IReadOnlyList<TransitionDescriptor> transitions, int index)
     {
-        foreach (var transition in transitions)
-        {
-            if (transition.Index == index)
-            {
-                return transition.Repertoire.Tags;
-            }
-        }
-
-        return Repertoire.None;
+        return index >= 0 && index < transitions.Count ? transitions[index].Repertoire.Tags : Repertoire.None;
     }
 
     private static string Serialize(TrackCueSheet sheet)

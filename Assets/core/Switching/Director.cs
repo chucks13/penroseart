@@ -15,10 +15,10 @@ public enum DirectorMode
 /// <summary>Read-only snapshot of the Director reducer's real state for the HUD and Unity Inspector.</summary>
 public readonly struct DirectorStatus
 {
+    /// <summary>The snapshot shown before the Director exists: no mode, nothing staged, nothing held.</summary>
     public static DirectorStatus NotReady { get; } = new DirectorStatus(
         DirectorMode.NotReady,
         false,
-        -1,
         -1,
         string.Empty,
         -1,
@@ -32,16 +32,19 @@ public readonly struct DirectorStatus
     /// <summary>True when the wall is in Synced Mode (the reducer is live).</summary>
     public readonly bool IsSyncedMode;
 
-    /// <summary>Current live beat observed by the Director, or -1 outside Synced Mode.</summary>
-    public readonly int CurrentBeat;
-
-    /// <summary>Staged effect index for the next Standalone move, or -1 when nothing is staged.</summary>
+    /// <summary>
+    /// Staged effect index for the next A-to-B move, or -1 when nothing is staged. It serves the next
+    /// Standalone move and, as a one-shot override, the next Synced cue the Director answers.
+    /// </summary>
     public readonly int NextEffectIndex;
 
     /// <summary>Display name of the staged effect, or empty when nothing is staged.</summary>
     public readonly string NextEffectName;
 
-    /// <summary>Staged transition index for the next Standalone move, or -1 before the Director is ready.</summary>
+    /// <summary>
+    /// Staged transition index for the next A-to-B move, or -1 before the Director is ready. Like
+    /// <see cref="NextEffectIndex"/> it serves both the next Standalone move and the next Synced override.
+    /// </summary>
     public readonly int NextTransitionIndex;
 
     /// <summary>Display name of the staged transition, or empty before the Director is ready.</summary>
@@ -53,10 +56,18 @@ public readonly struct DirectorStatus
     /// <summary>Whether the staged Transition is kept after each completed move.</summary>
     public readonly bool HoldSelectedTransition;
 
+    /// <summary>Captures one Director snapshot for downstream HUDs and inspectors.</summary>
+    /// <param name="mode">Which operating mode the Director is in this frame.</param>
+    /// <param name="isSyncedMode">Whether a usable beat clock is running.</param>
+    /// <param name="nextEffectIndex">Staged Effect catalog index, or -1 when nothing is staged.</param>
+    /// <param name="nextEffectName">Display name of the staged Effect.</param>
+    /// <param name="nextTransitionIndex">Staged Transition catalog index, or -1 before the Director is ready.</param>
+    /// <param name="nextTransitionName">Display name of the staged Transition.</param>
+    /// <param name="holdSelectedEffect">Whether the staged Effect is kept after each completed move.</param>
+    /// <param name="holdSelectedTransition">Whether the staged Transition is kept after each completed move.</param>
     public DirectorStatus(
         DirectorMode mode,
         bool isSyncedMode,
-        int currentBeat,
         int nextEffectIndex,
         string nextEffectName,
         int nextTransitionIndex,
@@ -66,7 +77,6 @@ public readonly struct DirectorStatus
     {
         Mode = mode;
         IsSyncedMode = isSyncedMode;
-        CurrentBeat = currentBeat;
         NextEffectIndex = nextEffectIndex;
         NextEffectName = nextEffectName ?? string.Empty;
         NextTransitionIndex = nextTransitionIndex;
@@ -113,7 +123,6 @@ public readonly struct CueDecision
 /// position, observes no Grid, and keeps no cast memory: execution belongs wholly to the Switcher.
 /// Standalone Mode (timer-driven, no wire) is unchanged.
 /// </summary>
-[Serializable]
 public sealed class Director
 {
     private readonly Controller controller;
@@ -127,20 +136,30 @@ public sealed class Director
     private bool holdSelectedEffect;
     private bool holdSelectedTransition;
 
-    // One-shot override masks (ADR-0017): a manual SetNext* stages a pick that replaces exactly the next synced
-    // cast's dealt card and is then consumed, so the plan resumes verbatim. Auto-staging and enabling a Hold
-    // both clear it. Overrides mask, never mutate — the sheet stays a pure function of (structure, seed).
+    /// <summary>
+    /// Whether a manually staged Effect is waiting to mask exactly one cue (ADR-0020). A manual
+    /// <see cref="SetNextEffect"/> raises it; answering one cue consumes it, so the plan resumes verbatim.
+    /// Auto-staging and enabling a Hold both clear it. Overrides mask, never mutate — the sheet stays a pure
+    /// function of (structure, seed).
+    /// </summary>
     private bool overrideEffectPending;
+
+    /// <summary>The same one-shot mask for a manually staged Transition; see <see cref="overrideEffectPending"/>.</summary>
     private bool overrideTransitionPending;
 
+    /// <summary>The last mode written to the trace, so a steady mode is logged once rather than every frame.</summary>
     private DirectorMode lastLoggedMode = DirectorMode.NotReady;
 
-    // One track-scoped Cue Sheet per physical player, mirroring the Players group. A slot is (re)built when
-    // that player's structure generation changes (inequality only, never ordering); the seed is (generation,
-    // player number). Track ID plays no role. sheetGeneration[slot] > 0 marks a live sheet; 0 marks none.
+    /// <summary>How many physical players the wire carries, and so how many sheet slots the Director keeps.</summary>
     private const int PlayerCount = RaveWireSnapshot.PlayerCount;
+
+    /// <summary>
+    /// One track-scoped Cue Sheet per physical player, mirroring the Players group. A slot is (re)built when
+    /// that player's structure generation changes (inequality only, never ordering); the seed is (generation,
+    /// player number) and Track ID plays no role. A slot whose sheet carries a
+    /// <see cref="TrackCueSheet.StructureGeneration"/> of zero holds no plan.
+    /// </summary>
     private readonly TrackCueSheet[] sheets = new TrackCueSheet[PlayerCount];
-    private readonly int[] sheetGeneration = new int[PlayerCount];
 
     /// <summary>
     /// The Cue Sheet built for each physical player slot, indexed by player number minus one. A slot whose
@@ -149,6 +168,17 @@ public sealed class Director
     /// </summary>
     public IReadOnlyList<TrackCueSheet> Sheets => sheets;
 
+    /// <summary>
+    /// Binds the one Director to everything it decides with and stages its opening choices. Every dependency is
+    /// required, so a constructed Director is always ready to answer.
+    /// </summary>
+    /// <param name="controller">The runtime hub owning the Effect and Transition catalogs and the beat clock.</param>
+    /// <param name="switcher">The Switcher this Director hands plans to and pushes immediate moves down into.</param>
+    /// <param name="standaloneTimer">The cadence clock driving Standalone Mode.</param>
+    /// <param name="effectDeck">Catalog indices the automatic Effect selection pulls from.</param>
+    /// <param name="transitionDeck">Catalog indices the automatic Transition selection pulls from.</param>
+    /// <param name="initialTransitionIndex">Transition staged before the first move.</param>
+    /// <exception cref="ArgumentNullException">Any dependency is null.</exception>
     public Director(
         Controller controller,
         Switcher switcher,
@@ -170,7 +200,7 @@ public sealed class Director
         SetNextTransition(initialTransitionIndex);
         // Initial seeding is not an operator override: clear the pending mask SetNextTransition just raised.
         overrideTransitionPending = false;
-        StageNextEffect(switcher.TransitionTargetEffectIndex);
+        AutoStageNextEffect(switcher.TransitionTargetEffectIndex);
     }
 
     /// <summary>
@@ -180,22 +210,12 @@ public sealed class Director
     public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsSynced;
 
     /// <summary>Current read-only reducer snapshot for runtime HUDs and inspector diagnostics.</summary>
-    public DirectorStatus Status => IsReady ? BuildStatus() : DirectorStatus.NotReady;
+    public DirectorStatus Status => BuildStatus();
 
-    private bool IsReady =>
-        controller != null
-        && controller.beatManager != null
-        && controller.effects != null
-        && controller.transitions != null
-        && switcher != null
-        && standaloneTimer != null
-        && effectDeck != null
-        && transitionDeck != null;
-
-    /// <summary>Index of the Effect staged for the next Standalone A-to-B move.</summary>
+    /// <summary>Index of the Effect staged for the next A-to-B move — Standalone, or a one-shot Synced override.</summary>
     public int NextEffectIndex => nextEffectIndex;
 
-    /// <summary>Index of the Transition staged for the next Standalone A-to-B move.</summary>
+    /// <summary>Index of the Transition staged for the next A-to-B move — Standalone, or a one-shot Synced override.</summary>
     public int NextTransitionIndex => nextTransitionIndex;
 
     /// <summary>Whether the staged Effect should be kept after each completed move.</summary>
@@ -205,10 +225,12 @@ public sealed class Director
     public bool HoldSelectedTransition => holdSelectedTransition;
 
     /// <summary>
-    /// Stages the Effect for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0017
-    /// override — exactly the next synced plan cast, which plays this pick instead of its dealt card before the
+    /// Stages the Effect for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0020
+    /// override — exactly the next synced cue, which plays this pick instead of its dealt card before the
     /// plan resumes verbatim. Masks, never mutates the sheet.
     /// </summary>
+    /// <param name="effectIndex">Effect catalog index to stage.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="effectIndex"/> is outside the catalog.</exception>
     public void SetNextEffect(int effectIndex)
     {
         ValidateEffectIndex(effectIndex);
@@ -218,9 +240,11 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Stages the Transition for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0017
-    /// override — exactly the next synced plan cast, before the plan resumes verbatim. Masks, never mutates.
+    /// Stages the Transition for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0020
+    /// override — exactly the next synced cue, before the plan resumes verbatim. Masks, never mutates.
     /// </summary>
+    /// <param name="transitionIndex">Transition catalog index to stage.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="transitionIndex"/> is outside the catalog.</exception>
     public void SetNextTransition(int transitionIndex)
     {
         ValidateTransitionIndex(transitionIndex);
@@ -291,7 +315,7 @@ public sealed class Director
         ValidateTransitionIndex(transitionIndex);
 
         Trace(() => $"SHOW_NOW effect={FormatEffect(effectIndex)} via={FormatTransition(transitionIndex)} durationSeconds={durationSeconds:0.###} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
-        switcher.StartTransition(effectIndex, transitionIndex, TransitionStartTiming.FromDefaultDuration(Time.time));
+        switcher.StartTransition(effectIndex, transitionIndex, Time.time);
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
         // Restages the following pick and, with it, the Controller's transition mirror.
@@ -351,10 +375,11 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Rebuilds each player's Cue Sheet slot when that player's structure generation changes. A sheet is built
-    /// only from a complete structure (visible phrase list equals the announced count); until it converges the
-    /// slot stays empty and the generation is left unstamped so the build retries. Generation zero (no
-    /// structure) clears the slot. Determinism replaces caching: the seed is (generation, player number).
+    /// Rebuilds each player's Cue Sheet slot when that player's structure generation changes. The built sheet
+    /// carries the generation it was built from, so the slot is its own record of what has been planned. A sheet
+    /// is built only from a complete structure (visible phrase list equals the announced count); until it
+    /// converges the slot is left alone so the build retries. Generation zero (no structure) clears the slot.
+    /// Determinism replaces caching: the seed is (generation, player number).
     /// </summary>
     private void MaintainSheets()
     {
@@ -363,7 +388,7 @@ public sealed class Director
         {
             var structure = players[slot].Structure;
             var generation = structure.Generation;
-            if (generation == sheetGeneration[slot])
+            if (generation == sheets[slot].StructureGeneration)
             {
                 continue;
             }
@@ -371,13 +396,12 @@ public sealed class Director
             if (generation <= 0)
             {
                 sheets[slot] = default;
-                sheetGeneration[slot] = generation;
                 continue;
             }
 
             if (structure.PhraseCount <= 0 || structure.Phrases.Count != structure.PhraseCount)
             {
-                // Structure not yet complete: keep playing and retry next frame without stamping.
+                // Structure not yet complete: keep playing and retry next frame, leaving the slot as it was.
                 continue;
             }
 
@@ -389,7 +413,6 @@ public sealed class Director
                 generation,
                 playerNumber);
             sheets[slot] = built;
-            sheetGeneration[slot] = generation;
             Trace(() => $"SHEET_BUILT player={playerNumber} generation={generation} marks={built.Marks.Count}");
         }
     }
@@ -407,7 +430,7 @@ public sealed class Director
         }
 
         var slot = focus - 1;
-        if (slot < 0 || slot >= PlayerCount || sheetGeneration[slot] <= 0)
+        if (slot < 0 || slot >= PlayerCount || sheets[slot].StructureGeneration <= 0)
         {
             return false;
         }
@@ -417,24 +440,47 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Answers what the Switcher should perform for a planned Cue Mark (ADR-0020): frozen under Hold —
-    /// an inspection freeze, so the mark performs on release — otherwise the mark's baked cards with the
-    /// ADR-0017 override masks applied. The sheet is never mutated; overrides mask.
+    /// Answers what the Switcher should perform for a planned Cue Mark (ADR-0020): frozen under Hold — an
+    /// inspection freeze, so nothing performs and the mark is left unfired — otherwise the mark's baked cards
+    /// with the one-shot override masks applied. Releasing a Hold does not chase a mark that came due while
+    /// frozen: a Transition only ever leaves on a Runway beat, so the wall waits for the next one. The sheet is
+    /// never mutated; overrides mask. This is the perform-time decision, and it is what consumes a one-shot
+    /// override — <see cref="PeekTransitionIndex"/> is the question to ask when nothing is being performed yet.
     /// </summary>
+    /// <param name="mark">The planned Cue Mark whose Runway has just begun.</param>
+    /// <returns>What to perform, or <see cref="CueDecision.Frozen"/> when the wall is held.</returns>
     public CueDecision DecideCue(CuePlanMark mark)
     {
         return Decide(mark.EffectIndex, mark.TransitionIndex);
     }
 
     /// <summary>
-    /// Answers the Switcher at a Grid Boundary the plan cannot cover: the DJ has looped back over a cue
+    /// Answers which Transition would perform at <paramref name="mark"/> if it came due this instant, without
+    /// performing or consuming anything (ADR-0020: commands go down, questions go up). The Switcher counts a
+    /// mark's Runway backwards from its Impact Point, and a Runway is a property of the Transition that flies
+    /// it — so counting from the plan's baked card while an override is staged would put the Impact beside the
+    /// Cue Mark instead of on it. A read only: the one-shot masks are inspected, never spent, so asking costs
+    /// the operator nothing and <see cref="DecideCue"/> still spends the mask on the frame that performs.
+    /// </summary>
+    /// <param name="mark">The planned Cue Mark whose Runway start is being worked out.</param>
+    /// <returns>The Transition catalog index that would perform this mark.</returns>
+    public int PeekTransitionIndex(CuePlanMark mark)
+    {
+        return holdSelectedTransition || overrideTransitionPending ? nextTransitionIndex : mark.TransitionIndex;
+    }
+
+    /// <summary>
+    /// Answers the Switcher about a Grid Boundary the plan cannot cover: the DJ has looped back over a cue
     /// already performed, so the same cue must not play twice, or the wall has held still for the plan's
     /// widest legal gap. Deals a fresh card and whether to take it here or ride through to the next boundary,
     /// so changes land one to four Grids apart and never further than
     /// <see cref="TrackCueSheet.MaximumGapBeats"/> beats. The Effect already on the wall is excluded, so a cue
     /// taken here always moves it. Frozen under Hold, and when there is no focus or no built sheet.
     /// </summary>
-    /// <param name="boundaryBeat">Absolute Grid Boundary beat the Switcher is standing on.</param>
+    /// <param name="boundaryBeat">
+    /// Absolute Grid Boundary beat being asked about — the beat a cue taken here should land its Impact Point
+    /// on. The Switcher may well be standing a Runway short of it, exactly as it is for a planned mark.
+    /// </param>
     /// <param name="gapGrids">
     /// The gap in Grids performing here would produce, as the Switcher counts it; at
     /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
@@ -465,7 +511,7 @@ public sealed class Director
 
     /// <summary>
     /// The one decision policy behind both questions (ADR-0020): Hold freezes the wall and answers
-    /// no-perform; otherwise the plan-dealt cards pass through the ADR-0017 override masks.
+    /// no-perform; otherwise the plan-dealt cards pass through the one-shot override masks.
     /// </summary>
     private CueDecision Decide(int planEffectIndex, int planTransitionIndex)
     {
@@ -485,9 +531,9 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Applies ADR-0017 override masking to a plan-dealt Effect: a Hold trumps every deal and returns the held
-    /// pick; otherwise a one-shot staged pick replaces exactly this cast and is then consumed; with neither, the
-    /// plan's card plays. A masking read only — the sheet is never mutated.
+    /// Applies override masking to a plan-dealt Effect (ADR-0020): a Hold trumps every deal and returns the
+    /// held pick; otherwise a one-shot staged pick replaces exactly this cue and is then consumed; with neither,
+    /// the plan's card plays. A masking read only — the sheet is never mutated.
     /// </summary>
     private int ResolveEffectOverride(int planEffectIndex)
     {
@@ -506,8 +552,9 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Applies ADR-0017 override masking to a plan-dealt Transition: a Hold trumps every deal; otherwise a
-    /// one-shot staged pick replaces exactly this cast and is then consumed; with neither, the plan's card plays.
+    /// Applies override masking to a plan-dealt Transition (ADR-0020): a Hold trumps every deal; otherwise a
+    /// one-shot staged pick replaces exactly this cue and is then consumed; with neither, the plan's card plays.
+    /// <see cref="PeekTransitionIndex"/> answers the same question without consuming the one-shot.
     /// </summary>
     private int ResolveTransitionOverride(int planTransitionIndex)
     {
@@ -525,27 +572,27 @@ public sealed class Director
         return planTransitionIndex;
     }
 
-    /// <summary>Builds the Effect catalog as descriptors (index + live effective repertoire) for the sheet builder.</summary>
+    /// <summary>Builds the Effect catalog as descriptors — one live effective repertoire per position — for the sheet builder.</summary>
     private IReadOnlyList<EffectDescriptor> BuildEffectDescriptors()
     {
         var effects = controller.effects;
         var descriptors = new EffectDescriptor[effects.Length];
         for (var i = 0; i < effects.Length; i++)
         {
-            descriptors[i] = new EffectDescriptor(i, controller.EffectiveRepertoire(i));
+            descriptors[i] = new EffectDescriptor(controller.EffectiveRepertoire(i));
         }
 
         return descriptors;
     }
 
-    /// <summary>Builds the Transition catalog as descriptors (index + repertoire) for the sheet builder.</summary>
+    /// <summary>Builds the Transition catalog as descriptors — one repertoire per position — for the sheet builder.</summary>
     private IReadOnlyList<TransitionDescriptor> BuildTransitionDescriptors()
     {
         var transitions = controller.transitions;
         var descriptors = new TransitionDescriptor[transitions.Length];
         for (var i = 0; i < transitions.Length; i++)
         {
-            descriptors[i] = new TransitionDescriptor(i, transitions[i].Repertoire);
+            descriptors[i] = new TransitionDescriptor(transitions[i].Repertoire);
         }
 
         return descriptors;
@@ -557,7 +604,7 @@ public sealed class Director
     /// </summary>
     private void ResetReducerMemory()
     {
-        Array.Clear(sheetGeneration, 0, sheetGeneration.Length);
+        Array.Clear(sheets, 0, sheets.Length);
         switcher.Cast(default);
     }
 
@@ -567,12 +614,10 @@ public sealed class Director
         var isSynced = IsSyncedMode;
         var isHeld = controller.TryGetHeldEffectIndex(out _);
         var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
-        var currentBeat = isSynced && controller.beatManager.Timing.Beat is { } beat ? beat : -1;
 
         return new DirectorStatus(
             mode,
             isSynced,
-            currentBeat,
             nextEffectIndex,
             EffectName(nextEffectIndex),
             nextTransitionIndex,
@@ -624,10 +669,7 @@ public sealed class Director
         var transitionRepertoire = controller.transitions[transitionIndex].Repertoire;
         var transitionDurationSeconds = transitionRepertoire.DefaultDurationSeconds;
         Trace(() => $"STANDALONE_TRANSITION_START transition={FormatTransition(transitionIndex)} target={FormatEffect(targetEffectIndex)} durationSeconds={transitionDurationSeconds:0.###}");
-        switcher.StartTransition(
-            targetEffectIndex,
-            transitionIndex,
-            TransitionStartTiming.FromDefaultDuration(Time.time));
+        switcher.StartTransition(targetEffectIndex, transitionIndex, Time.time);
         controller.currentTransition = transitionIndex;
         StageNextChoices();
         standaloneTimer.Set(transitionDurationSeconds + controller.effectTime);
@@ -637,12 +679,16 @@ public sealed class Director
     /// <summary>Stages the next Standalone choices from the stage's current destination effect.</summary>
     private void StageNextChoices()
     {
-        StageNextEffect(switcher.TransitionTargetEffectIndex);
+        AutoStageNextEffect(switcher.TransitionTargetEffectIndex);
         StageNextTransition();
     }
 
-    /// <summary>Stages the next Standalone Effect unless the existing staged choice is held.</summary>
-    private void StageNextEffect(int currentEffectIndex)
+    /// <summary>
+    /// Pulls the next Standalone Effect off the deck unless the existing staged choice is held. Automatic, so
+    /// unlike the operator's <see cref="SetNextEffect"/> it never raises a one-shot override.
+    /// </summary>
+    /// <param name="currentEffectIndex">Effect the stage is heading to, excluded from the pull; negative excludes nothing.</param>
+    private void AutoStageNextEffect(int currentEffectIndex)
     {
         if (holdSelectedEffect)
         {

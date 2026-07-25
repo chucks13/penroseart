@@ -123,7 +123,7 @@ public sealed class DirectorReducerTests
         Assert.That(controller.currentTransition, Is.EqualTo(player2Mark.TransitionIndex));
     }
 
-    // ---- Decision answers (ADR-0017 / ADR-0020) ------------------------------------------------
+    // ---- Decision answers (ADR-0020) -----------------------------------------------------------
 
     /// <summary>Pins the basic question seam: DecideCue returns the baked plan assignment unchanged.</summary>
     [Test]
@@ -138,7 +138,7 @@ public sealed class DirectorReducerTests
         Assert.That(decision.TransitionIndex, Is.EqualTo(mark.TransitionIndex));
     }
 
-    /// <summary>Pins ADR-0017 one-shots: staged Effect and Transition mask one answer, then the plan resumes.</summary>
+    /// <summary>Pins the ADR-0020 one-shots: staged Effect and Transition mask one answer, then the plan resumes.</summary>
     [Test]
     public void OneShotOverridesMaskExactlyOneDecision()
     {
@@ -276,7 +276,7 @@ public sealed class DirectorReducerTests
         var descriptors = new EffectDescriptor[controller.effects.Length];
         for (var i = 0; i < descriptors.Length; i++)
         {
-            descriptors[i] = new EffectDescriptor(i, controller.EffectiveRepertoire(i));
+            descriptors[i] = new EffectDescriptor(controller.EffectiveRepertoire(i));
         }
 
         return descriptors;
@@ -287,7 +287,7 @@ public sealed class DirectorReducerTests
         var descriptors = new TransitionDescriptor[controller.transitions.Length];
         for (var i = 0; i < descriptors.Length; i++)
         {
-            descriptors[i] = new TransitionDescriptor(i, controller.transitions[i].Repertoire);
+            descriptors[i] = new TransitionDescriptor(controller.transitions[i].Repertoire);
         }
 
         return descriptors;

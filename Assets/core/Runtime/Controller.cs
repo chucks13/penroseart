@@ -389,11 +389,13 @@ public class Controller : Singleton<Controller>
     [HideInInspector]
     public TransitionBase[] transitions;
 
-    /// <summary>Mechanical renderer/swapper for the currently staged effect or transition.</summary>
+    /// <summary>Mechanical renderer/swapper for the currently staged effect or transition. Built in Init.</summary>
+    [NonSerialized]
     [HideInInspector]
     public Switcher switcher;
 
-    /// <summary>Decision layer that owns sequencing cadence and stage-directed cues.</summary>
+    /// <summary>Decision layer that owns sequencing cadence and stage-directed cues. Built in Init.</summary>
+    [NonSerialized]
     [HideInInspector]
     public Director director;
 
@@ -843,17 +845,6 @@ public class Controller : Singleton<Controller>
         timer.Set(time);
         timer.Reset();
         effectText.text = effects[currentEffect].Name;
-    }
-
-    /// <summary>Stages a valid catalog Effect for the Director's next grid-driven move.</summary>
-    public void StageNextEffect(int i)
-    {
-        if (i < 0 || i >= effects.Length || director == null)
-        {
-            return;
-        }
-
-        director.SetNextEffect(i);
     }
 
     /// <summary>
@@ -1628,7 +1619,12 @@ public class Controller : Singleton<Controller>
                     bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
                     if (shift)
                     {
-                        StageNextEffect(i);
+                        // The keyboard bank walks past the end of shorter catalogs, so the guard belongs here:
+                        // the Director takes only catalog indices and rejects anything else.
+                        if (i >= 0 && i < effects.Length && director != null)
+                        {
+                            director.SetNextEffect(i);
+                        }
                     }
                     else
                     {
