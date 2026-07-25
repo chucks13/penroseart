@@ -50,14 +50,6 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 
 ## Simplicity and Hard Cuts
 
-- Default to the **smallest change that achieves the goal**. Plain code over clever code.
-- Do not create side-chain implementations of existing system features. Before creating
-  anything new, verify it doesn't already exist or that an existing system could be
-  modified to suit. Only after that verification, and after surfacing the reasoning,
-  create something new.
-- Add structure (abstraction, module, interface, manager) only when it concentrates
-  duplicated rules, scattered changes, or caller-visible complexity that already exists.
-  No speculative abstractions or seams — one adapter is speculation, two are evidence.
 - Make **hard cuts**: when a pattern, name, signature, or structure changes, change it
   everywhere in one pass and delete the old form. **Best pattern, in the best place, once.**
 - This is a personal installation with no installed base. Do not add backwards-compatibility
@@ -66,23 +58,12 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 - Treat "this is low-risk / minimal change / let's keep both for now" as a **smell** when it
   means preserving a second copy of anything. Prefer the decisive refactor that leaves
   exactly one canonical form.
+- Start with the simplest design that serves the **first real production caller**; prefer
+  direct composition of existing code. Tests and prototypes alone do not establish a need
+  for new structure. Applies to tickets, specs, prototypes, and implementation.
+- Prototype approval covers only interfaces exercised by realistic caller examples;
+  unexercised surface remains unapproved.
 - Any diagnostic code warning or above is to be treated as an error and must be either brought up to the user or fixed.
-
-### Caller-First Simplicity
-
-These rules apply to tickets, specs, prototypes, and implementation.
-
-Start with the simplest design that serves the first real production caller. Prefer direct
-composition of existing code. Do not introduce types, modes, factories, resolvers, or
-abstractions for hypothetical needs or merely to restate existing calls; tests and prototypes
-alone do not establish a need.
-
-More structure is justified when it hides demonstrated complexity, concentrates a real rule or
-invariant, or serves actual variation. Before locking it into a spec or writing it, show the
-concrete caller and explain why the simpler composition is insufficient.
-
-Prototype approval covers only interfaces exercised by realistic caller examples; unexercised
-surface remains unapproved.
 
 ## Core Files and Systems
 
@@ -168,9 +149,6 @@ Start with these before adding new structures:
 
 ## Documentation and Workflows
 
-- Issues and PRDs live as markdown files under `.scratch/<feature-slug>/`; see `docs/agents/issue-tracker.md`.
-- Triage state is recorded as a `Status:` line using the canonical strings in `docs/agents/triage-labels.md`.
-- This is a single-context repo: use `CONTEXT.md` and `docs/adr/` for domain vocabulary and decisions; see `docs/agents/domain.md`.
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
 - **Document what you touch:** any symbol you touch or create gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). See `docs/adr/0014-document-what-you-touch.md`.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.
