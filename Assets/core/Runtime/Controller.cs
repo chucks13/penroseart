@@ -319,7 +319,12 @@ public class Controller : Singleton<Controller>
     /// Per-run sink for Director/Switcher sequencing diagnostics. Always on: the traces are
     /// event-driven rather than per-frame, and a session file costs nothing until something
     /// actually happens, so there is no gate to forget to switch on before a run that matters.
+    /// Built in <see cref="Start"/> and closed in <see cref="OnDestroy"/>, so it is runtime state
+    /// rather than authored data: Unity cannot serialize a <see cref="CueLog"/>, and a field it
+    /// silently skips has no business appearing in the Inspector.
     /// </summary>
+    [HideInInspector]
+    [NonSerialized]
     public CueLog cueLog;
 
     /// <summary>UI label listing local IPv4 addresses.</summary>
