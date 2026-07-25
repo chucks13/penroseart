@@ -31,7 +31,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Switching/Director.cs` | Standalone cadence plus Synced planning and decisions: maintains six track-sheet slots, hands the on-air focus player's sheet to the Switcher, and answers due-mark or one-off questions with override-aware `CueDecision` values. |
 | `Assets/core/Switching/TrackCueSheet.cs` | Pure full-track Cue Sheet builder: seeded Effect/Transition bags, baked assignments, drop/fill Anchors, ride-through/performed-transition treatment, post-drop hold, and deterministic `DealAt(...)` starvation deals. |
 | `Assets/core/Switching/Deck.cs` | Rotating card deck used by Standalone effect and transition selection. |
-| `Assets/core/Switching/Switcher.cs` | Holds the handed-over Cue Sheet and check-offs; reads its player's beat/loop lanes, owns Runway/Impact/Tail timing and Grid-start staleness, asks the bound Director for cue decisions, and executes ShowNow/StartTransition/RenderAtTime with no loaded-cue or lock lifecycle. |
+| `Assets/core/Switching/Switcher.cs` | Holds the handed-over Cue Sheet and its permanent check-offs; reads its player's beat lane, owns Runway/Impact/Tail timing and Grid-start staleness, asks the bound Director for cue decisions, and executes StartTransition/RenderAtTime with no cut path and no loaded-cue or lock lifecycle. |
 | `Assets/core/Transitions/TransitionSettings*.cs` | Transition Repertoire/settings assets, code defaults, saved authoring values, and validation. |
 | `Assets/core/ReactiveInputs/drums.cs` | Drum and ring overlay system plus UDP/OSC-style trigger handling. |
 | `Assets/core/Hardware/SerialOut.cs` | USB serial hardware discovery and frame sending for S2 Mini / ESP32 boards. |

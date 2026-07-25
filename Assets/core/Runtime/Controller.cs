@@ -316,8 +316,12 @@ public class Controller : Singleton<Controller>
     public bool configureCompactHudLayout = true;
 
     [Header("Director Debug Logging")]
-    /// <summary>Writes tagged Director/Switcher sequencing diagnostics to the Unity log for post-run debugging.</summary>
-    public bool logDirectorSwitching = false;
+    /// <summary>
+    /// Writes tagged Director/Switcher sequencing diagnostics to the Unity log for post-run debugging.
+    /// Event-driven, not per-frame, so it is cheap enough to leave on while performing. Serialized —
+    /// the scene's saved value wins over this default for a component that already exists.
+    /// </summary>
+    public bool logDirectorSwitching = true;
 
     /// <summary>UI label listing local IPv4 addresses.</summary>
     public TextMeshProUGUI myIPText;
@@ -811,7 +815,9 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Cancels transition playback and immediately starts the effect at the requested catalog index.
+    /// Puts the effect at the requested catalog index on the wall now. Once the Director exists this is
+    /// an operator override that performs a real Transition into it (<see cref="Director.ShowNow"/>);
+    /// only the pre-Director startup fallback still cuts.
     /// </summary>
     public void JumpToEffect(int i, float time)
     {

@@ -277,14 +277,24 @@ public sealed class Director
         }
     }
 
-    /// <summary>Immediate developer/manual effect selection. Resets Standalone Mode cadence and reducer memory.</summary>
+    /// <summary>
+    /// The operator's immediate pick — a keyboard jump, an OSC button, or engaging a Held Effect.
+    /// Performs <paramref name="effectIndex"/> as a real Transition (the staged card, started at this
+    /// instant with no Runway) rather than cutting to it. Fire-and-forget: the plan in force and its
+    /// check-offs are left alone, so the sheet simply resumes at its next unfired Cue Mark.
+    /// <paramref name="durationSeconds"/> re-arms the Standalone cadence.
+    /// </summary>
     public void ShowNow(int effectIndex, float durationSeconds)
     {
-        Trace(() => $"SHOW_NOW effect={FormatEffect(effectIndex)} durationSeconds={durationSeconds:0.###} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
-        switcher.ShowNow(effectIndex);
-        ResetReducerMemory();
+        ValidateEffectIndex(effectIndex);
+        var transitionIndex = nextTransitionIndex;
+        ValidateTransitionIndex(transitionIndex);
+
+        Trace(() => $"SHOW_NOW effect={FormatEffect(effectIndex)} via={FormatTransition(transitionIndex)} durationSeconds={durationSeconds:0.###} synced={controller.beatManager.IsSynced} beat={FormatNullableBeat(controller.beatManager.Timing.Beat)}");
+        switcher.StartTransition(effectIndex, transitionIndex, TransitionStartTiming.FromDefaultDuration(Time.time));
         standaloneTimer.Set(durationSeconds);
         standaloneTimer.Reset();
+        // Restages the following pick and, with it, the Controller's transition mirror.
         StageNextChoices();
     }
 
@@ -439,12 +449,19 @@ public sealed class Director
     /// </summary>
     private CueDecision Decide(int planEffectIndex, int planTransitionIndex)
     {
-        if (controller.TryGetHeldEffectIndex(out _))
+        if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
         {
+            Trace(() => $"DECIDE_FROZEN held={FormatEffect(heldEffectIndex)} planned={FormatEffect(planEffectIndex)}/{FormatTransition(planTransitionIndex)}");
             return CueDecision.Frozen;
         }
 
-        return new CueDecision(ResolveEffectOverride(planEffectIndex), ResolveTransitionOverride(planTransitionIndex));
+        var decision = new CueDecision(ResolveEffectOverride(planEffectIndex), ResolveTransitionOverride(planTransitionIndex));
+        if (decision.EffectIndex != planEffectIndex || decision.TransitionIndex != planTransitionIndex)
+        {
+            Trace(() => $"DECIDE_MASKED planned={FormatEffect(planEffectIndex)}/{FormatTransition(planTransitionIndex)} decided={FormatEffect(decision.EffectIndex)}/{FormatTransition(decision.TransitionIndex)} holdEffect={holdSelectedEffect} holdTransition={holdSelectedTransition}");
+        }
+
+        return decision;
     }
 
     /// <summary>

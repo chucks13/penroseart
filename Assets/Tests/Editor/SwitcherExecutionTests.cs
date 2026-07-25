@@ -257,9 +257,13 @@ public sealed class SwitcherExecutionTests
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "Rolling loop motion preserves the fired check-off.");
     }
 
-    /// <summary>Pins back-cue semantics: backward motion without a rolling loop clears check-offs and re-performs arrival.</summary>
+    /// <summary>
+    /// Pins the permanence of a check-off: a back-cue re-crosses an already-fired mark without a rolling
+    /// loop, and the arrival still does not re-perform. Loop state is not what protects a fired cue —
+    /// nothing does, because a fired cue is simply done for the life of the handover.
+    /// </summary>
     [Test]
-    public void ABackCueWhileNotRollingReperformsTheArrival()
+    public void ABackCueDoesNotReperformAnAlreadyFiredCue()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
@@ -272,8 +276,49 @@ public sealed class SwitcherExecutionTests
         FeedSwitcherFrame(runwayStart - 1, phrases, generation: 1);
         FeedSwitcherFrame(runwayStart, phrases, generation: 1);
 
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The non-looping back-cue cleared check-offs and arrival fired again.");
-        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(mark.EffectIndex));
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "The back-cue re-crossing left the check-off standing.");
+        Assert.That(switcher.FiredMarks[0], Is.True);
+    }
+
+    /// <summary>
+    /// Pins the operator override as a performed move: an immediate pick starts a real Transition into
+    /// the chosen Effect rather than cutting to it.
+    /// </summary>
+    [Test]
+    public void AnOperatorOverrideStartsATransitionRatherThanCutting()
+    {
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(0), "Setup: effect zero is on the wall.");
+
+        director.ShowNow(2, controller.effectTime);
+
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "A transition owns the frame, so nothing was cut.");
+        Assert.That(switcher.Status.SourceEffectIndex, Is.EqualTo(0));
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2));
+        Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(0), "The staged card performs the override.");
+    }
+
+    /// <summary>
+    /// Pins fire-and-forget: an operator override interjects without disturbing the plan in force, so the
+    /// sheet stays cast with its check-offs intact and an already-performed mark never fires a second time.
+    /// </summary>
+    [Test]
+    public void AnOperatorOverrideLeavesTheInForceSheetAndItsCheckOffsAlone()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        var sheet = BuildExecutionSheet(phrases, generation: 1, transitionIndex: 2);
+        var mark = sheet.Marks[0];
+        switcher.Cast(sheet);
+        FeedSwitcherFrame(mark.Beat, phrases, generation: 1);
+        Assert.That(switcher.FiredMarks[0], Is.True, "Setup: the mark performed.");
+
+        director.ShowNow(2, controller.effectTime);
+        // Production frame order: the Director maintains and hands over before the Switcher executes, so
+        // a sheet the override had wiped would be rebuilt here and re-cast with cleared check-offs.
+        FeedDirectorFrame(mark.Beat, phrases, generation: 1);
+
+        Assert.That(switcher.Sheet.StructureGeneration, Is.EqualTo(1), "The override left the plan in force.");
+        Assert.That(switcher.FiredMarks[0], Is.True, "The override did not reset the check-off.");
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(2), "The plan did not snap the wall back off the override.");
     }
 
     /// <summary>Pins frozen decisions: Hold performs nothing and checks nothing off, so release still performs the mark.</summary>

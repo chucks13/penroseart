@@ -112,10 +112,10 @@ public readonly struct TransitionStartTiming
 /// <summary>
 /// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
 /// Director (ADR-0020): each tick it reads BeatManager directly for the sheet player's beat, performs
-/// due Cue Marks so each Impact Point lands on its mark, and checks marks off so a rolling loop never
-/// re-fires one. It owns all Runway/Impact/Tail timing and selects nothing — every decision is asked
-/// of the bound <see cref="Director"/>. It holds no loaded-cue lifecycle, no Lock Point, and no
-/// accept/reject verdict.
+/// due Cue Marks so each Impact Point lands on its mark, and checks marks off permanently, so no
+/// re-crossing — loop, back-cue, or needle-drop — ever re-fires one. It owns all Runway/Impact/Tail
+/// timing and selects nothing — every decision is asked of the bound <see cref="Director"/>. It holds
+/// no loaded-cue lifecycle, no Lock Point, and no accept/reject verdict.
 /// </summary>
 [Serializable]
 public sealed class Switcher
@@ -131,20 +131,22 @@ public sealed class Switcher
     private float transitionDurationSeconds = 1f;
     private float transitionProgress;
 
-    // The one decider (ADR-0020): commands come down (ShowNow, Standalone StartTransition, the sheet
-    // handover); questions go up through director.Decide*. Bound once at startup.
+    // The one decider (ADR-0020): commands come down (the immediate and Standalone StartTransition
+    // pushes, the sheet handover); questions go up through director.Decide*. Bound once at startup.
     private Director director;
 
     // The plan in force and its check-offs. The sheet is immutable and never written to; firedMarks is
     // Switcher execution state only, parallel to sheet.Marks, and lives and dies with the handover.
+    // A check-off is permanent for the life of the handover: nothing but a fresh Cast clears one.
     private TrackCueSheet sheet;
     private bool[] firedMarks = Array.Empty<bool>();
 
-    /// <summary>Sheet player's beat last tick, for backward-motion detection; null before the first read.</summary>
-    private int? previousSheetPlayerBeat;
-
     /// <summary>Last on-air Grid beat observed while recognizing a return to beat one; null before the first read.</summary>
     private int? previousGridBeat;
+
+    // Diagnostics only. Backward beat motion decides nothing now, so this exists purely so a trace can
+    // say that a loop or back-cue went past and left the check-offs standing.
+    private int? previousSheetPlayerBeat;
 
     // Consecutive on-air Grid starts with nothing performed. At the ceiling — the maximum Cue Mark gap
     // expressed in Grids — a loop pinned inside one segment has never crossed a plan mark, so the
@@ -228,19 +230,6 @@ public sealed class Switcher
         Trace(() => $"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
-    /// <summary>Immediately puts an effect on stage, cancelling any in-flight transition.</summary>
-    public void ShowNow(int effectIndex)
-    {
-        ValidateEffectIndex(effectIndex);
-
-        EffectBase.APalette.Change();
-        isTransitioning = false;
-        transitionProgress = 0f;
-        currentEffectIndex = effectIndex;
-        StartEffect(effectIndex);
-        Trace(() => $"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
-    }
-
     /// <summary>
     /// The handover (ADR-0020): takes the Cue Sheet now in force and resets its check-offs. "Cast" hands
     /// over the plan — it does not time a fire; <see cref="Tick"/> performs the marks. Idempotent on the
@@ -259,15 +248,19 @@ public sealed class Switcher
 
         this.sheet = sheet;
         firedMarks = sheet.Marks is { Count: > 0 } marks ? new bool[marks.Count] : Array.Empty<bool>();
-        previousSheetPlayerBeat = null;
         previousGridBeat = null;
+        previousSheetPlayerBeat = null;
         starvedGridStarts = 0;
+        Trace(() => sheet.StructureGeneration > 0
+            ? $"SWITCHER_CAST player={sheet.PlayerNumber} generation={sheet.StructureGeneration} marks={firedMarks.Length} checkOffsCleared"
+            : "SWITCHER_CAST_CLEARED plan=<none>");
     }
 
     /// <summary>
-    /// Executes the plan in force for one frame: performs the due Cue Mark, clears check-offs on a
-    /// back-cue, and escalates staleness to the Director. Called by the Controller each frame after
-    /// <see cref="Director.Tick"/> so a handover always precedes execution in the same frame.
+    /// Executes the plan in force for one frame: performs the due Cue Mark and escalates staleness to
+    /// the Director. Called by the Controller each frame after <see cref="Director.Tick"/> so a handover
+    /// always precedes execution in the same frame. Beat motion is read forward only — a check-off is
+    /// permanent, so backward motion of any kind is simply a stretch of already-performed plan.
     /// </summary>
     public void Tick()
     {
@@ -287,7 +280,7 @@ public sealed class Switcher
 
         // Observed unconditionally so the previous-frame comparison stays coherent even on a frame that fires.
         var gridStarted = ObserveGridStart();
-        ClearCheckOffsOnBackCue(beat, players[slot].Loop.Rolling);
+        TraceBackwardMotion(beat, players[slot].Loop.Rolling);
 
         if (TryPerformDueMark(beat))
         {
@@ -300,12 +293,16 @@ public sealed class Switcher
         }
 
         starvedGridStarts++;
+        Trace(() => $"SWITCHER_GRID_START beat={beat} starved={starvedGridStarts}/{StarvationGridStartCeiling}");
         if (starvedGridStarts < StarvationGridStartCeiling)
         {
             return;
         }
 
         var decision = director.DecideOneOff(beat);
+        Trace(() => decision.Perform
+            ? $"SWITCHER_STARVED beat={beat} oneOff={FormatEffect(decision.EffectIndex)} via={FormatTransition(decision.TransitionIndex)}"
+            : $"SWITCHER_STARVED beat={beat} oneOff=<frozen>");
         if (decision.Perform)
         {
             PerformCue(beat, beat, decision);
@@ -436,33 +433,58 @@ public sealed class Switcher
         if (!decision.Perform)
         {
             // Frozen (Hold): check nothing off, so the mark still performs on release.
+            Trace(() => $"SWITCHER_FROZEN beat={beat} mark[{due}]@{mark.Beat} planned={FormatEffect(mark.EffectIndex)} via={FormatTransition(mark.TransitionIndex)}");
             return false;
         }
 
-        for (var i = 0; i <= due; i++)
+        var skipped = 0;
+        for (var i = 0; i < due; i++)
         {
+            if (!firedMarks[i])
+            {
+                skipped++;
+            }
+
             firedMarks[i] = true;
         }
 
+        firedMarks[due] = true;
+        Trace(() => $"SWITCHER_DUE beat={beat} mark[{due}]@{mark.Beat} planned={FormatEffect(mark.EffectIndex)}/{FormatTransition(mark.TransitionIndex)} decided={FormatEffect(decision.EffectIndex)}/{FormatTransition(decision.TransitionIndex)} skippedCheckOffs={skipped}");
         PerformCue(beat, mark.Beat, decision);
         return true;
     }
 
     /// <summary>
-    /// Clears every check-off when the sheet player's beat moves backward while its loop is not rolling —
-    /// a needle-drop or back-cue, whose arrival re-performs. Rolling backward is a loop, so check-offs are
-    /// kept and the transition does not re-fire. This is the whole loop mechanism (ADR-0020).
+    /// Reports backward movement of the sheet player's beat, and how many check-offs it did not disturb.
+    /// Purely diagnostic: a loop, a back-cue, and a needle-drop all decide nothing here, and this trace is
+    /// how a log shows that the wall stayed where the plan last put it rather than snapping backward.
     /// </summary>
-    private void ClearCheckOffsOnBackCue(int beat, bool loopRolling)
+    private void TraceBackwardMotion(int beat, bool loopRolling)
     {
         var movedBackward = previousSheetPlayerBeat is { } previous && beat < previous;
+        var from = previousSheetPlayerBeat;
         previousSheetPlayerBeat = beat;
-        if (!movedBackward || loopRolling)
+        if (!movedBackward)
         {
             return;
         }
 
-        Array.Clear(firedMarks, 0, firedMarks.Length);
+        Trace(() => $"SWITCHER_BACKWARD from={from} to={beat} loopRolling={loopRolling} checkOffsStanding={CountCheckOffs()}/{firedMarks.Length}");
+    }
+
+    /// <summary>Counts standing check-offs for a trace; called only when diagnostics are enabled.</summary>
+    private int CountCheckOffs()
+    {
+        var fired = 0;
+        foreach (var mark in firedMarks)
+        {
+            if (mark)
+            {
+                fired++;
+            }
+        }
+
+        return fired;
     }
 
     /// <summary>Observes the on-air Grid lane and reports whether it wrapped back to beat one this frame.</summary>
