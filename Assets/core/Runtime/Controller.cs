@@ -840,6 +840,16 @@ public class Controller : Singleton<Controller>
         effectText.text = effects[currentEffect].Name;
     }
 
+    /// <summary>Stages a valid catalog Effect for the Director's next grid-driven move.</summary>
+    public void StageNextEffect(int i)
+    {
+        if (i < 0 || i >= effects.Length || director == null)
+        {
+            return;
+        }
+
+        director.SetNextEffect(i);
+    }
 
     /// <summary>
     /// Resolves <see cref="heldEffect"/> to a playable catalog index, or reports that the wall is free to rotate.
@@ -1585,7 +1595,8 @@ public class Controller : Singleton<Controller>
         EffectBase.APalette.Update();
 
         // 3. Local keyboard/debug input. Escape releases any held effect back to
-        // Random; A-W jump directly to effect indexes; X switches the keyboard bank.
+        // Random; A-W jump directly to effect indexes, while Shift+A-W stages the
+        // same pick for the next grid-driven move; X switches the keyboard bank.
         // Escape is the quick "let it rotate again" key: it sets heldEffect back to
         // the -1 Random sentinel, which the inspector dropdown mirrors as row 0.
         if (Input.GetKeyDown(KeyCode.Escape))
@@ -1609,7 +1620,15 @@ public class Controller : Singleton<Controller>
                 {
                     int button = k - KeyCode.A;
                     int i = (button + (keyboardBase * 23));
-                    JumpToEffect(i, effectTime);
+                    bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                    if (shift)
+                    {
+                        StageNextEffect(i);
+                    }
+                    else
+                    {
+                        JumpToEffect(i, effectTime);
+                    }
                 }
             }
         }
