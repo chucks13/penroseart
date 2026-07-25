@@ -381,6 +381,36 @@ public sealed class SwitcherExecutionTests
         Assert.That(switcher.StarvedGridStarts, Is.Zero, "A performed plan mark resets the staleness window.");
     }
 
+    /// <summary>
+    /// Pins the one-transition-at-a-time rule: a Cue Mark's Impact Point is itself a Grid Boundary, so the
+    /// mark's own arrival trips a Grid start while its Runway is still flying. A wall mid-Transition is not
+    /// stale, so nothing may be asked or granted there — granting would replace the in-flight move and read
+    /// as one transition interrupting another.
+    /// </summary>
+    [Test]
+    public void AGridStartMidTransitionNeitherAsksNorCounts()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        FeedDirectorFrame(focusBeat: 4, phrases, generation: 1);
+        var sheet = ExpectedDirectorSheet(generation: 1);
+        var mark = sheet.Marks[0];
+
+        FeedSwitcherFrame(
+            mark.Beat - controller.transitions[mark.TransitionIndex].Repertoire.RunwayBeats,
+            phrases,
+            generation: 1);
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.LessThan(0), "The mark's Runway is in flight.");
+        var targetMidFlight = switcher.Status.TargetEffectIndex;
+
+        // Every Grid start the Runway could possibly straddle, without ever completing the transition.
+        FeedGridStarts(TrackCueSheet.MaximumStalenessAsks, focusBeat: mark.Beat, phrases, generation: 1);
+
+        Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(targetMidFlight),
+            "No staleness cue replaced the in-flight Transition.");
+        Assert.That(switcher.StarvedGridStarts, Is.Zero,
+            "A Grid start crossed mid-Transition is not a starved one, so it is not counted either.");
+    }
+
     /// <summary>Pins staleness ownership: the Switcher asks each Grid start, and the Director's override decides the granted cue.</summary>
     [Test]
     public void StalenessMakesTheSwitcherAskTheDirectorForACue()

@@ -445,7 +445,7 @@ public sealed class Director
 
         if (sheet.DealStalenessAt(boundaryBeat, ask, askSequence) is not { } dealt)
         {
-            Trace(() => $"DECIDE_DEFICIT_WAIT beat={boundaryBeat} ask={ask} sequence={askSequence}");
+            Trace(() => $"DECIDE_STALENESS_WAIT beat={boundaryBeat} ask={ask} sequence={askSequence}");
             return CueDecision.Frozen;
         }
 

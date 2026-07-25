@@ -301,6 +301,15 @@ public sealed class Switcher
             return;
         }
 
+        if (isTransitioning)
+        {
+            // A wall mid-Transition is not stale — it is visibly moving. A Cue Mark's Impact Point is itself
+            // a Grid Boundary, so without this the mark's own arrival asks for a staleness cue and a granted
+            // one lands on top of the Runway still flying: last-command-wins replaces the in-flight move, and
+            // it reads as one transition interrupting another. Not counted either, for the same reason.
+            return;
+        }
+
         starvedGridStarts++;
         Trace(() => $"SWITCHER_GRID_START beat={beat} starved={starvedGridStarts}/{StarvationGridStartCeiling}");
 
