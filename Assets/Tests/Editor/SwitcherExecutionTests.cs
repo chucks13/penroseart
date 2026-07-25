@@ -366,34 +366,49 @@ public sealed class SwitcherExecutionTests
         FeedDirectorFrame(focusBeat: 4, phrases, generation: 1);
         var sheet = ExpectedDirectorSheet(generation: 1);
         var mark = sheet.Marks[0];
-        FeedGridStarts(3, focusBeat: 4, phrases, generation: 1);
 
+        // Run the deficit up, then cross the plan mark. The ask curve is measured from the last move, so
+        // performing a mark must put the escalation back to the start — otherwise a wall that just changed
+        // would still be treated as stale and get a mandatory cue on top of the one it just performed.
+        FeedGridStarts(3, focusBeat: 4, phrases, generation: 1);
         FeedSwitcherFrame(
             mark.Beat - controller.transitions[mark.TransitionIndex].Repertoire.RunwayBeats,
             phrases,
             generation: 1);
         switcher.RenderAtTime(1_000_000f, out _);
-        var overriddenEffect = mark.EffectIndex == 1 ? 2 : 1;
-        director.SetNextEffect(overriddenEffect);
 
-        FeedGridStarts(3, focusBeat: mark.Beat + 1, phrases, generation: 1);
-
-        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "Three Grid starts after the plan mark remain below a reset ceiling.");
-        Assert.That(director.DecideCue(mark).EffectIndex, Is.EqualTo(overriddenEffect), "No one-off consumed the pending Director override.");
+        Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "The plan mark performed.");
+        Assert.That(switcher.StarvedGridStarts, Is.Zero, "A performed plan mark resets the staleness window.");
     }
 
-    /// <summary>Pins staleness ownership: at the Grid ceiling the Switcher asks the Director, whose override decides the one-off.</summary>
+    /// <summary>Pins staleness ownership: the Switcher asks each Grid start, and the Director's override decides the granted cue.</summary>
     [Test]
-    public void StalenessMakesTheSwitcherAskTheDirectorForAOneOff()
+    public void StalenessMakesTheSwitcherAskTheDirectorForACue()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         FeedDirectorFrame(focusBeat: 4, phrases, generation: 1);
         var sheet = ExpectedDirectorSheet(generation: 1);
-        var dealt = sheet.DealAt(4);
+
+        // The Director declines early asks, so feed exactly as many Grid starts as it takes to be granted one
+        // cue — over-feeding would perform a second and consume the one-shot override twice. Until a cue
+        // performs, nothing resets the count, so the ask number and the ask sequence advance together.
+        var granting = 1;
+        var dealt = default(CuePlanMark);
+        while (granting <= TrackCueSheet.MaximumStalenessAsks)
+        {
+            if (sheet.DealStalenessAt(4, granting, granting) is { } card)
+            {
+                dealt = card;
+                break;
+            }
+
+            granting++;
+        }
+
         var overriddenEffect = dealt.EffectIndex == 1 ? 2 : 1;
         director.SetNextEffect(overriddenEffect);
 
-        FeedGridStarts(TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats, focusBeat: 4, phrases, generation: 1);
+        FeedGridStarts(granting, focusBeat: 4, phrases, generation: 1);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(overriddenEffect), "The Director's one-shot answer wins; the Switcher selected nothing.");
         Assert.That(controller.currentTransition, Is.EqualTo(dealt.TransitionIndex));

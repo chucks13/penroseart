@@ -169,6 +169,14 @@ public readonly struct TrackCueSheet
     public const int MaximumGapBeats = 64;
 
     /// <summary>
+    /// How many staleness asks a deficit gets before <see cref="DealStalenessAt"/> must deal rather than
+    /// wait — the maximum Cue Mark gap expressed in Grids, so the wall can never hold longer than the widest
+    /// gap the plan itself would have produced. The single authority for that count; callers derive from this
+    /// rather than recomputing the division.
+    /// </summary>
+    public const int MaximumStalenessAsks = MaximumGapBeats / GridBeats;
+
+    /// <summary>
     /// Minimum beats a drop-landing Effect holds before the next Cue Mark — a named knob, one Grid for now.
     /// No Cue Mark is placed within this window after a drop landing.
     /// </summary>
@@ -219,18 +227,32 @@ public readonly struct TrackCueSheet
     public int PlayerNumber { get; }
 
     /// <summary>
-    /// Deterministically deals one off-plan Cue Mark at <paramref name="boundaryBeat"/> from fresh bags over
-    /// this sheet's catalogs, without mutating the sheet. Seeded from the sheet's own seed pair and the
-    /// boundary beat, so the identical situation always deals the identical card and nothing observable
-    /// re-rolls. The Director uses this for the starvation guard: a loop pinned inside one segment never
-    /// crosses a plan mark, so at the maximum-gap ceiling it injects one fresh cast here rather than re-firing
-    /// the same mark (which would change nothing on the wall). Valid on any <see cref="Build"/>-produced sheet.
+    /// Answers one staleness ask: deals an off-plan Cue Mark at <paramref name="boundaryBeat"/> from fresh
+    /// bags over this sheet's catalogs, or says to wait for a later ask, without mutating the sheet. Seeded
+    /// from the sheet's own seed pair, the boundary beat, and <paramref name="ask"/> — so the answer is
+    /// reproducible without being constant, which is the whole point: a rolling loop returns to the same
+    /// boundary, and a deal blind to the ask would hand back the card already on the wall every pass.
+    /// Waiting grows less likely as the deficit runs, and at <see cref="MaximumGapBeats"/> worth of asks it
+    /// stops entirely, so the plan's own maximum spacing is also the longest the wall can hold.
+    /// Valid on any <see cref="Build"/>-produced sheet.
     /// </summary>
-    /// <param name="boundaryBeat">Absolute Grid Boundary beat the injected cast lands on; also the deal seed's third dimension.</param>
-    /// <returns>A Cue Mark at <paramref name="boundaryBeat"/> carrying one freshly dealt Effect and Transition index.</returns>
-    public CuePlanMark DealAt(int boundaryBeat)
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat this ask is about; the deal seed's third dimension.</param>
+    /// <param name="ask">Which consecutive ask this is within the current deficit, counting from one. Drives
+    /// how likely waiting is, and nothing else — it restarts at one after every performed cue.</param>
+    /// <param name="askSequence">How many asks the handover has made in total, counting from one. Seeds the
+    /// deal's fourth dimension, and is monotonic precisely so that a loop starving repeatedly at the same
+    /// boundary cannot be dealt the same card twice — <paramref name="ask"/> would repeat, this cannot.</param>
+    /// <returns>A Cue Mark carrying one freshly dealt Effect and Transition index, or null to wait for a later ask.</returns>
+    public CuePlanMark? DealStalenessAt(int boundaryBeat, int ask, int askSequence)
     {
-        var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat);
+        var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat, askSequence);
+        // Drawn before the bags so the wait roll and the card come from one stream rather than two
+        // same-seeded ones. Declines 3-in-4 on the first ask and never on the last.
+        if (rng.Bounded(MaximumStalenessAsks) < MaximumStalenessAsks - ask)
+        {
+            return null;
+        }
+
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
         var effectIndex = effects[effectBag.DealTop()].Index;
@@ -729,11 +751,12 @@ public readonly struct TrackCueSheet
         }
 
         /// <summary>
-        /// Folds a third dimension into the seed for a one-off deterministic deal (the starvation boundary
-        /// beat). A distinct stream from the two-argument build seed, so the off-plan deal never disturbs the
-        /// sheet's own roll.
+        /// Folds two further dimensions into the seed for an off-plan deterministic deal (the staleness
+        /// boundary beat and which ask it is). A distinct stream from the two-argument build seed, so the
+        /// off-plan deal never disturbs the sheet's own roll, and distinct per ask, so a loop asking again at
+        /// the same boundary is not handed the same answer.
         /// </summary>
-        public Rng(int first, int second, int third)
+        public Rng(int first, int second, int third, int fourth)
         {
             unchecked
             {
@@ -741,6 +764,7 @@ public readonly struct TrackCueSheet
                 folded = (folded ^ (uint)first) * 16777619u;
                 folded = (folded ^ (uint)second) * 16777619u;
                 folded = (folded ^ (uint)third) * 16777619u;
+                folded = (folded ^ (uint)fourth) * 16777619u;
                 state = folded == 0u ? 0x9E3779B9u : folded;
             }
         }

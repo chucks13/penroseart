@@ -148,11 +148,19 @@ public sealed class Switcher
     // say that a loop or back-cue went past and left the check-offs standing.
     private int? previousSheetPlayerBeat;
 
-    // Consecutive on-air Grid starts with nothing performed. At the ceiling — the maximum Cue Mark gap
-    // expressed in Grids — a loop pinned inside one segment has never crossed a plan mark, so the
-    // Switcher asks the Director for a one-off so the wall never goes stale. Any performed cue resets it.
-    public const int StarvationGridStartCeiling = TrackCueSheet.MaximumGapBeats / TrackCueSheet.GridBeats;
+    // Consecutive on-air Grid starts with nothing performed. Every one of them asks the Director for a cue,
+    // carrying this count; the Director may decline the early ones and cannot decline at the ceiling — the
+    // maximum Cue Mark gap expressed in Grids — so the wall never holds longer than the widest gap the plan
+    // itself would have produced. A decline leaves the count standing; only a performed cue resets it.
+    public const int StarvationGridStartCeiling = TrackCueSheet.MaximumStalenessAsks;
     private int starvedGridStarts;
+
+    // Total staleness asks made, for the life of this Switcher. Monotonic on purpose, and deliberately NOT
+    // cleared by Cast: starvedGridStarts restarts at one after every performed cue, so it cannot seed the
+    // deal — a loop starving twice at one Grid Boundary would ask with the same number both times and be
+    // dealt the same card. Surviving a handover matters too, because focus can flap away from a player and
+    // back to the same sheet identity, which would otherwise replay a seed this Switcher has already used.
+    private int stalenessAskSequence;
 
     /// <summary>
     /// The Cue Sheet in force — the plan this Switcher is performing. A default sheet
@@ -168,8 +176,9 @@ public sealed class Switcher
     public IReadOnlyList<bool> FiredMarks => firedMarks;
 
     /// <summary>
-    /// Consecutive on-air Grid starts with nothing performed. At <see cref="StarvationGridStartCeiling"/> the
-    /// Switcher asks the Director for a one-off.
+    /// Consecutive on-air Grid starts with nothing performed. Every one asks the Director for a cue and
+    /// carries this count, so the Director can decline early asks; at <see cref="StarvationGridStartCeiling"/>
+    /// it can no longer decline. Any performed cue puts this back to zero.
     /// </summary>
     public int StarvedGridStarts => starvedGridStarts;
 
@@ -294,19 +303,22 @@ public sealed class Switcher
 
         starvedGridStarts++;
         Trace(() => $"SWITCHER_GRID_START beat={beat} starved={starvedGridStarts}/{StarvationGridStartCeiling}");
-        if (starvedGridStarts < StarvationGridStartCeiling)
+
+        stalenessAskSequence++;
+        var decision = director.DecideStalenessCue(beat, starvedGridStarts, stalenessAskSequence);
+        Trace(() => decision.Perform
+            ? $"SWITCHER_STALENESS beat={beat} ask={starvedGridStarts}/{StarvationGridStartCeiling} sequence={stalenessAskSequence} cue={FormatEffect(decision.EffectIndex)} via={FormatTransition(decision.TransitionIndex)}"
+            : $"SWITCHER_STALENESS beat={beat} ask={starvedGridStarts}/{StarvationGridStartCeiling} sequence={stalenessAskSequence} cue=<wait>");
+        if (!decision.Perform)
         {
+            // A decline leaves the deficit standing, so the next Grid start asks again with a higher ask.
             return;
         }
 
-        var decision = director.DecideOneOff(beat);
-        Trace(() => decision.Perform
-            ? $"SWITCHER_STARVED beat={beat} oneOff={FormatEffect(decision.EffectIndex)} via={FormatTransition(decision.TransitionIndex)}"
-            : $"SWITCHER_STARVED beat={beat} oneOff=<frozen>");
-        if (decision.Perform)
-        {
-            PerformCue(beat, beat, decision);
-        }
+        // The Impact Point sits one Runway ahead so the Runway starts exactly now and the Transition plays in
+        // full. Anchoring it to the current beat — as this path used to — puts the whole Runway behind the
+        // playhead, which clamps the start time to now and lands progress at 1: a jump cut, every time.
+        PerformCue(beat, beat + transitions[decision.TransitionIndex].Repertoire.RunwayBeats, decision);
     }
 
     /// <summary>

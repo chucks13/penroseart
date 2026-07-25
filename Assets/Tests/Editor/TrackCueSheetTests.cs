@@ -65,48 +65,107 @@ public sealed class TrackCueSheetTests
         }
     }
 
-    [Test]
-    public void DealAtIsDeterministicForTheSameSeedAndBoundaryBeat()
-    {
-        // The starvation one-off deal is a pure function of (sheet seed, boundary beat): the same situation
-        // deals the identical card, both on a repeat call and on a fresh rebuild of the same sheet.
-        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
-        var first = sheet.DealAt(200);
-        var again = sheet.DealAt(200);
-        var rebuilt = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2).DealAt(200);
+    private const int CeilingAsk = TrackCueSheet.MaximumStalenessAsks;
 
-        Assert.That(first.Beat, Is.EqualTo(200), "The dealt mark lands on the boundary beat.");
-        Assert.That(again.EffectIndex, Is.EqualTo(first.EffectIndex));
-        Assert.That(again.TransitionIndex, Is.EqualTo(first.TransitionIndex));
-        Assert.That(rebuilt.EffectIndex, Is.EqualTo(first.EffectIndex), "A rebuilt sheet deals identically.");
-        Assert.That(rebuilt.TransitionIndex, Is.EqualTo(first.TransitionIndex));
+    [Test]
+    public void DealDeficitAtIsDeterministicForTheSameSeedBoundaryAndSequence()
+    {
+        // The staleness deal is a pure function of (sheet seed, boundary beat, ask sequence): the same
+        // situation deals the identical card, both on a repeat call and on a fresh rebuild of the same sheet.
+        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
+        var first = sheet.DealStalenessAt(200, CeilingAsk, askSequence: 1);
+        var again = sheet.DealStalenessAt(200, CeilingAsk, askSequence: 1);
+        var rebuilt = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2)
+            .DealStalenessAt(200, CeilingAsk, askSequence: 1);
+
+        Assert.That(first, Is.Not.Null, "The ceiling ask never waits.");
+        Assert.That(first!.Value.Beat, Is.EqualTo(200), "The dealt mark lands on the boundary beat.");
+        Assert.That(again!.Value.EffectIndex, Is.EqualTo(first.Value.EffectIndex));
+        Assert.That(again.Value.TransitionIndex, Is.EqualTo(first.Value.TransitionIndex));
+        Assert.That(rebuilt!.Value.EffectIndex, Is.EqualTo(first.Value.EffectIndex), "A rebuilt sheet deals identically.");
+        Assert.That(rebuilt.Value.TransitionIndex, Is.EqualTo(first.Value.TransitionIndex));
     }
 
     [Test]
-    public void DealAtNeverMutatesThePlan()
+    public void DealDeficitAtNeverWaitsAtTheCeilingAsk()
+    {
+        // The wall can never hold longer than the plan's own widest gap, so the last ask cannot be declined.
+        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
+        for (var boundaryBeat = 1; boundaryBeat <= 512; boundaryBeat += 16)
+        {
+            Assert.That(sheet.DealStalenessAt(boundaryBeat, CeilingAsk, askSequence: boundaryBeat), Is.Not.Null,
+                $"Ask {CeilingAsk} at beat {boundaryBeat} must deal rather than wait.");
+        }
+    }
+
+    [Test]
+    public void DealDeficitAtWaitsLessOftenAsTheDeficitRuns()
+    {
+        // The escalation Hunter asked for: a decline is likely early and impossible at the ceiling.
+        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
+        var waits = new int[CeilingAsk + 1];
+        var sequence = 0;
+        for (var boundaryBeat = 1; boundaryBeat <= 2048; boundaryBeat += 16)
+        {
+            for (var ask = 1; ask <= CeilingAsk; ask++)
+            {
+                if (sheet.DealStalenessAt(boundaryBeat, ask, ++sequence) is null)
+                {
+                    waits[ask]++;
+                }
+            }
+        }
+
+        Assert.That(waits[CeilingAsk], Is.Zero, "The ceiling ask never waits.");
+        Assert.That(waits[1], Is.GreaterThan(waits[CeilingAsk - 1]),
+            "The first ask waits more often than the second-to-last.");
+    }
+
+    [Test]
+    public void DealDeficitAtDealsAFreshCardWhenTheSameBoundaryStarvesAgain()
+    {
+        // The live defect this replaces: a rolling loop starved twice at one boundary and was dealt the same
+        // card both times, so the second cue transitioned the on-air Effect to itself and moved nothing.
+        // The ask number repeats across deficits; the ask sequence does not, which is what breaks the tie.
+        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
+        var cards = new HashSet<(int Effect, int Transition)>();
+        for (var sequence = 1; sequence <= 8; sequence++)
+        {
+            var dealt = sheet.DealStalenessAt(81, CeilingAsk, sequence);
+            Assert.That(dealt, Is.Not.Null);
+            cards.Add((dealt!.Value.EffectIndex, dealt.Value.TransitionIndex));
+        }
+
+        Assert.That(cards.Count, Is.GreaterThan(1),
+            "Repeated starvation at one boundary must not keep dealing a single card.");
+    }
+
+    [Test]
+    public void DealDeficitAtNeverMutatesThePlan()
     {
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
         var before = sheet.Marks.Select(m => (m.Beat, m.EffectIndex, m.TransitionIndex)).ToArray();
 
-        sheet.DealAt(200);
-        sheet.DealAt(48);
-        sheet.DealAt(415);
+        sheet.DealStalenessAt(200, CeilingAsk, askSequence: 1);
+        sheet.DealStalenessAt(48, CeilingAsk, askSequence: 2);
+        sheet.DealStalenessAt(415, CeilingAsk, askSequence: 3);
 
         var after = sheet.Marks.Select(m => (m.Beat, m.EffectIndex, m.TransitionIndex)).ToArray();
-        Assert.That(after, Is.EqualTo(before), "DealAt deals from fresh local bags and never touches the sheet's plan.");
+        Assert.That(after, Is.EqualTo(before), "The deal comes from fresh local bags and never touches the sheet's plan.");
     }
 
     [Test]
-    public void DealAtYieldsIndicesInsideBothCatalogs()
+    public void DealDeficitAtYieldsIndicesInsideBothCatalogs()
     {
         var effects = MixedEffects();
         var transitions = MixedTransitions();
         var sheet = TrackCueSheet.Build(MixedTrack(), effects, transitions, 7, 2);
         foreach (var boundaryBeat in new[] { 16, 97, 200, 370, 456 })
         {
-            var dealt = sheet.DealAt(boundaryBeat);
-            Assert.That(dealt.EffectIndex, Is.InRange(0, effects.Count - 1));
-            Assert.That(dealt.TransitionIndex, Is.InRange(0, transitions.Count - 1));
+            var dealt = sheet.DealStalenessAt(boundaryBeat, CeilingAsk, askSequence: boundaryBeat);
+            Assert.That(dealt, Is.Not.Null);
+            Assert.That(dealt!.Value.EffectIndex, Is.InRange(0, effects.Count - 1));
+            Assert.That(dealt.Value.TransitionIndex, Is.InRange(0, transitions.Count - 1));
         }
     }
 

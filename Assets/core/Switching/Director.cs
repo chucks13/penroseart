@@ -108,8 +108,9 @@ public readonly struct CueDecision
 /// Decides what plays; it never times a fire (ADR-0011, ADR-0020). In Synced Mode it builds one
 /// track-scoped <see cref="TrackCueSheet"/> per player the moment that player's structure generation
 /// changes, hands the on-air focus player's sheet to the <see cref="Switcher"/> every tick (an idempotent
-/// Cast), and answers the Switcher's questions — a planned mark's masked cards, or a fresh one-off deal
-/// when the wall has gone stale. It holds no Runway arithmetic, follows no position, observes no Grid,
+/// Cast), and answers the Switcher's questions — a planned mark's masked cards, or whether to deal a fresh
+/// card at all once the wall has gone stale, which it is asked at every Grid start of a deficit and can
+/// decline until the plan's own maximum spacing. It holds no Runway arithmetic, follows no position, observes no Grid,
 /// and keeps no cast memory: execution belongs wholly to the Switcher. Standalone Mode (timer-driven,
 /// no wire) is unchanged.
 /// </summary>
@@ -427,19 +428,27 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Answers the Switcher's staleness escalation: nothing has performed for the whole starvation
-    /// window, so deal one fresh off-plan card from the on-air focus player's sheet at
-    /// <paramref name="beat"/> and mask it like any other deal. Frozen under Hold, and when there is no
-    /// focus or no built sheet.
+    /// Answers one of the Switcher's staleness asks: nothing has performed for <paramref name="ask"/>
+    /// consecutive Grid starts, so either deal a fresh off-plan card from the on-air focus player's sheet at
+    /// <paramref name="boundaryBeat"/> and mask it like any other deal, or decline so the wall holds and the
+    /// Switcher asks again at the next Grid start. Declining grows less likely as the deficit runs and stops
+    /// at the plan's own maximum Cue Mark spacing, so the wall can never hold longer than the widest gap the
+    /// plan itself would have produced. Frozen under Hold, and when there is no focus or no built sheet — a
+    /// Hold therefore outlasts the ceiling, which is what holding means.
     /// </summary>
-    public CueDecision DecideOneOff(int beat)
+    public CueDecision DecideStalenessCue(int boundaryBeat, int ask, int askSequence)
     {
         if (!TryResolveFocusSheet(out var sheet))
         {
             return CueDecision.Frozen;
         }
 
-        var dealt = sheet.DealAt(beat);
+        if (sheet.DealStalenessAt(boundaryBeat, ask, askSequence) is not { } dealt)
+        {
+            Trace(() => $"DECIDE_DEFICIT_WAIT beat={boundaryBeat} ask={ask} sequence={askSequence}");
+            return CueDecision.Frozen;
+        }
+
         return Decide(dealt.EffectIndex, dealt.TransitionIndex);
     }
 
