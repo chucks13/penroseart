@@ -1,6 +1,10 @@
 # The Switcher executes a handed-over Cue Sheet; the Director never times a cast
 
-Status: accepted, amended — supersedes ADR-0019
+Status: superseded by ADR-0021
+
+This ADR supersedes ADR-0019's Director/Switcher split, and is itself superseded by ADR-0021, which extracts the two
+rulings that survive its own reversing amendments. Read for the record: the sections below argue with each other,
+and the Standby Cue and Missed Cue they describe are no longer in the code.
 
 The Director builds one track-scoped Cue Sheet per player at track load and hands the on-air player's sheet to the Mechanical Switcher when the focus changes; the Switcher executes that sheet against the on-air beat, owning Runway, Impact Point, and Tail, and checking off each Cue Mark as it fires. ADR-0019 split transition timing across both — the Director computed each mark's Runway start in order to decide when to Cast — which placed a second, invisible boundary inside every segment, so a loop straddling one re-fired the same Transition every pass. Runway is transition timing: it belongs wholly to the Switcher, and the Director selects Performers without timing anything.
 

@@ -1,5 +1,7 @@
 # Wire facts are never dropped and never duplicated
 
+Status: accepted
+
 BeatManager's surface had grown five spellings of some facts ("next beat" ×4, "on beat"
 ×6) as each interface generation re-wrapped the same wire data under new names — while
 other wire facts faced the opposite failure: dropped because "nobody is using it."

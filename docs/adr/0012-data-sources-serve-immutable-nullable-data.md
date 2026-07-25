@@ -1,5 +1,7 @@
 # Data sources serve immutable, availability-honest data
 
+Status: accepted
+
 A **data source** — a system whose job is to publish observations for any consumer to read, as BeatManager publishes musical truth — serves them **immutable** (reads cannot write), **availability-honest**, and **unrestricted** (consumers may read and combine them freely). `null` is appropriate when absence is a real, ordinary state the caller may need to distinguish, as with optional wire facts. A usable signal may instead expose a total response with a documented rest/default, while required configuration fails visibly when absent. This corrects the 2026-07-10 decision's overgeneralization of ADR-0002: its nullable-query pattern belongs to optional musical facts, not every value or API in the application.
 
 ## Scope (2026-07-25)

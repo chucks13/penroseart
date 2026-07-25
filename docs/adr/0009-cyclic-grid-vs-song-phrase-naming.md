@@ -1,5 +1,7 @@
 # Name the cyclic 16-beat unit "Grid", keep song-structure "Phrase"
 
+Status: accepted
+
 The timing layer carried a one-letter twin: `PhaseInfo` (the wall's cyclic 16-beat unit, read by effects) versus `PhraseInfo` (the song-structure section). They are different concepts from different registers, they co-occur in the same Switching signatures (`CuePlanner`, `OnAirTiming`, and `Director` each carry a `PhaseReading` *and* a `PhraseWindow`), and "phase"/"phrase" are trivially fat-fingered. We renamed the **cyclic** family `Phase*` → `Grid*` and kept `Phrase*`, because "phrase" is the canonical song-structure term (Pioneer PSSI / Rekordbox; RaveSystem is itself migrating its wire toward `phrase_state`), whereas the wall's 16-beat "Phase" is a PenroseArt-coined cyclic-position term with no external anchor — so the source-of-truth-aligned move is to rename the coined side, not the borrowed one.
 
 ## Scope

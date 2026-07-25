@@ -1,5 +1,7 @@
 # The Director is a wire-change reducer; the planning layer is deleted
 
+Status: accepted
+
 The Synced Mode decision path had grown a per-frame planning layer that re-derived phrase windows from arithmetic and answered "can this cue still change?" in four places (the CuePlanner's timing verdict and commit memory, a Switcher re-check, and a second lock clock in seconds), with every frame-ticked consumer growing its own already-did-it latch — and a beat-lane-fresh/phrase-lane-stale snapshot could re-roll a Cue Sheet mid-phrase. We replace the layer with a small reducer: the Director wakes once per new beat, keeps exactly two Cue Sheets alive by repair, casts a Cue when a Grid carrying a Cue Mark begins, and hands it to the Switcher, which alone owns commitment. Wire values changing — not re-derived arithmetic — drive every decision.
 
 ## One wake per beat

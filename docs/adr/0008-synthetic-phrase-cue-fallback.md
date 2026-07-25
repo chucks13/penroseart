@@ -1,6 +1,8 @@
 # Beat-only mode cues from a synthetic phrase window, not real Track Phase
 
-_Superseded by ADR-0010 (2026-07-04)._
+Status: superseded by ADR-0010
+
+_Superseded by ADR-0010 (2026-07-04); further narrowed to historical-only by ADR-0019 (2026-07-24)._
 
 Tracks loaded on the Pioneer gear may or may not carry preprocessed Track Phase data, but a phrase-less track still broadcasts a usable clock (beat, beat-in-bar, total beats, bpm). Today that case — On-Air Timing's beat-only frame with no Track Phase (the `TrackPhaseActive == -1` branch in `CuePlanner.Plan`) — produces an unlocked frame with no Cue Mark, so the Director idles in Synced Mode and issues no cues for the whole track, waiting for phrase data that may never arrive. We keep cueing in this fallback by synthesizing a rolling 64-beat phrase window from the running 4-count grid and feeding it through the existing `CueSheet.Build`, so beat-only sequencing inherits the real path's cue character instead of going dark. This is a deliberate fallback that holds until a phrase-bearing track loads (ADR-0005 Cue Sheets, ADR-0006 phase determiner, ADR-0007 mode authority).
 

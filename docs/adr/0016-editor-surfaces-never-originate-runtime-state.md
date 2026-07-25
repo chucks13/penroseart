@@ -1,5 +1,7 @@
 # Editor surfaces never originate runtime state
 
+Status: accepted
+
 Dashboards, custom inspectors, property drawers, and other Unity Editor surfaces are downstream mirrors: they display what the runtime core is and are rewritten to follow whatever the core becomes. No runtime member, state, or feature may be created, preserved, or shaped because an editor surface wants to show or control it — an editor-surface need is never a design driver for the core. The Effect **Hold** is a Unity Editor observation affordance: it freezes one effect on the wall through `Controller.heldEffect`, honored by the Director. It does not justify waveform substitution or other inspection state inside musical providers.
 
 ## Amendment — 2026-07-13: inspection scope corrected

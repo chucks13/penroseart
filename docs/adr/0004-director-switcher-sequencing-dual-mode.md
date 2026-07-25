@@ -1,5 +1,7 @@
 # Sequencing gains the Standalone/Synced dual-mode: a Director directs, a Switcher executes
 
+Status: accepted
+
 Effect *rendering* already chooses between Standalone behavior (self-running when OSC data is absent, or when a specific query is null) and Synced Mode (driven by live musical structure through the nullable rhythm queries, ADR-0002); *sequencing* did not — it ran off a single wall-clock timer in `Controller.OnTimerFinished`, which mashed the decision of *what and when* to change together with the *mechanism* of changing. We lift the same duality up to sequencing: a **Director**, polled every frame, owns the cadence and decides what plays and when, and a **Switcher** extracted from `Controller` executes those decisions as pure mechanism. In Synced Mode the Director reads live OSC timing and lands changes on the one; in Standalone Mode, when no OSC data is available, it free-runs its own cadence. This is a preference between two fully intentional modes, not a fallback to a degraded path. The `OnTimerFinished` state machine leaves `Controller`: its decide-half becomes the Director, its execute-half the Switcher.
 
 ## Considered options

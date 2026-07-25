@@ -1,5 +1,7 @@
 # Timing grid and phrase truth come from the OSC v2 wire, not local synthesis
 
+Status: accepted
+
 RaveSystem OSC schema v2 broadcasts source-computed timing that PenroseArt previously reconstructed downstream: a `timing_grid` (locked/coasting/disputed confidence with a 1..16 grid count and 1..4 bar), `phrase_state` and `next_phrase_state` that are **always present** because RaveSystem auto-generates phrases when a track has none, plus `loop_state`, split `energy_state`/`next_energy_state`, and a stable `track_id`. We deleted every local stand-in that guessed these before the wire carried them — GridSync's held-offset determiner, PhraseTracker's next-length guess, the synthetic 64-beat phrase fallback (ADR-0008), CuePlanner grid-anchor coasting, `TrackOrdinal` title-diffing, and the Director→BeatManager grid mirror — and read wire truth instead, because in Synced Mode the source computes this timing better than we can rebuild it and keeping both paths doubles the timing surface for no gain. Standalone Mode is untouched — its wall-clock timer and null off-air queries are mode authority (ADR-0007), not a fallback this replaces.
 
 ## Grid confidence is wire-sourced; GridConfidence lives in the Rhythm layer

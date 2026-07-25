@@ -1,5 +1,7 @@
 # Nullable contrived rhythm queries
 
+Status: accepted
+
 RaveSystem broadcasts 17 `/rave/onair/*` values at 60 Hz; PenroseArt parses all of them
 into `BeatData`, but until now only the beat clock had consumers — energy, track phase,
 drop, fill, and levels arrived, were displayed in the Inspector, and were read by nothing.

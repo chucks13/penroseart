@@ -1,5 +1,7 @@
 # Document what you touch
 
+Status: accepted
+
 Agents read code and its doc comments every session but never write them unprompted, so
 documentation only decays. RaveSystem fixes this by making a missing doc comment a compile
 error; PenroseArt deliberately does not adopt that gate, because the other developer on

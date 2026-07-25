@@ -1,6 +1,6 @@
 # Track-scoped Cue Sheets with baked-in assignments drive Synced Mode
 
-Status: superseded in part by ADR-0020
+Status: accepted
 
 The track-scoped Cue Sheet, its deterministic builder, and selection-behind-the-builder all stand. The Director/Switcher split below does not: "Position is wire-only" and "Decide-at-cast at the last responsible moment" describe a Director that times casts from Runway arithmetic, which ADR-0020 replaces with a handed-over sheet the Switcher executes.
 
@@ -30,4 +30,4 @@ The single new creative seam is `TrackCueSheet.Build`. Grid walk, the two seeded
 - The Switcher's public contract is `Cast` (plus the Standalone seconds path). It holds no cue lifecycle, so callers never mirror or guess commitment.
 - Standalone Mode (timer-driven, no wire) is untouched, and Effects' own live drop/fill reactions via the Data Surface are untouched.
 - Editor surfaces that visualized the phrase-scoped world and the loaded-cue window (Live Timeline, Tuning window) render a degraded view; new track-sheet visualization is a later feature.
-- Supersedes the phrase-scoped empty-Cue-Sheet halves of ADR-0005 and ADR-0011; narrows ADR-0008 (its Synced-mode synthetic-phrase role is gone — Standalone is the only timer-driven fallback). ADR-0017 (performers own artistic decisions) is unchanged: overrides mask the plan, never mutate it.
+- Supersedes the phrase-scoped empty-Cue-Sheet halves of ADR-0005 and ADR-0011; narrows ADR-0008 (its Synced-mode synthetic-phrase role is gone — Standalone is the only timer-driven fallback). ADR-0017 (performers own artistic decisions) is unchanged — Effects and Transitions still own how they respond to the musical facts they read. That an override **masks** the plan rather than mutating it is this ADR's own rule, not ADR-0017's: it follows from the sheet being a pure function of (structure, seed), so nothing an operator does can rewrite a built plan. ADR-0020 refines where the mask is applied (when the Director answers, not when the sheet is built).

@@ -1,5 +1,7 @@
 # Phrase Cue Sheets drive Synced Mode; the Switcher owns cue lifecycle
 
+Status: superseded by ADR-0019
+
 ADR-0004 split musical direction from mechanical execution, but the Synced Mode cue flow still needed sharper ownership: phrase planning belongs to Cue Sheets, cue direction belongs to the Director, and cue lifecycle/execution belongs to the Switcher. We decide that On-Air Timing derives simple per-Phrase Cue Sheets from Phrase length. The Director configures one cue direction at a time for the next Cue Mark: target Cue Mark, destination Performer, and selected Transition. At the cue window, the Director sends that cue direction to the Mechanical Switcher fire-and-forget and records pass-local Cue Mark consumption from its own command. The Switcher holds/schedules the Loaded Cue, derives the Transition-specific Lock Point, refuses conflicting updates once locked, and executes the resulting Armed Cue so the Transition Impact Point lands on the Cue Mark.
 
 This keeps Cue Sheet planning tied to Phrase structure, keeps Effect/Transition casting one cue at a time, and keeps Lock Point, Runway/Tail start/progress mechanics, and Unity-time conversion out of the Director.

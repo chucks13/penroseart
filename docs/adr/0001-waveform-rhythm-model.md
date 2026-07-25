@@ -1,5 +1,7 @@
 # Waveform rhythm model
 
+Status: accepted
+
 We replaced the seven hardcoded `beatVariant` integers with a data-driven **Waveform** model: a one-bar brightness envelope built from Humps merged end-to-end, described by a `sequence` of note-value tokens (`W H Q E S`) and a parallel `amplitude` string (`0–8`), plus per-Waveform `rounding` and phase `offset`. **Waveforms** acquires clock-bound values from a curated Pool; each held value reads its own live envelope. Full model in `docs/waveform-system.md`; terms in `CONTEXT.md`.
 
 ## Humps are concatenated in time, never summed
