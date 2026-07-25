@@ -76,8 +76,9 @@ public enum AnchorTreatment
 /// One placed Cue Mark in a track-scoped plan: the absolute beat the change lands on and the baked-in
 /// Effect and Transition catalog indices selected for it. A mark's Effect plays the segment beginning at
 /// <see cref="Beat"/> until the next mark; its Transition performs the change into that segment.
+/// A reference type so <see cref="Fired"/> can be set on the mark itself rather than tracked beside it.
 /// </summary>
-public readonly struct CuePlanMark
+public sealed class CuePlanMark
 {
     /// <summary>Captures one placed Cue Mark.</summary>
     /// <param name="beat">Absolute one-based track beat the change lands on (a Grid Boundary).</param>
@@ -98,6 +99,13 @@ public readonly struct CuePlanMark
 
     /// <summary>Transition catalog index that performs the change into this mark.</summary>
     public int TransitionIndex { get; }
+
+    /// <summary>
+    /// Whether this cue has been performed. Set once by the Switcher when it fires. A DJ looping brings the
+    /// playhead back over a fired mark, which is how the Switcher knows to ask for a fresh cue instead of
+    /// playing the same one twice.
+    /// </summary>
+    public bool Fired { get; set; }
 }
 
 /// <summary>
@@ -169,12 +177,10 @@ public readonly struct TrackCueSheet
     public const int MaximumGapBeats = 64;
 
     /// <summary>
-    /// How many staleness asks a deficit gets before <see cref="DealStalenessAt"/> must deal rather than
-    /// wait — the maximum Cue Mark gap expressed in Grids, so the wall can never hold longer than the widest
-    /// gap the plan itself would have produced. The single authority for that count; callers derive from this
-    /// rather than recomputing the division.
+    /// The largest legal gap counted in Grid Boundaries rather than beats — how the Switcher measures it,
+    /// because a loop re-crosses the same beat numbers and only boundary crossings measure elapsed music.
     /// </summary>
-    public const int MaximumStalenessAsks = MaximumGapBeats / GridBeats;
+    public const int MaximumGapGrids = MaximumGapBeats / GridBeats;
 
     /// <summary>
     /// Minimum beats a drop-landing Effect holds before the next Cue Mark — a named knob, one Grid for now.
@@ -187,7 +193,7 @@ public readonly struct TrackCueSheet
 
     // Retained so the sheet can deal one off-plan card deterministically without the live build-time bags: the
     // catalogs it dealt from and its seed pair. These keep the value pure — descriptors are index+repertoire
-    // structs with no engine references — and let the starvation deal be seeded from the sheet's own seed.
+    // structs with no engine references — and let the off-plan deal be seeded from the sheet's own seed.
     private readonly IReadOnlyList<EffectDescriptor> effects;
     private readonly IReadOnlyList<TransitionDescriptor> transitions;
 
@@ -227,37 +233,47 @@ public readonly struct TrackCueSheet
     public int PlayerNumber { get; }
 
     /// <summary>
-    /// Answers one staleness ask: deals an off-plan Cue Mark at <paramref name="boundaryBeat"/> from fresh
-    /// bags over this sheet's catalogs, or says to wait for a later ask, without mutating the sheet. Seeded
-    /// from the sheet's own seed pair, the boundary beat, and <paramref name="ask"/> — so the answer is
-    /// reproducible without being constant, which is the whole point: a rolling loop returns to the same
-    /// boundary, and a deal blind to the ask would hand back the card already on the wall every pass.
-    /// Waiting grows less likely as the deficit runs, and at <see cref="MaximumGapBeats"/> worth of asks it
-    /// stops entirely, so the plan's own maximum spacing is also the longest the wall can hold.
-    /// Valid on any <see cref="Build"/>-produced sheet.
+    /// Deals what to do at a Grid Boundary the plan cannot cover: a fresh Effect and Transition, and whether
+    /// to take them here or ride through to the next boundary. Wanted whenever the plan has nothing left to
+    /// give at the playhead — the DJ has looped back over a cue already performed, or an inspection freeze has
+    /// just ended. Taking is dealt so changes land evenly one to four Grids apart, and is certain once
+    /// <paramref name="gapGrids"/> reaches <see cref="MaximumGapGrids"/>, which is what makes holding the wall
+    /// still past <see cref="MaximumGapBeats"/> beats impossible. The card is seeded from the sheet's own seed
+    /// pair, the boundary, and <paramref name="ask"/> only, so it is reproducible and independent of how long
+    /// the wall has held. Leaves the sheet untouched. Valid on any <see cref="Build"/> sheet.
     /// </summary>
-    /// <param name="boundaryBeat">Absolute Grid Boundary beat this ask is about; the deal seed's third dimension.</param>
-    /// <param name="ask">Which consecutive ask this is within the current deficit, counting from one. Drives
-    /// how likely waiting is, and nothing else — it restarts at one after every performed cue.</param>
-    /// <param name="askSequence">How many asks the handover has made in total, counting from one. Seeds the
-    /// deal's fourth dimension, and is monotonic precisely so that a loop starving repeatedly at the same
-    /// boundary cannot be dealt the same card twice — <paramref name="ask"/> would repeat, this cannot.</param>
-    /// <returns>A Cue Mark carrying one freshly dealt Effect and Transition index, or null to wait for a later ask.</returns>
-    public CuePlanMark? DealStalenessAt(int boundaryBeat, int ask, int askSequence)
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat being asked about.</param>
+    /// <param name="gapGrids">
+    /// The gap in Grids that taking this deal would produce — how far the new Impact Point would sit from the
+    /// last one. At <see cref="MaximumGapGrids"/> or beyond the deal is always taken.
+    /// </param>
+    /// <param name="ask">Which ask this is, counting up; the only thing separating one ask from the next.</param>
+    /// <param name="onWallEffectIndex">
+    /// Effect catalog index already on the wall, which the deal will not hand back — an off-plan cue exists to
+    /// move the wall, and a Transition from an Effect to itself moves nothing. Pass a negative index when
+    /// nothing is showing. Honoured unless the catalog has no other card to give.
+    /// </param>
+    /// <returns>The dealt Effect and Transition catalog indices, and whether to take them at this boundary.</returns>
+    public (int EffectIndex, int TransitionIndex, bool Take) DealOffPlanCueAt(
+        int boundaryBeat,
+        int gapGrids,
+        int ask,
+        int onWallEffectIndex)
     {
-        var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat, askSequence);
-        // Drawn before the bags so the wait roll and the card come from one stream rather than two
-        // same-seeded ones. Declines 3-in-4 on the first ask and never on the last.
-        if (rng.Bounded(MaximumStalenessAsks) < MaximumStalenessAsks - ask)
-        {
-            return null;
-        }
-
+        var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat, ask);
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
-        var effectIndex = effects[effectBag.DealTop()].Index;
+        // Local copy because a struct's lambda cannot reach its own fields.
+        var catalog = effects;
+        var effectIndex = catalog[effectBag.DealPreferred(card => catalog[card].Index != onWallEffectIndex)].Index;
         var transitionIndex = transitions[transitionBag.DealTop()].Index;
-        return new CuePlanMark(boundaryBeat, effectIndex, transitionIndex);
+
+        // Gaps still available before the ceiling, so one chance in that many spreads the choice evenly across
+        // them: a quarter at one Grid, a third at two, a half at three, certain at four. Drawn after the cards
+        // so the card never depends on how long the wall has held.
+        var boundariesLeft = MaximumGapGrids - gapGrids + 1;
+        var take = boundariesLeft <= 1 || rng.Bounded(boundariesLeft) == 0;
+        return (effectIndex, transitionIndex, take);
     }
 
     /// <summary>
@@ -737,8 +753,10 @@ public readonly struct TrackCueSheet
     /// </summary>
     private sealed class Rng
     {
+        /// <summary>The xorshift32 register; every draw advances it.</summary>
         private uint state;
 
+        /// <summary>Folds the sheet's seed pair — Structure Generation and player number — into the stream.</summary>
         public Rng(int first, int second)
         {
             unchecked
@@ -751,8 +769,8 @@ public readonly struct TrackCueSheet
         }
 
         /// <summary>
-        /// Folds two further dimensions into the seed for an off-plan deterministic deal (the staleness
-        /// boundary beat and which ask it is). A distinct stream from the two-argument build seed, so the
+        /// Folds two further dimensions into the seed for an off-plan deterministic deal (the boundary beat
+        /// and which ask it is). A distinct stream from the two-argument build seed, so the
         /// off-plan deal never disturbs the sheet's own roll, and distinct per ask, so a loop asking again at
         /// the same boundary is not handed the same answer.
         /// </summary>
@@ -796,8 +814,10 @@ public readonly struct TrackCueSheet
 
     /// <summary>
     /// A seeded shuffled Bag over one catalog's indices, dealt top-down and reshuffled when empty so the
-    /// whole catalog is shown before any card repeats. Anchors scan the Bag for a capable card and encore
-    /// the least-recently-dealt capable card from the discard pile only when the remaining cards have none.
+    /// whole catalog is shown before any card repeats — including across the seam between two passes, where
+    /// the card just dealt is kept off the top of the new permutation. Anchors scan the Bag for a capable
+    /// card and encore the least-recently-dealt capable card from the discard pile only when the remaining
+    /// cards have none; that encore is the one path that can still repeat a card back to back.
     /// </summary>
     private sealed class Bag
     {
@@ -886,9 +906,16 @@ public readonly struct TrackCueSheet
             return card;
         }
 
-        /// <summary>Refills the Bag with a fresh Fisher-Yates permutation and clears the discard pile.</summary>
+        /// <summary>
+        /// Refills the Bag with a fresh Fisher-Yates permutation and clears the discard pile. The card just
+        /// dealt is kept off the top of the new permutation, because the seam between two passes is the one
+        /// place a fair bag can otherwise deal the same card twice running — and for the Effect catalog that
+        /// deals a Transition from a card to itself, which restarts the Effect in place and moves nothing.
+        /// </summary>
         private void Reshuffle()
         {
+            var lastDealt = discard.Count > 0 ? discard[^1] : -1;
+
             remaining.Clear();
             for (var i = 0; i < cardCount; i++)
             {
@@ -899,6 +926,14 @@ public readonly struct TrackCueSheet
             {
                 var j = rng.Bounded(i + 1);
                 (remaining[i], remaining[j]) = (remaining[j], remaining[i]);
+            }
+
+            // Swapped with a rolled position rather than a fixed one, so avoiding the repeat does not itself
+            // bias which card follows it. A one-card catalog has no alternative and keeps the repeat.
+            if (cardCount > 1 && remaining[0] == lastDealt)
+            {
+                var swapWith = 1 + rng.Bounded(cardCount - 1);
+                (remaining[0], remaining[swapWith]) = (remaining[swapWith], remaining[0]);
             }
 
             discard.Clear();

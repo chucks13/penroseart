@@ -180,9 +180,7 @@ public sealed class DirectorReducerTests
         Assert.That(released.TransitionIndex, Is.EqualTo(mark.TransitionIndex));
     }
 
-    private const int CeilingAsk = TrackCueSheet.MaximumStalenessAsks;
-
-    /// <summary>Pins Hold: a held wall makes both cue and staleness questions answer no-perform.</summary>
+    /// <summary>Pins Hold: a held wall makes both the planned and the off-plan question answer no-perform.</summary>
     [Test]
     public void HoldAnswersNoPerform()
     {
@@ -191,52 +189,52 @@ public sealed class DirectorReducerTests
         controller.heldEffect = 1;
 
         var cueDecision = director.DecideCue(new CuePlanMark(beat: 32, effectIndex: 2, transitionIndex: 1));
-        // The ceiling ask, which the plan itself can never decline — so a no-perform here is Hold and nothing else.
-        var deficitDecision = director.DecideStalenessCue(boundaryBeat: 4, ask: CeilingAsk, askSequence: 1);
+        // Asked at the ceiling, where the deal is always taken, so a no-perform here is Hold and nothing else.
+        var offPlanDecision = director.DecideOffPlanCue(32, TrackCueSheet.MaximumGapGrids, ask: 1);
 
         Assert.That(cueDecision.Perform, Is.False);
-        Assert.That(deficitDecision.Perform, Is.False, "Hold outlasts the ceiling; that is what holding means.");
+        Assert.That(offPlanDecision.Perform, Is.False,
+            "Hold outlasts the spacing rule; that is what holding means.");
     }
 
-    /// <summary>Pins the staleness answer: Director deals from the focus sheet at the requested beat.</summary>
+    /// <summary>Pins the off-plan answer: the Director deals from the focus sheet at the boundary it was asked about.</summary>
     [Test]
-    public void DecideStalenessCueAnswersFromTheFocusPlayersSheet()
+    public void DecideOffPlanCueAnswersFromTheFocusPlayersSheet()
     {
         var phrases = new[] { Phrase(1, 64, "intro") };
         FeedFrame(focusBeat: 1, phrases, generation: 1);
+        var boundary = 32;
         var expected = ExpectedSheet(playerSlot: 0, generation: 1)
-            .DealStalenessAt(boundaryBeat: 4, ask: CeilingAsk, askSequence: 1);
+            .DealOffPlanCueAt(boundary, TrackCueSheet.MaximumGapGrids, ask: 1, onWallEffectIndex: switcher.TransitionTargetEffectIndex);
 
-        var decision = director.DecideStalenessCue(boundaryBeat: 4, ask: CeilingAsk, askSequence: 1);
+        var decision = director.DecideOffPlanCue(boundary, TrackCueSheet.MaximumGapGrids, ask: 1);
 
-        Assert.That(expected, Is.Not.Null, "The ceiling ask never waits.");
-        Assert.That(decision.Perform, Is.True);
-        Assert.That(decision.EffectIndex, Is.EqualTo(expected.Value.EffectIndex));
-        Assert.That(decision.TransitionIndex, Is.EqualTo(expected.Value.TransitionIndex));
+        Assert.That(decision.Perform, Is.True, "At the ceiling the deal is taken rather than ridden through.");
+        Assert.That(decision.EffectIndex, Is.EqualTo(expected.EffectIndex));
+        Assert.That(decision.TransitionIndex, Is.EqualTo(expected.TransitionIndex));
     }
 
-    /// <summary>Pins the decline: an early ask can answer no-perform, which is how the wall holds and gets asked again.</summary>
+    /// <summary>
+    /// Pins the Director as memoryless across off-plan asks: the same question always gets the same answer, so
+    /// nothing about a previous loop, track, or handover can leak into this one.
+    /// </summary>
     [Test]
-    public void DecideStalenessCueCanDeclineAnEarlyAsk()
+    public void DecideOffPlanCueRemembersNothingBetweenAsks()
     {
         var phrases = new[] { Phrase(1, 64, "intro") };
         FeedFrame(focusBeat: 1, phrases, generation: 1);
-        var sheet = ExpectedSheet(playerSlot: 0, generation: 1);
 
-        var declined = 0;
-        for (var boundaryBeat = 1; boundaryBeat <= 512; boundaryBeat += 16)
+        var first = director.DecideOffPlanCue(32, gapGrids: 2, ask: 5);
+        for (var i = 0; i < 8; i++)
         {
-            if (!director.DecideStalenessCue(boundaryBeat, ask: 1, askSequence: boundaryBeat).Perform)
-            {
-                declined++;
-            }
-
-            Assert.That(director.DecideStalenessCue(boundaryBeat, ask: CeilingAsk, askSequence: boundaryBeat).Perform,
-                Is.True, $"The ceiling ask at beat {boundaryBeat} must be granted.");
+            director.DecideOffPlanCue(48, gapGrids: 4, ask: i + 100);
         }
 
-        Assert.That(declined, Is.GreaterThan(0), "First asks are declined sometimes; otherwise the escalation is dead.");
-        Assert.That(sheet.Marks, Is.Not.Empty, "Sanity: the focus sheet actually carries a plan.");
+        var again = director.DecideOffPlanCue(32, gapGrids: 2, ask: 5);
+
+        Assert.That(again.Perform, Is.EqualTo(first.Perform));
+        Assert.That(again.EffectIndex, Is.EqualTo(first.EffectIndex));
+        Assert.That(again.TransitionIndex, Is.EqualTo(first.TransitionIndex));
     }
 
     // ---- Standalone ----------------------------------------------------------------------------

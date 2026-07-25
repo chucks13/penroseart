@@ -108,11 +108,10 @@ public readonly struct CueDecision
 /// Decides what plays; it never times a fire (ADR-0011, ADR-0020). In Synced Mode it builds one
 /// track-scoped <see cref="TrackCueSheet"/> per player the moment that player's structure generation
 /// changes, hands the on-air focus player's sheet to the <see cref="Switcher"/> every tick (an idempotent
-/// Cast), and answers the Switcher's questions — a planned mark's masked cards, or whether to deal a fresh
-/// card at all once the wall has gone stale, which it is asked at every Grid start of a deficit and can
-/// decline until the plan's own maximum spacing. It holds no Runway arithmetic, follows no position, observes no Grid,
-/// and keeps no cast memory: execution belongs wholly to the Switcher. Standalone Mode (timer-driven,
-/// no wire) is unchanged.
+/// Cast), and answers the Switcher's two questions — what a planned mark plays, and whether a boundary the
+/// DJ has looped back over gets a fresh cue or is ridden through. It holds no Runway arithmetic, follows no
+/// position, observes no Grid, and keeps no cast memory: execution belongs wholly to the Switcher.
+/// Standalone Mode (timer-driven, no wire) is unchanged.
 /// </summary>
 [Serializable]
 public sealed class Director
@@ -428,24 +427,36 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Answers one of the Switcher's staleness asks: nothing has performed for <paramref name="ask"/>
-    /// consecutive Grid starts, so either deal a fresh off-plan card from the on-air focus player's sheet at
-    /// <paramref name="boundaryBeat"/> and mask it like any other deal, or decline so the wall holds and the
-    /// Switcher asks again at the next Grid start. Declining grows less likely as the deficit runs and stops
-    /// at the plan's own maximum Cue Mark spacing, so the wall can never hold longer than the widest gap the
-    /// plan itself would have produced. Frozen under Hold, and when there is no focus or no built sheet — a
-    /// Hold therefore outlasts the ceiling, which is what holding means.
+    /// Answers the Switcher at a Grid Boundary the plan cannot cover: the DJ has looped back over a cue
+    /// already performed, so the same cue must not play twice, or the wall has held still for the plan's
+    /// widest legal gap. Deals a fresh card and whether to take it here or ride through to the next boundary,
+    /// so changes land one to four Grids apart and never further than
+    /// <see cref="TrackCueSheet.MaximumGapBeats"/> beats. The Effect already on the wall is excluded, so a cue
+    /// taken here always moves it. Frozen under Hold, and when there is no focus or no built sheet.
     /// </summary>
-    public CueDecision DecideStalenessCue(int boundaryBeat, int ask, int askSequence)
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat the Switcher is standing on.</param>
+    /// <param name="gapGrids">
+    /// The gap in Grids performing here would produce, as the Switcher counts it; at
+    /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
+    /// </param>
+    /// <param name="ask">
+    /// Which off-plan ask this is on the current handover. The Director remembers nothing across asks, so this
+    /// is what separates one deal from the next when a loop re-crosses the same boundary.
+    /// </param>
+    public CueDecision DecideOffPlanCue(int boundaryBeat, int gapGrids, int ask)
     {
         if (!TryResolveFocusSheet(out var sheet))
         {
             return CueDecision.Frozen;
         }
 
-        if (sheet.DealStalenessAt(boundaryBeat, ask, askSequence) is not { } dealt)
+        // What the wall is showing, or moving to, is excluded from the deal: an off-plan cue is asked for
+        // precisely because the wall must change, so a card it already holds would answer nothing.
+        var dealt = sheet.DealOffPlanCueAt(
+            boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
+        if (!dealt.Take)
         {
-            Trace(() => $"DECIDE_STALENESS_WAIT beat={boundaryBeat} ask={ask} sequence={askSequence}");
+            Trace(() => $"DECIDE_OFF_PLAN_RIDE beat={boundaryBeat} gapGrids={gapGrids}");
             return CueDecision.Frozen;
         }
 
