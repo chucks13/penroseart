@@ -16,15 +16,14 @@ Unity is the host and simulator. The effect system itself is mostly plain C# so 
 
 ## Runtime loop
 
-The normal animation cycle is:
+The runtime has two sequencing paths:
 
-1. Select an effect from the effect deck.
-2. Play it for `effectTime` seconds.
-3. Select a destination effect and transition.
-4. Transition from the current effect to the destination over `transitionTime` seconds.
-5. Repeat.
+- **Standalone Mode:** select an effect from the rotating deck, play it for `effectTime` seconds, then select a destination effect and transition and repeat.
+- **Synced Mode:** build one complete `TrackCueSheet` for each player's loaded structure, follow `BeatManager.LiveOrder.Focus`, and hand that player's plan to the Switcher with `Switcher.Cast(...)`, which is a handover and fires nothing. The Switcher owns every fire: it asks the Director what the mark whose Runway begins on this beat should play, and the Director masks the baked assignment with any one-shot or held override. If the wall holds still for four Grid Boundaries, or the playhead re-crosses a mark that already fired, `TrackCueSheet.DealOffPlanCueAt(...)` supplies one fresh card without mutating the plan.
 
-Effects and transitions are selected from rotating decks. A card is drawn from the top half of the deck, then moved to the bottom. This gives random variety while reducing immediate repeats.
+Both paths render through the same Switcher, overlays, hardware output, and Unity preview.
+
+Standalone effects and transitions use rotating decks. A card is drawn from the top half of the deck, then moved to the bottom. This gives random variety while reducing immediate repeats.
 
 ## Effect lifecycle
 

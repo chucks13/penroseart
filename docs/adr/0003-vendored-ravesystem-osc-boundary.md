@@ -1,5 +1,7 @@
 # Vendored RaveSystem.Osc boundary
 
+Status: accepted
+
 PenroseArt carries a Unity-compatible copy of the generic `RaveSystem.Osc` library under `Assets/OSC/*.cs`. That code is a compatibility port of a reusable OSC implementation, not the place for Penrose-specific runtime policy. Penrose/Rave application behavior lives beside it in `Assets/OSC/Rave/` and in core consumers such as `Assets/core/IO/RaveOscReceiver.cs` and `Assets/core/Rhythm/BeatManager.cs`. The boundary is easy to blur during urgent live-installation debugging — the generic dispatcher, bundle reader, and timetag code sit close to the symptom — but changing them for Penrose policy mutates an imported library and makes future upstream comparisons harder.
 
 ## `Assets/OSC/*.cs` is a vendored generic library

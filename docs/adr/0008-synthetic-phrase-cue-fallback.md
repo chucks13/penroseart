@@ -1,6 +1,8 @@
 # Beat-only mode cues from a synthetic phrase window, not real Track Phase
 
-_Superseded by ADR-0010 (2026-07-04)._
+Status: superseded by ADR-0010
+
+_Superseded by ADR-0010 (2026-07-04); further narrowed to historical-only by ADR-0019 (2026-07-24)._
 
 Tracks loaded on the Pioneer gear may or may not carry preprocessed Track Phase data, but a phrase-less track still broadcasts a usable clock (beat, beat-in-bar, total beats, bpm). Today that case — On-Air Timing's beat-only frame with no Track Phase (the `TrackPhaseActive == -1` branch in `CuePlanner.Plan`) — produces an unlocked frame with no Cue Mark, so the Director idles in Synced Mode and issues no cues for the whole track, waiting for phrase data that may never arrive. We keep cueing in this fallback by synthesizing a rolling 64-beat phrase window from the running 4-count grid and feeding it through the existing `CueSheet.Build`, so beat-only sequencing inherits the real path's cue character instead of going dark. This is a deliberate fallback that holds until a phrase-bearing track loads (ADR-0005 Cue Sheets, ADR-0006 phase determiner, ADR-0007 mode authority).
 
@@ -27,3 +29,7 @@ A DJ loop (e.g. an 8-bar / 32-beat loop) replays only the front of the synthetic
 ## Amendment 2026-07-04 — superseded by ADR-0010
 
 RaveSystem OSC v2 auto-generates phrases when a track has none, so `phrase_state` is always present in Synced Mode and the beat-only "no Track Phase" branch this ADR fixed no longer occurs. The synthetic phrase window, its rolling re-roll, the distinct Synthetic Phrase timing source, and the stranded-mark loop-grid amendment are all deleted; wire-fed phrase and grid truth replace them (ADR-0010). This ADR is kept for the record of why the fallback existed.
+
+## Amendment 2026-07-24 — narrowed by ADR-0019
+
+ADR-0019 makes Synced Mode plan-driven end to end from the on-air focus player's track-scoped Cue Sheet, and deletes the reactive synced-mode fallbacks entirely. No synthetic-phrase or synced-mode fallback tier remains: Standalone Mode (timer-driven, no wire, ADR-0007) is the only fallback, and a live focus player is by definition playing a structured track. This ADR remains historical only.

@@ -84,106 +84,6 @@ public sealed class TuningWorkspaceLayoutTests
         Assert.That(selection.PinnedIndex, Is.EqualTo(2));
     }
 
-    /// <summary>Before Start, the live header counts down Lock, Start, and End from the current beat.</summary>
-    [Test]
-    public void LiveTimelineFormatsUpcomingTransitionCountdowns()
-    {
-        var cue = new SwitcherCueStatus(true, false, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
-            true,
-            12,
-            SwitcherCueStatus.Empty,
-            cue));
-
-        Assert.That(
-            LiveTimelineRenderer.FormatPendingTimingStatus(model.Pending),
-            Is.EqualTo("LOCK IN 1 · START IN 2 · END IN 7"));
-    }
-
-    /// <summary>The Live header keeps the next Cue visible across the full Cue Sheet gap.</summary>
-    [TestCase(64, "NEXT CUE IN 64 BEATS")]
-    [TestCase(1, "NEXT CUE IN 1 BEAT")]
-    [TestCase(0, "NEXT CUE NOW")]
-    [TestCase(null, "NEXT CUE —")]
-    public void LiveTimelineFormatsNextCueCountdown(int? beatsUntil, string expected)
-    {
-        Assert.That(LiveTimelineRenderer.FormatNextCueCountdown(beatsUntil), Is.EqualTo(expected));
-    }
-
-    /// <summary>The active Transition bar names A, B, and the Transition while counting down to End.</summary>
-    [Test]
-    public void LiveTimelineFormatsActiveTransitionBar()
-    {
-        var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
-            true,
-            15,
-            cue,
-            SwitcherCueStatus.Empty));
-        var switcher = new SwitcherStatus(
-            true,
-            -1,
-            string.Empty,
-            0,
-            "Waves",
-            1,
-            "Fluid",
-            0,
-            "Fade",
-            "Fade",
-            0.75f);
-
-        Assert.That(
-            LiveTimelineRenderer.FormatActiveTransitionLabel(switcher, model.Active),
-            Is.EqualTo("Waves → Fluid · Fade · END IN 4"));
-    }
-
-    /// <summary>At the pending-to-active handoff, the executing Transition retains the Start Now callout.</summary>
-    [Test]
-    public void LiveTimelineFormatsActiveTransitionStartNow()
-    {
-        var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(
-            true,
-            14,
-            cue,
-            SwitcherCueStatus.Empty));
-        var switcher = new SwitcherStatus(
-            true,
-            -1,
-            string.Empty,
-            0,
-            "Waves",
-            1,
-            "Fluid",
-            0,
-            "Fade",
-            "Fade",
-            0f);
-
-        Assert.That(
-            LiveTimelineRenderer.FormatActiveTransitionLabel(switcher, model.Active),
-            Is.EqualTo("Waves → Fluid · Fade · START NOW · END IN 5"));
-    }
-
-    /// <summary>The Live identity comes from the Cue whose timing is rendered, not newly staged Director choices.</summary>
-    [Test]
-    public void LiveTimelineFormatsIdentityFromTheSwitcherCueSnapshot()
-    {
-        var gameObject = new GameObject("Live Cue Identity Test");
-        var controller = gameObject.AddComponent<Controller>();
-        try
-        {
-            var cue = new SwitcherCueStatus(true, true, 117, 2, 1, 113, 114, 119, 3, 2);
-
-            Assert.That(ControllerStatusText.FormatSwitcherCue(controller, cue), Is.EqualTo("#2 · #1"));
-        }
-        finally
-        {
-            Object.DestroyImmediate(gameObject);
-        }
-    }
-
     /// <summary>Narrow and wide Tuning Window layouts survive real Editor repaint events without exceptions.</summary>
     [UnityTest]
     public IEnumerator TuningWindowRendersNarrowAndWideWithoutExceptions()
@@ -221,31 +121,6 @@ public sealed class TuningWorkspaceLayoutTests
             yield return null;
 
             window.position = new Rect(0f, 0f, 900f, BeatManagerDashboardRenderer.DashboardHeightForWidth(900f));
-            window.Repaint();
-            yield return null;
-
-            Assert.That(window.RenderCount, Is.GreaterThan(0));
-            LogAssert.NoUnexpectedReceived();
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    /// <summary>The two-row Live renderer survives narrow and wide Editor repaint events.</summary>
-    [UnityTest]
-    public IEnumerator LiveTimelineRendersNarrowAndWideWithoutExceptions()
-    {
-        var window = ScriptableObject.CreateInstance<LiveTimelineSmokeHost>();
-        try
-        {
-            window.position = new Rect(0f, 0f, 360f, 240f);
-            window.Show();
-            window.Repaint();
-            yield return null;
-
-            window.position = new Rect(0f, 0f, 900f, 240f);
             window.Repaint();
             yield return null;
 
@@ -380,37 +255,5 @@ internal sealed class RhythmDashboardSmokeHost : EditorWindow
         {
             Repaint();
         }
-    }
-}
-
-/// <summary>Hosts the real rolling Live renderer for responsive Editor repaint tests.</summary>
-internal sealed class LiveTimelineSmokeHost : EditorWindow
-{
-    /// <summary>Number of IMGUI events observed by the host.</summary>
-    internal int RenderCount { get; private set; }
-
-    /// <summary>Draws a representative cross-Grid Transition at the host window's current width.</summary>
-    private void OnGUI()
-    {
-        RenderCount++;
-        var activeCue = new SwitcherCueStatus(true, true, 101, 1, 0, 99, 100, 105, 1, 4);
-        var pendingCue = new SwitcherCueStatus(true, false, 117, 2, 1, 112, 113, 117, 4, 0);
-        var model = LiveTimelineProjection.Build(new LiveTimelineInput(true, 1, activeCue, pendingCue, 16));
-        var switcher = new SwitcherStatus(
-            true,
-            -1,
-            string.Empty,
-            0,
-            "ChromaticInterferenceWaves",
-            1,
-            "FluidVoronoiConstellation",
-            0,
-            "IrisTransitionWithLongDescriptiveName",
-            "IrisTransitionWithLongDescriptiveName",
-            0.75f);
-        LiveTimelineRenderer.Draw(
-            model,
-            switcher,
-            "RecursiveCrystalGrowthWithLongDescriptiveName · KaleidoscopicIrisTransition");
     }
 }

@@ -26,7 +26,7 @@ choreography, persistent trails, or a stateful simulation.
 4. Adjust its Runway/Tail settings and implement the A-to-B blend in `Draw()`.
 5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
 
-`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects.
+`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire also participates in track-sheet planning: a `HandlesDrop` or `HandlesFill` Transition can own an Anchor as a performed transition whose Impact lands on the planned beat.
 
 ## Choose a base class
 
@@ -130,11 +130,13 @@ A **Fill** is the build that leads up to a change; a **Drop** is the impact at t
 
 ### 1. Advertise the capability
 
-Override `Repertoire` so the Director can cast this effect into those moments:
+Override `Repertoire` so `TrackCueSheet.Build(...)` can assign this effect to ride through those Anchors:
 
 ```csharp
 public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
 ```
+
+Transitions advertise the same capabilities through `TransitionRepertoire`. The sheet builder chooses per Anchor between a capable Effect riding through the protected window and a capable Transition performing the boundary; runtime casting does not reselect either performer. An override can still replace an Anchor's baked performer at runtime, so the baked cast is a plan, not a guarantee.
 
 ### 2. Find the motion term, and never scale `effectTime`
 

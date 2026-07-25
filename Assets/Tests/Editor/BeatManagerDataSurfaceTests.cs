@@ -135,20 +135,18 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Pulses.On(Duration.Quarter, activeFor: 0.75f), Is.True);
     }
 
-    /// <summary>Track values preserve parsed player order alongside the focused track identity.</summary>
+    /// <summary>Track values preserve the focused track identity.</summary>
     [Test]
-    public void TrackValuesPreservePlayerOrderAndIdentity()
+    public void TrackValuesPreserveIdentity()
     {
         var beatManager = new BeatManager();
         BeatManagerWireFixture.Feed(beatManager, snapshot =>
         {
-            snapshot.playersLive = "2,1";
             snapshot.track = "Artist - Track";
             snapshot.trackId = 7661;
         });
         beatManager.Update(0f);
 
-        Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 2, 1 }));
         Assert.That(beatManager.Track.Title, Is.EqualTo("Artist - Track"));
         Assert.That(beatManager.Track.Id, Is.EqualTo(7661));
     }

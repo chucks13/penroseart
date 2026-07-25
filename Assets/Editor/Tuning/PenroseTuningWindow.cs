@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -136,6 +137,9 @@ public sealed class PenroseTuningWindow : EditorWindow
 
     private Type[] transitionTypes = Array.Empty<Type>();
     private string[] transitionNames = Array.Empty<string>();
+    /// <summary>The live Effect catalog index selected for Director steering.</summary>
+    [SerializeField]
+    private int selectedEffectIndex = -1;
     /// <summary>The catalog index whose saved Transition Settings are currently being edited.</summary>
     [SerializeField]
     private int selectedTransitionIndex = -1;
@@ -151,6 +155,12 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 settingsScroll;
     /// <summary>Scroll position for the live sequencing timeline.</summary>
     private Vector2 liveTimelineScroll;
+    /// <summary>Player slot pinned in the Cue Sheet tracker; -1 follows the on-air focus player.</summary>
+    private int selectedSheetSlot = -1;
+    /// <summary>Playhead row the tracker last saw, so auto-scroll reacts only to row changes.</summary>
+    private int lastPlayheadRow = -1;
+    /// <summary>Visible height of the tracker scroll view, measured on the last repaint.</summary>
+    private float liveViewHeight;
     /// <summary>Scroll position for the rhythm workspace.</summary>
     private Vector2 rhythmScroll;
     private TransitionSettingsAsset selectedAsset;
@@ -276,52 +286,211 @@ public sealed class PenroseTuningWindow : EditorWindow
         return false;
     }
 
-    /// <summary>Draws active A-to-B progress, next-Cue countdowns, and rolling Grid rows.</summary>
+    /// <summary>Draws live switching state, Director steering, and the sticky Cue Sheet tracker.</summary>
     private void DrawLiveTab()
     {
-        if (!LiveControllerAccess.TryGet(out var liveController))
+        if (!LiveControllerAccess.TryGet(out var controller))
         {
             EditorGUILayout.HelpBox(
-                "Live timeline unavailable. Enter Play Mode and wait for the Controller to initialize.",
+                "Cue Sheet tracker unavailable. Enter Play Mode and wait for the Controller to initialize.",
                 MessageType.Info);
             return;
         }
 
-        using var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll);
-        liveTimelineScroll = scroll.scrollPosition;
+        var director = controller.director;
+        var switcher = controller.switcher;
+        var beatManager = controller.beatManager;
+        if (director == null || switcher == null || beatManager == null)
+        {
+            EditorGUILayout.HelpBox("Sequencing runtime is still initializing.", MessageType.Info);
+            return;
+        }
 
-        var timelineInput = CaptureTimelineInput(liveController);
-        EditorGUILayout.LabelField("LIVE TRANSITION", EditorStyles.boldLabel);
-        LiveTimelineRenderer.Draw(
-            LiveTimelineProjection.Build(timelineInput),
-            liveController.SwitcherStatus,
-            ControllerStatusText.FormatSwitcherCue(liveController, timelineInput.PendingCue));
+        TransitionBarRenderer.Draw(switcher.Status);
+        DrawLiveEffectSteering(controller);
+
+        var viewWidth = position.width - 20f;
+        var activeSlot = DrawSheetSlotToolbar(director.Sheets, beatManager);
+        CueSheetTimelineRenderer.DrawHeader(viewWidth);
+
+        IReadOnlyList<CueSheetGridRow> rows = Array.Empty<CueSheetGridRow>();
+        int? playheadRow = null;
+        if (activeSlot >= 0)
+        {
+            var sheet = director.Sheets[activeSlot];
+            var player = beatManager.Players[activeSlot];
+            rows = CueSheetTimeline.Build(
+                sheet, player.Structure, TransitionRepertoiresOf(controller), player.Beat);
+            var row = player.Beat is { } beat ? CueSheetTimeline.RowContaining(rows, beat) : -1;
+            if (row >= 0)
+            {
+                playheadRow = row;
+            }
+        }
+
+        liveTimelineScroll = CueSheetTimelineRenderer.AutoScroll(
+            liveTimelineScroll,
+            playheadRow,
+            lastPlayheadRow >= 0 ? lastPlayheadRow : (int?)null,
+            liveViewHeight);
+        lastPlayheadRow = playheadRow ?? -1;
+
+        using (var scroll = new EditorGUILayout.ScrollViewScope(liveTimelineScroll))
+        {
+            liveTimelineScroll = scroll.scrollPosition;
+            if (rows.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "No Cue Sheet to present. Sheets build once a live player holds a complete track structure.",
+                    MessageType.Info);
+            }
+            else
+            {
+                CueSheetTimelineRenderer.DrawRows(
+                    rows, EffectNamesOf(controller), TransitionNamesOf(controller), viewWidth);
+            }
+        }
+
+        if (Event.current.type == EventType.Repaint)
+        {
+            liveViewHeight = GUILayoutUtility.GetLastRect().height;
+            // Same reason as the Rhythm tab: OnInspectorUpdate's 10 Hz cap would render the
+            // transition rail and playhead in visible steps, so a visible Live repaint schedules
+            // the next one.
+            if (Application.isPlaying)
+            {
+                Repaint();
+            }
+        }
     }
 
-    /// <summary>Captures one frame-coherent set of facts for the rolling live Transition display.</summary>
-    private static LiveTimelineInput CaptureTimelineInput(Controller controller)
+    /// <summary>
+    /// Steers the Director through its existing Effect override contract without owning runtime state.
+    /// </summary>
+    private void DrawLiveEffectSteering(Controller controller)
     {
-        var director = controller.DirectorStatus;
-        var beatManager = controller.beatManager;
-        var nextCueBeatsUntil = beatManager == null
-            ? null
-            : LiveTimelineProjection.FindNextCueBeatsUntil(
-                director.CurrentSheet,
-                beatManager.Phrase.LengthBeats,
-                beatManager.Phrase.BeatsRemaining);
-        var nextCueGridLengthBeats = beatManager == null
-            ? null
-            : LiveTimelineProjection.FindNextCueGridLengthBeats(
-                director.CurrentSheet,
-                beatManager.Phrase.LengthBeats,
-                beatManager.Phrase.BeatsRemaining);
-        return new LiveTimelineInput(
-            director.IsSyncedMode,
-            beatManager?.Grid.Beat,
-            controller.SwitcherActiveCueStatus,
-            controller.SwitcherLoadedCueStatus,
-            nextCueBeatsUntil,
-            nextCueGridLengthBeats);
+        var directorReady = controller.director != null;
+        var directorStatus = controller.DirectorStatus;
+        var effectNames = EffectNamesOf(controller);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            EditorGUILayout.LabelField("Next Effect", GUILayout.Width(70f));
+            selectedEffectIndex = EditorGUILayout.Popup(selectedEffectIndex, effectNames);
+            var validSelection = selectedEffectIndex >= 0 && selectedEffectIndex < effectNames.Length;
+
+            using (new EditorGUI.DisabledScope(!directorReady || !validSelection))
+            {
+                if (GUILayout.Button("Stage Next"))
+                {
+                    controller.director.SetNextEffect(selectedEffectIndex);
+                    Repaint();
+                }
+
+                EditorGUI.BeginChangeCheck();
+                var holdSelected = EditorGUILayout.ToggleLeft(
+                    "Hold Selected",
+                    directorStatus.HoldSelectedEffect);
+                if (EditorGUI.EndChangeCheck() && directorReady)
+                {
+                    if (holdSelected)
+                    {
+                        controller.director.SetNextEffect(selectedEffectIndex);
+                    }
+
+                    controller.director.SetHoldSelectedEffect(holdSelected);
+                    Repaint();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws the slot selector for every player slot holding a sheet, and returns the slot whose sheet the
+    /// tracker presents (-1 when none). Defaults to the on-air focus player until the user pins a slot.
+    /// </summary>
+    private int DrawSheetSlotToolbar(IReadOnlyList<TrackCueSheet> sheets, BeatManager beatManager)
+    {
+        var slots = new List<int>();
+        for (var slot = 0; slot < sheets.Count; slot++)
+        {
+            if (sheets[slot].StructureGeneration != 0)
+            {
+                slots.Add(slot);
+            }
+        }
+
+        var activeSlot = -1;
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (slots.Count == 0)
+            {
+                GUILayout.Label("No Cue Sheets", EditorStyles.miniLabel);
+            }
+            else
+            {
+                var labels = new string[slots.Count];
+                for (var i = 0; i < slots.Count; i++)
+                {
+                    var sheet = sheets[slots[i]];
+                    labels[i] = $"P{sheet.PlayerNumber} · g{sheet.StructureGeneration}";
+                }
+
+                var focusSlot = beatManager.LiveOrder.Focus is { } focus ? focus - 1 : -1;
+                var current = slots.Contains(selectedSheetSlot) ? selectedSheetSlot
+                    : slots.Contains(focusSlot) ? focusSlot
+                    : slots[0];
+                var clicked = GUILayout.Toolbar(
+                    slots.IndexOf(current), labels, EditorStyles.miniButton, GUILayout.ExpandWidth(false));
+                activeSlot = slots[clicked];
+                if (activeSlot != current)
+                {
+                    selectedSheetSlot = activeSlot;
+                }
+            }
+
+        }
+
+        return activeSlot;
+    }
+
+    /// <summary>The Transition catalog's repertoires by catalog index, for Runway/Tail lengths.</summary>
+    private static TransitionRepertoire[] TransitionRepertoiresOf(Controller controller)
+    {
+        var transitions = controller.transitions ?? Array.Empty<TransitionBase>();
+        var repertoires = new TransitionRepertoire[transitions.Length];
+        for (var i = 0; i < transitions.Length; i++)
+        {
+            repertoires[i] = transitions[i] != null ? transitions[i].Repertoire : default;
+        }
+
+        return repertoires;
+    }
+
+    /// <summary>Effect catalog display names by catalog index.</summary>
+    private static string[] EffectNamesOf(Controller controller)
+    {
+        var effects = controller.effects ?? Array.Empty<EffectBase>();
+        var names = new string[effects.Length];
+        for (var i = 0; i < effects.Length; i++)
+        {
+            names[i] = effects[i] != null ? effects[i].Name : "?";
+        }
+
+        return names;
+    }
+
+    /// <summary>Transition catalog display names by catalog index.</summary>
+    private static string[] TransitionNamesOf(Controller controller)
+    {
+        var transitions = controller.transitions ?? Array.Empty<TransitionBase>();
+        var names = new string[transitions.Length];
+        for (var i = 0; i < transitions.Length; i++)
+        {
+            names[i] = transitions[i] != null ? transitions[i].Name : "?";
+        }
+
+        return names;
     }
 
     /// <summary>Draws Transition navigation and settings in a width-appropriate flow.</summary>
@@ -517,13 +686,7 @@ public sealed class PenroseTuningWindow : EditorWindow
                 TransitionSettingsAssetUtility.ApplyConstrainedSettings(selectedSerializedObject);
                 settingsChangedSinceLastSave = true;
                 selectedSerializedObject.Update();
-                settingsProperty = selectedSerializedObject.FindProperty("settings");
-                runwayProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
-                tailProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
             }
-
-            EditorGUILayout.Space(8f);
-            DrawTransitionTimingPreview(liveController, runwayProperty.intValue, tailProperty.intValue);
         }
     }
 
@@ -574,40 +737,6 @@ public sealed class PenroseTuningWindow : EditorWindow
 
             EditorGUILayout.PropertyField(property, includeChildren: true);
         }
-    }
-
-    /// <summary>Draws saved timing on real live placement through the shared timeline projection and renderer.</summary>
-    private static void DrawTransitionTimingPreview(
-        Controller liveController,
-        int runwayBeats,
-        int tailBeats)
-    {
-        EditorGUILayout.LabelField("Timing Preview", EditorStyles.boldLabel);
-        if (liveController == null)
-        {
-            EditorGUILayout.HelpBox(
-                "Enter Play Mode with a live Controller to place saved timing on a real Cue.",
-                MessageType.None);
-            return;
-        }
-
-        var input = CaptureTimelineInput(liveController);
-        if (!LiveTimelineProjection.TryBuildTimingPreview(input, runwayBeats, tailBeats, out var preview))
-        {
-            var reason = !input.IsSynced
-                ? "Synced Grid timing is unavailable."
-                : input.CurrentGridBeat is not (>= 1 and <= CueSheet.GridBeats)
-                    ? "Current Grid position is unavailable."
-                    : !input.PendingCue.HasCue && !input.ActiveCue.HasCue
-                        ? "No Loaded Cue or active Transition provides a real Impact Point."
-                        : "Live Cue timing is unavailable.";
-            EditorGUILayout.HelpBox(reason, MessageType.None);
-            return;
-        }
-
-        LiveTimelineRenderer.DrawTimingPreview(
-            preview,
-            input.PendingCue.HasCue ? "Loaded Cue" : "Active Transition");
     }
 
     /// <summary>Draws explicit Director staging and Hold Selected controls.</summary>

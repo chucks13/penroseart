@@ -12,9 +12,9 @@ using NUnit.Framework;
 /// </summary>
 public sealed class DataSurfaceHygieneTests
 {
-    /// <summary>The captured live-player list cannot be mutated through its runtime collection type.</summary>
+    /// <summary>The captured live order cannot be mutated through its runtime collection type.</summary>
     [Test]
-    public void PlayersLiveCannotBeMutatedViaDowncast()
+    public void LiveOrderCannotBeMutatedViaDowncast()
     {
         var beatManager = new BeatManager();
         var snapshot = BeatClockFixture.CreateSnapshot(bpm: 120f, timeSeconds: 0.25f);
@@ -22,14 +22,13 @@ public sealed class DataSurfaceHygieneTests
         beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0.25f);
 
-        var players = beatManager.Track.PlayersLive;
-        Assert.That(players, Is.Not.Null);
+        var players = beatManager.LiveOrder.Players;
         Assert.That(players, Is.Not.InstanceOf<List<int>>());
 
         var mutableView = players as IList<int>;
         Assert.That(mutableView, Is.Not.Null);
         Assert.Throws<NotSupportedException>(() => mutableView!.Add(8));
-        Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 4, 2 }));
+        Assert.That(beatManager.LiveOrder.Players, Is.EqualTo(new[] { 4, 2 }));
     }
 
     /// <summary>A captured lane value remains stable after BeatManager captures a later frame.</summary>

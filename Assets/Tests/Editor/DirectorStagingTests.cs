@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -17,7 +18,6 @@ public sealed class DirectorStagingTests
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
         EffectBase.LoadPalette(controller.paletteSource);
-        controller.logDirectorSwitching = false;
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
         controller.effects = new EffectBase[] { new TestEffect(), new TestEffect(), new TestEffect() };
@@ -51,7 +51,7 @@ public sealed class DirectorStagingTests
     public void TearDown()
     {
         SetControllerSingleton(null);
-        Object.DestroyImmediate(controllerObject);
+        UnityEngine.Object.DestroyImmediate(controllerObject);
     }
 
     private static void SetControllerSingleton(Controller instance)
@@ -59,18 +59,6 @@ public sealed class DirectorStagingTests
         typeof(Singleton<Controller>)
             .GetField("_instance", BindingFlags.Static | BindingFlags.NonPublic)
             .SetValue(null, instance);
-    }
-
-    [Test]
-    public void ControllerDirectorStatusReportsNotReadyForSerializedStaleDirector()
-    {
-        DirectorStatus status = default;
-        typeof(Director)
-            .GetField("controller", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(director, null);
-
-        Assert.That(() => status = controller.DirectorStatus, Throws.Nothing);
-        Assert.That(status.Mode, Is.EqualTo(DirectorMode.NotReady));
     }
 
     /// <summary>Disabled sequencing diagnostics never resolve their deferred display reads.</summary>
@@ -86,6 +74,22 @@ public sealed class DirectorStagingTests
         });
 
         Assert.That(resolved, Is.False);
+    }
+
+    /// <summary>
+    /// Pins the seam the keyboard's Shift+letter staging goes through: a catalog index stages, and anything
+    /// else is rejected rather than quietly staged. The keyboard bank walks past the end of shorter catalogs,
+    /// so its call site guards on the same range before asking.
+    /// </summary>
+    [Test]
+    public void SetNextEffectStagesACatalogIndexAndRejectsAnythingElse()
+    {
+        director.SetNextEffect(2);
+        Assert.That(director.Status.NextEffectIndex, Is.EqualTo(2), "A valid index stages the Director's next Effect.");
+
+        Assert.That(() => director.SetNextEffect(controller.effects.Length), Throws.TypeOf<ArgumentOutOfRangeException>());
+        Assert.That(() => director.SetNextEffect(-1), Throws.TypeOf<ArgumentOutOfRangeException>());
+        Assert.That(director.Status.NextEffectIndex, Is.EqualTo(2), "A rejected request leaves the staged Effect alone.");
     }
 
     [Test]

@@ -36,12 +36,11 @@ public sealed class LoopValuesTests
         Assert.That(loop.LengthMilliseconds, Is.EqualTo(1875));
         Assert.That(loop.SizeNumerator, Is.EqualTo(4));
         Assert.That(loop.SizeDenominator, Is.EqualTo(1));
-        Assert.That(loop.NominalSizeBeats, Is.EqualTo(4f).Within(0.0001f));
     }
 
-    /// <summary>An idle, set lane preserves its measured and nominal region facts per ADR-0013.</summary>
+    /// <summary>An idle, set lane preserves its measured region facts per ADR-0013.</summary>
     [Test]
-    public void IdleSetLoopPreservesLengthsAndNominalSize()
+    public void IdleSetLoopPreservesItsMeasuredLengths()
     {
         var beatManager = new BeatManager();
         beatManager.FeedWireSnapshot(new RaveWireSnapshot { loopState = new LoopState
@@ -63,7 +62,6 @@ public sealed class LoopValuesTests
         Assert.That(loop.LengthMilliseconds, Is.EqualTo(234));
         Assert.That(loop.SizeNumerator, Is.EqualTo(1));
         Assert.That(loop.SizeDenominator, Is.EqualTo(2));
-        Assert.That(loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
     }
 
     /// <summary>The complete all-sentinel lane rests the flags at false and translates every numeric fact to null.</summary>
@@ -90,12 +88,11 @@ public sealed class LoopValuesTests
         Assert.That(loop.LengthMilliseconds, Is.Null);
         Assert.That(loop.SizeNumerator, Is.Null);
         Assert.That(loop.SizeDenominator, Is.Null);
-        Assert.That(loop.NominalSizeBeats, Is.Null);
     }
 
-    /// <summary>Real zero wire values remain zero while a zero denominator produces no nominal size.</summary>
+    /// <summary>Real zero wire values remain zero rather than translating to the null sentinel.</summary>
     [Test]
-    public void RealZerosRemainZeroWithoutInventingANominalSize()
+    public void RealZerosRemainZero()
     {
         var beatManager = new BeatManager();
         beatManager.FeedWireSnapshot(new RaveWireSnapshot { loopState = new LoopState
@@ -115,6 +112,5 @@ public sealed class LoopValuesTests
         Assert.That(loop.LengthMilliseconds, Is.Zero);
         Assert.That(loop.SizeNumerator, Is.Zero);
         Assert.That(loop.SizeDenominator, Is.Zero);
-        Assert.That(loop.NominalSizeBeats, Is.Null);
     }
 }

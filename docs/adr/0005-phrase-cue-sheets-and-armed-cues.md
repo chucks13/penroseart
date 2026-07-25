@@ -1,5 +1,7 @@
 # Phrase Cue Sheets drive Synced Mode; the Switcher owns cue lifecycle
 
+Status: superseded by ADR-0019
+
 ADR-0004 split musical direction from mechanical execution, but the Synced Mode cue flow still needed sharper ownership: phrase planning belongs to Cue Sheets, cue direction belongs to the Director, and cue lifecycle/execution belongs to the Switcher. We decide that On-Air Timing derives simple per-Phrase Cue Sheets from Phrase length. The Director configures one cue direction at a time for the next Cue Mark: target Cue Mark, destination Performer, and selected Transition. At the cue window, the Director sends that cue direction to the Mechanical Switcher fire-and-forget and records pass-local Cue Mark consumption from its own command. The Switcher holds/schedules the Loaded Cue, derives the Transition-specific Lock Point, refuses conflicting updates once locked, and executes the resulting Armed Cue so the Transition Impact Point lands on the Cue Mark.
 
 This keeps Cue Sheet planning tied to Phrase structure, keeps Effect/Transition casting one cue at a time, and keeps Lock Point, Runway/Tail start/progress mechanics, and Unity-time conversion out of the Director.
@@ -34,6 +36,10 @@ The length-identity reuse from the 2026-07-01 amendment (`CueSheet.Matches`, the
 ## Amendment 2026-07-05 — planning machinery superseded by ADR-0011
 
 The CuePlanner and its lifecycle amendments above (2026-07-01's one-live-sheet rules, 2026-07-04's rebuild-per-phrase-change) are superseded by the wire-change Director: two announcement-keyed Cue Sheet slots (current and next) repaired on every beat, marks empty until Cast at Grid entry, and no pass-local consumption memory — the Director records no decisions. This ADR's ownership split is what survives and still governs: the Cue Sheet is a Phrase timing plan holding no Effect/Transition choices, the Director casts one Cue at a time and sends it fire-and-forget, and the Switcher alone owns Loaded → Locked → Executing.
+
+## Amendment 2026-07-24 — the empty phrase-scoped Cue Sheet is superseded by ADR-0019
+
+The phrase-scoped Cue Sheet this ADR defined — an index of empty Cue Marks over one Phrase, with Effect/Transition choices made one cue at a time — is superseded by ADR-0019's track-scoped Cue Sheet, which bakes Effect and Transition assignments into a full-length plan built once per track load. The Switcher's Loaded → Locked → Executing lifecycle is retired with it: casting is fire-and-forget with no loaded-cue lock protocol. What survives conceptually is the ownership split — planning is not the Switcher's job, and mechanical Runway/Impact/Tail timing is not the Director's.
 
 ## Considered options
 

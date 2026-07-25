@@ -18,7 +18,7 @@ Load these skills via the Skill tool before any other work, every session: `unit
 
 ### Issue tracker
 
-Issues and specs are kept as local, git-ignored markdown under `.scratch/<feature-slug>/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues and specs live in the repo's GitHub Issues (via the `gh` CLI). External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -31,7 +31,7 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 ## Start Here
 
 - `README.md` — current orientation and runtime loop.
-- `CONTEXT.md` — canonical project vocabulary, platform/output notes, and architecture guide.
+- `CONTEXT.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
 - `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
 - `docs/investigation/` — historical research/audit notes; useful context, but not canonical current docs.
@@ -50,14 +50,6 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 
 ## Simplicity and Hard Cuts
 
-- Default to the **smallest change that achieves the goal**. Plain code over clever code.
-- Do not create side-chain implementations of existing system features. Before creating
-  anything new, verify it doesn't already exist or that an existing system could be
-  modified to suit. Only after that verification, and after surfacing the reasoning,
-  create something new.
-- Add structure (abstraction, module, interface, manager) only when it concentrates
-  duplicated rules, scattered changes, or caller-visible complexity that already exists.
-  No speculative abstractions or seams — one adapter is speculation, two are evidence.
 - Make **hard cuts**: when a pattern, name, signature, or structure changes, change it
   everywhere in one pass and delete the old form. **Best pattern, in the best place, once.**
 - This is a personal installation with no installed base. Do not add backwards-compatibility
@@ -66,23 +58,27 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 - Treat "this is low-risk / minimal change / let's keep both for now" as a **smell** when it
   means preserving a second copy of anything. Prefer the decisive refactor that leaves
   exactly one canonical form.
+- Start with the simplest design that serves the **first real production caller**; prefer
+  direct composition of existing code. Tests and prototypes alone do not establish a need
+  for new structure. Applies to tickets, specs, prototypes, and implementation.
+- Prototype approval covers only interfaces exercised by realistic caller examples;
+  unexercised surface remains unapproved.
 - Any diagnostic code warning or above is to be treated as an error and must be either brought up to the user or fixed.
 
-### Caller-First Simplicity
+### Design preflight
 
-These rules apply to tickets, specs, prototypes, and implementation.
+Before designing or adding any new system, abstraction, or module, answer these four
+questions and surface the answers before writing the code:
 
-Start with the simplest design that serves the first real production caller. Prefer direct
-composition of existing code. Do not introduce types, modes, factories, resolvers, or
-abstractions for hypothetical needs or merely to restate existing calls; tests and prototypes
-alone do not establish a need.
+1. **Who is the first real caller?** Name the production caller. Tests and prototypes
+   do not count.
+2. **Which existing seams or modules were inspected, and why can't they be extended?**
+   Name the files you actually read.
+3. **Why is new structure needed?** State what the existing shape cannot express.
+4. **What gets deleted in the same pass?** New structure that leaves a second way to do
+   the same thing is an unfinished hard cut.
 
-More structure is justified when it hides demonstrated complexity, concentrates a real rule or
-invariant, or serves actual variation. Before locking it into a spec or writing it, show the
-concrete caller and explain why the simpler composition is insufficient.
-
-Prototype approval covers only interfaces exercised by realistic caller examples; unexercised
-surface remains unapproved.
+If you cannot answer all four, the change is not designed yet — do not start it.
 
 ## Core Files and Systems
 
@@ -95,10 +91,12 @@ Start with these before adding new structures:
 - `Assets/core/Effects/MixerBase.cs` — base for effects that own child effects and combine or transform their buffers.
 - `Assets/core/Transitions/TransitionBase.cs` — base for transitions between effects and some external-source blend behavior.
 - `Assets/core/helpers/Factory.cs` — reflection-based discovery and instantiation of effect, transition, and blender classes.
-- `Assets/core/helpers/GPalette.cs` and `Assets/core/Rhythm/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope.
+- `Assets/core/helpers/GPalette.cs` and `Assets/core/Rhythm/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope; adding or changing a data surface is not (see below).
 - `Assets/core/Hardware/SerialOut.cs`, `Assets/OSCReader.cs`, `Assets/core/IO/PixelReceiver.cs`, and `Assets/core/ReactiveInputs/drums.cs` — hardware/control/input paths.
 
 `Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it. Small wiring changes needed to connect an approved runtime model change are allowed; broad Controller restructuring still requires explicit approval.
+
+`BeatManager.cs` is the single musical source: no other module re-derives musical facts. Adding or changing any BeatManager data surface requires asking Hunter first, with a proposal that states the musical fact, the consumer that needs it, and why. Do not add a surface speculatively, and do not compute a musical fact locally to avoid the ask.
 
 ## Adding Effects, Transitions, and Blenders
 
@@ -168,9 +166,6 @@ Start with these before adding new structures:
 
 ## Documentation and Workflows
 
-- Issues and PRDs live as markdown files under `.scratch/<feature-slug>/`; see `docs/agents/issue-tracker.md`.
-- Triage state is recorded as a `Status:` line using the canonical strings in `docs/agents/triage-labels.md`.
-- This is a single-context repo: use `CONTEXT.md` and `docs/adr/` for domain vocabulary and decisions; see `docs/agents/domain.md`.
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
 - **Document what you touch:** any symbol you touch or create gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). See `docs/adr/0014-document-what-you-touch.md`.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.

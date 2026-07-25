@@ -1,5 +1,7 @@
 # On-Air Timing is a Phase determiner; PhaseLock holds the one and Phrase wins the grid
 
+Status: superseded by ADR-0011
+
 _Superseded: the determiner half by ADR-0010 (2026-07-04), the CuePlanner half by ADR-0011 (2026-07-05)._
 
 `OnAirTiming.cs` tangles a universal job — determining Phase, "where is the one" on the 16-beat grid — with a Director job: Cue Sheet planning (`CueSheetPlans`, `CueSheetCursor`, and pass-local cue memory round-tripped through the Director every frame). We split them. On-Air Timing becomes a **pure Phase determiner** exposed as two deep modules: a reusable **PhaseLock** core that answers where the one is, and a **PhraseTracker** that rides on it for song structure. Cue Sheet planning moves out to a Director-owned **CuePlanner** (relocating the derivation ADR-0005 placed in On-Air Timing). The full operational design lives in the companion doc `docs/architecture-reviews/on-air-timing-redesign-2026-06-24.html`; this ADR records the decisions and why.

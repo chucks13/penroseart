@@ -38,8 +38,9 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.Pulses.Beat, Is.EqualTo(0.625f).Within(0.0001f));
 
         Assert.That(beatManager.Track.Title, Is.EqualTo("Artist - Track"));
-        Assert.That(beatManager.Track.PlayersLive, Is.EqualTo(new[] { 4, 2 }));
         Assert.That(beatManager.Track.Id, Is.EqualTo(777001));
+        Assert.That(beatManager.LiveOrder.Players, Is.EqualTo(new[] { 4, 2 }));
+        Assert.That(beatManager.LiveOrder.Focus, Is.EqualTo(4));
 
         Assert.That(beatManager.Phrase.Name, Is.EqualTo("Drop"));
         Assert.That(beatManager.Phrase.BeatsRemaining, Is.EqualTo(12));
@@ -73,7 +74,6 @@ public sealed class RaveOscIngestionRoundTripTests
         Assert.That(beatManager.Loop.LengthMilliseconds, Is.EqualTo(938));
         Assert.That(beatManager.Loop.SizeNumerator, Is.EqualTo(1));
         Assert.That(beatManager.Loop.SizeDenominator, Is.EqualTo(2));
-        Assert.That(beatManager.Loop.NominalSizeBeats, Is.EqualTo(0.5f).Within(0.0001f));
 
         Assert.That(beatManager.Grid.State, Is.EqualTo(GridState.Locked));
         Assert.That(beatManager.Grid.Beat, Is.EqualTo(5));

@@ -217,14 +217,6 @@ public class Controller : Singleton<Controller>
     /// <summary>Read-only Mechanical Switcher stage snapshot for inspectors and status displays.</summary>
     public SwitcherStatus SwitcherStatus => switcher != null ? switcher.Status : SwitcherStatus.NotReady;
 
-    /// <summary>Read-only Switcher Cue currently executing on stage.</summary>
-    public SwitcherCueStatus SwitcherActiveCueStatus =>
-        switcher != null ? switcher.ActiveCueStatus : SwitcherCueStatus.Empty;
-
-    /// <summary>Read-only Switcher Cue loaded and waiting to start.</summary>
-    public SwitcherCueStatus SwitcherLoadedCueStatus =>
-        switcher != null ? switcher.LoadedCueStatus : SwitcherCueStatus.Empty;
-
     /// <summary>Latest render-pipeline debug text captured before HUD filtering.</summary>
     public string LastRenderDebugText => lastRenderDebugText;
 
@@ -323,9 +315,17 @@ public class Controller : Singleton<Controller>
     /// <summary>Whether Controller should resize the legacy scene text into a compact non-blocking HUD at startup.</summary>
     public bool configureCompactHudLayout = true;
 
-    [Header("Director Debug Logging")]
-    /// <summary>Writes tagged Director/Switcher sequencing diagnostics to the Unity log for post-run debugging.</summary>
-    public bool logDirectorSwitching = false;
+    /// <summary>
+    /// Per-run sink for Director/Switcher sequencing diagnostics. Always on: the traces are
+    /// event-driven rather than per-frame, and a session file costs nothing until something
+    /// actually happens, so there is no gate to forget to switch on before a run that matters.
+    /// Built in <see cref="Start"/> and closed in <see cref="OnDestroy"/>, so it is runtime state
+    /// rather than authored data: Unity cannot serialize a <see cref="CueLog"/>, and a field it
+    /// silently skips has no business appearing in the Inspector.
+    /// </summary>
+    [HideInInspector]
+    [NonSerialized]
+    public CueLog cueLog;
 
     /// <summary>UI label listing local IPv4 addresses.</summary>
     public TextMeshProUGUI myIPText;
@@ -389,18 +389,15 @@ public class Controller : Singleton<Controller>
     [HideInInspector]
     public TransitionBase[] transitions;
 
-    /// <summary>Mechanical renderer/swapper for the currently staged effect or transition.</summary>
+    /// <summary>Mechanical renderer/swapper for the currently staged effect or transition. Built in Init.</summary>
+    [NonSerialized]
     [HideInInspector]
     public Switcher switcher;
 
-    /// <summary>Decision layer that owns sequencing cadence and stage-directed cues.</summary>
+    /// <summary>Decision layer that owns sequencing cadence and stage-directed cues. Built in Init.</summary>
+    [NonSerialized]
     [HideInInspector]
     public Director director;
-
-    /// <summary>Per-session operator-facing Cue Log sink; a downstream view, created in <see cref="Start"/> and closed in <see cref="OnDestroy"/>.</summary>
-    [HideInInspector]
-    [NonSerialized]
-    public CueLog cueLog;
 
     /// <summary>Scene Penrose model and preview mesh component.</summary>
     [HideInInspector]
@@ -502,13 +499,17 @@ public class Controller : Singleton<Controller>
         return builder.ToString();
     }
 
-    /// <summary>Advances BeatManager, Waveforms, and Director in their required per-frame observation order.</summary>
+    /// <summary>
+    /// Advances BeatManager, Waveforms, Director, and Switcher in their required per-frame observation
+    /// order: the Director's sheet handover always precedes the Switcher's execution in the same frame.
+    /// </summary>
     /// <param name="timeSeconds">Absolute Unity time captured for the current frame.</param>
     /// <param name="deltaTime">Unity frame delta consumed by Standalone Director timing.</param>
     internal void AdvanceFrameTiming(float timeSeconds, float deltaTime)
     {
         beatManager.Update(timeSeconds);
         director.Tick(deltaTime);
+        switcher.Tick();
     }
 
     /// <summary>
@@ -820,7 +821,9 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Cancels transition playback and immediately starts the effect at the requested catalog index.
+    /// Puts the effect at the requested catalog index on the wall now. Once the Director exists this is
+    /// an operator override that performs a real Transition into it (<see cref="Director.ShowNow"/>);
+    /// only the pre-Director startup fallback still cuts.
     /// </summary>
     public void JumpToEffect(int i, float time)
     {
@@ -843,7 +846,6 @@ public class Controller : Singleton<Controller>
         timer.Reset();
         effectText.text = effects[currentEffect].Name;
     }
-
 
     /// <summary>
     /// Resolves <see cref="heldEffect"/> to a playable catalog index, or reports that the wall is free to rotate.
@@ -1376,22 +1378,25 @@ public class Controller : Singleton<Controller>
         return color;
     }
 
-    /// <summary>Unity teardown hook. Closes the per-session Cue Log so its buffered writer flushes and releases the file.</summary>
+    /// <summary>Unity teardown hook. Closes the per-session Cue Log so its writer flushes and releases the file.</summary>
     void OnDestroy()
     {
         cueLog?.Dispose();
     }
 
-    /// <summary>Writes a tagged sequencing diagnostic line to the Unity log when enabled.</summary>
-    /// <param name="message">Deferred trace text, evaluated only when diagnostics are enabled.</param>
+    /// <summary>
+    /// Writes a tagged sequencing diagnostic line to this run's Cue Log session file. Silently drops
+    /// the line when no sink exists — tests construct a bare Controller without running Init().
+    /// </summary>
+    /// <param name="message">Deferred trace text, evaluated only when a sink is present.</param>
     public void LogDirectorSwitching(Func<string> message)
     {
-        if (!logDirectorSwitching)
+        if (cueLog == null)
         {
             return;
         }
 
-        Debug.Log($"[DEBUG-DIR16] frame={Time.frameCount} t={Time.time:0.000} {message()}");
+        cueLog.Write($"frame={Time.frameCount} t={Time.time:0.000} {message()}");
     }
 
     /// <summary>
@@ -1474,16 +1479,15 @@ public class Controller : Singleton<Controller>
             cameraOverlay.Init((int)penrose.Bounds.size.x, (int)penrose.Bounds.size.y, Penrose.Total);
         }
 
-        // Director owns sequencing cadence; Switcher owns only the mechanical in-flight stage state.
-        // The Cue Log is a downstream operator-facing sink (like the Observatory): its session file is created
-        // lazily on the first Cue event and closed in OnDestroy. Grid position is read live off the BeatManager.
+        // Director decides and hands over the Cue Sheet; Switcher executes it and owns transition timing.
+        // The Cue Log is a downstream operator-facing sink: its session file opens lazily on the first
+        // trace and closes in OnDestroy. persistentDataPath is read here because it is main-thread only.
+        cueLog = CueLog.CreateForSession(Path.Combine(Application.persistentDataPath, "Logs"));
         timer = new Timer(effectTime, false);
-        cueLog = CueLog.CreateForSession(
-            Path.Combine(Application.persistentDataPath, "Logs"),
-            () => beatManager != null ? beatManager.Grid : (GridValues?)null);
-        switcher = new Switcher(this, effects, transitions, cueLog);
+        switcher = new Switcher(this, effects, transitions);
         switcher.SetInitialEffect(currentEffect, currentTransition);
-        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition, cueLog);
+        director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
+        switcher.BindDirector(director);
         timer.onFinished += director.OnTimerFinished;
 
         ConfigureRuntimeHud();
@@ -1587,7 +1591,8 @@ public class Controller : Singleton<Controller>
         EffectBase.APalette.Update();
 
         // 3. Local keyboard/debug input. Escape releases any held effect back to
-        // Random; A-W jump directly to effect indexes; X switches the keyboard bank.
+        // Random; A-W jump directly to effect indexes, while Shift+A-W stages the
+        // same pick for the next grid-driven move; X switches the keyboard bank.
         // Escape is the quick "let it rotate again" key: it sets heldEffect back to
         // the -1 Random sentinel, which the inspector dropdown mirrors as row 0.
         if (Input.GetKeyDown(KeyCode.Escape))
@@ -1611,7 +1616,20 @@ public class Controller : Singleton<Controller>
                 {
                     int button = k - KeyCode.A;
                     int i = (button + (keyboardBase * 23));
-                    JumpToEffect(i, effectTime);
+                    bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                    if (shift)
+                    {
+                        // The keyboard bank walks past the end of shorter catalogs, so the guard belongs here:
+                        // the Director takes only catalog indices and rejects anything else.
+                        if (i >= 0 && i < effects.Length && director != null)
+                        {
+                            director.SetNextEffect(i);
+                        }
+                    }
+                    else
+                    {
+                        JumpToEffect(i, effectTime);
+                    }
                 }
             }
         }

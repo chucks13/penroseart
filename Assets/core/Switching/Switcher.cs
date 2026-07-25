@@ -6,229 +6,93 @@ using UnityEngine;
 /// </summary>
 public readonly struct SwitcherStatus
 {
+    /// <summary>The snapshot shown before the Switcher has anything on stage: no Effect, no Transition, no progress.</summary>
     public static SwitcherStatus NotReady { get; } = new SwitcherStatus(
-        false,
         -1,
+        string.Empty,
         string.Empty,
         -1,
         string.Empty,
         -1,
-        string.Empty,
-        -1,
-        string.Empty,
         string.Empty,
         0f);
 
-    public readonly bool Ready;
+    /// <summary>Index of the Effect on stage, or -1 while a Transition owns the frame.</summary>
     public readonly int CurrentEffectIndex;
+
+    /// <summary>Display name of the Effect on stage, or empty while a Transition owns the frame.</summary>
     public readonly string CurrentEffectName;
-    public readonly int SourceEffectIndex;
+
+    /// <summary>Display name of the Effect a running Transition is moving away from.</summary>
     public readonly string SourceEffectName;
+
+    /// <summary>Index of the Effect the stage is heading to, whether or not a Transition owns the frame.</summary>
     public readonly int TargetEffectIndex;
+
+    /// <summary>Display name of the Effect the stage is heading to.</summary>
     public readonly string TargetEffectName;
+
+    /// <summary>Index of the running Transition, or -1 when an Effect owns the frame.</summary>
     public readonly int CurrentTransitionIndex;
+
+    /// <summary>Display name of the running Transition, or empty when an Effect owns the frame.</summary>
     public readonly string CurrentTransitionName;
-    public readonly string StageName;
+
+    /// <summary>How far the running Transition has travelled, in 0-to-1; zero when none is running.</summary>
     public readonly float TransitionProgress;
 
+    /// <summary>Captures one stage snapshot.</summary>
+    /// <param name="currentEffectIndex">Effect on stage, or -1 while a Transition owns the frame.</param>
+    /// <param name="currentEffectName">Display name of the Effect on stage.</param>
+    /// <param name="sourceEffectName">Display name of the Effect a running Transition is leaving.</param>
+    /// <param name="targetEffectIndex">Effect the stage is heading to.</param>
+    /// <param name="targetEffectName">Display name of the Effect the stage is heading to.</param>
+    /// <param name="currentTransitionIndex">Running Transition, or -1 when an Effect owns the frame.</param>
+    /// <param name="currentTransitionName">Display name of the running Transition.</param>
+    /// <param name="transitionProgress">Transition progress, clamped to 0-to-1.</param>
     public SwitcherStatus(
-        bool ready,
         int currentEffectIndex,
         string currentEffectName,
-        int sourceEffectIndex,
         string sourceEffectName,
         int targetEffectIndex,
         string targetEffectName,
         int currentTransitionIndex,
         string currentTransitionName,
-        string stageName,
         float transitionProgress)
     {
-        Ready = ready;
         CurrentEffectIndex = currentEffectIndex;
         CurrentEffectName = currentEffectName;
-        SourceEffectIndex = sourceEffectIndex;
         SourceEffectName = sourceEffectName;
         TargetEffectIndex = targetEffectIndex;
         TargetEffectName = targetEffectName;
         CurrentTransitionIndex = currentTransitionIndex;
         CurrentTransitionName = currentTransitionName;
-        StageName = stageName;
         TransitionProgress = Mathf.Clamp01(transitionProgress);
     }
+
+    /// <summary>Whether anything is on stage yet: an Effect is showing, or a Transition is running.</summary>
+    public bool Ready => CurrentEffectIndex >= 0 || CurrentTransitionIndex >= 0;
+
+    /// <summary>What to call whatever owns the frame — the running Transition, else the Effect on stage.</summary>
+    public string StageName => CurrentTransitionIndex >= 0 ? CurrentTransitionName : CurrentEffectName;
 }
 
 /// <summary>
-/// Timing context for a started A-to-B Transition.
+/// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
+/// Director (ADR-0020): each tick it reads BeatManager directly for the sheet player's beat and Grid lanes,
+/// asks about the Cue Mark whose Runway begins on that beat, and fires the answer the same frame so the
+/// Transition's Impact Point lands on the mark. A mark whose Runway has already gone by is missed, not
+/// performed late, and nothing checks it off. A check-off is permanent, so no re-crossing — loop, back-cue,
+/// or needle-drop — ever re-fires a mark; re-crossing one asks for an off-plan cue instead. It owns all
+/// Runway/Impact/Tail timing and selects nothing — every decision is asked of the bound
+/// <see cref="Director"/>. It holds no cue between beats and no lifecycle around one: no Standby Cue, no
+/// Lock Point, no verdict, no revocation window.
 /// </summary>
-public readonly struct TransitionStartTiming
-{
-    private readonly bool useBeatDuration;
-    private readonly float secondsPerBeat;
-
-    private TransitionStartTiming(float startTime, bool useBeatDuration, float secondsPerBeat)
-    {
-        if (useBeatDuration && secondsPerBeat <= 0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(secondsPerBeat), secondsPerBeat, "Seconds per beat must be positive.");
-        }
-
-        StartTime = startTime;
-        this.useBeatDuration = useBeatDuration;
-        this.secondsPerBeat = secondsPerBeat;
-    }
-
-    /// <summary>Unity time when the transition should be considered started.</summary>
-    public float StartTime { get; }
-
-    /// <summary>Creates timing for beat-denominated Synced Mode execution.</summary>
-    public static TransitionStartTiming FromBeatClock(float startTime, float secondsPerBeat)
-    {
-        return new TransitionStartTiming(startTime, true, secondsPerBeat);
-    }
-
-    /// <summary>Creates timing for Standalone Mode execution using the transition's default duration.</summary>
-    public static TransitionStartTiming FromDefaultDuration(float startTime)
-    {
-        return new TransitionStartTiming(startTime, false, 0f);
-    }
-
-    /// <summary>Resolves the active execution duration from the selected transition's repertoire.</summary>
-    public float DurationSeconds(TransitionRepertoire repertoire)
-    {
-        var durationSeconds = useBeatDuration
-            ? repertoire.DurationBeats * secondsPerBeat
-            : repertoire.DefaultDurationSeconds;
-        if (durationSeconds < 0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(repertoire), durationSeconds, "Transition duration cannot be negative.");
-        }
-
-        return durationSeconds;
-    }
-}
-
-/// <summary>
-/// Beat-domain cue direction inserted into the Mechanical Switcher by the Director.
-/// </summary>
-public readonly struct SwitcherCueDirection
-{
-    public readonly int CueMarkBeat;
-    public readonly int TargetEffectIndex;
-    public readonly int TransitionIndex;
-    public readonly TransitionRepertoire TransitionRepertoire;
-
-    public SwitcherCueDirection(
-        int cueMarkBeat,
-        int targetEffectIndex,
-        int transitionIndex,
-        TransitionRepertoire transitionRepertoire)
-    {
-        CueMarkBeat = cueMarkBeat;
-        TargetEffectIndex = targetEffectIndex;
-        TransitionIndex = transitionIndex;
-        TransitionRepertoire = transitionRepertoire;
-    }
-}
-
-/// <summary>
-/// Plain beat-clock facts the Switcher needs to lock and execute an inserted cue.
-/// </summary>
-public readonly struct SwitcherClockSnapshot
-{
-    public readonly int CurrentBeat;
-    public readonly float BeatFraction;
-    public readonly float SecondsPerBeat;
-    public readonly float NowSeconds;
-
-    public SwitcherClockSnapshot(int currentBeat, float beatFraction, float secondsPerBeat, float nowSeconds)
-    {
-        if (secondsPerBeat <= 0f)
-        {
-            throw new ArgumentOutOfRangeException(nameof(secondsPerBeat), secondsPerBeat, "Seconds per beat must be positive.");
-        }
-
-        CurrentBeat = currentBeat;
-        BeatFraction = Mathf.Clamp01(beatFraction);
-        SecondsPerBeat = secondsPerBeat;
-        NowSeconds = nowSeconds;
-    }
-}
-
-/// <summary>
-/// Read-only snapshot of the Switcher-held cue lifecycle.
-/// </summary>
-public readonly struct SwitcherCueStatus
-{
-    public static SwitcherCueStatus Empty { get; } = new SwitcherCueStatus(false, false, -1, -1, -1, -1, -1, -1, 0, 0);
-
-    public readonly bool HasCue;
-    public readonly bool IsLocked;
-    public readonly int CueMarkBeat;
-    public readonly int TargetEffectIndex;
-    public readonly int TransitionIndex;
-    public readonly int LockPointBeat;
-    public readonly int StartBeat;
-    public readonly int CompleteBeat;
-    public readonly int RunwayBeats;
-    public readonly int TailBeats;
-
-    public SwitcherCueStatus(
-        bool hasCue,
-        bool isLocked,
-        int cueMarkBeat,
-        int targetEffectIndex,
-        int transitionIndex,
-        int lockPointBeat,
-        int startBeat,
-        int completeBeat,
-        int runwayBeats,
-        int tailBeats)
-    {
-        HasCue = hasCue;
-        IsLocked = isLocked;
-        CueMarkBeat = cueMarkBeat;
-        TargetEffectIndex = targetEffectIndex;
-        TransitionIndex = transitionIndex;
-        LockPointBeat = lockPointBeat;
-        StartBeat = startBeat;
-        CompleteBeat = completeBeat;
-        RunwayBeats = runwayBeats;
-        TailBeats = tailBeats;
-    }
-
-    public bool CanUpdate => HasCue && !IsLocked;
-}
-
-/// <summary>
-/// The Switcher's one answer to a cue offer, so the Director never mirrors commitment: the loaded cue was
-/// <see cref="Kept"/> unchanged (a same-Cue-Mark offer), <see cref="Loaded"/> (a fresh load or a different-mark
-/// replacement), or <see cref="Rejected"/> (too late, or a different-mark offer after the lock).
-/// </summary>
-public enum CueUpsertResult
-{
-    /// <summary>A same-Cue-Mark offer: the loaded cue rides unchanged and is never re-flavored.</summary>
-    Kept,
-
-    /// <summary>The offer was loaded — a fresh cue, or a different-mark cue replacing an unlocked one.</summary>
-    Loaded,
-
-    /// <summary>The offer was refused; the loaded cue and stage are untouched.</summary>
-    Rejected,
-}
-
-/// <summary>
-/// Mechanical stage switcher for Penrose performers.
-/// The Switcher owns Loaded Cue scheduling plus in-flight effect/transition execution,
-/// renders progress, and promotes B on completion.
-/// </summary>
-[Serializable]
 public sealed class Switcher
 {
     private readonly Controller controller;
     private readonly EffectBase[] effects;
     private readonly TransitionBase[] transitions;
-    private readonly CueLog cueLog;
 
     private int currentEffectIndex = -1;
     private int currentTransitionIndex = -1;
@@ -236,40 +100,67 @@ public sealed class Switcher
     private float transitionStartTime;
     private float transitionDurationSeconds = 1f;
     private float transitionProgress;
-    private bool hasLoadedCue;
-    private SwitcherCueDirection loadedCue;
-    private int loadedCueStartBeat;
-    private int loadedCueCompleteBeat;
-    private int loadedCueLockPointBeat;
-    private bool loadedCueLocked;
-    private float loadedCueStartTime;
-    private float loadedCueSecondsPerBeat;
 
-    /// <summary>The Cue whose Transition currently owns the stage, or Empty outside Cue execution.</summary>
-    private SwitcherCueStatus activeCueStatus = SwitcherCueStatus.Empty;
+    /// <summary>
+    /// The one decider (ADR-0020): commands come down (the immediate and Standalone
+    /// <see cref="StartTransition(int, int, float)"/> pushes, the sheet handover); questions go up through
+    /// <see cref="Director.DecideCue"/>, <see cref="Director.DecideOffPlanCue"/>, and
+    /// <see cref="Director.PeekTransitionIndex"/>. Bound once at startup.
+    /// </summary>
+    private Director director;
+
+    /// <summary>
+    /// The plan in force. Each mark records the beat it fired on, so the Switcher keeps no execution state
+    /// beside the sheet: firing a cue marks the cue.
+    /// </summary>
+    private TrackCueSheet sheet;
+
+    /// <summary>
+    /// The beat <see cref="Tick"/> last acted on. Tick runs every frame and a beat spans many of them, so this
+    /// is what makes "fire on the Runway beat" happen once rather than once per frame for the length of it.
+    /// </summary>
+    private int? actedBeat;
+
+    /// <summary>
+    /// Grid Boundaries of stillness — how many the wall has crossed since it last started changing. Reset in
+    /// <see cref="Perform"/> the moment a cue's Runway begins, so it measures stillness anchored at cue start.
+    /// This is the run-time backstop, and a separate rule from the plan-time one: the Director never builds a
+    /// gap wider than <see cref="TrackCueSheet.MaximumGapBeats"/>, but a DJ looping a stretch the plan left
+    /// empty, or an inspection freeze ending, can still leave the playhead with nothing to perform. Reaching
+    /// the ceiling with nothing performed means the plan cannot feed the playhead, and the boundary is asked
+    /// anyway. Counted in boundaries rather than beats because a loop re-crosses the same beat numbers — only
+    /// crossings measure elapsed music.
+    /// </summary>
+    private int boundariesSinceCue;
+
+    /// <summary>
+    /// How many off-plan asks this handover has made, the seed dimension that stops a loop re-crossing one
+    /// boundary from being handed the same card twice. Handover-scoped like <see cref="boundariesSinceCue"/>:
+    /// both reset on <see cref="Cast"/>, so no spacing or deal history leaks from one plan into the next.
+    /// </summary>
+    private int offPlanAsks;
+
+    /// <summary>
+    /// The Cue Sheet in force — the plan this Switcher is performing. A default sheet
+    /// (<see cref="TrackCueSheet.StructureGeneration"/> of zero) means no plan is in force.
+    /// </summary>
+    public TrackCueSheet Sheet => sheet;
 
     /// <summary>Currently active effect index, or -1 while a transition owns the frame.</summary>
     public int CurrentEffectIndex => isTransitioning ? -1 : currentEffectIndex;
 
-    /// <summary>Active transition index while a transition owns the frame; otherwise -1.</summary>
-    public int CurrentTransitionIndex => isTransitioning ? currentTransitionIndex : -1;
-
     /// <summary>The destination effect while transitioning, otherwise the currently active effect.</summary>
     public int TransitionTargetEffectIndex => isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
-
-    /// <summary>Display name for the effect or transition currently on stage.</summary>
-    public string CurrentName => isTransitioning ? transitions[currentTransitionIndex].Name : effects[currentEffectIndex].Name;
 
     /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
     public SwitcherStatus Status => BuildStatus();
 
-    /// <summary>Current read-only Loaded Cue lifecycle snapshot.</summary>
-    public SwitcherCueStatus LoadedCueStatus => BuildLoadedCueStatus();
-
-    /// <summary>The Cue whose Transition currently owns the stage.</summary>
-    public SwitcherCueStatus ActiveCueStatus => activeCueStatus;
-
-    public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions, CueLog cueLog = null)
+    /// <summary>Binds the Switcher to the runtime hub and the two performer catalogs it renders from.</summary>
+    /// <param name="controller">The runtime hub owning the beat clock, the trace sink, and the transition mirror.</param>
+    /// <param name="effects">The Effect catalog; catalog position is Effect identity throughout.</param>
+    /// <param name="transitions">The Transition catalog; catalog position is Transition identity throughout.</param>
+    /// <exception cref="ArgumentNullException">Any argument is null.</exception>
+    public Switcher(Controller controller, EffectBase[] effects, TransitionBase[] transitions)
     {
         if (controller == null)
         {
@@ -279,7 +170,18 @@ public sealed class Switcher
         this.controller = controller;
         this.effects = effects ?? throw new ArgumentNullException(nameof(effects));
         this.transitions = transitions ?? throw new ArgumentNullException(nameof(transitions));
-        this.cueLog = cueLog;
+    }
+
+    /// <summary>
+    /// Binds the one decider the Switcher asks before performing anything. Separate from construction
+    /// because the reference is genuinely mutual: the Director also pushes its immediate and Standalone
+    /// <see cref="StartTransition(int, int, float)"/> commands down into the Switcher.
+    /// </summary>
+    /// <param name="director">The one decider every question goes up to.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="director"/> is null.</exception>
+    public void BindDirector(Director director)
+    {
+        this.director = director ?? throw new ArgumentNullException(nameof(director));
     }
 
     /// <summary>
@@ -294,166 +196,187 @@ public sealed class Switcher
         currentTransitionIndex = transitionIndex;
         isTransitioning = false;
         transitionProgress = 0f;
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
         Trace(() => $"SWITCHER_INIT current={FormatEffect(effectIndex)} nextTransition={FormatTransition(transitionIndex)}");
     }
 
-    /// <summary>Immediately puts an effect on stage, cancelling any in-flight transition.</summary>
-    public void ShowNow(int effectIndex)
+    /// <summary>
+    /// The handover: takes the Cue Sheet now in force. "Cast" hands over the plan — it does not time a fire;
+    /// <see cref="Tick"/> performs the marks. Idempotent on the sheet's
+    /// (<see cref="TrackCueSheet.PlayerNumber"/>, <see cref="TrackCueSheet.StructureGeneration"/>) identity,
+    /// so the Director calls it every synced tick and keeps zero handover state. <c>Cast(default)</c> clears
+    /// the plan (generation 0, player 0) and is how Standalone Mode turns sheet execution off.
+    /// </summary>
+    public void Cast(TrackCueSheet sheet)
     {
-        ValidateEffectIndex(effectIndex);
+        if (sheet.PlayerNumber == this.sheet.PlayerNumber
+            && sheet.StructureGeneration == this.sheet.StructureGeneration)
+        {
+            return;
+        }
 
-        EffectBase.APalette.Change();
-        isTransitioning = false;
-        transitionProgress = 0f;
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
-        currentEffectIndex = effectIndex;
-        StartEffect(effectIndex);
-        Trace(() => $"SWITCHER_SHOW_NOW current={FormatEffect(effectIndex)}");
+        this.sheet = sheet;
+
+        // A handover is a fresh start: the incoming player is somewhere else in its own track, so neither the
+        // beat already acted on nor the outgoing plan's spacing and deal history mean anything here.
+        actedBeat = null;
+        boundariesSinceCue = 0;
+        offPlanAsks = 0;
+        Trace(() => sheet.StructureGeneration > 0
+            ? $"SWITCHER_CAST player={sheet.PlayerNumber} generation={sheet.StructureGeneration} marks={sheet.Marks.Count}"
+            : "SWITCHER_CAST_CLEARED plan=<none>");
     }
 
     /// <summary>
-    /// Inserts one beat-domain cue direction for fire-and-forget Switcher execution and answers what the
-    /// Switcher did with it. Identity on this seam is the Cue Mark alone: an offer at the <b>same</b> Cue Mark
-    /// as the loaded cue is a keep — the loaded cue rides unchanged and is never re-flavored. A different-mark
-    /// offer replaces the loaded cue when it can still commit (strictly before its Lock Point, one beat before
-    /// the Runway start) and the loaded cue is not locked; otherwise it is rejected and the loaded cue and
-    /// stage are untouched. Callers therefore never mirror or guess commitment state — the Switcher alone
-    /// owns it and answers in one call.
+    /// Follows the sheet player's beat and fires each cue on its Runway start — the beat a Transition has to
+    /// leave on for its Impact Point to land on the mark. Which Runway that is belongs to the Transition that
+    /// will actually fly, not to the plan's baked card, so the Director is asked first
+    /// (<see cref="Director.PeekTransitionIndex"/>) and a staged override still lands its Impact on the mark.
+    /// Called by the Controller each frame after <see cref="Director.Tick"/>, so a handover always precedes
+    /// execution in the same frame. A mark the playhead reaches again has already fired, which only happens
+    /// when the DJ loops, so the Director is asked for a fresh cue rather than replaying the spent one.
+    /// Counting Grid Boundaries alongside the plan is what bounds the wall: a boundary reached with the plan's
+    /// widest legal gap already spent is asked even though no mark sits on it, so no loop and no released
+    /// freeze can hold the wall still forever.
     /// </summary>
-    /// <returns>
-    /// <see cref="CueUpsertResult.Kept"/>, <see cref="CueUpsertResult.Loaded"/>, or
-    /// <see cref="CueUpsertResult.Rejected"/>.
-    /// </returns>
-    public CueUpsertResult UpsertLoadedCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
+    public void Tick()
     {
-        ValidateEffectIndex(cue.TargetEffectIndex);
-        ValidateTransitionIndex(cue.TransitionIndex);
-
-        StartLoadedCueIfDue(clock.NowSeconds);
-
-        if (hasLoadedCue)
+        // The Switcher performs the plan it holds against that plan's own player — never the focus
+        // player, which it does not know about. PlayerNumber is 1-based.
+        var slot = sheet.PlayerNumber - 1;
+        var players = controller.beatManager.Players;
+        if (slot < 0 || slot >= players.Count || players[slot].Beat is not { } beat)
         {
-            LatchLockAtBeat(clock.CurrentBeat);
+            return;
+        }
 
-            // Same Cue Mark: the loaded cue is already aimed here, so it rides unchanged. A keep never
-            // re-reads the fresh cast, so a cue the design says must not move cannot be re-flavored.
-            if (cue.CueMarkBeat == loadedCue.CueMarkBeat)
+        if (beat == actedBeat)
+        {
+            return;
+        }
+
+        actedBeat = beat;
+
+        // A Grid Boundary is the Grid lane returning to one — phrase-relative, so a shortened phrase restarts
+        // it early and the count follows the music. Without that lane there is no way to know where boundaries
+        // fall, so the count simply never advances and only the plan's own marks perform.
+        var onBoundary = players[slot].GridBeat == 1;
+        if (onBoundary)
+        {
+            boundariesSinceCue++;
+        }
+
+        foreach (var mark in sheet.Marks)
+        {
+            var spent = mark.Fired;
+            CueDecision cue;
+            if (spent)
             {
-                return CueUpsertResult.Kept;
+                // A spent cue is reachable again only by re-crossing the very beat it left on — a loop, a
+                // back-cue, a needle-drop. The beat it left on is the fact, not the beat the plan would have
+                // chosen: an override may have flown it on a different Runway. Its Impact Point would land on
+                // the next boundary, one Grid further out than the boundaries counted so far.
+                if (beat != mark.FiredAtBeat)
+                {
+                    continue;
+                }
+
+                cue = AskOffPlan(mark.Beat, boundariesSinceCue + 1);
+            }
+            else
+            {
+                // Count the Runway back from the Impact Point using the Transition that would actually perform
+                // this mark, so an override with its own Runway leaves on its own beat and still lands on the
+                // mark. Asking is free: the peek never spends the one-shot, only DecideCue below does.
+                if (beat != mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats)
+                {
+                    continue;
+                }
+
+                cue = director.DecideCue(mark);
             }
 
-            // A different-mark offer after the lock is refused; the locked cue rides.
-            if (loadedCueLocked)
+            if (!cue.Perform)
             {
-                Trace(() => $"SWITCHER_IGNORE_LOCKED_CUE cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)} lockedCueMark={loadedCue.CueMarkBeat}");
-                return CueUpsertResult.Rejected;
+                // Held, or a boundary the Director chose to ride through. Either way the wall stays put, and a
+                // mark that never fires simply does not happen — the plan says what to perform, not what must
+                // be on the wall at a beat.
+                return;
             }
+
+            if (!spent)
+            {
+                mark.FiredAtBeat = beat;
+            }
+
+            Perform(beat, cue);
+            return;
         }
 
-        if (!CanCommitCue(cue.CueMarkBeat, cue.TransitionRepertoire, clock.CurrentBeat))
+        // Nothing in the plan fires on this beat. Once the count reaches the ceiling the plan has demonstrably
+        // failed to feed the playhead, so the boundary is asked anyway; the deal is certain at that point, which
+        // is what makes the wall holding still past TrackCueSheet.MaximumGapBeats impossible. Below the ceiling
+        // nothing is asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
+        if (!onBoundary || boundariesSinceCue < TrackCueSheet.MaximumGapGrids)
         {
-            Trace(() => $"SWITCHER_REJECT_LATE_CUE beat={clock.CurrentBeat} cueMark={cue.CueMarkBeat} lock={LockPointBeatFor(cue.CueMarkBeat, cue.TransitionRepertoire)} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-            return CueUpsertResult.Rejected;
+            return;
         }
 
-        LoadCue(cue, clock);
-        return CueUpsertResult.Loaded;
-    }
-
-    /// <summary>
-    /// Whether a cue for this Cue Mark and transition can still commit on this beat: strictly before its
-    /// Lock Point. Runway/tail/lock arithmetic is the Switcher's alone; callers ask, they do not compute.
-    /// </summary>
-    public static bool CanCommitCue(int cueMarkBeat, TransitionRepertoire repertoire, int beat)
-    {
-        return beat < LockPointBeatFor(cueMarkBeat, repertoire);
-    }
-
-    /// <summary>
-    /// Projects the beat-domain window a cue for this Cue Mark and transition would occupy. Runway/tail/lock
-    /// arithmetic is the Switcher's alone, so this stays private; the loaded cue's window is published for
-    /// diagnostics through <see cref="SwitcherCueStatus"/>, not by projecting arbitrary candidates.
-    /// </summary>
-    private static void ProjectCueWindow(
-        int cueMarkBeat,
-        TransitionRepertoire repertoire,
-        out int startBeat,
-        out int lockPointBeat,
-        out int completeBeat)
-    {
-        lockPointBeat = LockPointBeatFor(cueMarkBeat, repertoire);
-        startBeat = lockPointBeat + 1;
-        completeBeat = cueMarkBeat + repertoire.TailBeats;
-    }
-
-    private static int LockPointBeatFor(int cueMarkBeat, TransitionRepertoire repertoire)
-    {
-        return cueMarkBeat - repertoire.RunwayBeats - 1;
-    }
-
-    /// <summary>
-    /// Whether the loaded cue has reached its Lock Point and can no longer be changed. A one-way latch:
-    /// once the Switcher's own clock (an offer's beat or the render clock's wall time) reaches the Lock
-    /// Point the cue rides until it starts, clears, or is aborted — a later backstep cannot reopen it.
-    /// </summary>
-    private bool IsLoadedCueLocked => loadedCueLocked;
-
-    /// <summary>Wall time of the Lock Point beat: one beat before the Runway Start Time the loaded cue carries.</summary>
-    private float LoadedCueLockTime => loadedCueStartTime - loadedCueSecondsPerBeat;
-
-    /// <summary>Latches the lock once a beat at or past the Lock Point is observed; never unlatches.</summary>
-    private void LatchLockAtBeat(int beat)
-    {
-        if (hasLoadedCue && !loadedCueLocked && beat >= loadedCueLockPointBeat)
+        // Standing on the boundary that spent the last legal Grid, so performing now is the ceiling gap itself.
+        var offPlan = AskOffPlan(beat, boundariesSinceCue);
+        if (offPlan.Perform)
         {
-            loadedCueLocked = true;
-            NotifyLocked(CueLockVia.Beat);
-        }
-    }
-
-    /// <summary>Latches the lock once the render clock's wall time reaches the Lock Point; never unlatches.</summary>
-    private void LatchLockAtTime(float nowSeconds)
-    {
-        if (hasLoadedCue && !loadedCueLocked && nowSeconds >= LoadedCueLockTime)
-        {
-            loadedCueLocked = true;
-            NotifyLocked(CueLockVia.Render);
+            Perform(beat, offPlan);
         }
     }
 
     /// <summary>
-    /// Raises the minimal lock notification the Cue Log sink joins with its remembered display context.
-    /// Fires exactly once per loaded cue — the false→true latch guard above admits only the first crossing —
-    /// and carries no Phrase or name context, which the Switcher does not hold.
+    /// Asks the Director what to do at a Grid Boundary the plan cannot cover, counting the ask so a loop
+    /// re-crossing one boundary is never handed the same card twice.
     /// </summary>
-    private void NotifyLocked(CueLockVia via)
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat being asked about.</param>
+    /// <param name="gapGrids">The gap in Grids that performing here would produce.</param>
+    private CueDecision AskOffPlan(int boundaryBeat, int gapGrids)
     {
-        cueLog?.CueLocked(loadedCue.CueMarkBeat, loadedCueLockPointBeat, via);
+        offPlanAsks++;
+        return director.DecideOffPlanCue(boundaryBeat, gapGrids, offPlanAsks);
     }
 
     /// <summary>
-    /// Starts or replaces a transition from the current stage destination to the target effect.
-    /// The Switcher owns progress and completion after this call; if another transition is still
-    /// rendering, the previous destination becomes the source for this new last-command-wins move.
+    /// Starts or replaces a transition from the current stage destination to the target effect, running for the
+    /// Transition's own default duration — the seconds-denominated move Standalone Mode and every immediate
+    /// operator pick use. The Switcher owns progress and completion after this call; if another transition is
+    /// still rendering, the previous destination becomes the source for this new last-command-wins move.
     /// </summary>
-    public void StartTransition(int targetEffectIndex, int transitionIndex, TransitionStartTiming timing)
+    /// <param name="targetEffectIndex">Effect catalog index the move lands on.</param>
+    /// <param name="transitionIndex">Transition catalog index performing the move.</param>
+    /// <param name="startTimeSeconds">Unity time the move is considered to have started.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Either index is outside the runtime catalog.</exception>
+    public void StartTransition(int targetEffectIndex, int transitionIndex, float startTimeSeconds)
     {
         ValidateTransitionIndex(transitionIndex);
-        activeCueStatus = SwitcherCueStatus.Empty;
-        ClearLoadedCue();
-        StartTransition(targetEffectIndex, transitionIndex, timing, Time.time, transitions[transitionIndex].Repertoire);
+        StartTransition(
+            targetEffectIndex,
+            transitionIndex,
+            startTimeSeconds,
+            transitions[transitionIndex].Repertoire.DefaultDurationSeconds,
+            Time.time);
     }
 
     /// <summary>Starts one fully resolved transition and defers its diagnostic display reads.</summary>
+    /// <param name="targetEffectIndex">Effect catalog index the move lands on.</param>
+    /// <param name="transitionIndex">Transition catalog index performing the move.</param>
+    /// <param name="startTimeSeconds">Unity time the move is considered to have started.</param>
+    /// <param name="durationSeconds">
+    /// How long the move runs. Resolved by the caller, because the two production paths denominate it
+    /// differently: Standalone in the Transition's own seconds, a synced cue in beats off the live clock.
+    /// </param>
+    /// <param name="progressNowSeconds">Unity time to seed the first progress reading from.</param>
     private void StartTransition(
         int targetEffectIndex,
         int transitionIndex,
-        TransitionStartTiming timing,
-        float progressNowSeconds,
-        TransitionRepertoire repertoire)
+        float startTimeSeconds,
+        float durationSeconds,
+        float progressNowSeconds)
     {
         var sourceEffectIndex = isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
         ValidateEffectIndex(sourceEffectIndex);
@@ -472,8 +395,8 @@ public sealed class Switcher
 
         currentTransitionIndex = transitionIndex;
         currentEffectIndex = -1;
-        transitionStartTime = timing.StartTime;
-        transitionDurationSeconds = timing.DurationSeconds(repertoire);
+        transitionStartTime = startTimeSeconds;
+        transitionDurationSeconds = durationSeconds;
         transitionProgress = ProgressAt(progressNowSeconds);
         isTransitioning = true;
         Trace(() => $"SWITCHER_START transition={FormatTransition(transitionIndex)} source={FormatEffect(sourceEffectIndex)} target={FormatEffect(targetEffectIndex)} A={transition.A} B={transition.B} durationSeconds={transitionDurationSeconds:0.###} progress={transitionProgress:0.###}");
@@ -488,8 +411,6 @@ public sealed class Switcher
     /// </summary>
     public Color[] RenderAtTime(float nowSeconds, out string debugText)
     {
-        StartLoadedCueIfDue(nowSeconds);
-
         if (isTransitioning)
         {
             transitionProgress = ProgressAt(nowSeconds);
@@ -527,109 +448,39 @@ public sealed class Switcher
         return (Color[])effect.buffer.Clone();
     }
 
-    /// <summary>Projects and stores one accepted Cue against the supplied canonical beat clock.</summary>
-    private void LoadCue(SwitcherCueDirection cue, SwitcherClockSnapshot clock)
-    {
-        ProjectCueWindow(
-            cue.CueMarkBeat,
-            cue.TransitionRepertoire,
-            out loadedCueStartBeat,
-            out loadedCueLockPointBeat,
-            out loadedCueCompleteBeat);
-        loadedCue = cue;
-        loadedCueStartTime = TimeAtBeat(clock, loadedCueStartBeat);
-        loadedCueSecondsPerBeat = clock.SecondsPerBeat;
-        loadedCueLocked = false;
-        hasLoadedCue = true;
-        Trace(() => $"SWITCHER_LOAD_CUE cueMark={cue.CueMarkBeat} lock={loadedCueLockPointBeat} start={loadedCueStartBeat} startTime={loadedCueStartTime:0.###} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-    }
-
-    private static float TimeAtBeat(SwitcherClockSnapshot clock, int beat)
-    {
-        var beatsUntil = beat - clock.CurrentBeat - clock.BeatFraction;
-        return clock.NowSeconds + (beatsUntil * clock.SecondsPerBeat);
-    }
-
-    private void StartLoadedCueIfDue(float nowSeconds)
-    {
-        if (!hasLoadedCue)
-        {
-            return;
-        }
-
-        LatchLockAtTime(nowSeconds);
-        if (nowSeconds >= loadedCueStartTime)
-        {
-            StartLoadedCue(nowSeconds);
-        }
-    }
-
-    /// <summary>Starts the loaded Cue's transition at the projected beat-domain time.</summary>
-    private void StartLoadedCue(float nowSeconds)
-    {
-        var cue = loadedCue;
-        var startBeat = loadedCueStartBeat;
-        var startTime = loadedCueStartTime;
-        var secondsPerBeat = loadedCueSecondsPerBeat;
-        var elapsedBeats = Mathf.Max(0f, (nowSeconds - startTime) / secondsPerBeat);
-        activeCueStatus = BuildLoadedCueStatus();
-        ClearLoadedCue();
-        StartTransition(
-            cue.TargetEffectIndex,
-            cue.TransitionIndex,
-            TransitionStartTiming.FromBeatClock(startTime, secondsPerBeat),
-            nowSeconds,
-            cue.TransitionRepertoire);
-        Trace(() => $"SWITCHER_START_CUE now={nowSeconds:0.###} elapsedBeats={elapsedBeats:0.###} start={startBeat} cueMark={cue.CueMarkBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.TargetEffectIndex)}");
-    }
-
     /// <summary>
-    /// Discards the Switcher-held Loaded Cue, even one already locked. The Director calls this when the
-    /// clock drops and the mode boundary crosses into Standalone: a beat-domain cue carries a Unity-time
-    /// start and would otherwise fire from Unity time into a dead clock (ADR-0007).
+    /// Performs one cue. It is fired on its Runway beat, so the Transition starts now, its Impact Point lands a
+    /// Runway later, and its Tail resolves after that. The Impact Point is derived from the Transition the
+    /// Director actually dealt, so an override or an off-plan card lands where its own Runway puts it rather
+    /// than where the plan assumed.
     /// </summary>
-    /// <remarks>
-    /// A fire-and-forget command on the Director → Switcher seam, not lifecycle observation: idempotent,
-    /// safe to call every Standalone frame, and a no-op when no cue is loaded.
-    /// </remarks>
-    public void AbortLoadedCue()
+    /// <param name="fireBeat">The beat this cue leaves on — one Runway before its Impact Point.</param>
+    /// <param name="cue">What the Director said to play.</param>
+    private void Perform(int fireBeat, CueDecision cue)
     {
-        if (!hasLoadedCue)
-        {
-            return;
-        }
+        var repertoire = transitions[cue.TransitionIndex].Repertoire;
+        var nowSeconds = Time.time;
 
-        Trace(() => $"SWITCHER_ABORT_CUE cueMark={loadedCue.CueMarkBeat} locked={IsLoadedCueLocked} transition={FormatTransition(loadedCue.TransitionIndex)} target={FormatEffect(loadedCue.TargetEffectIndex)}");
-        ClearLoadedCue();
+        // The wall is changing, so the stillness count starts again from this cue.
+        boundariesSinceCue = 0;
+
+        // A synced cue is denominated in beats, so its seconds come off the live clock rather than the
+        // Transition's authored default.
+        StartTransition(
+            cue.EffectIndex,
+            cue.TransitionIndex,
+            nowSeconds,
+            repertoire.DurationBeats * SecondsPerBeat(),
+            nowSeconds);
+        // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
+        controller.currentTransition = cue.TransitionIndex;
+        Trace(() => $"SWITCHER_PERFORM impact={fireBeat + repertoire.RunwayBeats} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
     }
 
-    private void ClearLoadedCue()
+    /// <summary>Live seconds per beat, falling back to the established 120-BPM cadence.</summary>
+    private float SecondsPerBeat()
     {
-        hasLoadedCue = false;
-        loadedCue = default;
-        loadedCueStartBeat = -1;
-        loadedCueCompleteBeat = -1;
-        loadedCueLockPointBeat = -1;
-        loadedCueLocked = false;
-        loadedCueStartTime = 0f;
-        loadedCueSecondsPerBeat = 0f;
-    }
-
-    private SwitcherCueStatus BuildLoadedCueStatus()
-    {
-        return hasLoadedCue
-            ? new SwitcherCueStatus(
-                true,
-                IsLoadedCueLocked,
-                loadedCue.CueMarkBeat,
-                loadedCue.TargetEffectIndex,
-                loadedCue.TransitionIndex,
-                loadedCueLockPointBeat,
-                loadedCueStartBeat,
-                loadedCueCompleteBeat,
-                loadedCue.TransitionRepertoire.RunwayBeats,
-                loadedCue.TransitionRepertoire.TailBeats)
-            : SwitcherCueStatus.Empty;
+        return controller.beatManager.Timing.Bpm is { } bpm && bpm > 0f ? 60f / bpm : 0.5f;
     }
 
     /// <summary>Promotes the transition target and emits the deferred completion trace.</summary>
@@ -642,7 +493,6 @@ public sealed class Switcher
         currentEffectIndex = targetEffectIndex;
         isTransitioning = false;
         transitionProgress = 0f;
-        activeCueStatus = SwitcherCueStatus.Empty;
         Trace(() => $"SWITCHER_COMPLETE transition={FormatTransition(completedTransitionIndex)} source={FormatEffect(sourceEffectIndex)} current={FormatEffect(currentEffectIndex)} targetWas={targetEffectIndex}");
     }
 
@@ -653,44 +503,32 @@ public sealed class Switcher
             : Mathf.Clamp01((now - transitionStartTime) / transitionDurationSeconds);
     }
 
+    /// <summary>Builds the read-only stage snapshot from whichever performer owns the frame.</summary>
     private SwitcherStatus BuildStatus()
     {
-        if (effects == null || transitions == null)
-        {
-            return SwitcherStatus.NotReady;
-        }
-
         if (isTransitioning)
         {
             var transition = transitions[currentTransitionIndex];
-            var sourceName = EffectName(transition.A);
-            var targetName = EffectName(transition.B);
             return new SwitcherStatus(
-                true,
                 -1,
                 string.Empty,
-                transition.A,
-                sourceName,
+                EffectName(transition.A),
                 transition.B,
-                targetName,
+                EffectName(transition.B),
                 currentTransitionIndex,
-                transition.Name,
                 transition.Name,
                 transitionProgress);
         }
 
         var currentName = EffectName(currentEffectIndex);
         return new SwitcherStatus(
-            currentEffectIndex >= 0,
             currentEffectIndex,
             currentName,
-            currentEffectIndex,
             currentName,
             currentEffectIndex,
             currentName,
             -1,
             string.Empty,
-            currentName,
             0f);
     }
 
