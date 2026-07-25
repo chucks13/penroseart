@@ -28,40 +28,32 @@ internal static class TransitionBarRenderer
     // The tracker reserves saturated magenta, cyan, orange, green, and yellow for plan
     // identities. This strip stays achromatic: dark graphite structure and a bright
     // silver fill read as live state without borrowing any tracker meaning.
-    /// <summary>Graphite border separating the strip from the surrounding Live workspace.</summary>
-    private static readonly Color BorderColor = new(0.28f, 0.29f, 0.31f);
+    /// <summary>Graphite border and idle progress track — the strip's structure.</summary>
+    private static readonly Color StructureColor = new(0.24f, 0.25f, 0.27f);
 
     /// <summary>Near-black neutral field behind both rows.</summary>
     private static readonly Color BackgroundColor = new(0.10f, 0.11f, 0.13f);
 
-    /// <summary>Dark neutral progress track shown even while idle or unavailable.</summary>
-    private static readonly Color TrackColor = new(0.20f, 0.21f, 0.23f);
-
-    /// <summary>Bright neutral progress fill for the currently executing Transition.</summary>
-    private static readonly Color FillColor = new(0.88f, 0.90f, 0.92f);
-
-    /// <summary>Bright neutral text for Effect and active Transition identities.</summary>
-    private static readonly Color PrimaryTextColor = new(0.90f, 0.91f, 0.93f);
+    /// <summary>Bright neutral progress fill and identity text.</summary>
+    private static readonly Color LiveColor = new(0.89f, 0.91f, 0.93f);
 
     /// <summary>Dim neutral text for the idle on-air state.</summary>
-    private static readonly Color DimTextColor = new(0.55f, 0.57f, 0.60f);
+    private static readonly Color IdleColor = new(0.55f, 0.57f, 0.60f);
 
     /// <summary>Cached left-aligned identity style.</summary>
     private static GUIStyle? leftStyle;
 
-    /// <summary>Cached right-aligned active Transition style.</summary>
+    /// <summary>Cached right-aligned state style; its colour is set per draw.</summary>
     private static GUIStyle? rightStyle;
 
-    /// <summary>Cached right-aligned idle state style.</summary>
-    private static GUIStyle? dimRightStyle;
-
     /// <summary>Draws the fixed-height live state strip for a Switcher status snapshot.</summary>
+    /// <param name="status">The stage snapshot to show; a not-ready snapshot still reserves the full strip.</param>
     public static void Draw(SwitcherStatus status)
     {
         EnsureStyles();
 
         var strip = GUILayoutUtility.GetRect(0f, float.MaxValue, StripHeight, StripHeight);
-        EditorGUI.DrawRect(strip, BorderColor);
+        EditorGUI.DrawRect(strip, StructureColor);
         var interior = new Rect(strip.x + 1f, strip.y + 1f, strip.width - 2f, strip.height - 2f);
         EditorGUI.DrawRect(interior, BackgroundColor);
 
@@ -94,14 +86,15 @@ internal static class TransitionBarRenderer
                 ? $"{NameOrDash(status.CurrentTransitionName)} · {Mathf.RoundToInt(status.TransitionProgress * 100f)}%"
                 : "ON AIR";
 
+        rightStyle!.normal.textColor = transitioning ? LiveColor : IdleColor;
         GUI.Label(leftText, leftLabel, leftStyle);
-        GUI.Label(rightText, rightLabel, transitioning ? rightStyle : dimRightStyle);
-        EditorGUI.DrawRect(rail, TrackColor);
+        GUI.Label(rightText, rightLabel, rightStyle);
+        EditorGUI.DrawRect(rail, StructureColor);
         if (transitioning && status.TransitionProgress > 0f)
         {
             EditorGUI.DrawRect(
                 new Rect(rail.x, rail.y, rail.width * status.TransitionProgress, rail.height),
-                FillColor);
+                LiveColor);
         }
     }
 
@@ -117,17 +110,11 @@ internal static class TransitionBarRenderer
         leftStyle ??= new GUIStyle(EditorStyles.miniLabel)
         {
             alignment = TextAnchor.MiddleLeft,
-            normal = { textColor = PrimaryTextColor },
+            normal = { textColor = LiveColor },
         };
         rightStyle ??= new GUIStyle(EditorStyles.miniLabel)
         {
             alignment = TextAnchor.MiddleRight,
-            normal = { textColor = PrimaryTextColor },
-        };
-        dimRightStyle ??= new GUIStyle(EditorStyles.miniLabel)
-        {
-            alignment = TextAnchor.MiddleRight,
-            normal = { textColor = DimTextColor },
         };
     }
 }

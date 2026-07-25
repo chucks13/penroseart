@@ -686,13 +686,7 @@ public sealed class PenroseTuningWindow : EditorWindow
                 TransitionSettingsAssetUtility.ApplyConstrainedSettings(selectedSerializedObject);
                 settingsChangedSinceLastSave = true;
                 selectedSerializedObject.Update();
-                settingsProperty = selectedSerializedObject.FindProperty("settings");
-                runwayProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.RunwayBeats));
-                tailProperty = settingsProperty.FindPropertyRelative(nameof(TransitionSettings.TailBeats));
             }
-
-            EditorGUILayout.Space(8f);
-            DrawTransitionTimingPreview(liveController, runwayProperty.intValue, tailProperty.intValue);
         }
     }
 
@@ -743,26 +737,6 @@ public sealed class PenroseTuningWindow : EditorWindow
 
             EditorGUILayout.PropertyField(property, includeChildren: true);
         }
-    }
-
-    /// <summary>
-    /// Draws a placeholder for the retired Transition timing preview. The preview projected the deleted
-    /// loaded-cue window (ADR-0019); a track-sheet preview is a separate follow-up. Runway and Tail are still
-    /// authored on the Transition through the normal settings fields above.
-    /// </summary>
-    private static void DrawTransitionTimingPreview(
-        Controller liveController,
-        int runwayBeats,
-        int tailBeats)
-    {
-        _ = liveController;
-        _ = runwayBeats;
-        _ = tailBeats;
-        EditorGUILayout.LabelField("Timing Preview", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox(
-            "Timing preview is unavailable: it projected the retired loaded-cue window. Runway and Tail are "
-            + "still authored on the Transition above; a track-sheet preview is a follow-up.",
-            MessageType.None);
     }
 
     /// <summary>Draws explicit Director staging and Hold Selected controls.</summary>
