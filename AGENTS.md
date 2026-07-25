@@ -31,7 +31,7 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 ## Start Here
 
 - `README.md` — current orientation and runtime loop.
-- `CONTEXT.md` — canonical project vocabulary, platform/output notes, and architecture guide.
+- `CONTEXT.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
 - `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
 - `docs/investigation/` — historical research/audit notes; useful context, but not canonical current docs.
@@ -65,6 +65,21 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
   unexercised surface remains unapproved.
 - Any diagnostic code warning or above is to be treated as an error and must be either brought up to the user or fixed.
 
+### Design preflight
+
+Before designing or adding any new system, abstraction, or module, answer these four
+questions and surface the answers before writing the code:
+
+1. **Who is the first real caller?** Name the production caller. Tests and prototypes
+   do not count.
+2. **Which existing seams or modules were inspected, and why can't they be extended?**
+   Name the files you actually read.
+3. **Why is new structure needed?** State what the existing shape cannot express.
+4. **What gets deleted in the same pass?** New structure that leaves a second way to do
+   the same thing is an unfinished hard cut.
+
+If you cannot answer all four, the change is not designed yet — do not start it.
+
 ## Core Files and Systems
 
 Start with these before adding new structures:
@@ -76,10 +91,12 @@ Start with these before adding new structures:
 - `Assets/core/Effects/MixerBase.cs` — base for effects that own child effects and combine or transform their buffers.
 - `Assets/core/Transitions/TransitionBase.cs` — base for transitions between effects and some external-source blend behavior.
 - `Assets/core/helpers/Factory.cs` — reflection-based discovery and instantiation of effect, transition, and blender classes.
-- `Assets/core/helpers/GPalette.cs` and `Assets/core/Rhythm/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope.
+- `Assets/core/helpers/GPalette.cs` and `Assets/core/Rhythm/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope; adding or changing a data surface is not (see below).
 - `Assets/core/Hardware/SerialOut.cs`, `Assets/OSCReader.cs`, `Assets/core/IO/PixelReceiver.cs`, and `Assets/core/ReactiveInputs/drums.cs` — hardware/control/input paths.
 
 `Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it. Small wiring changes needed to connect an approved runtime model change are allowed; broad Controller restructuring still requires explicit approval.
+
+`BeatManager.cs` is the single musical source: no other module re-derives musical facts. Adding or changing any BeatManager data surface requires asking Hunter first, with a proposal that states the musical fact, the consumer that needs it, and why. Do not add a surface speculatively, and do not compute a musical fact locally to avoid the ask.
 
 ## Adding Effects, Transitions, and Blenders
 

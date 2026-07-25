@@ -136,7 +136,7 @@ Override `Repertoire` so `TrackCueSheet.Build(...)` can assign this effect to ri
 public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
 ```
 
-Transitions advertise the same capabilities through `TransitionRepertoire`. The sheet builder chooses per Anchor between a capable Effect riding through the protected window and a capable Transition performing the boundary; runtime casting does not reselect either performer.
+Transitions advertise the same capabilities through `TransitionRepertoire`. The sheet builder chooses per Anchor between a capable Effect riding through the protected window and a capable Transition performing the boundary; runtime casting does not reselect either performer. An override can still replace an Anchor's baked performer at runtime, so the baked cast is a plan, not a guarantee.
 
 ### 2. Find the motion term, and never scale `effectTime`
 
