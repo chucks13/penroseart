@@ -191,8 +191,8 @@ The Director's act of handing the Switcher the Cue Sheet now in force — the ca
 _Avoid_: cast-time selection (retired — selection happens at sheet build); casting individual Cue Marks at their Runway start (retired — that put transition timing in the Director); a lock or revocation window after casting.
 
 **Anchor**:
-A moment in a Cue Sheet that a Drop landing or Fill window owns. Each Anchor is resolved at build time so a capable performer owns the moment — a seeded flip between Ride-through and a Performed Transition; a catalog that can serve only one treatment degenerates the flip to that side.
-_Avoid_: treating every phrase boundary as an Anchor; resolving Anchors at cast time; an error path for a one-sided catalog.
+A moment in a Cue Sheet that a Drop landing or Fill window owns. Each Anchor is resolved at build time so a capable performer owns the moment — a seeded flip between Ride-through and a Performed Transition; a catalog that can serve only one treatment degenerates the flip to that side. A Phrase's Drop and Fill markers say only *that* the Phrase carries one, which is all casting a capable performer needs; where the moment sits *now* comes from the live Drop and Fill values, which the cast performer reads for itself.
+_Avoid_: treating every phrase boundary as an Anchor; resolving Anchors at cast time; an error path for a one-sided catalog; planning around where a Fill begins or how long it runs — casting decides who is on the wall, and the performer decides how to play the moment.
 
 **Ride-through**:
 One of the two Anchor treatments: a Drop/Fill-capable Effect is already on the wall before the moment and simply plays through it — the boundary mark is suppressed and the Effect's own live Drop/Fill response carries the hit.
