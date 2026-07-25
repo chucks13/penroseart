@@ -128,7 +128,11 @@ internal static class CueSheetTimelineRenderer
         return scroll;
     }
 
-    /// <summary>Draws one row: gutter, phrase ribbon, sixteen cells, and the cue column.</summary>
+    /// <summary>
+    /// Draws one row: gutter, phrase ribbon, the row's cells, and the cue column. A phrase's last
+    /// Grid can be short, so the row draws only the beats it holds and the remaining columns stay
+    /// empty — that gap is what a shortened phrase looks like.
+    /// </summary>
     private static void DrawRow(
         Rect rect,
         CueSheetGridRow row,
@@ -140,11 +144,12 @@ internal static class CueSheetTimelineRenderer
 
         // Full row height with no vertical inset, so consecutive rows read as one continuous ribbon.
         var bar = new Rect(rect.x + BeatGutterWidth, rect.y, PhraseBarWidth, rect.height);
-        EditorGUI.DrawRect(bar, PhraseColor(row.CellPhrases[0]));
+        var phrase = PhraseColor(row.Phrase);
+        EditorGUI.DrawRect(bar, phrase);
 
-        for (var column = 0; column < Columns; column++)
+        for (var column = 0; column < row.Cells.Count; column++)
         {
-            DrawCell(CellRect(rect, cellWidth, column), row.Cells[column], PhraseColor(row.CellPhrases[column]), row.CueFired);
+            DrawCell(CellRect(rect, cellWidth, column), row.Cells[column], phrase, row.CueFired);
         }
 
         var cue = new Rect(rect.xMax - CueColumnWidth, rect.y, CueColumnWidth, rect.height);

@@ -23,7 +23,7 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(runwayBeats: 3, tailBeats: 2);
         var sheet = Sheet(structure, transition);
 
-        var rows = CueSheetTimeline.Build(sheet, null, structure, new[] { transition }, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(rows[0].Cells[12], Is.EqualTo(CueSheetBeatMark.None));
         Assert.That(rows[0].Cells[13], Is.EqualTo(CueSheetBeatMark.Runway));
@@ -42,7 +42,7 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(runwayBeats: 5, tailBeats: 0);
         var sheet = Sheet(structure, transition);
 
-        var rows = CueSheetTimeline.Build(sheet, null, structure, new[] { transition }, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(rows[0].Cells[14], Is.EqualTo(CueSheetBeatMark.Runway));
         Assert.That(rows[0].Cells[15], Is.EqualTo(CueSheetBeatMark.Runway));
@@ -62,10 +62,10 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(0, 0);
         var sheet = Sheet(structure, transition);
 
-        var rows = CueSheetTimeline.Build(sheet, null, structure, new[] { transition }, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
-        Assert.That(CueSheetTimeline.RowContaining(17), Is.EqualTo(1));
-        Assert.That(CueSheetTimeline.RowContaining(32), Is.EqualTo(1));
+        Assert.That(CueSheetTimeline.RowContaining(rows, 17), Is.EqualTo(1));
+        Assert.That(CueSheetTimeline.RowContaining(rows, 32), Is.EqualTo(1));
         Assert.That(rows[1].Cells[0], Is.EqualTo(CueSheetBeatMark.Impact));
         Assert.That(rows[1].Cells[15], Is.EqualTo(CueSheetBeatMark.Impact));
     }
@@ -81,16 +81,16 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(runwayBeats: 4, tailBeats: 4);
         var sheet = Sheet(structure, transition);
 
-        var rows = CueSheetTimeline.Build(sheet, null, structure, new[] { transition }, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(
             rows[1].Cells[4],
             Is.EqualTo(CueSheetBeatMark.Tail | CueSheetBeatMark.Runway));
     }
 
-    /// <summary>Pins fired-state lookup by mark index, including short and absent check-off lists.</summary>
+    /// <summary>Pins fired state as read off the cue itself, so the row shows what that cue actually did.</summary>
     [Test]
-    public void CueFiredUsesMarkIndexAndMissingEntriesRemainPending()
+    public void CueFiredComesFromTheMarkItself()
     {
         var structure = Structure(
             48,
@@ -99,13 +99,14 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(0, 0);
         var sheet = Sheet(structure, transition);
 
-        var shortRows = CueSheetTimeline.Build(sheet, new[] { true }, structure, new[] { transition }, null);
-        var nullRows = CueSheetTimeline.Build(sheet, null, structure, new[] { transition }, null);
+        var pendingRows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
+        Assert.That(pendingRows[1].CueFired, Is.False, "An unfired cue reads pending.");
 
-        Assert.That(shortRows[1].CueFired, Is.True);
-        Assert.That(shortRows[2].CueFired, Is.False);
-        Assert.That(nullRows[1].CueFired, Is.False);
-        Assert.That(nullRows[2].CueFired, Is.False);
+        sheet.Marks[0].Fired = true;
+        var firedRows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
+
+        Assert.That(firedRows[1].CueFired, Is.True);
+        Assert.That(firedRows[2].CueFired, Is.False, "Only the cue that fired reads fired.");
     }
 
     /// <summary>Pins a phrase label to its start row without repeating it on later rows.</summary>
@@ -114,26 +115,39 @@ public sealed class CueSheetTimelineTests
     {
         var structure = Structure(48, Phrase(1, 48, PhraseType.Chorus));
 
-        var rows = CueSheetTimeline.Build(default, null, structure, null, null);
+        var rows = CueSheetTimeline.Build(default, structure, null, null);
 
         Assert.That(rows[0].PhraseStart, Is.EqualTo(PhraseType.Chorus));
         Assert.That(rows[1].PhraseStart, Is.Null);
         Assert.That(rows[2].PhraseStart, Is.Null);
     }
 
-    /// <summary>Pins phrase coverage changing at an intra-row phrase boundary.</summary>
+    /// <summary>
+    /// Pins the Grid restarting at every phrase: a phrase shorter than a Grid ends on a short row
+    /// and the next phrase begins on column one, so rows stay in step with the Grid the runtime
+    /// delivers instead of sliding onto an absolute 16-beat lattice.
+    /// </summary>
     [Test]
-    public void CellPhrasesChangeWhenAPhraseStartsMidRow()
+    public void AShortPhraseEndsItsRowAndTheNextPhraseRestartsTheGrid()
     {
         var structure = Structure(
             32,
             Phrase(1, 8, PhraseType.Intro),
             Phrase(9, 32, PhraseType.Drop));
 
-        var rows = CueSheetTimeline.Build(default, null, structure, null, null);
+        var rows = CueSheetTimeline.Build(default, structure, null, null);
 
-        Assert.That(rows[0].CellPhrases.Take(8), Is.All.EqualTo(PhraseType.Intro));
-        Assert.That(rows[0].CellPhrases.Skip(8), Is.All.EqualTo(PhraseType.Drop));
+        Assert.That(rows.Count, Is.EqualTo(3));
+        Assert.That(rows[0].FirstBeat, Is.EqualTo(1));
+        Assert.That(rows[0].Cells.Count, Is.EqualTo(8), "The eight-beat phrase ends its row.");
+        Assert.That(rows[0].Phrase, Is.EqualTo(PhraseType.Intro));
+        Assert.That(rows[1].FirstBeat, Is.EqualTo(9), "The next phrase restarts the Grid.");
+        Assert.That(rows[1].Cells.Count, Is.EqualTo(TrackCueSheet.GridBeats));
+        Assert.That(rows[1].Phrase, Is.EqualTo(PhraseType.Drop));
+        Assert.That(rows[1].PhraseStart, Is.EqualTo(PhraseType.Drop));
+        Assert.That(rows[2].FirstBeat, Is.EqualTo(25));
+        Assert.That(rows[2].Cells.Count, Is.EqualTo(8), "The phrase's own last Grid is short.");
+        Assert.That(rows[2].PhraseStart, Is.Null);
     }
 
     /// <summary>Pins ride-through cue identity and a real Cue Mark's priority in the same row.</summary>
@@ -147,7 +161,7 @@ public sealed class CueSheetTimelineTests
             Phrase(17, 32, PhraseType.Up, fillStartBeat: 1));
         var rideSheet = Sheet(rideStructure, transition, Repertoire.HandlesFill);
 
-        var rideRows = CueSheetTimeline.Build(rideSheet, null, rideStructure, new[] { transition }, null);
+        var rideRows = CueSheetTimeline.Build(rideSheet, rideStructure, new[] { transition }, null);
 
         Assert.That(
             rideRows[2].Cells[0] & CueSheetBeatMark.AnchorLanding,
@@ -165,14 +179,14 @@ public sealed class CueSheetTimelineTests
 
         var priorityRows = CueSheetTimeline.Build(
             prioritySheet,
-            null,
             priorityStructure,
             new[] { transition },
             null);
 
-        Assert.That(priorityRows[1].CueEffectIndex, Is.EqualTo(7));
-        Assert.That(priorityRows[1].CueTransitionIndex, Is.EqualTo(0));
-        Assert.That(priorityRows[1].CueIsRideThrough, Is.False);
+        // Two eight-beat phrases take a short row each, so the third phrase's row is index 2.
+        Assert.That(priorityRows[2].CueEffectIndex, Is.EqualTo(7));
+        Assert.That(priorityRows[2].CueTransitionIndex, Is.EqualTo(0));
+        Assert.That(priorityRows[2].CueIsRideThrough, Is.False);
     }
 
     /// <summary>Pins the playhead to exactly one cell and leaves it absent for a null beat.</summary>
@@ -181,8 +195,8 @@ public sealed class CueSheetTimelineTests
     {
         var structure = Structure(32);
 
-        var activeRows = CueSheetTimeline.Build(default, null, structure, null, 18);
-        var idleRows = CueSheetTimeline.Build(default, null, structure, null, null);
+        var activeRows = CueSheetTimeline.Build(default, structure, null, 18);
+        var idleRows = CueSheetTimeline.Build(default, structure, null, null);
 
         Assert.That(CountFlags(activeRows, CueSheetBeatMark.Playhead), Is.EqualTo(1));
         Assert.That(activeRows[1].Cells[1], Is.EqualTo(CueSheetBeatMark.Playhead));
@@ -196,20 +210,20 @@ public sealed class CueSheetTimelineTests
         var hardCut = Transition(0, 0);
         var wholeStructure = Structure(33);
         Assert.That(
-            CueSheetTimeline.Build(default, null, wholeStructure, null, null).Count,
+            CueSheetTimeline.Build(default, wholeStructure, null, null).Count,
             Is.EqualTo(3));
 
         var markStructure = Structure(16, Phrase(1, 16, PhraseType.Intro));
         var markSheet = Sheet(markStructure, hardCut);
         Assert.That(
-            CueSheetTimeline.Build(markSheet, null, markStructure, new[] { hardCut }, null).Count,
+            CueSheetTimeline.Build(markSheet, markStructure, new[] { hardCut }, null).Count,
             Is.EqualTo(2));
 
         var tailStructure = Structure(16, Phrase(1, 15, PhraseType.Intro));
         var tailedTransition = Transition(0, 4);
         var tailSheet = Sheet(tailStructure, tailedTransition);
         Assert.That(
-            CueSheetTimeline.Build(tailSheet, null, tailStructure, new[] { tailedTransition }, null).Count,
+            CueSheetTimeline.Build(tailSheet, tailStructure, new[] { tailedTransition }, null).Count,
             Is.EqualTo(2));
 
         var anchorStructure = Structure(
@@ -218,12 +232,12 @@ public sealed class CueSheetTimelineTests
             Phrase(17, 32, PhraseType.Up, fillStartBeat: 1));
         var anchorSheet = Sheet(anchorStructure, hardCut, Repertoire.HandlesFill);
         Assert.That(
-            CueSheetTimeline.Build(anchorSheet, null, anchorStructure, new[] { hardCut }, null).Count,
+            CueSheetTimeline.Build(anchorSheet, anchorStructure, new[] { hardCut }, null).Count,
             Is.EqualTo(3));
 
         var playheadStructure = Structure(16);
         Assert.That(
-            CueSheetTimeline.Build(default, null, playheadStructure, null, 17).Count,
+            CueSheetTimeline.Build(default, playheadStructure, null, 17).Count,
             Is.EqualTo(2));
     }
 
@@ -233,7 +247,7 @@ public sealed class CueSheetTimelineTests
     {
         var structure = Structure(16);
 
-        var rows = CueSheetTimeline.Build(default, null, structure, null, null);
+        var rows = CueSheetTimeline.Build(default, structure, null, null);
 
         Assert.That(rows.Count, Is.EqualTo(1));
         Assert.That(rows[0].Cells, Is.All.EqualTo(CueSheetBeatMark.None));
@@ -244,12 +258,12 @@ public sealed class CueSheetTimelineTests
     [Test]
     public void EmptyAndPhraselessStructuresReturnSaneRows()
     {
-        var emptyRows = CueSheetTimeline.Build(default, null, default, null, null);
-        var phraselessRows = CueSheetTimeline.Build(default, null, Structure(16), null, null);
+        var emptyRows = CueSheetTimeline.Build(default, default, null, null);
+        var phraselessRows = CueSheetTimeline.Build(default, Structure(16), null, null);
 
         Assert.That(emptyRows, Is.Empty);
         Assert.That(phraselessRows.Count, Is.EqualTo(1));
-        Assert.That(phraselessRows[0].CellPhrases, Is.All.EqualTo(PhraseType.Unknown));
+        Assert.That(phraselessRows[0].Phrase, Is.EqualTo(PhraseType.Unknown));
         Assert.That(phraselessRows[0].PhraseStart, Is.Null);
     }
 
@@ -261,7 +275,7 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(4, 4);
         var sheet = Sheet(structure, transition, transitionIndex: 4);
 
-        var rows = CueSheetTimeline.Build(sheet, null, structure, new[] { transition }, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(CountFlags(rows, CueSheetBeatMark.Runway), Is.Zero);
         Assert.That(CountFlags(rows, CueSheetBeatMark.Tail), Is.Zero);
@@ -276,7 +290,7 @@ public sealed class CueSheetTimelineTests
         var transition = Transition(3, 2);
         var sheet = Sheet(structure, transition);
 
-        var rows = CueSheetTimeline.Build(sheet, null, structure, null, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, null, null);
 
         Assert.That(CountFlags(rows, CueSheetBeatMark.Runway), Is.Zero);
         Assert.That(CountFlags(rows, CueSheetBeatMark.Tail), Is.Zero);

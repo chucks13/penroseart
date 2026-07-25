@@ -310,7 +310,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         DrawLiveEffectSteering(controller);
 
         var viewWidth = position.width - 20f;
-        var activeSlot = DrawSheetSlotToolbar(director.Sheets, beatManager, switcher);
+        var activeSlot = DrawSheetSlotToolbar(director.Sheets, beatManager);
         CueSheetTimelineRenderer.DrawHeader(viewWidth);
 
         IReadOnlyList<CueSheetGridRow> rows = Array.Empty<CueSheetGridRow>();
@@ -319,16 +319,12 @@ public sealed class PenroseTuningWindow : EditorWindow
         {
             var sheet = director.Sheets[activeSlot];
             var player = beatManager.Players[activeSlot];
-            // Fired state exists only for the sheet the Switcher is performing; any other slot
-            // shows its whole plan pending.
-            var onAir = switcher.Sheet.PlayerNumber == sheet.PlayerNumber
-                && switcher.Sheet.StructureGeneration == sheet.StructureGeneration;
-            var fired = onAir ? switcher.FiredMarks : Array.Empty<bool>();
             rows = CueSheetTimeline.Build(
-                sheet, fired, player.Structure, TransitionRepertoiresOf(controller), player.Beat);
-            if (player.Beat is { } beat && beat >= 1 && CueSheetTimeline.RowContaining(beat) < rows.Count)
+                sheet, player.Structure, TransitionRepertoiresOf(controller), player.Beat);
+            var row = player.Beat is { } beat ? CueSheetTimeline.RowContaining(rows, beat) : -1;
+            if (row >= 0)
             {
-                playheadRow = CueSheetTimeline.RowContaining(beat);
+                playheadRow = row;
             }
         }
 
@@ -410,11 +406,10 @@ public sealed class PenroseTuningWindow : EditorWindow
     }
 
     /// <summary>
-    /// Draws the slot selector for every player slot holding a sheet, plus the unobtrusive
-    /// starvation counter, and returns the slot whose sheet the tracker presents (-1 when none).
-    /// Defaults to the on-air focus player until the user pins a slot.
+    /// Draws the slot selector for every player slot holding a sheet, and returns the slot whose sheet the
+    /// tracker presents (-1 when none). Defaults to the on-air focus player until the user pins a slot.
     /// </summary>
-    private int DrawSheetSlotToolbar(IReadOnlyList<TrackCueSheet> sheets, BeatManager beatManager, Switcher switcher)
+    private int DrawSheetSlotToolbar(IReadOnlyList<TrackCueSheet> sheets, BeatManager beatManager)
     {
         var slots = new List<int>();
         for (var slot = 0; slot < sheets.Count; slot++)
@@ -454,11 +449,6 @@ public sealed class PenroseTuningWindow : EditorWindow
                 }
             }
 
-            GUILayout.FlexibleSpace();
-            // Context for a one-off firing out of nowhere: consecutive starved Grid starts.
-            GUILayout.Label(
-                $"stale {switcher.StalenessAsk}/{Switcher.StalenessAskCeiling}",
-                EditorStyles.miniLabel);
         }
 
         return activeSlot;
