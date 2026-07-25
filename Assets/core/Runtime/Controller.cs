@@ -315,13 +315,12 @@ public class Controller : Singleton<Controller>
     /// <summary>Whether Controller should resize the legacy scene text into a compact non-blocking HUD at startup.</summary>
     public bool configureCompactHudLayout = true;
 
-    [Header("Director Debug Logging")]
     /// <summary>
-    /// Writes tagged Director/Switcher sequencing diagnostics to the Unity log for post-run debugging.
-    /// Event-driven, not per-frame, so it is cheap enough to leave on while performing. Serialized —
-    /// the scene's saved value wins over this default for a component that already exists.
+    /// Per-run sink for Director/Switcher sequencing diagnostics. Always on: the traces are
+    /// event-driven rather than per-frame, and a session file costs nothing until something
+    /// actually happens, so there is no gate to forget to switch on before a run that matters.
     /// </summary>
-    public bool logDirectorSwitching = true;
+    public CueLog cueLog;
 
     /// <summary>UI label listing local IPv4 addresses.</summary>
     public TextMeshProUGUI myIPText;
@@ -1373,16 +1372,25 @@ public class Controller : Singleton<Controller>
         return color;
     }
 
-    /// <summary>Writes a tagged sequencing diagnostic line to the Unity log when enabled.</summary>
-    /// <param name="message">Deferred trace text, evaluated only when diagnostics are enabled.</param>
+    /// <summary>Unity teardown hook. Closes the per-session Cue Log so its writer flushes and releases the file.</summary>
+    void OnDestroy()
+    {
+        cueLog?.Dispose();
+    }
+
+    /// <summary>
+    /// Writes a tagged sequencing diagnostic line to this run's Cue Log session file. Silently drops
+    /// the line when no sink exists — tests construct a bare Controller without running Init().
+    /// </summary>
+    /// <param name="message">Deferred trace text, evaluated only when a sink is present.</param>
     public void LogDirectorSwitching(Func<string> message)
     {
-        if (!logDirectorSwitching)
+        if (cueLog == null)
         {
             return;
         }
 
-        Debug.Log($"[DEBUG-DIR16] frame={Time.frameCount} t={Time.time:0.000} {message()}");
+        cueLog.Write($"frame={Time.frameCount} t={Time.time:0.000} {message()}");
     }
 
     /// <summary>
@@ -1466,6 +1474,9 @@ public class Controller : Singleton<Controller>
         }
 
         // Director decides and hands over the Cue Sheet; Switcher executes it and owns transition timing.
+        // The Cue Log is a downstream operator-facing sink: its session file opens lazily on the first
+        // trace and closes in OnDestroy. persistentDataPath is read here because it is main-thread only.
+        cueLog = CueLog.CreateForSession(Path.Combine(Application.persistentDataPath, "Logs"));
         timer = new Timer(effectTime, false);
         switcher = new Switcher(this, effects, transitions);
         switcher.SetInitialEffect(currentEffect, currentTransition);

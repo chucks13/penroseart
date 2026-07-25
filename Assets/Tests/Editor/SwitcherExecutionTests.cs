@@ -32,7 +32,6 @@ public sealed class SwitcherExecutionTests
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
         EffectBase.LoadPalette(controller.paletteSource);
-        controller.logDirectorSwitching = false;
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
         controller.beatManager.SetLiveBeatSource(true);

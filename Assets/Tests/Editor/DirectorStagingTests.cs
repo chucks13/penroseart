@@ -17,7 +17,6 @@ public sealed class DirectorStagingTests
         SetControllerSingleton(controller);
         controller.paletteSource = string.Empty;
         EffectBase.LoadPalette(controller.paletteSource);
-        controller.logDirectorSwitching = false;
         controller.effectTime = 10f;
         controller.beatManager = new BeatManager();
         controller.effects = new EffectBase[] { new TestEffect(), new TestEffect(), new TestEffect() };
