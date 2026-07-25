@@ -18,7 +18,7 @@ Load these skills via the Skill tool before any other work, every session: `unit
 
 ### Issue tracker
 
-Issues and specs are kept as local, git-ignored markdown under `.scratch/<feature-slug>/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues and specs live in the repo's GitHub Issues (via the `gh` CLI). External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
