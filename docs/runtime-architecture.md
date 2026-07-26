@@ -94,6 +94,8 @@ The Switcher counts boundary crossings rather than beats precisely because a loo
 
 Staged and held Effect/Transition choices mask the assignment when the Switcher asks `Director.DecideCue(...)` or `Director.DecideOffPlanCue(...)`; they never mutate the sheet. Both return a `CueDecision`; `Perform == false` means Hold or a ride-through, and the Switcher checks nothing off.
 
+Show Now is the pushed counterpart to a staged pick: an operator choice starts a real Transition into the picked Effect at that instant, with the staged card and no Runway, because an off-grid interjection has no Cue Mark for an Impact Point to fly toward. There is no cut path. The plan in force is left standing — nothing is cleared or re-cast — and it resumes at its next unfired mark.
+
 The fire math follows the **selected** Transition, not the planned one. `Switcher.Tick()` computes a mark's due beat as `mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats`, so an override carrying its own Runway leaves on its own beat and its Impact Point still lands on the Cue Mark. `PeekTransitionIndex` is a peek by design: asking is free, and only `DecideCue` spends the one-shot.
 
 The consequence is the override's timing contract. A Transition staged before its mark's Runway beat performs that mark. A Transition staged *after* that beat has already passed cannot fly its Runway, and a Runway is never compressed to catch up — so the mark is simply missed and the override takes effect at the following mark instead. Late staging delays an override; it never produces a rushed or off-mark hit.
@@ -191,6 +193,8 @@ Standalone selection uses rotating integer decks.
 This gives variety without immediate repeats while still eventually cycling through the catalog.
 
 Synced selection is separate: `TrackCueSheet.Build(...)` deals seeded shuffle bags over the complete Effect and Transition catalogs and bakes the results into the plan. Drop/fill Anchors scan those bags for capable performers and choose either ride-through or a performed Transition. `TrackCueSheet.DealOffPlanCueAt(...)` provides a deterministic fresh deal for an Off-Plan Cue, excluding whatever the wall already holds.
+
+Each bag is dealt top-card and reshuffled once it empties. The reshuffle keeps the card just dealt off the top of the new permutation, because the seam between two passes is the one place a fair bag would otherwise deal the same card twice running — and an Effect dealt twice running bakes a Transition from a card to itself, which moves nothing. Only a ride-through carrier digs past the top card, because it has to be capable of playing the moment itself; an encore from the discard pile is allowed only when an Anchor finds no capable card left.
 
 The Director keeps staged **Next Effect** and **Next Transition** choices as override masks. `SetNextEffect(...)` and `SetNextTransition(...)` replace exactly the next performed assignment; their Hold variants keep replacing that side on later decisions. Releasing a hold returns to the unchanged plan.
 
