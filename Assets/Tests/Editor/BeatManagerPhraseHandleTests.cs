@@ -1,0 +1,356 @@
+// Contract tests for the seven typed Phrase handles fed by the Focus player's Song Structure.
+
+#nullable enable
+
+using NUnit.Framework;
+using PenroseArt.RaveOsc;
+
+/// <summary>
+/// Tests the structure-fed Phrase handles through the Data Surface seam: a hand-built wire snapshot
+/// carrying a per-player Song Structure, its structure cursor, and the live order goes in, one frame
+/// is captured, and the handles' spans are read. Envelope internals are never touched directly.
+/// </summary>
+/// <remarks>
+/// Expected values come from the documented house shape — SmoothStep, <c>t * t * (3 - 2t)</c>, over the
+/// span's normalized position — worked out by hand rather than recomputed the way the runtime does.
+/// </remarks>
+public sealed class BeatManagerPhraseHandleTests
+{
+    /// <summary>Verifies In reads position through the phrase the cursor sits inside.</summary>
+    [Test]
+    public void InReadsPositionThroughTheCoveringPhrase()
+    {
+        // Beat 17 of the 32-beat chorus at ordinal 3: half way through it.
+        var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
+
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(0.5f).Within(0.01f));
+    }
+
+    /// <summary>Verifies In with no argument spans the covering phrase's own length.</summary>
+    [Test]
+    public void InDefaultsToTheCoveringPhrasesOwnLength()
+    {
+        var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
+
+        // Sixteen beats elapsed: a sixteen-beat window has completed, the phrase's own 32 is half way,
+        // and a 64-beat window is a quarter along — SmoothStep(0.25) is 0.15625.
+        Assert.That(beatManager.Chorus.In.Build(16), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(64), Is.EqualTo(0.15625f).Within(0.001f));
+    }
+
+    /// <summary>
+    /// Verifies Before targets the next ordinal occurrence of the type rather than the one being
+    /// played, so both spans of one handle are live in the same frame.
+    /// </summary>
+    [Test]
+    public void BeforeTargetsTheFollowingOccurrenceWhileInIsLive()
+    {
+        // Beat 81 of the track, inside the chorus at ordinal 3; the chorus at ordinal 4 starts at 97.
+        var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
+
+        // Sixteen beats out on a 32-beat runway is half way along it.
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(0.5f).Within(0.01f));
+        // A 16-beat runway is only now opening.
+        Assert.That(beatManager.Chorus.Before.Build(16), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+    }
+
+    /// <summary>Verifies Before reads a type the cursor is not inside, and rests beyond its window.</summary>
+    [Test]
+    public void BeforeReadsATypeTheCursorIsNotInside()
+    {
+        // From beat 81: the down section starts at 129 (48 beats out), the outro at 161 (80 out).
+        var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
+
+        Assert.That(beatManager.Down.Before.Build(96), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Outro.Before.Build(160), Is.EqualTo(0.5f).Within(0.01f));
+        // Eighty beats out is beyond a 64-beat runway, so the outro still reads as infinitely far.
+        Assert.That(beatManager.Outro.Before.Build(64), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Outro.Before.Decay(64), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Down.In.Build(), Is.EqualTo(0f).Within(0.01f));
+    }
+
+    /// <summary>Verifies both spans move within the beat rather than stepping once per beat.</summary>
+    [Test]
+    public void SpansMoveContinuouslyWithinTheBeat()
+    {
+        var onTheBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
+        var halfwayThroughTheBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17, timeSeconds: 0.25f);
+
+        // Half a beat further on: 16.5 of 32 beats elapsed and 15.5 of a 32-beat runway remaining both
+        // land on 0.515625, and SmoothStep(0.515625) is 0.5234.
+        Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.EqualTo(0.5234f).Within(0.001f));
+        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.EqualTo(0.5234f).Within(0.001f));
+        Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.GreaterThan(onTheBeat.Chorus.In.Build()));
+        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.GreaterThan(onTheBeat.Chorus.Before.Build(32)));
+    }
+
+    /// <summary>
+    /// Verifies adjacent identical types stay distinct phrases: entering the second chorus starts its
+    /// In span and leaves no chorus for Before to approach.
+    /// </summary>
+    [Test]
+    public void AdjacentIdenticalPhrasesAreDistinctOccurrences()
+    {
+        var beatManager = FocusDeck(Track(), currentPhrase: 4, beatInPhrase: 1);
+
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+    }
+
+    /// <summary>Verifies a type with no occurrence left, and one absent from the track, both rest.</summary>
+    [Test]
+    public void ATypeThatNeverRecursRestsAtZero()
+    {
+        // From beat 81 the intro is behind and the track carries no verse at all.
+        var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
+
+        Assert.That(beatManager.Intro.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Intro.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Intro.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Verse.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Verse.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Verse.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Bridge.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+    }
+
+    /// <summary>Verifies the handles read the Focus deck and re-read a new one the frame focus moves.</summary>
+    [Test]
+    public void AFocusChangeReReadsTheNewDecksStructureImmediately()
+    {
+        var beatManager = new BeatManager();
+        FeedTwoDecks(beatManager, liveOrder: "1");
+
+        // Player 1 sits half way through a 32-beat chorus; player 2 half way through a 64-beat outro.
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Outro.In.Build(), Is.EqualTo(0f).Within(0.01f));
+
+        FeedTwoDecks(beatManager, liveOrder: "2,1");
+
+        Assert.That(beatManager.Outro.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
+    }
+
+    /// <summary>Verifies a cursor bound to another structure generation is ignored until one matches.</summary>
+    [Test]
+    public void AGenerationMismatchedCursorIsIgnoredUntilAMatchingOneArrives()
+    {
+        var beatManager = new BeatManager();
+        Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 17,
+            structureGeneration: 7, cursorGeneration: 6);
+
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+
+        Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 17,
+            structureGeneration: 7, cursorGeneration: 7);
+
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0.5f).Within(0.01f));
+    }
+
+    /// <summary>
+    /// Verifies a Loop rewinding into the phrase re-enters its In span, because the reading is
+    /// positional rather than accumulated over frames.
+    /// </summary>
+    [Test]
+    public void LoopRewindReEntersTheInSpan()
+    {
+        var beatManager = new BeatManager();
+        Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 32);
+
+        // Thirty-one of 32 beats elapsed: SmoothStep(0.96875) is 0.99713.
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.99713f).Within(0.001f));
+
+        Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 1);
+
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(1f).Within(0.01f));
+    }
+
+    /// <summary>Verifies every handle rests while the Focus deck holds no structure.</summary>
+    [Test]
+    public void HandlesRestWhenNoStructureIsHeld()
+    {
+        var beatManager = new BeatManager();
+        LiveFrame(beatManager, snapshot =>
+        {
+            snapshot.playersLive = "1";
+            snapshot.players[0] = PlayerState.Unavailable;
+        });
+
+        AssertEveryHandleRests(beatManager);
+    }
+
+    /// <summary>Verifies a cursor covering no phrase leaves every handle at rest.</summary>
+    [Test]
+    public void HandlesRestWhenTheCursorCoversNoPhrase()
+    {
+        var beatManager = FocusDeck(Track(), currentPhrase: -1, beatInPhrase: -1);
+
+        AssertEveryHandleRests(beatManager);
+    }
+
+    /// <summary>Verifies a held structure with no live player leaves every handle at rest.</summary>
+    [Test]
+    public void HandlesRestWhenNoPlayerIsLive()
+    {
+        var beatManager = new BeatManager();
+        LiveFrame(beatManager, snapshot =>
+        {
+            snapshot.playersLive = "";
+            snapshot.players[0] = Deck(Track(), currentPhrase: 3, beatInPhrase: 17,
+                structureGeneration: 1, cursorGeneration: 1);
+        });
+
+        AssertEveryHandleRests(beatManager);
+    }
+
+    /// <summary>
+    /// Verifies Standalone Mode leaves every envelope at rest, so a speed multiplier written against a
+    /// Before decay reads "no response" rather than freezing the effect at zero.
+    /// </summary>
+    [Test]
+    public void HandlesRestInStandaloneMode()
+    {
+        var beatManager = new BeatManager();
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsSynced, Is.False);
+        AssertEveryHandleRests(beatManager);
+    }
+
+    /// <summary>
+    /// Verifies a structure phrase of the drop type does not feed the event-fed Drop handle, which
+    /// keeps its single source in the on-air drop lane.
+    /// </summary>
+    [Test]
+    public void AStructureDropPhraseDoesNotFeedTheEventFedDropHandle()
+    {
+        var beatManager = FocusDeck(new[] { Phrase(1, 32, "drop") }, currentPhrase: 1, beatInPhrase: 17);
+
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Drop.Before.Decay(8), Is.EqualTo(1f).Within(0.01f));
+    }
+
+    /// <summary>Asserts all seven handles read their nothing-happening values.</summary>
+    private static void AssertEveryHandleRests(BeatManager beatManager)
+    {
+        var handles = new[]
+        {
+            beatManager.Intro, beatManager.Up, beatManager.Down, beatManager.Verse,
+            beatManager.Bridge, beatManager.Chorus, beatManager.Outro,
+        };
+
+        foreach (var handle in handles)
+        {
+            Assert.That(handle.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
+            Assert.That(handle.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+            Assert.That(handle.In.Build(), Is.EqualTo(0f).Within(0.01f));
+            Assert.That(handle.In.Decay(), Is.EqualTo(0f).Within(0.01f));
+            Assert.That(handle.In.Decay(16), Is.EqualTo(0f).Within(0.01f));
+        }
+    }
+
+    /// <summary>A six-phrase track with two adjacent choruses and no verse or bridge.</summary>
+    private static StructurePhrase[] Track() => new[]
+    {
+        Phrase(1, 32, "intro"),
+        Phrase(33, 64, "up"),
+        Phrase(65, 96, "chorus"),
+        Phrase(97, 128, "chorus"),
+        Phrase(129, 160, "down"),
+        Phrase(161, 192, "outro"),
+    };
+
+    /// <summary>Captures one live frame whose focus deck holds the given structure and cursor.</summary>
+    private static BeatManager FocusDeck(StructurePhrase[] phrases, int currentPhrase, int beatInPhrase,
+        float timeSeconds = 0f)
+    {
+        var beatManager = new BeatManager();
+        Feed(beatManager, phrases, currentPhrase, beatInPhrase, timeSeconds: timeSeconds);
+        return beatManager;
+    }
+
+    /// <summary>Feeds one live frame in which player 1 is the focus deck and holds the structure.</summary>
+    private static void Feed(BeatManager beatManager, StructurePhrase[] phrases, int currentPhrase,
+        int beatInPhrase, int structureGeneration = 1, int? cursorGeneration = null, float timeSeconds = 0f)
+    {
+        LiveFrame(
+            beatManager,
+            snapshot =>
+            {
+                snapshot.playersLive = "1";
+                snapshot.players[0] = Deck(phrases, currentPhrase, beatInPhrase, structureGeneration,
+                    cursorGeneration ?? structureGeneration);
+            },
+            timeSeconds);
+    }
+
+    /// <summary>Feeds one live frame carrying two decks whose structures cannot be confused.</summary>
+    private static void FeedTwoDecks(BeatManager beatManager, string liveOrder)
+    {
+        LiveFrame(beatManager, snapshot =>
+        {
+            snapshot.playersLive = liveOrder;
+            snapshot.players[0] = Deck(new[] { Phrase(1, 32, "chorus") },
+                currentPhrase: 1, beatInPhrase: 17, structureGeneration: 1, cursorGeneration: 1);
+            snapshot.players[1] = Deck(new[] { Phrase(1, 64, "outro") },
+                currentPhrase: 1, beatInPhrase: 33, structureGeneration: 4, cursorGeneration: 4);
+        });
+    }
+
+    /// <summary>Feeds one live frame after applying a focused mutation to a deterministic snapshot.</summary>
+    private static void LiveFrame(BeatManager beatManager, System.Action<RaveWireSnapshot> mutate,
+        float timeSeconds = 0f)
+    {
+        var snapshot = BeatClockFixture.CreateSnapshot(120f, timeSeconds);
+        mutate(snapshot);
+        beatManager.FeedWireSnapshot(snapshot);
+        beatManager.Update(0f);
+    }
+
+    /// <summary>Builds one physical player holding a song structure and its live cursor.</summary>
+    private static PlayerState Deck(StructurePhrase[] phrases, int currentPhrase, int beatInPhrase,
+        int structureGeneration, int cursorGeneration)
+    {
+        var covered = currentPhrase >= 1 && currentPhrase <= phrases.Length && beatInPhrase >= 1;
+        var deck = PlayerState.Unavailable;
+        deck.structure = new PlayerStructure
+        {
+            generation = structureGeneration,
+            trackId = "phrase-handle-test",
+            source = "analyzed",
+            totalBeats = phrases[phrases.Length - 1].endBeat,
+            phraseCount = phrases.Length,
+            phrases = phrases,
+        };
+        deck.cursor = new StructureCursor
+        {
+            generation = cursorGeneration,
+            currentPhrase = covered ? currentPhrase : -1,
+            beatInPhrase = covered ? beatInPhrase : -1,
+            beatsToNextPhrase = covered
+                ? phrases[currentPhrase - 1].endBeat - phrases[currentPhrase - 1].startBeat - beatInPhrase + 2
+                : -1,
+        };
+        return deck;
+    }
+
+    /// <summary>Creates one wire phrase tuple of the given type.</summary>
+    private static StructurePhrase Phrase(int startBeat, int endBeat, string type) => new StructurePhrase
+    {
+        startBeat = startBeat,
+        endBeat = endBeat,
+        type = type,
+        variant = 0,
+        fillStartBeat = 0,
+        dropLandingBeat = 0,
+    };
+}
