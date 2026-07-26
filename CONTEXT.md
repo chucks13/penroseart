@@ -86,9 +86,13 @@ _Avoid_: a zero count; conflating the countdowns with the average interval; addi
 RaveSystem's name for the analyzed phrase signal: current/next phrase labels, active state, beats remaining to the phrase boundary or upcoming phrase start, phrase length, and phrase count. Despite the name, Track Phase describes a **Phrase** in song structure; it is not the wall's **Grid**. In the current OSC stream, `active=1` describes the current Phrase, `active=0` can describe an upcoming Phrase, and `active=-1` means unavailable.
 _Avoid_: confusing Track Phase with **Bar Phase** or the wall's **Grid**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
+**Song Structure**:
+The ordered Phrase list created for a track when it loads — e.g. intro, up, drop, chorus, down, up, drop, down, outro — with Fills marked anywhere within its Phrases. Each player broadcasts its own Song Structure, keyed by Structure Generation; the on-air drop and fill lanes are conveniences carved off it because those moments are used so much.
+_Avoid_: treating the on-air drop/fill lanes as a separate musical source from the structure; "phrase map" or "structure phrase" as distinct concepts — the list is the Song Structure and its pieces are Phrases.
+
 **Phrase**:
-The current musical section span described by Track Phase. It starts and ends at phrase boundaries, contains one or more Grids, and is usually at least 8 bars / 32 beats while often doubling or extending from there. The track's Phrase map is what the Cue Sheet lays its marks against.
-_Avoid_: treating a Phrase as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase.
+A named section of the Song Structure — intro, up, down, verse, bridge, chorus, outro, or drop. It starts and ends at phrase boundaries, contains one or more Grids, and is usually at least 8 bars / 32 beats while often doubling or extending from there; Track Phase is the on-air description of the current one. The track's Song Structure is what the Cue Sheet lays its marks against.
+_Avoid_: treating a Phrase as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase; "section" as a separate term.
 
 **Phrase Ordinal**:
 A structure phrase's identity: its one-based position in the assembled phrase list. Repeated and immediately adjacent identical phrase types are distinct phrases, and the structure cursor names its current phrase by ordinal.
@@ -99,7 +103,7 @@ The per-player change detector for song structure: an identifier that differs wh
 _Avoid_: using the track id to detect structure change; comparing generations with less-than/greater-than; treating an identical track as an unchanged structure.
 
 **Fill**:
-A one-to-four-beat musical section at the end of a Phrase, described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats`, `Progress`, `Build()`, and `Decay()`. The selected Effect or Transition owns how it responds.
+A short musical moment marked within a Phrase — anywhere inside it, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats`, `Progress`, `Build()`, and `Decay()`. The selected Effect or Transition owns how it responds.
 
 **Drop**:
 The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, `Build()`, and `Decay()`. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
@@ -154,17 +158,17 @@ _Avoid_: debouncing, smoothing, or applying hysteresis to Focus so it "settles";
 The two intentional personalities for rhythm-aware behavior. The dividing line is a single authority — whether a usable musical clock (the running 4-count) is present. **Synced Mode** is active whenever that clock is present; the wall syncs to whatever musical timing the signal currently provides. **Standalone Mode** is the self-running art behavior whenever the clock is absent — no OSC connected at all, or OSC connected but no track playing or yet analysed — and it must look fully intentional on its own. One shared flag — spelled `IsSynced`, its only name — decides this for every consumer so they can never disagree. This is a preference, not a fallback: the wall prefers a live clock and works deliberately without one.
 _Avoid_: deciding mode from transport connectivity or tempo instead of the running 4-count; multiple consumers each re-deriving the mode; `IsActive` (retired alias of `IsSynced`); effects that freeze, glitch, or go dark when the clock is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase (clock still running) as Standalone Mode.
 
-**Span**:
-An ordinary description of music with a duration, not a public BeatManager interface or wrapper type. Phrase, Drop, Fill, Energy, and Grid expose their facts directly and each offers the same readable `Build()` and `Decay()` convenience where useful.
-_Avoid_: `SpanView`, `.Span`, `.Current`, or forcing unlike wire shapes through one generic public type.
+**Span** (the **Before / In** pair):
+A musical piece with a beginning — a Drop, a Fill, or a Phrase of the Song Structure — has exactly two named spans: **Before**, approaching the piece across a caller-named window of whole beats, and **In**, through the piece from its start to its end. Each span serves the Stock Envelopes and nothing else; both spans of a piece can be live in the same frame, and `After` was considered and deliberately dropped.
+_Avoid_: `SpanView`, `.Span`, `.Current`, or forcing unlike wire shapes through one generic public type; "During", "Near"/"Far", "Approach"/"Distance" (rejected span names); a Before span with a default window.
 
 **Edge**:
 A consumer-local comparison when a system needs to know that a value changed or a moment began. BeatManager exposes current immutable state, not one-frame `Started`, `Ended`, `Changed`, `Wrapped`, or gate-opened booleans. The consumer retains the prior value whose change matters to its own behavior.
 _Avoid_: manufacturing events in BeatManager merely because a caller could compare two values; confusing a frame flag with durable event delivery.
 
 **Stock Envelope**:
-A direct convenience on Phrase, Drop, Fill, Energy, and Grid. **Build** rises from zero to one; **Decay** falls from one to zero. With no argument the window is the value's full length. `Build(16)` or `Decay(16)` completes during the first sixteen beats and then holds its endpoint. The methods rest at zero when their duration is unavailable or inactive.
-_Avoid_: a generic public envelope hierarchy; naming curves after artistic gestures; treating the convenience as the only sanctioned response.
+The readable envelope pair wherever a musical duration exists: **Build** rises from zero to one; **Decay** falls from one to zero. Windows are counts of whole beats — `Build(16)` completes during the first sixteen beats and then holds its endpoint; with no argument the window is the piece's full length, which is why a Before span (having no length of its own) always names its window. Served directly on the on-air Phrase group, Energy, and Grid, and through the Before/In spans of Drop, Fill, and the typed Phrase handles of the Song Structure. Each method rests at its nothing-happening value when its duration is unavailable or inactive: zero everywhere except a Before span's `Decay`, which rests at one — the piece reads as infinitely far, so a speed multiplier means "no response".
+_Avoid_: a generic public envelope hierarchy; fractional-beat windows; naming curves after artistic gestures; treating the convenience as the only sanctioned response; a Before `Decay` that rests at zero (it would freeze multiplier consumers in Standalone Mode).
 
 **Color Bank**:
 Retired. Color mapping is artistic policy owned by the Effect or Transition using the level data. BeatManager exposes musical values only.
