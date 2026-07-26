@@ -137,10 +137,10 @@ public class Flock : EffectBase
     private const float TypicalFillBeats = 4f;
 
     /// <summary>The shortest supported Fill duration used to cap short-window compensation.</summary>
-    private const int MinimumFillBeats = 1;
+    private const float MinimumFillBeats = 1f;
 
     /// <summary>Maximum number of beats used to establish the Fill orbit before onset.</summary>
-    private const int MaximumFillLeadBeats = 2;
+    private const float MaximumFillLeadBeats = 2f;
 
     /// <summary>Base tangential velocity added when a typical Fill begins; shorter Fills receive a duration boost.</summary>
     private const float FillOnsetImpulse = 6f;
@@ -160,7 +160,7 @@ public class Flock : EffectBase
     // Drop gathering and release
 
     /// <summary>Number of beats before a Drop during which the flock gathers at wall center.</summary>
-    private const int DropRunwayBeats = 8;
+    private const float DropRunwayBeats = 8f;
 
     /// <summary>Strength of center-seeking steering at the end of the Drop runway.</summary>
     private const float DropGatherSteering = 3f;
@@ -448,10 +448,11 @@ public class Flock : EffectBase
     {
         var fill = beatManager.Fill;
         bool fillActive = fill.Active;
-        float durationBoost = GetFillDurationBoost(fill.LengthBeats);
-        fillOrbitDrive = fillActive
-            ? durationBoost
-            : fill.Before.Build(GetFillLeadBeats(fill.LengthBeats)) * durationBoost;
+        fillOrbitDrive = GetFillApproach(
+            fillActive,
+            fill.BeatsUntil,
+            beatManager.Timing.BeatProgress,
+            fill.LengthBeats);
 
         if (fillActive && !previousFillActive)
         {
@@ -470,7 +471,7 @@ public class Flock : EffectBase
     {
         var drop = beatManager.Drop;
         bool dropActive = drop.Active;
-        dropGather = drop.Before.Build(DropRunwayBeats);
+        dropGather = GetDropApproach(dropActive, drop.BeatsUntil, beatManager.Timing.BeatProgress);
 
         if (dropActive && !previousDropActive)
         {
@@ -664,19 +665,53 @@ public class Flock : EffectBase
         return Mathf.Sqrt(TypicalFillBeats / duration);
     }
 
-    /// <summary>
-    /// Returns how many beats of runway this Fill gets, shortening the orbit lead for short Fills.
-    /// </summary>
-    /// <param name="lengthBeats">Known Fill length, or <see langword="null"/> when unavailable.</param>
-    /// <returns>Runway length in whole beats, between one and <see cref="MaximumFillLeadBeats"/>.</returns>
-    /// <remarks>
-    /// This is Flock's own choice of window, not envelope math: the shape itself comes from the
-    /// Fill handle's Before span.
-    /// </remarks>
-    private static int GetFillLeadBeats(int? lengthBeats) =>
-        lengthBeats is > 0
+    /// <summary>Builds the duration-aware orbit before Fill onset and holds it throughout the active Fill.</summary>
+    /// <param name="fillActive">Whether the Fill is currently active.</param>
+    /// <param name="beatsUntil">Whole-beat countdown to Fill onset.</param>
+    /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
+    /// <param name="lengthBeats">Known Fill length used for lead time and short-window compensation.</param>
+    /// <returns>Fill orbit drive; short Fills may intentionally return more than 1.</returns>
+    public static float GetFillApproach(
+        bool fillActive,
+        int? beatsUntil,
+        float? beatProgress,
+        int? lengthBeats)
+    {
+        float durationBoost = GetFillDurationBoost(lengthBeats);
+        if (fillActive)
+        {
+            return durationBoost;
+        }
+
+        float leadBeats = lengthBeats is > 0
             ? Mathf.Clamp(lengthBeats.Value, MinimumFillBeats, MaximumFillLeadBeats)
             : MaximumFillLeadBeats;
+        if (beatsUntil is not { } beats || beats < 0 || beats > leadBeats)
+        {
+            return 0f;
+        }
+
+        float continuousBeatsUntil = beats - Mathf.Clamp01(beatProgress ?? 0f);
+        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / leadBeats);
+        return Mathf.SmoothStep(0f, 1f, progress) * durationBoost;
+    }
+
+    /// <summary>Returns a smooth zero-to-one gathering amount across the final eight beats before a Drop.</summary>
+    /// <param name="dropActive">Whether the Drop has already begun.</param>
+    /// <param name="beatsUntil">Whole-beat countdown to Drop onset.</param>
+    /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
+    /// <returns>Pre-Drop gathering in <c>[0..1]</c>, or zero outside the runway.</returns>
+    public static float GetDropApproach(bool dropActive, int? beatsUntil, float? beatProgress)
+    {
+        if (dropActive || beatsUntil is not { } beats || beats < 0 || beats > DropRunwayBeats)
+        {
+            return 0f;
+        }
+
+        float continuousBeatsUntil = beats - Mathf.Clamp01(beatProgress ?? 0f);
+        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / DropRunwayBeats);
+        return Mathf.SmoothStep(0f, 1f, progress);
+    }
 
     // Individual boid simulation
 

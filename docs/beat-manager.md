@@ -103,11 +103,11 @@ Phrase, Energy, and Grid expose `Build()` and `Decay()` directly. Drop, Fill, an
 float fullBuild = beatManager.Drop.In.Build();
 float fastBuild = beatManager.Drop.In.Build(16);
 float fastDecay = beatManager.Drop.In.Decay(16);
-float slowdown  = beatManager.Drop.Before.Decay(8);   // 1 far off → 0 as the drop lands
-float charge    = beatManager.Drop.Before.Build(8);   // 0 far off → 1 as the drop lands
+float slowdown  = beatManager.Drop.Before.Decay(8);   // 1 far off → 1/8 on the last beat before it lands
+float charge    = beatManager.Drop.Before.Build(8);   // 0 far off → rising as the drop nears
 ```
 
-Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect. Both spans also rest whenever the wire reports no running beat count: without the intra-beat clock an envelope would step once per beat rather than move musically, so it rests instead. The facts are not gated that way — `BeatsUntil`, `BeatsRemaining`, and `Progress` all still read while the beat lane is missing, because only the envelopes need a clock.
+Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect. The two spans differ in shape on purpose: `Before` is linear in the wire's whole-beat countdown — the house slowdown ramp, advancing once per beat and never reaching its endpoint before the piece actually lands — while `In` eases (SmoothStep) and moves continuously within the beat when the clock runs, falling back to whole-beat steps when the wire stops reporting one.
 
 These normalized values use the same two scalar helpers as the rest of the runtime. `Lerp` turns a normalized
 amount into a useful range; `Remap` converts one range to another and clamps only when requested:

@@ -8,43 +8,38 @@ using UnityEngine;
 /// beats that ends where the piece begins.
 /// </summary>
 /// <remarks>
-/// Total by construction. An unavailable piece, an unusable window, and a piece further off than the
-/// window all read as infinitely far, so <see cref="Build"/> rests at zero and <see cref="Decay"/>
-/// rests at one — a speed multiplier written against <see cref="Decay"/> therefore means "no response"
-/// whenever nothing is coming, including Standalone Mode. Having no length of its own, this span never
-/// defaults its window.
+/// The ramp is the house counting shape: linear in the wire's whole-beat countdown, advancing once
+/// per beat exactly as the count does, with <see cref="Decay"/> still reading 1/window — not zero —
+/// on the final beat before the piece lands. Total by construction: an unavailable piece, an unusable
+/// window, and a piece further off than the window all read as infinitely far, so <see cref="Build"/>
+/// rests at zero and <see cref="Decay"/> rests at one — a speed multiplier written against
+/// <see cref="Decay"/> therefore means "no response" whenever nothing is coming, including Standalone
+/// Mode. Having no length of its own, this span never defaults its window.
 /// </remarks>
 public readonly struct BeforeSpan
 {
-    /// <summary>Continuous beats until the piece begins; null while no such piece is coming.</summary>
-    private readonly float? beatsUntil;
+    /// <summary>Whole beats until the piece begins; null while no such piece is coming.</summary>
+    private readonly int? beatsUntil;
 
-    /// <summary>Creates an approach span from a continuous distance to the piece.</summary>
-    /// <param name="continuousBeatsUntil">
-    /// Beats until the piece begins, smoothed within the beat so the value moves continuously;
-    /// null when no such piece is upcoming.
+    /// <summary>Creates an approach span from the wire's whole-beat distance to the piece.</summary>
+    /// <param name="beatsUntil">
+    /// Beats until the piece begins, including the current beat; null when no such piece is upcoming.
     /// </param>
-    internal BeforeSpan(float? continuousBeatsUntil)
+    internal BeforeSpan(int? beatsUntil)
     {
-        beatsUntil = continuousBeatsUntil;
+        this.beatsUntil = beatsUntil;
     }
 
-    /// <summary>Rises from zero to one across the <paramref name="windowBeats"/> beats before the piece.</summary>
+    /// <summary>Rises from zero toward one across the <paramref name="windowBeats"/> beats before the piece.</summary>
     /// <param name="windowBeats">Length of the approach runway in whole beats.</param>
-    public float Build(int windowBeats) => StockEnvelopes.Rise(Approach(windowBeats));
+    public float Build(int windowBeats) => 1f - Decay(windowBeats);
 
-    /// <summary>Falls from one to zero across the <paramref name="windowBeats"/> beats before the piece.</summary>
+    /// <summary>Falls from one toward zero across the <paramref name="windowBeats"/> beats before the piece.</summary>
     /// <param name="windowBeats">Length of the approach runway in whole beats.</param>
-    public float Decay(int windowBeats) => StockEnvelopes.Fall(Approach(windowBeats));
-
-    /// <summary>
-    /// Total 0..1 position along the runway: zero while the piece is unknown or beyond the window,
-    /// one as it lands. Totality lives here so both envelopes inherit it from one reading.
-    /// </summary>
-    private float Approach(int windowBeats) =>
+    public float Decay(int windowBeats) =>
         windowBeats > 0 && beatsUntil is { } until
-            ? Mathf.Clamp01((windowBeats - until) / windowBeats)
-            : 0f;
+            ? Mathf.Clamp01((float)until / windowBeats)
+            : 1f;
 }
 
 /// <summary>

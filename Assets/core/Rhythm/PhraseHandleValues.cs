@@ -64,19 +64,15 @@ internal readonly struct FocusStructureReading
     /// <summary>Absolute one-based track beat the cursor sits on.</summary>
     private readonly int currentBeat;
 
-    /// <summary>Fraction elapsed into the current beat, so distances fall continuously.</summary>
-    private readonly float intraBeatFraction;
-
     /// <summary>Captures one frame's cursor position and its next-occurrence table.</summary>
     internal FocusStructureReading(int[] nextStartBeats, PhraseType coveringType, float elapsedBeats,
-        int? coveringLength, int currentBeat, float intraBeatFraction)
+        int? coveringLength, int currentBeat)
     {
         this.nextStartBeats = nextStartBeats;
         this.coveringType = coveringType;
         this.elapsedBeats = elapsedBeats;
         this.coveringLength = coveringLength;
         this.currentBeat = currentBeat;
-        this.intraBeatFraction = intraBeatFraction;
     }
 
     /// <summary>Reads both spans of one phrase type from this position.</summary>
@@ -85,7 +81,7 @@ internal readonly struct FocusStructureReading
     {
         var nextStartBeat = nextStartBeats is { } starts ? starts[(int)type] : 0;
         return new PhraseHandleValues(
-            new BeforeSpan(nextStartBeat > 0 ? nextStartBeat - currentBeat - intraBeatFraction : null),
+            new BeforeSpan(nextStartBeat > 0 ? nextStartBeat - currentBeat : (int?)null),
             coveringType == type ? new InSpan(elapsedBeats, coveringLength) : default);
     }
 }
@@ -155,7 +151,7 @@ public partial class BeatManager
     /// </remarks>
     private FocusStructureReading ReadFocusStructure()
     {
-        // No running beat count is no clock at all: the envelopes rest rather than stepping per beat.
+        // No running beat count is no clock at all: without one the handles rest.
         if (!IsSynced || LiveOrder.Focus is not { } focus)
         {
             return default;
@@ -201,7 +197,6 @@ public partial class BeatManager
             covering.Type,
             beatInPhrase - 1 + intraBeat,
             coveringLength > 0 ? coveringLength : null,
-            currentBeat,
-            intraBeat);
+            currentBeat);
     }
 }

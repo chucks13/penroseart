@@ -9,7 +9,7 @@ using UnityEngine;
 /// FILL: a soft-edged wavefront sweeps across the tiles, ordered by each tile's hue distance from the
 /// wall's own mean hue (closest first), collapsing their hue toward that mean. The front position is
 /// driven by the Fill's <see cref="InSpan.Build"/> (so it always finishes by the Fill's end regardless of
-/// how many beats the Fill lasts), given a light pre-Fill primer from its <see cref="BeforeSpan.Build"/>,
+/// how many beats the Fill lasts), given a light pre-Fill primer from <see cref="FillValues.BeatsUntil"/>,
 /// and kicked forward once per Waveform hit so the sweep
 /// visibly lurches on the beat instead of gliding smoothly.
 ///
@@ -48,9 +48,6 @@ public class Angles : EffectBase
 
     /// <summary>How far a Waveform hit punches the wavefront beyond the stock Fill Build, so the collapse advances in visible surges instead of a silky ramp. Tune on the readout.</summary>
     private const float BeatKick = 0.15f;
-
-    /// <summary>Beats of pre-Fill runway over which the wavefront primer is shaped.</summary>
-    private const int AnticipationBeats = 32;
 
     /// <summary>Exponent shaping the long (32-beat) pre-Fill anticipation window so the wavefront primer stays negligible until the last few beats before a Fill actually starts.</summary>
     private const float AnticipationCurvePower = 5f;
@@ -237,7 +234,10 @@ public class Angles : EffectBase
     {
         var fill = beatManager.Fill;
         bool filling = fill.Active;
-        float primer = Mathf.Pow(fill.Before.Build(AnticipationBeats), AnticipationCurvePower) * AnticipationPrimerCap;
+        float anticipation = !filling && fill.BeatsUntil is { } next
+            ? ((float)next).Remap(0f, 32f, 1f, 0f, clamp: true)
+            : 0f;
+        float primer = Mathf.Pow(anticipation, AnticipationCurvePower) * AnticipationPrimerCap;
         fillEnv = Mathf.Max(fill.In.Build(), primer);
 
         if (filling)

@@ -69,6 +69,9 @@ public class Vortex : EffectBase
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
     public override void OnEnd() { }
+
+    /// <summary>Advances the vortex rotation, slamming the spin rate while a Drop is active.</summary>
+    /// <param name="delta">Frame time in seconds.</param>
     public void Update(float delta)
     {
         float deg2rad = (Mathf.PI * 2f) / 360f;
@@ -94,7 +97,11 @@ public class Vortex : EffectBase
     /// </summary>
     public override void Draw()
     {
-        ringScale = beatManager.Drop.Before.Decay(8);   // rings close in over the last eight beats
+        // Rings close in across the last eight beats and are fully shut one beat before the landing —
+        // Vortex's own ramp, steeper than the stock Before shape, which never reaches zero pre-landing.
+        ringScale = beatManager.Drop.BeatsUntil is { } beatsTilDrop && beatsTilDrop < 8
+            ? ((float)beatsTilDrop).Remap(8f, 1f, 1f, 0f)
+            : 1f;
 
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;

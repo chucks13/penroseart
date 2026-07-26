@@ -23,8 +23,8 @@ public sealed class BeatManagerPhraseHandleTests
         // Beat 17 of the 32-beat chorus at ordinal 3: half way through it.
         var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
 
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(0.5f));
     }
 
     /// <summary>Verifies In with no argument spans the covering phrase's own length.</summary>
@@ -35,9 +35,9 @@ public sealed class BeatManagerPhraseHandleTests
 
         // Sixteen beats elapsed: a sixteen-beat window has completed, the phrase's own 32 is half way,
         // and a 64-beat window is a quarter along — SmoothStep(0.25) is 0.15625.
-        Assert.That(beatManager.Chorus.In.Build(16), Is.EqualTo(1f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Build(64), Is.EqualTo(0.15625f).Within(0.001f));
+        Assert.That(beatManager.Chorus.In.Build(16), Is.EqualTo(1f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Chorus.In.Build(64), Is.EqualTo(0.15625f));
     }
 
     /// <summary>
@@ -51,11 +51,11 @@ public sealed class BeatManagerPhraseHandleTests
         var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
 
         // Sixteen beats out on a 32-beat runway is half way along it.
-        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(0.5f));
         // A 16-beat runway is only now opening.
-        Assert.That(beatManager.Chorus.Before.Build(16), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.Before.Build(16), Is.EqualTo(0f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
     }
 
     /// <summary>Verifies Before reads a type the cursor is not inside, and rests beyond its window.</summary>
@@ -65,27 +65,31 @@ public sealed class BeatManagerPhraseHandleTests
         // From beat 81: the down section starts at 129 (48 beats out), the outro at 161 (80 out).
         var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
 
-        Assert.That(beatManager.Down.Before.Build(96), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Outro.Before.Build(160), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Down.Before.Build(96), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Outro.Before.Build(160), Is.EqualTo(0.5f));
         // Eighty beats out is beyond a 64-beat runway, so the outro still reads as infinitely far.
-        Assert.That(beatManager.Outro.Before.Build(64), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Outro.Before.Decay(64), Is.EqualTo(1f).Within(0.01f));
-        Assert.That(beatManager.Down.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Outro.Before.Build(64), Is.EqualTo(0f));
+        Assert.That(beatManager.Outro.Before.Decay(64), Is.EqualTo(1f));
+        Assert.That(beatManager.Down.In.Build(), Is.EqualTo(0f));
     }
 
-    /// <summary>Verifies both spans move within the beat rather than stepping once per beat.</summary>
+    /// <summary>
+    /// Verifies In keeps its intra-beat continuity while Before holds until its whole-beat distance steps.
+    /// </summary>
     [Test]
-    public void SpansMoveContinuouslyWithinTheBeat()
+    public void InMovesContinuouslyWhileBeforeHoldsUntilTheWholeBeatSteps()
     {
         var onTheBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
         var halfwayThroughTheBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17, timeSeconds: 0.25f);
+        var nextWholeBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 18, timeSeconds: 0.25f);
 
-        // Half a beat further on: 16.5 of 32 beats elapsed and 15.5 of a 32-beat runway remaining both
-        // land on 0.515625, and SmoothStep(0.515625) is 0.5234.
+        // Half a beat further on, In reaches SmoothStep(16.5 / 32) while Before still sees 16 whole beats.
         Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.EqualTo(0.5234f).Within(0.001f));
-        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.EqualTo(0.5234f).Within(0.001f));
+        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.EqualTo(0.5f));
         Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.GreaterThan(onTheBeat.Chorus.In.Build()));
-        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.GreaterThan(onTheBeat.Chorus.Before.Build(32)));
+        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32),
+            Is.EqualTo(onTheBeat.Chorus.Before.Build(32)));
+        Assert.That(nextWholeBeat.Chorus.Before.Build(32), Is.EqualTo(17f / 32f));
     }
 
     /// <summary>
@@ -97,26 +101,26 @@ public sealed class BeatManagerPhraseHandleTests
     {
         var beatManager = FocusDeck(Track(), currentPhrase: 4, beatInPhrase: 1);
 
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(1f).Within(0.01f));
-        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f));
+        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(1f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0f));
+        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(1f));
     }
 
-    /// <summary>Verifies a type with no occurrence left, and one absent from the track, both rest.</summary>
+    /// <summary>Verifies handles with no current or upcoming occurrence rest at nothing-happening values.</summary>
     [Test]
-    public void ATypeThatNeverRecursRestsAtZero()
+    public void HandlesWithNoCurrentOrUpcomingOccurrenceRestAtNothingHappeningValues()
     {
         // From beat 81 the intro is behind and the track carries no verse at all.
         var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
 
-        Assert.That(beatManager.Intro.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Intro.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
-        Assert.That(beatManager.Intro.In.Build(), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Verse.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Verse.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
-        Assert.That(beatManager.Verse.In.Build(), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Bridge.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Intro.Before.Build(32), Is.EqualTo(0f));
+        Assert.That(beatManager.Intro.Before.Decay(32), Is.EqualTo(1f));
+        Assert.That(beatManager.Intro.In.Build(), Is.EqualTo(0f));
+        Assert.That(beatManager.Verse.Before.Build(32), Is.EqualTo(0f));
+        Assert.That(beatManager.Verse.Before.Decay(32), Is.EqualTo(1f));
+        Assert.That(beatManager.Verse.In.Build(), Is.EqualTo(0f));
+        Assert.That(beatManager.Bridge.Before.Decay(32), Is.EqualTo(1f));
     }
 
     /// <summary>Verifies the handles read the Focus deck and re-read a new one the frame focus moves.</summary>
@@ -127,13 +131,13 @@ public sealed class BeatManagerPhraseHandleTests
         FeedTwoDecks(beatManager, liveOrder: "1");
 
         // Player 1 sits half way through a 32-beat chorus; player 2 half way through a 64-beat outro.
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Outro.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Outro.In.Build(), Is.EqualTo(0f));
 
         FeedTwoDecks(beatManager, liveOrder: "2,1");
 
-        Assert.That(beatManager.Outro.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Outro.In.Build(), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f));
     }
 
     /// <summary>Verifies a cursor bound to another structure generation is ignored until one matches.</summary>
@@ -144,15 +148,15 @@ public sealed class BeatManagerPhraseHandleTests
         Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 17,
             structureGeneration: 7, cursorGeneration: 6);
 
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0f));
+        Assert.That(beatManager.Chorus.Before.Decay(32), Is.EqualTo(1f));
 
         Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 17,
             structureGeneration: 7, cursorGeneration: 7);
 
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
+        Assert.That(beatManager.Chorus.Before.Build(32), Is.EqualTo(0.5f));
     }
 
     /// <summary>
@@ -170,8 +174,8 @@ public sealed class BeatManagerPhraseHandleTests
 
         Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 1);
 
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0f));
+        Assert.That(beatManager.Chorus.In.Decay(), Is.EqualTo(1f));
     }
 
     /// <summary>Verifies every handle rests while the Focus deck holds no structure.</summary>
@@ -255,7 +259,7 @@ public sealed class BeatManagerPhraseHandleTests
         // The remaining chunk lands under the same generation and the same position now reads.
         Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 17);
 
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
     }
 
     /// <summary>
@@ -281,8 +285,8 @@ public sealed class BeatManagerPhraseHandleTests
     {
         var beatManager = FocusDeck(new[] { Phrase(1, 32, "drop") }, currentPhrase: 1, beatInPhrase: 17);
 
-        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0f).Within(0.01f));
-        Assert.That(beatManager.Drop.Before.Decay(8), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0f));
+        Assert.That(beatManager.Drop.Before.Decay(8), Is.EqualTo(1f));
     }
 
     /// <summary>Asserts all seven handles read their nothing-happening values.</summary>
@@ -296,11 +300,11 @@ public sealed class BeatManagerPhraseHandleTests
 
         foreach (var handle in handles)
         {
-            Assert.That(handle.Before.Build(32), Is.EqualTo(0f).Within(0.01f));
-            Assert.That(handle.Before.Decay(32), Is.EqualTo(1f).Within(0.01f));
-            Assert.That(handle.In.Build(), Is.EqualTo(0f).Within(0.01f));
-            Assert.That(handle.In.Decay(), Is.EqualTo(0f).Within(0.01f));
-            Assert.That(handle.In.Decay(16), Is.EqualTo(0f).Within(0.01f));
+            Assert.That(handle.Before.Build(32), Is.EqualTo(0f));
+            Assert.That(handle.Before.Decay(32), Is.EqualTo(1f));
+            Assert.That(handle.In.Build(), Is.EqualTo(0f));
+            Assert.That(handle.In.Decay(), Is.EqualTo(0f));
+            Assert.That(handle.In.Decay(16), Is.EqualTo(0f));
         }
     }
 

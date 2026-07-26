@@ -6,8 +6,7 @@ internal readonly struct CountdownValues
 {
     /// <summary>Creates the shared direct and interpreted countdown values.</summary>
     internal CountdownValues(bool active, int? lengthBeats, int? remaining,
-        int? beatsRemaining, int? beatsUntil, float? progress, float? elapsedBeats,
-        float? continuousBeatsUntil)
+        int? beatsRemaining, int? beatsUntil, float? progress, float? elapsedBeats)
     {
         Active = active;
         LengthBeats = lengthBeats;
@@ -16,7 +15,6 @@ internal readonly struct CountdownValues
         BeatsUntil = beatsUntil;
         Progress = progress;
         ElapsedBeats = elapsedBeats;
-        ContinuousBeatsUntil = continuousBeatsUntil;
     }
 
     /// <summary>Whether the event is active now; false when upcoming or unavailable.</summary>
@@ -31,13 +29,8 @@ internal readonly struct CountdownValues
     internal int? BeatsUntil { get; }
     /// <summary>Position through the active event.</summary>
     internal float? Progress { get; }
-    /// <summary>
-    /// Continuous beats elapsed through the active event, for the In span alone; null without the
-    /// running beat count, so the envelope rests rather than stepping once per beat.
-    /// </summary>
+    /// <summary>Continuous beats elapsed through the active event.</summary>
     internal float? ElapsedBeats { get; }
-    /// <summary>Continuous beats until the upcoming event; null while active or unavailable.</summary>
-    internal float? ContinuousBeatsUntil { get; }
 }
 
 /// <summary>Immutable drop wire facts with readable current/upcoming interpretations.</summary>
@@ -52,7 +45,7 @@ public readonly struct DropValues
         BeatsRemaining = values.BeatsRemaining;
         BeatsUntil = values.BeatsUntil;
         Progress = values.Progress;
-        Before = new BeforeSpan(values.ContinuousBeatsUntil);
+        Before = new BeforeSpan(values.BeatsUntil);
         In = new InSpan(values.ElapsedBeats, values.LengthBeats);
     }
 
@@ -110,9 +103,6 @@ public partial class BeatManager
             active ? NonNegativeOrNull(state.countBeats) : null,
             active ? null : NonNegativeOrNull(state.countBeats),
             ProgressOverLength(elapsed, state.lengthBeats),
-            // The span needs the clock and rests without it; Progress above does not, since it stays
-            // valid at whole-beat resolution and is a wire-derived fact rather than an envelope.
-            IsSynced ? elapsed : null,
-            active ? null : ContinuousBeatsUntil(state.countBeats));
+            elapsed);
     }
 }
