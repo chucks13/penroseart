@@ -120,13 +120,16 @@ public class Vortex : EffectBase
         Update(sampleeDelta);
         for (int i = 0; i < buffer.Length; i++)
         {
-            int which = 0;
+            int which = -1;
             float min = 100000f;
             // find the closest
             for (int j = 0; j < spinners.Length; j++)
             {
                 Vector2 delta = tiles[i].position - spinners[j].center;
                 float d2 = (delta.x * delta.x) + (delta.y * delta.y);
+                // Add a micro-bias tied to spinner index and tile index
+                // Breaks simultaneous crossing without shifting visible geometry
+                d2 += (j * 0.0001f) + (i * 0.000001f);
                 if (d2 < min)
                 {
                     min = d2;
@@ -140,10 +143,10 @@ public class Vortex : EffectBase
                 h = (h + hueShift) % 1f;
             if (beatManager.Fill.Active)                // go to black and while in a fill
             {
-                v_col=(h+s+v_col)%1f;                   // assure there is brightness variation
+                v_col = (h + s + v_col) % 1f;                   // assure there is brightness variation
                 s = 0f;
             }
-             c = Color.HSVToRGB(h, s, v_col);
+            c = Color.HSVToRGB(h, s, v_col);
             buffer[i] = c * beatBrightness;
             // Draw the point
         }
