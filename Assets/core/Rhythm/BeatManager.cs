@@ -131,6 +131,8 @@ public partial class BeatManager
         Grid = CaptureGrid();
         Levels = CaptureLevels();
         Players = CapturePlayers();
+        // Last of all: the Phrase handles read the live order and the captured players together.
+        CapturePhraseHandles();
     }
 
     // ---- Shared duration math -----------------------------------------------------------------

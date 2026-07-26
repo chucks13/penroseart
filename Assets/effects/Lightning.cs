@@ -30,7 +30,7 @@ public class Lightning : EffectBase
     private const int BeatsPerBar = 4;
 
     /// <summary>Drop decay length in bars: the slam eases from full to nothing over this many bars.</summary>
-    private const float DropBars = 2f;
+    private const int DropBars = 2;
 
     /// <summary>How far the bolts swell toward full brightness (HSV value) at the Drop's peak (0 = unchanged, 1 = full):
     /// a pure intensity lift that keeps the rolled hue and saturation and caps at 1, so it never washes toward white. Tune on the readout.</summary>
@@ -218,7 +218,7 @@ public class Lightning : EffectBase
         float beatBrightness = waveform.Lerp(1f, 0.75f);
         float beatHue = 0.5f * rhythm;
 
-        dropEnv = beatManager.Drop.Decay(DropBars * BeatsPerBar);
+        dropEnv = beatManager.Drop.In.Decay(DropBars * BeatsPerBar);
         float flicker = DropFlicker();
 
         buffer.Fade(dropEnv.Lerp(fadeValue, DropFadeHold));

@@ -59,10 +59,10 @@ public sealed class BeatManagerStructureTests
         var beatManager = LiveManager(snapshot =>
             snapshot.dropState = new CountdownState { active = 1, countBeats = 16, lengthBeats = 32, remaining = 1 });
 
-        Assert.That(beatManager.Drop.Build(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Drop.Decay(), Is.EqualTo(0.5f).Within(0.01f));
-        Assert.That(beatManager.Drop.Build(16), Is.EqualTo(1f).Within(0.01f));
-        Assert.That(beatManager.Drop.Decay(16), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Build(16), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Decay(16), Is.EqualTo(0f).Within(0.01f));
     }
 
     /// <summary>Verifies current Energy derives its Trend while the explicit next lane remains separate.</summary>

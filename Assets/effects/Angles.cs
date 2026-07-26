@@ -8,7 +8,7 @@ using UnityEngine;
 /// <remarks>
 /// FILL: a soft-edged wavefront sweeps across the tiles, ordered by each tile's hue distance from the
 /// wall's own mean hue (closest first), collapsing their hue toward that mean. The front position is
-/// driven by <see cref="FillValues.Build"/> (so it always finishes by the Fill's end regardless of
+/// driven by the Fill's <see cref="InSpan.Build"/> (so it always finishes by the Fill's end regardless of
 /// how many beats the Fill lasts), given a light pre-Fill primer from <see cref="FillValues.BeatsUntil"/>,
 /// and kicked forward once per Waveform hit so the sweep
 /// visibly lurches on the beat instead of gliding smoothly.
@@ -56,7 +56,7 @@ public class Angles : EffectBase
     private const float AnticipationPrimerCap = 0.18f;
 
     /// <summary>Drop length in beats: the whole blackout-and-reignite cascade plays over this many beats of the current tempo, kept short so the event reads within a 2-4 beat window.</summary>
-    private const float DropBeats = 3f;
+    private const int DropBeats = 3;
 
     /// <summary>Number of orientation (tileangle) classes the wall reignites through, one per 18° pentagrid direction. Verified against the 900-tile data: exactly 10 classes of 62-119 tiles each.</summary>
     private const int OrientationClasses = 10;
@@ -123,7 +123,7 @@ public class Angles : EffectBase
         $"\nEN {smoothedEnergy:0.00}" +
         (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
         (beatManager.Drop.Active
-            ? $"\nDROP {1f - beatManager.Drop.Decay(DropBeats):0.00}"
+            ? $"\nDROP {1f - beatManager.Drop.In.Decay(DropBeats):0.00}"
             : "");
 
     /// <summary>
@@ -238,7 +238,7 @@ public class Angles : EffectBase
             ? ((float)next).Remap(0f, 32f, 1f, 0f, clamp: true)
             : 0f;
         float primer = Mathf.Pow(anticipation, AnticipationCurvePower) * AnticipationPrimerCap;
-        fillEnv = Mathf.Max(fill.Build(), primer);
+        fillEnv = Mathf.Max(fill.In.Build(), primer);
 
         if (filling)
         {
@@ -273,7 +273,7 @@ public class Angles : EffectBase
         var drop = beatManager.Drop;
         bool inDrop = drop.Active;
         float cascade = inDrop
-            ? (1f - drop.Decay(DropBeats)).Remap(BlackHold, 1f, 0f, 1f, clamp: true)
+            ? (1f - drop.In.Decay(DropBeats)).Remap(BlackHold, 1f, 0f, 1f, clamp: true)
             : 1f;
         float shadeDepth = UpdateShadeDepth();
 

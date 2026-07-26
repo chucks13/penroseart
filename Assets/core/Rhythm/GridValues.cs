@@ -19,7 +19,7 @@ public enum GridState
 public readonly struct GridValues
 {
     /// <summary>Nominal number of positions in one complete timing-grid cycle.</summary>
-    private const float CycleBeats = 16f;
+    private const int CycleBeats = 16;
     /// <summary>Continuous elapsed position retained for Build and Decay.</summary>
     private readonly float? elapsedBeats;
 
@@ -43,18 +43,20 @@ public readonly struct GridValues
     public float? Progress { get; }
 
     /// <summary>
-    /// Rises across the nominal 16-beat cycle or requested duration; a phrase boundary may restart
-    /// the observed grid before that nominal cycle completes.
+    /// Rises across the nominal 16-beat cycle or requested window of whole beats; a phrase boundary
+    /// may restart the observed grid before that nominal cycle completes.
     /// </summary>
-    public float Build(float? durationBeats = null) =>
-        StockEnvelopes.Build(elapsedBeats, durationBeats ?? CycleBeats);
+    /// <param name="windowBeats">Window in whole beats; omit to use the nominal cycle.</param>
+    public float Build(int? windowBeats = null) =>
+        StockEnvelopes.Build(elapsedBeats, windowBeats ?? CycleBeats);
 
     /// <summary>
-    /// Falls across the nominal 16-beat cycle or requested duration; a phrase boundary may restart
-    /// the observed grid before that nominal cycle completes.
+    /// Falls across the nominal 16-beat cycle or requested window of whole beats; a phrase boundary
+    /// may restart the observed grid before that nominal cycle completes.
     /// </summary>
-    public float Decay(float? durationBeats = null) =>
-        StockEnvelopes.Decay(elapsedBeats, durationBeats ?? CycleBeats);
+    /// <param name="windowBeats">Window in whole beats; omit to use the nominal cycle.</param>
+    public float Decay(int? windowBeats = null) =>
+        StockEnvelopes.Decay(elapsedBeats, windowBeats ?? CycleBeats);
 }
 
 public partial class BeatManager

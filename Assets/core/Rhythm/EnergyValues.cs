@@ -58,13 +58,15 @@ public readonly struct EnergyValues
     /// <summary>Derived direction toward the next reported energy level.</summary>
     public EnergyTrend? Trend { get; }
 
-    /// <summary>Rises across the full energy run or requested beat duration.</summary>
-    public float Build(float? durationBeats = null) =>
-        StockEnvelopes.Build(elapsedBeats, durationBeats ?? LengthBeats);
+    /// <summary>Rises across the full energy run or requested window of whole beats.</summary>
+    /// <param name="windowBeats">Window in whole beats; omit to use the run's own length.</param>
+    public float Build(int? windowBeats = null) =>
+        StockEnvelopes.Build(elapsedBeats, windowBeats ?? LengthBeats);
 
-    /// <summary>Falls across the full energy run or requested beat duration.</summary>
-    public float Decay(float? durationBeats = null) =>
-        StockEnvelopes.Decay(elapsedBeats, durationBeats ?? LengthBeats);
+    /// <summary>Falls across the full energy run or requested window of whole beats.</summary>
+    /// <param name="windowBeats">Window in whole beats; omit to use the run's own length.</param>
+    public float Decay(int? windowBeats = null) =>
+        StockEnvelopes.Decay(elapsedBeats, windowBeats ?? LengthBeats);
 }
 
 /// <summary>Immutable facts from the wire's explicitly named next-energy lane.</summary>

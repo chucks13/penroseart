@@ -105,9 +105,8 @@ public class Fluid : ScreenEffect
         lastDropActive = beatManager.Drop.Active;
         if (beatManager.IsSynced)
         {
-            var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 6f;
-            // if we are expecting a drop, we are going to set the fluid settle fast 
-            if (beatsTilDrop < 6)
+            // if we are expecting a drop, we are going to set the fluid settle fast
+            if (beatManager.Drop.Before.Build(6) > 0f)
             {
                 dropComing = true;
                 fdamping = 0.7f;

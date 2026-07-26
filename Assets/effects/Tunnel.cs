@@ -41,7 +41,7 @@ public class Tunnel : EffectBase
     private const float BeatBrightnessFloor = 0.75f;
 
     /// <summary>Drop decay length in bars: the warp slam eases from full to nothing over this many bars.</summary>
-    private const float DropBars = 2f;
+    private const int DropBars = 2;
 
     /// <summary>Reverse scroll-rate multiple at the Drop's peak: the tunnel warps inward this much faster than its base scroll. Bigger than <see cref="FillRush"/> so the Drop out-slams a Fill. Tune on the readout.</summary>
     private const float DropRush = 10f;
@@ -111,7 +111,7 @@ public class Tunnel : EffectBase
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        fillEnv = beatManager.Fill.Build();
+        fillEnv = beatManager.Fill.In.Build();
         fillScroll = Mathf.Repeat(fillScroll + (speed * FillRush * fillEnv * effectDelta), 1f);
     }
 
@@ -121,7 +121,7 @@ public class Tunnel : EffectBase
     /// </summary>
     private void UpdateDropSlam()
     {
-        dropEnv = beatManager.Drop.Decay(DropBars * 4f);
+        dropEnv = beatManager.Drop.In.Decay(DropBars * 4);
         dropScroll = Mathf.Repeat(dropScroll - (speed * DropRush * dropEnv * effectDelta), 1f);
     }
 

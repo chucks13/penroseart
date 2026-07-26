@@ -36,9 +36,6 @@ internal readonly struct CountdownValues
 /// <summary>Immutable drop wire facts with readable current/upcoming interpretations.</summary>
 public readonly struct DropValues
 {
-    /// <summary>Continuous elapsed position retained for Build and Decay.</summary>
-    private readonly float? elapsedBeats;
-
     /// <summary>Creates a Drop reading from the shared countdown translation.</summary>
     internal DropValues(CountdownValues values)
     {
@@ -48,7 +45,8 @@ public readonly struct DropValues
         BeatsRemaining = values.BeatsRemaining;
         BeatsUntil = values.BeatsUntil;
         Progress = values.Progress;
-        elapsedBeats = values.ElapsedBeats;
+        Before = new BeforeSpan(values.BeatsUntil);
+        In = new InSpan(values.ElapsedBeats, values.LengthBeats);
     }
 
     /// <summary>
@@ -72,13 +70,11 @@ public readonly struct DropValues
     /// <summary>Derived 0..1 position through the active drop.</summary>
     public float? Progress { get; }
 
-    /// <summary>Rises across the full active drop or requested beat duration.</summary>
-    public float Build(float? durationBeats = null) =>
-        StockEnvelopes.Build(elapsedBeats, durationBeats ?? LengthBeats);
+    /// <summary>Envelopes approaching the upcoming drop across a caller-named window of whole beats.</summary>
+    public BeforeSpan Before { get; }
 
-    /// <summary>Falls across the full active drop or requested beat duration.</summary>
-    public float Decay(float? durationBeats = null) =>
-        StockEnvelopes.Decay(elapsedBeats, durationBeats ?? LengthBeats);
+    /// <summary>Envelopes running through the active drop.</summary>
+    public InSpan In { get; }
 }
 
 public partial class BeatManager

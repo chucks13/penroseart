@@ -42,7 +42,7 @@ public class Julia : EffectBase
     private const float PaletteChance = 0.5f;
 
     /// <summary>Beats the Drop slam takes to decay back to rest.</summary>
-    private const float DropDecayBeats = 8f;
+    private const int DropDecayBeats = 8;
 
     /// <summary>Spin speed in revolutions per second at the Drop slam's peak.</summary>
     private const float DropSpinRate = 1f;
@@ -201,7 +201,7 @@ public class Julia : EffectBase
         }
         previousDropActive = dropActive;
 
-        dropEnv = beatManager.Drop.Decay(DropDecayBeats);
+        dropEnv = beatManager.Drop.In.Decay(DropDecayBeats);
 
         rotation += dropSpinDir * DropSpinRate * dropEnv * effectDelta * 2f * Mathf.PI;
     }
@@ -217,7 +217,7 @@ public class Julia : EffectBase
         hueScroll = Mathf.Repeat(hueScroll + ((HueBaseRate + (beatEnvelope * HueBeatRate)) * effectDelta), 1f);
 
         // Fill Build becomes extra zoom depth below.
-        fillEnv = beatManager.Fill.Build();
+        fillEnv = beatManager.Fill.In.Build();
         UpdateDropSlam();
 
         // Breathing zoom (window width oscillates between WindowWidth and MinWindow), deepened

@@ -169,7 +169,7 @@ public class Flock : EffectBase
     private const float DropGatherSeparationSuppression = 0.9f;
 
     /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
-    private const float DropReleaseBeats = 2f;
+    private const int DropReleaseBeats = 2;
 
     /// <summary>Initial Drop burst speed relative to each boid's ordinary maximum speed.</summary>
     private const float DropBurstSpeedMultiplier = 1.6f;
@@ -483,7 +483,7 @@ public class Flock : EffectBase
         }
 
         previousDropActive = dropActive;
-        dropRelease = drop.Decay(DropReleaseBeats);
+        dropRelease = drop.In.Decay(DropReleaseBeats);
     }
 
     /// <summary>Fades the previous frame by Routine half-life, or clears it when trails are disabled.</summary>
