@@ -165,7 +165,20 @@ Use `Before` for anticipation. It is total — resting as if the event were infi
 localDelta *= beatManager.Drop.Before.Decay(8);   // slow down leading to the drop
 ```
 
-Read `Active`, `CountBeats`, `LengthBeats`, and `Remaining` when the Effect needs wire facts. If an Effect needs an onset, retain its own prior `Active` value and compare locally; BeatManager deliberately exposes state, not one-frame event flags.
+#### Shape the effect around song sections
+
+Song Structure exposes seven flat handles on BeatManager: `Intro`, `Up`, `Down`, `Verse`, `Bridge`, `Chorus`, and `Outro`. The wire's `unknown` phrase type gets no handle. Each handle uses the same `Before` and `In` spans as Drop and Fill:
+
+```csharp
+float chorusBuild = beatManager.Chorus.Before.Build(32); // rise into the next chorus
+float outroFade = beatManager.Outro.Before.Decay(64);    // wind down toward the outro
+```
+
+`Before` requires a whole-beat window. It advances linearly once per beat; on the final beat `Decay(window)` reads `1 / window`, not zero, because the section has not landed yet. `In` moves continuously within each beat, uses SmoothStep easing, and defaults to the covering section's own length when no window is supplied.
+
+These handles follow the Focus deck's generation-gated Song Structure cursor automatically, so an Effect never handles nulls or deck changes. They are positional: Loops and needle-drops read from the cursor's current section, and `Before` targets the next ordinal occurrence — during a chorus, `Chorus.Before` means the following chorus. When no applicable structure or clock exists, the type does not recur, or BeatManager is in Standalone Mode, every envelope rests at zero except `Before.Decay`, which rests at one.
+
+Read `Active`, `BeatsRemaining`/`BeatsUntil`, `LengthBeats`, and `Remaining` when the Effect needs wire facts. If an Effect needs an onset, retain its own prior `Active` value and compare locally; BeatManager deliberately exposes state, not one-frame event flags.
 
 ### 4. Acquire Waveforms explicitly
 

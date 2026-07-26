@@ -95,10 +95,11 @@ Three helpers turn raw values into visuals:
 
 ```csharp
 // Build/Decay: 0→1 ramps over a musical duration (Phrase, Energy, Grid directly;
-// Drop and Fill through their In/Before spans). Windows are whole beats.
+// Drop, Fill, and Song Structure handles through their In/Before spans). Windows are whole beats.
 float tension = beatManager.Fill.In.Build();        // rises 0→1 across the fill
 float flash   = beatManager.Drop.In.Decay(16);      // 1→0 over the first 16 beats of the drop
-float slowing = beatManager.Drop.Before.Decay(8);   // 1→0 across the last 8 beats before it lands
+float slowing = beatManager.Drop.Before.Decay(8);   // 1 → 1/8 across the last 8 beats before it lands
+float chorus  = beatManager.Chorus.Before.Build(32); // rises into the next chorus
 
 // Lerp: map a normalized amount into your artistic range.
 float brightness = beatManager.Drop.In.Build().Lerp(0.25f, 1f);
@@ -289,6 +290,9 @@ worked example: Routines, energy recipes, audio levels, and Standalone behavior.
 | A flash that fades after the drop | `beatManager.Drop.In.Decay(beats)` |
 | Slow into an approaching drop | `beatManager.Drop.Before.Decay(8)` (rests at 1 — safe to multiply) |
 | Charge up as a drop approaches | `beatManager.Drop.Before.Build(8)` |
+| Rise into the next chorus | `beatManager.Chorus.Before.Build(32)` |
+| Wind down toward the outro | `beatManager.Outro.Before.Decay(64)` |
+| Shape within the current section | `beatManager.Chorus.In.Build()` (any handle works) |
 | React to actual audio loudness | `beatManager.Levels.Smoothed` / `.Peak` |
 | Know if there's a live beat at all | `beatManager.IsSynced` |
 | Handle a nullable fact | `?? fallback`, or `is { } x` to branch (bools and pulses are never null) |
