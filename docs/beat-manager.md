@@ -16,6 +16,7 @@ beatManager.Phrase
 beatManager.NextPhrase
 beatManager.Drop
 beatManager.Fill
+beatManager.Intro          // and Up, Down, Verse, Bridge, Chorus, Outro
 beatManager.Energy
 beatManager.NextEnergy
 beatManager.Loop
@@ -96,7 +97,7 @@ beatManager.Drop.Progress;
 
 Energy uses the closed `Low`/`Mid`/`High` vocabulary. `Energy` holds the current run and its derived `Trend`; `NextEnergy` holds the wire's explicitly named next run.
 
-Phrase, Energy, and Grid expose `Build()` and `Decay()` directly. Drop and Fill reach theirs through two spans: `In`, through the active event, and `Before`, approaching the next one across a window you name. Windows are counts of whole beats; with no argument `In` covers the event's own length, and a shorter window completes early and holds its endpoint:
+Phrase, Energy, and Grid expose `Build()` and `Decay()` directly. Drop, Fill, and the seven Song Structure phrase handles reach theirs through two spans: `In`, through the active piece, and `Before`, approaching the next one across a window you name. Windows are counts of whole beats; with no argument `In` covers the event's own length, and a shorter window completes early and holds its endpoint:
 
 ```csharp
 float fullBuild = beatManager.Drop.In.Build();
@@ -117,6 +118,18 @@ float energy = beatManager.Levels.Smoothed.Average.Remap(0.1f, 0.8f, 0f, 1f, cla
 ```
 
 `Loop` exposes all loop wire fields, including `SizeNumerator` and `SizeDenominator`, plus `NominalSizeBeats`. `Grid` exposes nullable `State`, `Beat`, `Bar`, and `Progress` plus its build/decay conveniences.
+
+## Song Structure phrase handles
+
+The seven typed phrase kinds of the [Song Structure](osc-client-contract.md#per-player-values) — `Intro`, `Up`, `Down`, `Verse`, `Bridge`, `Chorus`, and `Outro` — are handles carrying the same two spans, so a Performer can shape itself to song sections rather than only to drops and fills. The wire's `unknown` kind gets no handle, and structure `drop` phrases feed no handle: `Drop` and `Fill` keep their single source in the on-air event lanes.
+
+```csharp
+float bloom = beatManager.Chorus.Before.Build(32);  // rise into the next chorus
+float fade  = beatManager.Outro.Before.Decay(64);   // wind down toward the outro
+float shape = beatManager.Up.In.Decay(5);           // respond inside the current up section
+```
+
+They read the Focus deck — the first live player, followed with no damping, so a deck swap re-reads the new structure the same frame — through its live structure cursor, which counts only while its generation matches the held structure. Everything is positional, computed from where the cursor sits in the phrase list rather than from time accumulated across frames, so a Loop rewinding into a phrase re-enters its `In` span and a needle-drop reads correctly. `Before` targets the *next ordinal occurrence* of the kind: during a chorus, `Chorus.Before` means the following chorus, so both spans of one handle can be live in the same frame. All seven rest — zero, and `Before.Decay` at one — when no structure is held, when the cursor covers no phrase or belongs to another generation, when the kind never occurs again, and in Standalone Mode.
 
 ## Levels
 
