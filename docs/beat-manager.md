@@ -107,7 +107,7 @@ float slowdown  = beatManager.Drop.Before.Decay(8);   // 1 far off → 0 as the 
 float charge    = beatManager.Drop.Before.Build(8);   // 0 far off → 1 as the drop lands
 ```
 
-Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect.
+Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect. Both spans also rest whenever the wire reports no running beat count: without the intra-beat clock an envelope would step once per beat rather than move musically, so it rests instead. The facts are not gated that way — `BeatsUntil`, `BeatsRemaining`, and `Progress` all still read while the beat lane is missing, because only the envelopes need a clock.
 
 These normalized values use the same two scalar helpers as the rest of the runtime. `Lerp` turns a normalized
 amount into a useful range; `Remap` converts one range to another and clamps only when requested:
@@ -129,7 +129,7 @@ float fade  = beatManager.Outro.Before.Decay(64);   // wind down toward the outr
 float shape = beatManager.Up.In.Decay(5);           // respond inside the current up section
 ```
 
-They read the Focus deck — the first live player, followed with no damping, so a deck swap re-reads the new structure the same frame — through its live structure cursor, which counts only while its generation matches the held structure. Everything is positional, computed from where the cursor sits in the phrase list rather than from time accumulated across frames, so a Loop rewinding into a phrase re-enters its `In` span and a needle-drop reads correctly. `Before` targets the *next ordinal occurrence* of the kind: during a chorus, `Chorus.Before` means the following chorus, so both spans of one handle can be live in the same frame. All seven rest — zero, and `Before.Decay` at one — when no structure is held, when the cursor covers no phrase or belongs to another generation, when the kind never occurs again, and in Standalone Mode.
+They read the Focus deck — the first live player, followed with no damping, so a deck swap re-reads the new structure the same frame — through its live structure cursor, which counts only while its generation matches the held structure. Everything is positional, computed from where the cursor sits in the phrase list rather than from time accumulated across frames, so a Loop rewinding into a phrase re-enters its `In` span and a needle-drop reads correctly. `Before` targets the *next ordinal occurrence* of the kind: during a chorus, `Chorus.Before` means the following chorus, so both spans of one handle can be live in the same frame. All seven rest — zero, and `Before.Decay` at one — when no structure is held, while its phrase list is still assembling from chunks, when the cursor covers no phrase or belongs to another generation, when the kind never occurs again, whenever the wire reports no running beat count, and in Standalone Mode.
 
 ## Levels
 

@@ -103,10 +103,10 @@ The per-player change detector for song structure: an identifier that differs wh
 _Avoid_: using the track id to detect structure change; comparing generations with less-than/greater-than; treating an identical track as an unchanged structure.
 
 **Fill**:
-A short musical moment marked within a Phrase — anywhere inside it, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats`, `Progress`, `Build()`, and `Decay()`. The selected Effect or Transition owns how it responds.
+A short musical moment marked within a Phrase — anywhere inside it, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats` and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
 
 **Drop**:
-The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, `Build()`, and `Decay()`. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
+The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
 
 **Energy**:
 Intensity on one closed three-step ladder — Low, Mid, High. `BeatManager.Energy` exposes the current wire level, countdown, length, progress, derived `Trend`, and `Build()`/`Decay()`. The explicitly named next wire lane lives separately at `BeatManager.NextEnergy`. A **Waveform's** Energy is derived from its shape — how many peaks it has and how tightly they pack — computed from the notation itself.
@@ -127,7 +127,7 @@ The single musical source for the whole application. It reads the wire, contrive
 _Avoid_: a second musical clock or a private re-derivation of a fact BeatManager already serves; BeatManager holding artistic response policy, consumer policy, or commands.
 
 **Data Surface**:
-The read-only face of BeatManager through which Effects, Transitions, Waveforms, and other systems pull musical data. It is deliberately shallow: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Levels`, `Players`, and `LiveOrder`. Each group places related wire facts and derived values together. Captured structs and owned collections prevent write-back; wire sentinels never cross the boundary.
+The read-only face of BeatManager through which Effects, Transitions, Waveforms, and other systems pull musical data. It is deliberately shallow: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Levels`, `Players`, `LiveOrder`, and the seven typed Phrase handles of the Song Structure — `Intro`, `Up`, `Down`, `Verse`, `Bridge`, `Chorus`, and `Outro`. Each group places related wire facts and derived values together. Captured structs and owned collections prevent write-back; wire sentinels never cross the boundary.
 _Avoid_: `View`/`Facts`/`Span`/`Current`/`Run` navigation; a separate raw tree; duplicate aliases; hub-owned `Started`, `Ended`, `Changed`, `Wrapped`, or gate-opened flags; color policy; dropping wire lanes because nothing reads them yet.
 
 **Contrived Value**:
