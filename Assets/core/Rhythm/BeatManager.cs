@@ -105,7 +105,7 @@ public partial class BeatManager
 
         // Derivation and shaping run after wireSnapshot has settled for this frame so contrived values
         // never lag the transport by a frame or shape from stale data across a source switch.
-        DeriveBeatState();
+        DeriveOffBeats();
         UpdateLevelsShaping(timeSeconds);
 
         // Capture last so every reader sees one frame-coherent musical snapshot.
@@ -181,16 +181,7 @@ public partial class BeatManager
     }
 
     /// <summary>
-    /// Contrives the locally derived beat state from the transport fields. Runs once per frame from
-    /// <see cref="Update"/> after the live source has written <see cref="wireSnapshot"/>.
-    /// </summary>
-    private void DeriveBeatState()
-    {
-        DeriveOffBeats();
-    }
-
-    /// <summary>
-    /// Resets Levels and the Phrase, Drop, Fill, Energy, Loop, Grid, and Track ID facts to unavailable.
+    /// Resets on-air analysis and reactive facts to their unavailable wire values.
     /// </summary>
     /// <remarks>
     /// Standalone is a no-beat state, not a musical analysis, so it must never present phrase data. Running
@@ -198,7 +189,7 @@ public partial class BeatManager
     /// after a RaveSystem broadcast stops, so the captured groups return null values instead of
     /// replaying the last live Fill/Drop/Energy forever.
     /// </remarks>
-    private void ClearPhraseAndLevelState()
+    private void ClearOnAirAnalysisState()
     {
         wireSnapshot.levels = PenroseArt.RaveOsc.Levels.Unavailable;
         wireSnapshot.phraseState = PhraseState.Unavailable;
@@ -220,7 +211,7 @@ public partial class BeatManager
     {
         wireSnapshot.playersLive = "";
         wireSnapshot.track = "";
-        wireSnapshot.bpm = UnavailableMs; // wire sentinel: no usable tempo
+        wireSnapshot.bpm = -1f; // wire sentinel: no usable tempo
         wireSnapshot.beat = new BeatPosition { current = -1, total = -1 };
         wireSnapshot.bar = new BarPosition { current = -1, nextMs = -1 };
         wireSnapshot.beatInBar = -1; // real 4-count sentinel (musically 1..4 or -1, never 0); clears IsSynced
@@ -228,7 +219,7 @@ public partial class BeatManager
         wireSnapshot.beatPulse = 0f;
         wireSnapshot.beatsCountMs = CreateUnavailableCountdowns();
         wireSnapshot.onBeats = new bool[BeatSlotCount];
-        ClearPhraseAndLevelState();
+        ClearOnAirAnalysisState();
         ClearPlayersToNoBeat();
     }
 
@@ -242,5 +233,4 @@ public partial class BeatManager
         }
         return countdowns;
     }
-
 }

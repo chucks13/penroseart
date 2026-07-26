@@ -212,11 +212,11 @@ public readonly struct PlayerValues
     /// <summary>This player's loop wire values, in the same shape as the on-air <see cref="BeatManager.Loop"/>.</summary>
     public LoopValues Loop { get; }
 
-    /// <summary>This player's sixteen-beat grid trust state; null when unavailable.</summary>
+    /// <summary>This player's phrase-relative timing-grid trust state; null when unavailable.</summary>
     public GridState? GridState { get; }
-    /// <summary>One-based beat within this player's sixteen-beat grid.</summary>
+    /// <summary>One-based position within this player's phrase-relative 16-position timing-grid cycle.</summary>
     public int? GridBeat { get; }
-    /// <summary>One-based bar within this player's four-bar grid.</summary>
+    /// <summary>One-based four-beat subdivision within this player's timing-grid cycle.</summary>
     public int? GridBar { get; }
 
     /// <summary>This player's assembled song structure.</summary>
@@ -267,14 +267,16 @@ public partial class BeatManager
     /// </remarks>
     private PlayersValues CapturePlayers()
     {
-        var wire = wireSnapshot.players;
-        var captured = new PlayerValues[RaveWireSnapshot.PlayerCount];
-        for (var i = 0; i < captured.Length; i++)
+        var wirePlayers = wireSnapshot.players;
+        var capturedPlayers = new PlayerValues[RaveWireSnapshot.PlayerCount];
+        for (var i = 0; i < capturedPlayers.Length; i++)
         {
-            var state = wire != null && i < wire.Length ? wire[i] : PlayerState.Unavailable;
-            captured[i] = CapturePlayer(i, state);
+            var state = wirePlayers != null && i < wirePlayers.Length
+                ? wirePlayers[i]
+                : PlayerState.Unavailable;
+            capturedPlayers[i] = CapturePlayer(i, state);
         }
-        return new PlayersValues(captured);
+        return new PlayersValues(capturedPlayers);
     }
 
     /// <summary>Translates one player's wire lanes into an immutable entry for slot <paramref name="slot"/>.</summary>
@@ -287,7 +289,21 @@ public partial class BeatManager
         var cursor = state.cursor;
         // Match the on-air grid capture: an unparseable state label makes the whole grid
         // unavailable — the state is the trust gate for beat and bar.
-        var hasGrid = TryParseGridState(grid.state, out var gridState);
+        var hasGridState = TryParseGridState(grid.state, out var gridState);
+        var loopValues = TranslateLoop(state.loopState);
+        var structureValues = new StructureValues(
+            structure.generation,
+            string.IsNullOrEmpty(structure.trackId) ? null : structure.trackId,
+            ParseStructureSource(structure.source),
+            NonNegativeOrNull(structure.totalBeats),
+            structure.phraseCount,
+            TranslatePhrases(slot, structure));
+        var cursorValues = new StructureCursorValues(
+            cursor.generation,
+            cursor.currentPhrase >= 1 ? cursor.currentPhrase : null,
+            cursor.beatInPhrase >= 1 ? cursor.beatInPhrase : null,
+            NonNegativeOrNull(cursor.beatsToNextPhrase));
+
         return new PlayerValues(
             slot + 1,
             clock.bpm > 0f ? clock.bpm : null,
@@ -301,22 +317,12 @@ public partial class BeatManager
             TriStateOrNull(transport.master),
             TriStateOrNull(transport.synced),
             TriStateTrue(transport.playing) && TriStateTrue(transport.onAir),
-            TranslateLoop(state.loopState),
-            hasGrid ? gridState : null,
-            hasGrid && grid.beat >= 1 ? grid.beat : null,
-            hasGrid && grid.bar >= 1 ? grid.bar : null,
-            new StructureValues(
-                structure.generation,
-                string.IsNullOrEmpty(structure.trackId) ? null : structure.trackId,
-                ParseStructureSource(structure.source),
-                NonNegativeOrNull(structure.totalBeats),
-                structure.phraseCount,
-                TranslatePhrases(slot, structure)),
-            new StructureCursorValues(
-                cursor.generation,
-                cursor.currentPhrase >= 1 ? cursor.currentPhrase : null,
-                cursor.beatInPhrase >= 1 ? cursor.beatInPhrase : null,
-                NonNegativeOrNull(cursor.beatsToNextPhrase)));
+            loopValues,
+            hasGridState ? gridState : null,
+            hasGridState && grid.beat >= 1 ? grid.beat : null,
+            hasGridState && grid.bar >= 1 ? grid.bar : null,
+            structureValues,
+            cursorValues);
     }
 
     /// <summary>Translates one player's wire phrase list, reusing the previous frame's translation when unchanged.</summary>
@@ -356,10 +362,10 @@ public partial class BeatManager
                 phrase.fillStartBeat >= 1 ? phrase.fillStartBeat : null,
                 phrase.dropLandingBeat >= 1 ? phrase.dropLandingBeat : null);
         }
-        var wrapped = new ReadOnlyCollection<StructurePhraseValues>(translated);
+        var readOnlyPhrases = new ReadOnlyCollection<StructurePhraseValues>(translated);
         playerPhrasesGeneration[slot] = structure.generation;
-        playerPhrasesCache[slot] = wrapped;
-        return wrapped;
+        playerPhrasesCache[slot] = readOnlyPhrases;
+        return readOnlyPhrases;
     }
 
     /// <summary>Translates the wire's closed lowercase phrase-type labels; anything else is Unknown.</summary>
@@ -398,15 +404,15 @@ public partial class BeatManager
     /// </remarks>
     private void ClearPlayersToNoBeat()
     {
-        var players = wireSnapshot.players;
-        if (players == null)
+        var wirePlayers = wireSnapshot.players;
+        if (wirePlayers == null)
         {
             return;
         }
 
-        for (var i = 0; i < players.Length; i++)
+        for (var i = 0; i < wirePlayers.Length; i++)
         {
-            players[i] = PlayerState.Unavailable;
+            wirePlayers[i] = PlayerState.Unavailable;
         }
     }
 }
