@@ -154,8 +154,13 @@ public partial class BeatManager
     /// Beats until an upcoming event from a wire count that includes the current beat, smoothed within
     /// the beat so the distance falls continuously instead of stepping once per beat.
     /// </summary>
+    /// <remarks>
+    /// Null without the running beat count: the countdown lanes arrive independently of the beat lane,
+    /// so a count can survive a clock the wire has stopped reporting. Without the intra-beat fraction
+    /// the distance would step once per beat, and an approach envelope must rest when no clock runs.
+    /// </remarks>
     private float? ContinuousBeatsUntil(int countBeats) =>
-        countBeats >= 0 ? countBeats - IntraBeatFraction() : null;
+        IsSynced && countBeats >= 0 ? countBeats - IntraBeatFraction() : null;
 
     /// <summary>0..1 position through a duration of the given length.</summary>
     private static float? ProgressOverLength(float? elapsedBeats, int lengthBeats)

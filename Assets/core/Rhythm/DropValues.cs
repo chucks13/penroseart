@@ -31,7 +31,10 @@ internal readonly struct CountdownValues
     internal int? BeatsUntil { get; }
     /// <summary>Position through the active event.</summary>
     internal float? Progress { get; }
-    /// <summary>Continuous beats elapsed through the active event.</summary>
+    /// <summary>
+    /// Continuous beats elapsed through the active event, for the In span alone; null without the
+    /// running beat count, so the envelope rests rather than stepping once per beat.
+    /// </summary>
     internal float? ElapsedBeats { get; }
     /// <summary>Continuous beats until the upcoming event; null while active or unavailable.</summary>
     internal float? ContinuousBeatsUntil { get; }
@@ -107,7 +110,9 @@ public partial class BeatManager
             active ? NonNegativeOrNull(state.countBeats) : null,
             active ? null : NonNegativeOrNull(state.countBeats),
             ProgressOverLength(elapsed, state.lengthBeats),
-            elapsed,
+            // The span needs the clock and rests without it; Progress above does not, since it stays
+            // valid at whole-beat resolution and is a wire-derived fact rather than an envelope.
+            IsSynced ? elapsed : null,
             active ? null : ContinuousBeatsUntil(state.countBeats));
     }
 }

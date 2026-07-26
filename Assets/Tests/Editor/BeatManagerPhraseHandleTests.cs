@@ -213,6 +213,52 @@ public sealed class BeatManagerPhraseHandleTests
     }
 
     /// <summary>
+    /// Verifies a live structure and cursor still rest while the wire reports no running beat count:
+    /// without a clock the envelopes would step once per beat rather than move musically.
+    /// </summary>
+    [Test]
+    public void HandlesRestWhileTheWireCarriesNoBeatCount()
+    {
+        var beatManager = new BeatManager();
+        UnsyncedFrame(beatManager, snapshot =>
+        {
+            snapshot.playersLive = "1";
+            snapshot.players[0] = Deck(Track(), currentPhrase: 3, beatInPhrase: 17,
+                structureGeneration: 1, cursorGeneration: 1);
+        });
+
+        Assert.That(beatManager.IsSynced, Is.False);
+        // The structure itself still arrived — only the envelopes rest.
+        Assert.That(beatManager.Players[0].Cursor.CurrentPhrase, Is.EqualTo(3));
+        AssertEveryHandleRests(beatManager);
+    }
+
+    /// <summary>
+    /// Verifies handles rest while structure chunks are still converging: until the visible phrase list
+    /// is complete a cursor ordinal can name a different tuple than the one at that position.
+    /// </summary>
+    [Test]
+    public void HandlesRestWhileThePhraseListIsStillAssembling()
+    {
+        var beatManager = new BeatManager();
+        var firstChunk = new[] { Phrase(1, 32, "intro"), Phrase(33, 64, "up"), Phrase(65, 96, "chorus") };
+        LiveFrame(beatManager, snapshot =>
+        {
+            snapshot.playersLive = "1";
+            // Three of the announced six phrases have landed so far.
+            snapshot.players[0] = Deck(firstChunk, currentPhrase: 3, beatInPhrase: 17,
+                structureGeneration: 1, cursorGeneration: 1, phraseCount: 6);
+        });
+
+        AssertEveryHandleRests(beatManager);
+
+        // The remaining chunk lands under the same generation and the same position now reads.
+        Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 17);
+
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f).Within(0.01f));
+    }
+
+    /// <summary>
     /// Verifies Standalone Mode leaves every envelope at rest, so a speed multiplier written against a
     /// Before decay reads "no response" rather than freezing the effect at zero.
     /// </summary>
@@ -316,9 +362,25 @@ public sealed class BeatManagerPhraseHandleTests
         beatManager.Update(0f);
     }
 
+    /// <summary>
+    /// Feeds one live frame carrying no beat count at all, the lossy-UDP case in which per-player lanes
+    /// arrive while the beat lane is unavailable.
+    /// </summary>
+    private static void UnsyncedFrame(BeatManager beatManager, System.Action<RaveWireSnapshot> mutate)
+    {
+        var snapshot = new RaveWireSnapshot();
+        mutate(snapshot);
+        beatManager.FeedWireSnapshot(snapshot);
+        beatManager.Update(0f);
+    }
+
     /// <summary>Builds one physical player holding a song structure and its live cursor.</summary>
+    /// <param name="phraseCount">
+    /// Full-track phrase count the sender announces; leave at <c>-1</c> for a fully assembled structure,
+    /// or pass a larger number to model a phrase list whose remaining chunks have not landed yet.
+    /// </param>
     private static PlayerState Deck(StructurePhrase[] phrases, int currentPhrase, int beatInPhrase,
-        int structureGeneration, int cursorGeneration)
+        int structureGeneration, int cursorGeneration, int phraseCount = -1)
     {
         var covered = currentPhrase >= 1 && currentPhrase <= phrases.Length && beatInPhrase >= 1;
         var deck = PlayerState.Unavailable;
@@ -328,7 +390,7 @@ public sealed class BeatManagerPhraseHandleTests
             trackId = "phrase-handle-test",
             source = "analyzed",
             totalBeats = phrases[phrases.Length - 1].endBeat,
-            phraseCount = phrases.Length,
+            phraseCount = phraseCount >= 0 ? phraseCount : phrases.Length,
             phrases = phrases,
         };
         deck.cursor = new StructureCursor

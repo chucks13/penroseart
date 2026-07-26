@@ -94,6 +94,76 @@ public sealed class BeatManagerSpanTests
         Assert.That(beatManager.Drop.Before.Decay(8), Is.EqualTo(1f).Within(0.01f));
     }
 
+    /// <summary>Verifies In with no argument spans the event's own length, not a hidden default.</summary>
+    [Test]
+    public void InDefaultsToTheEventsOwnLength()
+    {
+        // Eight of the 32 beats elapsed: SmoothStep(0.25) is 0.15625 across the drop's own length,
+        // while an eight-beat window has already completed and a sixteen-beat one is half way.
+        var beatManager = ActiveDrop(beatsRemaining: 24, lengthBeats: 32);
+
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.15625f).Within(0.001f));
+        Assert.That(beatManager.Drop.In.Build(8), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Build(16), Is.EqualTo(0.5f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0.84375f).Within(0.001f));
+    }
+
+    /// <summary>
+    /// Verifies an upcoming event still rests both approach envelopes while the wire reports no running
+    /// beat count: the countdown lanes arrive independently of the beat lane, and without the intra-beat
+    /// clock the approach would step once per beat instead of resting.
+    /// </summary>
+    [Test]
+    public void BeforeEnvelopesRestWhileTheWireCarriesNoBeatCount()
+    {
+        var beatManager = new BeatManager();
+        var snapshot = new RaveWireSnapshot
+        {
+            dropState = new CountdownState { active = 0, countBeats = 4, lengthBeats = 16, remaining = 1 },
+            fillState = new CountdownState { active = 0, countBeats = 4, lengthBeats = 8, remaining = 1 },
+        };
+        beatManager.FeedWireSnapshot(snapshot);
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsSynced, Is.False);
+        // The lanes themselves still read: only the envelopes rest.
+        Assert.That(beatManager.Drop.BeatsUntil, Is.EqualTo(4));
+        Assert.That(beatManager.Fill.BeatsUntil, Is.EqualTo(4));
+        Assert.That(beatManager.Drop.Before.Build(8), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Drop.Before.Decay(8), Is.EqualTo(1f).Within(0.01f));
+        Assert.That(beatManager.Fill.Before.Build(8), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Fill.Before.Decay(8), Is.EqualTo(1f).Within(0.01f));
+    }
+
+    /// <summary>
+    /// Verifies a running event rests both through-the-event envelopes while the wire reports no beat
+    /// count, matching the approach spans — but leaves the facts, including whole-beat `Progress`, intact.
+    /// </summary>
+    [Test]
+    public void InEnvelopesRestWhileTheWireCarriesNoBeatCount()
+    {
+        var beatManager = new BeatManager();
+        var snapshot = new RaveWireSnapshot
+        {
+            dropState = new CountdownState { active = 1, countBeats = 16, lengthBeats = 32, remaining = 1 },
+            fillState = new CountdownState { active = 1, countBeats = 16, lengthBeats = 32, remaining = 1 },
+        };
+        beatManager.FeedWireSnapshot(snapshot);
+        beatManager.Update(0f);
+
+        Assert.That(beatManager.IsSynced, Is.False);
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Drop.In.Build(8), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Fill.In.Build(), Is.EqualTo(0f).Within(0.01f));
+        Assert.That(beatManager.Fill.In.Decay(), Is.EqualTo(0f).Within(0.01f));
+        // The facts are not gated: half the drop has passed and Progress says so at beat resolution.
+        Assert.That(beatManager.Drop.Active, Is.True);
+        Assert.That(beatManager.Drop.BeatsRemaining, Is.EqualTo(16));
+        Assert.That(beatManager.Drop.LengthBeats, Is.EqualTo(32));
+        Assert.That(beatManager.Drop.Progress, Is.EqualTo(0.5f).Within(0.01f));
+    }
+
     /// <summary>Verifies the through-the-drop envelopes rest while the drop is only upcoming.</summary>
     [Test]
     public void InEnvelopesRestWhileTheDropIsOnlyUpcoming()

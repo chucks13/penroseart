@@ -150,12 +150,13 @@ public partial class BeatManager
     /// Focus is followed without damping — a live-order change re-reads the new deck's structure the
     /// same frame — and the cursor is honored only when its generation equals the held structure's, the
     /// wire contract's mandatory gate: an ordinal is meaningless against a different structure. Anything
-    /// missing (no focus, no structure, a mismatched generation, an ordinal past a still-converging
-    /// phrase list, or no phrase covering the beat) reads as the default resting position.
+    /// missing (no clock, no focus, no structure, a mismatched generation, a phrase list still
+    /// assembling, or no phrase covering the beat) reads as the default resting position.
     /// </remarks>
     private FocusStructureReading ReadFocusStructure()
     {
-        if (LiveOrder.Focus is not { } focus)
+        // No running beat count is no clock at all: the envelopes rest rather than stepping per beat.
+        if (!IsSynced || LiveOrder.Focus is not { } focus)
         {
             return default;
         }
@@ -168,9 +169,12 @@ public partial class BeatManager
             return default;
         }
 
+        // A cursor ordinal only indexes a fully assembled list. While structure chunks converge the
+        // visible phrases are a partial slice, so the tuple at an ordinal can be a different phrase
+        // than the one the sender named — the length gate, not a bounds check, is what makes it safe.
         var phrases = structure.Phrases;
-        if (cursor.CurrentPhrase is not { } ordinal || ordinal > phrases.Count
-            || cursor.BeatInPhrase is not { } beatInPhrase)
+        if (phrases.Count != structure.PhraseCount || cursor.CurrentPhrase is not { } ordinal
+            || ordinal > phrases.Count || cursor.BeatInPhrase is not { } beatInPhrase)
         {
             return default;
         }
