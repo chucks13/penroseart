@@ -34,6 +34,7 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 - `CONTEXT.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
 - `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
+- `docs/osc-client-contract.md` — the RaveSystem OSC wire contract (a synced copy owned by RaveSystem; never edited here). The single authority on what the wire actually provides — per-player clocks, transport predicates, loop state, timing grids, structure. Read it before any BeatManager, receiver, Director/Switcher, or player-data work instead of inferring wire facts from code or memory.
 - `docs/investigation/` — historical research/audit notes; useful context, but not canonical current docs.
 
 ## Default Memory Reads
@@ -46,6 +47,7 @@ Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, rea
 ## Development Philosophy
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
+- **Behavioral claims in docs, comments, and memories are hypotheses to verify against code, tests, and logs — not facts to build on.** When documentation layers disagree, test the claim against the runtime instead of picking a layer to trust, then fix the losing document in the same session. Neither defend machinery nor delete it on a doc claim alone.
 - Custom property drawers and inspectors are downstream debug views; runtime code must not be preserved just to keep them fed. They follow the runtime, not the reverse, and should be changed as needed.
 
 ## Simplicity and Hard Cuts
