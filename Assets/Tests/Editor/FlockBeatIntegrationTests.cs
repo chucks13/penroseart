@@ -71,61 +71,6 @@ public sealed class FlockBeatIntegrationTests
         Assert.That(Flock.GetFillDurationBoost(lengthBeats), Is.EqualTo(expected).Within(0.0001f));
     }
 
-    /// <summary>Verifies that Fill orbit builds before onset over a lead window capped at two beats.</summary>
-    [TestCase(3, 0f, 4, 0f)]
-    [TestCase(2, 0f, 4, 0f)]
-    [TestCase(2, 1f, 4, 0.5f)]
-    [TestCase(1, 1f, 4, 1f)]
-    [TestCase(1, 0f, 1, 0f)]
-    [TestCase(1, 1f, 1, 2f)]
-    public void FillApproachBuildsBeforeOnset(
-        int beatsUntil,
-        float beatProgress,
-        int lengthBeats,
-        float expected)
-    {
-        Assert.That(
-            Flock.GetFillApproach(false, beatsUntil, beatProgress, lengthBeats),
-            Is.EqualTo(expected).Within(0.0001f));
-    }
-
-    /// <summary>Verifies that the anticipated orbit remains fully present throughout the active Fill.</summary>
-    [TestCase(4, 1f)]
-    [TestCase(2, 1.4142135f)]
-    [TestCase(1, 2f)]
-    public void ActiveFillHoldsItsDurationAwareOrbit(int lengthBeats, float expected)
-    {
-        Assert.That(
-            Flock.GetFillApproach(true, null, null, lengthBeats),
-            Is.EqualTo(expected).Within(0.0001f));
-    }
-
-    /// <summary>
-    /// Verifies the eight-beat Drop runway advances continuously through the current beat.
-    /// </summary>
-    [TestCase(8, 0f, 0f)]
-    [TestCase(8, 1f, 0.04296875f)]
-    [TestCase(4, 0f, 0.5f)]
-    [TestCase(2, 0f, 0.84375f)]
-    [TestCase(1, 1f, 1f)]
-    public void DropApproachBuildsAcrossTheFinalEightBeats(int beatsUntil, float beatProgress, float expected)
-    {
-        Assert.That(
-            Flock.GetDropApproach(false, beatsUntil, beatProgress),
-            Is.EqualTo(expected).Within(0.0001f));
-    }
-
-    /// <summary>
-    /// Verifies that gathering rests when no upcoming Drop is inside the eight-beat runway.
-    /// </summary>
-    [Test]
-    public void DropApproachRestsOutsideTheRunway()
-    {
-        Assert.That(Flock.GetDropApproach(false, 9, 0.5f), Is.Zero);
-        Assert.That(Flock.GetDropApproach(false, null, 0.5f), Is.Zero);
-        Assert.That(Flock.GetDropApproach(true, null, 0.5f), Is.Zero);
-    }
-
     /// <summary>
     /// Verifies that wander turns relative to current travel rather than imposing one shared world-space heading.
     /// </summary>

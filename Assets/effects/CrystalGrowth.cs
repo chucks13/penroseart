@@ -89,7 +89,7 @@ public class CrystalGrowth : EffectBase
     private const int BeatsPerBar = 4;
 
     /// <summary>Bars the Drop sparkle is drawn out over: full machine-gun at the hit, fading back to normal growth across this many bars.</summary>
-    private const float DropFadeBars = 2f;
+    private const int DropFadeBars = 2;
 
     /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP FLASH readout.</summary>
     private const float DropFlashBrightness = 1.2f;
@@ -293,7 +293,7 @@ public class CrystalGrowth : EffectBase
         // long fills lean in.
         var fill = beatManager.Fill;
         bool inFill = fill.Active;
-        float fillAmount = fill.Build();
+        float fillAmount = fill.In.Build();
         var sixteenthOn = beatManager.Pulses.On(Duration.Sixteenth);
         float ratchet = sixteenthOn ? 1f : 0f;
         fillActive = inFill;
@@ -307,7 +307,7 @@ public class CrystalGrowth : EffectBase
             PlantUnisonSeeds(DropFlashSeeds);
         }
         previousDropActive = dropActive;
-        dropFlash = drop.Decay(DropFadeBars * BeatsPerBar);
+        dropFlash = drop.In.Decay(DropFadeBars * BeatsPerBar);
 
         if (sixteenthOn && !previousSixteenthOn && dropFlash > 0.5f)
         {

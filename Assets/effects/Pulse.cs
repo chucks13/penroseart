@@ -75,15 +75,11 @@ public class Pulse : EffectBase
     {
         float localPulseMultiplier = pulseMultipler;
 
-        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
-        if (beatsTilDrop < 8)                   // slow down leading to drop
-        {
-            localPulseMultiplier *= ((float)beatsTilDrop) / 8f;
-        }
+        localPulseMultiplier *= beatManager.Drop.Before.Decay(8);   // slow down leading to drop
 
         if (beatManager.Drop.Active)
         {
-            float rampDown = localPulseMultiplier * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localPulseMultiplier);
+            float rampDown = localPulseMultiplier * beatManager.Drop.In.Decay(8).Remap(1f, 0f, 5f, localPulseMultiplier);
             if (rampDown > localPulseMultiplier)
                 localPulseMultiplier = rampDown;
         }

@@ -12,15 +12,15 @@ public sealed class PhraseEventViewTests
 {
     /// <summary>A running Fill with served progress, length, countdown, and remaining count.</summary>
     private static FillValues InProgressEvent => new(
-        new CountdownValues(true, 16, 1, 9, null, 0.4375f, 7f));
+        new CountdownValues(true, 16, 1, 9, null, 0.4375f, 7f, null));
 
     /// <summary>An upcoming Fill seven beats away with two occurrences remaining.</summary>
     private static FillValues UpcomingEvent => new(
-        new CountdownValues(false, 16, 2, null, 7, null, null));
+        new CountdownValues(false, 16, 2, null, 7, null, null, 7f));
 
     /// <summary>The "no more left" wire shape: nothing upcoming, zero remaining — values, not a state.</summary>
     private static FillValues NoUpcomingEvent => new(
-        new CountdownValues(false, null, 0, null, null, null, null));
+        new CountdownValues(false, null, 0, null, null, null, null, null));
 
     [Test]
     public void ChipSaysNowInProgressCountdownWhileUpcomingAndNullOtherwise()
@@ -60,7 +60,7 @@ public sealed class PhraseEventViewTests
     [Test]
     public void DropUsesTheSameCanonicalCountdownShape()
     {
-        var drop = new DropValues(new CountdownValues(false, 16, 2, null, 7, null, null));
+        var drop = new DropValues(new CountdownValues(false, 16, 2, null, 7, null, null, 7f));
 
         Assert.That(PhraseEventView.Of(drop).Readout, Is.EqualTo("in 7b · len 16 · ×2"));
     }

@@ -74,7 +74,7 @@ public class Vortex : EffectBase
         float deg2rad = (Mathf.PI * 2f) / 360f;
         float spinSpeed = speed * delta;
         if (beatManager.Drop.Active)
-            spinSpeed = beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, spinSpeed);
+            spinSpeed = beatManager.Drop.In.Decay(8).Remap(1f, 0f, 5f, spinSpeed);
 
         angle += spinSpeed;
 
@@ -94,14 +94,7 @@ public class Vortex : EffectBase
     /// </summary>
     public override void Draw()
     {
-        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 5f;
-
-        if (beatManager.Drop.BeatsUntil < 8)
-        {
-            ringScale = beatsTilDrop.Remap(8f, 1f, 1f, 0f);
-        }
-        else
-            ringScale = 1f;
+        ringScale = beatManager.Drop.Before.Decay(8);   // rings close in over the last eight beats
 
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;

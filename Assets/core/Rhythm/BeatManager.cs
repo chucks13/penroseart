@@ -148,6 +148,13 @@ public partial class BeatManager
         return lengthBeats - countBeats + IntraBeatFraction();
     }
 
+    /// <summary>
+    /// Beats until an upcoming event from a wire count that includes the current beat, smoothed within
+    /// the beat so the distance falls continuously instead of stepping once per beat.
+    /// </summary>
+    private float? ContinuousBeatsUntil(int countBeats) =>
+        countBeats >= 0 ? countBeats - IntraBeatFraction() : null;
+
     /// <summary>0..1 position through a duration of the given length.</summary>
     private static float? ProgressOverLength(float? elapsedBeats, int lengthBeats)
     {

@@ -59,15 +59,11 @@ public class MetaBalls : ScreenEffect
         float beatHue = 0.5f * rhythm;
         float localDelta = beatMode < 2 ? effectDelta + (0.05f * rhythm) : effectDelta;
         
-        var beatsTilDrop = (float?)beatManager.Drop.BeatsUntil ?? 8f;
-        if (beatsTilDrop < 8)                   // slow down leading to drop
-        {
-            localDelta *= ((float)beatsTilDrop) / 8f;
-        }
+        localDelta *= beatManager.Drop.Before.Decay(8);   // slow down leading to drop
 
         if (beatManager.Drop.Active)
         {
-            float rampDown = localDelta * beatManager.Drop.Decay(8).Remap(1f, 0f, 5f, localDelta);
+            float rampDown = localDelta * beatManager.Drop.In.Decay(8).Remap(1f, 0f, 5f, localDelta);
             if (rampDown > localDelta)
                 localDelta = rampDown;
         }

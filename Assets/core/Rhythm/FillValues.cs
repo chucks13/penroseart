@@ -4,9 +4,6 @@
 /// <summary>Immutable fill wire facts with readable current/upcoming interpretations.</summary>
 public readonly struct FillValues
 {
-    /// <summary>Continuous elapsed position retained for Build and Decay.</summary>
-    private readonly float? elapsedBeats;
-
     /// <summary>Creates a Fill reading from the shared countdown translation.</summary>
     internal FillValues(CountdownValues values)
     {
@@ -16,7 +13,8 @@ public readonly struct FillValues
         BeatsRemaining = values.BeatsRemaining;
         BeatsUntil = values.BeatsUntil;
         Progress = values.Progress;
-        elapsedBeats = values.ElapsedBeats;
+        Before = new BeforeSpan(values.ContinuousBeatsUntil);
+        In = new InSpan(values.ElapsedBeats, values.LengthBeats);
     }
 
     /// <summary>
@@ -40,13 +38,11 @@ public readonly struct FillValues
     /// <summary>Derived 0..1 position through the active fill.</summary>
     public float? Progress { get; }
 
-    /// <summary>Rises across the full active fill or requested beat duration.</summary>
-    public float Build(float? durationBeats = null) =>
-        StockEnvelopes.Build(elapsedBeats, durationBeats ?? LengthBeats);
+    /// <summary>Envelopes approaching the upcoming fill across a caller-named window of whole beats.</summary>
+    public BeforeSpan Before { get; }
 
-    /// <summary>Falls across the full active fill or requested beat duration.</summary>
-    public float Decay(float? durationBeats = null) =>
-        StockEnvelopes.Decay(elapsedBeats, durationBeats ?? LengthBeats);
+    /// <summary>Envelopes running through the active fill.</summary>
+    public InSpan In { get; }
 }
 
 public partial class BeatManager
