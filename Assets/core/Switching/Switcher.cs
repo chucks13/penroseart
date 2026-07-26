@@ -122,14 +122,16 @@ public sealed class Switcher
     private int? actedBeat;
 
     /// <summary>
-    /// Grid Boundaries of stillness — how many the wall has crossed since it last started changing. Reset in
-    /// <see cref="Perform"/> the moment a cue's Runway begins, so it measures stillness anchored at cue start.
-    /// This is the run-time backstop, and a separate rule from the plan-time one: the Director never builds a
-    /// gap wider than <see cref="TrackCueSheet.MaximumGapBeats"/>, but a DJ looping a stretch the plan left
-    /// empty, or an inspection freeze ending, can still leave the playhead with nothing to perform. Reaching
-    /// the ceiling with nothing performed means the plan cannot feed the playhead, and the boundary is asked
-    /// anyway. Counted in boundaries rather than beats because a loop re-crosses the same beat numbers — only
-    /// crossings measure elapsed music.
+    /// Grid Boundaries of stillness — how many the wall has crossed since the last cue's mark. Anchored at
+    /// the Cue Mark (ADR-0022): <see cref="Perform"/> seeds the count so the in-flight cue's own landing
+    /// crossing spends the seed instead of counting as stillness, which is what keeps the ceiling a full
+    /// four Grids and a legal 64-beat plan gap un-pre-empted. This is the run-time backstop, and a separate
+    /// rule from the plan-time one: the Director never builds a gap wider than
+    /// <see cref="TrackCueSheet.MaximumGapBeats"/>, but a jump can leave a Missed Cue behind, and a DJ
+    /// looping a stretch the plan left empty, or an inspection freeze ending, can still leave the playhead
+    /// with nothing to perform. Reaching the ceiling with nothing performed means the plan cannot feed the
+    /// playhead, and the boundary is asked anyway. Counted in boundaries rather than beats because a loop
+    /// re-crosses the same beat numbers — only crossings measure elapsed music.
     /// </summary>
     private int boundariesSinceCue;
 
@@ -254,13 +256,16 @@ public sealed class Switcher
             return;
         }
 
+        var firstActSinceHandover = actedBeat == null;
         actedBeat = beat;
 
         // A Grid Boundary is the Grid lane returning to one — phrase-relative, so a shortened phrase restarts
         // it early and the count follows the music. Without that lane there is no way to know where boundaries
-        // fall, so the count simply never advances and only the plan's own marks perform.
+        // fall, so the count simply never advances and only the plan's own marks perform. The handover beat is
+        // the start line of the new plan's stillness, not elapsed music, so a handover landing on a boundary
+        // does not count that crossing (ADR-0022).
         var onBoundary = players[slot].GridBeat == 1;
-        if (onBoundary)
+        if (onBoundary && !firstActSinceHandover)
         {
             boundariesSinceCue++;
         }
@@ -280,7 +285,11 @@ public sealed class Switcher
                     continue;
                 }
 
-                cue = AskOffPlan(mark.Beat, boundariesSinceCue + 1);
+                // The count is floored at zero: its -1 seed only exists to absorb the landing crossing
+                // (ADR-0022), and a loop that turned back before the mark's boundary simply never spent it.
+                // The extra Grid is the landing still ahead of this fire beat — a runway-zero cue fired on
+                // its own boundary has none, and that crossing was already counted this very tick.
+                cue = AskOffPlan(mark.Beat, Math.Max(boundariesSinceCue, 0) + (mark.Beat > mark.FiredAtBeat ? 1 : 0));
             }
             else
             {
@@ -308,7 +317,7 @@ public sealed class Switcher
                 mark.FiredAtBeat = beat;
             }
 
-            Perform(beat, cue);
+            Perform(beat, mark.Beat, cue, offPlan: spent);
             return;
         }
 
@@ -322,10 +331,10 @@ public sealed class Switcher
         }
 
         // Standing on the boundary that spent the last legal Grid, so performing now is the ceiling gap itself.
-        var offPlan = AskOffPlan(beat, boundariesSinceCue);
-        if (offPlan.Perform)
+        var offPlanCue = AskOffPlan(beat, boundariesSinceCue);
+        if (offPlanCue.Perform)
         {
-            Perform(beat, offPlan);
+            Perform(beat, beat, offPlanCue, offPlan: true);
         }
     }
 
@@ -449,20 +458,27 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Performs one cue. It is fired on its Runway beat, so the Transition starts now, its Impact Point lands a
-    /// Runway later, and its Tail resolves after that. The Impact Point is derived from the Transition the
-    /// Director actually dealt, so an override or an off-plan card lands where its own Runway puts it rather
-    /// than where the plan assumed.
+    /// Performs one cue. It is fired on its Runway beat, so the Transition starts now and reaches its mark
+    /// one Runway later, resolving its Tail after that. The Runway is the dealt Transition's own, so an
+    /// override or an off-plan card reaches the mark on its own timing rather than the plan's baked card's.
     /// </summary>
-    /// <param name="fireBeat">The beat this cue leaves on — one Runway before its Impact Point.</param>
+    /// <param name="fireBeat">The beat this cue leaves on — one Runway before its mark.</param>
+    /// <param name="markBeat">
+    /// The beat this cue is anchored to — the stillness anchor (ADR-0022): its Cue Mark, or for an
+    /// off-plan deal the Grid Boundary the ask borrowed as its mark. Equals <paramref name="fireBeat"/>
+    /// when the cue fires on the very boundary it was asked about, whose landing then trails past it.
+    /// </param>
     /// <param name="cue">What the Director said to play.</param>
-    private void Perform(int fireBeat, CueDecision cue)
+    /// <param name="offPlan">Whether the Director dealt this cue off-plan rather than from the sheet's mark.</param>
+    private void Perform(int fireBeat, int markBeat, CueDecision cue, bool offPlan)
     {
         var repertoire = transitions[cue.TransitionIndex].Repertoire;
         var nowSeconds = Time.time;
 
-        // The wall is changing, so the stillness count starts again from this cue.
-        boundariesSinceCue = 0;
+        // Stillness anchors at the mark, not at the fire (ADR-0022). When the fire leads its mark, the
+        // landing boundary still ahead belongs to this cue: the count starts one short so that crossing
+        // brings it to zero. A cue fired on the boundary it was asked about has no landing left to absorb.
+        boundariesSinceCue = markBeat > fireBeat ? -1 : 0;
 
         // A synced cue is denominated in beats, so its seconds come off the live clock rather than the
         // Transition's authored default.
@@ -474,7 +490,7 @@ public sealed class Switcher
             nowSeconds);
         // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
         controller.currentTransition = cue.TransitionIndex;
-        Trace(() => $"SWITCHER_PERFORM impact={fireBeat + repertoire.RunwayBeats} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+        Trace(() => $"SWITCHER_PERFORM mark={markBeat} source={(offPlan ? "offplan" : "plan")} fire={fireBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
     }
 
     /// <summary>Live seconds per beat, falling back to the established 120-BPM cadence.</summary>

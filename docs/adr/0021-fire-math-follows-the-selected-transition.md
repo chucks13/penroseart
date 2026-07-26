@@ -1,6 +1,6 @@
 # Fire math follows the selected Transition; the run-time ceiling measures stillness
 
-Status: accepted
+Status: superseded by ADR-0022
 
 ADR-0020 established that the Mechanical Switcher performs a handed-over Cue Sheet against the on-air beat, but its amendments reversed its own body in place until the ADR argued with itself, and it still describes a Standby Cue and a Missed Cue the code no longer has. These two rulings supersede it; everything else it settled — the permanent check-off, the Off-Plan Cue, commands down and questions up — is carried forward unchanged.
 

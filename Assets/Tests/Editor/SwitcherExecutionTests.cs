@@ -577,6 +577,107 @@ public sealed class SwitcherExecutionTests
         Assert.Fail("No loop cue was ever performed, so its Runway could not be checked.");
     }
 
+    /// <summary>
+    /// Pins the stillness anchor (ADR-0022): the count anchors at the Cue Mark, so the plan's widest legal
+    /// gap — 64 beats, exactly what the plan-time rule permits — plays out with no off-plan ask, and the
+    /// closing mark performs as planned. Anchoring at cue fire counted the mark's own landing boundary as
+    /// stillness and dealt a certain off-plan cue 16 beats early (the 2026-07-25 live spurious transition).
+    /// </summary>
+    [Test]
+    public void ALegalMaximumGapIsNeverPreEmptedByTheCeiling()
+    {
+        // The walk is seeded, so scan generations until the Director's own cast sheet carries a
+        // maximum-width gap between consecutive marks.
+        var phrases = new[] { Phrase(1, 449, "intro") };
+        CuePlanMark gapOpen = null;
+        CuePlanMark gapClose = null;
+        var generation = 0;
+        for (var candidate = 1; candidate <= 128 && gapClose == null; candidate++)
+        {
+            FeedDirectorFrame(focusBeat: 1, phrases, candidate);
+            var marks = switcher.Sheet.Marks;
+            for (var i = 1; i < marks.Count; i++)
+            {
+                // The opener must fly a positive Runway so its landing crossing exists — the crossing the
+                // old fire-anchored count billed as stillness; a runway-zero opener cannot discriminate.
+                if (marks[i].Beat - marks[i - 1].Beat == TrackCueSheet.MaximumGapBeats
+                    && !marks[i - 1].Fired
+                    && controller.transitions[marks[i - 1].TransitionIndex].Repertoire.RunwayBeats > 0)
+                {
+                    gapOpen = marks[i - 1];
+                    gapClose = marks[i];
+                    generation = candidate;
+                    break;
+                }
+            }
+        }
+
+        Assert.That(gapClose, Is.Not.Null, "Setup: no scanned generation dealt the widest legal gap.");
+        switcher.RenderAtTime(1_000_000f, out _); // Settle anything a scan frame started.
+
+        var openFire = gapOpen.Beat - controller.transitions[gapOpen.TransitionIndex].Repertoire.RunwayBeats;
+        var closeFire = gapClose.Beat - controller.transitions[gapClose.TransitionIndex].Repertoire.RunwayBeats;
+        FeedDirectorFrame(openFire, phrases, generation);
+        Assert.That(gapOpen.Fired, Is.True, "Setup: the gap's opening mark fires on its Runway beat.");
+        switcher.RenderAtTime(1_000_000f, out _); // Complete the opening move; the wall is now still.
+
+        for (var beat = openFire + 1; beat < closeFire; beat++)
+        {
+            FeedDirectorFrame(beat, phrases, generation);
+            Assert.That(
+                switcher.Status.CurrentEffectIndex,
+                Is.GreaterThanOrEqualTo(0),
+                $"Beat {beat}: an off-plan cue pre-empted a plan the playhead is still walking through.");
+        }
+
+        FeedDirectorFrame(closeFire, phrases, generation);
+        Assert.That(gapClose.Fired, Is.True, "The gap's closing mark performs as planned.");
+    }
+
+    /// <summary>
+    /// Pins the handover start line (ADR-0022): a cast landing on a Grid Boundary does not count that
+    /// crossing as stillness, so an opening mark a full legal gap from the cast is reached and performed
+    /// with no off-plan ask. Counting the handover boundary armed the ceiling one Grid early and
+    /// pre-empted the plan's opener.
+    /// </summary>
+    [Test]
+    public void AFreshCastsOwnBoundaryIsNotCountedAsStillness()
+    {
+        // Cast lands on beat 1, a Grid Boundary; scan for a plan whose first mark sits the widest legal
+        // gap out and flies a positive Runway, so its landing crossing exists to miscount.
+        var phrases = new[] { Phrase(1, 449, "intro") };
+        CuePlanMark opener = null;
+        var generation = 0;
+        for (var candidate = 1; candidate <= 128 && opener == null; candidate++)
+        {
+            FeedDirectorFrame(focusBeat: 1, phrases, candidate);
+            var first = switcher.Sheet.Marks[0];
+            if (first.Beat - 1 == TrackCueSheet.MaximumGapBeats
+                && !first.Fired
+                && controller.transitions[first.TransitionIndex].Repertoire.RunwayBeats > 0)
+            {
+                opener = first;
+                generation = candidate;
+            }
+        }
+
+        Assert.That(opener, Is.Not.Null, "Setup: no scanned generation opened with the widest legal gap.");
+        switcher.RenderAtTime(1_000_000f, out _); // Settle anything a scan frame started.
+
+        var openerFire = opener.Beat - controller.transitions[opener.TransitionIndex].Repertoire.RunwayBeats;
+        for (var beat = 2; beat < openerFire; beat++)
+        {
+            FeedDirectorFrame(beat, phrases, generation);
+            Assert.That(
+                switcher.Status.CurrentEffectIndex,
+                Is.GreaterThanOrEqualTo(0),
+                $"Beat {beat}: an off-plan cue pre-empted the plan's opening mark.");
+        }
+
+        FeedDirectorFrame(openerFire, phrases, generation);
+        Assert.That(opener.Fired, Is.True, "The opening mark performs as planned.");
+    }
+
     /// <summary>Pins the independent Standalone seconds path after sheet execution.</summary>
     [Test]
     public void StandaloneSecondsPathIsUnaffectedBySheetExecution()

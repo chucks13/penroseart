@@ -55,7 +55,8 @@ asked of the Director.
 
 | ADR | What it governs |
 | --- | --- |
-| [0021](0021-fire-math-follows-the-selected-transition.md) | **Current.** Fire math follows the selected Transition (peek before due-beat arithmetic, so Impact always lands on the mark; a late override waits for the following mark). The run-time ceiling measures **stillness**, anchored at cue start. |
+| [0022](0022-stillness-anchors-at-the-cue-mark.md) | **Current.** The stillness count anchors at the **Cue Mark**, not at cue fire — the landing boundary is not stillness, so the run-time ceiling asks only after a full 64 beats past the last cue's mark, and a legal 64-beat plan gap is never pre-empted. Carries 0021's fire-math ruling forward verbatim. |
+| [0021](0021-fire-math-follows-the-selected-transition.md) | *Superseded by 0022.* Fire math follows the selected Transition (peek before due-beat arithmetic, so Impact always lands on the mark; a late override waits for the following mark) — carried forward. Its cue-start stillness anchor armed the ceiling 16 beats early and is reversed. |
 | [0020](0020-the-switcher-executes-a-handed-over-cue-sheet.md) | *Superseded by 0021,* but the record of what survives: permanent check-offs, the Off-Plan Cue, commands down and questions up, Show Now as a performed move. Its amendments reverse its own body — read it as history. |
 | [0019](0019-track-scoped-cue-sheets.md) | The handover itself and fire-and-forget. |
 | [0004](0004-director-switcher-sequencing-dual-mode.md) | Beat-denominated Runway/Tail, hard cuts, last-command-wins. |
@@ -112,6 +113,6 @@ wire protocol itself.
 
 ## Status at a glance
 
-Accepted: 0001, 0002, 0003, 0004, 0007, 0009, 0010, 0011, 0012, 0013, 0014, 0016, 0017, 0018, 0019, 0021.
+Accepted: 0001, 0002, 0003, 0004, 0007, 0009, 0010, 0011, 0012, 0013, 0014, 0016, 0017, 0018, 0019, 0022.
 
-Superseded: 0005 (by 0019), 0006 (by 0011), 0008 (by 0010), 0015 (by 0018), 0020 (by 0021).
+Superseded: 0005 (by 0019), 0006 (by 0011), 0008 (by 0010), 0015 (by 0018), 0020 (by 0021), 0021 (by 0022).
