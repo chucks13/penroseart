@@ -7,17 +7,22 @@ using UnityEngine;
 /// <summary>Immutable wire and tempo-derived pulse values captured for one BeatManager update.</summary>
 public readonly struct PulsesValues
 {
-    /// <summary>Whether duration-based pulse reads are available.</summary>
-    private readonly bool synced;
+    /// <summary>Whether the captured frame has a usable running one-through-four clock.</summary>
+    private readonly bool hasUsableClock;
     /// <summary>Captured 0..1 position through the current bar.</summary>
     private readonly float barProgress;
 
     /// <summary>Captures the pulse values and duration clock for one update.</summary>
-    internal PulsesValues(bool live, bool synced, float beat, float offBeat, float barProgress)
+    internal PulsesValues(
+        bool hasLiveWire,
+        bool hasUsableClock,
+        float beat,
+        float offBeat,
+        float barProgress)
     {
-        this.synced = synced;
-        Beat = live ? beat : 0f;
-        OffBeat = synced ? offBeat : 0f;
+        this.hasUsableClock = hasUsableClock;
+        Beat = hasLiveWire ? beat : 0f;
+        OffBeat = hasUsableClock ? offBeat : 0f;
         this.barProgress = barProgress;
     }
 
@@ -30,14 +35,14 @@ public readonly struct PulsesValues
     /// <summary>Returns a tempo-based 1→0 pulse for every selected musical duration; rests at zero without synchronization.</summary>
     public float Every(Duration duration)
     {
-        var phase = synced ? DurationClock.Phase(barProgress, duration) : null;
+        var phase = hasUsableClock ? DurationClock.Phase(barProgress, duration) : null;
         return phase is { } value ? DurationClock.Pulse(value) : 0f;
     }
 
     /// <summary>Returns true for the first <paramref name="activeFor"/> fraction of every duration; false without synchronization.</summary>
     public bool On(Duration duration, float activeFor = 0.25f)
     {
-        var phase = synced ? DurationClock.Phase(barProgress, duration) : null;
+        var phase = hasUsableClock ? DurationClock.Phase(barProgress, duration) : null;
         return phase is { } value && value < Mathf.Clamp01(activeFor);
     }
 }
@@ -78,6 +83,11 @@ public partial class BeatManager
     /// <summary>Captures wire and derived pulse values for public reading.</summary>
     private PulsesValues CapturePulses()
     {
-        return new PulsesValues(liveBeatActive, IsSynced, wireSnapshot.beatPulse, offBeatPulse, BarPhase);
+        return new PulsesValues(
+            hasLiveWire: liveBeatActive,
+            hasUsableClock: IsSynced,
+            beat: wireSnapshot.beatPulse,
+            offBeat: offBeatPulse,
+            barProgress: BarPhase);
     }
 }

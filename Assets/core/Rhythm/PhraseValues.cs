@@ -28,7 +28,7 @@ public readonly struct PhraseValues
     /// <summary>Total phrase length in beats.</summary>
     public int? LengthBeats { get; }
 
-    /// <summary>Whether the phrase length breaks the sender's sixteen-beat grid; false when unknown.</summary>
+    /// <summary>Whether the phrase length is not divisible by 16; false when unknown.</summary>
     public bool Irregular { get; }
 
     /// <summary>Derived 0..1 position through the phrase.</summary>

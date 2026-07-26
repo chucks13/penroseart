@@ -36,7 +36,18 @@ public readonly struct LevelBands
     /// <summary>The strongest band's value.</summary>
     public float Strongest => Mathf.Max(Low, Mathf.Max(Mid, High));
     /// <summary>The strongest band, with ties resolved Low then Mid then High.</summary>
-    public Band StrongestBand => Low >= Mid && Low >= High ? Band.Low : Mid >= High ? Band.Mid : Band.High;
+    public Band StrongestBand
+    {
+        get
+        {
+            if (Low >= Mid && Low >= High)
+            {
+                return Band.Low;
+            }
+
+            return Mid >= High ? Band.Mid : Band.High;
+        }
+    }
 
     /// <summary>Spectral balance from zero at low through one at high; zero at silence.</summary>
     public float Centroid
@@ -82,6 +93,9 @@ public readonly struct LevelsValues
 
 public partial class BeatManager
 {
+    /// <summary>Peak fall time used when no usable musical tempo is available.</summary>
+    private const float StandalonePeakDrainSeconds = 0.5f;
+
     /// <summary>Attack time constant in seconds for rising smoothed levels.</summary>
     [SerializeField]
     private float levelsAttackSeconds = 0.02f;
@@ -95,9 +109,9 @@ public partial class BeatManager
     /// <summary>Latest tempo-draining peak state.</summary>
     private LevelBands peakLevels;
     /// <summary>Last clock sample used by both shaping algorithms.</summary>
-    private float lastSmoothingTime;
+    private float lastShapingTime;
     /// <summary>Whether a prior shaping clock sample exists.</summary>
-    private bool hasSmoothingClock;
+    private bool hasShapingClock;
     /// <summary>Whether shaping state has been initialized from an input sample.</summary>
     private bool hasLevelShaping;
 
@@ -107,9 +121,9 @@ public partial class BeatManager
     /// <summary>Advances Smoothed and Peak from the current normalized wire levels.</summary>
     private void UpdateLevelsShaping(float timeSeconds)
     {
-        var deltaSeconds = hasSmoothingClock ? Mathf.Max(0f, timeSeconds - lastSmoothingTime) : 0f;
-        lastSmoothingTime = timeSeconds;
-        hasSmoothingClock = true;
+        var deltaSeconds = hasShapingClock ? Mathf.Max(0f, timeSeconds - lastShapingTime) : 0f;
+        lastShapingTime = timeSeconds;
+        hasShapingClock = true;
 
         var normalized = ReadNormalizedLevels();
         if (!hasLevelShaping)
@@ -146,7 +160,7 @@ public partial class BeatManager
     private float PeakDrainBeatSeconds() =>
         IsSynced && wireSnapshot.beatAverageMs > 0
             ? wireSnapshot.beatAverageMs / 1000f
-            : 0.5f;
+            : StandalonePeakDrainSeconds;
 
     /// <summary>Moves one band through the configured attack or release follower.</summary>
     private float SmoothTowards(float current, float target, float deltaSeconds)
