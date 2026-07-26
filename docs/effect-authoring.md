@@ -152,11 +152,17 @@ dropScroll = Mathf.Repeat(dropScroll - speed * DropRush * dropEnv * effectDelta,
 
 ### 3. Read direct structure values and envelopes
 
-Fill and Drop each keep their raw countdown fields beside readable interpretations (`Active`, `BeatsRemaining`, `BeatsUntil`, and `Progress`). Their `Build()` and `Decay()` conveniences rest at zero when the event is inactive. `Tunnel` uses them directly:
+Fill and Drop each keep their raw countdown fields beside readable interpretations (`Active`, `BeatsRemaining`, `BeatsUntil`, and `Progress`). Their envelopes hang off two spans: `In` runs through the active event, `Before` approaches the next one across a window of whole beats that you must name. `Tunnel` uses `In` directly:
 
 ```csharp
-fillEnv = beatManager.Fill.Build();
-dropEnv = beatManager.Drop.Decay(DropBars * 4f);
+fillEnv = beatManager.Fill.In.Build();
+dropEnv = beatManager.Drop.In.Decay(DropBars * 4);
+```
+
+Use `Before` for anticipation. It is total — resting as if the event were infinitely far, so `Before.Decay` reads 1 and `Before.Build` reads 0 whenever nothing is coming, including Standalone Mode. That makes `Before.Decay` safe to multiply straight into a delta with no null handling:
+
+```csharp
+localDelta *= beatManager.Drop.Before.Decay(8);   // slow down leading to the drop
 ```
 
 Read `Active`, `CountBeats`, `LengthBeats`, and `Remaining` when the Effect needs wire facts. If an Effect needs an onset, retain its own prior `Active` value and compare locally; BeatManager deliberately exposes state, not one-frame event flags.

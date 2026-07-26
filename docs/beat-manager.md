@@ -96,19 +96,23 @@ beatManager.Drop.Progress;
 
 Energy uses the closed `Low`/`Mid`/`High` vocabulary. `Energy` holds the current run and its derived `Trend`; `NextEnergy` holds the wire's explicitly named next run.
 
-Phrase, Drop, Fill, Energy, and Grid expose `Build()` and `Decay()`. With no argument they cover the full duration. A shorter beat duration completes early and holds its endpoint:
+Phrase, Energy, and Grid expose `Build()` and `Decay()` directly. Drop and Fill reach theirs through two spans: `In`, through the active event, and `Before`, approaching the next one across a window you name. Windows are counts of whole beats; with no argument `In` covers the event's own length, and a shorter window completes early and holds its endpoint:
 
 ```csharp
-float fullBuild = beatManager.Drop.Build();
-float fastBuild = beatManager.Drop.Build(16);
-float fastDecay = beatManager.Drop.Decay(16);
+float fullBuild = beatManager.Drop.In.Build();
+float fastBuild = beatManager.Drop.In.Build(16);
+float fastDecay = beatManager.Drop.In.Decay(16);
+float slowdown  = beatManager.Drop.Before.Decay(8);   // 1 far off → 0 as the drop lands
+float charge    = beatManager.Drop.Before.Build(8);   // 0 far off → 1 as the drop lands
 ```
+
+Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect.
 
 These normalized values use the same two scalar helpers as the rest of the runtime. `Lerp` turns a normalized
 amount into a useful range; `Remap` converts one range to another and clamps only when requested:
 
 ```csharp
-float brightness = beatManager.Drop.Build().Lerp(0.25f, 1f);
+float brightness = beatManager.Drop.In.Build().Lerp(0.25f, 1f);
 float energy = beatManager.Levels.Smoothed.Average.Remap(0.1f, 0.8f, 0f, 1f, clamp: true);
 ```
 

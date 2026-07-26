@@ -94,12 +94,14 @@ floats, and `waveform.Lerp(from, to)` already folds the no-beat state into your
 Three helpers turn raw values into visuals:
 
 ```csharp
-// Build/Decay: 0→1 ramps over a musical duration (Phrase, Drop, Fill, Energy, Grid).
-float tension = beatManager.Fill.Build();       // rises 0→1 across the fill
-float flash   = beatManager.Drop.Decay(16);     // 1→0 over the first 16 beats of the drop
+// Build/Decay: 0→1 ramps over a musical duration (Phrase, Energy, Grid directly;
+// Drop and Fill through their In/Before spans). Windows are whole beats.
+float tension = beatManager.Fill.In.Build();        // rises 0→1 across the fill
+float flash   = beatManager.Drop.In.Decay(16);      // 1→0 over the first 16 beats of the drop
+float slowing = beatManager.Drop.Before.Decay(8);   // 1→0 across the last 8 beats before it lands
 
 // Lerp: map a normalized amount into your artistic range.
-float brightness = beatManager.Drop.Build().Lerp(0.25f, 1f);
+float brightness = beatManager.Drop.In.Build().Lerp(0.25f, 1f);
 
 // Remap: convert one range to another.
 float glow = beatManager.Levels.Smoothed.Average.Remap(0.1f, 0.8f, 0f, 1f, clamp: true);
@@ -262,7 +264,7 @@ public class HeartbeatWash : EffectBase
         float brightness = waveform.Lerp(0.4f, 1f);
 
         // Push toward white while a fill builds tension.
-        float whiten = beatManager.Fill.Build() * 0.5f;
+        float whiten = beatManager.Fill.In.Build() * 0.5f;
 
         Color color = Color.Lerp(Color.blue, Color.white, whiten) * brightness;
         for (int i = 0; i < buffer.Length; i++)
@@ -283,8 +285,10 @@ worked example: Routines, energy recipes, audio levels, and Standalone behavior.
 | A rhythm that varies over four bars | `Routine.Of(...)` + `routine.Lerp(from, to)` |
 | Calmer / busier rhythms | `waveforms.Random(Energy.Low)` / `(Energy.High)` |
 | Change rhythm as the music moves | re-acquire in `OnNewGrid()` |
-| Tension rising into a fill or drop | `beatManager.Fill.Build()` / `Drop.Build()` |
-| A flash that fades after the drop | `beatManager.Drop.Decay(beats)` |
+| Tension rising through a fill or drop | `beatManager.Fill.In.Build()` / `Drop.In.Build()` |
+| A flash that fades after the drop | `beatManager.Drop.In.Decay(beats)` |
+| Slow into an approaching drop | `beatManager.Drop.Before.Decay(8)` (rests at 1 — safe to multiply) |
+| Charge up as a drop approaches | `beatManager.Drop.Before.Build(8)` |
 | React to actual audio loudness | `beatManager.Levels.Smoothed` / `.Peak` |
 | Know if there's a live beat at all | `beatManager.IsSynced` |
 | Handle a nullable fact | `?? fallback`, or `is { } x` to branch (bools and pulses are never null) |

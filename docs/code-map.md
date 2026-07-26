@@ -25,7 +25,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/core/Rhythm/BeatManager.cs` | Private Rave snapshot ownership, live/Standalone source handling, `IsSynced`, per-frame derivation, and frame-coherent Data Surface capture. |
 | `Assets/core/Rhythm/TimingValues.cs`, `TrackValues.cs`, `LiveOrderValues.cs` | Captured route, timing, playhead-position, track-identity, and ordered live-player focus values. |
 | `Assets/core/Rhythm/BeatsValues.cs`, `OffbeatsValues.cs`, `PulsesValues.cs`, `Duration.cs` | Beat/offbeat wire countdowns and triggers, plus tempo-based musical pulses. |
-| `Assets/core/Rhythm/PhraseValues.cs`, `FillValues.cs`, `DropValues.cs`, `EnergyValues.cs`, `GridValues.cs`, `StockEnvelopes.cs` | Phrase-structure wire values, direct progress facts, and Build/Decay calculations. |
+| `Assets/core/Rhythm/PhraseValues.cs`, `FillValues.cs`, `DropValues.cs`, `EnergyValues.cs`, `GridValues.cs`, `StockEnvelopes.cs`, `Spans.cs` | Phrase-structure wire values, direct progress facts, and Build/Decay calculations. `Spans.cs` holds the Before/In span pair that serves Drop and Fill their envelopes. |
 | `Assets/core/Rhythm/LoopValues.cs`, `LevelsValues.cs` | Loop wire values and always-available normalized/smoothed/peak audio-band values. |
 | `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Explicit immutable Waveform acquisition, clock-bound playback, Pool codec/load path, and four-bar Routine composition. |
 | `Assets/core/IO/RaveOscReceiver.cs` | Unity-hosted bridge that applies current Rave OSC on-air snapshots into `BeatManager` before the Director ticks. |
