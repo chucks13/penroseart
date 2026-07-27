@@ -23,5 +23,5 @@ DEFINE_WAVEFORM(measure start) { QQQQ     | 8000     | 0.3 | 0 }
 DEFINE_WAVEFORM(beats 1 and 4) { QQQQ     | 8008     | 0.3 | 0 }
 DEFINE_WAVEFORM(offbeat)       { QQQQ     | 8888     | 0.3 | 0.5 }
 DEFINE_WAVEFORM(every eighth)  { EEEEEEEE | 88888888 | 0.3 | 0 }
-DEFINE_WAVEFORM(dance for me)  { EEQSSSSQ | 88488884 | 0.5 | 0 }
+DEFINE_WAVEFORM(dance for me)  { EEQQQ    | 88484    | 0.5 | 0 }
 DEFINE_WAVEFORM(heartbeat)     { EEQEEQ   | 860860   | 0.3 | 0 }
