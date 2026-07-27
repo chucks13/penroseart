@@ -11,8 +11,8 @@ using PenroseArt.RaveOsc;
 /// is captured, and the handles' spans are read. Envelope internals are never touched directly.
 /// </summary>
 /// <remarks>
-/// Expected values come from the documented house shape — SmoothStep, <c>t * t * (3 - 2t)</c>, over the
-/// span's normalized position — worked out by hand rather than recomputed the way the runtime does.
+/// Expected values come from the linear contract — Build is the normalized position and Decay is one
+/// minus that position — worked out by hand rather than recomputed the way the runtime does.
 /// </remarks>
 public sealed class BeatManagerPhraseHandleTests
 {
@@ -34,10 +34,10 @@ public sealed class BeatManagerPhraseHandleTests
         var beatManager = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
 
         // Sixteen beats elapsed: a sixteen-beat window has completed, the phrase's own 32 is half way,
-        // and a 64-beat window is a quarter along — SmoothStep(0.25) is 0.15625.
+        // and the linear position across a 64-beat window is 16 / 64 = 0.25.
         Assert.That(beatManager.Chorus.In.Build(16), Is.EqualTo(1f));
         Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.5f));
-        Assert.That(beatManager.Chorus.In.Build(64), Is.EqualTo(0.15625f));
+        Assert.That(beatManager.Chorus.In.Build(64), Is.EqualTo(0.25f));
     }
 
     /// <summary>
@@ -73,23 +73,21 @@ public sealed class BeatManagerPhraseHandleTests
         Assert.That(beatManager.Down.In.Build(), Is.EqualTo(0f));
     }
 
-    /// <summary>
-    /// Verifies In keeps its intra-beat continuity while Before holds until its whole-beat distance steps.
-    /// </summary>
+    /// <summary>Verifies In and Before use the same continuous intra-beat position.</summary>
     [Test]
-    public void InMovesContinuouslyWhileBeforeHoldsUntilTheWholeBeatSteps()
+    public void InAndBeforeMoveContinuouslyWithinTheBeat()
     {
         var onTheBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17);
         var halfwayThroughTheBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 17, timeSeconds: 0.25f);
         var nextWholeBeat = FocusDeck(Track(), currentPhrase: 3, beatInPhrase: 18, timeSeconds: 0.25f);
 
-        // Half a beat further on, In reaches SmoothStep(16.5 / 32) while Before still sees 16 whole beats.
-        Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.EqualTo(0.5234f).Within(0.001f));
-        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.EqualTo(0.5f));
+        // Half a beat further on, both linear spans read 16.5 / 32 = 0.515625.
+        Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.EqualTo(16.5f / 32f));
+        Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32), Is.EqualTo(16.5f / 32f));
         Assert.That(halfwayThroughTheBeat.Chorus.In.Build(), Is.GreaterThan(onTheBeat.Chorus.In.Build()));
         Assert.That(halfwayThroughTheBeat.Chorus.Before.Build(32),
-            Is.EqualTo(onTheBeat.Chorus.Before.Build(32)));
-        Assert.That(nextWholeBeat.Chorus.Before.Build(32), Is.EqualTo(17f / 32f));
+            Is.GreaterThan(onTheBeat.Chorus.Before.Build(32)));
+        Assert.That(nextWholeBeat.Chorus.Before.Build(32), Is.EqualTo(17.5f / 32f));
     }
 
     /// <summary>
@@ -169,8 +167,8 @@ public sealed class BeatManagerPhraseHandleTests
         var beatManager = new BeatManager();
         Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 32);
 
-        // Thirty-one of 32 beats elapsed: SmoothStep(0.96875) is 0.99713.
-        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(0.99713f).Within(0.001f));
+        // Thirty-one of 32 beats elapsed: the linear position is 31 / 32 = 0.96875.
+        Assert.That(beatManager.Chorus.In.Build(), Is.EqualTo(31f / 32f));
 
         Feed(beatManager, Track(), currentPhrase: 3, beatInPhrase: 1);
 

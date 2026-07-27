@@ -64,15 +64,19 @@ internal readonly struct FocusStructureReading
     /// <summary>Absolute one-based track beat the cursor sits on.</summary>
     private readonly int currentBeat;
 
+    /// <summary>Continuous fraction elapsed through <see cref="currentBeat"/>.</summary>
+    private readonly float intraBeat;
+
     /// <summary>Captures one frame's cursor position and its next-occurrence table.</summary>
     internal FocusStructureReading(int[] nextStartBeats, PhraseType coveringType, float elapsedBeats,
-        int? coveringLength, int currentBeat)
+        int? coveringLength, int currentBeat, float intraBeat)
     {
         this.nextStartBeats = nextStartBeats;
         this.coveringType = coveringType;
         this.elapsedBeats = elapsedBeats;
         this.coveringLength = coveringLength;
         this.currentBeat = currentBeat;
+        this.intraBeat = intraBeat;
     }
 
     /// <summary>Reads both spans of one phrase type from this position.</summary>
@@ -81,7 +85,7 @@ internal readonly struct FocusStructureReading
     {
         var nextStartBeat = nextStartBeats is { } starts ? starts[(int)type] : 0;
         return new PhraseHandleValues(
-            new BeforeSpan(nextStartBeat > 0 ? nextStartBeat - currentBeat : (int?)null),
+            new BeforeSpan(nextStartBeat > 0 ? nextStartBeat - currentBeat - intraBeat : null),
             coveringType == type ? new InSpan(elapsedBeats, coveringLength) : default);
     }
 }
@@ -197,6 +201,7 @@ public partial class BeatManager
             covering.Type,
             beatInPhrase - 1 + intraBeat,
             coveringLength > 0 ? coveringLength : null,
-            currentBeat);
+            currentBeat,
+            intraBeat);
     }
 }

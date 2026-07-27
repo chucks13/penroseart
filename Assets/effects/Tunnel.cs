@@ -40,7 +40,7 @@ public class Tunnel : EffectBase
     /// <summary>Floor of the beat brightness pulse: higher = shallower pulse (less beat effect on brightness). 1 = no pulse. Tune on the readout.</summary>
     private const float BeatBrightnessFloor = 0.75f;
 
-    /// <summary>Drop decay length in bars: the warp slam eases from full to nothing over this many bars.</summary>
+    /// <summary>Drop decay length in bars: the warp slam falls linearly from full to nothing over this many bars.</summary>
     private const int DropBars = 2;
 
     /// <summary>Reverse scroll-rate multiple at the Drop's peak: the tunnel warps inward this much faster than its base scroll. Bigger than <see cref="FillRush"/> so the Drop out-slams a Fill. Tune on the readout.</summary>

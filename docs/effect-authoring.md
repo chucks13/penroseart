@@ -174,7 +174,7 @@ float chorusBuild = beatManager.Chorus.Before.Build(32); // rise into the next c
 float outroFade = beatManager.Outro.Before.Decay(64);    // wind down toward the outro
 ```
 
-`Before` requires a whole-beat window. It advances linearly once per beat; on the final beat `Decay(window)` reads `1 / window`, not zero, because the section has not landed yet. `In` moves continuously within each beat, uses SmoothStep easing, and defaults to the covering section's own length when no window is supplied.
+`Before` requires a whole-beat window, and `In` defaults to the covering section's own length when no window is supplied. Both move continuously within each beat and shape their normalized position linearly: `Build` is the position and `Decay` is one minus it. On the final beat, `Before.Decay(window)` starts at `1 / window` and continues toward zero as the section approaches.
 
 These handles follow the Focus deck's generation-gated Song Structure cursor automatically, so an Effect never handles nulls or deck changes. They are positional: Loops and needle-drops read from the cursor's current section, and `Before` targets the next ordinal occurrence — during a chorus, `Chorus.Before` means the following chorus. When no applicable structure or clock exists, the type does not recur, or BeatManager is in Standalone Mode, every envelope rests at zero except `Before.Decay`, which rests at one.
 

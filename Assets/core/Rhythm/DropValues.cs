@@ -6,13 +6,14 @@ internal readonly struct CountdownValues
 {
     /// <summary>Creates the shared direct and interpreted countdown values.</summary>
     internal CountdownValues(bool active, int? lengthBeats, int? remaining,
-        int? beatsRemaining, int? beatsUntil, float? progress, float? elapsedBeats)
+        int? beatsRemaining, int? beatsUntil, float? distanceUntil, float? progress, float? elapsedBeats)
     {
         Active = active;
         LengthBeats = lengthBeats;
         Remaining = remaining;
         BeatsRemaining = beatsRemaining;
         BeatsUntil = beatsUntil;
+        DistanceUntil = distanceUntil;
         Progress = progress;
         ElapsedBeats = elapsedBeats;
     }
@@ -27,6 +28,8 @@ internal readonly struct CountdownValues
     internal int? BeatsRemaining { get; }
     /// <summary>Beats until the event when inactive.</summary>
     internal int? BeatsUntil { get; }
+    /// <summary>Continuous beats until the event after subtracting the current intra-beat fraction.</summary>
+    internal float? DistanceUntil { get; }
     /// <summary>Position through the active event.</summary>
     internal float? Progress { get; }
     /// <summary>Continuous beats elapsed through the active event.</summary>
@@ -45,7 +48,7 @@ public readonly struct DropValues
         BeatsRemaining = values.BeatsRemaining;
         BeatsUntil = values.BeatsUntil;
         Progress = values.Progress;
-        Before = new BeforeSpan(values.BeatsUntil);
+        Before = new BeforeSpan(values.DistanceUntil);
         In = new InSpan(values.ElapsedBeats, values.LengthBeats);
     }
 
@@ -85,7 +88,7 @@ public partial class BeatManager
     /// <summary>Captures the settled Drop lane.</summary>
     private DropValues CaptureDrop() => new(CaptureCountdown(wireSnapshot.dropState));
 
-    /// <summary>Translates the shared Drop/Fill wire shape once for either public group.</summary>
+    /// <summary>Translates the shared Drop/Fill wire shape and captures continuous span positions.</summary>
     private CountdownValues CaptureCountdown(PenroseArt.RaveOsc.CountdownState state)
     {
         var lane = TriStateOrNull(state.active);
@@ -96,12 +99,17 @@ public partial class BeatManager
 
         var active = lane.Value;
         var elapsed = active ? ElapsedInDuration(state.countBeats, state.lengthBeats) : null;
+        var beatsUntil = active ? null : NonNegativeOrNull(state.countBeats);
+        var distanceUntil = beatsUntil is { } until
+            ? until - IntraBeatFraction()
+            : (float?)null;
         return new CountdownValues(
             active,
             NonNegativeOrNull(state.lengthBeats),
             NonNegativeOrNull(state.remaining),
             active ? NonNegativeOrNull(state.countBeats) : null,
-            active ? null : NonNegativeOrNull(state.countBeats),
+            beatsUntil,
+            distanceUntil,
             ProgressOverLength(elapsed, state.lengthBeats),
             elapsed);
     }

@@ -10,8 +10,8 @@ using PenroseArt.RaveOsc;
 /// frame is captured, and the handle's spans are read. Envelope internals are never touched directly.
 /// </summary>
 /// <remarks>
-/// Expected values come from the documented house shape — SmoothStep, <c>t * t * (3 - 2t)</c>, over the
-/// span's normalized position — worked out by hand rather than recomputed the way the runtime does.
+/// Expected values come from the linear contract — Build is the normalized position and Decay is one
+/// minus that position — worked out by hand rather than recomputed the way the runtime does.
 /// </remarks>
 public sealed class BeatManagerSpanTests
 {
@@ -34,9 +34,9 @@ public sealed class BeatManagerSpanTests
         Assert.That(UpcomingDrop(beatsUntil: 0).Drop.Before.Decay(8), Is.EqualTo(0f));
     }
 
-    /// <summary>Verifies approach decay exactly matches the wire-count parity formula across its window.</summary>
+    /// <summary>Verifies approach decay exactly matches the linear distance formula across its window.</summary>
     [Test]
-    public void BeforeDecayMatchesTheWireCountdownFormulaAcrossTheWholeWindow()
+    public void BeforeDecayMatchesTheLinearDistanceFormulaAcrossTheWholeWindow()
     {
         for (var until = 0; until <= 8; until++)
         {
@@ -65,20 +65,17 @@ public sealed class BeatManagerSpanTests
         Assert.That(beatManager.Drop.Before.Decay(8), Is.EqualTo(1f));
     }
 
-    /// <summary>
-    /// Verifies the approach holds while only intra-beat time advances and steps when the whole-beat
-    /// wire count advances.
-    /// </summary>
+    /// <summary>Verifies the approach advances continuously with the captured intra-beat fraction.</summary>
     [Test]
-    public void BeforeEnvelopesHoldWithinTheBeatAndStepWithTheWireCount()
+    public void BeforeEnvelopesMoveContinuouslyWithinTheBeat()
     {
         var onTheBeat = UpcomingDrop(beatsUntil: 4).Drop.Before.Build(8);
         var halfwayThroughTheBeat = UpcomingDrop(beatsUntil: 4, timeSeconds: 0.25f).Drop.Before.Build(8);
         var nextWholeBeat = UpcomingDrop(beatsUntil: 3, timeSeconds: 0.25f).Drop.Before.Build(8);
 
         Assert.That(onTheBeat, Is.EqualTo(0.5f));
-        Assert.That(halfwayThroughTheBeat, Is.EqualTo(0.5f));
-        Assert.That(nextWholeBeat, Is.EqualTo(0.625f));
+        Assert.That(halfwayThroughTheBeat, Is.EqualTo(0.5625f));
+        Assert.That(nextWholeBeat, Is.EqualTo(0.6875f));
     }
 
     /// <summary>Verifies the window is read as whole beats, so a shorter runway ramps later.</summary>
@@ -119,14 +116,14 @@ public sealed class BeatManagerSpanTests
     [Test]
     public void InDefaultsToTheEventsOwnLength()
     {
-        // Eight of the 32 beats elapsed: SmoothStep(0.25) is 0.15625 across the drop's own length,
-        // while an eight-beat window has already completed and a sixteen-beat one is half way.
+        // Eight of 32 beats elapsed is 8 / 32 = 0.25 across the drop's own length, while an
+        // eight-beat window has completed and a sixteen-beat window is half way.
         var beatManager = ActiveDrop(beatsRemaining: 24, lengthBeats: 32);
 
-        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.15625f));
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.25f));
         Assert.That(beatManager.Drop.In.Build(8), Is.EqualTo(1f));
         Assert.That(beatManager.Drop.In.Build(16), Is.EqualTo(0.5f));
-        Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0.84375f));
+        Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0.75f));
     }
 
     /// <summary>
@@ -174,8 +171,8 @@ public sealed class BeatManagerSpanTests
         Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.5f));
         Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0.5f));
         Assert.That(beatManager.Drop.In.Build(8), Is.EqualTo(1f));
-        Assert.That(beatManager.Fill.In.Build(), Is.EqualTo(0.15625f));
-        Assert.That(beatManager.Fill.In.Decay(), Is.EqualTo(0.84375f));
+        Assert.That(beatManager.Fill.In.Build(), Is.EqualTo(0.25f));
+        Assert.That(beatManager.Fill.In.Decay(), Is.EqualTo(0.75f));
         Assert.That(beatManager.Drop.Active, Is.True);
         Assert.That(beatManager.Drop.BeatsRemaining, Is.EqualTo(16));
         Assert.That(beatManager.Drop.LengthBeats, Is.EqualTo(32));
@@ -185,7 +182,7 @@ public sealed class BeatManagerSpanTests
         beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0f);
 
-        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.546814f).Within(0.000001f));
+        Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(17f / 32f));
     }
 
     /// <summary>Verifies the through-the-drop envelopes rest while the drop is only upcoming.</summary>

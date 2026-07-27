@@ -13,7 +13,7 @@ public readonly struct FillValues
         BeatsRemaining = values.BeatsRemaining;
         BeatsUntil = values.BeatsUntil;
         Progress = values.Progress;
-        Before = new BeforeSpan(values.BeatsUntil);
+        Before = new BeforeSpan(values.DistanceUntil);
         In = new InSpan(values.ElapsedBeats, values.LengthBeats);
     }
 

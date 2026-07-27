@@ -34,7 +34,7 @@ using Random = UnityEngine.Random;
 ///   steady trickle plus a synthetic downbeat bloom) so several fronts always crawl at once.</description></item>
 /// <item><description>THE DROP — beat one of a Drop fires a one-shot flash: a fresh single-color layer is surged
 ///   across the whole wall as a bright colored wavefront (the luminance lift rides the sweeping leading edge, in
-///   palette color, never white), easing back over a couple of bars so the drop lands as one dramatic sweep that
+///   palette color, never white), then falling linearly over a couple of bars so the drop lands as one dramatic sweep that
 ///   resolves into a new crystal field.</description></item>
 /// <item><description>HOW FAST the front lunges — <see cref="PulsesValues.Beat"/> surges the spread rate on
 ///   each hit; Standalone falls back to a self-driven surge so its fronts still lunge on the synthetic downbeats.</description></item>
@@ -200,7 +200,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Whether this frame is inside a fill, kept for the debug readout.</summary>
     private bool fillActive;
 
-    /// <summary>This frame's fill build level [0..1] (the fast-attack ramp, plateaued at full), kept for the debug readout.</summary>
+    /// <summary>This frame's continuous linear Fill Build position [0..1], kept for the debug readout.</summary>
     private float fillLevel;
 
     /// <summary>
@@ -346,7 +346,7 @@ public class CrystalGrowth : EffectBase
             charge[i] *= keep;
         }
 
-        // Hold the drop layer while its flash eases: don't let coverage auto-advance to a new (multicolor)
+        // Hold the drop layer while its flash falls: don't let coverage auto-advance to a new (multicolor)
         // generation mid-flash, so the single drop color owns the wall until the wavefront settles.
         if (dropFlash <= 0f)
         {
@@ -361,7 +361,7 @@ public class CrystalGrowth : EffectBase
         float rhythmBrightness = waveform.Lerp(minimumBrightness, 1f);
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
-        // the wall flashes on each 16th for the drop's whole window (easing out with the release). Applied to
+        // the wall flashes on each 16th for the drop's whole window (falling linearly with the release). Applied to
         // the final color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to
         // 1 (no strobe) outside a Drop. The Fill instead swells the glow while the hold-back compresses growth.
         float strobe = 1f - (dropFlash * (1f - ratchet) * DropStrobeDepth);
@@ -386,7 +386,7 @@ public class CrystalGrowth : EffectBase
 
             // sqrt widens the bright band: the whole active growth area stays bright and only the oldest tail
             // eases down to the floor, so the crystal reads as a defined glowing region instead of a bright dot.
-            // The Drop flash adds a luminance lift weighted by front heat (c) and the eased envelope, so the boost
+            // The Drop flash adds a luminance lift weighted by front heat (c) and the linear envelope, so the boost
             // rides the sweeping leading edge — a bright colored wavefront crossing the wall — and trails back to
             // normal behind it, all in the tile's own palette color (never toward white). Collapses to ×1 off a flash.
             float factor = Mathf.Max(Mathf.Sqrt(c) * rhythmBrightness, CrystalFloor) * (1f + DropFlashBrightness * dropFlash * c);

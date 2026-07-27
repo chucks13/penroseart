@@ -29,14 +29,14 @@ public class Lightning : EffectBase
     /// <summary>Beats per bar used to express the authored Drop decay length in beats.</summary>
     private const int BeatsPerBar = 4;
 
-    /// <summary>Drop decay length in bars: the slam eases from full to nothing over this many bars.</summary>
+    /// <summary>Drop decay length in bars: the slam falls linearly from full to nothing over this many bars.</summary>
     private const int DropBars = 2;
 
     /// <summary>How far the bolts swell toward full brightness (HSV value) at the Drop's peak (0 = unchanged, 1 = full):
     /// a pure intensity lift that keeps the rolled hue and saturation and caps at 1, so it never washes toward white. Tune on the readout.</summary>
     private const float DropValueLift = 1f;
 
-    /// <summary>Depth of the fast electric flicker at the Drop's peak (0 = none, 1 = can strobe to black): the whole bolt stutters, easing out with the envelope. Tune on the readout.</summary>
+    /// <summary>Depth of the fast electric flicker at the Drop's peak (0 = none, 1 = can strobe to black): the whole bolt stutters, fading out linearly with the envelope. Tune on the readout.</summary>
     private const float DropFlickerDepth = 0.5f;
 
     /// <summary>Flicker speed (Perlin samples per second of effect time): higher = faster, sharper strobe. Tune on the readout.</summary>
@@ -67,7 +67,7 @@ public class Lightning : EffectBase
     private bool heldActive;
     private bool previousEighthOn;
 
-    /// <summary>Drop slam amount (1 at the downbeat, SmoothStep-eased to 0 over <see cref="DropBars"/>); drives the value lift, flicker, field inversion, and trail hold.</summary>
+    /// <summary>Drop slam amount (1 at the downbeat, then falling linearly to 0 over <see cref="DropBars"/>); drives the value lift, flicker, field inversion, and trail hold.</summary>
     private float dropEnv;
 
     /// <summary>

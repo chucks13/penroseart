@@ -103,11 +103,11 @@ Phrase, Energy, and Grid expose `Build()` and `Decay()` directly. Drop, Fill, an
 float fullBuild = beatManager.Drop.In.Build();
 float fastBuild = beatManager.Drop.In.Build(16);
 float fastDecay = beatManager.Drop.In.Decay(16);
-float slowdown  = beatManager.Drop.Before.Decay(8);   // 1 far off → 1/8 on the last beat before it lands
+float slowdown  = beatManager.Drop.Before.Decay(8);   // 1 far off → continuously falling to 0 at the drop
 float charge    = beatManager.Drop.Before.Build(8);   // 0 far off → rising as the drop nears
 ```
 
-Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect. The two spans differ in shape on purpose: `Before` is linear in the wire's whole-beat countdown — the house slowdown ramp, advancing once per beat and never reaching its endpoint before the piece actually lands — while `In` eases (SmoothStep) and moves continuously within the beat when the clock runs, falling back to whole-beat steps when the wire stops reporting one.
+Every envelope is total. `Before` requires its window (it has no length of its own) and rests as if the event were infinitely far: `Before.Decay` reads 1, everything else reads 0. That holds when no such event is coming, while one is already running, and in Standalone Mode — so a speed multiplier written against `Before.Decay` never needs a null check and never freezes the effect. Both spans use the same contract: a continuous normalized position shaped linearly, with `Build` equal to that position and `Decay` equal to one minus it. `In` reads continuous elapsed beats; `Before` reads the whole-beat countdown minus the current intra-beat fraction, so a countdown of 8 is 8.0 on the beat and 7.5 halfway through it. When no intra-beat fraction is available, both naturally rest on the captured whole-beat position.
 
 These normalized values use the same two scalar helpers as the rest of the runtime. `Lerp` turns a normalized
 amount into a useful range; `Remap` converts one range to another and clamps only when requested:
