@@ -51,8 +51,8 @@ public class Nibbler : EffectBase
         else
         {
             randomColor = false;
-            color = Color.HSVToRGB(Random.value, 1f, 1f);
         }
+        color = Color.HSVToRGB(Random.value, 1f, 1f);
 
         fade = Random.Range(0.97f, 0.999f);
         buffer.Clear();
