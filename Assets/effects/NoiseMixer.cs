@@ -9,6 +9,9 @@ public class NoiseMixer : MixerBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
+    /// <summary>The mask slows its drift over the eight beats leading into a Drop.</summary>
+    protected override int DropSlowdownBeats => 8;
+
 
     private EffectBase[] effects;
     private Color border;
@@ -79,14 +82,6 @@ public class NoiseMixer : MixerBase
             effects[i].Draw();
         }
         float rhythm = waveform.Envelope;
-
-        // we are going to hack the local time with our own local delta
-        effectTime -= effectDelta;            // remove the currelt delta
-        // calculate our drop modified time delta
-        float localDelta = DropSlowdown(effectDelta);
-        // change the effect time by this updated delta
-        effectTime += localDelta;
-
 
         float sampleTime = effectTime + (0.5f * rhythm);
         float width = 0.1f;

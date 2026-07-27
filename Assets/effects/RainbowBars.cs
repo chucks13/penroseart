@@ -10,6 +10,9 @@ public class RainbowBars : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
+    /// <summary>The bands slow their scroll over the eight beats leading into a Drop.</summary>
+    protected override int DropSlowdownBeats => 8;
+
 
     /// <summary>The screen-space direction used to sample the palette bands.</summary>
     private Direction direction;
@@ -50,14 +53,6 @@ public class RainbowBars : ScreenEffect
     /// </summary>
     public override void Draw()
     {
-        // we are going to hack the local time with our own local delta
-        effectTime -= effectDelta;            // remove the currelt delta
-        // calculate our drop modified time delta
-        float localDelta = DropSlowdown(effectDelta);
-        // change the effect time by this updated delta
-        effectTime += localDelta;
-        effectDelta = localDelta;
-
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;
         float sampleTime = effectTime;

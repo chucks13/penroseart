@@ -10,6 +10,9 @@ public class Noise : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill |  Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
+    /// <summary>The noise field slows its drift over the eight beats leading into a Drop.</summary>
+    protected override int DropSlowdownBeats => 8;
+
 
     private float n;
     private float scale;
@@ -62,14 +65,6 @@ public class Noise : EffectBase
         float beatBrightness = 1.0f;
         float hueShift = 0.0f;
         float sampleTime = effectTime;
-
-        // we are going to hack the local time with our own local delta
-        effectTime -= effectDelta;            // remove the currelt delta
-        // calculate our drop modified time delta
-        float localDelta = DropSlowdown(effectDelta);
-        // change the effect time by this updated delta
-        effectTime += localDelta;
-
 
         // This Effect owns all three response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;

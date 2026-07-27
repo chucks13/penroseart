@@ -98,16 +98,30 @@ public abstract class EffectBase
     }
 
     /// <summary>
-    /// Advances the effect's local clock from Unity's current frame delta.
+    /// Beats of drop-approach slowdown this effect wants applied to its own clock. Zero, the default,
+    /// runs the clock at real time. Effects that lean into a Drop override this rather than rewriting
+    /// <see cref="effectTime"/> inside Draw, so the clock is already correct by the time Draw runs.
+    /// </summary>
+    protected virtual int DropSlowdownBeats => 0;
+
+    /// <summary>
+    /// Advances the effect's local clock from Unity's current frame delta, slowed for an approaching
+    /// Drop when <see cref="DropSlowdownBeats"/> asks for it.
     /// </summary>
     public void UpdateTime()
     {
         effectDelta = Time.deltaTime;
-        effectTime += effectDelta;
         if (controller == null)
         {
+            effectTime += effectDelta;
             return;
         }
+
+        if (DropSlowdownBeats > 0)
+        {
+            effectDelta = DropSlowdown(effectDelta, DropSlowdownBeats);
+        }
+        effectTime += effectDelta;
 
         var gridBeat = beatManager.Grid.Beat;
         if (gridBeat == 1 && previousGridBeat is { } previous && previous != 1)

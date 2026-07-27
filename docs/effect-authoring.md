@@ -165,6 +165,21 @@ Use `Before` for anticipation. It is total — resting as if the event were infi
 localDelta *= beatManager.Drop.Before.Decay(8);   // slow down leading to the drop
 ```
 
+`EffectBase` already packages that approach-and-enter slowdown two ways, so don't hand-roll it. To slow the Effect's whole clock, override `DropSlowdownBeats`; `UpdateTime()` then applies the slowdown while it integrates the frame, and `Draw()` sees an `effectTime`/`effectDelta` pair that is already correct:
+
+```csharp
+/// <summary>The bands slow their scroll over the eight beats leading into a Drop.</summary>
+protected override int DropSlowdownBeats => 8;
+```
+
+To slow one local value instead — a synthesized delta, a speed multiplier — call `DropSlowdown(value)` directly and leave the clock alone:
+
+```csharp
+float localDelta = DropSlowdown(beatMode < 2 ? effectDelta + (0.05f * rhythm) : effectDelta);
+```
+
+Never rewind `effectTime` inside `Draw()` to retrofit a slowdown onto the clock. `UpdateTime()` has already integrated the frame by then, so the un-add is both redundant and easy to order wrong against values sampled earlier in the method.
+
 #### Shape the effect around song sections
 
 Song Structure exposes seven flat handles on BeatManager: `Intro`, `Up`, `Down`, `Verse`, `Bridge`, `Chorus`, and `Outro`. The wire's `unknown` phrase type gets no handle. Each handle uses the same `Before` and `In` spans as Drop and Fill:

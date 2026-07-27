@@ -13,6 +13,9 @@ public class NoiseTunnel : EffectBase
     public override Repertoire Repertoire =>
          Repertoire.HandlesFill |  Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
+    /// <summary>The tunnel slows its flow over the eight beats leading into a Drop.</summary>
+    protected override int DropSlowdownBeats => 8;
+
 
     private float n;
     private float scale;
@@ -65,14 +68,6 @@ public class NoiseTunnel : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // we are going to hack the local time with our own local delta
-        effectTime -= effectDelta;            // remove the currelt delta
-        // calculate our drop modified time delta
-        float localDelta = DropSlowdown(effectDelta);
-        // change the effect time by this updated delta
-        effectTime += localDelta;
-        effectDelta = localDelta;
-
         // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
         float rhythm = waveform.Envelope;
         float beatBrightness = waveform.Lerp(1f, 0.75f);
