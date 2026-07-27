@@ -71,6 +71,8 @@ public sealed class SwitcherExecutionTests
             controller.transitionDeck,
             controller.currentTransition);
         controller.director = director;
+        // Pin the run salt (ADR-0024) so every dealt card is deterministic across test runs.
+        director.SheetSalt = 0;
         switcher.BindDirector(director);
     }
 
@@ -337,16 +339,23 @@ public sealed class SwitcherExecutionTests
         switcher.RenderAtTime(1_000_000f, out _);
         Assert.That(mark.Fired, Is.True, "Setup: the planned cue fired and is marked on the cue itself.");
 
-        // Roll the loop back over that same boundary several times. Whether any one crossing changes the wall is
-        // dealt, so what must hold every time is that the spent cue is never the thing performed.
-        for (var pass = 0; pass < 8; pass++)
+        // Roll the loop back over that same beat until a re-crossing performs. Whether any one crossing
+        // changes the wall is dealt — the rising cadence (ADR-0023) usually declines a one-Grid gap — so the
+        // wall holding still is the deal declining, never the spent cue replaying. A replay would keep the
+        // wall pinned to the spent cue's destination forever; a fresh deal excludes what is on the wall, so
+        // the first performed cue must move off it. Each ask advances the deal stream, so under the pinned
+        // salt this either changes at a fixed pass or fails honestly.
+        var changed = false;
+        for (var pass = 0; pass < 200 && !changed; pass++)
         {
             FeedSwitcherFrame(runwayStart - 1, phrases, generation: 1);
             FeedSwitcherFrame(runwayStart, phrases, generation: 1);
             switcher.RenderAtTime(1_000_000f, out _);
-            Assert.That(OnWallEffect(), Is.Not.EqualTo(mark.EffectIndex),
-                $"pass {pass}: the spent cue's own destination was performed again.");
+            changed = OnWallEffect() != mark.EffectIndex;
         }
+
+        Assert.That(changed, Is.True,
+            "no re-crossing ever performed a fresh cue; the loop replayed the spent cue or froze the wall.");
     }
 
     /// <summary>

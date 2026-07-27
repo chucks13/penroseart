@@ -70,6 +70,8 @@ public sealed class DirectorReducerTests
             controller.transitionDeck,
             controller.currentTransition);
         controller.director = director;
+        // Pin the run salt (ADR-0024) so every dealt card is deterministic across test runs.
+        director.SheetSalt = 0;
         switcher.BindDirector(director);
     }
 
@@ -268,7 +270,8 @@ public sealed class DirectorReducerTests
     private TrackCueSheet ExpectedSheet(int playerSlot, int generation, int playerNumber = 1)
     {
         var structure = controller.beatManager.Players[playerSlot].Structure;
-        return TrackCueSheet.Build(structure, EffectDescriptors(), TransitionDescriptors(), generation, playerNumber);
+        return TrackCueSheet.Build(
+            structure, EffectDescriptors(), TransitionDescriptors(), generation, playerNumber, director.SheetSalt);
     }
 
     private IReadOnlyList<EffectDescriptor> EffectDescriptors()

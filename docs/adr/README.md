@@ -39,6 +39,8 @@ player's sheet to the Switcher, and answers the Switcher's questions. It times n
 
 | ADR | What it governs |
 | --- | --- |
+| [0024](0024-a-per-run-salt-varies-the-show-between-runs.md) | **Why runs differ.** One random salt per run, folded into every sheet's roll stream and traced per build. Within a run determinism and handover identity are unchanged; across runs the show is fresh. Qualifies 0019's "same load rebuilds the identical sheet". |
+| [0023](0023-cue-marks-spread-by-rising-hazard.md) | **Where Cue Marks land.** One walk over the whole track's Grid Boundaries, counted in beats, taking each candidate with a probability that rises with the gap behind it. Phrase ends are ordinary candidates; a mark is never forced. Drop/Fill landings are pinned, Ride-through preferred at 0.75. |
 | [0019](0019-track-scoped-cue-sheets.md) | **What a Cue Sheet is.** One deterministic full-length plan per player, Effect and Transition baked in, a pure function of (structure, seed). All selection lives behind `TrackCueSheet.Build`. |
 | [0004](0004-director-switcher-sequencing-dual-mode.md) | The Director/Switcher split itself, and beat-denominated timing. |
 | [0011](0011-wire-change-director.md) | **Position comes from the wire; nothing keeps a self-ticked count.** Its 2026-07-25 note also records that energy casting was removed a second time — affinity flags stay on Performers as declarations with no casting consumer. |

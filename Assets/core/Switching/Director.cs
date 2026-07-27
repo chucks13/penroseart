@@ -162,6 +162,15 @@ public sealed class Director
     private readonly TrackCueSheet[] sheets = new TrackCueSheet[PlayerCount];
 
     /// <summary>
+    /// Run-scoped seed salt folded into every sheet deal (ADR-0024). Drawn once when the Director is
+    /// created, so within the run every rebuild stays deterministic and handover identity is untouched,
+    /// while each run deals a fresh show even when the wire's generation counters restart identically.
+    /// Traced with every SHEET_BUILT line, and settable so a logged run can be reproduced — or a test
+    /// pinned — by assigning the salt before any structure arrives.
+    /// </summary>
+    public int SheetSalt { get; set; } = Guid.NewGuid().GetHashCode();
+
+    /// <summary>
     /// The Cue Sheet built for each physical player slot, indexed by player number minus one. A slot whose
     /// <see cref="TrackCueSheet.StructureGeneration"/> is zero has no sheet. Exposed read-only so debug views
     /// can show what the Director planned for every loaded track, not just the one on air.
@@ -411,9 +420,10 @@ public sealed class Director
                 BuildEffectDescriptors(),
                 BuildTransitionDescriptors(),
                 generation,
-                playerNumber);
+                playerNumber,
+                SheetSalt);
             sheets[slot] = built;
-            Trace(() => $"SHEET_BUILT player={playerNumber} generation={generation} marks={built.Marks.Count}");
+            Trace(() => $"SHEET_BUILT player={playerNumber} generation={generation} salt={SheetSalt} marks={built.Marks.Count}");
         }
     }
 

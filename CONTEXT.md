@@ -243,7 +243,7 @@ A track-scoped show plan built the moment a track's song structure arrives: ever
 _Avoid_: the retired per-Phrase empty-marks sheet; treating it as a queue of pending cues; treating the sheet as something an override or an Off-Plan Cue edits.
 
 **Cue Mark**:
-A beat position in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment. Marks sit on Grid Boundaries, plus the final beat of a Phrase; Phrase boundaries are preferred positions, not mandates. Where a Drop or Fill owns a boundary, the Anchor decides how the moment is performed.
+A beat position in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment. Marks sit on Grid Boundaries and nowhere else; a Phrase boundary always begins a Grid, so a Phrase end is an ordinary candidate, never a mandate. Where a Drop or Fill owns a boundary, the Anchor decides how the moment is performed.
 _Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Grid Boundary; empty marks awaiting cast-time selection (retired).
 
 **Cast**:

@@ -66,6 +66,108 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
+    public void MarksDoNotClusterAtTheMinimumGap()
+    {
+        // The defect this closes: the builder walked each Phrase independently and had to land exactly on the
+        // Phrase end, truncating its own gap draw, and that draw was uniform over one to four Grids. So a
+        // quarter of all gaps were the 16-beat minimum, half of all 64-beat Phrases ended on a forced one, and
+        // the wall changed four times a Grid apart and then held. The rising cadence (ADR-0023) makes the
+        // minimum gap rare and a run of them rarer still.
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var minimumGaps = 0;
+        var totalGaps = 0;
+        var totalBeats = 0;
+        var longestMinimumRun = 0;
+
+        foreach (var generation in Generations)
+        {
+            foreach (var player in Players)
+            {
+                var marks = TrackCueSheet.Build(MixedTrack(), effects, transitions, generation, player).Marks;
+                var run = 0;
+                for (var i = 1; i < marks.Count; i++)
+                {
+                    var gap = marks[i].Beat - marks[i - 1].Beat;
+                    totalGaps++;
+                    totalBeats += gap;
+                    if (gap <= MinimumGapBeats)
+                    {
+                        minimumGaps++;
+                        run++;
+                        longestMinimumRun = run > longestMinimumRun ? run : longestMinimumRun;
+                    }
+                    else
+                    {
+                        run = 0;
+                    }
+                }
+            }
+        }
+
+        Assert.That(totalGaps, Is.GreaterThan(100), "not enough gaps to judge the distribution");
+        Assert.That(minimumGaps / (double)totalGaps, Is.LessThan(0.15),
+            $"{minimumGaps} of {totalGaps} gaps sat at the minimum — changes are clustering");
+        Assert.That(longestMinimumRun, Is.LessThanOrEqualTo(2),
+            $"{longestMinimumRun} minimum gaps ran back to back — that is the cluster this rule exists to stop");
+        Assert.That(totalBeats / (double)totalGaps, Is.InRange(36.0, 50.0),
+            "mean spacing drifted away from the intended cadence");
+    }
+
+    [Test]
+    public void APhraseEndIsAnOrdinaryCandidateNotAMandatoryMark()
+    {
+        // The old walk placed a mark on every Phrase end, which is what forced the short gaps at every seam.
+        // Phrase boundaries are preferred positions, not mandates (ADR-0019, CONTEXT.md "Cue Mark"), so across
+        // seeds plenty of Phrase ends must go unmarked.
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var phraseEnds = MixedTrack().Phrases.Select(p => p.StartBeat).Skip(1).ToHashSet();
+        var unmarked = 0;
+
+        foreach (var generation in Generations)
+        {
+            foreach (var player in Players)
+            {
+                var sheet = TrackCueSheet.Build(MixedTrack(), effects, transitions, generation, player);
+                var marked = sheet.Marks.Select(m => m.Beat).ToHashSet();
+                unmarked += phraseEnds.Count(end => !marked.Contains(end));
+            }
+        }
+
+        Assert.That(unmarked, Is.GreaterThan(0), "every Phrase end carried a mark — the mandate is still in force");
+    }
+
+    [Test]
+    public void RideThroughIsPreferredAtAnchorsButNotUniversal()
+    {
+        // "Most of the time, but not all the time": the incumbent playing a drop or fill through is the
+        // preferred reading, so a fair coin was wrong — but a one-faced coin would be too. Both catalogs are
+        // fully capable here so the treatment is decided by the roll rather than degenerating.
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var rideThrough = 0;
+        var performed = 0;
+
+        foreach (var generation in Generations)
+        {
+            foreach (var player in Players)
+            {
+                foreach (var anchor in TrackCueSheet.Build(TwoDropTrack(), effects, transitions, generation, player).Anchors)
+                {
+                    if (anchor.Treatment == AnchorTreatment.RideThrough) { rideThrough++; } else { performed++; }
+                }
+            }
+        }
+
+        var total = rideThrough + performed;
+        Assert.That(total, Is.GreaterThan(50), "not enough Anchors to judge the preference");
+        Assert.That(performed, Is.GreaterThan(0), "every Anchor rode through — the preference became a mandate");
+        Assert.That(rideThrough / (double)total, Is.GreaterThan(0.5),
+            $"ride-through won only {rideThrough} of {total} Anchors — it is meant to be the preferred reading");
+    }
+
+    [Test]
     public void DealOffPlanCueAtIsDeterministicForTheSameSeedBoundaryAndAsk()
     {
         // The off-plan deal is a pure function of (sheet seed, boundary beat, ask): the same situation deals the
@@ -203,10 +305,10 @@ public sealed class TrackCueSheetTests
     [Test]
     public void EveryMarkIsGridSpacedFromItsPhraseStartAndStrictlyAscending()
     {
-        // "A cue is a marker at a Grid Boundary" (CONTEXT.md:184), and the Grid is a wire lane that restarts on
-        // every Phrase: a Phrase shorter than sixteen beats simply makes a short Grid. So a Boundary is a Grid
-        // multiple *from the Phrase start*, or the Phrase end itself — never a multiple of sixteen counted from
-        // track beat one. Marks must also be strictly ascending.
+        // Marks sit on Grid Boundaries and nowhere else, and the Grid is a wire lane that restarts on every
+        // Phrase. So a Boundary is a Grid multiple *from the Phrase start* — never a multiple of sixteen
+        // counted from track beat one, and a Phrase shorter than sixteen beats simply makes a short Grid.
+        // Marks must also be strictly ascending.
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 42, 1);
         var phraseStarts = MixedTrack().Phrases.Select(p => p.StartBeat).ToHashSet();
         foreach (var mark in sheet.Marks)
@@ -349,6 +451,21 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
+    public void DifferentSaltsDealADifferentShowAndTheSameSaltRebuildsIt()
+    {
+        // The per-run salt (ADR-0024) is what stops every session opening with the identical show when the
+        // wire's generation counters restart. Same salt, same show; different salt, fresh show.
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var one = TrackCueSheet.Build(MixedTrack(), effects, transitions, 1, 1, salt: 12345);
+        var same = TrackCueSheet.Build(MixedTrack(), effects, transitions, 1, 1, salt: 12345);
+        var other = TrackCueSheet.Build(MixedTrack(), effects, transitions, 1, 1, salt: 54321);
+
+        Assert.That(Serialize(same), Is.EqualTo(Serialize(one)), "the same salt re-dealt a different show");
+        Assert.That(Serialize(other), Is.Not.EqualTo(Serialize(one)), "a different salt dealt the identical show");
+    }
+
+    [Test]
     public void DifferentPlayersDealADifferentShow()
     {
         var effects = MixedEffects();
@@ -376,7 +493,7 @@ public sealed class TrackCueSheetTests
         const int catalogSize = 6;
         var effects = UntaggedEffects(catalogSize);
         var transitions = PlainTransitions(2);
-        var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 3), effects, transitions, 5, 1);
+        var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 9), effects, transitions, 5, 1);
 
         var dealt = sheet.Marks.Select(m => m.EffectIndex).ToArray();
         Assert.That(dealt.Length, Is.GreaterThanOrEqualTo(catalogSize * 2),
@@ -402,7 +519,7 @@ public sealed class TrackCueSheetTests
 
         foreach (var generation in Generations)
         {
-            var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 6), effects, transitions, generation, 1);
+            var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 18), effects, transitions, generation, 1);
             Assert.That(sheet.Marks.Count, Is.GreaterThan(catalogSize * 2),
                 "not enough marks to cross a reshuffle seam");
             for (var i = 1; i < sheet.Marks.Count; i++)
@@ -463,7 +580,7 @@ public sealed class TrackCueSheetTests
         var effects = Effects(reps);
         var transitions = PlainTransitions(2);
 
-        var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 4), effects, transitions, 11, 1);
+        var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 12), effects, transitions, 11, 1);
         var counts = new int[catalogSize];
         var fullCycleMarks = (sheet.Marks.Count / catalogSize) * catalogSize;
         for (var i = 0; i < fullCycleMarks; i++)
@@ -553,7 +670,10 @@ public sealed class TrackCueSheetTests
         return new StructureValues(1, null, StructureSource.Analyzed, totalBeats, phrases.Length, phrases);
     }
 
-    /// <summary>A plain track of equal one-Grid Phrases with no Anchors, sized to a target mark count.</summary>
+    /// <summary>
+    /// A plain track of equal one-Grid Phrases with no Anchors. Marks land roughly every 43 beats
+    /// (ADR-0023), so budget about three Phrases per mark when sizing one of these.
+    /// </summary>
     private static StructureValues PlainTrack(int phraseCount)
     {
         var phrases = new StructurePhraseValues[phraseCount];
@@ -566,17 +686,23 @@ public sealed class TrackCueSheetTests
         return Structure(phrases);
     }
 
-    /// <summary>Two drop Anchors set deep enough in the track that each has a preceding carrier mark.</summary>
+    /// <summary>
+    /// Two drop Anchors set deep enough in the track that each has a preceding carrier mark, so the seeded
+    /// treatment roll genuinely reaches both Ride-through and Performed Transition. "Deep enough" means at
+    /// least <see cref="MaximumGapBeats"/> of music ahead of the landing: the cadence ceiling guarantees a
+    /// mark inside that window, and without one there is no incumbent to ride through.
+    /// </summary>
     private static StructureValues TwoDropTrack()
     {
         return Structure(
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Up),
-            Phrase(33, 48, PhraseType.Drop, drop: 33),
-            Phrase(49, 64, PhraseType.Verse),
-            Phrase(65, 80, PhraseType.Up),
-            Phrase(81, 96, PhraseType.Drop, drop: 81),
-            Phrase(97, 112, PhraseType.Outro));
+            Phrase(1, 64, PhraseType.Intro),
+            Phrase(65, 128, PhraseType.Up),
+            Phrase(129, 192, PhraseType.Up),
+            Phrase(193, 256, PhraseType.Drop, drop: 193),
+            Phrase(257, 320, PhraseType.Verse),
+            Phrase(321, 384, PhraseType.Up),
+            Phrase(385, 448, PhraseType.Drop, drop: 385),
+            Phrase(449, 512, PhraseType.Outro));
     }
 
     // --- Catalogs ---------------------------------------------------------------------------------------

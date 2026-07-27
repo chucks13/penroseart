@@ -159,10 +159,12 @@ public readonly struct AnchorResolution
 /// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0019): it superseded and replaced
 /// the phrase-scoped index of empty Cue Marks over a single Phrase.
 ///
-/// The mark placement absorbs the phrase-scoped builder's Grid walk — interior marks on Grid Boundaries,
-/// bounded 16-to-64-beat gaps, a mandatory Phrase-end mark, one run-out Grid absorbing an irregular tail —
-/// and runs it per Phrase against absolute track beats. Every consecutive gap in <see cref="Marks"/> stays
-/// within one to four Grids by construction, including across Anchor suppression.
+/// Mark placement is one walk over the whole track's Grid Boundaries, counted in beats (ADR-0023). Each
+/// candidate boundary is taken with a probability that rises with the gap behind it, so changes spread
+/// instead of clustering; a mark is never forced onto a boundary to make the walk land somewhere. Phrase
+/// ends carry no special status — a Phrase boundary begins a Grid, so it is simply one more candidate.
+/// Every consecutive gap in <see cref="Marks"/> stays within <see cref="MinimumGapBeats"/> and
+/// <see cref="MaximumGapBeats"/> by construction, including across Anchor suppression.
 /// </remarks>
 public readonly struct TrackCueSheet
 {
@@ -187,6 +189,31 @@ public readonly struct TrackCueSheet
     /// </summary>
     public const int PostDropHoldBeats = GridBeats;
 
+    /// <summary>
+    /// How often an Anchor is ridden through rather than performed by a Transition, as a percentage. The
+    /// incumbent playing the moment itself is the preferred reading of a drop or fill, but not the only one
+    /// (ADR-0023); a fair coin here made the wall cut into every second drop.
+    /// </summary>
+    public const int RideThroughPreferencePercent = 75;
+
+    /// <summary>
+    /// Largest gap the walk allows on each side of a pinned Anchor landing: half of
+    /// <see cref="MaximumGapBeats"/>, so that when a Ride-through suppresses the landing mark, its two
+    /// neighbours — at most one flank apart on each side — are never left more than the full ceiling apart.
+    /// Without this the ~43-beat mean spacing made suppression illegal almost everywhere and Ride-through
+    /// silently degraded to a Performed Transition.
+    /// </summary>
+    public const int AnchorFlankBeats = MaximumGapBeats / 2;
+
+    /// <summary>
+    /// The chance, as a percentage, that a candidate Grid Boundary becomes a Cue Mark, indexed by how many
+    /// whole Grids of music sit behind it (one Grid at index zero, four at index three). Rising rather than
+    /// uniform is the whole anti-clustering rule: a boundary one Grid after the last change is nearly always
+    /// let past, while the fourth is certain, which bounds every gap to
+    /// <see cref="MinimumGapBeats"/>..<see cref="MaximumGapBeats"/> and puts the mean near 43 beats.
+    /// </summary>
+    private static readonly int[] TakeChancePercent = { 8, 35, 65, 100 };
+
     /// <summary>The empty mark list a structure-less sheet returns, shared so no-plan sheets allocate nothing.</summary>
     private static readonly IReadOnlyList<CuePlanMark> NoMarks = Array.Empty<CuePlanMark>();
 
@@ -203,6 +230,13 @@ public readonly struct TrackCueSheet
     /// <summary>The Transition catalog this sheet was dealt from, retained for the same reason as <see cref="effects"/>.</summary>
     private readonly IReadOnlyList<TransitionDescriptor> transitions;
 
+    /// <summary>
+    /// The run-scoped seed salt this sheet was dealt under (ADR-0024), retained so
+    /// <see cref="DealOffPlanCueAt"/> draws from the same salted stream as the plan. Not part of the sheet's
+    /// identity: the salt is constant within a run, so (generation, player) still identifies the sheet.
+    /// </summary>
+    private readonly int salt;
+
     /// <summary>Captures one finished plan. Private because <see cref="Build"/> is the only way to make a real sheet.</summary>
     /// <param name="marks">Every placed Cue Mark, ascending by beat.</param>
     /// <param name="anchors">Every owned Anchor resolution, ascending by landing beat.</param>
@@ -210,13 +244,15 @@ public readonly struct TrackCueSheet
     /// <param name="transitions">The Transition catalog this plan was dealt from.</param>
     /// <param name="structureGeneration">First half of the deal seed and of the sheet's identity.</param>
     /// <param name="playerNumber">Second half of the deal seed and of the sheet's identity.</param>
+    /// <param name="salt">Run-scoped seed salt the deal was drawn under (ADR-0024).</param>
     private TrackCueSheet(
         IReadOnlyList<CuePlanMark> marks,
         IReadOnlyList<AnchorResolution> anchors,
         IReadOnlyList<EffectDescriptor> effects,
         IReadOnlyList<TransitionDescriptor> transitions,
         int structureGeneration,
-        int playerNumber)
+        int playerNumber,
+        int salt)
     {
         Marks = marks;
         Anchors = anchors;
@@ -224,6 +260,7 @@ public readonly struct TrackCueSheet
         this.transitions = transitions;
         StructureGeneration = structureGeneration;
         PlayerNumber = playerNumber;
+        this.salt = salt;
     }
 
     /// <summary>Every placed Cue Mark, ascending by beat; the complete fire schedule the Switcher performs.</summary>
@@ -273,17 +310,16 @@ public readonly struct TrackCueSheet
         int ask,
         int onWallEffectIndex)
     {
-        var rng = new Rng(StructureGeneration, PlayerNumber, boundaryBeat, ask);
+        var rng = new Rng(StructureGeneration ^ salt, PlayerNumber, boundaryBeat, ask);
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
         var effectIndex = effectBag.DealPreferred(card => card != onWallEffectIndex);
         var transitionIndex = transitionBag.DealTop();
 
-        // Gaps still available before the ceiling, so one chance in that many spreads the choice evenly across
-        // them: a quarter at one Grid, a third at two, a half at three, certain at four. Drawn after the cards
-        // so the card never depends on how long the wall has held.
-        var boundariesLeft = MaximumGapGrids - gapGrids + 1;
-        var take = boundariesLeft <= 1 || rng.Bounded(boundariesLeft) == 0;
+        // The same rising cadence the plan walk uses (ADR-0023), so an off-plan cue spreads exactly like a
+        // planned one instead of carrying its own rule. Drawn after the cards so the card never depends on
+        // how long the wall has held.
+        var take = TakeBoundary(gapGrids * GridBeats, rng);
         return (effectIndex, transitionIndex, take);
     }
 
@@ -304,6 +340,12 @@ public readonly struct TrackCueSheet
     /// <param name="transitions">Transition catalog as descriptors, one per catalog position. Must be non-empty.</param>
     /// <param name="structureGeneration">The structure's generation — the first half of the seed.</param>
     /// <param name="playerNumber">The physical player number — the second half of the seed.</param>
+    /// <param name="salt">
+    /// Run-scoped seed salt (ADR-0024), folded into the roll stream so each run deals a fresh show even when
+    /// the wire's generation counters restart identically. Constant within a run — the Director draws one at
+    /// startup — so rebuilds and handover identity are unaffected. Zero (the default) means unsalted, which
+    /// keeps every existing deterministic expectation byte-identical.
+    /// </param>
     /// <returns>The complete track-scoped Cue Sheet.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="effects"/> or <paramref name="transitions"/> is null.</exception>
     /// <exception cref="ArgumentException"><paramref name="effects"/> or <paramref name="transitions"/> is empty.</exception>
@@ -312,7 +354,8 @@ public readonly struct TrackCueSheet
         IReadOnlyList<EffectDescriptor> effects,
         IReadOnlyList<TransitionDescriptor> transitions,
         int structureGeneration,
-        int playerNumber)
+        int playerNumber,
+        int salt = 0)
     {
         if (effects == null)
         {
@@ -337,77 +380,152 @@ public readonly struct TrackCueSheet
         var phrases = structure.Phrases;
         if (phrases.Count == 0)
         {
-            return new TrackCueSheet(NoMarks, NoAnchors, effects, transitions, structureGeneration, playerNumber);
+            return new TrackCueSheet(NoMarks, NoAnchors, effects, transitions, structureGeneration, playerNumber, salt);
         }
 
-        var rng = new Rng(structureGeneration, playerNumber);
+        var rng = new Rng(structureGeneration ^ salt, playerNumber);
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
 
-        var baseMarks = WalkTrack(phrases, rng);
+        // Anchors are read first because their landing beats are pinned into the walk: a drop or fill is the
+        // reason a capable performer exists, so those boundaries are marks regardless of the cadence roll.
         var anchors = CollectAnchors(phrases);
-        var plan = ResolveAndDeal(baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng, structureGeneration, playerNumber);
+        var pinned = new HashSet<int>();
+        foreach (var anchor in anchors)
+        {
+            pinned.Add(anchor.LandingBeat);
+        }
+
+        var baseMarks = WalkTrack(phrases, pinned, rng);
+        var plan = ResolveAndDeal(baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng, structureGeneration, playerNumber, salt);
         return plan;
     }
 
     /// <summary>
-    /// Walks every Phrase in order, absorbing the phrase-scoped Grid walk against absolute track beats.
-    /// Interior marks land on Grid Boundaries, one run-out Grid absorbs an irregular tail, and each Phrase's
-    /// end carries a mark on the next Phrase's downbeat. Adjacent Phrases share that boundary beat, so the
-    /// concatenated result holds one mark per boundary with every gap in one to four Grids.
+    /// Every Grid Boundary in the track, ascending. The Grid count is phrase-relative — the wire restarts it
+    /// at each Phrase's downbeat (the One) and runs `1..16` for as long as that Phrase lasts — so a Phrase
+    /// contributes a boundary at its start and every Grid thereafter that still falls inside it, and the
+    /// final Grid of a Phrase whose length is not a Grid multiple is simply short. This is the candidate set
+    /// the walk chooses from and the only thing the Phrase map contributes to placement.
     /// </summary>
-    private static List<int> WalkTrack(IReadOnlyList<StructurePhraseValues> phrases, Rng rng)
+    private static List<int> GridBoundaries(IReadOnlyList<StructurePhraseValues> phrases)
     {
-        var marks = new List<int>();
+        var boundaries = new List<int>();
         foreach (var phrase in phrases)
         {
-            WalkPhrase(phrase.StartBeat, PhraseLength(phrase), rng, marks);
+            var length = PhraseLength(phrase);
+            for (var offset = 0; offset < length; offset += GridBeats)
+            {
+                boundaries.Add(phrase.StartBeat + offset);
+            }
+        }
+
+        return boundaries;
+    }
+
+    /// <summary>
+    /// Walks the track's Grid Boundaries once, in beats, taking each candidate with a chance that rises with
+    /// the gap behind it (ADR-0023). Nothing resets at a Phrase seam and no boundary is ever forced, which is
+    /// what stops the clustering the per-Phrase walk produced: that walk had to land exactly on each Phrase
+    /// end, so it truncated its own gap draw and jammed changes together at every seam.
+    /// </summary>
+    /// <param name="phrases">The track's Phrase map, supplying the boundary lattice.</param>
+    /// <param name="pinned">Anchor landing beats, which become marks regardless of the cadence roll.</param>
+    /// <param name="rng">The sheet's single roll stream.</param>
+    /// <returns>Every placed mark beat, ascending, with all gaps inside the cadence bounds.</returns>
+    private static List<int> WalkTrack(IReadOnlyList<StructurePhraseValues> phrases, HashSet<int> pinned, Rng rng)
+    {
+        var marks = new List<int>();
+        var boundaries = GridBoundaries(phrases);
+
+        // The run-in from track start is unconstrained — the wall keeps playing whatever it holds until the
+        // first mark — so the first gap is measured from the opening downbeat and never forces a mark onto it.
+        var lastMark = phrases[0].StartBeat;
+        var lastWasPinned = false;
+
+        for (var i = 0; i < boundaries.Count; i++)
+        {
+            var boundary = boundaries[i];
+            if (boundary <= lastMark)
+            {
+                continue;
+            }
+
+            var gap = boundary - lastMark;
+            if (pinned.Contains(boundary))
+            {
+                // A pin outranks the cadence, but not the floor: rather than place two marks inside one Grid,
+                // the ordinary mark that crowds it gives way. Two pins that close cannot both be honoured, so
+                // the later one is dropped and its Anchor degrades through the usual capability path.
+                if (gap < MinimumGapBeats)
+                {
+                    if (lastWasPinned || marks.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    marks.RemoveAt(marks.Count - 1);
+                    lastMark = marks.Count > 0 ? marks[marks.Count - 1] : phrases[0].StartBeat;
+                }
+
+                marks.Add(boundary);
+                lastMark = boundary;
+                lastWasPinned = true;
+                continue;
+            }
+
+            // The ceiling is enforced against the *next* candidate, not this one. A Phrase whose length is not
+            // a Grid multiple leaves a short final Grid, so boundaries are not evenly spaced and "take it once
+            // the gap reaches four Grids" can overshoot: the last boundary under the ceiling has to be taken
+            // while it is still under it. Beside a pinned Anchor the ceiling halves to
+            // <see cref="AnchorFlankBeats"/> — into the pin ahead and out of the pin behind — which is what
+            // keeps a Ride-through's mark suppression legal (see the constant's remarks).
+            var next = i + 1 < boundaries.Count ? boundaries[i + 1] : int.MaxValue;
+            var cap = lastWasPinned || (next != int.MaxValue && pinned.Contains(next))
+                ? AnchorFlankBeats
+                : MaximumGapBeats;
+            var lastChance = next != int.MaxValue && next - lastMark > cap;
+            if (!lastChance && !TakeBoundary(gap, rng))
+            {
+                continue;
+            }
+
+            marks.Add(boundary);
+            lastMark = boundary;
+            lastWasPinned = false;
         }
 
         return marks;
     }
 
-    /// <summary>Appends one Phrase's Cue Marks (absolute beats) using the absorbed Grid walk.</summary>
-    private static void WalkPhrase(int startBeat, int lengthBeats, Rng rng, List<int> marks)
+    /// <summary>
+    /// Whether a candidate Grid Boundary becomes a Cue Mark, given the beats of music behind it. Below
+    /// <see cref="MinimumGapBeats"/> the answer is always no and below <see cref="MaximumGapBeats"/> always
+    /// yes, so the cadence bounds hold by construction; between them the chance rises with the gap
+    /// (<see cref="TakeChancePercent"/>). Consumes a roll only in that middle band, where the answer is
+    /// genuinely open.
+    /// </summary>
+    /// <param name="gapBeats">Beats between the last placed mark and this boundary.</param>
+    /// <param name="rng">The roll stream to draw from.</param>
+    private static bool TakeBoundary(int gapBeats, Rng rng)
     {
-        if (lengthBeats <= 0)
+        if (gapBeats < MinimumGapBeats)
         {
-            return;
+            return false;
         }
 
-        var tailBeats = lengthBeats % GridBeats;
-        var walkBeats = lengthBeats;
-        if (tailBeats != 0)
+        if (gapBeats >= MaximumGapBeats)
         {
-            var interiorBeats = lengthBeats - tailBeats;
-            var gridsAvailable = interiorBeats / GridBeats;
-            if (gridsAvailable == 0)
-            {
-                // Shorter than one Grid: only the mandatory end mark, with an unavoidably short run-in.
-                marks.Add(startBeat + lengthBeats);
-                return;
-            }
-
-            var maxRunOutGrids = (MaximumGapBeats - tailBeats) / GridBeats;
-            var runOutCap = maxRunOutGrids < gridsAvailable ? maxRunOutGrids : gridsAvailable;
-            var runOutGrids = 1 + rng.Bounded(runOutCap);
-            walkBeats = interiorBeats - runOutGrids * GridBeats;
+            return true;
         }
 
-        var offset = 0;
-        while (offset < walkBeats)
+        var index = gapBeats / GridBeats - 1;
+        if (index >= TakeChancePercent.Length)
         {
-            var gridsRemaining = (walkBeats - offset) / GridBeats;
-            var maxGapGrids = gridsRemaining < MaximumGapBeats / GridBeats ? gridsRemaining : MaximumGapBeats / GridBeats;
-            var gapGrids = 1 + rng.Bounded(maxGapGrids);
-            offset += gapGrids * GridBeats;
-            marks.Add(startBeat + offset);
+            index = TakeChancePercent.Length - 1;
         }
 
-        if (tailBeats != 0)
-        {
-            marks.Add(startBeat + lengthBeats);
-        }
+        return rng.Bounded(100) < TakeChancePercent[index];
     }
 
     /// <summary>
@@ -464,7 +582,8 @@ public readonly struct TrackCueSheet
         Bag transitionBag,
         Rng rng,
         int structureGeneration,
-        int playerNumber)
+        int playerNumber,
+        int salt)
     {
         var suppressed = new HashSet<int>();
         var rideCarriers = new Dictionary<int, List<Anchor>>();
@@ -478,8 +597,9 @@ public readonly struct TrackCueSheet
 
         foreach (var anchor in anchors)
         {
-            // One flip per Anchor, always consumed, so the roll stream never depends on catalog contents.
-            var prefersRideThrough = rng.Flip();
+            // One roll per Anchor, always consumed, so the roll stream never depends on catalog contents.
+            // Weighted, not fair: the incumbent playing the moment through is the preferred reading.
+            var prefersRideThrough = rng.Chance(RideThroughPreferencePercent);
 
             var capable = anchor.Capability;
             var hasCapableEffect = capable == Repertoire.HandlesDrop ? hasCapableEffectForDrop : hasCapableEffectForFill;
@@ -587,7 +707,7 @@ public readonly struct TrackCueSheet
 
         var anchorList = new AnchorResolution[resolutions.Count];
         resolutions.Values.CopyTo(anchorList, 0);
-        return new TrackCueSheet(marks, anchorList, effects, transitions, structureGeneration, playerNumber);
+        return new TrackCueSheet(marks, anchorList, effects, transitions, structureGeneration, playerNumber, salt);
     }
 
     /// <summary>Suppresses any base mark inside the post-drop hold window, keeping an owned mark intact.</summary>
@@ -771,10 +891,11 @@ public readonly struct TrackCueSheet
             return exclusiveBound <= 1 ? 0 : (int)(Next() % (uint)exclusiveBound);
         }
 
-        /// <summary>A single fair coin flip.</summary>
-        public bool Flip()
+        /// <summary>A weighted yes/no draw: true with <paramref name="percent"/> chance in a hundred.</summary>
+        /// <param name="percent">Chance of true, 0..100.</param>
+        public bool Chance(int percent)
         {
-            return (Next() & 1u) == 0u;
+            return Bounded(100) < percent;
         }
     }
 

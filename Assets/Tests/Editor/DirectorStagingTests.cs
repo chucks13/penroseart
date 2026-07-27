@@ -45,6 +45,8 @@ public sealed class DirectorStagingTests
             controller.transitionDeck,
             controller.currentTransition);
         controller.director = director;
+        // Pin the run salt (ADR-0024) so every dealt card is deterministic across test runs.
+        director.SheetSalt = 0;
     }
 
     [TearDown]
