@@ -2,6 +2,22 @@ using System;
 using UnityEngine;
 
 /// <summary>
+/// Where a synced cue came from. Everything except <see cref="Plan"/> is the Switcher covering for a plan
+/// the playhead escaped, so HUDs badge those and stay silent for the sheet's own marks.
+/// </summary>
+public enum CueSource
+{
+    /// <summary>Performed from the Cue Sheet's own mark — the ordinary case, shown without comment.</summary>
+    Plan,
+
+    /// <summary>Dealt fresh because a loop re-crossed a mark that had already fired (never replayed).</summary>
+    LoopRedeal,
+
+    /// <summary>Dealt because the wall reached the four-Grid stillness ceiling with nothing planned to perform.</summary>
+    Ceiling,
+}
+
+/// <summary>
 /// Read-only snapshot of the Mechanical Switcher's current stage state for HUDs and inspectors.
 /// </summary>
 public readonly struct SwitcherStatus
@@ -15,7 +31,9 @@ public readonly struct SwitcherStatus
         string.Empty,
         -1,
         string.Empty,
-        0f);
+        0f,
+        CueSource.Plan,
+        -1);
 
     /// <summary>Index of the Effect on stage, or -1 while a Transition owns the frame.</summary>
     public readonly int CurrentEffectIndex;
@@ -41,6 +59,16 @@ public readonly struct SwitcherStatus
     /// <summary>How far the running Transition has travelled, in 0-to-1; zero when none is running.</summary>
     public readonly float TransitionProgress;
 
+    /// <summary>
+    /// Where the most recent synced cue came from. Sticky until the next cue performs (not just while its
+    /// Transition runs), so a glance at the HUD after the wall changes still finds the reason. Reset to
+    /// <see cref="CueSource.Plan"/> on handover — a badge never outlives the plan it explains.
+    /// </summary>
+    public readonly CueSource LastCueSource;
+
+    /// <summary>The mark beat the most recent synced cue anchored to, or -1 before any cue has performed.</summary>
+    public readonly int LastCueMarkBeat;
+
     /// <summary>Captures one stage snapshot.</summary>
     /// <param name="currentEffectIndex">Effect on stage, or -1 while a Transition owns the frame.</param>
     /// <param name="currentEffectName">Display name of the Effect on stage.</param>
@@ -50,6 +78,8 @@ public readonly struct SwitcherStatus
     /// <param name="currentTransitionIndex">Running Transition, or -1 when an Effect owns the frame.</param>
     /// <param name="currentTransitionName">Display name of the running Transition.</param>
     /// <param name="transitionProgress">Transition progress, clamped to 0-to-1.</param>
+    /// <param name="lastCueSource">Where the most recent synced cue came from.</param>
+    /// <param name="lastCueMarkBeat">Mark beat the most recent synced cue anchored to, or -1 before any.</param>
     public SwitcherStatus(
         int currentEffectIndex,
         string currentEffectName,
@@ -58,7 +88,9 @@ public readonly struct SwitcherStatus
         string targetEffectName,
         int currentTransitionIndex,
         string currentTransitionName,
-        float transitionProgress)
+        float transitionProgress,
+        CueSource lastCueSource,
+        int lastCueMarkBeat)
     {
         CurrentEffectIndex = currentEffectIndex;
         CurrentEffectName = currentEffectName;
@@ -68,6 +100,8 @@ public readonly struct SwitcherStatus
         CurrentTransitionIndex = currentTransitionIndex;
         CurrentTransitionName = currentTransitionName;
         TransitionProgress = Mathf.Clamp01(transitionProgress);
+        LastCueSource = lastCueSource;
+        LastCueMarkBeat = lastCueMarkBeat;
     }
 
     /// <summary>Whether anything is on stage yet: an Effect is showing, or a Transition is running.</summary>
@@ -141,6 +175,16 @@ public sealed class Switcher
     /// both reset on <see cref="Cast"/>, so no spacing or deal history leaks from one plan into the next.
     /// </summary>
     private int offPlanAsks;
+
+    /// <summary>
+    /// Provenance of the most recent synced cue, held for <see cref="Status"/> so the Live strip can badge a
+    /// wall change the plan did not call for. Sticky until the next cue or handover, not until the
+    /// Transition completes — the explanation outlives the move it explains.
+    /// </summary>
+    private CueSource lastCueSource = CueSource.Plan;
+
+    /// <summary>Mark beat the most recent synced cue anchored to, or -1 before any cue has performed.</summary>
+    private int lastCueMarkBeat = -1;
 
     /// <summary>
     /// The Cue Sheet in force — the plan this Switcher is performing. A default sheet
@@ -223,6 +267,8 @@ public sealed class Switcher
         actedBeat = null;
         boundariesSinceCue = 0;
         offPlanAsks = 0;
+        lastCueSource = CueSource.Plan;
+        lastCueMarkBeat = -1;
         Trace(() => sheet.StructureGeneration > 0
             ? $"SWITCHER_CAST player={sheet.PlayerNumber} generation={sheet.StructureGeneration} marks={sheet.Marks.Count}"
             : "SWITCHER_CAST_CLEARED plan=<none>");
@@ -317,7 +363,7 @@ public sealed class Switcher
                 mark.FiredAtBeat = beat;
             }
 
-            Perform(beat, mark.Beat, cue, offPlan: spent);
+            Perform(beat, mark.Beat, cue, spent ? CueSource.LoopRedeal : CueSource.Plan);
             return;
         }
 
@@ -334,7 +380,7 @@ public sealed class Switcher
         var offPlanCue = AskOffPlan(beat, boundariesSinceCue);
         if (offPlanCue.Perform)
         {
-            Perform(beat, beat, offPlanCue, offPlan: true);
+            Perform(beat, beat, offPlanCue, CueSource.Ceiling);
         }
     }
 
@@ -469,11 +515,13 @@ public sealed class Switcher
     /// when the cue fires on the very boundary it was asked about, whose landing then trails past it.
     /// </param>
     /// <param name="cue">What the Director said to play.</param>
-    /// <param name="offPlan">Whether the Director dealt this cue off-plan rather than from the sheet's mark.</param>
-    private void Perform(int fireBeat, int markBeat, CueDecision cue, bool offPlan)
+    /// <param name="source">Where this cue came from: the sheet's mark, a loop re-deal, or the ceiling.</param>
+    private void Perform(int fireBeat, int markBeat, CueDecision cue, CueSource source)
     {
         var repertoire = transitions[cue.TransitionIndex].Repertoire;
         var nowSeconds = Time.time;
+        lastCueSource = source;
+        lastCueMarkBeat = markBeat;
 
         // Stillness anchors at the mark, not at the fire (ADR-0022). When the fire leads its mark, the
         // landing boundary still ahead belongs to this cue: the count starts one short so that crossing
@@ -490,7 +538,7 @@ public sealed class Switcher
             nowSeconds);
         // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
         controller.currentTransition = cue.TransitionIndex;
-        Trace(() => $"SWITCHER_PERFORM mark={markBeat} source={(offPlan ? "offplan" : "plan")} fire={fireBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+        Trace(() => $"SWITCHER_PERFORM mark={markBeat} source={source} fire={fireBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
     }
 
     /// <summary>Live seconds per beat, falling back to the established 120-BPM cadence.</summary>
@@ -533,7 +581,9 @@ public sealed class Switcher
                 EffectName(transition.B),
                 currentTransitionIndex,
                 transition.Name,
-                transitionProgress);
+                transitionProgress,
+                lastCueSource,
+                lastCueMarkBeat);
         }
 
         var currentName = EffectName(currentEffectIndex);
@@ -545,7 +595,9 @@ public sealed class Switcher
             currentName,
             -1,
             string.Empty,
-            0f);
+            0f,
+            lastCueSource,
+            lastCueMarkBeat);
     }
 
     private string EffectName(int effectIndex)

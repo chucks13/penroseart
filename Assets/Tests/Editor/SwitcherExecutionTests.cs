@@ -338,6 +338,8 @@ public sealed class SwitcherExecutionTests
         FeedSwitcherFrame(runwayStart, phrases, generation: 1);
         switcher.RenderAtTime(1_000_000f, out _);
         Assert.That(mark.Fired, Is.True, "Setup: the planned cue fired and is marked on the cue itself.");
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.Plan),
+            "a cue performed from the sheet's own mark reports Plan provenance.");
 
         // Roll the loop back over that same beat until a re-crossing performs. Whether any one crossing
         // changes the wall is dealt — the rising cadence (ADR-0023) usually declines a one-Grid gap — so the
@@ -356,6 +358,10 @@ public sealed class SwitcherExecutionTests
 
         Assert.That(changed, Is.True,
             "no re-crossing ever performed a fresh cue; the loop replayed the spent cue or froze the wall.");
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.LoopRedeal),
+            "a cue dealt for a re-crossed fired mark reports LoopRedeal provenance for the Live badge.");
+        Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(mark.Beat),
+            "the badge anchors to the re-crossed mark's beat.");
     }
 
     /// <summary>
@@ -387,6 +393,8 @@ public sealed class SwitcherExecutionTests
 
             Assert.That(changed, Is.True,
                 $"beats {beat - windowBeats}-{beat - 1} held the wall still past the ceiling.");
+            Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.Ceiling),
+                "a cue forced by the stillness ceiling reports Ceiling provenance for the Live badge.");
         }
     }
 

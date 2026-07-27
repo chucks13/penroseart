@@ -40,11 +40,23 @@ internal static class TransitionBarRenderer
     /// <summary>Dim neutral text for the idle on-air state.</summary>
     private static readonly Color IdleColor = new(0.55f, 0.57f, 0.60f);
 
+    // Off-plan badge colours sit outside both registers on purpose: not the tracker's reserved
+    // saturated identities (magenta, cyan, orange, green, yellow) and not this strip's neutrals,
+    // so a badge reads as "the Switcher covered for the plan" and nothing else.
+    /// <summary>Badge field for a cue dealt fresh after a loop re-crossed a fired mark.</summary>
+    private static readonly Color LoopRedealBadgeColor = new(0.42f, 0.27f, 0.62f);
+
+    /// <summary>Badge field for a cue forced by the four-Grid stillness ceiling.</summary>
+    private static readonly Color CeilingBadgeColor = new(0.62f, 0.22f, 0.24f);
+
     /// <summary>Cached left-aligned identity style.</summary>
     private static GUIStyle? leftStyle;
 
     /// <summary>Cached right-aligned state style; its colour is set per draw.</summary>
     private static GUIStyle? rightStyle;
+
+    /// <summary>Cached centred badge style.</summary>
+    private static GUIStyle? badgeStyle;
 
     /// <summary>Draws the fixed-height live state strip for a Switcher status snapshot.</summary>
     /// <param name="status">The stage snapshot to show; a not-ready snapshot still reserves the full strip.</param>
@@ -89,6 +101,7 @@ internal static class TransitionBarRenderer
         rightStyle!.normal.textColor = transitioning ? LiveColor : IdleColor;
         GUI.Label(leftText, leftLabel, leftStyle);
         GUI.Label(rightText, rightLabel, rightStyle);
+        DrawCueSourceBadge(status, leftText, leftLabel);
         EditorGUI.DrawRect(rail, StructureColor);
         if (transitioning && status.TransitionProgress > 0f)
         {
@@ -96,6 +109,40 @@ internal static class TransitionBarRenderer
                 new Rect(rail.x, rail.y, rail.width * status.TransitionProgress, rail.height),
                 LiveColor);
         }
+    }
+
+    /// <summary>
+    /// Badges the last synced cue's provenance beside the A-to-B identity when the plan did not call for it.
+    /// The badge is sticky — it follows <see cref="SwitcherStatus.LastCueSource"/>, which holds until the
+    /// next cue or handover — so the reason for a wall change is still on screen after the move lands.
+    /// A planned cue draws nothing: silence means "that was the sheet".
+    /// </summary>
+    private static void DrawCueSourceBadge(SwitcherStatus status, Rect leftText, string leftLabel)
+    {
+        if (status.LastCueSource == CueSource.Plan)
+        {
+            return;
+        }
+
+        var (label, color) = status.LastCueSource == CueSource.LoopRedeal
+            ? ($"LOOP RE-DEAL @ {status.LastCueMarkBeat}", LoopRedealBadgeColor)
+            : ($"CEILING @ {status.LastCueMarkBeat}", CeilingBadgeColor);
+        var size = badgeStyle!.CalcSize(new GUIContent(label));
+        var identityWidth = leftStyle!.CalcSize(new GUIContent(leftLabel)).x;
+        var badge = new Rect(
+            leftText.x + identityWidth + 8f,
+            leftText.y + ((leftText.height - size.y) * 0.5f),
+            size.x + 10f,
+            size.y);
+        if (badge.xMax > leftText.xMax)
+        {
+            // Out of room beside a long identity: pin to the region's right edge rather than colliding
+            // with the right-hand state label.
+            badge.x = leftText.xMax - badge.width;
+        }
+
+        EditorGUI.DrawRect(badge, color);
+        GUI.Label(badge, label, badgeStyle);
     }
 
     /// <summary>Degrades missing runtime names without changing the strip geometry.</summary>
@@ -115,6 +162,11 @@ internal static class TransitionBarRenderer
         rightStyle ??= new GUIStyle(EditorStyles.miniLabel)
         {
             alignment = TextAnchor.MiddleRight,
+        };
+        badgeStyle ??= new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = LiveColor },
         };
     }
 }
