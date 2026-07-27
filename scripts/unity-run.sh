@@ -9,6 +9,14 @@ unity_owned_pid=""
 unity_owned_log=""
 unity_owned_bin=""
 
+# Markers that prove licensing reached a usable state, matched as an ERE against the batchmode log.
+# "Licensing is initialized" alone is not enough: Unity logs it only when something queries the
+# module while initialization is still pending (paired with "Licensing is not yet initialized").
+# When the licensing background thread wins that race, neither line is ever written, and a run that
+# licensed perfectly well looks like a licensing failure. Entitlement resolution is logged on every
+# successful run and means the license itself resolved, not merely that the IPC channel connected.
+UNITY_LICENSING_READY_PATTERN='Licensing is initialized|Successfully resolved entitlement details'
+
 unity_editor_has_project_open() {
   local repo_root="$1"
   local lock_file="$repo_root/Temp/UnityLockfile"
@@ -148,7 +156,7 @@ unity_run_supervised() {
   trap 'unity_cleanup_owned_processes; exit 130' INT TERM HUP
 
   while kill -0 "$unity_owned_pid" 2>/dev/null; do
-    if [ "$licensing_ready" -eq 0 ] && grep -q 'Licensing is initialized' "$log_file" 2>/dev/null; then
+    if [ "$licensing_ready" -eq 0 ] && grep -qE "$UNITY_LICENSING_READY_PATTERN" "$log_file" 2>/dev/null; then
       licensing_ready=1
       licensing_ready_after=$((SECONDS - started_at))
     fi
@@ -187,7 +195,7 @@ unity_run_supervised() {
 
   trap - EXIT INT TERM HUP
 
-  if [ "$licensing_ready" -eq 0 ] && grep -q 'Licensing is initialized' "$log_file" 2>/dev/null; then
+  if [ "$licensing_ready" -eq 0 ] && grep -qE "$UNITY_LICENSING_READY_PATTERN" "$log_file" 2>/dev/null; then
     licensing_ready=1
     licensing_ready_after=$((SECONDS - started_at))
   fi
