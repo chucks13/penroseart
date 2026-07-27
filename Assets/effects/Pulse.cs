@@ -73,16 +73,7 @@ public class Pulse : EffectBase
     /// </summary>
     public override void Draw()
     {
-        float localPulseMultiplier = pulseMultipler;
-
-        localPulseMultiplier *= beatManager.Drop.Before.Decay(8);   // slow down leading to drop
-
-        if (beatManager.Drop.Active)
-        {
-            float rampDown = localPulseMultiplier * beatManager.Drop.In.Decay(8).Remap(1f, 0f, 5f, localPulseMultiplier);
-            if (rampDown > localPulseMultiplier)
-                localPulseMultiplier = rampDown;
-        }
+        float localPulseMultiplier = DropSlowdown(pulseMultipler);
 
         float localTime = effectTime;
         if (beatManager.Fill.Active)        // go fast in fill       

@@ -75,15 +75,7 @@ public class Nibbler : EffectBase
         float beatHue = 0.5f * rhythm;
         buffer.Fade(fade);
 
-        float localDelta = effectDelta;
-        localDelta *= beatManager.Drop.Before.Decay(8);   // slow down leading to drop
-
-        if (beatManager.Drop.Active)
-        {
-            float rampDown = localDelta * beatManager.Drop.In.Decay(8).Remap(1f, 0f, 5f, localDelta);
-            if (rampDown > localDelta)
-                localDelta = rampDown;
-        }
+        float localDelta = DropSlowdown(effectDelta);
 
         int count = (int)(localDelta * 300f);
 

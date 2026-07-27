@@ -118,6 +118,23 @@ public abstract class EffectBase
     }
 
     /// <summary>
+    /// Slows a caller-provided value while approaching and entering a Drop.
+    /// </summary>
+    protected float DropSlowdown(float value, int beats = 8)
+    {
+        value *= beatManager.Drop.Before.Decay(beats);
+
+        if (beatManager.Drop.Active)
+        {
+            float rampDown = value * beatManager.Drop.In.Decay(beats).Remap(1f, 0f, 5f, value);
+            if (rampDown > value)
+                value = rampDown;
+        }
+
+        return value;
+    }
+
+    /// <summary>
     /// Called when this effect observes the timing-grid beat return to one after another placed beat.
     /// </summary>
     protected virtual void OnNewGrid() { }

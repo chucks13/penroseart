@@ -68,15 +68,7 @@ public class NoiseTunnel : EffectBase
         // we are going to hack the local time with our own local delta
         effectTime -= effectDelta;            // remove the currelt delta
         // calculate our drop modified time delta
-        float localDelta = effectDelta;
-        localDelta *= beatManager.Drop.Before.Decay(8);   // slow down leading to drop
-
-        if (beatManager.Drop.Active)
-        {
-            float rampDown = localDelta * beatManager.Drop.In.Decay(8).Remap(1f, 0f, 5f, localDelta);
-            if (rampDown > localDelta)
-                localDelta = rampDown;
-        }
+        float localDelta = DropSlowdown(effectDelta);
         // change the effect time by this updated delta
         effectTime += localDelta;
         effectDelta = localDelta;
