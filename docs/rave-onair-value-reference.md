@@ -5,8 +5,7 @@ The wire schema — addresses, argument shapes, types, sentinels, delivery — i
 **Never edit that file here**; schema updates flow from RaveSystem. This document holds
 the Penrose half: why each lane has value to effects and transitions, and the
 client-side caveats Penrose must respect. Serving rules are
-[ADR-0012](adr/0012-data-sources-serve-immutable-nullable-data.md) (immutable, uniformly
-nullable) and [ADR-0013](adr/0013-single-lane-wire-facts-served-once.md) (nothing on
+[ADR-0012](adr/0012-data-sources-serve-immutable-nullable-data.md) (read-only values) and [ADR-0013](adr/0013-single-lane-wire-facts-served-once.md) (nothing on
 `/rave/onair` dropped, each datum served once). The deprecated `/rave/system/*` bundle is
 out of the serving floor per ADR-0013's scope note.
 
