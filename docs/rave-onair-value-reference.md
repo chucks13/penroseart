@@ -4,10 +4,10 @@ The wire schema — addresses, argument shapes, types, sentinels, delivery — i
 [the OSC client contract](osc-client-contract.md), a synced copy owned by RaveSystem.
 **Never edit that file here**; schema updates flow from RaveSystem. This document holds
 the Penrose half: why each lane has value to effects and transitions, and the
-client-side caveats Penrose must respect. Serving rules are
-[ADR-0012](adr/0012-data-sources-serve-immutable-nullable-data.md) (read-only values) and [ADR-0013](adr/0013-single-lane-wire-facts-served-once.md) (nothing on
-`/rave/onair` dropped, each datum served once). The deprecated `/rave/system/*` bundle is
-out of the serving floor per ADR-0013's scope note.
+client-side caveats Penrose must respect. Every musical `/rave/onair` lane is served —
+unused lanes are inventory for future effects, not junk. The deprecated `/rave/system/*`
+transport metadata is not served. BeatManager serves these read-only
+([ADR-0012](adr/0012-data-sources-serve-immutable-nullable-data.md)).
 
 Ground-truth captures of the live wire (gate/countdown behavior at two instants) live in
 the beat-data-interface effort's map assets.
