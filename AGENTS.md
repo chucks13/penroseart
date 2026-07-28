@@ -164,6 +164,7 @@ Start with these before adding new structures:
 - Penrose/Rave application policy belongs in `Assets/OSC/Rave/`, `Assets/core/IO/RaveOscReceiver.cs`, `Assets/core/Rhythm/BeatManager.cs`, or other core consumers — not as special cases in the generic OSC files.
 - Before changing `Assets/OSC/*.cs`, state whether the change is a generic OSC/library change, a Unity compatibility port change, or Penrose/Rave application policy. If unclear, stop and ask.
 - Root-level `Assets/OSC.cs` and `Assets/OSCReader.cs` are project-specific/legacy integration files, not the vendored `Assets/OSC/` library boundary.
+- The copyright and `Origin:` headers on `Assets/OSC/*.cs` mark imported RaveSystem code. Never apply that header pattern to any other file.
 - For OSC work, read `docs/adr/0003-vendored-ravesystem-osc-boundary.md` before editing the vendored library or adapter layer.
 
 ## Documentation and Workflows
