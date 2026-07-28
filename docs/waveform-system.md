@@ -121,6 +121,8 @@ waveform = waveforms.Random(Energy.Low);          // one Energy tier
 waveform = waveforms.Random(Energy.Low, Energy.Mid);
 ```
 
+A Waveform's Energy is **derived from its notation, never authored or stored**, so it can never disagree with the shape — it is `max(density tier, gap tier)`, and it covers every Waveform, Pool or inline. The tier boundaries are documented on `Waveform.Energy`.
+
 No match is a configuration error and throws. Pool positions and Preset names are authoring details, not runtime identities. `Waveform.Parse(...)` remains the shared pure parser for the Pool codec, editor previews, tests, and direct `Sample(barPhase)` inspection; it is not a second runtime acquisition path.
 
 The plain **Beat Pulse** (`QQQQ` / `8888`) is the canonical default Preset.
