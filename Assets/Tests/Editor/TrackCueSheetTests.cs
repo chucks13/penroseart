@@ -71,7 +71,7 @@ public sealed class TrackCueSheetTests
         // The defect this closes: the builder walked each Phrase independently and had to land exactly on the
         // Phrase end, truncating its own gap draw, and that draw was uniform over one to four Grids. So a
         // quarter of all gaps were the 16-beat minimum, half of all 64-beat Phrases ended on a forced one, and
-        // the wall changed four times a Grid apart and then held. The rising cadence (ADR-0023) makes the
+        // the wall changed four times a Grid apart and then held. The rising cadence makes the
         // minimum gap rare and a run of them rarer still.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
@@ -118,7 +118,7 @@ public sealed class TrackCueSheetTests
     public void APhraseEndIsAnOrdinaryCandidateNotAMandatoryMark()
     {
         // The old walk placed a mark on every Phrase end, which is what forced the short gaps at every seam.
-        // Phrase boundaries are preferred positions, not mandates (ADR-0019, CONTEXT.md "Cue Mark"), so across
+        // Phrase boundaries are preferred positions, not mandates (ADR-0010, CONTEXT.md "Cue Mark"), so across
         // seeds plenty of Phrase ends must go unmarked.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
@@ -453,7 +453,7 @@ public sealed class TrackCueSheetTests
     [Test]
     public void DifferentSaltsDealADifferentShowAndTheSameSaltRebuildsIt()
     {
-        // The per-run salt (ADR-0024) is what stops every session opening with the identical show when the
+        // The per-run salt (ADR-0008) is what stops every session opening with the identical show when the
         // wire's generation counters restart. Same salt, same show; different salt, fresh show.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
@@ -533,7 +533,7 @@ public sealed class TrackCueSheetTests
     [Test]
     public void EnergyAffinityDoesNotInfluenceThePlan()
     {
-        // ADR-0011 took energy out of casting: it is a Performer input read from BeatManager, not a Director
+        // Energy is out of casting: it is a Performer input read from BeatManager, not a Director
         // one. The bag deals Effects freely and capability is asked only of a ride-through carrier, which has
         // to play the moment itself. So two catalogs identical in capability and differing only in energy
         // affinity must plan the same show from the same seed — mark for mark, anchor for anchor.
@@ -671,8 +671,8 @@ public sealed class TrackCueSheetTests
     }
 
     /// <summary>
-    /// A plain track of equal one-Grid Phrases with no Anchors. Marks land roughly every 43 beats
-    /// (ADR-0023), so budget about three Phrases per mark when sizing one of these.
+    /// A plain track of equal one-Grid Phrases with no Anchors. Marks land roughly every 43 beats,
+    /// so budget about three Phrases per mark when sizing one of these.
     /// </summary>
     private static StructureValues PlainTrack(int phraseCount)
     {

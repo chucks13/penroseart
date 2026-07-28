@@ -21,7 +21,7 @@ public sealed class CueSheetTimelineTests
     public void RunwayImpactAndTailOccupyTheBeatsAroundTheirMark()
     {
         // A drop landing pins a Cue Mark on that Grid Boundary whatever the cadence rolls, which is how these
-        // paint tests get a mark at a known beat now that no mark is forced onto a Phrase end (ADR-0023).
+        // paint tests get a mark at a known beat now that no mark is forced onto a Phrase end.
         var structure = Structure(
             32,
             Phrase(1, 16, PhraseType.Intro),
@@ -66,7 +66,7 @@ public sealed class CueSheetTimelineTests
     /// Pins beat-in-Grid column placement. Every Cue Mark is a Grid Boundary and every row begins on one, so
     /// a mark always paints column zero of its row — including where a short Phrase makes the preceding row
     /// end early. Column 15 is unreachable for a mark: the old mandatory Phrase-end mark could land mid-Grid
-    /// (and even one beat past the track), and nothing places a mark off a Boundary any more (ADR-0023).
+    /// (and even one beat past the track), and nothing places a mark off a Boundary any more.
     /// </summary>
     [Test]
     public void MarkColumnsUseBeatInGridPosition()
@@ -91,7 +91,7 @@ public sealed class CueSheetTimelineTests
     /// <summary>
     /// Pins that cell flags compose rather than overwrite. The Playhead is the one layer that can land on
     /// any painted beat; Tail-meets-Runway is no longer reachable, because consecutive marks sit at least
-    /// one Grid apart (ADR-0023) while a Transition's whole Duration is capped at twelve beats.
+    /// one Grid apart while a Transition's whole Duration is capped at twelve beats.
     /// </summary>
     [Test]
     public void ImpactAndPlayheadCanShareOneCell()
@@ -241,7 +241,7 @@ public sealed class CueSheetTimelineTests
             Is.EqualTo(3));
 
         // Drop landings pin the marks these layers hang off, since no mark is forced onto a Phrase end any
-        // more (ADR-0023); each Phrase map deliberately runs past its announced total_beats so the extension
+        // more; each Phrase map deliberately runs past its announced total_beats so the extension
         // is what the row count is measuring.
         var markStructure = Structure(
             16,

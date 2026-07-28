@@ -38,7 +38,7 @@ public sealed class LoopValuesTests
         Assert.That(loop.SizeDenominator, Is.EqualTo(1));
     }
 
-    /// <summary>An idle, set lane preserves its measured region facts per ADR-0013.</summary>
+    /// <summary>An idle, set lane preserves its measured region facts.</summary>
     [Test]
     public void IdleSetLoopPreservesItsMeasuredLengths()
     {

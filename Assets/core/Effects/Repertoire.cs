@@ -4,7 +4,7 @@ using System;
 /// Musical capabilities a Performer advertises to the Director.
 /// Repertoire is an input to casting and cue decisions; it never decides sequencing by itself.
 /// Only the capability flags are cast on. The energy affinities are advertised and currently unconsumed:
-/// ADR-0011 made energy a Performer input read live from BeatManager rather than a casting one, and the
+/// energy is a Performer input read live from BeatManager rather than a casting one, and the
 /// affinity flags are the declaration half of a contract whose consumption side is still open.
 /// </summary>
 [Flags]

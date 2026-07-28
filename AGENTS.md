@@ -164,12 +164,13 @@ Start with these before adding new structures:
 - Penrose/Rave application policy belongs in `Assets/OSC/Rave/`, `Assets/core/IO/RaveOscReceiver.cs`, `Assets/core/Rhythm/BeatManager.cs`, or other core consumers — not as special cases in the generic OSC files.
 - Before changing `Assets/OSC/*.cs`, state whether the change is a generic OSC/library change, a Unity compatibility port change, or Penrose/Rave application policy. If unclear, stop and ask.
 - Root-level `Assets/OSC.cs` and `Assets/OSCReader.cs` are project-specific/legacy integration files, not the vendored `Assets/OSC/` library boundary.
-- For OSC work, read `docs/adr/0003-vendored-ravesystem-osc-boundary.md` before editing the vendored library or adapter layer.
+- The copyright and `Origin:` headers on `Assets/OSC/*.cs` mark imported RaveSystem code. Never apply that header pattern to any other file.
+- For OSC work, read `docs/adr/0002-vendored-ravesystem-osc-boundary.md` before editing the vendored library or adapter layer.
 
 ## Documentation and Workflows
 
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
-- **Document what you touch:** any symbol you touch or create gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). See `docs/adr/0014-document-what-you-touch.md`.
+- **Document what you touch:** any symbol you touch or create — public or private, production or test — gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). New files start with a `//` file-purpose comment. Touched tests document the scenario under test and the asserted outcome; `<inheritdoc/>` is not a stand-in for that. Repair documentation warnings (bad cref, placement) — never delete a doc comment to silence one. There is deliberately no compiler-enforced documentation gate.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.
 
 ## Project-wide Boundaries

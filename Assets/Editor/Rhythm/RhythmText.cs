@@ -1,4 +1,4 @@
-// Editor-side display-text formatting for BeatManager's contrived rhythm queries (ADR-0002): nullable
+// Editor-side display-text formatting for BeatManager's contrived rhythm queries: nullable
 // beat and count values rendered for the BeatManager dashboard. Lives in the editor assembly with its
 // only consumers; the rhythm-query data it formats stays in the runtime assembly.
 

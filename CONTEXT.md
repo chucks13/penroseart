@@ -41,7 +41,7 @@ The first beat of a Bar — the downbeat. **Every change lands on the one**, nev
 _Avoid_: landing a change mid-bar; conflating the musical count with the `0..1` Bar Phase value.
 
 **Bar** (a.k.a. **Measure**):
-Four beats — "4-on-the-floor". The rhythmic structure runs on **powers of four**: 4 beats to a Bar, and Phrase lengths are multiples of four Bars. A Bar boundary falls every 4 beats, but plan-time mark placement works in Grids, not bars.
+Four beats — "4-on-the-floor". The rhythmic structure runs on **powers of four**: 4 beats to a Bar, and Phrase lengths are usually multiples of four Bars, but a valid Phrase can end off that lattice. A Bar boundary falls every 4 beats, but plan-time mark placement works in Grids, not bars.
 _Avoid_: assuming arbitrary bar lengths — the wall assumes a 4/4, powers-of-four structure; treating every bar downbeat as a place the wall may change.
 
 **Bar Phase**:
@@ -264,7 +264,7 @@ _Avoid_: using an untagged Transition at an Anchor; landing the Impact Point any
 
 **Bag**:
 The seeded fairness mechanism sheet building deals from: one shuffled bag per catalog (Effects, Transitions), dealt a card at a time so the whole catalog shows before anything repeats, and reshuffled once it empties. The bag *is* the fairness — no scoring, weighting, or preference sits behind it.
-_Avoid_: weights or scoring; filtering the deal by energy affinity (energy is a Performer input, not a casting one, per ADR-0011); per-cast random picks; treating a one-card catalog's unavoidable repeat as a defect.
+_Avoid_: weights or scoring; filtering the deal by energy affinity (energy is a Performer input, not a casting one); per-cast random picks; treating a one-card catalog's unavoidable repeat as a defect.
 
 **Off-Plan Cue**:
 The cue the Director deals when the plan in force cannot feed the playhead. Its answer is a fresh card or a ride-through, never the Effect already on the wall or the one being moved toward, and it leaves the Cue Sheet exactly as it was.

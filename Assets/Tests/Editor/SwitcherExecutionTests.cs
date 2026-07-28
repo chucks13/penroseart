@@ -3,7 +3,7 @@ using PenroseArt.RaveOsc;
 using UnityEngine;
 using RepertoireFlags = Repertoire;
 
-// Execution-seam tests for the plan-driven Switcher (ADR-0020). Immutable Track Cue Sheets are
+// Execution-seam tests for the plan-driven Switcher (ADR-0009). Immutable Track Cue Sheets are
 // handed in, per-player wire snapshots advance execution, and assertions stay on public stage state.
 public sealed class SwitcherExecutionTests
 {
@@ -71,7 +71,7 @@ public sealed class SwitcherExecutionTests
             controller.transitionDeck,
             controller.currentTransition);
         controller.director = director;
-        // Pin the run salt (ADR-0024) so every dealt card is deterministic across test runs.
+        // Pin the run salt (ADR-0008) so every dealt card is deterministic across test runs.
         director.SheetSalt = 0;
         switcher.BindDirector(director);
     }
@@ -178,7 +178,7 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Pins the Runway arithmetic against a staged override (ADR-0020). A Runway belongs to the Transition that
+    /// Pins the Runway arithmetic against a staged override (ADR-0009). A Runway belongs to the Transition that
     /// flies it, so counting from the plan's baked card while an override is staged would leave on the wrong beat
     /// and land the Impact Point beside the Cue Mark. The override leaves on its own Runway beat, flies whole, and
     /// lands on the mark; the beat the plan would have left on passes without a second fire.
@@ -342,7 +342,7 @@ public sealed class SwitcherExecutionTests
             "a cue performed from the sheet's own mark reports Plan provenance.");
 
         // Roll the loop back over that same beat until a re-crossing performs. Whether any one crossing
-        // changes the wall is dealt — the rising cadence (ADR-0023) usually declines a one-Grid gap — so the
+        // changes the wall is dealt — the rising cadence usually declines a one-Grid gap — so the
         // wall holding still is the deal declining, never the spent cue replaying. A replay would keep the
         // wall pinned to the spent cue's destination forever; a fresh deal excludes what is on the wall, so
         // the first performed cue must move off it. Each ask advances the deal stream, so under the pinned
@@ -595,7 +595,7 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Pins the stillness anchor (ADR-0022): the count anchors at the Cue Mark, so the plan's widest legal
+    /// Pins the stillness anchor: the count anchors at the Cue Mark, so the plan's widest legal
     /// gap — 64 beats, exactly what the plan-time rule permits — plays out with no off-plan ask, and the
     /// closing mark performs as planned. Anchoring at cue fire counted the mark's own landing boundary as
     /// stillness and dealt a certain off-plan cue 16 beats early (the 2026-07-25 live spurious transition).
@@ -652,7 +652,7 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Pins the handover start line (ADR-0022): a cast landing on a Grid Boundary does not count that
+    /// Pins the handover start line: a cast landing on a Grid Boundary does not count that
     /// crossing as stillness, so an opening mark a full legal gap from the cast is reached and performed
     /// with no off-plan ask. Counting the handover boundary armed the ceiling one Grid early and
     /// pre-empted the plan's opener.
