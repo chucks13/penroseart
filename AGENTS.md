@@ -170,7 +170,7 @@ Start with these before adding new structures:
 ## Documentation and Workflows
 
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
-- **Document what you touch:** any symbol you touch or create gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). See `docs/adr/0014-document-what-you-touch.md`.
+- **Document what you touch:** any symbol you touch or create — public or private, production or test — gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). New files start with a `//` file-purpose comment. Touched tests document the scenario under test and the asserted outcome; `<inheritdoc/>` is not a stand-in for that. Repair documentation warnings (bad cref, placement) — never delete a doc comment to silence one. There is deliberately no compiler-enforced documentation gate.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.
 
 ## Project-wide Boundaries
