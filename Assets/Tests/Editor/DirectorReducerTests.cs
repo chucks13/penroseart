@@ -279,7 +279,7 @@ public sealed class DirectorReducerTests
         var descriptors = new EffectDescriptor[controller.effects.Length];
         for (var i = 0; i < descriptors.Length; i++)
         {
-            descriptors[i] = new EffectDescriptor(controller.EffectiveRepertoire(i));
+            descriptors[i] = new EffectDescriptor(controller.effects[i].Repertoire);
         }
 
         return descriptors;
