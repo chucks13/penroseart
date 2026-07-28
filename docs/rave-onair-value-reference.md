@@ -7,7 +7,7 @@ the Penrose half: why each lane has value to effects and transitions, and the
 client-side caveats Penrose must respect. Every musical `/rave/onair` lane is served —
 unused lanes are inventory for future effects, not junk. The deprecated `/rave/system/*`
 transport metadata is not served. BeatManager serves these read-only
-([ADR-0012](adr/0012-data-sources-serve-immutable-nullable-data.md)).
+([ADR-0005](adr/0005-beatmanager-values-are-read-only.md)).
 
 Ground-truth captures of the live wire (gate/countdown behavior at two instants) live in
 the beat-data-interface effort's map assets.

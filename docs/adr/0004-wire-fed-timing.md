@@ -5,4 +5,4 @@ position — is read from the wire, never rebuilt locally, because a local recon
 the source only until it drifts. Deriving values from what the wire says, or tracking something the
 wire does not carry, is ordinary work; what is forbidden is keeping a second copy of a wire fact
 beside the wire. Standalone Mode is not a fallback under this rule but the other intentional mode,
-for when no usable clock exists (ADR-0007).
+for when no usable clock exists (ADR-0003).

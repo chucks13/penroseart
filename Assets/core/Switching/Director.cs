@@ -87,7 +87,7 @@ public readonly struct DirectorStatus
 }
 
 /// <summary>
-/// The Director's answer to a Switcher question (ADR-0020): whether to perform at all, and with which
+/// The Director's answer to a Switcher question (ADR-0009): whether to perform at all, and with which
 /// Effect and Transition after override masking. Commands go down, questions go up — the Switcher asks,
 /// the Director answers, and the Switcher executes the answer on its own timeline.
 /// </summary>
@@ -115,7 +115,7 @@ public readonly struct CueDecision
 }
 
 /// <summary>
-/// Decides what plays; it never times a fire (ADR-0011, ADR-0020). In Synced Mode it builds one
+/// Decides what plays; it never times a fire (ADR-0009). In Synced Mode it builds one
 /// track-scoped <see cref="TrackCueSheet"/> per player the moment that player's structure generation
 /// changes, hands the on-air focus player's sheet to the <see cref="Switcher"/> every tick (an idempotent
 /// Cast), and answers the Switcher's two questions — what a planned mark plays, and whether a boundary the
@@ -137,7 +137,7 @@ public sealed class Director
     private bool holdSelectedTransition;
 
     /// <summary>
-    /// Whether a manually staged Effect is waiting to mask exactly one cue (ADR-0020). A manual
+    /// Whether a manually staged Effect is waiting to mask exactly one cue (ADR-0009). A manual
     /// <see cref="SetNextEffect"/> raises it; answering one cue consumes it, so the plan resumes verbatim.
     /// Auto-staging and enabling a Hold both clear it. Overrides mask, never mutate — the sheet stays a pure
     /// function of (structure, seed).
@@ -162,7 +162,7 @@ public sealed class Director
     private readonly TrackCueSheet[] sheets = new TrackCueSheet[PlayerCount];
 
     /// <summary>
-    /// Run-scoped seed salt folded into every sheet deal (ADR-0024). Drawn once when the Director is
+    /// Run-scoped seed salt folded into every sheet deal (ADR-0008). Drawn once when the Director is
     /// created, so within the run every rebuild stays deterministic and handover identity is untouched,
     /// while each run deals a fresh show even when the wire's generation counters restart identically.
     /// Traced with every SHEET_BUILT line, and settable so a logged run can be reproduced — or a test
@@ -214,7 +214,7 @@ public sealed class Director
 
     /// <summary>
     /// Whether the wall is in Synced Mode: a usable beat clock is running. Reads the single mode authority
-    /// (<see cref="BeatManager.IsSynced"/>), not OSC transport liveness (ADR-0007).
+    /// (<see cref="BeatManager.IsSynced"/>), not OSC transport liveness (ADR-0003).
     /// </summary>
     public bool IsSyncedMode => controller != null && controller.beatManager != null && controller.beatManager.IsSynced;
 
@@ -234,7 +234,7 @@ public sealed class Director
     public bool HoldSelectedTransition => holdSelectedTransition;
 
     /// <summary>
-    /// Stages the Effect for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0020
+    /// Stages the Effect for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0009
     /// override — exactly the next synced cue, which plays this pick instead of its dealt card before the
     /// plan resumes verbatim. Masks, never mutates the sheet.
     /// </summary>
@@ -249,7 +249,7 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Stages the Transition for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0020
+    /// Stages the Transition for the next A-to-B move: the next Standalone move, and — as a one-shot ADR-0009
     /// override — exactly the next synced cue, before the plan resumes verbatim. Masks, never mutates.
     /// </summary>
     /// <param name="transitionIndex">Transition catalog index to stage.</param>
@@ -299,7 +299,7 @@ public sealed class Director
     {
         LogModeIfChanged();
 
-        // The mode authority alone owns the Synced/Standalone fallthrough (ADR-0007).
+        // The mode authority alone owns the Synced/Standalone fallthrough (ADR-0003).
         if (IsSyncedMode)
         {
             TickSyncedMode();
@@ -366,7 +366,7 @@ public sealed class Director
     private void TickStandaloneMode(float deltaTime)
     {
         // The mode boundary clears the sheet slots and the Switcher's in-force sheet so no stale plan
-        // crosses a Standalone gap. Idempotent every frame (ADR-0007).
+        // crosses a Standalone gap. Idempotent every frame (ADR-0003).
         ResetReducerMemory();
         standaloneTimer.Update(deltaTime);
     }
@@ -450,7 +450,7 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Answers what the Switcher should perform for a planned Cue Mark (ADR-0020): frozen under Hold — an
+    /// Answers what the Switcher should perform for a planned Cue Mark (ADR-0009): frozen under Hold — an
     /// inspection freeze, so nothing performs and the mark is left unfired — otherwise the mark's baked cards
     /// with the one-shot override masks applied. Releasing a Hold does not chase a mark that came due while
     /// frozen: a Transition only ever leaves on a Runway beat, so the wall waits for the next one. The sheet is
@@ -466,7 +466,7 @@ public sealed class Director
 
     /// <summary>
     /// Answers which Transition would perform at <paramref name="mark"/> if it came due this instant, without
-    /// performing or consuming anything (ADR-0020: commands go down, questions go up). The Switcher counts a
+    /// performing or consuming anything (ADR-0009: commands go down, questions go up). The Switcher counts a
     /// mark's Runway backwards from its Impact Point, and a Runway is a property of the Transition that flies
     /// it — so counting from the plan's baked card while an override is staged would put the Impact beside the
     /// Cue Mark instead of on it. A read only: the one-shot masks are inspected, never spent, so asking costs
@@ -520,7 +520,7 @@ public sealed class Director
     }
 
     /// <summary>
-    /// The one decision policy behind both questions (ADR-0020): Hold freezes the wall and answers
+    /// The one decision policy behind both questions (ADR-0009): Hold freezes the wall and answers
     /// no-perform; otherwise the plan-dealt cards pass through the one-shot override masks.
     /// </summary>
     private CueDecision Decide(int planEffectIndex, int planTransitionIndex)
@@ -541,7 +541,7 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Applies override masking to a plan-dealt Effect (ADR-0020): a Hold trumps every deal and returns the
+    /// Applies override masking to a plan-dealt Effect (ADR-0009): a Hold trumps every deal and returns the
     /// held pick; otherwise a one-shot staged pick replaces exactly this cue and is then consumed; with neither,
     /// the plan's card plays. A masking read only — the sheet is never mutated.
     /// </summary>
@@ -562,7 +562,7 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Applies override masking to a plan-dealt Transition (ADR-0020): a Hold trumps every deal; otherwise a
+    /// Applies override masking to a plan-dealt Transition (ADR-0009): a Hold trumps every deal; otherwise a
     /// one-shot staged pick replaces exactly this cue and is then consumed; with neither, the plan's card plays.
     /// <see cref="PeekTransitionIndex"/> answers the same question without consuming the one-shot.
     /// </summary>

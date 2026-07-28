@@ -58,7 +58,7 @@ The active runtime frame flow is:
 
 ## Sequencing model
 
-ADR-0025 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
+ADR-0009 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
 
 The Director owns the decision layer: which Performer should be on stage and which Transition should move between A and B. The Switcher owns the in-force Cue Sheet and its check-offs, decides when its marks are due, and owns the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion. It does not own a pending or loaded-cue lifecycle.
 
@@ -115,11 +115,11 @@ The Switcher uses Runway to decide when a Cue Mark is due and starts the Transit
 
 `BeatManager` is the one read-only musical gateway for the whole application: anything needing a musical fact reads it there, which is why nothing else reads OSC directly. `RaveOscReceiver.ApplyTo(...)` applies the latest live on-air snapshot before `BeatManager.Update()` captures the frame. Without a usable live clock the wall is deliberately in Standalone Mode — a preference, not a fallback.
 
-The Data Surface is shallow and frame-coherent: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Players`, `LiveOrder`, and always-present `Levels`. Individual wire values read `null` when unavailable; derived values sit beside the wire values they describe. Consumers own any previous-frame comparisons, and `IsSynced` is the single mode authority. `docs/beat-manager.md` describes the surface; ADR-0012 governs read-only serving.
+The Data Surface is shallow and frame-coherent: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Players`, `LiveOrder`, and always-present `Levels`. Individual wire values read `null` when unavailable; derived values sit beside the wire values they describe. Consumers own any previous-frame comparisons, and `IsSynced` is the single mode authority. `docs/beat-manager.md` describes the surface; ADR-0005 governs read-only serving.
 
 `Waveforms` is a sibling acquisition surface, not a child of BeatManager. The Controller owns one instance and exposes it to Effects and Transitions as `waveforms`. Performers acquire immutable, clock-bound `Waveform` values by Energy or compose a `Routine`; each held value reads its own `Envelope` or maps it through `Lerp(from, to)`. `Waveforms.None` is the explicit non-null value a Mixer assigns to suppress a child's response.
 
-Both surfaces provide musical facts and tools, never artistic response policy (ADR-0017). Concrete Effects and Transitions choose acquisition timing, endpoints, mapping, fallback, and any local response state; their bases acquire nothing automatically. A Mixer is one Effect publicly: it owns its child instances and may directly configure their public artistic state, and those choices stay private to the Mixer.
+Both surfaces provide musical facts and tools, never artistic response policy (ADR-0007). Concrete Effects and Transitions choose acquisition timing, endpoints, mapping, fallback, and any local response state; their bases acquire nothing automatically. A Mixer is one Effect publicly: it owns its child instances and may directly configure their public artistic state, and those choices stay private to the Mixer.
 
 ## Palette
 

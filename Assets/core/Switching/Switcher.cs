@@ -113,7 +113,7 @@ public readonly struct SwitcherStatus
 
 /// <summary>
 /// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
-/// Director (ADR-0020): each tick it reads BeatManager directly for the sheet player's beat and Grid lanes,
+/// Director (ADR-0009): each tick it reads BeatManager directly for the sheet player's beat and Grid lanes,
 /// asks about the Cue Mark whose Runway begins on that beat, and fires the answer the same frame so the
 /// Transition's Impact Point lands on the mark. A mark whose Runway has already gone by is missed, not
 /// performed late, and nothing checks it off. A check-off is permanent, so no re-crossing — loop, back-cue,
@@ -136,7 +136,7 @@ public sealed class Switcher
     private float transitionProgress;
 
     /// <summary>
-    /// The one decider (ADR-0020): commands come down (the immediate and Standalone
+    /// The one decider (ADR-0009): commands come down (the immediate and Standalone
     /// <see cref="StartTransition(int, int, float)"/> pushes, the sheet handover); questions go up through
     /// <see cref="Director.DecideCue"/>, <see cref="Director.DecideOffPlanCue"/>, and
     /// <see cref="Director.PeekTransitionIndex"/>. Bound once at startup.
@@ -157,7 +157,7 @@ public sealed class Switcher
 
     /// <summary>
     /// Grid Boundaries of stillness — how many the wall has crossed since the last cue's mark. Anchored at
-    /// the Cue Mark (ADR-0022): <see cref="Perform"/> seeds the count so the in-flight cue's own landing
+    /// the Cue Mark: <see cref="Perform"/> seeds the count so the in-flight cue's own landing
     /// crossing spends the seed instead of counting as stillness, which is what keeps the ceiling a full
     /// four Grids and a legal 64-beat plan gap un-pre-empted. This is the run-time backstop, and a separate
     /// rule from the plan-time one: the Director never builds a gap wider than
@@ -309,7 +309,7 @@ public sealed class Switcher
         // it early and the count follows the music. Without that lane there is no way to know where boundaries
         // fall, so the count simply never advances and only the plan's own marks perform. The handover beat is
         // the start line of the new plan's stillness, not elapsed music, so a handover landing on a boundary
-        // does not count that crossing (ADR-0022).
+        // does not count that crossing.
         var onBoundary = players[slot].GridBeat == 1;
         if (onBoundary && !firstActSinceHandover)
         {
@@ -331,8 +331,8 @@ public sealed class Switcher
                     continue;
                 }
 
-                // The count is floored at zero: its -1 seed only exists to absorb the landing crossing
-                // (ADR-0022), and a loop that turned back before the mark's boundary simply never spent it.
+                // The count is floored at zero: its -1 seed only exists to absorb the landing crossing, and a loop
+                // that turned back before the mark's boundary simply never spent it.
                 // The extra Grid is the landing still ahead of this fire beat — a runway-zero cue fired on
                 // its own boundary has none, and that crossing was already counted this very tick.
                 cue = AskOffPlan(mark.Beat, Math.Max(boundariesSinceCue, 0) + (mark.Beat > mark.FiredAtBeat ? 1 : 0));
@@ -510,7 +510,7 @@ public sealed class Switcher
     /// </summary>
     /// <param name="fireBeat">The beat this cue leaves on — one Runway before its mark.</param>
     /// <param name="markBeat">
-    /// The beat this cue is anchored to — the stillness anchor (ADR-0022): its Cue Mark, or for an
+    /// The beat this cue is anchored to — the stillness anchor: its Cue Mark, or for an
     /// off-plan deal the Grid Boundary the ask borrowed as its mark. Equals <paramref name="fireBeat"/>
     /// when the cue fires on the very boundary it was asked about, whose landing then trails past it.
     /// </param>
@@ -523,7 +523,7 @@ public sealed class Switcher
         lastCueSource = source;
         lastCueMarkBeat = markBeat;
 
-        // Stillness anchors at the mark, not at the fire (ADR-0022). When the fire leads its mark, the
+        // Stillness anchors at the mark, not at the fire. When the fire leads its mark, the
         // landing boundary still ahead belongs to this cue: the count starts one short so that crossing
         // brings it to zero. A cue fired on the boundary it was asked about has no landing left to absorb.
         boundariesSinceCue = markBeat > fireBeat ? -1 : 0;

@@ -4,7 +4,7 @@ using PenroseArt.RaveOsc;
 using UnityEngine;
 using RepertoireFlags = Repertoire;
 
-// Reducer-seam tests for the plan-driven Director (ADR-0019). Per-player wire snapshots go in through the
+// Reducer-seam tests for the plan-driven Director (ADR-0010). Per-player wire snapshots go in through the
 // BeatManager; casts are observed at the Switcher seam (Status.TargetEffectIndex and the mirrored
 // controller.currentTransition). The Director's own sheet is the deterministic TrackCueSheet, so each test
 // builds the same sheet as ground truth and asserts the casts follow it — never asserting a random layout.
@@ -70,7 +70,7 @@ public sealed class DirectorReducerTests
             controller.transitionDeck,
             controller.currentTransition);
         controller.director = director;
-        // Pin the run salt (ADR-0024) so every dealt card is deterministic across test runs.
+        // Pin the run salt (ADR-0008) so every dealt card is deterministic across test runs.
         director.SheetSalt = 0;
         switcher.BindDirector(director);
     }
@@ -125,7 +125,7 @@ public sealed class DirectorReducerTests
         Assert.That(controller.currentTransition, Is.EqualTo(player2Mark.TransitionIndex));
     }
 
-    // ---- Decision answers (ADR-0020) -----------------------------------------------------------
+    // ---- Decision answers (ADR-0009) -----------------------------------------------------------
 
     /// <summary>Pins the basic question seam: DecideCue returns the baked plan assignment unchanged.</summary>
     [Test]
@@ -140,7 +140,7 @@ public sealed class DirectorReducerTests
         Assert.That(decision.TransitionIndex, Is.EqualTo(mark.TransitionIndex));
     }
 
-    /// <summary>Pins the ADR-0020 one-shots: staged Effect and Transition mask one answer, then the plan resumes.</summary>
+    /// <summary>Pins the ADR-0009 one-shots: staged Effect and Transition mask one answer, then the plan resumes.</summary>
     [Test]
     public void OneShotOverridesMaskExactlyOneDecision()
     {

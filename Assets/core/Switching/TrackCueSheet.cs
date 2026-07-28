@@ -156,10 +156,10 @@ public readonly struct AnchorResolution
 /// sheet.
 /// </summary>
 /// <remarks>
-/// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0019): it superseded and replaced
+/// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0010): it superseded and replaced
 /// the phrase-scoped index of empty Cue Marks over a single Phrase.
 ///
-/// Mark placement is one walk over the whole track's Grid Boundaries, counted in beats (ADR-0023). Each
+/// Mark placement is one walk over the whole track's Grid Boundaries, counted in beats. Each
 /// candidate boundary is taken with a probability that rises with the gap behind it, so changes spread
 /// instead of clustering; a mark is never forced onto a boundary to make the walk land somewhere. Phrase
 /// ends carry no special status — a Phrase boundary begins a Grid, so it is simply one more candidate.
@@ -191,8 +191,8 @@ public readonly struct TrackCueSheet
 
     /// <summary>
     /// How often an Anchor is ridden through rather than performed by a Transition, as a percentage. The
-    /// incumbent playing the moment itself is the preferred reading of a drop or fill, but not the only one
-    /// (ADR-0023); a fair coin here made the wall cut into every second drop.
+    /// incumbent playing the moment itself is the preferred reading of a drop or fill, but not the only one;
+    /// a fair coin here made the wall cut into every second drop.
     /// </summary>
     public const int RideThroughPreferencePercent = 75;
 
@@ -231,7 +231,7 @@ public readonly struct TrackCueSheet
     private readonly IReadOnlyList<TransitionDescriptor> transitions;
 
     /// <summary>
-    /// The run-scoped seed salt this sheet was dealt under (ADR-0024), retained so
+    /// The run-scoped seed salt this sheet was dealt under (ADR-0008), retained so
     /// <see cref="DealOffPlanCueAt"/> draws from the same salted stream as the plan. Not part of the sheet's
     /// identity: the salt is constant within a run, so (generation, player) still identifies the sheet.
     /// </summary>
@@ -244,7 +244,7 @@ public readonly struct TrackCueSheet
     /// <param name="transitions">The Transition catalog this plan was dealt from.</param>
     /// <param name="structureGeneration">First half of the deal seed and of the sheet's identity.</param>
     /// <param name="playerNumber">Second half of the deal seed and of the sheet's identity.</param>
-    /// <param name="salt">Run-scoped seed salt the deal was drawn under (ADR-0024).</param>
+    /// <param name="salt">Run-scoped seed salt the deal was drawn under (ADR-0008).</param>
     private TrackCueSheet(
         IReadOnlyList<CuePlanMark> marks,
         IReadOnlyList<AnchorResolution> anchors,
@@ -316,7 +316,7 @@ public readonly struct TrackCueSheet
         var effectIndex = effectBag.DealPreferred(card => card != onWallEffectIndex);
         var transitionIndex = transitionBag.DealTop();
 
-        // The same rising cadence the plan walk uses (ADR-0023), so an off-plan cue spreads exactly like a
+        // The same rising cadence the plan walk uses, so an off-plan cue spreads exactly like a
         // planned one instead of carrying its own rule. Drawn after the cards so the card never depends on
         // how long the wall has held.
         var take = TakeBoundary(gapGrids * GridBeats, rng);
@@ -341,7 +341,7 @@ public readonly struct TrackCueSheet
     /// <param name="structureGeneration">The structure's generation — the first half of the seed.</param>
     /// <param name="playerNumber">The physical player number — the second half of the seed.</param>
     /// <param name="salt">
-    /// Run-scoped seed salt (ADR-0024), folded into the roll stream so each run deals a fresh show even when
+    /// Run-scoped seed salt (ADR-0008), folded into the roll stream so each run deals a fresh show even when
     /// the wire's generation counters restart identically. Constant within a run — the Director draws one at
     /// startup — so rebuilds and handover identity are unaffected. Zero (the default) means unsalted, which
     /// keeps every existing deterministic expectation byte-identical.
@@ -425,7 +425,7 @@ public readonly struct TrackCueSheet
 
     /// <summary>
     /// Walks the track's Grid Boundaries once, in beats, taking each candidate with a chance that rises with
-    /// the gap behind it (ADR-0023). Nothing resets at a Phrase seam and no boundary is ever forced, which is
+    /// the gap behind it. Nothing resets at a Phrase seam and no boundary is ever forced, which is
     /// what stops the clustering the per-Phrase walk produced: that walk had to land exactly on each Phrase
     /// end, so it truncated its own gap draw and jammed changes together at every seam.
     /// </summary>
@@ -570,8 +570,8 @@ public readonly struct TrackCueSheet
     /// surviving marks in beat order. The flip is consumed once per Anchor for stable determinism; the
     /// chosen treatment then degenerates to whichever side the catalogs and geometry actually support.
     /// Effects are dealt from the bag's own order at every mark: capability is asked of a ride-through
-    /// carrier, which has to play the moment itself, and of nothing else. Nothing else filters the deal
-    /// (ADR-0011), so the plan shows the whole catalog before it repeats anything.
+    /// carrier, which has to play the moment itself, and of nothing else. Nothing else filters the deal,
+    /// so the plan shows the whole catalog before it repeats anything.
     /// </summary>
     private static TrackCueSheet ResolveAndDeal(
         List<int> baseMarks,
