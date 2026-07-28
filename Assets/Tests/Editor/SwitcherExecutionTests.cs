@@ -742,7 +742,7 @@ public sealed class SwitcherExecutionTests
         var structure = controller.beatManager.Players[0].Structure;
         return TrackCueSheet.Build(
             structure,
-            new[] { new EffectDescriptor(controller.EffectiveRepertoire(0)) },
+            new[] { new EffectDescriptor(controller.effects[0].Repertoire) },
             new[] { new TransitionDescriptor(controller.transitions[0].Repertoire) },
             generation,
             playerNumber: 1);

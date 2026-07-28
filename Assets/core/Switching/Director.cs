@@ -582,14 +582,14 @@ public sealed class Director
         return planTransitionIndex;
     }
 
-    /// <summary>Builds the Effect catalog as descriptors — one live effective repertoire per position — for the sheet builder.</summary>
+    /// <summary>Builds the Effect catalog as descriptors — one repertoire per position — for the sheet builder.</summary>
     private IReadOnlyList<EffectDescriptor> BuildEffectDescriptors()
     {
         var effects = controller.effects;
         var descriptors = new EffectDescriptor[effects.Length];
         for (var i = 0; i < effects.Length; i++)
         {
-            descriptors[i] = new EffectDescriptor(controller.EffectiveRepertoire(i));
+            descriptors[i] = new EffectDescriptor(effects[i].Repertoire);
         }
 
         return descriptors;
