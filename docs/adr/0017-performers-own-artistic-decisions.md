@@ -1,5 +1,9 @@
 # Performers own artistic decisions
 
-Status: accepted
-
-BeatManager and Waveforms provide shared read-only musical facts and tools; Effects and Transitions decide how to use them and expose their artistic configuration as ordinary public object state. Ownership means the Performer chooses acquisition and artistic endpoints, not that every mechanical playback step must be repeated at every call site: a held Waveform or Routine may expose its current `Envelope` and apply caller-supplied `Lerp(from, to)` endpoints without choosing what the response means. Authoring bases may hold neutral shared configuration but perform no automatic acquisition or replacement. A Mixer is one Effect to the rest of the runtime, while internally it owns its child instances and may configure, suppress, synchronize, or combine them directly; the runtime standardizes no child behavior policy.
+BeatManager and Waveforms serve shared read-only musical facts and tools; Effects and Transitions
+decide what their art makes of them, and nothing else in the application tells a Performer what to
+do. The one channel running the other way is the Repertoire: a Performer advertises what it
+supports, the rest of the application selects around those advertisements, and a declared
+capability may precede its first consumer — it is a standing offer, not dead code. Authoring bases
+hold neutral shared configuration and perform no automatic acquisition or replacement; a Mixer is
+one Effect to the rest of the runtime and owns its children internally.
