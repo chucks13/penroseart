@@ -399,12 +399,13 @@ public sealed class Switcher
         if (ceilingArmed && players[slot].GridBeat is { } gridBeat && gridBeat != 1)
         {
             var boundaryBeat = beat + (TrackCueSheet.GridBeats - gridBeat + 1);
+            var gapGrids = boundariesSinceCue + 1;
             var peekedTransition = director.PeekOffPlanTransitionIndex(
-                boundaryBeat, boundariesSinceCue + 1, offPlanAsks + 1);
+                boundaryBeat, gapGrids, offPlanAsks + 1);
             if (peekedTransition >= 0
                 && boundaryBeat - beat == transitions[peekedTransition].Repertoire.RunwayBeats)
             {
-                var cue = AskOffPlan(boundaryBeat, boundariesSinceCue + 1);
+                var cue = AskOffPlan(boundaryBeat, gapGrids);
                 if (cue.Perform)
                 {
                     Perform(beat, boundaryBeat, cue, CueSource.Ceiling);

@@ -476,7 +476,7 @@ public sealed class Director
     /// <returns>The Transition catalog index that would perform this mark.</returns>
     public int PeekTransitionIndex(CuePlanMark mark)
     {
-        return holdSelectedTransition || overrideTransitionPending ? nextTransitionIndex : mark.TransitionIndex;
+        return PeekTransitionOverride(mark.TransitionIndex);
     }
 
     /// <summary>
@@ -491,18 +491,17 @@ public sealed class Director
     /// <param name="ask">The ask number the commit would use, so the peek reads the same card.</param>
     public int PeekOffPlanTransitionIndex(int boundaryBeat, int gapGrids, int ask)
     {
-        if (!TryResolveFocusSheet(out var sheet) || controller.TryGetHeldEffectIndex(out _))
+        if (controller.TryGetHeldEffectIndex(out _))
         {
             return -1;
         }
 
-        var dealt = sheet.DealOffPlanCueAt(boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
-        if (!dealt.Take)
+        if (!TryDealOffPlan(boundaryBeat, gapGrids, ask, out var dealt) || !dealt.Take)
         {
             return -1;
         }
 
-        return holdSelectedTransition || overrideTransitionPending ? nextTransitionIndex : dealt.TransitionIndex;
+        return PeekTransitionOverride(dealt.TransitionIndex);
     }
 
     /// <summary>
@@ -527,15 +526,11 @@ public sealed class Director
     /// </param>
     public CueDecision DecideOffPlanCue(int boundaryBeat, int gapGrids, int ask)
     {
-        if (!TryResolveFocusSheet(out var sheet))
+        if (!TryDealOffPlan(boundaryBeat, gapGrids, ask, out var dealt))
         {
             return CueDecision.Frozen;
         }
 
-        // What the wall is showing, or moving to, is excluded from the deal: an off-plan cue is asked for
-        // precisely because the wall must change, so a card it already holds would answer nothing.
-        var dealt = sheet.DealOffPlanCueAt(
-            boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
         if (!dealt.Take)
         {
             Trace(() => $"DECIDE_OFF_PLAN_RIDE beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
@@ -547,6 +542,25 @@ public sealed class Director
         // A take can still be refused below by Hold, so this line records the deal, not the perform.
         Trace(() => $"DECIDE_OFF_PLAN_TAKE beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
         return Decide(dealt.EffectIndex, dealt.TransitionIndex);
+    }
+
+    /// <summary>
+    /// The single deal both <see cref="PeekOffPlanTransitionIndex"/> and <see cref="DecideOffPlanCue"/> read.
+    /// The card is seeded by the boundary and ask alone and never hands back the Effect the wall is showing
+    /// or moving toward — an off-plan cue is asked for precisely because the wall must change — so a peek
+    /// and its commit always turn over the identical card. False when no focus sheet is in force to deal from.
+    /// </summary>
+    private bool TryDealOffPlan(int boundaryBeat, int gapGrids, int ask,
+        out (int EffectIndex, int TransitionIndex, bool Take) dealt)
+    {
+        if (!TryResolveFocusSheet(out var sheet))
+        {
+            dealt = default;
+            return false;
+        }
+
+        dealt = sheet.DealOffPlanCueAt(boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
+        return true;
     }
 
     /// <summary>
@@ -589,6 +603,16 @@ public sealed class Director
         }
 
         return planEffectIndex;
+    }
+
+    /// <summary>
+    /// The Transition <see cref="ResolveTransitionOverride"/> would select, read without consuming the
+    /// pending one-shot. Every peek routes through this mirror so a foreseen fire beat counts the same
+    /// Runway the commit will actually fly.
+    /// </summary>
+    private int PeekTransitionOverride(int planTransitionIndex)
+    {
+        return holdSelectedTransition || overrideTransitionPending ? nextTransitionIndex : planTransitionIndex;
     }
 
     /// <summary>
