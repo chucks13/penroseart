@@ -480,6 +480,32 @@ public sealed class Director
     }
 
     /// <summary>
+    /// The Transition that would perform an off-plan cue dealt at <paramref name="boundaryBeat"/>, or -1 when
+    /// nothing would perform there — no focus sheet, Hold in force, or a deal the cadence declines. This is
+    /// <see cref="PeekTransitionIndex"/> for the off-plan path: the Switcher counts a foreseeable ceiling
+    /// cue's Runway back from its boundary with it. Asking is free — the peek consumes neither the ask
+    /// number nor a staged one-shot override; only <see cref="DecideOffPlanCue"/> spends those.
+    /// </summary>
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat the cue would land on.</param>
+    /// <param name="gapGrids">The gap in Grids performing there would produce.</param>
+    /// <param name="ask">The ask number the commit would use, so the peek reads the same card.</param>
+    public int PeekOffPlanTransitionIndex(int boundaryBeat, int gapGrids, int ask)
+    {
+        if (!TryResolveFocusSheet(out var sheet) || controller.TryGetHeldEffectIndex(out _))
+        {
+            return -1;
+        }
+
+        var dealt = sheet.DealOffPlanCueAt(boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
+        if (!dealt.Take)
+        {
+            return -1;
+        }
+
+        return holdSelectedTransition || overrideTransitionPending ? nextTransitionIndex : dealt.TransitionIndex;
+    }
+
+    /// <summary>
     /// Answers the Switcher about a Grid Boundary the plan cannot cover: the DJ has looped back over a cue
     /// already performed, so the same cue must not play twice, or the wall has held still for the plan's
     /// widest legal gap. Deals a fresh card and whether to take it here or ride through to the next boundary,

@@ -177,6 +177,17 @@ public sealed class Switcher
     private int offPlanAsks;
 
     /// <summary>
+    /// Whether the playhead is inside the final Grid before the stillness ceiling with the closing deal
+    /// already certain. Armed on the Grid Boundary crossing that leaves exactly one legal Grid of stillness
+    /// (<see cref="TrackCueSheet.MaximumGapGrids"/> - 1 counted crossings) when no unfired plan mark can
+    /// still feed that Grid — the decision to act is taken once, at the Grid's start. Nothing is dealt and
+    /// no one-shot override is consumed at arm time; the flag only remembers that this Grid must end with a
+    /// cue. Cleared by every performed cue, by <see cref="Cast"/>, and at the ceiling boundary itself where
+    /// the at-boundary backstop takes over.
+    /// </summary>
+    private bool ceilingArmed;
+
+    /// <summary>
     /// Provenance of the most recent synced cue, held for <see cref="Status"/> so the Live strip can badge a
     /// wall change the plan did not call for. Sticky until the next cue or handover, not until the
     /// Transition completes — the explanation outlives the move it explains.
@@ -267,6 +278,7 @@ public sealed class Switcher
         actedBeat = null;
         boundariesSinceCue = 0;
         offPlanAsks = 0;
+        ceilingArmed = false;
         lastCueSource = CueSource.Plan;
         lastCueMarkBeat = -1;
         Trace(() => sheet.StructureGeneration > 0
@@ -367,21 +379,84 @@ public sealed class Switcher
             return;
         }
 
-        // Nothing in the plan fires on this beat. Once the count reaches the ceiling the plan has demonstrably
-        // failed to feed the playhead, so the boundary is asked anyway; the deal is certain at that point, which
-        // is what makes the wall holding still past TrackCueSheet.MaximumGapBeats impossible. Below the ceiling
-        // nothing is asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
+        // Nothing in the plan fires on this beat. One Grid short of the ceiling the next boundary's deal is
+        // already certain, so the decision to act is taken here, at the Grid's start — armed once, not
+        // re-judged every beat. The plan is consulted exactly once: an unfired mark that can still fire by
+        // this Grid's closing boundary keeps the plan in charge and the ceiling quiet.
+        if (onBoundary && boundariesSinceCue == TrackCueSheet.MaximumGapGrids - 1
+            && !PlanFeedsPlayheadBy(beat, beat + TrackCueSheet.GridBeats))
+        {
+            ceilingArmed = true;
+        }
+
+        // An armed ceiling fires mid-Grid, early enough that the Transition flies its whole Runway and its
+        // Impact lands on the next boundary — exactly like a planned mark. Firing at the boundary itself
+        // held the wall still for the whole gap plus the Transition's own length (2026-07-28 live). The
+        // boundary is projected from the Grid lane, not tracked as an absolute beat, so a loop pass that
+        // re-walks the final Grid fires on the same lane and lands on the same boundary it re-approaches.
+        // The peek spends nothing; the commit deals the same card because both are seeded by the boundary
+        // and the ask alone.
+        if (ceilingArmed && players[slot].GridBeat is { } gridBeat && gridBeat != 1)
+        {
+            var boundaryBeat = beat + (TrackCueSheet.GridBeats - gridBeat + 1);
+            var peekedTransition = director.PeekOffPlanTransitionIndex(
+                boundaryBeat, boundariesSinceCue + 1, offPlanAsks + 1);
+            if (peekedTransition >= 0
+                && boundaryBeat - beat == transitions[peekedTransition].Repertoire.RunwayBeats)
+            {
+                var cue = AskOffPlan(boundaryBeat, boundariesSinceCue + 1);
+                if (cue.Perform)
+                {
+                    Perform(beat, boundaryBeat, cue, CueSource.Ceiling);
+                }
+
+                return;
+            }
+        }
+
+        // At the boundary itself the ceiling is the backstop for everything the armed lane cannot fly: a
+        // zero-Runway card, a boundary arriving early off a shortened phrase, a Hold covering the fire
+        // lane, or a jump that skipped it. The deal is certain at the ceiling, which is what makes the
+        // wall holding still past TrackCueSheet.MaximumGapBeats impossible. Below the ceiling nothing is
+        // asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
         if (!onBoundary || boundariesSinceCue < TrackCueSheet.MaximumGapGrids)
         {
             return;
         }
 
-        // Standing on the boundary that spent the last legal Grid, so performing now is the ceiling gap itself.
+        // Standing on the boundary that spent the last legal Grid: the armed lane is over, and performing
+        // now is the ceiling gap itself.
+        ceilingArmed = false;
         var offPlanCue = AskOffPlan(beat, boundariesSinceCue);
         if (offPlanCue.Perform)
         {
             Perform(beat, beat, offPlanCue, CueSource.Ceiling);
         }
+    }
+
+    /// <summary>
+    /// Whether any unfired mark can still fire after <paramref name="beat"/> and at or before
+    /// <paramref name="boundaryBeat"/> — the guard that keeps a foreseeable ceiling cue from pre-empting a
+    /// plan that is about to feed the playhead itself. Counts each mark's Runway back from its landing with
+    /// the Transition that would actually perform it, exactly as the planned-mark path does.
+    /// </summary>
+    private bool PlanFeedsPlayheadBy(int beat, int boundaryBeat)
+    {
+        foreach (var mark in sheet.Marks)
+        {
+            if (mark.Fired)
+            {
+                continue;
+            }
+
+            var fireBeat = mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats;
+            if (fireBeat > beat && fireBeat <= boundaryBeat)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -527,6 +602,8 @@ public sealed class Switcher
         // landing boundary still ahead belongs to this cue: the count starts one short so that crossing
         // brings it to zero. A cue fired on the boundary it was asked about has no landing left to absorb.
         boundariesSinceCue = markBeat > fireBeat ? -1 : 0;
+        // Any performed cue, whatever its source, ends the stillness the ceiling was armed against.
+        ceilingArmed = false;
 
         // A synced cue is denominated in beats, so its seconds come off the live clock rather than the
         // Transition's authored default.

@@ -399,6 +399,122 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
+    /// Pins the ceiling cue's timing: the fourth boundary's deal is certain one Grid out, so the cue is
+    /// foreseeable and must fly its Runway onto that boundary exactly like a planned mark — fire at
+    /// boundary − Runway, Impact on the boundary. Firing only at the boundary itself held the wall still
+    /// for the whole gap plus the Transition's length (the 2026-07-28 live defect).
+    /// </summary>
+    [Test]
+    public void ACeilingCueFliesItsRunwayOntoTheBoundaryRatherThanStartingThere()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        FeedDirectorFrame(focusBeat: 1, phrases, generation: 1);
+        var beat = switcher.Sheet.Marks[switcher.Sheet.Marks.Count - 1].Beat + 1;
+
+        // Walk stillness windows until the deterministic deal stream (salt 0) produces a Ceiling cue whose
+        // card flies a positive Runway; zero-Runway cards legitimately fire on the boundary and prove nothing.
+        var previousMarkBeat = switcher.Status.LastCueMarkBeat;
+        const int walkBeats = (TrackCueSheet.MaximumGapBeats + TrackCueSheet.GridBeats) * 6;
+        for (var step = 0; step < walkBeats; step++, beat++)
+        {
+            FeedSwitcherFrame(beat, phrases, generation: 1);
+            var status = switcher.Status;
+            var performedHere = status.LastCueSource == CueSource.Ceiling
+                && status.LastCueMarkBeat != previousMarkBeat;
+            previousMarkBeat = status.LastCueMarkBeat;
+            if (performedHere && status.CurrentTransitionIndex >= 0)
+            {
+                var runway = controller.transitions[status.CurrentTransitionIndex].Repertoire.RunwayBeats;
+                if (runway > 0)
+                {
+                    Assert.That((status.LastCueMarkBeat - 1) % TrackCueSheet.GridBeats, Is.EqualTo(0),
+                        "A ceiling cue's Impact Point must land on a Grid Boundary.");
+                    Assert.That(beat, Is.EqualTo(status.LastCueMarkBeat - runway),
+                        "A ceiling cue must fire on its Runway beat so its Impact lands ON the boundary rather than starting there.");
+                    return;
+                }
+            }
+
+            switcher.RenderAtTime(1_000_000f, out _);
+        }
+
+        Assert.Fail("Setup: no Ceiling cue with a positive Runway was performed, so the timing could not be checked.");
+    }
+
+    /// <summary>
+    /// Pins the ceiling's loop behavior: when the final Grid before the ceiling is looped, the armed cue
+    /// still fires on the Grid lane — Runway beats before the boundary the loop re-approaches — and lands
+    /// on that boundary rather than falling back to a zero-Runway start at the boundary itself. The loop is
+    /// expressed as the beat sequence a loop actually produces: forward walk, a one-Grid backward jump
+    /// mid-Grid, forward walk again over the same beats.
+    /// </summary>
+    [Test]
+    public void ALoopedFinalGridStillFliesTheCeilingRunwayOntoItsBoundary()
+    {
+        var phrases = new[] { Phrase(1, 256, "intro") };
+        FeedDirectorFrame(focusBeat: 1, phrases, generation: 1);
+        var beat = switcher.Sheet.Marks[switcher.Sheet.Marks.Count - 1].Beat + 1;
+
+        // Walk stillness windows, looping each final Grid, until the deterministic deal stream (salt 0)
+        // produces a Ceiling card with a positive Runway; zero-Runway cards legitimately fire on the
+        // boundary and prove nothing. The mirror tracks the Switcher's own boundary count so the test
+        // knows when the final Grid begins.
+        var previousMarkBeat = switcher.Status.LastCueMarkBeat;
+        var stillness = previousMarkBeat > 1 ? -1 : 0;
+        var loopedBoundary = -1;
+        const int walkBeats = (TrackCueSheet.MaximumGapBeats + TrackCueSheet.GridBeats) * 6;
+        for (var step = 0; step < walkBeats; step++)
+        {
+            FeedSwitcherFrame(beat, phrases, generation: 1);
+            if ((beat - 1) % TrackCueSheet.GridBeats == 0)
+            {
+                stillness++;
+            }
+
+            var status = switcher.Status;
+            if (status.LastCueMarkBeat != previousMarkBeat)
+            {
+                if (status.LastCueSource == CueSource.Ceiling && status.CurrentTransitionIndex >= 0)
+                {
+                    var runway = controller.transitions[status.CurrentTransitionIndex].Repertoire.RunwayBeats;
+                    if (runway > 0)
+                    {
+                        Assert.That(loopedBoundary, Is.GreaterThanOrEqualTo(0),
+                            "Setup: the positive-Runway Ceiling cue must arrive on a looped final Grid.");
+                        Assert.That(status.LastCueMarkBeat, Is.EqualTo(loopedBoundary),
+                            "A looped Ceiling cue must land on the boundary the loop re-approaches, not on a projected future beat.");
+                        Assert.That(beat, Is.EqualTo(status.LastCueMarkBeat - runway),
+                            "A looped Ceiling cue must fire on its Runway beat within the re-walked pass so its Impact lands ON the boundary.");
+                        return;
+                    }
+                }
+
+                stillness = status.LastCueMarkBeat > beat ? -1 : 0;
+                previousMarkBeat = status.LastCueMarkBeat;
+                loopedBoundary = -1;
+            }
+
+            switcher.RenderAtTime(1_000_000f, out _);
+
+            // Half-way into the final Grid, jump back one whole Grid — the beat sequence a loop produces —
+            // so the fire lane can only be reached on the re-walked pass approaching the counted boundary.
+            if (stillness == TrackCueSheet.MaximumGapGrids - 1
+                && (beat - 1) % TrackCueSheet.GridBeats == 8
+                && loopedBoundary < 0)
+            {
+                loopedBoundary = beat - 8;
+                beat -= TrackCueSheet.GridBeats;
+            }
+            else
+            {
+                beat++;
+            }
+        }
+
+        Assert.Fail("Setup: no looped Ceiling cue with a positive Runway was performed, so the loop timing could not be checked.");
+    }
+
+    /// <summary>
     /// Pins Hold against that ceiling: an inspection freeze outranks it, and releasing does not lose it — the
     /// next boundary performs rather than waiting for a plan that has nothing left to give.
     /// </summary>
