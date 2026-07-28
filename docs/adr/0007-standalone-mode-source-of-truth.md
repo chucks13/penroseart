@@ -10,7 +10,7 @@ The wall runs in one of two intentional modes — Standalone (self-running) or S
 
 ## Standalone means "no usable clock", including OSC-connected-but-idle
 
-OSC connected with no track playing — or playing but not yet analysed — is Standalone, not a hold: the wall keeps its self-running rotation, matching what the effects already do via the per-datum nullable queries (ADR-0002). "Some OSC data present, but not the data we need" is Standalone. A deliberate between-tracks hold (wall waits, frozen, for the next track) would be a different feature and is explicitly not what this is. Per-datum query nullability is unchanged and is a separate concern from mode: the queries still return `null` for any specific value that is absent.
+OSC connected with no track playing — or playing but not yet analysed — is Standalone, not a hold: the wall keeps its self-running rotation, matching what the effects already do via the per-datum nullable queries (ADR-0012). "Some OSC data present, but not the data we need" is Standalone. A deliberate between-tracks hold (wall waits, frozen, for the next track) would be a different feature and is explicitly not what this is. Per-datum query nullability is unchanged and is a separate concern from mode: the queries still return `null` for any specific value that is absent.
 
 ## The mode boundary owns cue teardown
 
