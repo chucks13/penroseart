@@ -36,7 +36,7 @@ The Phrase decides where the 16-grid starts: On-Air Timing latches `offset` from
 
 ## Degradation is per-layer with a stand-alone floor
 
-Confidence degrades top-down and never loses the floor: the pulse is ≈always locked while a clock exists, while Phase and Phrase each carry their own LOCKED / COASTING / CONTRADICTED state. There is no global "Unlocked" inside synced mode. The floor is the clock itself: when the beat signals read `-1` (no `beat_in_bar`), On-Air Timing exits to stand-alone Mode (the Director's free-running timer, ADR-0004) — a mode exit, not a degraded Phase state. With a clock but no Phrase data we stay synced and COASTING/CONTRADICTED, and what to do there is the Director's decision, not the timing core's.
+Confidence degrades top-down and never loses the floor: the pulse is ≈always locked while a clock exists, while Phase and Phrase each carry their own LOCKED / COASTING / CONTRADICTED state. There is no global "Unlocked" inside synced mode. The floor is the clock itself: when the beat signals read `-1` (no `beat_in_bar`), On-Air Timing exits to stand-alone Mode (the Director's free-running timer, ADR-0025) — a mode exit, not a degraded Phase state. With a clock but no Phrase data we stay synced and COASTING/CONTRADICTED, and what to do there is the Director's decision, not the timing core's.
 
 ## All timing metrics are integer beats
 

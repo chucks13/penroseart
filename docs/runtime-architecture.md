@@ -50,7 +50,7 @@ The active runtime frame flow is:
 4. `Director.Tick(deltaTime)` chooses Standalone or Synced behavior and keeps one `TrackCueSheet` slot per physical player current with that player's complete structure generation.
 5. In Synced Mode, the Director hands the `BeatManager.LiveOrder.Focus` player's current sheet to the Switcher with `Switcher.Cast(sheet)`. Cast is a handover; it does not fire a cue.
 6. `Switcher.Tick()` reads the sheet player's beat and Grid lanes and, on each new beat, asks `Director.DecideCue(...)` about the mark whose Runway begins there, firing the answer the same frame so the Impact Point lands on the mark. A mark whose Runway beat elapsed unnoticed is a Missed Cue: nothing is checked off, and it fires only if the playhead reaches that beat again.
-7. The Switcher also counts Grid Boundaries of stillness, anchored at the last cue's mark (ADR-0022). Re-crossing a fired mark's Runway beat, or spending the fourth Grid of stillness, asks `Director.DecideOffPlanCue(...)` for a fresh deal instead; the sheet itself never changes.
+7. The Switcher also counts Grid Boundaries of stillness, anchored at the last cue's mark. Re-crossing a fired mark's Runway beat, or spending the fourth Grid of stillness, asks `Director.DecideOffPlanCue(...)` for a fresh deal instead; the sheet itself never changes.
 8. `Switcher.RenderAtTime(...)` renders the current Effect or active A-to-B Transition into `penrose.buffer`.
 9. Filters, drums, camera, and external pixel blending may modify `penrose.buffer`.
 10. The active serial path or legacy UDP/ACN path sends the frame to hardware.
@@ -58,7 +58,7 @@ The active runtime frame flow is:
 
 ## Sequencing model
 
-ADR-0004 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
+ADR-0025 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
 
 The Director owns the decision layer: which Performer should be on stage and which Transition should move between A and B. The Switcher owns the in-force Cue Sheet and its check-offs, decides when its marks are due, and owns the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion. It does not own a pending or loaded-cue lifecycle.
 
@@ -84,7 +84,7 @@ The four-Grid figure appears twice, and the two rules are distinct. Conflating t
 
 **The Director's plan-time rule** applies while `TrackCueSheet.Build(...)` walks a track's Phrase map. Every consecutive gap between Cue Marks is constrained to one-to-four Grids — `MinimumGapBeats` (16) to `MaximumGapBeats` (64) — by construction, including across Anchor suppression, with a run-out Grid absorbing a phrase tail that is not a whole number of Grids. This is a property of the written plan. It is measured in absolute track beats, it holds on both sides (there is a floor as well as a ceiling), and it is settled before a single beat is performed.
 
-**The Switcher's run-time rule** is a loop backstop, not a planning constraint. `boundariesSinceCue` counts Grid Boundaries — the player's Grid lane returning to one, which is phrase-relative, so a shortened phrase restarts the count early and the count follows the music. The count is anchored at the **Cue Mark** (ADR-0022): `Perform(...)` seeds it so the in-flight cue's own landing crossing spends the seed rather than counting as stillness — the mark's boundary is beat zero, and the ceiling arrives a full 64 beats after the mark, the same interval the plan-time rule bounds. Anchoring at cue fire instead armed the ceiling at mark+48 and pre-empted every legal 64-beat gap (the 2026-07-25 spurious-transition bug). Once the count reaches `TrackCueSheet.MaximumGapGrids` (4) the plan has demonstrably failed to feed the playhead, so that boundary asks for an Off-Plan Cue whether or not a mark was re-crossed, and the deal is certain at that point. Below the ceiling nothing is asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
+**The Switcher's run-time rule** is a loop backstop, not a planning constraint. `boundariesSinceCue` counts Grid Boundaries — the player's Grid lane returning to one, which is phrase-relative, so a shortened phrase restarts the count early and the count follows the music. The count is anchored at the **Cue Mark**: `Perform(...)` seeds it so the in-flight cue's own landing crossing spends the seed rather than counting as stillness — the mark's boundary is beat zero, and the ceiling arrives a full 64 beats after the mark, the same interval the plan-time rule bounds. Anchoring at cue fire instead armed the ceiling at mark+48 and pre-empted every legal 64-beat gap (the 2026-07-25 spurious-transition bug). Once the count reaches `TrackCueSheet.MaximumGapGrids` (4) the plan has demonstrably failed to feed the playhead, so that boundary asks for an Off-Plan Cue whether or not a mark was re-crossed, and the deal is certain at that point. Below the ceiling nothing is asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
 
 The Switcher counts boundary crossings rather than beats precisely because a loop re-crosses the same beat numbers; only crossings measure elapsed music. Without a Grid lane the count simply never advances, and only the plan's own marks perform.
 

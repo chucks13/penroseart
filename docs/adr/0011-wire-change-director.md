@@ -50,14 +50,14 @@ This amendment makes the split exact. A Cue Sheet's identity is the **announced 
 
 The re-check narrows back to a single fire-and-forget seam. Identity on the Director → Switcher seam is the **Cue Mark alone**: `UpsertLoadedCue` treats an offer at the same Cue Mark as a **keep** — the loaded cue rides unchanged and is never re-flavored — replaces the loaded cue on a different mark when it can still commit and is not locked, and otherwise rejects. The Switcher answers in one call (kept / loaded / rejected), so the Director no longer runs its own keep-guard: the `IsLoadedCueWorkable` re-check and its `LoadedCueStatus` decision-read are deleted (the Observatory's read-only `LoadedCueStatus` view stays — it is a view, not a decision). The `Grid == null` special case in the cast path is deleted too: a null grid means the wall is not in Synced Mode, which the ADR-0007 mode fallthrough at the tick entry owns.
 
-## Amendment 2026-07-24 — announcement-keyed empty sheets and the loaded-cue lock are superseded by ADR-0019
+## Amendment 2026-07-24 — announcement-keyed empty sheets and the loaded-cue lock are superseded by ADR-0026
 
-The two announcement-keyed Cue Sheet slots (current and next, repaired every wake with empty marks Cast at Grid entry), the lazy preference-based casting, and the `UpsertLoadedCue` keep/loaded/rejected lock seam are all superseded by ADR-0019, whose Director/Switcher split is in turn revised by ADR-0020. With the complete per-player song structure on the wire, the Director builds one track-scoped Cue Sheet per player with Effect and Transition assignments baked in and hands the on-air sheet to the Switcher, which performs it — no loaded cue, no lock, no verdict. What survives from this ADR is its thesis, and it is now total: position comes from the wire and nothing keeps a self-ticked count of its own, so the drift this ADR set out to kill cannot return.
+The two announcement-keyed Cue Sheet slots (current and next, repaired every wake with empty marks Cast at Grid entry), the lazy preference-based casting, and the `UpsertLoadedCue` keep/loaded/rejected lock seam are all superseded by ADR-0026, whose Director/Switcher split is in turn revised by ADR-0025. With the complete per-player song structure on the wire, the Director builds one track-scoped Cue Sheet per player with Effect and Transition assignments baked in and hands the on-air sheet to the Switcher, which performs it — no loaded cue, no lock, no verdict. What survives from this ADR is its thesis, and it is now total: position comes from the wire and nothing keeps a self-ticked count of its own, so the drift this ADR set out to kill cannot return.
 
 ## Note 2026-07-25 — energy casting came back once, and has been removed again
 
 This ADR's "Casting is lazy and preference-based" rule — energy is a Performer input read from BeatManager by
-the Performers themselves, not a Director casting input — was reversed without being amended. ADR-0019's
+the Performers themselves, not a Director casting input — was reversed without being amended. ADR-0026's
 `TrackCueSheet.Build` (`8c8dd38f`, 2026-07-24) reintroduced an energy preference as one of the things living
 behind the builder, and because a track-scoped plan is built at load time from structure alone, it could not
 read the energy lane the deleted `EnergyCasting` had read. It substituted a phrase-label proxy instead:
