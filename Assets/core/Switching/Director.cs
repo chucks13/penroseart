@@ -538,10 +538,14 @@ public sealed class Director
             boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
         if (!dealt.Take)
         {
-            Trace(() => $"DECIDE_OFF_PLAN_RIDE beat={boundaryBeat} gapGrids={gapGrids}");
+            Trace(() => $"DECIDE_OFF_PLAN_RIDE beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
             return CueDecision.Frozen;
         }
 
+        // The take is traced with the gap and ask that produced it so a log alone can tell a certain-row
+        // take from a lucky low-gap roll (2026-07-28: two sessions were indistinguishable without this).
+        // A take can still be refused below by Hold, so this line records the deal, not the perform.
+        Trace(() => $"DECIDE_OFF_PLAN_TAKE beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
         return Decide(dealt.EffectIndex, dealt.TransitionIndex);
     }
 
