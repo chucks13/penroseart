@@ -1,5 +1,5 @@
 ﻿﻿
-#define ENABLE_SERIAL
+// #define ENABLE_SERIAL
 
 // Select the wiring diagram for this art piece: define exactly one.
 // Wiring files are hand-editable text in Assets/StreamingAssets (wiring_*.txt).
@@ -1648,7 +1648,7 @@ public class Controller : Singleton<Controller>
             transientHudMessage = "dummy source";
             doblend = true;
         }
-        else 
+        else
 #endif
         if (readPixel.Update())
         {
