@@ -340,6 +340,15 @@ public sealed class Switcher
             return;
         }
 
+        if (lastSeenBeat != 0 && beat != lastSeenBeat + 1)
+        {
+            // A discontinuity is the wire's story: a snap-back is a loop, a forward skip is frames
+            // outrunning beats or a needle-drop. The Grid lane rides along so a straddled Grid start —
+            // a think that never ran — is visible in the log instead of inferred from silence.
+            var from = lastSeenBeat;
+            Trace(() => $"SWITCHER_BEAT_JUMP from={from} to={beat} gridBeat={gridBeat}");
+        }
+
         lastSeenBeat = beat;
 
         if (scheduledMark != null && beat == scheduledFireBeat)
@@ -402,8 +411,16 @@ public sealed class Switcher
         // ahead. The decision already taken stands — re-deciding would consume a staged override twice.
         if (scheduledMark != null && !ReferenceEquals(scheduledMark, candidate))
         {
+            var droppedMarkBeat = scheduledMark.Beat;
+            var droppedFireBeat = scheduledFireBeat;
+            Trace(() => $"SWITCHER_UNSCHEDULE mark={droppedMarkBeat} fire={droppedFireBeat} beat={beat}");
             ClearScheduledAct();
         }
+
+        // One line per think makes the log distinguish "no mark at this boundary" from "a mark passed
+        // unseen" — without it a silent think and a skipped think read identically (2026-07-31 session).
+        var seenCandidate = candidate;
+        Trace(() => $"SWITCHER_THINK beat={beat} stillGrids={stillGrids} candidate={(seenCandidate == null ? "none" : seenCandidate.Fired ? $"{seenCandidate.Beat}:fired" : seenCandidate.Beat.ToString())} scheduled={(scheduledMark == null ? "none" : scheduledMark.Beat.ToString())} onWall={FormatEffect(TransitionSourceEffectIndex)} toward={FormatEffect(TransitionTargetEffectIndex)}");
 
         OffPlanAnomaly? anomaly = null;
 
@@ -424,7 +441,13 @@ public sealed class Switcher
             else
             {
                 var cue = director.DecideCue(candidate);
-                if (cue.Perform)
+                if (!cue.Perform)
+                {
+                    // A refused answer is Hold (ADR-0009) — traced so a passed mark under a held wall
+                    // reads as the operator's doing, not as a mark the Switcher lost.
+                    Trace(() => $"SWITCHER_HOLD mark={candidate.Beat} beat={beat}");
+                }
+                else
                 {
                     // The Runway belongs to the Transition the Director decided, so a staged override flies
                     // its own Runway and still lands its Impact on the mark.

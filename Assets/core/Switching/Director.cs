@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using PenroseArt.RaveOsc;
 using UnityEngine;
 
@@ -510,7 +511,9 @@ public sealed class Director
                 playerNumber,
                 SheetSalt);
             sheets[slot] = built;
-            Trace(() => $"SHEET_BUILT player={playerNumber} generation={generation} salt={SheetSalt} marks={built.Marks.Count}");
+            // The mark-beat list makes a session log self-describing: whether a boundary carried a mark is
+            // a grep, not a reconstruction (2026-07-31: a silent 81..145 stretch could not say either way).
+            Trace(() => $"SHEET_BUILT player={playerNumber} generation={generation} salt={SheetSalt} marks={built.Marks.Count} beats={string.Join("|", built.Marks.Select(m => m.Beat))}");
         }
     }
 
@@ -577,14 +580,14 @@ public sealed class Director
 
         if (!dealt.Take)
         {
-            Trace(() => $"DECIDE_OFF_PLAN_RIDE anomaly={sighting.Anomaly} beat={sighting.BoundaryBeat} gapGrids={sighting.GapGrids} ask={sighting.Ask}");
+            Trace(() => $"DECIDE_OFF_PLAN_RIDE anomaly={sighting.Anomaly} beat={sighting.BoundaryBeat} gapGrids={sighting.GapGrids} ask={sighting.Ask} onWall={FormatEffect(sighting.OnWallEffectIndex)} toward={FormatEffect(sighting.MovingTowardEffectIndex)}");
             return CueDecision.Frozen;
         }
 
         // The take is traced with the gap and ask that produced it so a log alone can tell a certain-row
         // take from a lucky low-gap roll (2026-07-28: two sessions were indistinguishable without this).
         // A take can still be refused below by Hold, so this line records the deal, not the perform.
-        Trace(() => $"DECIDE_OFF_PLAN_TAKE anomaly={sighting.Anomaly} beat={sighting.BoundaryBeat} gapGrids={sighting.GapGrids} ask={sighting.Ask}");
+        Trace(() => $"DECIDE_OFF_PLAN_TAKE anomaly={sighting.Anomaly} beat={sighting.BoundaryBeat} gapGrids={sighting.GapGrids} ask={sighting.Ask} onWall={FormatEffect(sighting.OnWallEffectIndex)} toward={FormatEffect(sighting.MovingTowardEffectIndex)}");
         return Decide(dealt.EffectIndex, dealt.TransitionIndex);
     }
 
