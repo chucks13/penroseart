@@ -145,10 +145,10 @@ public sealed class TrackCueSheetTests
         // The off-plan deal is a pure function of (sheet seed, boundary beat, ask): the same situation deals the
         // identical card, both on a repeat call and on a fresh rebuild of the same sheet.
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
-        var first = sheet.DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1);
-        var again = sheet.DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1);
+        var first = sheet.DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
+        var again = sheet.DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
         var rebuilt = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2)
-            .DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1);
+            .DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
 
         Assert.That(again, Is.EqualTo(first));
         Assert.That(rebuilt, Is.EqualTo(first), "A rebuilt sheet deals identically.");
@@ -162,9 +162,9 @@ public sealed class TrackCueSheetTests
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
         for (var ask = 1; ask <= 256; ask++)
         {
-            Assert.That(sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, -1).Take, Is.True,
+            Assert.That(sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, -1, -1).Take, Is.True,
                 $"ask {ask} would hold the wall past {TrackCueSheet.MaximumGapBeats} beats");
-            Assert.That(sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids + 1, ask, -1).Take, Is.True,
+            Assert.That(sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids + 1, ask, -1, -1).Take, Is.True,
                 "An overshot count must not wrap back into riding.");
         }
     }
@@ -181,7 +181,7 @@ public sealed class TrackCueSheetTests
             var ridden = 0;
             for (var ask = 1; ask <= 256; ask++)
             {
-                if (sheet.DealOffPlanCueAt(81, boundaries, ask, -1).Take) { taken++; } else { ridden++; }
+                if (sheet.DealOffPlanCueAt(81, boundaries, ask, -1, -1).Take) { taken++; } else { ridden++; }
             }
 
             Assert.That(taken, Is.GreaterThan(0), $"boundary {boundaries} never changes the wall");
@@ -203,7 +203,7 @@ public sealed class TrackCueSheetTests
         var dealtTransitions = new HashSet<int>();
         for (var ask = 1; ask <= 256; ask++)
         {
-            var dealt = sheet.DealOffPlanCueAt(81, gapGrids: 1, ask: ask, onWallEffectIndex: -1);
+            var dealt = sheet.DealOffPlanCueAt(81, gapGrids: 1, ask: ask, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
             dealtEffects.Add(dealt.EffectIndex);
             dealtTransitions.Add(dealt.TransitionIndex);
         }
@@ -223,9 +223,39 @@ public sealed class TrackCueSheetTests
         {
             for (var ask = 1; ask <= 64; ask++)
             {
-                var dealt = sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, onWall);
+                var dealt = sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, onWall, onWall);
                 Assert.That(dealt.EffectIndex, Is.Not.EqualTo(onWall),
                     $"ask {ask} would transition Effect {onWall} to itself.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// A blend can be mid-flight when the doorway asks, so the deal excludes two Effects at once: the one
+    /// still showing on the wall and the one the running Transition is moving toward.
+    /// </summary>
+    [Test]
+    public void AnOffPlanDealExcludesBothTheOnWallEffectAndTheOneBeingMovedToward()
+    {
+        var effects = MixedEffects();
+        var sheet = TrackCueSheet.Build(MixedTrack(), effects, MixedTransitions(), 7, 2);
+        for (var onWall = 0; onWall < effects.Count; onWall++)
+        {
+            for (var movingToward = 0; movingToward < effects.Count; movingToward++)
+            {
+                if (movingToward == onWall)
+                {
+                    continue;
+                }
+
+                for (var ask = 1; ask <= 16; ask++)
+                {
+                    var dealt = sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, onWall, movingToward);
+                    Assert.That(dealt.EffectIndex, Is.Not.EqualTo(onWall),
+                        $"ask {ask} would hand back the Effect still showing on the wall.");
+                    Assert.That(dealt.EffectIndex, Is.Not.EqualTo(movingToward),
+                        $"ask {ask} would hand back the Effect already being moved toward.");
+                }
             }
         }
     }
@@ -236,10 +266,10 @@ public sealed class TrackCueSheetTests
         // Only whether the deal is taken reads the count; the card itself is drawn first, so one boundary's card
         // is the same whether it is the first ask after a change or the last before the ceiling.
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
-        var atFirstBoundary = sheet.DealOffPlanCueAt(97, gapGrids: 1, ask: 3, onWallEffectIndex: -1);
+        var atFirstBoundary = sheet.DealOffPlanCueAt(97, gapGrids: 1, ask: 3, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
         for (var boundaries = 2; boundaries <= TrackCueSheet.MaximumGapGrids; boundaries++)
         {
-            var later = sheet.DealOffPlanCueAt(97, boundaries, ask: 3, onWallEffectIndex: -1);
+            var later = sheet.DealOffPlanCueAt(97, boundaries, ask: 3, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
             Assert.That(
                 (later.EffectIndex, later.TransitionIndex),
                 Is.EqualTo((atFirstBoundary.EffectIndex, atFirstBoundary.TransitionIndex)));
@@ -252,9 +282,9 @@ public sealed class TrackCueSheetTests
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
         var before = sheet.Marks.Select(m => (m.Beat, m.EffectIndex, m.TransitionIndex)).ToArray();
 
-        sheet.DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1);
-        sheet.DealOffPlanCueAt(48, gapGrids: 2, ask: 2, onWallEffectIndex: -1);
-        sheet.DealOffPlanCueAt(415, gapGrids: 4, ask: 3, onWallEffectIndex: -1);
+        sheet.DealOffPlanCueAt(200, gapGrids: 1, ask: 1, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
+        sheet.DealOffPlanCueAt(48, gapGrids: 2, ask: 2, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
+        sheet.DealOffPlanCueAt(415, gapGrids: 4, ask: 3, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
 
         var after = sheet.Marks.Select(m => (m.Beat, m.EffectIndex, m.TransitionIndex)).ToArray();
         Assert.That(after, Is.EqualTo(before), "The deal comes from fresh local bags and never touches the sheet's plan.");
@@ -268,7 +298,7 @@ public sealed class TrackCueSheetTests
         var sheet = TrackCueSheet.Build(MixedTrack(), effects, transitions, 7, 2);
         foreach (var boundaryBeat in new[] { 16, 97, 200, 370, 456 })
         {
-            var dealt = sheet.DealOffPlanCueAt(boundaryBeat, gapGrids: 2, ask: boundaryBeat, onWallEffectIndex: -1);
+            var dealt = sheet.DealOffPlanCueAt(boundaryBeat, gapGrids: 2, ask: boundaryBeat, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
             Assert.That(dealt.EffectIndex, Is.InRange(0, effects.Count - 1));
             Assert.That(dealt.TransitionIndex, Is.InRange(0, transitions.Count - 1));
         }

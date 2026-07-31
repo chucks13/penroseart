@@ -255,17 +255,24 @@ public readonly struct TrackCueSheet
     /// move the wall, and a Transition from an Effect to itself moves nothing. Pass a negative index when
     /// nothing is showing. Honoured unless the catalog has no other card to give.
     /// </param>
+    /// <param name="movingTowardEffectIndex">
+    /// Effect catalog index a mid-flight Transition is carrying the wall toward, excluded for the same
+    /// reason: a doorway answer must move the wall somewhere new, never where it is already headed. Equal to
+    /// <paramref name="onWallEffectIndex"/> when no blend is in flight; negative when nothing is staged.
+    /// Honoured unless the catalog has no other card to give.
+    /// </param>
     /// <returns>The dealt Effect and Transition catalog indices, and whether to take them at this boundary.</returns>
     public (int EffectIndex, int TransitionIndex, bool Take) DealOffPlanCueAt(
         int boundaryBeat,
         int gapGrids,
         int ask,
-        int onWallEffectIndex)
+        int onWallEffectIndex,
+        int movingTowardEffectIndex)
     {
         var rng = new Rng(StructureGeneration ^ salt, PlayerNumber, boundaryBeat, ask);
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
-        var effectIndex = effectBag.DealPreferred(card => card != onWallEffectIndex);
+        var effectIndex = effectBag.DealPreferred(card => card != onWallEffectIndex && card != movingTowardEffectIndex);
         var transitionIndex = transitionBag.DealTop();
 
         // The same rising cadence the plan walk uses, so an off-plan cue spreads exactly like a
