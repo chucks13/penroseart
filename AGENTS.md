@@ -32,6 +32,7 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 
 - `README.md` — current orientation and runtime loop.
 - `CONTEXT.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
+- `docs/switching-model.md` — the single source of truth for switching behavior; read it before any Director, Switcher, or sequencing work.
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
 - `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
 - `docs/osc-client-contract.md` — the RaveSystem OSC wire contract (a synced copy owned by RaveSystem; never edited here). The single authority on what the wire actually provides — per-player clocks, transport predicates, loop state, timing grids, structure. Read it before any BeatManager, receiver, Director/Switcher, or player-data work instead of inferring wire facts from code or memory.

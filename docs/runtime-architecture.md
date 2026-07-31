@@ -49,8 +49,8 @@ The active runtime frame flow is:
 3. `BeatManager.Update()` settles the live or Standalone source, derives shared values, and captures every public value group once so the frame sees one coherent musical snapshot.
 4. `Director.Tick(deltaTime)` chooses Standalone or Synced behavior and keeps one `TrackCueSheet` slot per physical player current with that player's complete structure generation.
 5. In Synced Mode, the Director hands the `BeatManager.LiveOrder.Focus` player's current sheet to the Switcher with `Switcher.Cast(sheet)`. Cast is a handover; it does not fire a cue.
-6. `Switcher.Tick()` reads the sheet player's beat and Grid lanes and, on each new beat, asks `Director.DecideCue(...)` about the mark whose Runway begins there, firing the answer the same frame so the Impact Point lands on the mark. A mark whose Runway beat elapsed unnoticed is a Missed Cue: nothing is checked off, and it fires only if the playhead reaches that beat again.
-7. The Switcher also counts Grid Boundaries of stillness, anchored at the last cue's mark. Re-crossing a fired mark's Runway beat, or spending the fourth Grid of stillness, asks `Director.DecideOffPlanCue(...)` for a fresh deal instead; the sheet itself never changes.
+6. `Switcher.Tick()` thinks once per Grid, at the Grid's start, from the on-air Grid — the timing authority: a next boundary carrying an unfired mark fires its Transition at boundary minus Runway, so the Impact Point lands on the mark. Marks skipped by a forward jump lapse as Missed Cues — no late firing.
+7. Anomalies — a re-crossed fired mark, a mark moving into the Effect already on the wall, Stillness up — go through one doorway: the Switcher tells the Director what it sees, and the Director decides — ride through, or a fresh Director-cast cue. The sheet itself never changes.
 8. `Switcher.RenderAtTime(...)` renders the current Effect or active A-to-B Transition into `penrose.buffer`.
 9. Filters, drums, camera, and external pixel blending may modify `penrose.buffer`.
 10. The active serial path or legacy UDP/ACN path sends the frame to hardware.
@@ -58,39 +58,35 @@ The active runtime frame flow is:
 
 ## Sequencing model
 
-ADR-0009 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
+[`docs/switching-model.md`](switching-model.md) is the single source of truth for switching behavior — the model this runtime is being rewired to match. Where the code still disagrees with the model, the model wins and the code is the defect. ADR-0009 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
 
 The Director owns the decision layer: which Performer should be on stage and which Transition should move between A and B. The Switcher owns the in-force Cue Sheet and its check-offs, decides when its marks are due, and owns the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion. It does not own a pending or loaded-cue lifecycle.
 
 ### Standalone Mode
 
-Standalone Mode is the intentional self-running behavior whenever no usable musical clock is present — whether nothing is connected at all, or OSC is connected but no track is playing or yet analysed. The Director uses the existing `Timer` as its cadence clock, consumes staged Next Effect / Next Transition choices, and commands the Switcher. Timer expiry is not an independent sequencer; `Director.OnTimerFinished()` ignores timer completion while Synced Mode is active.
+Standalone Mode is the intentional self-running behavior whenever no usable musical clock is present — whether nothing is connected at all, or OSC is connected but no track is playing or yet analysed. Standalone lives inside the Director (`TickStandaloneMode` → `Timer` → `RunStandaloneTimerDecision`) and starts moves through `Switcher.StartTransition`, the shared stage primitive. The sync machinery — sheets, marks, stillness — never runs in or disturbs Standalone: entering Standalone clears the sheet slots and the in-force sheet (ADR-0003). Timer expiry is not an independent sequencer; `Director.OnTimerFinished()` ignores timer completion while Synced Mode is active.
 
 ### Synced Mode
 
-Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. `BeatManager.LiveOrder.Focus` selects the sheet the Director hands over. The Switcher then reads that sheet player's absolute beat and Grid lanes directly; the Director never follows musical position, reads the Grid, or self-ticks a musical count.
+Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. `BeatManager.LiveOrder.Focus` selects the sheet the Director hands over. The Switcher executes against the on-air beat and Grid — the timing authority; the wire guarantees on-air values equal the focus player's values in the same capture, and per-player surfaces serve song structure and sheet building. The Director never follows musical position, reads the Grid, or self-ticks a musical count.
 
-`TrackCueSheet.Build(...)` is the single creative planning seam. When a player's complete structure generation changes, it builds one full-track plan into that player's slot, seeded by structure generation plus player number. The plan contains every Cue Mark with its Effect and Transition indexes already assigned. Its seeded Effect and Transition bags, drop/fill Anchors, ride-through versus performed-transition choice, and post-drop hold all live behind the builder. Effects are dealt from bag order alone; capability is asked of a ride-through carrier and of an Anchor's Transition, and nothing else filters a deal. Phrase boundaries are preferred mark positions, not mandatory transitions.
+`TrackCueSheet.Build(...)` is the single creative planning seam. When a player's complete structure generation changes, it builds one full-track plan into that player's slot, seeded by structure generation plus player number and the per-run salt (ADR-0008). The plan contains every Cue Mark with its Effect and Transition already assigned: marks sit at sensible, irregular spacing — never clumped, never metronomic — and never leave more than 64 beats (4 Grids) without a transition. Effects are dealt from bag order alone; capability is asked only of an Anchor's ride-through carrier, and no transition is written from an effect into itself. Around a Drop or Fill a capable Effect is already on the wall and no Transition's Runway or Tail crosses the moment; on a short Grid the cast Transition's Runway fits. Phrase boundaries are preferred mark positions, not mandatory transitions.
 
-At runtime the Director hands the focus player's current sheet to the Switcher on every synced tick; `Cast(sheet)` is an idempotent handover for the same player and structure generation. The Switcher holds that plan and nothing else standing against it: on each new beat it asks about the mark whose Runway begins on that beat and performs the answer the same frame, so the Transition's Impact Point lands on the mark. A mark whose Runway beat is already behind the playhead is a Missed Cue — not performed late, and not checked off either, which is what keeps a fresh Cast, a focus handover, and a needle-drop from cutting. A check-off is permanent for the life of the handover, so a re-crossed fired mark is never replayed; instead the re-crossing is itself the signal to ask for an Off-Plan Cue. The loop lane is not read: a loop re-crosses marks or sits in an empty gap, and both are already covered.
-
-Beside the plan the Switcher counts exactly two things, both restarted by a handover: `actedBeat`, the beat it last acted on, and `boundariesSinceCue`, the stillness count described below.
+At runtime the Director hands the focus player's current sheet to the Switcher on every synced tick; `Cast(sheet)` is an idempotent handover for the same player and structure generation, and a handover changes nothing on the wall by itself. The Switcher thinks once per Grid, at the Grid's start: a next boundary carrying an unfired mark fires at boundary minus Runway, and once started a Transition is fire-and-forget. Marks skipped by a forward jump lapse as Missed Cues — not performed late, not checked off — which is what keeps a fresh Cast, a focus handover, and a needle-drop from cutting. A check-off is permanent, so a re-crossed fired mark is never replayed; it is an anomaly for the doorway instead. The loop lane is never a decision signal (ADR-0011): the beat counter snapping back *is* the loop, and the lane at most corroborates traces.
 
 `Switcher.BindDirector(...)` binds the decider after construction because the Director and Switcher references are mutual.
 
-### Two gap rules, one at plan time and one at run time
+### Two rules against stillness, one at plan time and one at run time
 
-The four-Grid figure appears twice, and the two rules are distinct. Conflating them is the most common way to misread the sequencing code.
+**The Director's plan-time rule** applies while `TrackCueSheet.Build(...)` walks a track's Phrase map: never leave more than 64 beats (4 Grids) without a transition, and place marks at sensible, irregular spacing — never clumped, never metronomic. There is no numeric spacing floor; the real invariant is that no two blends overlap, guaranteed by casting transitions that fit the space they are given. This is a property of the written plan, settled before a single beat is performed.
 
-**The Director's plan-time rule** applies while `TrackCueSheet.Build(...)` walks a track's Phrase map. Every consecutive gap between Cue Marks is constrained to one-to-four Grids — `MinimumGapBeats` (16) to `MaximumGapBeats` (64) — by construction, including across Anchor suppression, with a run-out Grid absorbing a phrase tail that is not a whole number of Grids. This is a property of the written plan. It is measured in absolute track beats, it holds on both sides (there is a floor as well as a ceiling), and it is settled before a single beat is performed.
-
-**The Switcher's run-time rule** is a loop backstop, not a planning constraint. `boundariesSinceCue` counts Grid Boundaries — the player's Grid lane returning to one, which is phrase-relative, so a shortened phrase restarts the count early and the count follows the music. The count is anchored at the **Cue Mark**: `Perform(...)` seeds it so the in-flight cue's own landing crossing spends the seed rather than counting as stillness — the mark's boundary is beat zero, and the ceiling arrives a full 64 beats after the mark, the same interval the plan-time rule bounds. Anchoring at cue fire instead armed the ceiling at mark+48 and pre-empted every legal 64-beat gap (the 2026-07-25 spurious-transition bug). Once the count reaches `TrackCueSheet.MaximumGapGrids` (4) the plan has demonstrably failed to feed the playhead, so that boundary asks for an Off-Plan Cue whether or not a mark was re-crossed, and the deal is certain at that point. Below the ceiling nothing is asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
-
-The Switcher counts boundary crossings rather than beats precisely because a loop re-crosses the same beat numbers; only crossings measure elapsed music. Without a Grid lane the count simply never advances, and only the plan's own marks perform.
+**The Switcher's run-time rule** is Stillness — whole Grids since the last fired cue, a property of the wall, not of any sheet. It is checked at every Grid start: three Grids since the last fire means the fourth Grid must fire, short or not. A Director-built sheet never violates stillness on its own; only sheet swaps and loops can push the wall toward it, and the Grid-start check catches both by asking the Director through the doorway. Stillness counts Grid crossings rather than beats because a loop re-crosses the same beat numbers; only crossings measure elapsed music.
 
 ### Fire-and-forget, and the override contract
 
 **Nothing changes a Transition in flight.** Once `Perform(...)` has started a move, that move plays out as it left — no re-targeting, no re-timing, no re-deciding from the clock. A pick made mid-flight applies to the next move.
+
+The override surface — staged Next Effect / Next Transition, Hold Selected, Held Effect, Show Now, and Hold — is debugging and verification tooling for testing Performers, never show behavior; it must never degrade the show model.
 
 Staged and held Effect/Transition choices mask the assignment when the Switcher asks `Director.DecideCue(...)` or `Director.DecideOffPlanCue(...)`; they never mutate the sheet. Both return a `CueDecision`; `Perform == false` means Hold or a ride-through, and the Switcher checks nothing off.
 
@@ -102,11 +98,10 @@ The consequence is the override's timing contract. A Transition staged before it
 
 ### Transition timing
 
-A Transition's `TransitionRepertoire` declares its beat timing with three authored values and one derived read:
+A Transition's `TransitionRepertoire` declares its beat timing with two authored values and one derived read:
 
 - **`RunwayBeats`** (authored): beats before the chosen Cue Mark when the Transition must start.
 - **`TailBeats`** (authored): visual resolution after the hit. `DurationBeats` is the sum; `MaxDurationBeats` caps it at 12, leaving room inside the nominal 16-beat cadence.
-- **`Tags`** (authored): Fill/Drop event suitability. Timing shape makes a Transition schedulable; tags make it artistically suitable for an event.
 - **`ImpactPoint`** (derived, `RunwayBeats / DurationBeats`): where the authored Runway and Tail have already placed the visual hit inside the move, normalized to progress. It is a read of the declaration's shape, not a value anything sets or schedules by — the runtime schedules from Runway alone.
 
 The Switcher uses Runway to decide when a Cue Mark is due and starts the Transition so its Impact lands on that mark. A late entry does not compress the Runway: a cue that cannot fly its Runway is missed instead, so the anchored start time is never behind the playhead. `Switcher.Cast(...)` only hands over a sheet and starts no Transition itself. Tail completion and Switcher progress are execution facts only, not musical scheduling inputs. Saved `Assets/transitions/Resources/TransitionSettings/*.asset` values participate in the live Transition Repertoire through `TransitionSettingsProvider`, so code defaults alone are not the full runtime truth.
@@ -192,7 +187,7 @@ Standalone selection uses rotating integer decks.
 
 This gives variety without immediate repeats while still eventually cycling through the catalog.
 
-Synced selection is separate: `TrackCueSheet.Build(...)` deals seeded shuffle bags over the complete Effect and Transition catalogs and bakes the results into the plan. Drop/fill Anchors scan those bags for capable performers and choose either ride-through or a performed Transition. `TrackCueSheet.DealOffPlanCueAt(...)` provides a deterministic fresh deal for an Off-Plan Cue, excluding whatever the wall already holds.
+Synced selection is separate: `TrackCueSheet.Build(...)` deals seeded shuffle bags over the complete Effect and Transition catalogs and bakes the results into the plan. A drop/fill Anchor scans the Effect bag for a capable ride-through carrier — the Effect that must already be on the wall for the moment — and the moment itself is cleared of Transitions. `TrackCueSheet.DealOffPlanCueAt(...)` provides a deterministic fresh deal for an Off-Plan Cue, excluding whatever the wall already holds.
 
 Each bag is dealt top-card and reshuffled once it empties. The reshuffle keeps the card just dealt off the top of the new permutation, because the seam between two passes is the one place a fair bag would otherwise deal the same card twice running — and an Effect dealt twice running bakes a Transition from a card to itself, which moves nothing. Only a ride-through carrier digs past the top card, because it has to be capable of playing the moment itself; an encore from the discard pile is allowed only when an Anchor finds no capable card left.
 
@@ -248,9 +243,9 @@ Control and input paths are OSC (`OSCReader`, `RaveOscReceiver`), optional `Pixe
 | Geometry/model | `Assets/core/Runtime/Penrose.cs` | Layout data, tile metadata, Unity mesh generation, buffer-to-mesh colors. |
 | Wall data files | `Assets/core/Runtime/WallData.cs` | `LayoutData`/`WiringData` contracts for the `Assets/StreamingAssets/` text files; layout is fixed, wiring is selected per art piece on the Controller. |
 | Sequencing decision | `Assets/core/Switching/Director.cs` | Standalone cadence plus Synced planning and decisions: maintains six track-sheet slots, hands over the focus player's sheet, and answers due-mark or off-plan questions with override-aware `CueDecision` values, remembering nothing between asks. |
-| Track Cue Sheets | `Assets/core/Switching/TrackCueSheet.cs` | Pure full-track plan builder with baked Effect/Transition assignments, seeded bags, drop/fill Anchors, ride-through/performed-transition treatment, post-drop hold, and deterministic off-plan deals. |
+| Track Cue Sheets | `Assets/core/Switching/TrackCueSheet.cs` | Pure full-track plan builder with baked Effect/Transition assignments, seeded bags, drop/fill Anchor casting and clearance, and deterministic off-plan deals. |
 | Cue/casting | `Assets/core/Switching/Deck.cs`, `Assets/core/Effects/Repertoire.cs` | Rotating Standalone decks plus the capability and timing declarations consumed by track-sheet planning and Switcher execution. |
-| Mechanical execution | `Assets/core/Switching/Switcher.cs` | Holds the handed-over sheet and its permanent check-offs; reads its player's beat and Grid lanes, owns Runway/Impact/Tail timing and the four-Grid ceiling, asks the Director for cue decisions, and executes StartTransition/RenderAtTime with no cut path and no loaded-cue or lock lifecycle. |
+| Mechanical execution | `Assets/core/Switching/Switcher.cs` | Holds the handed-over sheet and its permanent check-offs; thinks once per Grid at Grid start from the on-air beat and Grid, owns Runway/Impact/Tail timing and the Grid-counted Stillness check, takes anomalies through the Director doorway, and executes StartTransition/RenderAtTime with no cut path and no loaded-cue or lock lifecycle. |
 | Effects | `Assets/core/Effects/EffectBase.cs`, `Assets/effects/*.cs` | Generate 900-tile frames; concrete Effects own Repertoire, Waveform acquisition, and every artistic mapping from shared musical facts/tools. |
 | Screen effects | `Assets/core/Effects/ScreenEffect.cs` | Map rectangular screen buffers onto the Penrose tile layout. |
 | Mixers/wrappers | `Assets/core/Effects/MixerBase.cs`, mixer effects | Remain one Effect publicly; privately own/configure child Effects and combine or transform their buffers. |

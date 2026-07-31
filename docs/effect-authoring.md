@@ -26,7 +26,7 @@ choreography, persistent trails, or a stateful simulation.
 4. Adjust its Runway/Tail settings and implement the A-to-B blend in `Draw()`.
 5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
 
-`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire also participates in track-sheet planning: a `HandlesDrop` or `HandlesFill` Transition can own an Anchor as a performed transition whose Impact lands on the planned beat.
+`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`docs/switching-model.md`](switching-model.md)).
 
 ## Choose a base class
 
