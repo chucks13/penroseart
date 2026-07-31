@@ -7,7 +7,6 @@ public sealed class TransitionRepertoireTests
     {
         var repertoire = TransitionRepertoire.Default;
 
-        Assert.That(repertoire.Tags, Is.EqualTo(Repertoire.None));
         Assert.That(repertoire.Shape, Is.EqualTo(TransitionShape.Blend));
         Assert.That(repertoire.Intensity, Is.EqualTo(TransitionIntensity.Subtle));
         Assert.That(repertoire.DefaultDurationSeconds, Is.EqualTo(4f));
@@ -22,14 +21,12 @@ public sealed class TransitionRepertoireTests
     public void FromRunwayAndTailComputesDurationAndImpactPoint()
     {
         var repertoire = TransitionRepertoire.FromRunwayAndTail(
-            Repertoire.HandlesDrop,
             runwayBeats: 4,
             tailBeats: 4,
             TransitionShape.Noise,
             TransitionIntensity.High,
             defaultDurationSeconds: 4f);
 
-        Assert.That(repertoire.Tags, Is.EqualTo(Repertoire.HandlesDrop));
         Assert.That(repertoire.Shape, Is.EqualTo(TransitionShape.Noise));
         Assert.That(repertoire.Intensity, Is.EqualTo(TransitionIntensity.High));
         Assert.That(repertoire.DefaultDurationSeconds, Is.EqualTo(4f));
@@ -44,7 +41,6 @@ public sealed class TransitionRepertoireTests
     public void FromRunwayAndTailAcceptsHardCut()
     {
         var repertoire = TransitionRepertoire.FromRunwayAndTail(
-            Repertoire.None,
             runwayBeats: 0,
             tailBeats: 0,
             TransitionShape.Blend,
@@ -63,7 +59,6 @@ public sealed class TransitionRepertoireTests
     {
         Assert.That(
             () => TransitionRepertoire.FromRunwayAndTail(
-                Repertoire.None,
                 runwayBeats: 10,
                 tailBeats: 3,
                 TransitionShape.Blend,
@@ -78,7 +73,6 @@ public sealed class TransitionRepertoireTests
     {
         Assert.That(
             () => TransitionRepertoire.FromRunwayAndTail(
-                Repertoire.None,
                 runwayBeats: -1,
                 tailBeats: 0,
                 TransitionShape.Blend,
@@ -87,7 +81,6 @@ public sealed class TransitionRepertoireTests
             Throws.TypeOf<System.ArgumentOutOfRangeException>());
         Assert.That(
             () => TransitionRepertoire.FromRunwayAndTail(
-                Repertoire.None,
                 runwayBeats: 0,
                 tailBeats: -1,
                 TransitionShape.Blend,
@@ -107,27 +100,8 @@ public sealed class TransitionRepertoireTests
         }
     }
 
-    [Test]
-    public void ConcreteTransitionsExposeAtLeastOneEventCapableTransition()
-    {
-        var factory = new Factory<TransitionBase>();
-
-        var eventCapableCount = 0;
-        foreach (var transitionType in factory.Types)
-        {
-            var transition = (TransitionBase)System.Activator.CreateInstance(transitionType);
-            if ((transition.Repertoire.Tags & (Repertoire.HandlesFill | Repertoire.HandlesDrop)) != 0)
-            {
-                eventCapableCount++;
-            }
-        }
-
-        Assert.That(eventCapableCount, Is.GreaterThanOrEqualTo(1));
-    }
-
     private static void AssertValidRepertoire(TransitionRepertoire actual, string context)
     {
-        Assert.That(actual.Tags & ~(Repertoire.HandlesFill | Repertoire.HandlesDrop), Is.EqualTo(Repertoire.None), context);
         Assert.That(actual.RunwayBeats, Is.GreaterThanOrEqualTo(0), context);
         Assert.That(actual.TailBeats, Is.GreaterThanOrEqualTo(0), context);
         Assert.That(actual.DurationBeats, Is.EqualTo(actual.RunwayBeats + actual.TailBeats), context);

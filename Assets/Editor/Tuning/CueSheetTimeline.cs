@@ -35,9 +35,9 @@ public enum CueSheetBeatMark
 /// One Grid row of the tracker. Column position is beat-in-Grid, so Grid adherence is structural:
 /// downbeats align vertically and a boundary reads as a column. A row never straddles a phrase —
 /// the Grid restarts at every phrase — so the row carries one phrase and holds at most
-/// <see cref="TrackCueSheet.GridBeats"/> cells, fewer on a phrase's short final Grid. Plan marks sit
-/// at least a Grid apart within a phrase, so at most one Cue Mark falls in a row and the cue
-/// identity is row-level data.
+/// <see cref="TrackCueSheet.GridBeats"/> cells, fewer on a phrase's short final Grid. Cue Marks sit
+/// only on Grid Boundaries and every row begins on one, so at most one Cue Mark falls in a row and
+/// the cue identity is row-level data.
 /// </summary>
 public sealed class CueSheetGridRow
 {
@@ -72,15 +72,15 @@ public sealed class CueSheetGridRow
     public PhraseType? PhraseStart { get; }
 
     /// <summary>
-    /// Effect catalog index for the row's cue identity: the mark's Effect, or the riding Effect
-    /// on a ride-through Anchor row. Null when the row presents no cue.
+    /// Effect catalog index for the row's cue identity: the mark's Effect, or on an Anchor-landing
+    /// row the capable Effect already on the wall for the moment. Null when the row presents no cue.
     /// </summary>
     public int? CueEffectIndex { get; internal set; }
 
-    /// <summary>Transition catalog index of the row's Cue Mark; null on ride-through and empty rows.</summary>
+    /// <summary>Transition catalog index of the row's Cue Mark; null on Anchor-landing and empty rows.</summary>
     public int? CueTransitionIndex { get; internal set; }
 
-    /// <summary>Whether the row's cue identity is a ride-through Anchor rather than a Cue Mark.</summary>
+    /// <summary>Whether the row's cue identity is an Anchor's riding Effect rather than a Cue Mark.</summary>
     public bool CueIsRideThrough { get; internal set; }
 
     /// <summary>
@@ -202,17 +202,13 @@ public static class CueSheetTimeline
         {
             var anchor = anchors[i];
             Paint(rows, anchor.LandingBeat, CueSheetBeatMark.AnchorLanding);
-            if (anchor.Treatment != AnchorTreatment.RideThrough)
-            {
-                continue;
-            }
 
-            // A ride-through suppresses its boundary Cue Mark, so the riding Effect is the row's
-            // cue identity; a real mark elsewhere in the row keeps priority.
+            // An owned landing carries no Cue Mark, so the Effect on the wall for the moment is the
+            // row's cue identity; a real mark keeps priority if inconsistent inputs put one there.
             var row = RowContaining(rows, anchor.LandingBeat);
             if (row >= 0 && rows[row].CueEffectIndex is null)
             {
-                rows[row].CueEffectIndex = anchor.PerformerIndex;
+                rows[row].CueEffectIndex = anchor.EffectIndex;
                 rows[row].CueIsRideThrough = true;
             }
         }

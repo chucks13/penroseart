@@ -21,19 +21,19 @@ public readonly struct EffectDescriptor
 
 /// <summary>
 /// One transition catalog entry as it enters the sheet builder: the <see cref="TransitionRepertoire"/>
-/// timing/use contract the catalog advertises at this position. Position is identity, as for
+/// timing contract the catalog advertises at this position. Position is identity, as for
 /// <see cref="EffectDescriptor"/>.
 /// </summary>
 public readonly struct TransitionDescriptor
 {
     /// <summary>Captures one transition catalog entry.</summary>
-    /// <param name="repertoire">Timing and musical-use contract this catalog position advertises.</param>
+    /// <param name="repertoire">Timing contract this catalog position advertises.</param>
     public TransitionDescriptor(TransitionRepertoire repertoire)
     {
         Repertoire = repertoire;
     }
 
-    /// <summary>Timing and musical-use contract this catalog position advertises.</summary>
+    /// <summary>Timing contract this catalog position advertises.</summary>
     public TransitionRepertoire Repertoire { get; }
 }
 
@@ -45,22 +45,6 @@ public enum AnchorKind
 
     /// <summary>A fill window with no drop behind it — a build-up that still deserves a capable performer.</summary>
     Fill,
-}
-
-/// <summary>How an Anchor is performed on the wall.</summary>
-public enum AnchorTreatment
-{
-    /// <summary>
-    /// The incumbent capable Effect enters at the prior Cue Mark and plays through the boundary with no
-    /// transition; the boundary Cue Mark is suppressed so nothing crossfades over the moment.
-    /// </summary>
-    RideThrough,
-
-    /// <summary>
-    /// A capable Transition owns the boundary Cue Mark, its Impact Point landing on the landing beat, and
-    /// deals into a normally selected Effect.
-    /// </summary>
-    PerformedTransition,
 }
 
 /// <summary>
@@ -107,27 +91,22 @@ public sealed class CuePlanMark
 }
 
 /// <summary>
-/// How one drop or fill Anchor was owned by the plan. A capable performer always owns each Anchor: a
-/// <see cref="AnchorTreatment.RideThrough"/> resolution names the Effect that rides the boundary and there
-/// is no Cue Mark at <see cref="LandingBeat"/>; a <see cref="AnchorTreatment.PerformedTransition"/>
-/// resolution names the Transition carried by the Cue Mark at <see cref="LandingBeat"/>.
+/// How one drop or fill Anchor is owned by the plan — there is one way an Anchor is performed: a
+/// repertoire-capable Effect is already on the wall when the moment hits and rides through it, no Cue
+/// Mark sits on <see cref="LandingBeat"/>, and no transition's Runway or Tail crosses it.
+/// <see cref="EffectIndex"/> names the capable Effect, cast at the last Cue Mark before the landing.
 /// </summary>
 public readonly struct AnchorResolution
 {
     /// <summary>Captures one Anchor resolution.</summary>
     /// <param name="landingBeat">Absolute one-based Grid Boundary beat the Anchor lands on.</param>
     /// <param name="kind">Whether the Anchor is a drop landing or a fill window.</param>
-    /// <param name="treatment">Whether the Anchor is ridden through or performed by a transition.</param>
-    /// <param name="performerIndex">
-    /// Effect catalog index for <see cref="AnchorTreatment.RideThrough"/>; Transition catalog index for
-    /// <see cref="AnchorTreatment.PerformedTransition"/>.
-    /// </param>
-    public AnchorResolution(int landingBeat, AnchorKind kind, AnchorTreatment treatment, int performerIndex)
+    /// <param name="effectIndex">Effect catalog index of the capable Effect on the wall at the moment.</param>
+    public AnchorResolution(int landingBeat, AnchorKind kind, int effectIndex)
     {
         LandingBeat = landingBeat;
         Kind = kind;
-        Treatment = treatment;
-        PerformerIndex = performerIndex;
+        EffectIndex = effectIndex;
     }
 
     /// <summary>Absolute one-based Grid Boundary beat the Anchor lands on.</summary>
@@ -136,24 +115,19 @@ public readonly struct AnchorResolution
     /// <summary>Whether the Anchor is a drop landing or a fill window.</summary>
     public AnchorKind Kind { get; }
 
-    /// <summary>Whether the Anchor is ridden through or performed by a transition.</summary>
-    public AnchorTreatment Treatment { get; }
-
     /// <summary>
-    /// The capable performer that owns the moment: an Effect catalog index when the treatment is
-    /// <see cref="AnchorTreatment.RideThrough"/>, a Transition catalog index when it is
-    /// <see cref="AnchorTreatment.PerformedTransition"/>.
+    /// Effect catalog index of the capable Effect that owns the moment: dealt to the last Cue Mark before
+    /// <see cref="LandingBeat"/>, so it is already on the wall — showing off on its own — when the moment hits.
     /// </summary>
-    public int PerformerIndex { get; }
+    public int EffectIndex { get; }
 }
 
 /// <summary>
 /// A track-scoped, full-length show plan: every Cue Mark placed against a player's real Phrase map with
-/// its Effect and Transition assignment baked in, plus how each drop or fill Anchor was owned. Built once
+/// its Effect and Transition assignment baked in, plus how each drop or fill Anchor is owned. Built once
 /// per track load by <see cref="Build"/> as a pure, deterministic function of (structure, seed, catalogs);
 /// it holds no notion of "now" and no engine references. The Director builds it and hands it over; the
-/// Switcher performs it against the sheet player's own beat, and the same load always rebuilds the identical
-/// sheet.
+/// Switcher performs it, and the same load always rebuilds the identical sheet.
 /// </summary>
 /// <remarks>
 /// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0010): it superseded and replaced
@@ -161,18 +135,18 @@ public readonly struct AnchorResolution
 ///
 /// Mark placement is one walk over the whole track's Grid Boundaries, counted in beats. Each
 /// candidate boundary is taken with a probability that rises with the gap behind it, so changes spread
-/// instead of clustering; a mark is never forced onto a boundary to make the walk land somewhere. Phrase
-/// ends carry no special status — a Phrase boundary begins a Grid, so it is simply one more candidate.
-/// Every consecutive gap in <see cref="Marks"/> stays within <see cref="MinimumGapBeats"/> and
-/// <see cref="MaximumGapBeats"/> by construction, including across Anchor suppression.
+/// irregularly instead of clustering; a mark is never forced onto a boundary except to keep the
+/// <see cref="MaximumGapBeats"/> ceiling or to put a capable Effect on the wall ahead of an Anchor. There
+/// is no fixed spacing floor: the only lower bound on a gap is that the catalog's transitions must fit the
+/// space they are given, so no two blends can ever overlap. Phrase ends carry no special status — a Phrase
+/// boundary begins a Grid, so it is simply one more candidate. Around each owned Anchor the landing
+/// boundary and its immediate flanks are withheld from the walk, which is what clears the moment of
+/// Runways and Tails by construction.
 /// </remarks>
 public readonly struct TrackCueSheet
 {
     /// <summary>Beats in one Grid — the 16-beat cycle every Cue Mark lands on.</summary>
     public const int GridBeats = 16;
-
-    /// <summary>Smallest legal gap between consecutive Cue Marks, in beats (one Grid).</summary>
-    public const int MinimumGapBeats = GridBeats;
 
     /// <summary>Largest legal gap between consecutive Cue Marks, in beats (four Grids).</summary>
     public const int MaximumGapBeats = 64;
@@ -184,33 +158,11 @@ public readonly struct TrackCueSheet
     public const int MaximumGapGrids = MaximumGapBeats / GridBeats;
 
     /// <summary>
-    /// Minimum beats a drop-landing Effect holds before the next Cue Mark — a named knob, one Grid for now.
-    /// No Cue Mark is placed within this window after a drop landing.
-    /// </summary>
-    public const int PostDropHoldBeats = GridBeats;
-
-    /// <summary>
-    /// How often an Anchor is ridden through rather than performed by a Transition, as a percentage. The
-    /// incumbent playing the moment itself is the preferred reading of a drop or fill, but not the only one;
-    /// a fair coin here made the wall cut into every second drop.
-    /// </summary>
-    public const int RideThroughPreferencePercent = 75;
-
-    /// <summary>
-    /// Largest gap the walk allows on each side of a pinned Anchor landing: half of
-    /// <see cref="MaximumGapBeats"/>, so that when a Ride-through suppresses the landing mark, its two
-    /// neighbours — at most one flank apart on each side — are never left more than the full ceiling apart.
-    /// Without this the ~43-beat mean spacing made suppression illegal almost everywhere and Ride-through
-    /// silently degraded to a Performed Transition.
-    /// </summary>
-    public const int AnchorFlankBeats = MaximumGapBeats / 2;
-
-    /// <summary>
     /// The chance, as a percentage, that a candidate Grid Boundary becomes a Cue Mark, indexed by how many
-    /// whole Grids of music sit behind it (one Grid at index zero, four at index three). Rising rather than
-    /// uniform is the whole anti-clustering rule: a boundary one Grid after the last change is nearly always
-    /// let past, while the fourth is certain, which bounds every gap to
-    /// <see cref="MinimumGapBeats"/>..<see cref="MaximumGapBeats"/> and puts the mean near 43 beats.
+    /// whole Grids of music sit behind it (under two Grids at index zero, four at index three). Rising rather
+    /// than uniform is the anti-clustering rule: a boundary shortly after the last change is nearly always
+    /// let past, while the fourth Grid is certain, which caps every gap at <see cref="MaximumGapBeats"/>
+    /// and puts the mean near 43 beats.
     /// </summary>
     private static readonly int[] TakeChancePercent = { 8, 35, 65, 100 };
 
@@ -266,7 +218,7 @@ public readonly struct TrackCueSheet
     /// <summary>Every placed Cue Mark, ascending by beat; the complete fire schedule the Switcher performs.</summary>
     public IReadOnlyList<CuePlanMark> Marks { get; }
 
-    /// <summary>Every owned drop or fill Anchor, ascending by landing beat; how each protected moment is performed.</summary>
+    /// <summary>Every owned drop or fill Anchor, ascending by landing beat; how each protected moment is owned.</summary>
     public IReadOnlyList<AnchorResolution> Anchors { get; }
 
     /// <summary>
@@ -329,7 +281,7 @@ public readonly struct TrackCueSheet
     /// <paramref name="structureGeneration"/>, <paramref name="playerNumber"/>) always produce a
     /// byte-identical sheet, and a different generation deals a fresh show. The seed pair is the caller's
     /// (structure generation, player number); the builder folds it into one deterministic roll stream that
-    /// drives the Grid walk, both bags, and every Anchor flip.
+    /// drives the Grid walk and both bags.
     /// </summary>
     /// <param name="structure">
     /// The player's assembled song structure. Marks are laid against <see cref="StructureValues.Phrases"/>;
@@ -387,18 +339,20 @@ public readonly struct TrackCueSheet
         var effectBag = new Bag(effects.Count, rng);
         var transitionBag = new Bag(transitions.Count, rng);
 
-        // Anchors are read first because their landing beats are pinned into the walk: a drop or fill is the
-        // reason a capable performer exists, so those boundaries are marks regardless of the cadence roll.
-        var anchors = CollectAnchors(phrases);
-        var pinned = new HashSet<int>();
-        foreach (var anchor in anchors)
-        {
-            pinned.Add(anchor.LandingBeat);
-        }
+        // The fit guarantee card: the transition whose whole blend is the shortest. Every gap the walk
+        // accepts and every clearance zone it withholds is sized so this card always fits, which is what
+        // makes "no two blends overlap" and "the moment is cleared" hold by construction.
+        SmallestBlend(transitions, out var smallRunway, out var smallTail);
 
-        var baseMarks = WalkTrack(phrases, pinned, rng);
-        var plan = ResolveAndDeal(baseMarks, anchors, effects, transitions, effectBag, transitionBag, rng, structureGeneration, playerNumber, salt);
-        return plan;
+        var startBeat = phrases[0].StartBeat;
+        var boundaries = GridBoundaries(phrases);
+        var anchors = CollectAnchors(phrases);
+        var owned = OwnableAnchors(anchors, boundaries, startBeat, effects, smallRunway, smallTail);
+        var candidates = WithoutClearanceZones(boundaries, owned, smallRunway, smallTail);
+        var markBeats = WalkTrack(candidates, owned, startBeat, smallRunway, smallTail, rng);
+        return Deal(
+            markBeats, owned, effects, transitions, effectBag, transitionBag,
+            startBeat, smallRunway, structureGeneration, playerNumber, salt);
     }
 
     /// <summary>
@@ -424,102 +378,208 @@ public readonly struct TrackCueSheet
     }
 
     /// <summary>
-    /// Walks the track's Grid Boundaries once, in beats, taking each candidate with a chance that rises with
-    /// the gap behind it. Nothing resets at a Phrase seam and no boundary is ever forced, which is
-    /// what stops the clustering the per-Phrase walk produced: that walk had to land exactly on each Phrase
-    /// end, so it truncated its own gap draw and jammed changes together at every seam.
+    /// Finds the transition catalog's shortest whole blend: the card with the smallest Runway + Tail,
+    /// earliest catalog position on a tie. Its Runway and Tail are the fit floor the walk guarantees
+    /// everywhere, so the deal can never come up empty.
     /// </summary>
-    /// <param name="phrases">The track's Phrase map, supplying the boundary lattice.</param>
-    /// <param name="pinned">Anchor landing beats, which become marks regardless of the cadence roll.</param>
+    private static void SmallestBlend(IReadOnlyList<TransitionDescriptor> transitions, out int runway, out int tail)
+    {
+        var best = transitions[0].Repertoire;
+        for (var i = 1; i < transitions.Count; i++)
+        {
+            if (transitions[i].Repertoire.DurationBeats < best.DurationBeats)
+            {
+                best = transitions[i].Repertoire;
+            }
+        }
+
+        runway = best.RunwayBeats;
+        tail = best.TailBeats;
+    }
+
+    /// <summary>
+    /// Decides which Anchors the plan can own under the single Anchor treatment: the catalog holds a capable
+    /// Effect, and a carrier Cue Mark can exist before the landing — either because an earlier owned Anchor
+    /// already forces one, or because the lattice offers a boundary that can legally be the first mark and
+    /// still clears the moment. An Anchor that cannot be owned is dropped here: no resolution is recorded and
+    /// its landing boundary goes back to being an ordinary candidate.
+    /// </summary>
+    private static List<Anchor> OwnableAnchors(
+        List<Anchor> anchors,
+        List<int> boundaries,
+        int startBeat,
+        IReadOnlyList<EffectDescriptor> effects,
+        int smallRunway,
+        int smallTail)
+    {
+        var owned = new List<Anchor>();
+        foreach (var anchor in anchors)
+        {
+            if (!AnyEffect(effects, anchor.Capability))
+            {
+                continue;
+            }
+
+            // An earlier owned Anchor already guarantees a mark before its own (earlier) landing, and any
+            // mark before the earlier landing is also before this one.
+            var carrierPossible = owned.Count > 0;
+            if (!carrierPossible)
+            {
+                foreach (var boundary in boundaries)
+                {
+                    if (boundary >= anchor.LandingBeat - smallTail)
+                    {
+                        break;
+                    }
+
+                    if (boundary > startBeat && boundary - startBeat >= smallRunway)
+                    {
+                        carrierPossible = true;
+                        break;
+                    }
+                }
+            }
+
+            if (carrierPossible)
+            {
+                owned.Add(anchor);
+            }
+        }
+
+        return owned;
+    }
+
+    /// <summary>
+    /// Withholds each owned Anchor's clearance zone from the candidate lattice: the landing boundary itself
+    /// (no Cue Mark sits on it) and any boundary so close that even the shortest card's Tail or Runway would
+    /// cross the moment. What remains is every boundary a mark may legally land on.
+    /// </summary>
+    private static List<int> WithoutClearanceZones(
+        List<int> boundaries,
+        List<Anchor> owned,
+        int smallRunway,
+        int smallTail)
+    {
+        if (owned.Count == 0)
+        {
+            return boundaries;
+        }
+
+        var candidates = new List<int>(boundaries.Count);
+        foreach (var boundary in boundaries)
+        {
+            var excluded = false;
+            foreach (var anchor in owned)
+            {
+                if (boundary >= anchor.LandingBeat - smallTail && boundary <= anchor.LandingBeat + smallRunway)
+                {
+                    excluded = true;
+                    break;
+                }
+            }
+
+            if (!excluded)
+            {
+                candidates.Add(boundary);
+            }
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
+    /// Walks the candidate boundaries once, in beats, taking each with a chance that rises with the gap
+    /// behind it. Nothing resets at a Phrase seam, and a boundary is forced only twice over: when skipping it
+    /// would leave the next candidate past the <see cref="MaximumGapBeats"/> ceiling, and when it is the last
+    /// chance to put a mark — the Effect that will be on the wall — ahead of the earliest owned Anchor. A
+    /// boundary whose gap is too small for the shortest card to fit is never taken, which is the only lower
+    /// bound on spacing: fit, not a fixed floor. Fit outranks the ceiling: on a degenerate lattice whose
+    /// usable boundaries sit further apart than the ceiling allows, the gap runs long rather than taking a
+    /// boundary no card can serve — the Switcher's Stillness check owns that case at execution time.
+    /// </summary>
+    /// <param name="candidates">The boundary lattice with every clearance zone already withheld.</param>
+    /// <param name="owned">The owned Anchors, ascending by landing beat.</param>
+    /// <param name="startBeat">The track's opening downbeat; the first blend may not start before it.</param>
+    /// <param name="smallRunway">Runway of the catalog's shortest blend.</param>
+    /// <param name="smallTail">Tail of the catalog's shortest blend.</param>
     /// <param name="rng">The sheet's single roll stream.</param>
-    /// <returns>Every placed mark beat, ascending, with all gaps inside the cadence bounds.</returns>
-    private static List<int> WalkTrack(IReadOnlyList<StructurePhraseValues> phrases, HashSet<int> pinned, Rng rng)
+    /// <returns>Every placed mark beat, ascending.</returns>
+    private static List<int> WalkTrack(
+        List<int> candidates,
+        List<Anchor> owned,
+        int startBeat,
+        int smallRunway,
+        int smallTail,
+        Rng rng)
     {
         var marks = new List<int>();
-        var boundaries = GridBoundaries(phrases);
+        var earliestLanding = owned.Count > 0 ? owned[0].LandingBeat : int.MaxValue;
 
         // The run-in from track start is unconstrained — the wall keeps playing whatever it holds until the
         // first mark — so the first gap is measured from the opening downbeat and never forces a mark onto it.
-        var lastMark = phrases[0].StartBeat;
-        var lastWasPinned = false;
+        var lastMark = startBeat;
 
-        for (var i = 0; i < boundaries.Count; i++)
+        for (var i = 0; i < candidates.Count; i++)
         {
-            var boundary = boundaries[i];
+            var boundary = candidates[i];
             if (boundary <= lastMark)
             {
                 continue;
             }
 
+            // Fit legality: the shortest card must fit here. The first mark only needs its Runway to clear
+            // the opening downbeat; a later mark also needs to clear the previous mark's Tail.
             var gap = boundary - lastMark;
-            if (pinned.Contains(boundary))
+            var fits = marks.Count == 0 ? gap >= smallRunway : gap >= smallRunway + smallTail + 1;
+            if (!fits)
             {
-                // A pin outranks the cadence, but not the floor: rather than place two marks inside one Grid,
-                // the ordinary mark that crowds it gives way. Two pins that close cannot both be honoured, so
-                // the later one is dropped and its Anchor degrades through the usual capability path.
-                if (gap < MinimumGapBeats)
-                {
-                    if (lastWasPinned || marks.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    marks.RemoveAt(marks.Count - 1);
-                    lastMark = marks.Count > 0 ? marks[marks.Count - 1] : phrases[0].StartBeat;
-                }
-
-                marks.Add(boundary);
-                lastMark = boundary;
-                lastWasPinned = true;
                 continue;
             }
 
-            // The ceiling is enforced against the *next* candidate, not this one. A Phrase whose length is not
-            // a Grid multiple leaves a short final Grid, so boundaries are not evenly spaced and "take it once
-            // the gap reaches four Grids" can overshoot: the last boundary under the ceiling has to be taken
-            // while it is still under it. Beside a pinned Anchor the ceiling halves to
-            // <see cref="AnchorFlankBeats"/> — into the pin ahead and out of the pin behind — which is what
-            // keeps a Ride-through's mark suppression legal (see the constant's remarks).
-            var next = i + 1 < boundaries.Count ? boundaries[i + 1] : int.MaxValue;
-            var cap = lastWasPinned || (next != int.MaxValue && pinned.Contains(next))
-                ? AnchorFlankBeats
-                : MaximumGapBeats;
-            var lastChance = next != int.MaxValue && next - lastMark > cap;
-            if (!lastChance && !TakeBoundary(gap, rng))
+            var next = i + 1 < candidates.Count ? candidates[i + 1] : int.MaxValue;
+
+            // The last chance to cast the Effect that will be on the wall at the earliest Anchor: with no
+            // mark yet and no further candidate before the landing, this boundary carries the moment.
+            var mustCarry = marks.Count == 0 && boundary < earliestLanding && next > earliestLanding;
+
+            // The ceiling is enforced against the *next* candidate, not this one: candidates are not evenly
+            // spaced (short Grids, withheld clearance zones), so the last boundary under the ceiling has to
+            // be taken while it is still under it.
+            var lastChance = next != int.MaxValue && next - lastMark > MaximumGapBeats;
+
+            if (!mustCarry && !lastChance && !TakeBoundary(gap, rng))
             {
                 continue;
             }
 
             marks.Add(boundary);
             lastMark = boundary;
-            lastWasPinned = false;
         }
 
         return marks;
     }
 
     /// <summary>
-    /// Whether a candidate Grid Boundary becomes a Cue Mark, given the beats of music behind it. Below
-    /// <see cref="MinimumGapBeats"/> the answer is always no and below <see cref="MaximumGapBeats"/> always
-    /// yes, so the cadence bounds hold by construction; between them the chance rises with the gap
-    /// (<see cref="TakeChancePercent"/>). Consumes a roll only in that middle band, where the answer is
-    /// genuinely open.
+    /// Whether a candidate Grid Boundary becomes a Cue Mark, given the beats of music behind it. At
+    /// <see cref="MaximumGapBeats"/> the answer is always yes; below it the chance rises with the gap
+    /// (<see cref="TakeChancePercent"/>), with everything under two Grids sharing the lowest band — small
+    /// gaps are rare by judgment, not forbidden by floor. Consumes a roll only when the answer is open.
     /// </summary>
     /// <param name="gapBeats">Beats between the last placed mark and this boundary.</param>
     /// <param name="rng">The roll stream to draw from.</param>
     private static bool TakeBoundary(int gapBeats, Rng rng)
     {
-        if (gapBeats < MinimumGapBeats)
-        {
-            return false;
-        }
-
         if (gapBeats >= MaximumGapBeats)
         {
             return true;
         }
 
         var index = gapBeats / GridBeats - 1;
+        if (index < 0)
+        {
+            index = 0;
+        }
+
         if (index >= TakeChancePercent.Length)
         {
             index = TakeChancePercent.Length - 1;
@@ -566,200 +626,122 @@ public readonly struct TrackCueSheet
     }
 
     /// <summary>
-    /// Resolves each Anchor by seeded flip, applies suppression, then deals Effects and Transitions to the
-    /// surviving marks in beat order. The flip is consumed once per Anchor for stable determinism; the
-    /// chosen treatment then degenerates to whichever side the catalogs and geometry actually support.
-    /// Effects are dealt from the bag's own order at every mark: capability is asked of a ride-through
-    /// carrier, which has to play the moment itself, and of nothing else. Nothing else filters the deal,
-    /// so the plan shows the whole catalog before it repeats anything.
+    /// Deals Effects and Transitions to the placed marks in beat order and records each owned Anchor's
+    /// resolution. Every Transition is dealt to fit the space it is given — its Runway inside the free
+    /// interval behind the mark, its Tail short of the next Anchor moment and of the next mark's smallest
+    /// possible Runway — so no two blends overlap and no blend crosses a landing, by construction. The mark
+    /// standing last before an owned landing is that Anchor's carrier: its Effect is dealt capable, because
+    /// it is the Effect on the wall when the moment hits. Every other mark deals the bag's own order,
+    /// unfiltered, so the plan shows the whole catalog before it repeats anything.
     /// </summary>
-    private static TrackCueSheet ResolveAndDeal(
-        List<int> baseMarks,
-        List<Anchor> anchors,
+    private static TrackCueSheet Deal(
+        List<int> markBeats,
+        List<Anchor> owned,
         IReadOnlyList<EffectDescriptor> effects,
         IReadOnlyList<TransitionDescriptor> transitions,
         Bag effectBag,
         Bag transitionBag,
-        Rng rng,
+        int startBeat,
+        int smallRunway,
         int structureGeneration,
         int playerNumber,
         int salt)
     {
-        var suppressed = new HashSet<int>();
-        var rideCarriers = new Dictionary<int, List<Anchor>>();
-        var performedMarks = new Dictionary<int, Anchor>();
-        var resolutions = new SortedDictionary<int, AnchorResolution>();
-
-        var hasCapableEffectForDrop = AnyEffect(effects, Repertoire.HandlesDrop);
-        var hasCapableEffectForFill = AnyEffect(effects, Repertoire.HandlesFill);
-        var hasCapableTransitionForDrop = AnyTransition(transitions, Repertoire.HandlesDrop);
-        var hasCapableTransitionForFill = AnyTransition(transitions, Repertoire.HandlesFill);
-
-        foreach (var anchor in anchors)
+        // Carrier map: each owned Anchor keys to the last mark before its landing. The walk guarantees one
+        // exists. Adjacent Anchors can share a carrier; the one incumbent then rides every one of them.
+        var carriers = new Dictionary<int, List<Anchor>>();
+        foreach (var anchor in owned)
         {
-            // One roll per Anchor, always consumed, so the roll stream never depends on catalog contents.
-            // Weighted, not fair: the incumbent playing the moment through is the preferred reading.
-            var prefersRideThrough = rng.Chance(RideThroughPreferencePercent);
-
-            var capable = anchor.Capability;
-            var hasCapableEffect = capable == Repertoire.HandlesDrop ? hasCapableEffectForDrop : hasCapableEffectForFill;
-            var hasCapableTransition = capable == Repertoire.HandlesDrop ? hasCapableTransitionForDrop : hasCapableTransitionForFill;
-
-            // Ride-through needs a prior surviving mark and a merged gap that stays within one to four Grids
-            // once the boundary mark is removed; otherwise it is not a legal treatment.
-            var carrier = LastSurvivingBefore(baseMarks, suppressed, anchor.LandingBeat);
-            var canRideThrough = hasCapableEffect && carrier >= 0
-                && MergedGapWithin(baseMarks, suppressed, carrier, anchor.LandingBeat);
-            var canPerform = hasCapableTransition && baseMarks.Contains(anchor.LandingBeat);
-
-            AnchorTreatment treatment;
-            if (canRideThrough && canPerform)
+            var carrier = -1;
+            foreach (var beat in markBeats)
             {
-                treatment = prefersRideThrough ? AnchorTreatment.RideThrough : AnchorTreatment.PerformedTransition;
-            }
-            else if (canRideThrough)
-            {
-                treatment = AnchorTreatment.RideThrough;
-            }
-            else if (canPerform)
-            {
-                treatment = AnchorTreatment.PerformedTransition;
-            }
-            else
-            {
-                // No capable performer on either side: leave the boundary as a normal mark, unrecorded.
-                continue;
-            }
-
-            if (treatment == AnchorTreatment.RideThrough)
-            {
-                // Adjacent ride-through Anchors can share one incumbent carrier mark; the incumbent rides
-                // through every one of them, so a carrier keeps a list rather than a single Anchor.
-                suppressed.Add(anchor.LandingBeat);
-                if (!rideCarriers.TryGetValue(carrier, out var carried))
+                if (beat < anchor.LandingBeat && beat > carrier)
                 {
-                    carried = new List<Anchor>();
-                    rideCarriers[carrier] = carried;
+                    carrier = beat;
                 }
-
-                carried.Add(anchor);
-            }
-            else
-            {
-                performedMarks[anchor.LandingBeat] = anchor;
             }
 
-            if (anchor.Kind == AnchorKind.Drop)
+            if (!carriers.TryGetValue(carrier, out var carried))
             {
-                SuppressPostDropHold(baseMarks, suppressed, anchor.LandingBeat, performedMarks, rideCarriers);
+                carried = new List<Anchor>();
+                carriers[carrier] = carried;
             }
+
+            carried.Add(anchor);
         }
 
-        var marks = new List<CuePlanMark>();
-        foreach (var beat in baseMarks)
+        var marks = new List<CuePlanMark>(markBeats.Count);
+        var resolutions = new List<AnchorResolution>(owned.Count);
+        var previousBlendEnd = startBeat - 1;
+        for (var i = 0; i < markBeats.Count; i++)
         {
-            if (suppressed.Contains(beat))
+            var beat = markBeats[i];
+            var next = i + 1 < markBeats.Count ? markBeats[i + 1] : int.MaxValue;
+
+            // The Runway may reach back to the end of the previous blend and never across a landing; the
+            // Tail may reach forward short of the next landing and must leave the next mark room for the
+            // catalog's smallest Runway. The walk's fit rules keep both budgets at least the shortest
+            // card's size, so this deal always finds a card.
+            var runwayBudget = beat - previousBlendEnd - 1;
+            var tailBudget = next == int.MaxValue ? int.MaxValue : next - beat - 1 - smallRunway;
+            foreach (var anchor in owned)
             {
-                continue;
+                if (anchor.LandingBeat < beat)
+                {
+                    runwayBudget = Math.Min(runwayBudget, beat - anchor.LandingBeat - 1);
+                }
+                else if (anchor.LandingBeat > beat && anchor.LandingBeat < next)
+                {
+                    tailBudget = Math.Min(tailBudget, anchor.LandingBeat - beat - 1);
+                }
             }
 
-            if (performedMarks.TryGetValue(beat, out var performed))
-            {
-                // Only the Transition has to be capable: it carries the hit, so the Effect it moves toward is
-                // dealt like any other — the bag's own order, unfiltered.
-                var transitionIndex = transitionBag.DealCapable(i => IsTransitionCapable(transitions, i, performed.Capability), out _);
-                var effectIndex = effectBag.DealTop();
-                marks.Add(new CuePlanMark(beat, effectIndex, transitionIndex));
-                resolutions[performed.LandingBeat] = new AnchorResolution(
-                    performed.LandingBeat, performed.Kind, AnchorTreatment.PerformedTransition, transitionIndex);
-                continue;
-            }
+            var transitionIndex = transitionBag.DealCapable(
+                card => transitions[card].Repertoire.RunwayBeats <= runwayBudget
+                    && transitions[card].Repertoire.TailBeats <= tailBudget,
+                out _);
 
-            if (rideCarriers.TryGetValue(beat, out var carriedAnchors))
+            int effectIndex;
+            if (carriers.TryGetValue(beat, out var carriedAnchors))
             {
-                // One capable incumbent enters here and rides through every Anchor keyed to this carrier. It
-                // must satisfy all of their capabilities; if none does, fall back to the first Anchor's need.
+                // One capable incumbent enters here and is on the wall for every Anchor keyed to this
+                // carrier. It must satisfy all of their capabilities; if none does, fall back to the first
+                // Anchor's need.
                 var combined = Repertoire.None;
                 foreach (var carried in carriedAnchors)
                 {
                     combined |= carried.Capability;
                 }
 
-                var effectIndex = effectBag.DealCapable(i => (effects[i].Repertoire & combined) == combined, out var any);
+                effectIndex = effectBag.DealCapable(card => (effects[card].Repertoire & combined) == combined, out var any);
                 if (!any)
                 {
-                    effectIndex = effectBag.DealCapable(i => IsEffectCapable(effects, i, carriedAnchors[0].Capability), out _);
+                    effectIndex = effectBag.DealCapable(
+                        card => (effects[card].Repertoire & carriedAnchors[0].Capability) != 0, out _);
                 }
 
-                var transitionIndex = transitionBag.DealTop();
-                marks.Add(new CuePlanMark(beat, effectIndex, transitionIndex));
+                // An Anchor the dealt Effect cannot actually serve — a shared carrier needing both flags
+                // from a catalog that holds no dual-capable card — is not reported owned. Its landing
+                // stays cleared (the walk already withheld it), but no resolution claims capability.
                 foreach (var carried in carriedAnchors)
                 {
-                    resolutions[carried.LandingBeat] = new AnchorResolution(
-                        carried.LandingBeat, carried.Kind, AnchorTreatment.RideThrough, effectIndex);
+                    if ((effects[effectIndex].Repertoire & carried.Capability) != 0)
+                    {
+                        resolutions.Add(new AnchorResolution(carried.LandingBeat, carried.Kind, effectIndex));
+                    }
                 }
-
-                continue;
             }
-
-            marks.Add(new CuePlanMark(beat, effectBag.DealTop(), transitionBag.DealTop()));
-        }
-
-        var anchorList = new AnchorResolution[resolutions.Count];
-        resolutions.Values.CopyTo(anchorList, 0);
-        return new TrackCueSheet(marks, anchorList, effects, transitions, structureGeneration, playerNumber, salt);
-    }
-
-    /// <summary>Suppresses any base mark inside the post-drop hold window, keeping an owned mark intact.</summary>
-    private static void SuppressPostDropHold(
-        List<int> baseMarks,
-        HashSet<int> suppressed,
-        int landingBeat,
-        Dictionary<int, Anchor> performedMarks,
-        Dictionary<int, List<Anchor>> rideCarriers)
-    {
-        foreach (var beat in baseMarks)
-        {
-            if (beat > landingBeat && beat < landingBeat + PostDropHoldBeats
-                && !performedMarks.ContainsKey(beat) && !rideCarriers.ContainsKey(beat))
+            else
             {
-                suppressed.Add(beat);
+                effectIndex = effectBag.DealTop();
             }
-        }
-    }
 
-    /// <summary>The greatest surviving base-mark beat strictly below <paramref name="landingBeat"/>, or -1.</summary>
-    private static int LastSurvivingBefore(List<int> baseMarks, HashSet<int> suppressed, int landingBeat)
-    {
-        var best = -1;
-        foreach (var beat in baseMarks)
-        {
-            if (beat < landingBeat && beat > best && !suppressed.Contains(beat))
-            {
-                best = beat;
-            }
+            marks.Add(new CuePlanMark(beat, effectIndex, transitionIndex));
+            previousBlendEnd = beat + transitions[transitionIndex].Repertoire.TailBeats;
         }
 
-        return best;
-    }
-
-    /// <summary>
-    /// Whether removing the boundary mark keeps the merged carrier-to-next gap within the maximum cadence.
-    /// The next surviving mark above the boundary is used, or the boundary itself when none exists.
-    /// </summary>
-    private static bool MergedGapWithin(List<int> baseMarks, HashSet<int> suppressed, int carrier, int landingBeat)
-    {
-        var next = int.MaxValue;
-        foreach (var beat in baseMarks)
-        {
-            if (beat > landingBeat && beat < next && !suppressed.Contains(beat))
-            {
-                next = beat;
-            }
-        }
-
-        var mergedTo = next == int.MaxValue ? landingBeat : next;
-        return mergedTo - carrier <= MaximumGapBeats;
+        resolutions.Sort(static (a, b) => a.LandingBeat.CompareTo(b.LandingBeat));
+        return new TrackCueSheet(marks, resolutions, effects, transitions, structureGeneration, playerNumber, salt);
     }
 
     /// <summary>Phrase length in beats: an inclusive one-based span, so its end mark is the next downbeat.</summary>
@@ -782,33 +764,7 @@ public readonly struct TrackCueSheet
         return false;
     }
 
-    /// <summary>Whether any Transition in the catalog carries <paramref name="capability"/>.</summary>
-    private static bool AnyTransition(IReadOnlyList<TransitionDescriptor> transitions, Repertoire capability)
-    {
-        for (var i = 0; i < transitions.Count; i++)
-        {
-            if ((transitions[i].Repertoire.Tags & capability) != 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>Whether the Effect at <paramref name="index"/> carries <paramref name="capability"/>.</summary>
-    private static bool IsEffectCapable(IReadOnlyList<EffectDescriptor> effects, int index, Repertoire capability)
-    {
-        return (effects[index].Repertoire & capability) != 0;
-    }
-
-    /// <summary>Whether the Transition at <paramref name="index"/> carries <paramref name="capability"/>.</summary>
-    private static bool IsTransitionCapable(IReadOnlyList<TransitionDescriptor> transitions, int index, Repertoire capability)
-    {
-        return (transitions[index].Repertoire.Tags & capability) != 0;
-    }
-
-    /// <summary>A drop or fill window read from the Phrase map, before a treatment is chosen for it.</summary>
+    /// <summary>A drop or fill window read from the Phrase map, before the plan decides it can own it.</summary>
     private readonly struct Anchor
     {
         /// <summary>Captures one Anchor read from the Phrase map.</summary>
@@ -834,8 +790,8 @@ public readonly struct TrackCueSheet
 
     /// <summary>
     /// The sheet's single deterministic roll stream: an FNV-1a fold of the seed pair advanced by xorshift32.
-    /// The Grid walk, both <see cref="Bag"/>s, and every Anchor flip draw from this one stream, so the whole
-    /// sheet is a byte-identical function of the seed pair.
+    /// The Grid walk and both <see cref="Bag"/>s draw from this one stream, so the whole sheet is a
+    /// byte-identical function of the seed pair.
     /// </summary>
     private sealed class Rng
     {
@@ -890,35 +846,33 @@ public readonly struct TrackCueSheet
         {
             return exclusiveBound <= 1 ? 0 : (int)(Next() % (uint)exclusiveBound);
         }
-
-        /// <summary>A weighted yes/no draw: true with <paramref name="percent"/> chance in a hundred.</summary>
-        /// <param name="percent">Chance of true, 0..100.</param>
-        public bool Chance(int percent)
-        {
-            return Bounded(100) < percent;
-        }
     }
 
     /// <summary>
     /// A seeded shuffled Bag over one catalog's indices, dealt top-down and reshuffled when empty so the
-    /// whole catalog is shown before any card repeats — including across the seam between two passes, where
-    /// the card just dealt is kept off the top of the new permutation. Anchors scan the Bag for a capable
-    /// card and encore the least-recently-dealt capable card from the discard pile only when the remaining
-    /// cards have none; that encore is the one path that can still repeat a card back to back.
+    /// whole catalog is shown before any card repeats. The card most recently handed out is remembered and
+    /// kept away from the next deal wherever a choice exists — off the top of a fresh permutation, and
+    /// skipped by a filtered scan when another match remains — because for the Effect catalog a back-to-back
+    /// repeat deals a Transition from a card to itself, which restarts the Effect in place and moves
+    /// nothing. Filtered deals that find no match in the remaining cards encore the least-recently-dealt
+    /// matching card from the discard pile without consuming a card.
     /// </summary>
     private sealed class Bag
     {
         /// <summary>How many cards the catalog holds; every pass deals a permutation of exactly these.</summary>
         private readonly int cardCount;
 
-        /// <summary>The sheet's roll stream, shared with the Grid walk and the Anchor flips.</summary>
+        /// <summary>The sheet's roll stream, shared with the Grid walk.</summary>
         private readonly Rng rng;
 
         /// <summary>Cards not yet dealt in this pass, in the order they will come off the top.</summary>
         private readonly List<int> remaining;
 
-        /// <summary>Cards already dealt in this pass, oldest first — the encore pile for capability scans.</summary>
+        /// <summary>Cards already dealt in this pass, oldest first — the encore pile for filtered scans.</summary>
         private readonly List<int> discard;
+
+        /// <summary>The card most recently handed out by any deal, including encores; -1 before the first.</summary>
+        private int lastDealt = -1;
 
         /// <summary>Creates a Bag over <paramref name="cardCount"/> catalog positions and shuffles the first pass.</summary>
         /// <param name="cardCount">Number of cards in the catalog this Bag deals.</param>
@@ -959,32 +913,46 @@ public readonly struct TrackCueSheet
         }
 
         /// <summary>
-        /// Deals the first remaining card matching <paramref name="capable"/>. If no remaining card matches,
-        /// encores the least-recently-dealt capable card from the discard pile without consuming a card.
-        /// <paramref name="any"/> is false only when the whole catalog holds no capable card.
+        /// Deals the first card matching <paramref name="capable"/>, preferring any match that is not the
+        /// card just dealt: the remaining cards are scanned first, then the discard pile as an encore that
+        /// consumes nothing, and only when the just-dealt card is the sole match anywhere is it repeated.
+        /// <paramref name="any"/> is false only when the whole catalog holds no matching card.
         /// </summary>
         public int DealCapable(Func<int, bool> capable, out bool any)
         {
             EnsureCards();
+            var card = ScanFor(capable, excluded: lastDealt);
+            if (card < 0)
+            {
+                card = ScanFor(capable, excluded: -1);
+            }
+
+            any = card >= 0;
+            return card;
+        }
+
+        /// <summary>
+        /// One matching scan: the remaining cards first (a real deal), then the discard pile oldest-first
+        /// (an encore), skipping <paramref name="excluded"/> in both. Returns -1 when nothing matches.
+        /// </summary>
+        private int ScanFor(Func<int, bool> capable, int excluded)
+        {
             for (var i = 0; i < remaining.Count; i++)
             {
-                if (capable(remaining[i]))
+                if (capable(remaining[i]) && remaining[i] != excluded)
                 {
-                    any = true;
                     return Take(i);
                 }
             }
 
             for (var i = 0; i < discard.Count; i++)
             {
-                if (capable(discard[i]))
+                if (capable(discard[i]) && discard[i] != excluded)
                 {
-                    any = true;
-                    return discard[i];
+                    return Encore(discard[i]);
                 }
             }
 
-            any = false;
             return -1;
         }
 
@@ -1005,19 +973,24 @@ public readonly struct TrackCueSheet
             var card = remaining[index];
             remaining.RemoveAt(index);
             discard.Add(card);
+            lastDealt = card;
+            return card;
+        }
+
+        /// <summary>Hands out an already-discarded card again without consuming a card from the pass.</summary>
+        private int Encore(int card)
+        {
+            lastDealt = card;
             return card;
         }
 
         /// <summary>
         /// Refills the Bag with a fresh Fisher-Yates permutation and clears the discard pile. The card just
         /// dealt is kept off the top of the new permutation, because the seam between two passes is the one
-        /// place a fair bag can otherwise deal the same card twice running — and for the Effect catalog that
-        /// deals a Transition from a card to itself, which restarts the Effect in place and moves nothing.
+        /// place a fair bag can otherwise deal the same card twice running.
         /// </summary>
         private void Reshuffle()
         {
-            var lastDealt = discard.Count > 0 ? discard[^1] : -1;
-
             remaining.Clear();
             for (var i = 0; i < cardCount; i++)
             {

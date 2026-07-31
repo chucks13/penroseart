@@ -1,14 +1,12 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using RepertoireFlags = Repertoire;
 using Random = UnityEngine.Random;
 /// <summary>
 /// Radial iris transition that expands or contracts from the center.
 /// </summary>
 public class IrisTransition : TransitionBase
 {
-    private const RepertoireFlags DefaultTags = RepertoireFlags.HandlesDrop;
     private const int RunwayBeats = 4;
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.Iris;
@@ -21,7 +19,6 @@ public class IrisTransition : TransitionBase
     {
         return new TransitionSettings
         {
-            Tags = DefaultTags,
             RunwayBeats = RunwayBeats,
             TailBeats = TailBeats,
             Shape = Shape,

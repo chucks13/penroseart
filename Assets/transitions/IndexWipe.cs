@@ -1,11 +1,9 @@
 ﻿using UnityEngine;
-using RepertoireFlags = Repertoire;
 /// <summary>
 /// Wipes by raw tile index order rather than geometric position.
 /// </summary>
 public class IndexWipe : TransitionBase
 {
-    private const RepertoireFlags DefaultTags = RepertoireFlags.None;
     private const int RunwayBeats = 4;
     private const int TailBeats = 0;
     private const TransitionShape Shape = TransitionShape.IndexWipe;
@@ -17,7 +15,6 @@ public class IndexWipe : TransitionBase
     {
         return new TransitionSettings
         {
-            Tags = DefaultTags,
             RunwayBeats = RunwayBeats,
             TailBeats = TailBeats,
             Shape = Shape,

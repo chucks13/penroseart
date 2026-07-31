@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
 using UnityEngine;
-using RepertoireFlags = Repertoire;
 
 // Reducer-seam tests for the plan-driven Director (ADR-0010). Per-player wire snapshots go in through the
 // BeatManager; casts are observed at the Switcher seam (Status.TargetEffectIndex and the mirrored
@@ -43,9 +42,9 @@ public sealed class DirectorReducerTests
         };
         controller.transitions = new TransitionBase[]
         {
-            new TestTransition(RepertoireFlags.None, runwayBeats: 4, tailBeats: 4),
-            new TestTransition(RepertoireFlags.HandlesDrop, runwayBeats: 4, tailBeats: 4),
-            new TestTransition(RepertoireFlags.HandlesFill, runwayBeats: 4, tailBeats: 4),
+            new TestTransition(runwayBeats: 4, tailBeats: 4),
+            new TestTransition(runwayBeats: 4, tailBeats: 4),
+            new TestTransition(runwayBeats: 4, tailBeats: 4),
         };
         foreach (var transition in controller.transitions)
         {
@@ -380,13 +379,11 @@ public sealed class DirectorReducerTests
 
     private sealed class TestTransition : TransitionBase
     {
-        private readonly Repertoire tags;
         private readonly int runwayBeats;
         private readonly int tailBeats;
 
-        public TestTransition(Repertoire tags, int runwayBeats, int tailBeats)
+        public TestTransition(int runwayBeats, int tailBeats)
         {
-            this.tags = tags;
             this.runwayBeats = runwayBeats;
             this.tailBeats = tailBeats;
             buffer = new Color[Penrose.Total];
@@ -395,7 +392,6 @@ public sealed class DirectorReducerTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                tags,
                 runwayBeats,
                 tailBeats,
                 TransitionShape.Blend,

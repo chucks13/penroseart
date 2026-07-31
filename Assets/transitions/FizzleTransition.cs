@@ -1,14 +1,12 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using RepertoireFlags = Repertoire;
 using Random = UnityEngine.Random;
 /// <summary>
 /// Reveals destination tiles through a fixed shuffled tile order.
 /// </summary>
 public class FizzleTransition : TransitionBase
 {
-    private const RepertoireFlags DefaultTags = RepertoireFlags.HandlesDrop;
     private const int RunwayBeats = 4;
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.Dissolve;
@@ -20,7 +18,6 @@ public class FizzleTransition : TransitionBase
     {
         return new TransitionSettings
         {
-            Tags = DefaultTags,
             RunwayBeats = RunwayBeats,
             TailBeats = TailBeats,
             Shape = Shape,

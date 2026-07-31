@@ -1,7 +1,6 @@
 using NUnit.Framework;
 using PenroseArt.RaveOsc;
 using UnityEngine;
-using RepertoireFlags = Repertoire;
 
 // Execution-seam tests for the plan-driven Switcher (ADR-0009). Immutable Track Cue Sheets are
 // handed in, per-player wire snapshots advance execution, and assertions stay on public stage state.
@@ -981,7 +980,6 @@ public sealed class SwitcherExecutionTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                RepertoireFlags.None,
                 runwayBeats: 0,
                 tailBeats: 0,
                 TransitionShape.Blend,
@@ -1018,7 +1016,6 @@ public sealed class SwitcherExecutionTests
         protected override TransitionSettings BuildCodeDefaults()
         {
             return TransitionSettings.FromRepertoire(TransitionRepertoire.FromRunwayAndTail(
-                RepertoireFlags.None,
                 runwayBeats,
                 tailBeats,
                 TransitionShape.Blend,
