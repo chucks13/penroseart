@@ -201,8 +201,8 @@ internal static class CueSheetTimelineRenderer
 
     /// <summary>
     /// The cue column's text: <c>Effect ▸ Transition</c> for the row's mark with a tick once
-    /// fired, <c>Effect ▸ ride-through</c> for a ride-through Anchor, and on cue-less rows the
-    /// phrase name where a phrase starts — drawn once, never repeated down the phrase.
+    /// fired, <c>Effect ▸ ride-through</c> for an Anchor landing the on-wall Effect rides, and on
+    /// cue-less rows the phrase name where a phrase starts — drawn once, never repeated down the phrase.
     /// </summary>
     private static string CueLabel(
         CueSheetGridRow row,

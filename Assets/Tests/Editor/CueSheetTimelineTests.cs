@@ -20,14 +20,15 @@ public sealed class CueSheetTimelineTests
     [Test]
     public void RunwayImpactAndTailOccupyTheBeatsAroundTheirMark()
     {
-        // A drop landing pins a Cue Mark on that Grid Boundary whatever the cadence rolls, which is how these
-        // paint tests get a mark at a known beat now that no mark is forced onto a Phrase end.
+        // An owned drop Anchor forces a carrier mark onto the last candidate boundary before its landing,
+        // which is how these paint tests get a mark at a known beat (17 here, ahead of the drop at 33) now
+        // that nothing pins a mark onto the landing itself.
         var structure = Structure(
-            32,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Drop, dropLandingBeat: 17));
+            48,
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 48, PhraseType.Drop, dropLandingBeat: 33));
         var transition = Transition(runwayBeats: 3, tailBeats: 2);
-        var sheet = Sheet(structure, transition);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesDrop);
 
         var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
@@ -45,21 +46,21 @@ public sealed class CueSheetTimelineTests
     public void RunwayStraddlingAGridBoundaryPaintsBothRows()
     {
         var structure = Structure(
-            32,
-            Phrase(1, 19, PhraseType.Intro),
-            Phrase(20, 32, PhraseType.Drop, dropLandingBeat: 20));
+            42,
+            Phrase(1, 10, PhraseType.Intro),
+            Phrase(11, 26, PhraseType.Up),
+            Phrase(27, 42, PhraseType.Drop, dropLandingBeat: 27));
         var transition = Transition(runwayBeats: 5, tailBeats: 0);
-        var sheet = Sheet(structure, transition);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesDrop);
 
         var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
-        // The 19-beat Intro lays a full row (1-16) and a short row (17-19); the pinned mark at 20 opens the
-        // Drop row. Its five-beat Runway (15-19) crosses both Intro rows on the way in.
-        Assert.That(rows[0].Cells[14], Is.EqualTo(CueSheetBeatMark.Runway));
-        Assert.That(rows[0].Cells[15], Is.EqualTo(CueSheetBeatMark.Runway));
-        Assert.That(rows[1].Cells[0], Is.EqualTo(CueSheetBeatMark.Runway));
-        Assert.That(rows[1].Cells[2], Is.EqualTo(CueSheetBeatMark.Runway));
-        Assert.That(rows[2].Cells[0], Is.EqualTo(CueSheetBeatMark.Impact));
+        // The ten-beat Intro lays one short row (1-10); the forced carrier mark at 11 opens the Up row.
+        // Its five-beat Runway (6-10) reaches back across the row boundary into the short Intro row.
+        Assert.That(rows[0].Cells[4], Is.EqualTo(CueSheetBeatMark.None));
+        Assert.That(rows[0].Cells[5], Is.EqualTo(CueSheetBeatMark.Runway));
+        Assert.That(rows[0].Cells[9], Is.EqualTo(CueSheetBeatMark.Runway));
+        Assert.That(rows[1].Cells[0], Is.EqualTo(CueSheetBeatMark.Impact));
     }
 
     /// <summary>
@@ -71,37 +72,46 @@ public sealed class CueSheetTimelineTests
     [Test]
     public void MarkColumnsUseBeatInGridPosition()
     {
-        // Pins one Grid apart — the cadence floor — so both survive; anything closer drops the later pin.
+        var transition = Transition(0, 0);
+
+        // Regular Grids: the forced carrier mark at 17 opens its own row on column zero.
         var structure = Structure(
             48,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Verse, dropLandingBeat: 17),
-            Phrase(33, 48, PhraseType.Chorus, dropLandingBeat: 33));
-        var transition = Transition(0, 0);
-        var sheet = Sheet(structure, transition);
-
-        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 48, PhraseType.Drop, dropLandingBeat: 33));
+        var rows = CueSheetTimeline.Build(
+            Sheet(structure, transition, Repertoire.HandlesDrop), structure, new[] { transition }, null);
 
         Assert.That(CueSheetTimeline.RowContaining(rows, 17), Is.EqualTo(1));
-        Assert.That(CueSheetTimeline.RowContaining(rows, 33), Is.EqualTo(2));
         Assert.That(rows[1].Cells[0], Is.EqualTo(CueSheetBeatMark.Impact));
-        Assert.That(rows[2].Cells[0], Is.EqualTo(CueSheetBeatMark.Impact));
+
+        // A short Intro Phrase ends its row early; the carrier mark at 11 still opens column zero.
+        var shortStructure = Structure(
+            42,
+            Phrase(1, 10, PhraseType.Intro),
+            Phrase(11, 26, PhraseType.Up),
+            Phrase(27, 42, PhraseType.Chorus, dropLandingBeat: 27));
+        var shortRows = CueSheetTimeline.Build(
+            Sheet(shortStructure, transition, Repertoire.HandlesDrop), shortStructure, new[] { transition }, null);
+
+        Assert.That(CueSheetTimeline.RowContaining(shortRows, 11), Is.EqualTo(1));
+        Assert.That(shortRows[1].Cells[0], Is.EqualTo(CueSheetBeatMark.Impact));
     }
 
     /// <summary>
     /// Pins that cell flags compose rather than overwrite. The Playhead is the one layer that can land on
-    /// any painted beat; Tail-meets-Runway is no longer reachable, because consecutive marks sit at least
-    /// one Grid apart while a Transition's whole Duration is capped at twelve beats.
+    /// any painted beat; Tail-meets-Runway is no longer reachable, because every Transition is dealt to fit
+    /// the space it is given and no two blends ever share a beat.
     /// </summary>
     [Test]
     public void ImpactAndPlayheadCanShareOneCell()
     {
         var structure = Structure(
-            32,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Drop, dropLandingBeat: 17));
+            48,
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 48, PhraseType.Drop, dropLandingBeat: 33));
         var transition = Transition(runwayBeats: 4, tailBeats: 4);
-        var sheet = Sheet(structure, transition);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesDrop);
 
         var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, currentBeat: 17);
 
@@ -116,11 +126,10 @@ public sealed class CueSheetTimelineTests
     {
         var structure = Structure(
             48,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Verse, dropLandingBeat: 17),
-            Phrase(33, 48, PhraseType.Chorus, dropLandingBeat: 33));
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 48, PhraseType.Drop, dropLandingBeat: 33));
         var transition = Transition(0, 0);
-        var sheet = Sheet(structure, transition);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesDrop);
 
         var pendingRows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
         Assert.That(pendingRows[1].CueFired, Is.False, "An unfired cue reads pending.");
@@ -129,7 +138,7 @@ public sealed class CueSheetTimelineTests
         var firedRows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(firedRows[1].CueFired, Is.True);
-        Assert.That(firedRows[2].CueFired, Is.False, "Only the cue that fired reads fired.");
+        Assert.That(firedRows[2].CueFired, Is.False, "The Anchor row carries no mark and stays pending.");
     }
 
     /// <summary>Pins a phrase label to its start row without repeating it on later rows.</summary>
@@ -173,47 +182,31 @@ public sealed class CueSheetTimelineTests
         Assert.That(rows[2].PhraseStart, Is.Null);
     }
 
-    /// <summary>Pins ride-through cue identity and a real Cue Mark's priority in the same row.</summary>
+    /// <summary>Pins an Anchor-landing row's cue identity to the Effect on the wall for the moment.</summary>
     [Test]
-    public void RideThroughUsesTheRidingEffectUnlessARealMarkSharesTheRow()
+    public void AnAnchorRowShowsTheEffectOnTheWallForTheMoment()
     {
         var transition = Transition(0, 0);
-        // The Intro runs a full four Grids so the cadence ceiling guarantees a carrier mark ahead of the fill
-        // Anchor at beat 81; without an incumbent there is nothing to ride through. The Anchor's row is index
-        // five: four Intro rows, then the Up row, then the Chorus row it lands on.
-        var rideStructure = Structure(
+        // The fill Anchor lands at beat 81; the plan casts its capable Effect at a carrier mark somewhere
+        // ahead of it, and the landing boundary itself carries no mark. The Anchor's row is index five: four
+        // Intro rows, then the Up row, then the Chorus row it lands on.
+        var structure = Structure(
             96,
             Phrase(1, 64, PhraseType.Intro),
             Phrase(65, 80, PhraseType.Up, fillStartBeat: 1),
             Phrase(81, 96, PhraseType.Chorus));
-        var rideSheet = Sheet(rideStructure, transition, Repertoire.HandlesFill);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesFill);
 
-        var rideRows = CueSheetTimeline.Build(rideSheet, rideStructure, new[] { transition }, null);
+        var rows = CueSheetTimeline.Build(sheet, structure, new[] { transition }, null);
 
         Assert.That(
-            rideRows[5].Cells[0] & CueSheetBeatMark.AnchorLanding,
+            rows[5].Cells[0] & CueSheetBeatMark.AnchorLanding,
             Is.EqualTo(CueSheetBeatMark.AnchorLanding));
-        Assert.That(rideRows[5].CueEffectIndex, Is.EqualTo(0));
-        Assert.That(rideRows[5].CueTransitionIndex, Is.Null);
-        Assert.That(rideRows[5].CueIsRideThrough, Is.True);
-
-        var priorityStructure = Structure(
-            32,
-            Phrase(1, 8, PhraseType.Intro),
-            Phrase(9, 16, PhraseType.Up, fillStartBeat: 1),
-            Phrase(17, 24, PhraseType.Chorus));
-        var prioritySheet = Sheet(priorityStructure, transition, Repertoire.HandlesFill);
-
-        var priorityRows = CueSheetTimeline.Build(
-            prioritySheet,
-            priorityStructure,
-            new[] { transition },
-            null);
-
-        // Two eight-beat phrases take a short row each, so the third phrase's row is index 2.
-        Assert.That(priorityRows[2].CueEffectIndex, Is.EqualTo(0));
-        Assert.That(priorityRows[2].CueTransitionIndex, Is.EqualTo(0));
-        Assert.That(priorityRows[2].CueIsRideThrough, Is.False);
+        Assert.That(rows[5].CueEffectIndex, Is.EqualTo(0));
+        Assert.That(rows[5].CueTransitionIndex, Is.Null);
+        Assert.That(rows[5].CueIsRideThrough, Is.True);
+        Assert.That(sheet.Marks.Any(m => m.Beat == 81), Is.False,
+            "an owned landing must not carry a Cue Mark");
     }
 
     /// <summary>Pins the playhead to exactly one cell and leaves it absent for a null beat.</summary>
@@ -240,9 +233,9 @@ public sealed class CueSheetTimelineTests
             CueSheetTimeline.Build(default, wholeStructure, null, null).Count,
             Is.EqualTo(3));
 
-        // Drop landings pin the marks these layers hang off, since no mark is forced onto a Phrase end any
-        // more; each Phrase map deliberately runs past its announced total_beats so the extension
-        // is what the row count is measuring.
+        // The Phrase map deliberately runs past its announced total_beats; the rows follow the Phrase map,
+        // so the extension is what the row count is measuring. (A dealt mark's Tail can also stretch the
+        // last row, but mark positions are cadence-dealt and so not pinnable here.)
         var markStructure = Structure(
             16,
             Phrase(1, 16, PhraseType.Intro),
@@ -252,20 +245,8 @@ public sealed class CueSheetTimelineTests
             CueSheetTimeline.Build(markSheet, markStructure, new[] { hardCut }, null).Count,
             Is.EqualTo(2));
 
-        // The pinned mark at 17 sits on the short final Phrase, so its four-beat Tail (18-21) runs past both
-        // the Phrase end and total_beats; the last row stretches to cover it.
-        var tailStructure = Structure(
-            20,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 20, PhraseType.Drop, dropLandingBeat: 17));
-        var tailedTransition = Transition(0, 4);
-        var tailSheet = Sheet(tailStructure, tailedTransition);
-        Assert.That(
-            CueSheetTimeline.Build(tailSheet, tailStructure, new[] { tailedTransition }, null).Count,
-            Is.EqualTo(2));
-
-        // Four Intro Grids so the cadence ceiling guarantees the carrier the ride-through Anchor needs; the
-        // fill Anchor lands on beat 81 — one past the final Phrase — so the rows extend one cell to show it.
+        // Four Intro Grids so a carrier mark exists ahead of the owned fill Anchor; the Anchor lands on
+        // beat 81 — one past the final Phrase — so the rows extend one cell to show it.
         var anchorStructure = Structure(
             80,
             Phrase(1, 64, PhraseType.Intro),
@@ -312,11 +293,11 @@ public sealed class CueSheetTimelineTests
     public void OutOfRangeTransitionIndexUsesNoRunwayOrTail()
     {
         var structure = Structure(
-            32,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Drop, dropLandingBeat: 17));
+            48,
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 48, PhraseType.Drop, dropLandingBeat: 33));
         var transition = Transition(4, 4);
-        var sheet = Sheet(structure, transition);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesDrop);
 
         // An empty catalog puts every baked index out of range while still being a supplied catalog, which is
         // what tells this apart from the null case NullTransitionsAndFiredMarksLeaveAValidPendingImpact covers.
@@ -332,11 +313,11 @@ public sealed class CueSheetTimelineTests
     public void NullTransitionsAndFiredMarksLeaveAValidPendingImpact()
     {
         var structure = Structure(
-            32,
-            Phrase(1, 16, PhraseType.Intro),
-            Phrase(17, 32, PhraseType.Drop, dropLandingBeat: 17));
+            48,
+            Phrase(1, 32, PhraseType.Intro),
+            Phrase(33, 48, PhraseType.Drop, dropLandingBeat: 33));
         var transition = Transition(3, 2);
-        var sheet = Sheet(structure, transition);
+        var sheet = Sheet(structure, transition, Repertoire.HandlesDrop);
 
         var rows = CueSheetTimeline.Build(sheet, structure, null, null);
 

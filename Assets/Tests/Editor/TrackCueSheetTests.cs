@@ -1,7 +1,7 @@
 // Seam tests for the pure track-scoped Cue Sheet builder (TrackCueSheet.Build). Synthetic structures and
 // descriptor catalogs go in; the built sheet's constraints, determinism, and fairness come out. Tests assert
-// caller-visible guarantees — gap bounds, Anchor ownership, suppression, post-drop hold, determinism, bag
-// fairness — never the private walk order or bag internals.
+// caller-visible guarantees — the gap ceiling, Anchor clearance, blend fit, determinism, bag fairness —
+// never the private walk order or bag internals.
 
 #nullable enable
 
@@ -11,15 +11,13 @@ using NUnit.Framework;
 
 /// <summary>
 /// Behavioral battery for <see cref="TrackCueSheet"/>: the single track-scoped builder seam. Every test
-/// drives the public <see cref="TrackCueSheet.Build"/> and asserts a spec constraint through the returned
+/// drives the public <see cref="TrackCueSheet.Build"/> and asserts a model rule through the returned
 /// plan (marks and Anchor resolutions), across many seeds where a guarantee must hold for all shows.
 /// </summary>
 public sealed class TrackCueSheetTests
 {
     private const int GridBeats = TrackCueSheet.GridBeats;
-    private const int MinimumGapBeats = TrackCueSheet.MinimumGapBeats;
     private const int MaximumGapBeats = TrackCueSheet.MaximumGapBeats;
-    private const int PostDropHoldBeats = TrackCueSheet.PostDropHoldBeats;
 
     private static readonly int[] Generations = { 1, 2, 3, 7, 42, 100, 9999 };
     private static readonly int[] Players = { 1, 2, 3, 4, 5, 6 };
@@ -40,24 +38,24 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
-    public void ConsecutiveMarkGapsStayWithinCadenceAcrossSeeds()
+    public void ConsecutiveMarkGapsNeverExceedTheCeiling()
     {
-        // The Grid walk bounds every gap to one-to-four Grids, and Anchor suppression is capped so a merged
-        // gap can never exceed the maximum. The run-in from track start is unconstrained (the wall keeps
-        // playing until the first mark), so only gaps between consecutive marks are checked.
+        // Never more than 64 beats without a transition, whatever the seed and however the Anchors fell.
+        // There is deliberately no lower-bound assertion: the model has no fixed spacing floor — small gaps
+        // are rare by cadence judgment, not forbidden by constant.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
+        var structures = new[] { MixedTrack(), ShortGridTrack(), TwoDropTrack() };
+        foreach (var structure in structures)
         foreach (var generation in Generations)
         {
             foreach (var player in Players)
             {
-                var sheet = TrackCueSheet.Build(MixedTrack(), effects, transitions, generation, player);
+                var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
                 var marks = sheet.Marks;
                 for (var i = 1; i < marks.Count; i++)
                 {
                     var gap = marks[i].Beat - marks[i - 1].Beat;
-                    Assert.That(gap, Is.GreaterThanOrEqualTo(MinimumGapBeats),
-                        $"gen={generation} player={player}: gap {gap} below one Grid");
                     Assert.That(gap, Is.LessThanOrEqualTo(MaximumGapBeats),
                         $"gen={generation} player={player}: gap {gap} above four Grids");
                 }
@@ -66,19 +64,19 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
-    public void MarksDoNotClusterAtTheMinimumGap()
+    public void MarksAreIrregularlySpacedNeverClumpedNeverMetronomic()
     {
-        // The defect this closes: the builder walked each Phrase independently and had to land exactly on the
-        // Phrase end, truncating its own gap draw, and that draw was uniform over one to four Grids. So a
-        // quarter of all gaps were the 16-beat minimum, half of all 64-beat Phrases ended on a forced one, and
-        // the wall changed four times a Grid apart and then held. The rising cadence makes the
-        // minimum gap rare and a run of them rarer still.
+        // "Never clumped, never metronomic" is plan-time judgment, asserted statistically: one-Grid-or-closer
+        // gaps stay rare, never run back to back, and the mean spacing stays in the intended band. A
+        // metronomic plan would collapse the gap distribution onto one value; a clumped one would pile
+        // gaps at the bottom.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
-        var minimumGaps = 0;
+        var tightGaps = 0;
         var totalGaps = 0;
         var totalBeats = 0;
-        var longestMinimumRun = 0;
+        var longestTightRun = 0;
+        var distinctGaps = new HashSet<int>();
 
         foreach (var generation in Generations)
         {
@@ -91,11 +89,12 @@ public sealed class TrackCueSheetTests
                     var gap = marks[i].Beat - marks[i - 1].Beat;
                     totalGaps++;
                     totalBeats += gap;
-                    if (gap <= MinimumGapBeats)
+                    distinctGaps.Add(gap);
+                    if (gap <= GridBeats)
                     {
-                        minimumGaps++;
+                        tightGaps++;
                         run++;
-                        longestMinimumRun = run > longestMinimumRun ? run : longestMinimumRun;
+                        longestTightRun = run > longestTightRun ? run : longestTightRun;
                     }
                     else
                     {
@@ -106,12 +105,14 @@ public sealed class TrackCueSheetTests
         }
 
         Assert.That(totalGaps, Is.GreaterThan(100), "not enough gaps to judge the distribution");
-        Assert.That(minimumGaps / (double)totalGaps, Is.LessThan(0.15),
-            $"{minimumGaps} of {totalGaps} gaps sat at the minimum — changes are clustering");
-        Assert.That(longestMinimumRun, Is.LessThanOrEqualTo(2),
-            $"{longestMinimumRun} minimum gaps ran back to back — that is the cluster this rule exists to stop");
+        Assert.That(tightGaps / (double)totalGaps, Is.LessThan(0.15),
+            $"{tightGaps} of {totalGaps} gaps sat at one Grid or less — changes are clustering");
+        Assert.That(longestTightRun, Is.LessThanOrEqualTo(2),
+            $"{longestTightRun} tight gaps ran back to back — that is the clump this rule exists to stop");
         Assert.That(totalBeats / (double)totalGaps, Is.InRange(36.0, 50.0),
             "mean spacing drifted away from the intended cadence");
+        Assert.That(distinctGaps.Count, Is.GreaterThan(3),
+            "the gap distribution collapsed onto a few values — the plan turned metronomic");
     }
 
     [Test]
@@ -136,35 +137,6 @@ public sealed class TrackCueSheetTests
         }
 
         Assert.That(unmarked, Is.GreaterThan(0), "every Phrase end carried a mark — the mandate is still in force");
-    }
-
-    [Test]
-    public void RideThroughIsPreferredAtAnchorsButNotUniversal()
-    {
-        // "Most of the time, but not all the time": the incumbent playing a drop or fill through is the
-        // preferred reading, so a fair coin was wrong — but a one-faced coin would be too. Both catalogs are
-        // fully capable here so the treatment is decided by the roll rather than degenerating.
-        var effects = MixedEffects();
-        var transitions = MixedTransitions();
-        var rideThrough = 0;
-        var performed = 0;
-
-        foreach (var generation in Generations)
-        {
-            foreach (var player in Players)
-            {
-                foreach (var anchor in TrackCueSheet.Build(TwoDropTrack(), effects, transitions, generation, player).Anchors)
-                {
-                    if (anchor.Treatment == AnchorTreatment.RideThrough) { rideThrough++; } else { performed++; }
-                }
-            }
-        }
-
-        var total = rideThrough + performed;
-        Assert.That(total, Is.GreaterThan(50), "not enough Anchors to judge the preference");
-        Assert.That(performed, Is.GreaterThan(0), "every Anchor rode through — the preference became a mandate");
-        Assert.That(rideThrough / (double)total, Is.GreaterThan(0.5),
-            $"ride-through won only {rideThrough} of {total} Anchors — it is meant to be the preferred reading");
     }
 
     [Test]
@@ -303,41 +275,47 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
-    public void EveryMarkIsGridSpacedFromItsPhraseStartAndStrictlyAscending()
+    public void EveryMarkSitsOnAGridBoundaryOfItsOwnPhraseAndMarksAscend()
     {
-        // Marks sit on Grid Boundaries and nowhere else, and the Grid is a wire lane that restarts on every
-        // Phrase. So a Boundary is a Grid multiple *from the Phrase start* — never a multiple of sixteen
-        // counted from track beat one, and a Phrase shorter than sixteen beats simply makes a short Grid.
+        // Marks sit on Grid Boundaries and nowhere else, and the Grid restarts on every Phrase: a Boundary
+        // is a Grid multiple from the start of the Phrase *containing* the mark — never a multiple of
+        // sixteen counted from track beat one, and a Phrase shorter than sixteen beats simply makes a short
+        // Grid. The lattice is derived independently here so alignment to some other Phrase cannot pass.
         // Marks must also be strictly ascending.
-        var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 42, 1);
-        var phraseStarts = MixedTrack().Phrases.Select(p => p.StartBeat).ToHashSet();
-        foreach (var mark in sheet.Marks)
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var structures = new[] { MixedTrack(), ShortGridTrack(), TwoDropTrack() };
+        foreach (var structure in structures)
+        foreach (var generation in Generations)
         {
-            Assert.That(
-                phraseStarts.Any(start => mark.Beat >= start && (mark.Beat - start) % TrackCueSheet.GridBeats == 0)
-                    || phraseStarts.Contains(mark.Beat),
-                Is.True,
-                $"the mark at beat {mark.Beat} is not Grid-spaced from any Phrase start");
-        }
+            foreach (var player in Players)
+            {
+                var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
+                var lattice = GridBoundaryLattice(structure);
+                foreach (var mark in sheet.Marks)
+                {
+                    Assert.That(lattice.Contains(mark.Beat), Is.True,
+                        $"gen={generation} player={player}: the mark at beat {mark.Beat} "
+                        + "is not a Grid Boundary of the Phrase containing it");
+                }
 
-        for (var i = 1; i < sheet.Marks.Count; i++)
-        {
-            Assert.That(sheet.Marks[i].Beat, Is.GreaterThan(sheet.Marks[i - 1].Beat),
-                "marks are not strictly ascending");
+                for (var i = 1; i < sheet.Marks.Count; i++)
+                {
+                    Assert.That(sheet.Marks[i].Beat, Is.GreaterThan(sheet.Marks[i - 1].Beat),
+                        "marks are not strictly ascending");
+                }
+            }
         }
     }
 
     [Test]
-    public void EveryAnchorIsOwnedByACapablePerformerUnderBothTreatments()
+    public void EveryAnchorIsClearedAndOwnedByACapableEffectAlreadyOnTheWall()
     {
-        // Across seeds, both treatments occur for the same Anchor. Whichever is chosen, a capable performer
-        // owns it: a performed Anchor carries a capable Transition on the landing mark; a ride-through Anchor
-        // has no landing mark and hands a capable Effect to the mark immediately before it.
+        // An Anchor is performed one way: no Cue Mark sits on the landing boundary, the last mark before
+        // the landing casts a repertoire-capable Effect (so it is already on the wall when the moment
+        // hits), and the resolution names that Effect.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
-        var treatmentsSeen = new HashSet<AnchorTreatment>();
-        // Mixed exercises irregular geometry; the all-Grid TwoDropTrack keeps ride-through always feasible so
-        // the seeded flip genuinely reaches both treatments.
         var structures = new[] { MixedTrack(), TwoDropTrack() };
 
         foreach (var structure in structures)
@@ -346,46 +324,118 @@ public sealed class TrackCueSheetTests
             foreach (var player in Players)
             {
                 var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
+                Assert.That(sheet.Anchors, Is.Not.Empty,
+                    $"gen={generation} player={player}: a capable catalog left every Anchor unowned");
                 foreach (var anchor in sheet.Anchors)
                 {
-                    treatmentsSeen.Add(anchor.Treatment);
                     var capability = anchor.Kind == AnchorKind.Drop ? Repertoire.HandlesDrop : Repertoire.HandlesFill;
 
-                    if (anchor.Treatment == AnchorTreatment.PerformedTransition)
+                    Assert.That(MarkAt(sheet, anchor.LandingBeat), Is.Null,
+                        $"gen={generation} player={player}: a Cue Mark sits on the Anchor landing at {anchor.LandingBeat}");
+
+                    var carrier = LastMarkBefore(sheet, anchor.LandingBeat);
+                    Assert.That(carrier, Is.Not.Null,
+                        $"gen={generation} player={player}: no Effect was cast ahead of the Anchor at {anchor.LandingBeat}");
+                    Assert.That(carrier!.EffectIndex, Is.EqualTo(anchor.EffectIndex),
+                        "the Anchor resolution does not name the Effect on the wall at the moment");
+                    Assert.That(EffectCapability(effects, anchor.EffectIndex) & capability, Is.EqualTo(capability),
+                        "the Effect on the wall at the Anchor is not capable");
+                }
+            }
+        }
+    }
+
+    [Test]
+    public void NoRunwayOrTailCrossesAnAnchorLanding()
+    {
+        // The moment is cleared of Runways and Tails: no transition's blend interval — Runway before its mark,
+        // Tail after — may contain an owned Anchor's landing beat.
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        foreach (var generation in Generations)
+        {
+            foreach (var player in Players)
+            {
+                var sheet = TrackCueSheet.Build(MixedTrack(), effects, transitions, generation, player);
+                foreach (var anchor in sheet.Anchors)
+                {
+                    foreach (var mark in sheet.Marks)
                     {
-                        var landing = MarkAt(sheet, anchor.LandingBeat);
-                        Assert.That(landing, Is.Not.Null,
-                            $"performed Anchor at {anchor.LandingBeat} has no landing mark");
-                        Assert.That(landing!.TransitionIndex, Is.EqualTo(anchor.PerformerIndex),
-                            "performed Anchor's landing mark does not carry its transition");
-                        Assert.That(TransitionCapability(transitions, anchor.PerformerIndex) & capability, Is.EqualTo(capability),
-                            "performed Anchor's transition is not capable");
-                    }
-                    else
-                    {
-                        Assert.That(MarkAt(sheet, anchor.LandingBeat), Is.Null,
-                            $"ride-through Anchor at {anchor.LandingBeat} did not suppress its landing mark");
-                        var carrier = LastMarkBefore(sheet, anchor.LandingBeat);
-                        Assert.That(carrier, Is.Not.Null,
-                            "ride-through Anchor has no incumbent mark to carry it");
-                        Assert.That(carrier!.EffectIndex, Is.EqualTo(anchor.PerformerIndex),
-                            "ride-through Anchor's incumbent mark does not carry its effect");
-                        Assert.That(EffectCapability(effects, anchor.PerformerIndex) & capability, Is.EqualTo(capability),
-                            "ride-through Anchor's effect is not capable");
+                        var repertoire = transitions[mark.TransitionIndex].Repertoire;
+                        var blendStart = mark.Beat - repertoire.RunwayBeats;
+                        var blendEnd = mark.Beat + repertoire.TailBeats;
+                        Assert.That(
+                            anchor.LandingBeat >= blendStart && anchor.LandingBeat <= blendEnd, Is.False,
+                            $"gen={generation} player={player}: the blend of the mark at {mark.Beat} "
+                            + $"([{blendStart}, {blendEnd}]) crosses the Anchor landing at {anchor.LandingBeat}");
                     }
                 }
             }
         }
+    }
 
-        Assert.That(treatmentsSeen, Is.EquivalentTo(new[] { AnchorTreatment.RideThrough, AnchorTreatment.PerformedTransition }),
-            "both Anchor treatments should be reachable across seeds");
+    [Test]
+    public void NoTwoBlendsOverlapEvenAcrossShortGrids()
+    {
+        // The real spacing invariant: transitions are dealt to fit the space they are given, so consecutive
+        // blends never share a beat and the first blend never starts before the track's opening downbeat.
+        // The short-Grid structure and the wide-runway catalog are the stress: a 12-beat Runway card must
+        // never be dealt into a slot it cannot fit.
+        var effects = MixedEffects();
+        var transitions = WideTimingTransitions();
+        var structures = new[] { MixedTrack(), ShortGridTrack(), TwoDropTrack() };
+
+        foreach (var structure in structures)
+        foreach (var generation in Generations)
+        {
+            foreach (var player in Players)
+            {
+                var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
+                var startBeat = structure.Phrases[0].StartBeat;
+                var previousBlendEnd = startBeat - 1;
+                foreach (var mark in sheet.Marks)
+                {
+                    var repertoire = transitions[mark.TransitionIndex].Repertoire;
+                    var blendStart = mark.Beat - repertoire.RunwayBeats;
+                    Assert.That(blendStart, Is.GreaterThan(previousBlendEnd),
+                        $"gen={generation} player={player}: the blend into the mark at {mark.Beat} starts at "
+                        + $"{blendStart}, inside the previous blend (ends {previousBlendEnd})");
+                    previousBlendEnd = mark.Beat + repertoire.TailBeats;
+                }
+            }
+        }
+    }
+
+    [Test]
+    public void NoTransitionEverLeadsFromAnEffectIntoItself()
+    {
+        // A Transition from an Effect into itself restarts it in place and moves nothing — a plan that skips
+        // a change. Consecutive marks must always deal different Effects, including across the bag's
+        // reshuffle seam and through Anchor carrier deals.
+        var effects = MixedEffects();
+        var transitions = MixedTransitions();
+        var structures = new[] { MixedTrack(), TwoDropTrack(), PlainTrack(4 * 18) };
+
+        foreach (var structure in structures)
+        foreach (var generation in Generations)
+        {
+            foreach (var player in Players)
+            {
+                var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
+                for (var i = 1; i < sheet.Marks.Count; i++)
+                {
+                    Assert.That(sheet.Marks[i].EffectIndex, Is.Not.EqualTo(sheet.Marks[i - 1].EffectIndex),
+                        $"gen={generation} player={player}: marks {i - 1} and {i} deal the same Effect");
+                }
+            }
+        }
     }
 
     [Test]
     public void DropLandingsAndFillWindowsBecomeAnchors()
     {
         // The two drops and the lone fill (the fill leading into a drop is folded into that drop) each
-        // surface as an Anchor at the expected Grid Boundary.
+        // surface as an owned Anchor at the expected Grid Boundary.
         var landings = new HashSet<int>();
         foreach (var generation in Generations)
         {
@@ -399,29 +449,6 @@ public sealed class TrackCueSheetTests
         Assert.That(landings, Does.Contain(97), "drop landing at 97 is not an Anchor");
         Assert.That(landings, Does.Contain(370), "drop landing at 370 is not an Anchor");
         Assert.That(landings, Does.Contain(265), "fill window ending at 265 is not an Anchor");
-    }
-
-    [Test]
-    public void NoMarkFallsWithinThePostDropHold()
-    {
-        // After a drop landing, the performing Effect holds a minimum of one Grid: no mark lands in the open
-        // window (landing, landing + hold).
-        foreach (var generation in Generations)
-        {
-            foreach (var player in Players)
-            {
-                var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), generation, player);
-                foreach (var anchor in sheet.Anchors.Where(a => a.Kind == AnchorKind.Drop))
-                {
-                    foreach (var mark in sheet.Marks)
-                    {
-                        var withinHold = mark.Beat > anchor.LandingBeat && mark.Beat < anchor.LandingBeat + PostDropHoldBeats;
-                        Assert.That(withinHold, Is.False,
-                            $"gen={generation} player={player}: mark {mark.Beat} inside the post-drop hold after {anchor.LandingBeat}");
-                    }
-                }
-            }
-        }
     }
 
     [Test]
@@ -507,36 +534,12 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
-    public void NoTwoConsecutiveMarksDealTheSameEffect()
-    {
-        // The cycle test above checks aligned windows, which is true by construction and so blind to the one
-        // place a fair bag repeats: the seam between two passes. A repeat there bakes a Transition from an
-        // Effect to itself, which restarts it in place and moves nothing — a plan that skips a change. Several
-        // seeds, because whether a seam lands on a repeat at all is a property of the shuffle.
-        const int catalogSize = 4;
-        var effects = UntaggedEffects(catalogSize);
-        var transitions = PlainTransitions(2);
-
-        foreach (var generation in Generations)
-        {
-            var sheet = TrackCueSheet.Build(PlainTrack(catalogSize * 18), effects, transitions, generation, 1);
-            Assert.That(sheet.Marks.Count, Is.GreaterThan(catalogSize * 2),
-                "not enough marks to cross a reshuffle seam");
-            for (var i = 1; i < sheet.Marks.Count; i++)
-            {
-                Assert.That(sheet.Marks[i].EffectIndex, Is.Not.EqualTo(sheet.Marks[i - 1].EffectIndex),
-                    $"generation {generation} dealt effect {sheet.Marks[i].EffectIndex} to marks {i - 1} and {i}");
-            }
-        }
-    }
-
-    [Test]
     public void EnergyAffinityDoesNotInfluenceThePlan()
     {
         // Energy is out of casting: it is a Performer input read from BeatManager, not a Director
-        // one. The bag deals Effects freely and capability is asked only of a ride-through carrier, which has
-        // to play the moment itself. So two catalogs identical in capability and differing only in energy
-        // affinity must plan the same show from the same seed — mark for mark, anchor for anchor.
+        // one. The bag deals Effects freely and capability is asked only of an Anchor carrier, which has
+        // to be on the wall for the moment. So two catalogs identical in capability and differing only in
+        // energy affinity must plan the same show from the same seed — mark for mark, anchor for anchor.
         var capabilities = new[]
         {
             Repertoire.HandlesFill | Repertoire.HandlesDrop,
@@ -597,51 +600,35 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
-    public void MissingCapableTransitionForcesEveryDropAnchorToRideThrough()
+    public void MissingCapableEffectLeavesAnchorsUnownedAndLandingsOrdinary()
     {
-        // A catalog with a capable Effect but no capable Transition degenerates the flip to a one-faced
-        // coin: every drop Anchor is ridden through.
-        var effects = Effects(Repertoire.HandlesDrop, Repertoire.None, Repertoire.None, Repertoire.None);
-        var transitions = PlainTransitions(3); // no HandlesDrop tag anywhere
-
-        foreach (var generation in Generations)
-        {
-            var sheet = TrackCueSheet.Build(TwoDropTrack(), effects, transitions, generation, 1);
-            Assert.That(sheet.Anchors, Is.Not.Empty, "expected drop Anchors");
-            Assert.That(sheet.Anchors.All(a => a.Treatment == AnchorTreatment.RideThrough), Is.True,
-                $"gen={generation}: an Anchor was not ridden through despite no capable transition");
-        }
-    }
-
-    [Test]
-    public void MissingCapableEffectForcesEveryDropAnchorToPerformedTransition()
-    {
-        // The mirror: a capable Transition but no capable Effect degenerates the flip to performed transitions.
+        // Without a capable Effect anywhere in the catalog there is no way to own the moment: no resolution
+        // is recorded and the landing boundary goes back to being an ordinary candidate.
         var effects = UntaggedEffects(4); // no HandlesDrop tag anywhere
-        var transitions = new[]
-        {
-            new TransitionDescriptor(Transition(Repertoire.HandlesDrop)),
-            new TransitionDescriptor(Transition(Repertoire.None)),
-        };
+        var transitions = MixedTransitions();
 
+        var landingMarked = 0;
         foreach (var generation in Generations)
         {
             var sheet = TrackCueSheet.Build(TwoDropTrack(), effects, transitions, generation, 1);
-            Assert.That(sheet.Anchors, Is.Not.Empty, "expected drop Anchors");
-            Assert.That(sheet.Anchors.All(a => a.Treatment == AnchorTreatment.PerformedTransition), Is.True,
-                $"gen={generation}: an Anchor was not performed despite no capable effect");
+            Assert.That(sheet.Anchors, Is.Empty,
+                $"gen={generation}: an Anchor was owned despite no capable effect");
+            landingMarked += sheet.Marks.Count(m => m.Beat == 193 || m.Beat == 385);
         }
+
+        Assert.That(landingMarked, Is.GreaterThan(0),
+            "unowned landings never took an ordinary mark across seeds — they are still being suppressed");
     }
 
     [Test]
     public void DiscardPileEncoreOwnsAnAnchorWhenTheBagHasNoCapableCardLeft()
     {
-        // One drop-capable effect, several plain ones, and two ride-through drop Anchors with distinct carrier
-        // marks but inside one shuffle cycle. The first Anchor's carrier deals the lone capable card; the
-        // second, still in the same shuffle, finds none left in the bag and encores it from the discard pile.
+        // One drop-capable effect, several plain ones, and two drop Anchors with distinct carrier marks
+        // inside one shuffle cycle. The first Anchor's carrier deals the lone capable card; the second,
+        // still in the same shuffle, finds none left in the bag and encores it from the discard pile.
         // Both Anchors end up owned by that single card.
         var effects = Effects(Repertoire.HandlesDrop, Repertoire.None, Repertoire.None, Repertoire.None, Repertoire.None, Repertoire.None);
-        var transitions = PlainTransitions(2); // no capable transition, so both Anchors ride through
+        var transitions = PlainTransitions(2);
 
         foreach (var generation in Generations)
         {
@@ -650,8 +637,7 @@ public sealed class TrackCueSheetTests
             Assert.That(dropAnchors.Length, Is.EqualTo(2), $"gen={generation}: expected two drop Anchors");
             foreach (var anchor in dropAnchors)
             {
-                Assert.That(anchor.Treatment, Is.EqualTo(AnchorTreatment.RideThrough));
-                Assert.That(anchor.PerformerIndex, Is.EqualTo(0),
+                Assert.That(anchor.EffectIndex, Is.EqualTo(0),
                     $"gen={generation}: drop Anchor not owned by the only capable effect (encore failed)");
             }
         }
@@ -687,10 +673,28 @@ public sealed class TrackCueSheetTests
     }
 
     /// <summary>
-    /// Two drop Anchors set deep enough in the track that each has a preceding carrier mark, so the seeded
-    /// treatment roll genuinely reaches both Ride-through and Performed Transition. "Deep enough" means at
-    /// least <see cref="MaximumGapBeats"/> of music ahead of the landing: the cadence ceiling guarantees a
-    /// mark inside that window, and without one there is no incumbent to ride through.
+    /// A run of short irregular Phrases, so the boundary lattice carries many short Grids and consecutive
+    /// candidates sit well under sixteen beats apart. The stress fixture for blend fit: with no fixed
+    /// spacing floor, marks may land close together and every dealt transition still has to fit its slot.
+    /// </summary>
+    private static StructureValues ShortGridTrack()
+    {
+        var phrases = new List<StructurePhraseValues>();
+        var lengths = new[] { 24, 9, 21, 7, 40, 11, 23, 8, 25, 39, 10, 22, 41, 9, 24 };
+        var start = 1;
+        foreach (var length in lengths)
+        {
+            phrases.Add(Phrase(start, start + length - 1, PhraseType.Verse));
+            start += length;
+        }
+
+        return Structure(phrases.ToArray());
+    }
+
+    /// <summary>
+    /// Two drop Anchors set deep enough in the track that each has a preceding carrier mark: at least
+    /// <see cref="MaximumGapBeats"/> of music ahead of the landing, where the cadence ceiling guarantees a
+    /// mark — the Effect that will be on the wall when the moment hits.
     /// </summary>
     private static StructureValues TwoDropTrack()
     {
@@ -724,10 +728,22 @@ public sealed class TrackCueSheetTests
     {
         return new[]
         {
-            new TransitionDescriptor(Transition(Repertoire.None)),
-            new TransitionDescriptor(Transition(Repertoire.HandlesDrop)),
-            new TransitionDescriptor(Transition(Repertoire.HandlesFill)),
-            new TransitionDescriptor(Transition(Repertoire.HandlesDrop | Repertoire.HandlesFill)),
+            new TransitionDescriptor(Transition(runway: 4, tail: 0)),
+            new TransitionDescriptor(Transition(runway: 8, tail: 4)),
+            new TransitionDescriptor(Transition(runway: 2, tail: 2)),
+            new TransitionDescriptor(Transition(runway: 12, tail: 0)),
+        };
+    }
+
+    /// <summary>A catalog spanning the timing extremes: long Runways, long Tails, and one small card.</summary>
+    private static IReadOnlyList<TransitionDescriptor> WideTimingTransitions()
+    {
+        return new[]
+        {
+            new TransitionDescriptor(Transition(runway: 12, tail: 0)),
+            new TransitionDescriptor(Transition(runway: 0, tail: 8)),
+            new TransitionDescriptor(Transition(runway: 2, tail: 1)),
+            new TransitionDescriptor(Transition(runway: 6, tail: 6)),
         };
     }
 
@@ -753,19 +769,38 @@ public sealed class TrackCueSheetTests
         var list = new TransitionDescriptor[count];
         for (var i = 0; i < count; i++)
         {
-            list[i] = new TransitionDescriptor(Transition(Repertoire.None));
+            list[i] = new TransitionDescriptor(Transition(runway: 4, tail: 0));
         }
 
         return list;
     }
 
-    private static TransitionRepertoire Transition(Repertoire tags)
+    private static TransitionRepertoire Transition(int runway, int tail)
     {
-        return TransitionRepertoire.FromRunwayAndTail(tags, runwayBeats: 4, tailBeats: 0,
+        return TransitionRepertoire.FromRunwayAndTail(Repertoire.None, runway, tail,
             TransitionShape.Blend, TransitionIntensity.Subtle, defaultDurationSeconds: 4f);
     }
 
     // --- Helpers ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Every Grid Boundary of a structure, derived independently of the builder: each Phrase contributes
+    /// its start and every sixteenth beat after that still falls inside the Phrase.
+    /// </summary>
+    private static HashSet<int> GridBoundaryLattice(StructureValues structure)
+    {
+        var boundaries = new HashSet<int>();
+        foreach (var phrase in structure.Phrases)
+        {
+            var length = phrase.EndBeat - phrase.StartBeat + 1;
+            for (var offset = 0; offset < length; offset += GridBeats)
+            {
+                boundaries.Add(phrase.StartBeat + offset);
+            }
+        }
+
+        return boundaries;
+    }
 
     private static CuePlanMark? MarkAt(TrackCueSheet sheet, int beat)
     {
@@ -799,15 +834,10 @@ public sealed class TrackCueSheetTests
         return index >= 0 && index < effects.Count ? effects[index].Repertoire : Repertoire.None;
     }
 
-    private static Repertoire TransitionCapability(IReadOnlyList<TransitionDescriptor> transitions, int index)
-    {
-        return index >= 0 && index < transitions.Count ? transitions[index].Repertoire.Tags : Repertoire.None;
-    }
-
     private static string Serialize(TrackCueSheet sheet)
     {
         var marks = string.Join(";", sheet.Marks.Select(m => $"{m.Beat}:{m.EffectIndex}:{m.TransitionIndex}"));
-        var anchors = string.Join(";", sheet.Anchors.Select(a => $"{a.LandingBeat}:{a.Kind}:{a.Treatment}:{a.PerformerIndex}"));
+        var anchors = string.Join(";", sheet.Anchors.Select(a => $"{a.LandingBeat}:{a.Kind}:{a.EffectIndex}"));
         return marks + "|" + anchors;
     }
 }
