@@ -10,10 +10,7 @@ public enum CueSource
     /// <summary>Performed from the Cue Sheet's own mark — the ordinary case, shown without comment.</summary>
     Plan,
 
-    /// <summary>Dealt fresh because a loop re-crossed a mark that had already fired (never replayed).</summary>
-    LoopRedeal,
-
-    /// <summary>Dealt because the wall reached the four-Grid stillness ceiling with nothing planned to perform.</summary>
+    /// <summary>Dealt because the wall sat three whole Grids since the last fired cue: the fourth Grid fired at its start.</summary>
     Ceiling,
 }
 
@@ -61,8 +58,7 @@ public readonly struct SwitcherStatus
 
     /// <summary>
     /// Where the most recent synced cue came from. Sticky until the next cue performs (not just while its
-    /// Transition runs), so a glance at the HUD after the wall changes still finds the reason. Reset to
-    /// <see cref="CueSource.Plan"/> on handover — a badge never outlives the plan it explains.
+    /// Transition runs), so a glance at the HUD after the wall changes still finds the reason.
     /// </summary>
     public readonly CueSource LastCueSource;
 
@@ -113,14 +109,16 @@ public readonly struct SwitcherStatus
 
 /// <summary>
 /// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
-/// Director (ADR-0009): each tick it reads BeatManager directly for the sheet player's beat and Grid lanes,
-/// asks about the Cue Mark whose Runway begins on that beat, and fires the answer the same frame so the
-/// Transition's Impact Point lands on the mark. A mark whose Runway has already gone by is missed, not
-/// performed late, and nothing checks it off. A check-off is permanent, so no re-crossing — loop, back-cue,
-/// or needle-drop — ever re-fires a mark; re-crossing one asks for an off-plan cue instead. It owns all
-/// Runway/Impact/Tail timing and selects nothing — every decision is asked of the bound
-/// <see cref="Director"/>. It holds no cue between beats and no lifecycle around one: no Standby Cue, no
-/// Lock Point, no verdict, no revocation window.
+/// Director (ADR-0009) and thinks once per Grid, at the Grid's start, from the on-air BeatManager
+/// surface — the on-air grid is the timing authority, and the Switcher knows no player number at
+/// execution time. The think decides everything the Grid needs: whether the next boundary's mark fires
+/// (asked of the bound <see cref="Director"/>, which resolves any staged override at that moment), and
+/// whether stillness is up. Starting the blend at boundary-minus-Runway is a mechanical scheduled act
+/// of that decision, not a fresh decision. A mark whose fire beat the playhead never lands on is a
+/// Missed Cue: not performed, not spent, never fired late. A handover changes nothing on the wall by
+/// itself and resets nothing. It owns all Runway/Impact/Tail timing and selects nothing — every
+/// decision is asked of the Director. It holds no cue lifecycle: no Standby Cue, no Lock Point, no
+/// verdict, no revocation window.
 /// </summary>
 public sealed class Switcher
 {
@@ -138,59 +136,62 @@ public sealed class Switcher
     /// <summary>
     /// The one decider (ADR-0009): commands come down (the immediate and Standalone
     /// <see cref="StartTransition(int, int, float)"/> pushes, the sheet handover); questions go up through
-    /// <see cref="Director.DecideCue"/>, <see cref="Director.DecideOffPlanCue"/>, and
-    /// <see cref="Director.PeekTransitionIndex"/>. Bound once at startup.
+    /// <see cref="Director.DecideCue"/> and <see cref="Director.DecideOffPlanCue"/>. Bound once at startup.
     /// </summary>
     private Director director;
 
     /// <summary>
-    /// The plan in force. Each mark records the beat it fired on, so the Switcher keeps no execution state
-    /// beside the sheet: firing a cue marks the cue.
+    /// The plan in force. Each mark records the beat it fired on, so firing a cue marks the cue; what the
+    /// Switcher keeps beside the sheet is the wall's own state — stillness, the Grid's scheduled act, the
+    /// last-observed beat, the ask counter, and the last cue's provenance badge.
     /// </summary>
     private TrackCueSheet sheet;
 
     /// <summary>
-    /// The beat <see cref="Tick"/> last acted on. Tick runs every frame and a beat spans many of them, so this
-    /// is what makes "fire on the Runway beat" happen once rather than once per frame for the length of it.
+    /// The on-air beat <see cref="Tick"/> last acted on. Tick runs every frame and a beat spans many of
+    /// them, so this is what makes each beat observed once. A loop shows up here as the beat counter
+    /// snapping back (…190, 191, 160, 161…); the wire loop flag corroborates traces only (ADR-0011).
     /// </summary>
-    private int? actedBeat;
+    private int? lastSeenBeat;
 
     /// <summary>
-    /// Grid Boundaries of stillness — how many the wall has crossed since the last cue's mark. Anchored at
-    /// the Cue Mark: <see cref="Perform"/> seeds the count so the in-flight cue's own landing
-    /// crossing spends the seed instead of counting as stillness, which is what keeps the ceiling a full
-    /// four Grids and a legal 64-beat plan gap un-pre-empted. This is the run-time backstop, and a separate
-    /// rule from the plan-time one: the Director never builds a gap wider than
-    /// <see cref="TrackCueSheet.MaximumGapBeats"/>, but a jump can leave a Missed Cue behind, and a DJ
-    /// looping a stretch the plan left empty, or an inspection freeze ending, can still leave the playhead
-    /// with nothing to perform. Reaching the ceiling with nothing performed means the plan cannot feed the
-    /// playhead, and the boundary is asked anyway. Counted in boundaries rather than beats because a loop
-    /// re-crosses the same beat numbers — only crossings measure elapsed music.
+    /// Whether a think has established the stillness baseline. The first think observes a Grid start with
+    /// no whole Grid behind it, so it counts nothing; every later think counts the Grid it closes.
     /// </summary>
-    private int boundariesSinceCue;
+    private bool hasBaseline;
 
     /// <summary>
-    /// How many off-plan asks this handover has made, the seed dimension that stops a loop re-crossing one
-    /// boundary from being handed the same card twice. Handover-scoped like <see cref="boundariesSinceCue"/>:
-    /// both reset on <see cref="Cast"/>, so no spacing or deal history leaks from one plan into the next.
+    /// Stillness: whole Grids the wall has sat through since the last fired cue. A property of the wall,
+    /// not of any sheet — it survives handovers — and it is checked at every Grid start: three still
+    /// Grids since the last fire mean the fourth Grid fires, short or not.
+    /// </summary>
+    private int stillGrids;
+
+    /// <summary>Whether a cue fired since the last think — the fact the next think's stillness update consumes.</summary>
+    private bool firedSinceThink;
+
+    /// <summary>
+    /// The Grid's one scheduled act: the mark the think decided to fire, or null when this Grid needs
+    /// nothing. Decided once at the Grid's start; the fire itself is mechanical.
+    /// </summary>
+    private CuePlanMark scheduledMark;
+
+    /// <summary>The Director's answer for <see cref="scheduledMark"/>, decided at the think.</summary>
+    private CueDecision scheduledCue;
+
+    /// <summary>The beat the scheduled act leaves on — its mark's boundary minus the decided Transition's Runway.</summary>
+    private int scheduledFireBeat;
+
+    /// <summary>
+    /// How many off-plan asks this run has made — the seed dimension that stops a loop re-crossing one
+    /// boundary from being handed the same card twice. Never reset: a handover resets nothing.
     /// </summary>
     private int offPlanAsks;
 
     /// <summary>
-    /// Whether the playhead is inside the final Grid before the stillness ceiling with the closing deal
-    /// already certain. Armed on the Grid Boundary crossing that leaves exactly one legal Grid of stillness
-    /// (<see cref="TrackCueSheet.MaximumGapGrids"/> - 1 counted crossings) when no unfired plan mark can
-    /// still feed that Grid — the decision to act is taken once, at the Grid's start. Nothing is dealt and
-    /// no one-shot override is consumed at arm time; the flag only remembers that this Grid must end with a
-    /// cue. Cleared by every performed cue, by <see cref="Cast"/>, and at the ceiling boundary itself where
-    /// the at-boundary backstop takes over.
-    /// </summary>
-    private bool ceilingArmed;
-
-    /// <summary>
     /// Provenance of the most recent synced cue, held for <see cref="Status"/> so the Live strip can badge a
-    /// wall change the plan did not call for. Sticky until the next cue or handover, not until the
-    /// Transition completes — the explanation outlives the move it explains.
+    /// wall change the plan did not call for. Sticky until the next cue, not until the Transition
+    /// completes — the explanation outlives the move it explains.
     /// </summary>
     private CueSource lastCueSource = CueSource.Plan;
 
@@ -258,10 +259,13 @@ public sealed class Switcher
 
     /// <summary>
     /// The handover: takes the Cue Sheet now in force. "Cast" hands over the plan — it does not time a fire;
-    /// <see cref="Tick"/> performs the marks. Idempotent on the sheet's
-    /// (<see cref="TrackCueSheet.PlayerNumber"/>, <see cref="TrackCueSheet.StructureGeneration"/>) identity,
-    /// so the Director calls it every synced tick and keeps zero handover state. <c>Cast(default)</c> clears
-    /// the plan (generation 0, player 0) and is how Standalone Mode turns sheet execution off.
+    /// <see cref="Tick"/> performs the marks. A handover changes nothing on the wall by itself and resets
+    /// nothing of the wall's own: stillness, the check-offs, and any Transition already in flight all
+    /// stand, and the next change comes at a mark or at the stillness deadline. An unstarted scheduled
+    /// act is the outgoing plan's decision, not the wall's, so it leaves with its sheet — only a started
+    /// Transition is fire-and-forget. Idempotent on the sheet's (<see cref="TrackCueSheet.PlayerNumber"/>, <see cref="TrackCueSheet.StructureGeneration"/>)
+    /// identity, so the Director calls it every synced tick and keeps zero handover state. <c>Cast(default)</c>
+    /// clears the plan (generation 0, player 0) and is how Standalone Mode turns sheet execution off.
     /// </summary>
     public void Cast(TrackCueSheet sheet)
     {
@@ -272,204 +276,175 @@ public sealed class Switcher
         }
 
         this.sheet = sheet;
-
-        // A handover is a fresh start: the incoming player is somewhere else in its own track, so neither the
-        // beat already acted on nor the outgoing plan's spacing and deal history mean anything here.
-        actedBeat = null;
-        boundariesSinceCue = 0;
-        offPlanAsks = 0;
-        ceilingArmed = false;
-        lastCueSource = CueSource.Plan;
-        lastCueMarkBeat = -1;
+        ClearScheduledAct();
         Trace(() => sheet.StructureGeneration > 0
             ? $"SWITCHER_CAST player={sheet.PlayerNumber} generation={sheet.StructureGeneration} marks={sheet.Marks.Count}"
             : "SWITCHER_CAST_CLEARED plan=<none>");
     }
 
     /// <summary>
-    /// Follows the sheet player's beat and fires each cue on its Runway start — the beat a Transition has to
-    /// leave on for its Impact Point to land on the mark. Which Runway that is belongs to the Transition that
-    /// will actually fly, not to the plan's baked card, so the Director is asked first
-    /// (<see cref="Director.PeekTransitionIndex"/>) and a staged override still lands its Impact on the mark.
-    /// Called by the Controller each frame after <see cref="Director.Tick"/>, so a handover always precedes
-    /// execution in the same frame. A mark the playhead reaches again has already fired, which only happens
-    /// when the DJ loops, so the Director is asked for a fresh cue rather than replaying the spent one.
-    /// Counting Grid Boundaries alongside the plan is what bounds the wall: a boundary reached with the plan's
-    /// widest legal gap already spent is asked even though no mark sits on it, so no loop and no released
-    /// freeze can hold the wall still forever.
+    /// Executes the plan against the on-air surface. Called by the Controller each frame after
+    /// <see cref="Director.Tick"/>, so a handover always precedes execution in the same frame. Each new
+    /// on-air beat does two things: it fires the Grid's scheduled act when the beat lands on the act's
+    /// fire beat exactly — a forward jump that skips that beat leaves the mark a Missed Cue, not performed
+    /// and not spent, while a loop snap-back before it keeps the act for the re-walked pass — and it
+    /// thinks once at every Grid start, where all deciding happens.
     /// </summary>
     public void Tick()
     {
-        // The Switcher performs the plan it holds against that plan's own player — never the focus
-        // player, which it does not know about. PlayerNumber is 1-based.
-        var slot = sheet.PlayerNumber - 1;
-        var players = controller.beatManager.Players;
-        if (slot < 0 || slot >= players.Count || players[slot].Beat is not { } beat)
+        // The on-air grid is the timing authority — anything the DJ does is represented in it — and the
+        // Switcher knows no player number at execution time.
+        if (controller.beatManager.Timing.Beat is not { } beat
+            || controller.beatManager.Grid.Beat is not { } gridBeat)
         {
             return;
         }
 
-        if (beat == actedBeat)
+        if (beat == lastSeenBeat)
         {
             return;
         }
 
-        var firstActSinceHandover = actedBeat == null;
-        actedBeat = beat;
+        lastSeenBeat = beat;
 
-        // A Grid Boundary is the Grid lane returning to one — phrase-relative, so a shortened phrase restarts
-        // it early and the count follows the music. Without that lane there is no way to know where boundaries
-        // fall, so the count simply never advances and only the plan's own marks perform. The handover beat is
-        // the start line of the new plan's stillness, not elapsed music, so a handover landing on a boundary
-        // does not count that crossing.
-        var onBoundary = players[slot].GridBeat == 1;
-        if (onBoundary && !firstActSinceHandover)
+        if (scheduledMark != null && beat == scheduledFireBeat)
         {
-            boundariesSinceCue++;
+            var mark = scheduledMark;
+            var cue = scheduledCue;
+            ClearScheduledAct();
+            mark.FiredAtBeat = beat;
+            Perform(beat, mark.Beat, cue, CueSource.Plan);
+        }
+        else if (scheduledMark != null && beat > scheduledFireBeat)
+        {
+            // The playhead escaped past the fire beat without landing on it — a forward jump. The act
+            // lapses and its mark stays unspent; a lapsed mark never fires late.
+            var lapsedMarkBeat = scheduledMark.Beat;
+            var lapsedFireBeat = scheduledFireBeat;
+            ClearScheduledAct();
+            Trace(() => $"SWITCHER_LAPSE mark={lapsedMarkBeat} fire={lapsedFireBeat} beat={beat}");
         }
 
-        foreach (var mark in sheet.Marks)
+        // The Grid lane returning to one is a Grid start — phrase-relative, so a shortened phrase
+        // restarts it early and the think follows the music. A loop that snaps the beat back re-crosses
+        // Grid starts and thinks again: crossings measure elapsed music.
+        if (gridBeat == 1)
         {
-            var spent = mark.Fired;
-            CueDecision cue;
-            if (spent)
-            {
-                // A spent cue is reachable again only by re-crossing the very beat it left on — a loop, a
-                // back-cue, a needle-drop. The beat it left on is the fact, not the beat the plan would have
-                // chosen: an override may have flown it on a different Runway. Its Impact Point would land on
-                // the next boundary, one Grid further out than the boundaries counted so far.
-                if (beat != mark.FiredAtBeat)
-                {
-                    continue;
-                }
-
-                // The count is floored at zero: its -1 seed only exists to absorb the landing crossing, and a loop
-                // that turned back before the mark's boundary simply never spent it.
-                // The extra Grid is the landing still ahead of this fire beat — a runway-zero cue fired on
-                // its own boundary has none, and that crossing was already counted this very tick.
-                cue = AskOffPlan(mark.Beat, Math.Max(boundariesSinceCue, 0) + (mark.Beat > mark.FiredAtBeat ? 1 : 0));
-            }
-            else
-            {
-                // Count the Runway back from the Impact Point using the Transition that would actually perform
-                // this mark, so an override with its own Runway leaves on its own beat and still lands on the
-                // mark. Asking is free: the peek never spends the one-shot, only DecideCue below does.
-                if (beat != mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats)
-                {
-                    continue;
-                }
-
-                cue = director.DecideCue(mark);
-            }
-
-            if (!cue.Perform)
-            {
-                // Held, or a boundary the Director chose to ride through. Either way the wall stays put, and a
-                // mark that never fires simply does not happen — the plan says what to perform, not what must
-                // be on the wall at a beat.
-                return;
-            }
-
-            if (!spent)
-            {
-                mark.FiredAtBeat = beat;
-            }
-
-            Perform(beat, mark.Beat, cue, spent ? CueSource.LoopRedeal : CueSource.Plan);
-            return;
-        }
-
-        // Nothing in the plan fires on this beat. One Grid short of the ceiling the next boundary's deal is
-        // already certain, so the decision to act is taken here, at the Grid's start — armed once, not
-        // re-judged every beat. The plan is consulted exactly once: an unfired mark that can still fire by
-        // this Grid's closing boundary keeps the plan in charge and the ceiling quiet.
-        if (onBoundary && boundariesSinceCue == TrackCueSheet.MaximumGapGrids - 1
-            && !PlanFeedsPlayheadBy(beat, beat + TrackCueSheet.GridBeats))
-        {
-            ceilingArmed = true;
-        }
-
-        // An armed ceiling fires mid-Grid, early enough that the Transition flies its whole Runway and its
-        // Impact lands on the next boundary — exactly like a planned mark. Firing at the boundary itself
-        // held the wall still for the whole gap plus the Transition's own length (2026-07-28 live). The
-        // boundary is projected from the Grid lane, not tracked as an absolute beat, so a loop pass that
-        // re-walks the final Grid fires on the same lane and lands on the same boundary it re-approaches.
-        // The peek spends nothing; the commit deals the same card because both are seeded by the boundary
-        // and the ask alone.
-        if (ceilingArmed && players[slot].GridBeat is { } gridBeat && gridBeat != 1)
-        {
-            var boundaryBeat = beat + (TrackCueSheet.GridBeats - gridBeat + 1);
-            var gapGrids = boundariesSinceCue + 1;
-            var peekedTransition = director.PeekOffPlanTransitionIndex(
-                boundaryBeat, gapGrids, offPlanAsks + 1);
-            if (peekedTransition >= 0
-                && boundaryBeat - beat == transitions[peekedTransition].Repertoire.RunwayBeats)
-            {
-                var cue = AskOffPlan(boundaryBeat, gapGrids);
-                if (cue.Perform)
-                {
-                    Perform(beat, boundaryBeat, cue, CueSource.Ceiling);
-                }
-
-                return;
-            }
-        }
-
-        // At the boundary itself the ceiling is the backstop for everything the armed lane cannot fly: a
-        // zero-Runway card, a boundary arriving early off a shortened phrase, a Hold covering the fire
-        // lane, or a jump that skipped it. The deal is certain at the ceiling, which is what makes the
-        // wall holding still past TrackCueSheet.MaximumGapBeats impossible. Below the ceiling nothing is
-        // asked, so an off-plan cue can never pre-empt a plan the playhead is still walking through.
-        if (!onBoundary || boundariesSinceCue < TrackCueSheet.MaximumGapGrids)
-        {
-            return;
-        }
-
-        // Standing on the boundary that spent the last legal Grid: the armed lane is over, and performing
-        // now is the ceiling gap itself.
-        ceilingArmed = false;
-        var offPlanCue = AskOffPlan(beat, boundariesSinceCue);
-        if (offPlanCue.Perform)
-        {
-            Perform(beat, beat, offPlanCue, CueSource.Ceiling);
+            Think(beat);
         }
     }
 
     /// <summary>
-    /// Whether any unfired mark can still fire after <paramref name="beat"/> and at or before
-    /// <paramref name="boundaryBeat"/> — the guard that keeps a foreseeable ceiling cue from pre-empting a
-    /// plan that is about to feed the playhead itself. Counts each mark's Runway back from its landing with
-    /// the Transition that would actually perform it, exactly as the planned-mark path does.
+    /// The once-per-Grid decision, taken at the Grid's start from on-air state — everything this Grid
+    /// needs. Stillness is counted first; then the next boundary's unfired mark is decided and its blend
+    /// scheduled at boundary-minus-Runway; and a wall three whole Grids still with nothing scheduled
+    /// takes the Ceiling cue here, at the Grid start — never mid-Grid.
     /// </summary>
-    private bool PlanFeedsPlayheadBy(int beat, int boundaryBeat)
+    /// <param name="beat">The on-air beat this Grid starts on.</param>
+    private void Think(int beat)
     {
-        foreach (var mark in sheet.Marks)
+        if (!hasBaseline)
         {
-            if (mark.Fired)
-            {
-                continue;
-            }
+            // The first think has no whole Grid behind it, so there is nothing to count yet.
+            hasBaseline = true;
+        }
+        else if (firedSinceThink)
+        {
+            stillGrids = 0;
+        }
+        else
+        {
+            stillGrids++;
+        }
 
-            var fireBeat = mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats;
-            if (fireBeat > beat && fireBeat <= boundaryBeat)
+        firedSinceThink = false;
+
+        var candidate = NextBoundaryMark(beat);
+
+        // A short Grid restarts the Grid early, so a think can arrive with the same closing mark still
+        // ahead. The decision already taken stands — re-deciding would consume a staged override twice.
+        if (scheduledMark != null && !ReferenceEquals(scheduledMark, candidate))
+        {
+            ClearScheduledAct();
+        }
+
+        if (candidate is { Fired: false } && scheduledMark == null)
+        {
+            var cue = director.DecideCue(candidate);
+            if (cue.Perform)
             {
-                return true;
+                // The Runway belongs to the Transition the Director decided, so a staged override flies
+                // its own Runway and still lands its Impact on the mark.
+                var fireBeat = candidate.Beat - transitions[cue.TransitionIndex].Repertoire.RunwayBeats;
+                if (fireBeat == beat)
+                {
+                    // The Runway exactly fills this Grid (a short Grid under a card that just fits):
+                    // the blend leaves here, at the Grid start, and still flies whole onto the mark.
+                    candidate.FiredAtBeat = beat;
+                    Perform(beat, candidate.Beat, cue, CueSource.Plan);
+                }
+                else if (fireBeat < beat)
+                {
+                    // A Runway longer than the Grid it would launch from: a Runway is never compressed
+                    // and nothing fires late, so this is a Missed Cue — not performed, not spent.
+                    Trace(() => $"SWITCHER_MISS mark={candidate.Beat} fire={fireBeat} beat={beat}");
+                }
+                else
+                {
+                    scheduledMark = candidate;
+                    scheduledCue = cue;
+                    scheduledFireBeat = fireBeat;
+                    Trace(() => $"SWITCHER_SCHEDULE mark={candidate.Beat} fire={fireBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+                }
             }
         }
 
-        return false;
+        // Three whole Grids since the last fire and nothing scheduled to feed this one: the fourth Grid
+        // fires, short or not, and the Ceiling cue is taken at the Grid start. Only sheet swaps and loops
+        // push the wall here — a Director-built sheet never violates stillness on its own, because its
+        // widest legal gap puts the closing mark's fire inside this Grid.
+        if (stillGrids >= TrackCueSheet.MaximumGapGrids - 1 && scheduledMark == null && !firedSinceThink)
+        {
+            offPlanAsks++;
+            var cue = director.DecideOffPlanCue(beat, stillGrids + 1, offPlanAsks);
+            if (cue.Perform)
+            {
+                Perform(beat, beat, cue, CueSource.Ceiling);
+            }
+        }
     }
 
     /// <summary>
-    /// Asks the Director what to do at a Grid Boundary the plan cannot cover, counting the ask so a loop
-    /// re-crossing one boundary is never handed the same card twice.
+    /// The mark on this Grid's closing boundary, or null when that boundary carries none. Marks sit on
+    /// Grid Boundaries, so the nearest mark within one nominal Grid of the start is the closing one.
     /// </summary>
-    /// <param name="boundaryBeat">Absolute Grid Boundary beat being asked about.</param>
-    /// <param name="gapGrids">The gap in Grids that performing here would produce.</param>
-    private CueDecision AskOffPlan(int boundaryBeat, int gapGrids)
+    /// <param name="beat">The on-air beat the Grid starts on.</param>
+    private CuePlanMark NextBoundaryMark(int beat)
     {
-        offPlanAsks++;
-        return director.DecideOffPlanCue(boundaryBeat, gapGrids, offPlanAsks);
+        if (sheet.Marks is not { } marks)
+        {
+            // No plan in force — a default sheet carries no mark list at all.
+            return null;
+        }
+
+        CuePlanMark next = null;
+        foreach (var mark in marks)
+        {
+            if (mark.Beat > beat && (next == null || mark.Beat < next.Beat))
+            {
+                next = mark;
+            }
+        }
+
+        return next != null && next.Beat - beat <= TrackCueSheet.GridBeats ? next : null;
+    }
+
+    /// <summary>Forgets the Grid's scheduled act.</summary>
+    private void ClearScheduledAct()
+    {
+        scheduledMark = null;
+        scheduledCue = default;
+        scheduledFireBeat = 0;
     }
 
     /// <summary>
@@ -599,12 +574,9 @@ public sealed class Switcher
         lastCueSource = source;
         lastCueMarkBeat = markBeat;
 
-        // Stillness anchors at the mark, not at the fire. When the fire leads its mark, the
-        // landing boundary still ahead belongs to this cue: the count starts one short so that crossing
-        // brings it to zero. A cue fired on the boundary it was asked about has no landing left to absorb.
-        boundariesSinceCue = markBeat > fireBeat ? -1 : 0;
-        // Any performed cue, whatever its source, ends the stillness the ceiling was armed against.
-        ceilingArmed = false;
+        // Any performed cue, whatever its source, ends the wall's still spell; the next think's
+        // stillness update consumes this.
+        firedSinceThink = true;
 
         // A synced cue is denominated in beats, so its seconds come off the live clock rather than the
         // Transition's authored default.

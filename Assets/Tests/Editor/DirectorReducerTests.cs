@@ -90,13 +90,13 @@ public sealed class DirectorReducerTests
         var phrasesA = new[] { Phrase(1, 64, "intro") };
         FeedFrame(focusBeat: 1, phrasesA, generation: 1);
         var sheetA = ExpectedSheet(playerSlot: 0, generation: 1);
-        FeedFrame(RunwayStart(sheetA.Marks[0]), phrasesA, generation: 1);
+        WalkFrames(2, RunwayStart(sheetA.Marks[0]), phrasesA, generation: 1);
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(sheetA.Marks[0].EffectIndex), "Generation 1 drives execution.");
 
         var phrasesB = new[] { Phrase(1, 48, "verse"), Phrase(49, 96, "chorus") };
         FeedFrame(focusBeat: 1, phrasesB, generation: 2);
         var sheetB = ExpectedSheet(playerSlot: 0, generation: 2);
-        FeedFrame(RunwayStart(sheetB.Marks[0]), phrasesB, generation: 2);
+        WalkFrames(2, RunwayStart(sheetB.Marks[0]), phrasesB, generation: 2);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(sheetB.Marks[0].EffectIndex), "The rebuilt generation-2 sheet is handed over.");
         Assert.That(controller.currentTransition, Is.EqualTo(sheetB.Marks[0].TransitionIndex));
@@ -335,6 +335,15 @@ public sealed class DirectorReducerTests
         controller.beatManager.Update(0f);
         director.Tick(0f);
         switcher.Tick();
+    }
+
+    /// <summary>Feeds every beat from <paramref name="fromBeat"/> through <paramref name="toBeat"/> in production frame order, so Grid-start thinks occur.</summary>
+    private void WalkFrames(int fromBeat, int toBeat, StructurePhrase[] phrases, int generation)
+    {
+        for (var beat = fromBeat; beat <= toBeat; beat++)
+        {
+            FeedFrame(beat, phrases, generation);
+        }
     }
 
     private static StructurePhrase Phrase(int startBeat, int endBeat, string type, int fillStartBeat = 0, int dropLandingBeat = 0)
