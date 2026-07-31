@@ -266,6 +266,10 @@ _Avoid_: weights or scoring; filtering the deal by energy affinity (energy is a 
 The cue the Director deals when the plan in force cannot feed the playhead. Its answer is a fresh card or a ride-through, never the Effect already on the wall or the one being moved toward, and it leaves the Cue Sheet exactly as it was.
 _Avoid_: "staleness cue" (retired name); calling it a Cast, an override, or a Missed Cue's replacement; treating it as something that spends a Cue Mark.
 
+**Off-Plan Sighting** (a.k.a. **Sighting**):
+The Switcher's whole report through the anomaly doorway — which anomaly it saw, the Grid Boundary at hand, how still the wall has been, which ask this is, and what the wall is showing and moving toward. It is everything the Director's answer may draw on; the anomaly kind itself is diagnostic — it feeds traces and displays, never the deal.
+_Avoid_: reading the anomaly kind as a decision input; the Director reaching back into the Switcher for anything the Sighting should carry; a second doorway or a looser-argument variant of the question.
+
 **Stillness**:
 How long the wall has held still — whole Grids since the last fired cue, checked at every Grid start. It is a property of the wall, not of any sheet: a handover changes nothing on the wall and resets nothing.
 _Avoid_: counting stillness in beats or beat positions (loops and jumps break both — Grids crossed at Grid start is the measure); treating stillness as sheet state a handover restarts.
