@@ -9,7 +9,6 @@ using UnityEngine;
 public sealed class TransitionSettings
 {
     [Header("Transition Repertoire")]
-    public Repertoire Tags = Repertoire.None;
     [Min(0)] public int RunwayBeats = 4;
     [Min(0)] public int TailBeats;
     public TransitionShape Shape = TransitionShape.Blend;
@@ -73,7 +72,6 @@ public sealed class TransitionSettings
     {
         ValidateDuration();
         return TransitionRepertoire.FromRunwayAndTail(
-            Tags,
             RunwayBeats,
             TailBeats,
             Shape,
@@ -97,7 +95,6 @@ public sealed class TransitionSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        Tags = source.Tags;
         RunwayBeats = source.RunwayBeats;
         TailBeats = source.TailBeats;
         Shape = source.Shape;
@@ -128,7 +125,6 @@ public sealed class TransitionSettings
 
     private void CopyRepertoireFrom(TransitionRepertoire repertoire)
     {
-        Tags = repertoire.Tags;
         RunwayBeats = repertoire.RunwayBeats;
         TailBeats = repertoire.TailBeats;
         Shape = repertoire.Shape;

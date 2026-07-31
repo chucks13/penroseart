@@ -387,7 +387,6 @@ public sealed class CueSheetTimelineTests
     private static TransitionRepertoire Transition(int runwayBeats, int tailBeats)
     {
         return TransitionRepertoire.FromRunwayAndTail(
-            Repertoire.None,
             runwayBeats,
             tailBeats,
             TransitionShape.Blend,

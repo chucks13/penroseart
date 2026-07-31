@@ -21,19 +21,19 @@ public readonly struct EffectDescriptor
 
 /// <summary>
 /// One transition catalog entry as it enters the sheet builder: the <see cref="TransitionRepertoire"/>
-/// timing/use contract the catalog advertises at this position. Position is identity, as for
+/// timing contract the catalog advertises at this position. Position is identity, as for
 /// <see cref="EffectDescriptor"/>.
 /// </summary>
 public readonly struct TransitionDescriptor
 {
     /// <summary>Captures one transition catalog entry.</summary>
-    /// <param name="repertoire">Timing and musical-use contract this catalog position advertises.</param>
+    /// <param name="repertoire">Timing contract this catalog position advertises.</param>
     public TransitionDescriptor(TransitionRepertoire repertoire)
     {
         Repertoire = repertoire;
     }
 
-    /// <summary>Timing and musical-use contract this catalog position advertises.</summary>
+    /// <summary>Timing contract this catalog position advertises.</summary>
     public TransitionRepertoire Repertoire { get; }
 }
 

@@ -1,12 +1,10 @@
 ﻿using UnityEngine;
-using RepertoireFlags = Repertoire;
 
 /// <summary>
 /// Staggered per-channel fade where red, green, and blue transition on offset progress windows.
 /// </summary>
 public class RGBFade : TransitionBase
 {
-    private const RepertoireFlags DefaultTags = RepertoireFlags.None;
     private const int RunwayBeats = 4;
     private const int TailBeats = 4;
     private const TransitionShape Shape = TransitionShape.ChannelBlend;
@@ -18,7 +16,6 @@ public class RGBFade : TransitionBase
     {
         return new TransitionSettings
         {
-            Tags = DefaultTags,
             RunwayBeats = RunwayBeats,
             TailBeats = TailBeats,
             Shape = Shape,

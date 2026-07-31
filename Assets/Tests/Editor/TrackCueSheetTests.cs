@@ -777,7 +777,7 @@ public sealed class TrackCueSheetTests
 
     private static TransitionRepertoire Transition(int runway, int tail)
     {
-        return TransitionRepertoire.FromRunwayAndTail(Repertoire.None, runway, tail,
+        return TransitionRepertoire.FromRunwayAndTail(runway, tail,
             TransitionShape.Blend, TransitionIntensity.Subtle, defaultDurationSeconds: 4f);
     }
 

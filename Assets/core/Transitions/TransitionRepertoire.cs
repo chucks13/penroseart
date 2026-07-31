@@ -21,7 +21,7 @@ public enum TransitionIntensity
 }
 
 /// <summary>
-/// Timing and musical-use contract that a Transition advertises to the Director.
+/// Timing contract that a Transition advertises to the Director.
 /// </summary>
 /// <remarks>
 /// A transition moves from A to B over <see cref="DurationBeats"/> in Synced Mode.
@@ -37,15 +37,11 @@ public readonly struct TransitionRepertoire
 
     /// <summary>Default transition contract: a four-beat blend with a four-second Standalone duration.</summary>
     public static TransitionRepertoire Default { get; } = FromRunwayAndTail(
-        Repertoire.None,
         runwayBeats: 4,
         tailBeats: 0,
         TransitionShape.Blend,
         TransitionIntensity.Subtle,
         defaultDurationSeconds: 4f);
-
-    /// <summary>Musical events this transition is suited for, such as Fill or Drop cues.</summary>
-    public readonly Repertoire Tags;
 
     /// <summary>Beats from transition start to the Impact Point.</summary>
     public readonly int RunwayBeats;
@@ -72,7 +68,6 @@ public readonly struct TransitionRepertoire
     public bool HasTail => TailBeats > 0;
 
     public TransitionRepertoire(
-        Repertoire tags,
         int runwayBeats,
         int tailBeats,
         TransitionShape shape,
@@ -98,7 +93,6 @@ public readonly struct TransitionRepertoire
                 $"Runway plus Tail cannot exceed {MaxDurationBeats} beats.");
         }
 
-        Tags = tags;
         RunwayBeats = runwayBeats;
         TailBeats = tailBeats;
         Shape = shape;
@@ -110,13 +104,12 @@ public readonly struct TransitionRepertoire
     /// Creates a transition contract from the musical language the Director uses to schedule it.
     /// </summary>
     public static TransitionRepertoire FromRunwayAndTail(
-        Repertoire tags,
         int runwayBeats,
         int tailBeats,
         TransitionShape shape,
         TransitionIntensity intensity,
         float defaultDurationSeconds)
     {
-        return new TransitionRepertoire(tags, runwayBeats, tailBeats, shape, intensity, defaultDurationSeconds);
+        return new TransitionRepertoire(runwayBeats, tailBeats, shape, intensity, defaultDurationSeconds);
     }
 }

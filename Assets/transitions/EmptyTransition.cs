@@ -1,6 +1,5 @@
 // Copyable, catalog-ignored starter for authoring PenroseArt A-to-B transitions.
 using UnityEngine;
-using RepertoireFlags = Repertoire;
 
 /// <summary>
 /// Copyable starter template for a new PenroseArt effect-to-effect transition.
@@ -46,7 +45,6 @@ public class EmptyTransition : TransitionBase
     {
         return new TransitionSettings
         {
-            Tags = RepertoireFlags.None,
             RunwayBeats = 4,
             TailBeats = 0,
             Shape = TransitionShape.Blend,
