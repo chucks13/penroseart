@@ -40,13 +40,10 @@ internal static class TransitionBarRenderer
     /// <summary>Dim neutral text for the idle on-air state.</summary>
     private static readonly Color IdleColor = new(0.55f, 0.57f, 0.60f);
 
-    // Off-plan badge colours sit outside both registers on purpose: not the tracker's reserved
+    // The off-plan badge colour sits outside both registers on purpose: not the tracker's reserved
     // saturated identities (magenta, cyan, orange, green, yellow) and not this strip's neutrals,
     // so a badge reads as "the Switcher covered for the plan" and nothing else.
-    /// <summary>Badge field for a cue dealt fresh after a loop re-crossed a fired mark.</summary>
-    private static readonly Color LoopRedealBadgeColor = new(0.42f, 0.27f, 0.62f);
-
-    /// <summary>Badge field for a cue forced by the four-Grid stillness ceiling.</summary>
+    /// <summary>Badge field for a cue forced by the stillness ceiling.</summary>
     private static readonly Color CeilingBadgeColor = new(0.62f, 0.22f, 0.24f);
 
     /// <summary>Cached left-aligned identity style.</summary>
@@ -114,7 +111,7 @@ internal static class TransitionBarRenderer
     /// <summary>
     /// Badges the last synced cue's provenance beside the A-to-B identity when the plan did not call for it.
     /// The badge is sticky — it follows <see cref="SwitcherStatus.LastCueSource"/>, which holds until the
-    /// next cue or handover — so the reason for a wall change is still on screen after the move lands.
+    /// next cue — so the reason for a wall change is still on screen after the move lands.
     /// A planned cue draws nothing: silence means "that was the sheet".
     /// </summary>
     private static void DrawCueSourceBadge(SwitcherStatus status, Rect leftText, string leftLabel)
@@ -124,9 +121,8 @@ internal static class TransitionBarRenderer
             return;
         }
 
-        var (label, color) = status.LastCueSource == CueSource.LoopRedeal
-            ? ($"LOOP RE-DEAL @ {status.LastCueMarkBeat}", LoopRedealBadgeColor)
-            : ($"CEILING @ {status.LastCueMarkBeat}", CeilingBadgeColor);
+        var label = $"CEILING @ {status.LastCueMarkBeat}";
+        var color = CeilingBadgeColor;
         var size = badgeStyle!.CalcSize(new GUIContent(label));
         var identityWidth = leftStyle!.CalcSize(new GUIContent(leftLabel)).x;
         var badge = new Rect(

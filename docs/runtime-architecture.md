@@ -92,9 +92,9 @@ Staged and held Effect/Transition choices mask the assignment when the Switcher 
 
 Show Now is the pushed counterpart to a staged pick: an operator choice starts a real Transition into the picked Effect at that instant, with the staged card and no Runway, because an off-grid interjection has no Cue Mark for an Impact Point to fly toward. There is no cut path. The plan in force is left standing — nothing is cleared or re-cast — and it resumes at its next unfired mark.
 
-The fire math follows the **selected** Transition, not the planned one. `Switcher.Tick()` computes a mark's due beat as `mark.Beat - transitions[director.PeekTransitionIndex(mark)].Repertoire.RunwayBeats`, so an override carrying its own Runway leaves on its own beat and its Impact Point still lands on the Cue Mark. `PeekTransitionIndex` is a peek by design: asking is free, and only `DecideCue` spends the one-shot.
+The fire math follows the **decided** Transition, not the planned one. The Grid-start think asks `Director.DecideCue(mark)` once — which is where a one-shot override is consumed — and schedules the blend at `mark.Beat - RunwayBeats` of the Transition the answer names, so an override carrying its own Runway leaves on its own beat and its Impact Point still lands on the Cue Mark. There is no peek surface: one ask, one decision, one scheduled act.
 
-The consequence is the override's timing contract. A Transition staged before its mark's Runway beat performs that mark. A Transition staged *after* that beat has already passed cannot fly its Runway, and a Runway is never compressed to catch up — so the mark is simply missed and the override takes effect at the following mark instead. Late staging delays an override; it never produces a rushed or off-mark hit.
+The consequence is the override's timing contract: staged overrides apply from the next think onward. An override staged before the Grid-start think that decides a mark performs that mark. An override staged after the think does not touch the already-scheduled act — fire-and-forget extends to the scheduled act — so it takes effect at a following think instead. Late staging delays an override; it never produces a rushed or off-mark hit.
 
 ### Transition timing
 

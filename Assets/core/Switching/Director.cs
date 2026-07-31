@@ -453,11 +453,12 @@ public sealed class Director
     /// Answers what the Switcher should perform for a planned Cue Mark (ADR-0009): frozen under Hold — an
     /// inspection freeze, so nothing performs and the mark is left unfired — otherwise the mark's baked cards
     /// with the one-shot override masks applied. Releasing a Hold does not chase a mark that came due while
-    /// frozen: a Transition only ever leaves on a Runway beat, so the wall waits for the next one. The sheet is
-    /// never mutated; overrides mask. This is the perform-time decision, and it is what consumes a one-shot
-    /// override — <see cref="PeekTransitionIndex"/> is the question to ask when nothing is being performed yet.
+    /// frozen: a Transition only ever leaves on a Runway beat, so the wall waits for the next think. The
+    /// sheet is never mutated; overrides mask. The Switcher asks this once, at the Grid-start think, so
+    /// this is where a staged one-shot override is consumed — staged overrides apply from the next think
+    /// onward, and the decided cue then runs fire-and-forget through its scheduled act.
     /// </summary>
-    /// <param name="mark">The planned Cue Mark whose Runway has just begun.</param>
+    /// <param name="mark">The planned Cue Mark on the thinking Grid's closing boundary.</param>
     /// <returns>What to perform, or <see cref="CueDecision.Frozen"/> when the wall is held.</returns>
     public CueDecision DecideCue(CuePlanMark mark)
     {
@@ -465,63 +466,22 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Answers which Transition would perform at <paramref name="mark"/> if it came due this instant, without
-    /// performing or consuming anything (ADR-0009: commands go down, questions go up). The Switcher counts a
-    /// mark's Runway backwards from its Impact Point, and a Runway is a property of the Transition that flies
-    /// it — so counting from the plan's baked card while an override is staged would put the Impact beside the
-    /// Cue Mark instead of on it. A read only: the one-shot masks are inspected, never spent, so asking costs
-    /// the operator nothing and <see cref="DecideCue"/> still spends the mask on the frame that performs.
-    /// </summary>
-    /// <param name="mark">The planned Cue Mark whose Runway start is being worked out.</param>
-    /// <returns>The Transition catalog index that would perform this mark.</returns>
-    public int PeekTransitionIndex(CuePlanMark mark)
-    {
-        return PeekTransitionOverride(mark.TransitionIndex);
-    }
-
-    /// <summary>
-    /// The Transition that would perform an off-plan cue dealt at <paramref name="boundaryBeat"/>, or -1 when
-    /// nothing would perform there — no focus sheet, Hold in force, or a deal the cadence declines. This is
-    /// <see cref="PeekTransitionIndex"/> for the off-plan path: the Switcher counts a foreseeable ceiling
-    /// cue's Runway back from its boundary with it. Asking is free — the peek consumes neither the ask
-    /// number nor a staged one-shot override; only <see cref="DecideOffPlanCue"/> spends those.
-    /// </summary>
-    /// <param name="boundaryBeat">Absolute Grid Boundary beat the cue would land on.</param>
-    /// <param name="gapGrids">The gap in Grids performing there would produce.</param>
-    /// <param name="ask">The ask number the commit would use, so the peek reads the same card.</param>
-    public int PeekOffPlanTransitionIndex(int boundaryBeat, int gapGrids, int ask)
-    {
-        if (controller.TryGetHeldEffectIndex(out _))
-        {
-            return -1;
-        }
-
-        if (!TryDealOffPlan(boundaryBeat, gapGrids, ask, out var dealt) || !dealt.Take)
-        {
-            return -1;
-        }
-
-        return PeekTransitionOverride(dealt.TransitionIndex);
-    }
-
-    /// <summary>
-    /// Answers the Switcher about a Grid Boundary the plan cannot cover: the DJ has looped back over a cue
-    /// already performed, so the same cue must not play twice, or the wall has held still for the plan's
-    /// widest legal gap. Deals a fresh card and whether to take it here or ride through to the next boundary,
+    /// Answers the Switcher about a Grid start the plan cannot cover: the wall has sat three whole Grids
+    /// since the last fired cue, so the fourth Grid must fire. Deals a fresh card and whether to take it here or ride through to the next boundary,
     /// so changes land one to four Grids apart and never further than
     /// <see cref="TrackCueSheet.MaximumGapBeats"/> beats. The Effect already on the wall is excluded, so a cue
     /// taken here always moves it. Frozen under Hold, and when there is no focus or no built sheet.
     /// </summary>
     /// <param name="boundaryBeat">
-    /// Absolute Grid Boundary beat being asked about — the beat a cue taken here should land its Impact Point
-    /// on. The Switcher may well be standing a Runway short of it, exactly as it is for a planned mark.
+    /// Absolute Grid Boundary beat being asked about — the Grid start the Switcher is standing on, where a
+    /// cue taken here starts its blend.
     /// </param>
     /// <param name="gapGrids">
     /// The gap in Grids performing here would produce, as the Switcher counts it; at
     /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
     /// </param>
     /// <param name="ask">
-    /// Which off-plan ask this is on the current handover. The Director remembers nothing across asks, so this
+    /// Which off-plan ask this is on the current run. The Director remembers nothing across asks, so this
     /// is what separates one deal from the next when a loop re-crosses the same boundary.
     /// </param>
     public CueDecision DecideOffPlanCue(int boundaryBeat, int gapGrids, int ask)
@@ -545,10 +505,9 @@ public sealed class Director
     }
 
     /// <summary>
-    /// The single deal both <see cref="PeekOffPlanTransitionIndex"/> and <see cref="DecideOffPlanCue"/> read.
-    /// The card is seeded by the boundary and ask alone and never hands back the Effect the wall is showing
-    /// or moving toward — an off-plan cue is asked for precisely because the wall must change — so a peek
-    /// and its commit always turn over the identical card. False when no focus sheet is in force to deal from.
+    /// The single deal <see cref="DecideOffPlanCue"/> reads. The card is seeded by the boundary and ask
+    /// alone and never hands back the Effect the wall is showing or moving toward — an off-plan cue is
+    /// asked for precisely because the wall must change. False when no focus sheet is in force to deal from.
     /// </summary>
     private bool TryDealOffPlan(int boundaryBeat, int gapGrids, int ask,
         out (int EffectIndex, int TransitionIndex, bool Take) dealt)
@@ -606,19 +565,8 @@ public sealed class Director
     }
 
     /// <summary>
-    /// The Transition <see cref="ResolveTransitionOverride"/> would select, read without consuming the
-    /// pending one-shot. Every peek routes through this mirror so a foreseen fire beat counts the same
-    /// Runway the commit will actually fly.
-    /// </summary>
-    private int PeekTransitionOverride(int planTransitionIndex)
-    {
-        return holdSelectedTransition || overrideTransitionPending ? nextTransitionIndex : planTransitionIndex;
-    }
-
-    /// <summary>
     /// Applies override masking to a plan-dealt Transition (ADR-0009): a Hold trumps every deal; otherwise a
     /// one-shot staged pick replaces exactly this cue and is then consumed; with neither, the plan's card plays.
-    /// <see cref="PeekTransitionIndex"/> answers the same question without consuming the one-shot.
     /// </summary>
     private int ResolveTransitionOverride(int planTransitionIndex)
     {
