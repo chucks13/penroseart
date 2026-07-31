@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — penroseart / switching</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <h1 class="font-serif text-3xl">Architecture review — <span class="text-indigo-700">penroseart</span> / switching</h1>
+        <p class="text-sm text-slate-500">2026-07-31 · scope: wayfinder <span class="font-mono">#94</span> — Director, Switcher, TrackCueSheet, Deck, their tests, and the Tuning views (tickets #102–#104)</p>
+        <div class="flex gap-5 text-xs text-slate-600 items-center pt-1">
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-3 border-2 border-slate-500"></span> module</span>
+          <span class="flex items-center gap-1.5"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#64748b" stroke-width="2" class="seam"/></svg> seam</span>
+          <span class="flex items-center gap-1.5"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-3 deep rounded-sm"></span> deep module</span>
+        </div>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900">
+          Already deep — leave alone: <strong>TrackCueSheet.Build</strong> (6-arg pure function over ~400 lines of walk/anchor/deal), the private <strong>Bag</strong>, <strong>Switcher.Cast</strong> idempotence on <span class="font-mono text-xs">(player, generation)</span>, <strong>TrackCueSheetTests</strong> (28 pure tests, zero Unity objects), and the Tuning views (no reflection, no internals).
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-10">
+
+      <!-- ─────────────────── 1 ─────────────────── -->
+      <article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-serif text-xl">1 · Finish the doorway: one self-describing question</h2>
+          <div class="flex gap-2">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+        </div>
+        <p class="font-mono text-sm text-slate-500">Assets/core/Switching/Director.cs:511-552 · Switcher.cs:379-450</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Before</p>
+            <pre class="mermaid">
+flowchart TB
+  S[SWITCHER] -- "DecideOffPlanCue(sighting, beat, gapGrids, ask)" --> D[DIRECTOR]
+  D -. "reads back TransitionSourceEffectIndex" .-> S
+  D -. "reads back TransitionTargetEffectIndex" .-> S
+  N["sighting → used only in Trace()"]:::dead
+  D --- N
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  classDef dead fill:#fef2f2,stroke:#dc2626,stroke-dasharray:3 3,color:#991b1b;
+  linkStyle 1,2 stroke:#dc2626,stroke-width:2px;
+            </pre>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">After</p>
+            <pre class="mermaid">
+flowchart TB
+  S[SWITCHER] -- "one Off-Plan Sighting value:<br/>what was seen · boundary · gap · ask ·<br/>on-wall Effect · moving-toward Effect" --> D[DIRECTOR]
+  D -- "CueDecision" --> S
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a;
+  class D deep
+            </pre>
+          </div>
+        </div>
+
+        <p><strong>Problem:</strong> the interface understates itself — 4 named arguments, of which <span class="font-mono text-sm">sighting</span> decides nothing (it appears only in two trace lambdas), while the real answer silently reads two more inputs back out of the asker (<span class="font-mono text-sm">Director.cs:549-550</span>) — values the Switcher already holds.</p>
+        <p><strong>Solution:</strong> the Switcher hands over one sighting value carrying everything the answer needs; the Director answers from its arguments alone.</p>
+        <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+          <li>Doorway testable without a live Switcher</li>
+          <li>Tests stop mirroring the back-read wiring</li>
+          <li>Interface states its whole contract</li>
+        </ul>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">ADR-0009 adjacent — this <em>strengthens</em> "questions go up, commands go down"; the back-read is what currently blurs it.</div>
+      </article>
+
+      <!-- ─────────────────── 2 ─────────────────── -->
+      <article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-serif text-xl">2 · Narrow what Director and Switcher demand at construction</h2>
+          <div class="flex gap-2">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">local-substitutable</span>
+          </div>
+        </div>
+        <p class="font-mono text-sm text-slate-500">Director.cs · Switcher.cs · Tests/Editor/SwitcherExecutionTests.cs · DirectorReducerTests.cs · DirectorStagingTests.cs</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — interface: the whole runtime hub</p>
+            <div class="border-2 border-red-400 rounded p-2 text-center text-xs uppercase tracking-wider mb-2">Controller <span class="normal-case text-red-600">(everything)</span></div>
+            <div class="text-xs text-slate-600 space-y-1">
+              <p>Every test must build:</p>
+              <div class="flex flex-wrap gap-1">
+                <span class="px-1.5 py-0.5 bg-red-50 border border-red-200 rounded">GameObject</span>
+                <span class="px-1.5 py-0.5 bg-red-50 border border-red-200 rounded">Controller MonoBehaviour</span>
+                <span class="px-1.5 py-0.5 bg-red-50 border border-red-200 rounded">palette</span>
+                <span class="px-1.5 py-0.5 bg-red-50 border border-red-200 rounded">BeatManager</span>
+                <span class="px-1.5 py-0.5 bg-red-100 border border-red-300 rounded font-semibold">reflection into Singleton&lt;Controller&gt;._instance ×3 files</span>
+              </div>
+              <p class="pt-1">Scaffolding: 33% of SwitcherExecutionTests, 51% of DirectorReducerTests. Wire fixture written twice; performer fakes written twice; two tests scan up to 128 generations to find a usable sheet.</p>
+            </div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — interface: what they actually read</p>
+            <div class="deep rounded p-3 text-slate-100 text-center text-xs uppercase tracking-wider mb-2">Director · Switcher</div>
+            <div class="flex flex-wrap gap-1 text-xs">
+              <span class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded">beat surface</span>
+              <span class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded">the two catalogs' Repertoires</span>
+              <span class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded">held-effect question</span>
+              <span class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded">trace sink</span>
+            </div>
+            <p class="text-xs text-slate-600 pt-2">One narrowing, not an abstraction layer — fewer facts at the call site, not more types. TrackCueSheetTests already proves the shape: 28 tests, zero engine.</p>
+          </div>
+        </div>
+
+        <p><strong>Problem:</strong> the interface is not the test surface — both modules take the whole <span class="font-mono text-sm">Controller</span>, so tests reach past the interface by reflection to fake a singleton, and reproduce the engine to ask one question.</p>
+        <p><strong>Solution:</strong> constructors name the few things read; tests hand the Switcher a chosen sheet instead of hunting for one.</p>
+        <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+          <li>Reflection fixture deleted from 3 files</li>
+          <li>Two wire fixtures collapse to one</li>
+          <li>Leverage: one interface, every test</li>
+        </ul>
+      </article>
+
+      <!-- ─────────────────── 3 ─────────────────── -->
+      <article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-serif text-xl">3 · One owner for Stillness / Ceiling arithmetic</h2>
+          <div class="flex gap-2">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+        </div>
+        <p class="font-mono text-sm text-slate-500">Switcher.cs:431-475 · TrackCueSheet.cs:158, 281, 539-596 · Editor/Tuning/CueSheetTimeline.cs:275-279</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 p-4 space-y-1.5">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Before — one rule, five spellings, two units</p>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">stillGrids >= MaximumGapGrids - 1 <span class="text-red-500 font-sans">· grids, −1</span></div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">gapGrids: stillGrids + 1 <span class="text-red-500 font-sans">· grids, +1</span></div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">next.Beat - beat <= GridBeats <span class="text-red-500 font-sans">· beats</span></div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">TakeBoundary(gapGrids * GridBeats, rng) <span class="text-red-500 font-sans">· grids→beats</span></div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">gapBeats / GridBeats - 1 <span class="text-red-500 font-sans">· beats→band</span></div>
+            <p class="text-xs text-slate-600 pt-1">Plus the phrase-relative Grid-Boundary lattice implemented three times: builder, timeline view, and a test helper.</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-4 flex flex-col justify-center items-center gap-2">
+            <p class="text-xs uppercase tracking-wider text-slate-400 self-start">After</p>
+            <div class="deep rounded p-4 text-slate-100 text-center w-3/4">
+              <p class="text-xs uppercase tracking-wider">stillness &amp; the lattice</p>
+              <p class="text-xs text-slate-300 mt-1">"how far past the last fire?" · "is that the Ceiling?" · "which beats are Grid Boundaries?"</p>
+            </div>
+            <div class="flex gap-3 text-xs text-slate-500">
+              <span>↑ Switcher asks</span><span>↑ sheet deal asks</span><span>↑ timeline asks</span>
+            </div>
+            <p class="text-xs text-slate-600 text-center">Same unit on both sides of the seam — no grids↔beats round-trip, no off-by-ones at the interface.</p>
+          </div>
+        </div>
+
+        <p><strong>Problem:</strong> the model states Stillness in two sentences; the code states it five times across two files with two off-by-ones and a unit round-trip performed only to cross the seam. Poor locality on the one rule most likely to change.</p>
+        <p><strong>Solution:</strong> one place owns "how much music has passed and is that past the Ceiling," and one function owns the phrase-relative Grid-Boundary lattice; walker, doorway deal, and timeline all ask it.</p>
+        <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+          <li>Locality: Ceiling bugs concentrate in one module</li>
+          <li>Unit conversions leave the seam</li>
+          <li>Test helper lattice deleted</li>
+        </ul>
+      </article>
+
+      <!-- ─────────────────── 4 ─────────────────── -->
+      <article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-serif text-xl">4 · <span class="font-mono text-lg">controller.currentTransition</span>: five writers, one accidental reader</h2>
+          <div class="flex gap-2">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+        </div>
+        <p class="font-mono text-sm text-slate-500">Runtime/Controller.cs:247, 1438-1439 · Director.cs:282, 714, 754, 765 · Switcher.cs:626</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Before</p>
+            <pre class="mermaid">
+flowchart LR
+  D[DIRECTOR ×4 writes] --> F[currentTransition<br/>public mutable field]
+  S[SWITCHER ×1 write<br/>«the Switcher owns this»] --> F
+  F -.-> I[Inspector display]
+  F -.-> T[2 test asserts]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class F leak
+            </pre>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">After</p>
+            <pre class="mermaid">
+flowchart LR
+  SS[SwitcherStatus<br/>CurrentTransitionIndex]:::deep --> I[Inspector display<br/>derived on read]
+  SS --> T[tests assert here]
+  C[scene value] -- "read once at construction" --> SS
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a;
+            </pre>
+          </div>
+        </div>
+
+        <p><strong>Problem:</strong> the loosest possible seam — a public mutable field written from five sites in two modules, whose meaning depends on which writer ran last; production reads it only once at startup, yet tests observe casts through it.</p>
+        <p><strong>Solution:</strong> one owner. Derive the display from <span class="font-mono text-sm">SwitcherStatus</span>; read the scene seed once at construction; move the two test assertions to the Switcher's own status surface.</p>
+        <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+          <li>Five writers become zero</li>
+          <li>Tests observe the real interface</li>
+          <li>Ownership comment becomes true</li>
+        </ul>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">Small Controller wiring change only — no restructuring; within the standing Controller rule.</div>
+      </article>
+
+      <!-- ─────────────────── 5 ─────────────────── -->
+      <article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-serif text-xl">5 · Let the Cue Sheet answer "am I a plan?"</h2>
+          <div class="flex gap-2">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+        </div>
+        <p class="font-mono text-sm text-slate-500">TrackCueSheet.cs:200-283 · Switcher.cs:276-289, 458-476 · Director.cs:454-470, 539 · Editor/Tuning/CueSheetTimeline.cs:154-157</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 p-4 space-y-1.5">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Before — every caller re-enforces the invariant, differently</p>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">Switcher: sheet.Marks is not { } marks</div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">Switcher: StructureGeneration > 0</div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">Director: StructureGeneration <= 0</div>
+            <div class="text-xs font-mono bg-red-50 border-l-4 border-red-400 px-2 py-1">Timeline: Marks ?? Array.Empty&lt;&gt;()</div>
+            <p class="text-xs text-slate-600 pt-1"><span class="font-mono">DealOffPlanCueAt</span> documents "valid on any Build sheet" — and throws NRE on a <span class="font-mono">default</span> sheet; the only guard lives in a caller.</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-4 flex flex-col justify-center items-center gap-3">
+            <p class="text-xs uppercase tracking-wider text-slate-400 self-start">After</p>
+            <div class="deep rounded p-4 text-slate-100 text-center w-3/4">
+              <p class="text-xs uppercase tracking-wider">TrackCueSheet</p>
+              <p class="text-xs text-slate-300 mt-1">no-plan = real empty value, not <span class="font-mono">default</span> · one "is there a plan?" question · honours its own documented precondition</p>
+            </div>
+            <p class="text-xs text-slate-600 text-center">Deletion test: removing the four guards today would scatter, not concentrate — the signature of a value that should answer for itself.</p>
+          </div>
+        </div>
+
+        <p><strong>Problem:</strong> <span class="font-mono text-sm">default(TrackCueSheet)</span> is a partially-formed value, so "is there a plan?" is asked four different ways by four callers; the slot↔player convention (<span class="font-mono text-sm">slot + 1</span>) is a second unenforced invariant restated in three places.</p>
+        <p><strong>Solution:</strong> the no-plan sheet becomes a real empty value with one membership question; <span class="font-mono text-sm">PlayerNumber</span> carries the slot answer it already holds.</p>
+        <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+          <li>Four guards become one question</li>
+          <li>Documented precondition becomes true</li>
+          <li>Interface: fewer facts per caller</li>
+        </ul>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">ADR-0010 compatible — this is about the empty case; build-fresh-and-bake is untouched.</div>
+      </article>
+
+      <!-- ─────────────────── 6 ─────────────────── -->
+      <article id="c6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="font-serif text-xl">6 · Sweep the vestigial interface the rewrite left behind</h2>
+          <div class="flex gap-2">
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+          </div>
+        </div>
+        <p class="font-mono text-sm text-slate-500">Director.cs:239-254 · Deck.cs · TrackCueSheet.cs:9-48, 116 · Transitions/TransitionRepertoire.cs:106-114</p>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — interface a reader must classify before dismissing</p>
+            <div class="space-y-1 text-xs">
+              <div class="flex"><span class="w-56 font-mono">Director.NextEffectIndex</span><span class="px-1.5 bg-red-100 text-red-700 rounded">0 refs</span></div>
+              <div class="flex"><span class="w-56 font-mono">Director.NextTransitionIndex</span><span class="px-1.5 bg-red-100 text-red-700 rounded">0 refs</span></div>
+              <div class="flex"><span class="w-56 font-mono">Director.IsSyncedMode + 2 Hold props</span><span class="px-1.5 bg-amber-100 text-amber-700 rounded">DirectorStatus already carries them</span></div>
+              <div class="flex"><span class="w-56 font-mono">Deck.TryFindPreferred</span><span class="px-1.5 bg-red-100 text-red-700 rounded">tests only</span></div>
+              <div class="flex"><span class="w-56 font-mono">Deck.PullRandom params</span><span class="px-1.5 bg-amber-100 text-amber-700 rounded">constants at all production sites</span></div>
+              <div class="flex"><span class="w-56 font-mono">Effect/TransitionDescriptor</span><span class="px-1.5 bg-amber-100 text-amber-700 rounded">1-field wrappers, mapping loop ×5</span></div>
+              <div class="flex"><span class="w-56 font-mono">AnchorResolution.Kind</span><span class="px-1.5 bg-amber-100 text-amber-700 rounded">tests only</span></div>
+              <div class="flex"><span class="w-56 font-mono">FromRunwayAndTail vs ctor</span><span class="px-1.5 bg-amber-100 text-amber-700 rounded">pass-through twin</span></div>
+            </div>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-4 flex items-center justify-center">
+            <div class="w-full">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After — interface mass</p>
+              <div class="flex items-end gap-6 justify-center h-40">
+                <div class="text-center">
+                  <div class="w-16 bg-red-200 border border-red-300 rounded-t" style="height:120px"></div>
+                  <div class="w-16 deep rounded-b" style="height:16px"></div>
+                  <p class="text-xs mt-1 text-slate-500">before</p>
+                </div>
+                <div class="text-center">
+                  <div class="w-16 bg-slate-200 border border-slate-300 rounded-t" style="height:44px"></div>
+                  <div class="w-16 deep rounded-b" style="height:16px"></div>
+                  <p class="text-xs mt-1 text-slate-500">after</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-600 text-center mt-2">Same implementation, less interface to learn. Descriptors: deletion test says passing the Repertoires directly removes five loops and concentrates nothing.</p>
+            </div>
+          </div>
+        </div>
+
+        <p><strong>Problem:</strong> the hard cut stopped one pass short — dead publics, test-only entries, parameters that are constants at every production site, and two one-field wrapper structs whose mapping loop is written five times (the Timeline already takes raw <span class="font-mono text-sm">Repertoire</span> lists, so one catalog projection has two shapes).</p>
+        <p><strong>Solution:</strong> delete the zero-ref members, point the two editor labels at <span class="font-mono text-sm">DirectorStatus</span>, pass Repertoires instead of descriptors, collapse the factory/ctor twin, and decide whether Deck still earns its keep as a module.</p>
+        <ul class="text-sm space-y-1 list-disc list-inside text-slate-700">
+          <li>Delete 2 shallow wrappers, 5 loops</li>
+          <li>Test-only seams leave the interface</li>
+          <li>Deck: keep deep or inline it</li>
+        </ul>
+      </article>
+
+      </section>
+
+      <!-- ─────────────────── top recommendation ─────────────────── -->
+      <section id="top-recommendation" class="rounded-xl deep text-slate-100 p-8 space-y-3">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</p>
+        <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-slate-500 hover:decoration-slate-200">1 · Finish the doorway</a> — then <a href="#c2" class="underline decoration-slate-500 hover:decoration-slate-200">2 · narrow construction</a> as its natural second move</h2>
+        <p class="text-sm text-slate-300 max-w-3xl">Ticket #104's destination was "every anomaly goes through one doorway" — the mechanism arrived, but the seam still leaks: a parameter that decides nothing plus two silent reads back into the asker. Making the sighting self-describing completes the effort's own stated goal, strengthens ADR-0009, and is small. Candidate 2 then pays the doorway off: once the Director answers from its arguments and its constructor names what it reads, the reflection fixtures, duplicate fakes, and 128-generation sheet hunts all fall out of the tests.</p>
+      </section>
+
+      <p class="text-xs text-slate-400">penroseart · switching architecture review · generated 2026-07-31 · vocabulary: docs/switching-model.md, CONTEXT.md, /codebase-design</p>
+    </main>
+  </body>
+</html>
