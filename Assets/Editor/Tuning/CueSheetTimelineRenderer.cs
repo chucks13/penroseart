@@ -222,7 +222,7 @@ internal static class CueSheetTimelineRenderer
     }
 
     /// <summary>Resolves a catalog index against the given names, degrading to the raw index.</summary>
-    private static string NameOf(IReadOnlyList<string> names, int index)
+    internal static string NameOf(IReadOnlyList<string> names, int index)
     {
         return index >= 0 && index < names.Count ? names[index] : $"#{index}";
     }

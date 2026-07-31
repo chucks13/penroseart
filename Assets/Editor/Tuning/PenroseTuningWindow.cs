@@ -382,19 +382,12 @@ public sealed class PenroseTuningWindow : EditorWindow
 
         var answer = status.LastOffPlanAnswer;
         var verdict = answer.Perform
-            ? $"TAKE {NameAt(EffectNamesOf(controller), answer.EffectIndex)} / {NameAt(TransitionNamesOf(controller), answer.TransitionIndex)}"
+            ? $"TAKE {CueSheetTimelineRenderer.NameOf(EffectNamesOf(controller), answer.EffectIndex)}" +
+              $" / {CueSheetTimelineRenderer.NameOf(TransitionNamesOf(controller), answer.TransitionIndex)}"
             : "RIDE";
         EditorGUILayout.LabelField(
             "Off-Plan",
             $"{sighting.Anomaly} @ {sighting.BoundaryBeat} · gap {sighting.GapGrids} · ask {sighting.Ask} → {verdict}");
-    }
-
-    /// <summary>Names a catalog index, or "?" when the index falls outside the catalog.</summary>
-    /// <param name="names">Catalog display names.</param>
-    /// <param name="index">Catalog index to name.</param>
-    private static string NameAt(string[] names, int index)
-    {
-        return index >= 0 && index < names.Length ? names[index] : "?";
     }
 
     /// <summary>
