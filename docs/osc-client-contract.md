@@ -208,7 +208,7 @@ Arguments: total_beats
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `total_beats` | int32 | Total number of musical beats in the track, or `-1` when unavailable. |
+| `total_beats` | int32 | Total number of musical beats in the track per the beat grid, or `-1` when unavailable. |
 
 This value normally remains constant for the loaded track. It may become available later than other live fields.
 
@@ -503,7 +503,7 @@ In the first example, the next 16-beat drop begins in 6 beats and is the final r
 
 ### `/rave/onair/fill_state`
 
-Reports one musical fill selected from across all live players. A fill is a transition section at the tail of a phrase and ends with that phrase.
+Reports one musical fill selected from across all live players. A fill is a transition section in the tail of a phrase. It runs from its start beat to the last beat of that phrase and never stops before the phrase ends.
 
 ```text
 Type tag: ,iiii
@@ -797,7 +797,7 @@ Header:
 | `track_id` | string | Opaque decimal string of the loaded track's full uint32 rekordbox id; a recognition/cache hint only. Empty (`""`) when no track is loaded. |
 | `structure_generation` | int32 | Per-player monotonic change detector. Authoritative for whether the structure changed. Never `0` on the wire (`0` is the never-loaded sentinel). |
 | `source` | string | Structure source: exactly `analyzed`, `synthesized`, `fused`, or `unavailable`. |
-| `total_beats` | int32 | Total musical beats in the loaded track; `-1` when unavailable. |
+| `total_beats` | int32 | Total musical beats in the loaded track per the beat grid. `-1` when unavailable. |
 | `phrase_count` | int32 | Full-track phrase count across **all** chunks of this generation; `0` when there are no phrases. |
 | `chunk_index` | int32 | Zero-based index of this datagram within the generation's chunk sequence; `0` when unchunked. |
 | `chunk_count` | int32 | Total chunks carrying this generation; `1` when unchunked. |
@@ -810,8 +810,8 @@ Repeating phrase tuple:
 | `end_beat` | int32 | Inclusive phrase end beat. |
 | `type` | string | Lowercase phrase kind (vocabulary below); `unknown` when the kind is not in the published set. |
 | `variant` | int32 | Rekordbox phrase variant; `0` when variantless. |
-| `fill_start_beat` | int32 | One-based fill start beat within the phrase; `0` when the phrase has no fill. |
-| `drop_landing_beat` | int32 | Pinned drop landing beat; `0` when none. |
+| `fill_start_beat` | int32 | One-based fill start beat within the phrase, or `0` when the phrase has no fill. A fill is a tail: it runs from `fill_start_beat` to `end_beat`. For the `synthesized` and `fused` sources the audio-detected fill is canonical. A `fused` phrase with no audio-detected fill adopts a rekordbox fill only when that fill ends at `end_beat`. An `analyzed` structure carries only rekordbox fills. |
+| `drop_landing_beat` | int32 | Pinned drop landing beat; `0` when none. For the `synthesized` and `fused` sources it always equals `start_beat`. Only an `analyzed` structure can carry a landing a few beats away from `start_beat`. There the landing stays a sidecar of the rekordbox boundary. |
 
 Example — a two-phrase unchunked structure for track id `328123`, generation `7`:
 
@@ -851,6 +851,7 @@ This is a **different set and a different case** from the capitalized `/rave/ona
 - **`structure_generation`** is authoritative for change. It advances on track load, on eject/clear, and on any applied-structure or analysis change — including a content-identical re-application and, notably, a **synthesized→fused refinement** (the same track's structure improving from waveform-synthesized to PSSI-fused advances the generation even though the track never changed).
 - An **eject** publishes the cleared shape — empty `track_id`, `source` `unavailable`, `total_beats` `-1`, `phrase_count` `0` — under a **fresh** generation, so a client sees the clear as an ordinary generation edge.
 - `structure_generation` `0` is the never-loaded sentinel and is **never emitted**; a player's first real structure has a positive generation.
+- **`total_beats`** counts the beats in the track per the beat grid. An `analyzed` phrase list can end before `total_beats` because rekordbox stops phrase analysis before the end of the track. `fused` and `synthesized` phrase lists end exactly at `total_beats`.
 
 A client replaces its entire held structure and chunk buffer whenever it sees a new generation — "new" means *different from the held generation*, compared for inequality, never for ordering (do not require the number to increase) — and clears its held structure and cursor when it receives a zero-phrase `chunk_index 0 / chunk_count 1` message.
 
