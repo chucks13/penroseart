@@ -10,8 +10,11 @@ public enum CueSource
     /// <summary>Performed from the Cue Sheet's own mark — the ordinary case, shown without comment.</summary>
     Plan,
 
-    /// <summary>Dealt because the wall sat three whole Grids since the last fired cue: the fourth Grid fired at its start.</summary>
-    Ceiling,
+    /// <summary>
+    /// Dealt through the anomaly doorway — a re-crossed fired mark, a self-blend mark, or Stillness up —
+    /// and performed at the Grid start the sighting was reported from.
+    /// </summary>
+    OffPlan,
 }
 
 /// <summary>
@@ -210,6 +213,9 @@ public sealed class Switcher
     /// <summary>The destination effect while transitioning, otherwise the currently active effect.</summary>
     public int TransitionTargetEffectIndex => isTransitioning ? transitions[currentTransitionIndex].B : currentEffectIndex;
 
+    /// <summary>The Effect still showing on the wall: the source while a Transition owns the frame, otherwise the currently active effect.</summary>
+    public int TransitionSourceEffectIndex => isTransitioning ? transitions[currentTransitionIndex].A : currentEffectIndex;
+
     /// <summary>Current read-only mechanical stage snapshot for runtime HUDs and inspector diagnostics.</summary>
     public SwitcherStatus Status => BuildStatus();
 
@@ -337,8 +343,10 @@ public sealed class Switcher
     /// <summary>
     /// The once-per-Grid decision, taken at the Grid's start from on-air state — everything this Grid
     /// needs. Stillness is counted first; then the next boundary's unfired mark is decided and its blend
-    /// scheduled at boundary-minus-Runway; and a wall three whole Grids still with nothing scheduled
-    /// takes the Ceiling cue here, at the Grid start — never mid-Grid.
+    /// scheduled at boundary-minus-Runway; and every anomaly — a re-crossed fired mark, a mark blending
+    /// into the Effect already on the wall, Stillness up — goes through the one doorway,
+    /// <see cref="Director.DecideOffPlanCue"/>, at most once per think, with a taken cue performed here
+    /// at the Grid start — never mid-Grid.
     /// </summary>
     /// <param name="beat">The on-air beat this Grid starts on.</param>
     private void Think(int beat)
@@ -368,48 +376,76 @@ public sealed class Switcher
             ClearScheduledAct();
         }
 
-        if (candidate is { Fired: false } && scheduledMark == null)
+        OffPlanSighting? sighting = null;
+
+        if (candidate != null && scheduledMark == null)
         {
-            var cue = director.DecideCue(candidate);
-            if (cue.Perform)
+            if (candidate.Fired)
             {
-                // The Runway belongs to the Transition the Director decided, so a staged override flies
-                // its own Runway and still lands its Impact on the mark.
-                var fireBeat = candidate.Beat - transitions[cue.TransitionIndex].Repertoire.RunwayBeats;
-                if (fireBeat == beat)
+                // The DJ looped back over spent plan; a fired mark is never performed again (ADR-0011).
+                sighting = OffPlanSighting.FiredMark;
+            }
+            else if (candidate.EffectIndex == TransitionTargetEffectIndex)
+            {
+                // The mark blends into the Effect the wall is showing or already moving toward. A built
+                // sheet never writes a Transition from an Effect into itself, so only a sheet swap or a
+                // loop can line these up.
+                sighting = OffPlanSighting.SelfBlend;
+            }
+            else
+            {
+                var cue = director.DecideCue(candidate);
+                if (cue.Perform)
                 {
-                    // The Runway exactly fills this Grid (a short Grid under a card that just fits):
-                    // the blend leaves here, at the Grid start, and still flies whole onto the mark.
-                    candidate.FiredAtBeat = beat;
-                    Perform(beat, candidate.Beat, cue, CueSource.Plan);
-                }
-                else if (fireBeat < beat)
-                {
-                    // A Runway longer than the Grid it would launch from: a Runway is never compressed
-                    // and nothing fires late, so this is a Missed Cue — not performed, not spent.
-                    Trace(() => $"SWITCHER_MISS mark={candidate.Beat} fire={fireBeat} beat={beat}");
-                }
-                else
-                {
-                    scheduledMark = candidate;
-                    scheduledCue = cue;
-                    scheduledFireBeat = fireBeat;
-                    Trace(() => $"SWITCHER_SCHEDULE mark={candidate.Beat} fire={fireBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+                    // The Runway belongs to the Transition the Director decided, so a staged override flies
+                    // its own Runway and still lands its Impact on the mark.
+                    var fireBeat = candidate.Beat - transitions[cue.TransitionIndex].Repertoire.RunwayBeats;
+                    if (fireBeat == beat)
+                    {
+                        // The Runway exactly fills this Grid (a short Grid under a card that just fits):
+                        // the blend leaves here, at the Grid start, and still flies whole onto the mark.
+                        candidate.FiredAtBeat = beat;
+                        Perform(beat, candidate.Beat, cue, CueSource.Plan);
+                    }
+                    else if (fireBeat < beat)
+                    {
+                        // A Runway longer than the Grid it would launch from: a Runway is never compressed
+                        // and nothing fires late, so this is a Missed Cue — not performed, not spent.
+                        Trace(() => $"SWITCHER_MISS mark={candidate.Beat} fire={fireBeat} beat={beat}");
+                    }
+                    else
+                    {
+                        scheduledMark = candidate;
+                        scheduledCue = cue;
+                        scheduledFireBeat = fireBeat;
+                        Trace(() => $"SWITCHER_SCHEDULE mark={candidate.Beat} fire={fireBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+                    }
                 }
             }
         }
 
-        // Three whole Grids since the last fire and nothing scheduled to feed this one: the fourth Grid
-        // fires, short or not, and the Ceiling cue is taken at the Grid start. Only sheet swaps and loops
-        // push the wall here — a Director-built sheet never violates stillness on its own, because its
-        // widest legal gap puts the closing mark's fire inside this Grid.
-        if (stillGrids >= TrackCueSheet.MaximumGapGrids - 1 && scheduledMark == null && !firedSinceThink)
+        // Three whole Grids since the last fire and nothing scheduled or fired to feed this one: Stillness
+        // is up, and the fourth Grid fires at its start, short or not. Only sheet swaps and loops push the
+        // wall here — a Director-built sheet never violates stillness on its own, because its widest legal
+        // gap puts the closing mark's fire inside this Grid.
+        if (sighting == null
+            && stillGrids >= TrackCueSheet.MaximumGapGrids - 1
+            && scheduledMark == null
+            && !firedSinceThink)
+        {
+            sighting = OffPlanSighting.StillnessUp;
+        }
+
+        // Every anomaly goes through one doorway, at most once per think: the Switcher reports what it
+        // saw and the Director decides — ride through, or a fresh Off-Plan Cue performed here at the Grid
+        // start. The answer leaves the sheet exactly as it was; an anomalous mark is never spent by it.
+        if (sighting is { } seen)
         {
             offPlanAsks++;
-            var cue = director.DecideOffPlanCue(beat, stillGrids + 1, offPlanAsks);
+            var cue = director.DecideOffPlanCue(seen, beat, stillGrids + 1, offPlanAsks);
             if (cue.Perform)
             {
-                Perform(beat, beat, cue, CueSource.Ceiling);
+                Perform(beat, beat, cue, CueSource.OffPlan);
             }
         }
     }

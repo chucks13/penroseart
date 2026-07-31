@@ -178,8 +178,10 @@ public sealed class SwitcherExecutionTests
         Assert.That(switcher.Status.TransitionProgress, Is.EqualTo(repertoire.ImpactPoint).Within(0.01f),
             "The Impact Point lands exactly on the Cue Mark beat.");
 
+        // A hair past the Tail's end: at exactly runway-plus-tail seconds, float truncation on a large
+        // Editor-uptime Time.time can leave progress fractionally under 1 and the assert flaky.
         var buffer = switcher.RenderAtTime(
-            fireTime + ((repertoire.RunwayBeats + repertoire.TailBeats) * 0.5f),
+            fireTime + ((repertoire.RunwayBeats + repertoire.TailBeats) * 0.5f) + 0.05f,
             out _);
         Assert.That(switcher.Status.CurrentEffectIndex, Is.EqualTo(mark.EffectIndex), "The Tail completes after the Impact.");
         Assert.That(switcher.Status.CurrentTransitionIndex, Is.EqualTo(-1));
@@ -196,8 +198,11 @@ public sealed class SwitcherExecutionTests
     {
         StageSheetCatalog(cueTransition);
         var phrases = new[] { Phrase(1, 40, "intro"), Phrase(41, 168, "up") };
-        var sheet = BuildExecutionSheet(phrases, generation: 1);
+        // Two Effect cards: never-into-itself makes consecutive marks alternate targets, so a steady walk
+        // can fire every mark as planned with no self-blend sighting reaching the doorway.
+        var sheet = BuildExecutionSheet(phrases, generation: 1, effectCards: 2);
         Assert.That(sheet.Marks.Count, Is.GreaterThanOrEqualTo(2), "Setup: the structure produces several marks.");
+        switcher.SetInitialEffect(1 - sheet.Marks[0].EffectIndex, 0);
         switcher.Cast(sheet);
 
         for (var beat = 1; beat <= 168; beat++)
@@ -434,7 +439,7 @@ public sealed class SwitcherExecutionTests
         WalkDirector(ceilingBeat, ceilingBeat, phrases, generation: 2);
         Assert.That(OnWallEffect(), Is.Not.EqualTo(effectBefore),
             "The fourth still Grid fired on the wall's own count; a handover reset would have pushed it out.");
-        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.Ceiling));
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
         Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(ceilingBeat), "The Ceiling cue was taken at the Grid start.");
     }
 
@@ -459,7 +464,7 @@ public sealed class SwitcherExecutionTests
 
         WalkDirector(ceilingBeat, ceilingBeat, phrases, generation: 1);
         Assert.That(OnWallEffect(), Is.Not.EqualTo(effectBefore), "The fourth still Grid fires.");
-        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.Ceiling));
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
         Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(ceilingBeat),
             "The Ceiling cue anchors to the Grid start it was taken at.");
     }
@@ -498,12 +503,102 @@ public sealed class SwitcherExecutionTests
 
         Assert.That(changedAtBeat, Is.EqualTo(lastImpact + TrackCueSheet.GridBeats),
             "The looped stretch fires at a Grid start once stillness is up — the loop keeps the wall alive.");
-        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.Ceiling));
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
         for (var i = 0; i < firedBeats.Count; i++)
         {
             Assert.That(switcher.Sheet.Marks[i].FiredAtBeat, Is.EqualTo(firedBeats[i]),
                 "A spent mark is never re-fired by a loop.");
         }
+    }
+
+    /// <summary>
+    /// A loop that re-crosses a spent mark reports it through the one doorway: the Grid-start think sees
+    /// the fired mark at the coming boundary and asks the Director once, and the wall shows the model's
+    /// answer — the ask-1 deal taken, or a ride-through leaving the wall alone — while the spent mark and
+    /// the sheet stay exactly as they were.
+    /// </summary>
+    /// <summary>
+    /// A loop that re-crosses a spent mark reports it through the one doorway, once per Grid-start think:
+    /// each re-crossing produces exactly one ask — pinned by the rising ask number the model's deal is
+    /// seeded with — and the wall shows the answer: ride-throughs leave it alone, and the eventual take is
+    /// a fresh card that is never the Effect already on the wall, while the spent mark and the sheet stay
+    /// exactly as they were.
+    /// </summary>
+    [Test]
+    public void AReCrossedFiredMarkGoesThroughTheDoorwayAndIsNeverReplayed()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        FeedDirectorOnly(1, phrases, generation: 1);
+        var mark = switcher.Sheet.Marks[0];
+        var thinkBeat = mark.Beat - TrackCueSheet.GridBeats;
+        // Start the wall off the mark's own card so the plan walk fires it normally.
+        switcher.SetInitialEffect((mark.EffectIndex + 1) % controller.effects.Length, 0);
+        WalkDirector(thinkBeat, mark.Beat, phrases, generation: 1);
+        Assert.That(mark.Fired, Is.True, "Setup: the steady walk fires the plan's first mark.");
+        var firedAt = mark.FiredAtBeat;
+        var onWall = OnWallEffect();
+        var expectedSheet = ExpectedFocusSheet(generation: 1);
+
+        // The DJ holds a loop over the Grid before the spent mark: every re-crossed Grid start re-sees the
+        // fired mark and asks the doorway exactly once, the still gap and ask number rising together,
+        // until the rising cadence takes — certain by the Stillness Ceiling's gap.
+        var took = false;
+        for (var pass = 1; pass <= TrackCueSheet.MaximumGapGrids - 1 && !took; pass++)
+        {
+            WalkDirector(thinkBeat, thinkBeat + TrackCueSheet.GridBeats - 1, phrases, generation: 1);
+            var expected = expectedSheet.DealOffPlanCueAt(
+                thinkBeat, gapGrids: pass + 1, ask: pass, onWallEffectIndex: onWall, movingTowardEffectIndex: onWall);
+            Assert.That(mark.FiredAtBeat, Is.EqualTo(firedAt), "The doorway answer never re-spends or edits the spent mark.");
+            if (expected.Take)
+            {
+                took = true;
+                Assert.That(expected.EffectIndex, Is.Not.EqualTo(onWall), "A doorway answer is never the Effect on the wall.");
+                Assert.That(OnWallEffect(), Is.EqualTo(expected.EffectIndex),
+                    $"Pass {pass}: the wall shows the ask-{pass} deal — that ask number only fits one doorway ask per think.");
+                Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
+                Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(thinkBeat),
+                    "The off-plan cue anchors to the Grid start it was taken at.");
+            }
+            else
+            {
+                Assert.That(OnWallEffect(), Is.EqualTo(onWall), $"Pass {pass}: a ride-through leaves the wall alone.");
+            }
+        }
+
+        Assert.That(took, Is.True, "The rising cadence takes before the wall can outsit the Ceiling.");
+    }
+
+    /// <summary>
+    /// A mark blending into the Effect already on the wall — lined up by a handover, never by a built
+    /// sheet — goes through the doorway instead of firing: the wall shows the model's answer, which is
+    /// never the Effect on the wall, and the colliding mark is never spent, lapsing at its boundary.
+    /// </summary>
+    [Test]
+    public void AMarkBlendingIntoTheOnWallEffectGoesThroughTheDoorwayAndLapses()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        FeedDirectorOnly(1, phrases, generation: 1);
+        var mark = switcher.Sheet.Marks[0];
+        var thinkBeat = mark.Beat - TrackCueSheet.GridBeats;
+        // A handover lined the wall up with the mark's own card — the collision only a swap or loop makes.
+        switcher.SetInitialEffect(mark.EffectIndex, 0);
+
+        WalkDirector(thinkBeat, thinkBeat, phrases, generation: 1);
+
+        var expected = ExpectedFocusSheet(generation: 1)
+            .DealOffPlanCueAt(thinkBeat, gapGrids: 1, ask: 1, onWallEffectIndex: mark.EffectIndex, movingTowardEffectIndex: mark.EffectIndex);
+        Assert.That(OnWallEffect(), Is.EqualTo(expected.Take ? expected.EffectIndex : mark.EffectIndex),
+            "The wall shows the doorway's answer and nothing else.");
+        if (expected.Take)
+        {
+            Assert.That(expected.EffectIndex, Is.Not.EqualTo(mark.EffectIndex),
+                "A doorway answer is never the Effect on the wall or the one the mark moves toward.");
+            Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
+        }
+
+        // The colliding mark's decision moment has passed: it lapses at its boundary, never fired.
+        WalkDirector(thinkBeat + 1, mark.Beat, phrases, generation: 1);
+        Assert.That(mark.Fired, Is.False, "A doorway answer never spends the mark it stood in for.");
     }
 
     /// <summary>
@@ -608,6 +703,8 @@ public sealed class SwitcherExecutionTests
         }
 
         Assert.That(opener, Is.Not.Null, "Setup: no scanned generation opened with the widest legal gap.");
+        // Start the wall off the opener's card so the boundary carries a performable mark, not a self-blend.
+        switcher.SetInitialEffect((opener.EffectIndex + 1) % controller.effects.Length, 0);
 
         var openerFire = opener.Beat - controller.transitions[opener.TransitionIndex].Repertoire.RunwayBeats;
         for (var beat = 1; beat < openerFire; beat++)
@@ -789,15 +886,52 @@ public sealed class SwitcherExecutionTests
         return System.Array.IndexOf(controller.transitions, target);
     }
 
-    /// <summary>Builds a deterministic sheet over the one-card prefix of each catalog for execution assertions.</summary>
-    private TrackCueSheet BuildExecutionSheet(StructurePhrase[] phrases, int generation)
+    /// <summary>
+    /// Builds a deterministic sheet over the leading cards of each catalog for execution assertions: one
+    /// Transition card always, and <paramref name="effectCards"/> Effect cards — one by default, so every
+    /// mark shares one target; two makes consecutive marks alternate (never-into-itself).
+    /// </summary>
+    private TrackCueSheet BuildExecutionSheet(StructurePhrase[] phrases, int generation, int effectCards = 1)
     {
         FeedWire(focusBeat: 1, phrases, generation, gridBeat: 1);
         var structure = controller.beatManager.Players[0].Structure;
+        var effectDescriptors = new EffectDescriptor[effectCards];
+        for (var i = 0; i < effectCards; i++)
+        {
+            effectDescriptors[i] = new EffectDescriptor(controller.effects[i].Repertoire);
+        }
+
         return TrackCueSheet.Build(
             structure,
-            new[] { new EffectDescriptor(controller.effects[0].Repertoire) },
+            effectDescriptors,
             new[] { new TransitionDescriptor(controller.transitions[0].Repertoire) },
+            generation,
+            playerNumber: 1);
+    }
+
+    /// <summary>
+    /// Rebuilds the sheet the Director maintains for player 1 from the full test catalogs — the
+    /// deterministic ground truth doorway assertions deal from (ADR-0008: same structure, seed, and
+    /// catalogs deal the same sheet). Call only after a wire frame has delivered the structure.
+    /// </summary>
+    private TrackCueSheet ExpectedFocusSheet(int generation)
+    {
+        var effectDescriptors = new EffectDescriptor[controller.effects.Length];
+        for (var i = 0; i < controller.effects.Length; i++)
+        {
+            effectDescriptors[i] = new EffectDescriptor(controller.effects[i].Repertoire);
+        }
+
+        var transitionDescriptors = new TransitionDescriptor[controller.transitions.Length];
+        for (var i = 0; i < controller.transitions.Length; i++)
+        {
+            transitionDescriptors[i] = new TransitionDescriptor(controller.transitions[i].Repertoire);
+        }
+
+        return TrackCueSheet.Build(
+            controller.beatManager.Players[0].Structure,
+            effectDescriptors,
+            transitionDescriptors,
             generation,
             playerNumber: 1);
     }

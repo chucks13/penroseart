@@ -115,6 +115,26 @@ public readonly struct CueDecision
 }
 
 /// <summary>
+/// What the Switcher saw at a Grid start that the plan cannot feed — the sighting it reports through the
+/// one anomaly doorway, <see cref="Director.DecideOffPlanCue"/>. The Switcher only reports what it sees;
+/// the Director decides ride-through or a fresh Off-Plan Cue (Director-cast, as always).
+/// </summary>
+public enum OffPlanSighting
+{
+    /// <summary>The mark at the coming boundary has already fired — the DJ looped back over spent plan (ADR-0011).</summary>
+    FiredMark,
+
+    /// <summary>
+    /// The mark at the coming boundary blends into the Effect the wall is showing — or already moving
+    /// toward mid-flight — and a Transition from an Effect into itself moves nothing.
+    /// </summary>
+    SelfBlend,
+
+    /// <summary>Stillness is up: three whole Grids since the last fired cue, so this fourth Grid must fire.</summary>
+    StillnessUp,
+}
+
+/// <summary>
 /// Decides what plays; it never times a fire (ADR-0009). In Synced Mode it builds one
 /// track-scoped <see cref="TrackCueSheet"/> per player the moment that player's structure generation
 /// changes, hands the on-air focus player's sheet to the <see cref="Switcher"/> every tick (an idempotent
@@ -466,25 +486,29 @@ public sealed class Director
     }
 
     /// <summary>
-    /// Answers the Switcher about a Grid start the plan cannot cover: the wall has sat three whole Grids
-    /// since the last fired cue, so the fourth Grid must fire. Deals a fresh card and whether to take it here or ride through to the next boundary,
-    /// so changes land one to four Grids apart and never further than
-    /// <see cref="TrackCueSheet.MaximumGapBeats"/> beats. The Effect already on the wall is excluded, so a cue
-    /// taken here always moves it. Frozen under Hold, and when there is no focus or no built sheet.
+    /// The one anomaly doorway: answers the Switcher about a Grid start the plan cannot feed. The Switcher
+    /// reports what it saw — <paramref name="sighting"/> — and the Director decides one of two ways: ride
+    /// through (no-perform), or a fresh Off-Plan Cue, Director-cast as always. Which way is dealt with the
+    /// same rising cadence the plan walk uses, so changes land one to four Grids apart and taking is certain
+    /// once <paramref name="gapGrids"/> reaches <see cref="TrackCueSheet.MaximumGapGrids"/> — that certainty
+    /// is what makes the Stillness Ceiling a bound whichever sighting carried the ask. A dealt cue is never
+    /// the Effect on the wall and never the one being moved toward, and it leaves the Cue Sheet exactly as
+    /// it was. Frozen under Hold, and when there is no focus or no built sheet.
     /// </summary>
+    /// <param name="sighting">The anomaly the Switcher saw at this Grid start. Reported, never decided, by the Switcher.</param>
     /// <param name="boundaryBeat">
     /// Absolute Grid Boundary beat being asked about — the Grid start the Switcher is standing on, where a
     /// cue taken here starts its blend.
     /// </param>
     /// <param name="gapGrids">
-    /// The gap in Grids performing here would produce, as the Switcher counts it; at
+    /// The gap in Grids riding through here would let the wall reach, as the Switcher counts it; at
     /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
     /// </param>
     /// <param name="ask">
     /// Which off-plan ask this is on the current run. The Director remembers nothing across asks, so this
     /// is what separates one deal from the next when a loop re-crosses the same boundary.
     /// </param>
-    public CueDecision DecideOffPlanCue(int boundaryBeat, int gapGrids, int ask)
+    public CueDecision DecideOffPlanCue(OffPlanSighting sighting, int boundaryBeat, int gapGrids, int ask)
     {
         if (!TryDealOffPlan(boundaryBeat, gapGrids, ask, out var dealt))
         {
@@ -493,14 +517,14 @@ public sealed class Director
 
         if (!dealt.Take)
         {
-            Trace(() => $"DECIDE_OFF_PLAN_RIDE beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
+            Trace(() => $"DECIDE_OFF_PLAN_RIDE sighting={sighting} beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
             return CueDecision.Frozen;
         }
 
         // The take is traced with the gap and ask that produced it so a log alone can tell a certain-row
         // take from a lucky low-gap roll (2026-07-28: two sessions were indistinguishable without this).
         // A take can still be refused below by Hold, so this line records the deal, not the perform.
-        Trace(() => $"DECIDE_OFF_PLAN_TAKE beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
+        Trace(() => $"DECIDE_OFF_PLAN_TAKE sighting={sighting} beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
         return Decide(dealt.EffectIndex, dealt.TransitionIndex);
     }
 
@@ -518,7 +542,12 @@ public sealed class Director
             return false;
         }
 
-        dealt = sheet.DealOffPlanCueAt(boundaryBeat, gapGrids, ask, switcher.TransitionTargetEffectIndex);
+        dealt = sheet.DealOffPlanCueAt(
+            boundaryBeat,
+            gapGrids,
+            ask,
+            switcher.TransitionSourceEffectIndex,
+            switcher.TransitionTargetEffectIndex);
         return true;
     }
 

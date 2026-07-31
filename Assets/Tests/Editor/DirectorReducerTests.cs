@@ -88,15 +88,19 @@ public sealed class DirectorReducerTests
     public void AGenerationChangeRebuildsThePlayerSheet()
     {
         var phrasesA = new[] { Phrase(1, 64, "intro") };
-        FeedFrame(focusBeat: 1, phrasesA, generation: 1);
+        // Beat 2 is no Grid start: the sheet is built and handed over before any think, so the wall can be
+        // staged off the opener's card and the walk fires the plan instead of a self-blend doorway ask.
+        FeedFrame(focusBeat: 2, phrasesA, generation: 1);
         var sheetA = ExpectedSheet(playerSlot: 0, generation: 1);
-        WalkFrames(2, RunwayStart(sheetA.Marks[0]), phrasesA, generation: 1);
+        switcher.SetInitialEffect((sheetA.Marks[0].EffectIndex + 1) % controller.effects.Length, 0);
+        WalkFrames(1, RunwayStart(sheetA.Marks[0]), phrasesA, generation: 1);
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(sheetA.Marks[0].EffectIndex), "Generation 1 drives execution.");
 
         var phrasesB = new[] { Phrase(1, 48, "verse"), Phrase(49, 96, "chorus") };
-        FeedFrame(focusBeat: 1, phrasesB, generation: 2);
+        FeedFrame(focusBeat: 2, phrasesB, generation: 2);
         var sheetB = ExpectedSheet(playerSlot: 0, generation: 2);
-        WalkFrames(2, RunwayStart(sheetB.Marks[0]), phrasesB, generation: 2);
+        switcher.SetInitialEffect((sheetB.Marks[0].EffectIndex + 1) % controller.effects.Length, 0);
+        WalkFrames(1, RunwayStart(sheetB.Marks[0]), phrasesB, generation: 2);
 
         Assert.That(switcher.Status.TargetEffectIndex, Is.EqualTo(sheetB.Marks[0].EffectIndex), "The rebuilt generation-2 sheet is handed over.");
         Assert.That(controller.currentTransition, Is.EqualTo(sheetB.Marks[0].TransitionIndex));
@@ -107,15 +111,21 @@ public sealed class DirectorReducerTests
     public void TheOnAirPlayersSheetIsHandedToTheSwitcherOnAFocusChange()
     {
         var phrases1 = new[] { Phrase(1, 64, "intro") };
-        FeedFrame(focusBeat: 1, phrases1, generation: 1, focusPlayer: 1);
+        // Beat 2 is no Grid start: hand the sheet over first, stage the wall off the opener's card, then
+        // let the Grid-start think at beat 1 decide the opener as plan rather than a self-blend sighting.
+        FeedFrame(focusBeat: 2, phrases1, generation: 1, focusPlayer: 1);
         var sheet1 = ExpectedSheet(playerSlot: 0, generation: 1, playerNumber: 1);
+        switcher.SetInitialEffect((sheet1.Marks[0].EffectIndex + 1) % controller.effects.Length, 0);
+        FeedFrame(focusBeat: 1, phrases1, generation: 1, focusPlayer: 1);
         FeedFrame(RunwayStart(sheet1.Marks[0]), phrases1, generation: 1, focusPlayer: 1);
         switcher.RenderAtTime(1_000_000f, out _);
 
         var phrases2 = new[] { Phrase(1, 96, "chorus") };
-        FeedFrame(focusBeat: 1, phrases2, generation: 2, focusPlayer: 2);
+        FeedFrame(focusBeat: 2, phrases2, generation: 2, focusPlayer: 2);
         var sheet2 = ExpectedSheet(playerSlot: 1, generation: 2, playerNumber: 2);
         var player2Mark = sheet2.Marks[0];
+        switcher.SetInitialEffect((player2Mark.EffectIndex + 1) % controller.effects.Length, 0);
+        FeedFrame(focusBeat: 1, phrases2, generation: 2, focusPlayer: 2);
 
         FeedFrame(RunwayStart(player2Mark), phrases2, generation: 2, focusPlayer: 2);
 
@@ -191,7 +201,7 @@ public sealed class DirectorReducerTests
 
         var cueDecision = director.DecideCue(new CuePlanMark(beat: 32, effectIndex: 2, transitionIndex: 1));
         // Asked at the ceiling, where the deal is always taken, so a no-perform here is Hold and nothing else.
-        var offPlanDecision = director.DecideOffPlanCue(32, TrackCueSheet.MaximumGapGrids, ask: 1);
+        var offPlanDecision = director.DecideOffPlanCue(OffPlanSighting.StillnessUp, 32, TrackCueSheet.MaximumGapGrids, ask: 1);
 
         Assert.That(cueDecision.Perform, Is.False);
         Assert.That(offPlanDecision.Perform, Is.False,
@@ -206,9 +216,14 @@ public sealed class DirectorReducerTests
         FeedFrame(focusBeat: 1, phrases, generation: 1);
         var boundary = 32;
         var expected = ExpectedSheet(playerSlot: 0, generation: 1)
-            .DealOffPlanCueAt(boundary, TrackCueSheet.MaximumGapGrids, ask: 1, onWallEffectIndex: switcher.TransitionTargetEffectIndex);
+            .DealOffPlanCueAt(
+                boundary,
+                TrackCueSheet.MaximumGapGrids,
+                ask: 1,
+                onWallEffectIndex: switcher.TransitionSourceEffectIndex,
+                movingTowardEffectIndex: switcher.TransitionTargetEffectIndex);
 
-        var decision = director.DecideOffPlanCue(boundary, TrackCueSheet.MaximumGapGrids, ask: 1);
+        var decision = director.DecideOffPlanCue(OffPlanSighting.StillnessUp, boundary, TrackCueSheet.MaximumGapGrids, ask: 1);
 
         Assert.That(decision.Perform, Is.True, "At the ceiling the deal is taken rather than ridden through.");
         Assert.That(decision.EffectIndex, Is.EqualTo(expected.EffectIndex));
@@ -225,17 +240,39 @@ public sealed class DirectorReducerTests
         var phrases = new[] { Phrase(1, 64, "intro") };
         FeedFrame(focusBeat: 1, phrases, generation: 1);
 
-        var first = director.DecideOffPlanCue(32, gapGrids: 2, ask: 5);
+        var first = director.DecideOffPlanCue(OffPlanSighting.FiredMark, 32, gapGrids: 2, ask: 5);
         for (var i = 0; i < 8; i++)
         {
-            director.DecideOffPlanCue(48, gapGrids: 4, ask: i + 100);
+            director.DecideOffPlanCue(OffPlanSighting.StillnessUp, 48, gapGrids: 4, ask: i + 100);
         }
 
-        var again = director.DecideOffPlanCue(32, gapGrids: 2, ask: 5);
+        var again = director.DecideOffPlanCue(OffPlanSighting.FiredMark, 32, gapGrids: 2, ask: 5);
 
         Assert.That(again.Perform, Is.EqualTo(first.Perform));
         Assert.That(again.EffectIndex, Is.EqualTo(first.EffectIndex));
         Assert.That(again.TransitionIndex, Is.EqualTo(first.TransitionIndex));
+    }
+
+    /// <summary>
+    /// Pins the doorway's exclusion mid-flight: while a Transition is carrying the wall from one Effect to
+    /// another, a taken off-plan answer is neither the Effect still showing nor the one being moved toward.
+    /// </summary>
+    [Test]
+    public void ADoorwayAnswerIsNeverTheOnWallEffectNorTheOneBeingMovedToward()
+    {
+        var phrases = new[] { Phrase(1, 64, "intro") };
+        // Beat 2 is no Grid start, so the sheet arrives without a think disturbing the staged blend below.
+        FeedFrame(focusBeat: 2, phrases, generation: 1);
+        // A blend in flight: Effect 0 is still showing while the wall moves toward Effect 1.
+        switcher.StartTransition(1, 0, startTimeSeconds: 0f);
+        Assert.That(switcher.TransitionSourceEffectIndex, Is.EqualTo(0), "Setup: the source Effect is still on the wall.");
+        Assert.That(switcher.TransitionTargetEffectIndex, Is.EqualTo(1), "Setup: the wall is moving toward the target.");
+
+        var decision = director.DecideOffPlanCue(OffPlanSighting.StillnessUp, 32, TrackCueSheet.MaximumGapGrids, ask: 1);
+
+        Assert.That(decision.Perform, Is.True, "At the ceiling the deal is taken rather than ridden through.");
+        Assert.That(decision.EffectIndex, Is.Not.EqualTo(0), "Never the Effect still showing on the wall.");
+        Assert.That(decision.EffectIndex, Is.Not.EqualTo(1), "Never the Effect being moved toward.");
     }
 
     // ---- Standalone ----------------------------------------------------------------------------

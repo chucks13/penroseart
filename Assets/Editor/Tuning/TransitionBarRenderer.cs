@@ -43,8 +43,8 @@ internal static class TransitionBarRenderer
     // The off-plan badge colour sits outside both registers on purpose: not the tracker's reserved
     // saturated identities (magenta, cyan, orange, green, yellow) and not this strip's neutrals,
     // so a badge reads as "the Switcher covered for the plan" and nothing else.
-    /// <summary>Badge field for a cue forced by the stillness ceiling.</summary>
-    private static readonly Color CeilingBadgeColor = new(0.62f, 0.22f, 0.24f);
+    /// <summary>Badge field for an off-plan cue dealt through the anomaly doorway.</summary>
+    private static readonly Color OffPlanBadgeColor = new(0.62f, 0.22f, 0.24f);
 
     /// <summary>Cached left-aligned identity style.</summary>
     private static GUIStyle? leftStyle;
@@ -121,8 +121,8 @@ internal static class TransitionBarRenderer
             return;
         }
 
-        var label = $"CEILING @ {status.LastCueMarkBeat}";
-        var color = CeilingBadgeColor;
+        var label = $"OFF-PLAN @ {status.LastCueMarkBeat}";
+        var color = OffPlanBadgeColor;
         var size = badgeStyle!.CalcSize(new GUIContent(label));
         var identityWidth = leftStyle!.CalcSize(new GUIContent(leftLabel)).x;
         var badge = new Rect(
