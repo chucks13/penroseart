@@ -201,7 +201,13 @@ public sealed class DirectorReducerTests
 
         var cueDecision = director.DecideCue(new CuePlanMark(beat: 32, effectIndex: 2, transitionIndex: 1));
         // Asked at the ceiling, where the deal is always taken, so a no-perform here is Hold and nothing else.
-        var offPlanDecision = director.DecideOffPlanCue(OffPlanSighting.StillnessUp, 32, TrackCueSheet.MaximumGapGrids, ask: 1);
+        var offPlanDecision = director.DecideOffPlanCue(new OffPlanSighting(
+            OffPlanAnomaly.StillnessUp,
+            boundaryBeat: 32,
+            gapGrids: TrackCueSheet.MaximumGapGrids,
+            ask: 1,
+            onWallEffectIndex: 0,
+            movingTowardEffectIndex: 0));
 
         Assert.That(cueDecision.Perform, Is.False);
         Assert.That(offPlanDecision.Perform, Is.False,
@@ -220,10 +226,16 @@ public sealed class DirectorReducerTests
                 boundary,
                 TrackCueSheet.MaximumGapGrids,
                 ask: 1,
-                onWallEffectIndex: switcher.TransitionSourceEffectIndex,
-                movingTowardEffectIndex: switcher.TransitionTargetEffectIndex);
+                onWallEffectIndex: 0,
+                movingTowardEffectIndex: 0);
 
-        var decision = director.DecideOffPlanCue(OffPlanSighting.StillnessUp, boundary, TrackCueSheet.MaximumGapGrids, ask: 1);
+        var decision = director.DecideOffPlanCue(new OffPlanSighting(
+            OffPlanAnomaly.StillnessUp,
+            boundary,
+            gapGrids: TrackCueSheet.MaximumGapGrids,
+            ask: 1,
+            onWallEffectIndex: 0,
+            movingTowardEffectIndex: 0));
 
         Assert.That(decision.Perform, Is.True, "At the ceiling the deal is taken rather than ridden through.");
         Assert.That(decision.EffectIndex, Is.EqualTo(expected.EffectIndex));
@@ -240,13 +252,17 @@ public sealed class DirectorReducerTests
         var phrases = new[] { Phrase(1, 64, "intro") };
         FeedFrame(focusBeat: 1, phrases, generation: 1);
 
-        var first = director.DecideOffPlanCue(OffPlanSighting.FiredMark, 32, gapGrids: 2, ask: 5);
+        var question = new OffPlanSighting(
+            OffPlanAnomaly.FiredMark, boundaryBeat: 32, gapGrids: 2, ask: 5, onWallEffectIndex: 0, movingTowardEffectIndex: 0);
+
+        var first = director.DecideOffPlanCue(question);
         for (var i = 0; i < 8; i++)
         {
-            director.DecideOffPlanCue(OffPlanSighting.StillnessUp, 48, gapGrids: 4, ask: i + 100);
+            director.DecideOffPlanCue(new OffPlanSighting(
+                OffPlanAnomaly.StillnessUp, boundaryBeat: 48, gapGrids: 4, ask: i + 100, onWallEffectIndex: 0, movingTowardEffectIndex: 0));
         }
 
-        var again = director.DecideOffPlanCue(OffPlanSighting.FiredMark, 32, gapGrids: 2, ask: 5);
+        var again = director.DecideOffPlanCue(question);
 
         Assert.That(again.Perform, Is.EqualTo(first.Perform));
         Assert.That(again.EffectIndex, Is.EqualTo(first.EffectIndex));
@@ -254,25 +270,57 @@ public sealed class DirectorReducerTests
     }
 
     /// <summary>
-    /// Pins the doorway's exclusion mid-flight: while a Transition is carrying the wall from one Effect to
-    /// another, a taken off-plan answer is neither the Effect still showing nor the one being moved toward.
+    /// Pins the doorway's exclusion mid-flight: a Sighting reporting the wall showing one Effect while
+    /// moving toward another gets an answer that is neither — both exclusions read from the question alone.
     /// </summary>
     [Test]
     public void ADoorwayAnswerIsNeverTheOnWallEffectNorTheOneBeingMovedToward()
     {
         var phrases = new[] { Phrase(1, 64, "intro") };
-        // Beat 2 is no Grid start, so the sheet arrives without a think disturbing the staged blend below.
-        FeedFrame(focusBeat: 2, phrases, generation: 1);
-        // A blend in flight: Effect 0 is still showing while the wall moves toward Effect 1.
-        switcher.StartTransition(1, 0, startTimeSeconds: 0f);
-        Assert.That(switcher.TransitionSourceEffectIndex, Is.EqualTo(0), "Setup: the source Effect is still on the wall.");
-        Assert.That(switcher.TransitionTargetEffectIndex, Is.EqualTo(1), "Setup: the wall is moving toward the target.");
+        FeedFrame(focusBeat: 1, phrases, generation: 1);
 
-        var decision = director.DecideOffPlanCue(OffPlanSighting.StillnessUp, 32, TrackCueSheet.MaximumGapGrids, ask: 1);
+        // A blend in flight, stated in the question: Effect 0 still showing, the wall moving toward Effect 1.
+        var decision = director.DecideOffPlanCue(new OffPlanSighting(
+            OffPlanAnomaly.StillnessUp,
+            boundaryBeat: 32,
+            gapGrids: TrackCueSheet.MaximumGapGrids,
+            ask: 1,
+            onWallEffectIndex: 0,
+            movingTowardEffectIndex: 1));
 
         Assert.That(decision.Perform, Is.True, "At the ceiling the deal is taken rather than ridden through.");
         Assert.That(decision.EffectIndex, Is.Not.EqualTo(0), "Never the Effect still showing on the wall.");
         Assert.That(decision.EffectIndex, Is.Not.EqualTo(1), "Never the Effect being moved toward.");
+    }
+
+    /// <summary>
+    /// Pins the anomaly kind as diagnostic-only: two Sightings identical except for the anomaly kind get
+    /// the identical decision — at a gap where riding is possible and at the ceiling where taking is
+    /// certain — so a per-kind decision branch cannot sneak in without a deliberate model change.
+    /// </summary>
+    [Test]
+    public void TheAnomalyKindNeverChangesTheDecision()
+    {
+        var phrases = new[] { Phrase(1, 64, "intro") };
+        FeedFrame(focusBeat: 1, phrases, generation: 1);
+
+        foreach (var gapGrids in new[] { 2, TrackCueSheet.MaximumGapGrids })
+        {
+            var baseline = director.DecideOffPlanCue(Sighting(OffPlanAnomaly.FiredMark, gapGrids));
+            foreach (var anomaly in new[] { OffPlanAnomaly.SelfBlend, OffPlanAnomaly.StillnessUp })
+            {
+                var decision = director.DecideOffPlanCue(Sighting(anomaly, gapGrids));
+                Assert.That(decision.Perform, Is.EqualTo(baseline.Perform),
+                    $"{anomaly} at gap {gapGrids}: the anomaly kind is diagnostic, never the deal.");
+                Assert.That(decision.EffectIndex, Is.EqualTo(baseline.EffectIndex),
+                    $"{anomaly} at gap {gapGrids}: same question, same card.");
+                Assert.That(decision.TransitionIndex, Is.EqualTo(baseline.TransitionIndex),
+                    $"{anomaly} at gap {gapGrids}: same question, same card.");
+            }
+        }
+
+        static OffPlanSighting Sighting(OffPlanAnomaly anomaly, int gapGrids) => new OffPlanSighting(
+            anomaly, boundaryBeat: 32, gapGrids: gapGrids, ask: 3, onWallEffectIndex: 0, movingTowardEffectIndex: 0);
     }
 
     // ---- Standalone ----------------------------------------------------------------------------

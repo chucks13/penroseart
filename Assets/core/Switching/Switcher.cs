@@ -33,7 +33,9 @@ public readonly struct SwitcherStatus
         string.Empty,
         0f,
         CueSource.Plan,
-        -1);
+        -1,
+        null,
+        default);
 
     /// <summary>Index of the Effect on stage, or -1 while a Transition owns the frame.</summary>
     public readonly int CurrentEffectIndex;
@@ -68,6 +70,18 @@ public readonly struct SwitcherStatus
     /// <summary>The mark beat the most recent synced cue anchored to, or -1 before any cue has performed.</summary>
     public readonly int LastCueMarkBeat;
 
+    /// <summary>
+    /// The last question asked through the anomaly doorway, or null before any ask. Last value only —
+    /// history stays in the Cue Log and traces.
+    /// </summary>
+    public readonly OffPlanSighting? LastOffPlanSighting;
+
+    /// <summary>
+    /// The Director's answer to <see cref="LastOffPlanSighting"/> — a no-perform is a ride-through.
+    /// Meaningless while <see cref="LastOffPlanSighting"/> is null.
+    /// </summary>
+    public readonly CueDecision LastOffPlanAnswer;
+
     /// <summary>Captures one stage snapshot.</summary>
     /// <param name="currentEffectIndex">Effect on stage, or -1 while a Transition owns the frame.</param>
     /// <param name="currentEffectName">Display name of the Effect on stage.</param>
@@ -79,6 +93,8 @@ public readonly struct SwitcherStatus
     /// <param name="transitionProgress">Transition progress, clamped to 0-to-1.</param>
     /// <param name="lastCueSource">Where the most recent synced cue came from.</param>
     /// <param name="lastCueMarkBeat">Mark beat the most recent synced cue anchored to, or -1 before any.</param>
+    /// <param name="lastOffPlanSighting">Last question asked through the anomaly doorway, or null before any ask.</param>
+    /// <param name="lastOffPlanAnswer">The Director's answer to that question; a no-perform is a ride-through.</param>
     public SwitcherStatus(
         int currentEffectIndex,
         string currentEffectName,
@@ -89,7 +105,9 @@ public readonly struct SwitcherStatus
         string currentTransitionName,
         float transitionProgress,
         CueSource lastCueSource,
-        int lastCueMarkBeat)
+        int lastCueMarkBeat,
+        OffPlanSighting? lastOffPlanSighting,
+        CueDecision lastOffPlanAnswer)
     {
         CurrentEffectIndex = currentEffectIndex;
         CurrentEffectName = currentEffectName;
@@ -101,6 +119,8 @@ public readonly struct SwitcherStatus
         TransitionProgress = Mathf.Clamp01(transitionProgress);
         LastCueSource = lastCueSource;
         LastCueMarkBeat = lastCueMarkBeat;
+        LastOffPlanSighting = lastOffPlanSighting;
+        LastOffPlanAnswer = lastOffPlanAnswer;
     }
 
     /// <summary>Whether anything is on stage yet: an Effect is showing, or a Transition is running.</summary>
@@ -190,6 +210,15 @@ public sealed class Switcher
     /// boundary from being handed the same card twice. Never reset: a handover resets nothing.
     /// </summary>
     private int offPlanAsks;
+
+    /// <summary>
+    /// The last question asked through the anomaly doorway, or null before any ask. Kept only so the
+    /// status snapshot can show an operator why the wall last changed — or rode through — off plan.
+    /// </summary>
+    private OffPlanSighting? lastOffPlanSighting;
+
+    /// <summary>The Director's answer to <see cref="lastOffPlanSighting"/>; meaningless while that is null.</summary>
+    private CueDecision lastOffPlanAnswer;
 
     /// <summary>
     /// Provenance of the most recent synced cue, held for <see cref="Status"/> so the Live strip can badge a
@@ -376,21 +405,21 @@ public sealed class Switcher
             ClearScheduledAct();
         }
 
-        OffPlanSighting? sighting = null;
+        OffPlanAnomaly? anomaly = null;
 
         if (candidate != null && scheduledMark == null)
         {
             if (candidate.Fired)
             {
                 // The DJ looped back over spent plan; a fired mark is never performed again (ADR-0011).
-                sighting = OffPlanSighting.FiredMark;
+                anomaly = OffPlanAnomaly.FiredMark;
             }
             else if (candidate.EffectIndex == TransitionTargetEffectIndex)
             {
                 // The mark blends into the Effect the wall is showing or already moving toward. A built
                 // sheet never writes a Transition from an Effect into itself, so only a sheet swap or a
                 // loop can line these up.
-                sighting = OffPlanSighting.SelfBlend;
+                anomaly = OffPlanAnomaly.SelfBlend;
             }
             else
             {
@@ -428,24 +457,35 @@ public sealed class Switcher
         // is up, and the fourth Grid fires at its start, short or not. Only sheet swaps and loops push the
         // wall here — a Director-built sheet never violates stillness on its own, because its widest legal
         // gap puts the closing mark's fire inside this Grid.
-        if (sighting == null
+        if (anomaly == null
             && stillGrids >= TrackCueSheet.MaximumGapGrids - 1
             && scheduledMark == null
             && !firedSinceThink)
         {
-            sighting = OffPlanSighting.StillnessUp;
+            anomaly = OffPlanAnomaly.StillnessUp;
         }
 
         // Every anomaly goes through one doorway, at most once per think: the Switcher reports what it
         // saw and the Director decides — ride through, or a fresh Off-Plan Cue performed here at the Grid
         // start. The answer leaves the sheet exactly as it was; an anomalous mark is never spent by it.
-        if (sighting is { } seen)
+        if (anomaly is { } seen)
         {
+            // The ask is counted here, before the value is built, so constructing a Sighting stays pure
+            // data — the stillness and ask counters never leave the Switcher; the Sighting carries snapshots.
             offPlanAsks++;
-            var cue = director.DecideOffPlanCue(seen, beat, stillGrids + 1, offPlanAsks);
-            if (cue.Perform)
+            var sighting = new OffPlanSighting(
+                seen,
+                beat,
+                stillGrids + 1,
+                offPlanAsks,
+                TransitionSourceEffectIndex,
+                TransitionTargetEffectIndex);
+            var answer = director.DecideOffPlanCue(sighting);
+            lastOffPlanSighting = sighting;
+            lastOffPlanAnswer = answer;
+            if (answer.Perform)
             {
-                Perform(beat, beat, cue, CueSource.OffPlan);
+                Perform(beat, beat, answer, CueSource.OffPlan);
             }
         }
     }
@@ -669,7 +709,9 @@ public sealed class Switcher
                 transition.Name,
                 transitionProgress,
                 lastCueSource,
-                lastCueMarkBeat);
+                lastCueMarkBeat,
+                lastOffPlanSighting,
+                lastOffPlanAnswer);
         }
 
         var currentName = EffectName(currentEffectIndex);
@@ -683,7 +725,9 @@ public sealed class Switcher
             string.Empty,
             0f,
             lastCueSource,
-            lastCueMarkBeat);
+            lastCueMarkBeat,
+            lastOffPlanSighting,
+            lastOffPlanAnswer);
     }
 
     private string EffectName(int effectIndex)

@@ -307,6 +307,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
 
         TransitionBarRenderer.Draw(switcher.Status);
+        DrawOffPlanReadout(switcher.Status, controller);
         DrawLiveEffectSteering(controller);
 
         var viewWidth = position.width - 20f;
@@ -362,6 +363,38 @@ public sealed class PenroseTuningWindow : EditorWindow
                 Repaint();
             }
         }
+    }
+
+    /// <summary>
+    /// One-line readout of the last off-plan question and answer, straight from the Switcher's read-only
+    /// status snapshot (ADR-0006: the editor reads, never originates). Empty until the first ask; last
+    /// value only — history stays in the Cue Log and traces.
+    /// </summary>
+    /// <param name="status">The Switcher snapshot carrying the last Off-Plan Sighting and answer.</param>
+    /// <param name="controller">Live Controller, used only to name the dealt Effect and Transition.</param>
+    private static void DrawOffPlanReadout(SwitcherStatus status, Controller controller)
+    {
+        if (status.LastOffPlanSighting is not { } sighting)
+        {
+            EditorGUILayout.LabelField("Off-Plan", "—");
+            return;
+        }
+
+        var answer = status.LastOffPlanAnswer;
+        var verdict = answer.Perform
+            ? $"TAKE {NameAt(EffectNamesOf(controller), answer.EffectIndex)} / {NameAt(TransitionNamesOf(controller), answer.TransitionIndex)}"
+            : "RIDE";
+        EditorGUILayout.LabelField(
+            "Off-Plan",
+            $"{sighting.Anomaly} @ {sighting.BoundaryBeat} · gap {sighting.GapGrids} · ask {sighting.Ask} → {verdict}");
+    }
+
+    /// <summary>Names a catalog index, or "?" when the index falls outside the catalog.</summary>
+    /// <param name="names">Catalog display names.</param>
+    /// <param name="index">Catalog index to name.</param>
+    private static string NameAt(string[] names, int index)
+    {
+        return index >= 0 && index < names.Length ? names[index] : "?";
     }
 
     /// <summary>

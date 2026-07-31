@@ -115,11 +115,12 @@ public readonly struct CueDecision
 }
 
 /// <summary>
-/// What the Switcher saw at a Grid start that the plan cannot feed — the sighting it reports through the
-/// one anomaly doorway, <see cref="Director.DecideOffPlanCue"/>. The Switcher only reports what it sees;
-/// the Director decides ride-through or a fresh Off-Plan Cue (Director-cast, as always).
+/// The kind of anomaly the Switcher saw at a Grid start that the plan cannot feed — the condition an
+/// <see cref="OffPlanSighting"/> reports through the one anomaly doorway,
+/// <see cref="Director.DecideOffPlanCue"/>. Diagnostic forever: it feeds the decision-site trace and the
+/// Live tab, never the deal — two Sightings identical except for this kind get the identical answer.
 /// </summary>
-public enum OffPlanSighting
+public enum OffPlanAnomaly
 {
     /// <summary>The mark at the coming boundary has already fired — the DJ looped back over spent plan (ADR-0011).</summary>
     FiredMark,
@@ -132,6 +133,72 @@ public enum OffPlanSighting
 
     /// <summary>Stillness is up: three whole Grids since the last fired cue, so this fourth Grid must fire.</summary>
     StillnessUp,
+}
+
+/// <summary>
+/// The Switcher's whole report through the anomaly doorway — the one self-describing question
+/// <see cref="Director.DecideOffPlanCue"/> answers from alone: which anomaly it saw, the Grid Boundary at
+/// hand, how still the wall has been, which ask this is, and what the wall is showing and moving toward.
+/// Pure data: constructing one has no side effects, and the stillness and ask counters it snapshots stay
+/// the Switcher's own.
+/// </summary>
+public readonly struct OffPlanSighting
+{
+    /// <summary>
+    /// The anomaly the Switcher saw. Diagnostic forever: it feeds the decision-site trace and the Live tab,
+    /// never the deal — stillness pressure already rides in <see cref="GapGrids"/>.
+    /// </summary>
+    public readonly OffPlanAnomaly Anomaly;
+
+    /// <summary>
+    /// Absolute Grid Boundary beat being asked about — the Grid start the Switcher is standing on, where a
+    /// cue taken here starts its blend.
+    /// </summary>
+    public readonly int BoundaryBeat;
+
+    /// <summary>
+    /// The gap in whole Grids riding through here would let the wall reach, as the Switcher counts it; at
+    /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
+    /// </summary>
+    public readonly int GapGrids;
+
+    /// <summary>
+    /// Which off-plan ask this is on the current run. The Director remembers nothing across asks, so this
+    /// is what separates one deal from the next when a loop re-crosses the same boundary.
+    /// </summary>
+    public readonly int Ask;
+
+    /// <summary>Index of the Effect the wall is showing; a dealt cue is never this.</summary>
+    public readonly int OnWallEffectIndex;
+
+    /// <summary>
+    /// Index of the Effect a mid-flight Transition is moving toward — the on-wall index again when nothing
+    /// is in flight; a dealt cue is never this either.
+    /// </summary>
+    public readonly int MovingTowardEffectIndex;
+
+    /// <summary>Captures one report through the anomaly doorway.</summary>
+    /// <param name="anomaly">The anomaly the Switcher saw; diagnostic only, never a decision input.</param>
+    /// <param name="boundaryBeat">Absolute Grid Boundary beat being asked about.</param>
+    /// <param name="gapGrids">The gap in whole Grids riding through this boundary would let the wall reach.</param>
+    /// <param name="ask">Which off-plan ask this is on the current run.</param>
+    /// <param name="onWallEffectIndex">Index of the Effect the wall is showing.</param>
+    /// <param name="movingTowardEffectIndex">Index of the Effect a mid-flight Transition is moving toward.</param>
+    public OffPlanSighting(
+        OffPlanAnomaly anomaly,
+        int boundaryBeat,
+        int gapGrids,
+        int ask,
+        int onWallEffectIndex,
+        int movingTowardEffectIndex)
+    {
+        Anomaly = anomaly;
+        BoundaryBeat = boundaryBeat;
+        GapGrids = gapGrids;
+        Ask = ask;
+        OnWallEffectIndex = onWallEffectIndex;
+        MovingTowardEffectIndex = movingTowardEffectIndex;
+    }
 }
 
 /// <summary>
@@ -487,53 +554,50 @@ public sealed class Director
 
     /// <summary>
     /// The one anomaly doorway: answers the Switcher about a Grid start the plan cannot feed. The Switcher
-    /// reports what it saw — <paramref name="sighting"/> — and the Director decides one of two ways: ride
-    /// through (no-perform), or a fresh Off-Plan Cue, Director-cast as always. Which way is dealt with the
-    /// same rising cadence the plan walk uses, so changes land one to four Grids apart and taking is certain
-    /// once <paramref name="gapGrids"/> reaches <see cref="TrackCueSheet.MaximumGapGrids"/> — that certainty
-    /// is what makes the Stillness Ceiling a bound whichever sighting carried the ask. A dealt cue is never
-    /// the Effect on the wall and never the one being moved toward, and it leaves the Cue Sheet exactly as
-    /// it was. Frozen under Hold, and when there is no focus or no built sheet.
+    /// reports what it saw — one self-describing <see cref="OffPlanSighting"/> — and the Director decides
+    /// from that argument alone, one of two ways: ride through (no-perform), or a fresh Off-Plan Cue,
+    /// Director-cast as always. Which way is dealt with the same rising cadence the plan walk uses, so
+    /// changes land one to four Grids apart and taking is certain once the Sighting's gap reaches
+    /// <see cref="TrackCueSheet.MaximumGapGrids"/> — that certainty is what makes the Stillness Ceiling a
+    /// bound whichever anomaly carried the ask. A dealt cue is never the Effect on the wall and never the
+    /// one being moved toward, and it leaves the Cue Sheet exactly as it was. Frozen under Hold, and when
+    /// there is no focus or no built sheet.
     /// </summary>
-    /// <param name="sighting">The anomaly the Switcher saw at this Grid start. Reported, never decided, by the Switcher.</param>
-    /// <param name="boundaryBeat">
-    /// Absolute Grid Boundary beat being asked about — the Grid start the Switcher is standing on, where a
-    /// cue taken here starts its blend.
+    /// <param name="sighting">
+    /// The Switcher's whole report — everything this answer may draw on. Its anomaly kind is diagnostic
+    /// only: it feeds the trace lines here, never the deal.
     /// </param>
-    /// <param name="gapGrids">
-    /// The gap in Grids riding through here would let the wall reach, as the Switcher counts it; at
-    /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
-    /// </param>
-    /// <param name="ask">
-    /// Which off-plan ask this is on the current run. The Director remembers nothing across asks, so this
-    /// is what separates one deal from the next when a loop re-crosses the same boundary.
-    /// </param>
-    public CueDecision DecideOffPlanCue(OffPlanSighting sighting, int boundaryBeat, int gapGrids, int ask)
+    /// <returns>What to perform, or <see cref="CueDecision.Frozen"/> for a ride-through or a held wall.</returns>
+    public CueDecision DecideOffPlanCue(OffPlanSighting sighting)
     {
-        if (!TryDealOffPlan(boundaryBeat, gapGrids, ask, out var dealt))
+        if (!TryDealOffPlan(sighting, out var dealt))
         {
             return CueDecision.Frozen;
         }
 
         if (!dealt.Take)
         {
-            Trace(() => $"DECIDE_OFF_PLAN_RIDE sighting={sighting} beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
+            Trace(() => $"DECIDE_OFF_PLAN_RIDE anomaly={sighting.Anomaly} beat={sighting.BoundaryBeat} gapGrids={sighting.GapGrids} ask={sighting.Ask}");
             return CueDecision.Frozen;
         }
 
         // The take is traced with the gap and ask that produced it so a log alone can tell a certain-row
         // take from a lucky low-gap roll (2026-07-28: two sessions were indistinguishable without this).
         // A take can still be refused below by Hold, so this line records the deal, not the perform.
-        Trace(() => $"DECIDE_OFF_PLAN_TAKE sighting={sighting} beat={boundaryBeat} gapGrids={gapGrids} ask={ask}");
+        Trace(() => $"DECIDE_OFF_PLAN_TAKE anomaly={sighting.Anomaly} beat={sighting.BoundaryBeat} gapGrids={sighting.GapGrids} ask={sighting.Ask}");
         return Decide(dealt.EffectIndex, dealt.TransitionIndex);
     }
 
     /// <summary>
-    /// The single deal <see cref="DecideOffPlanCue"/> reads. The card is seeded by the boundary and ask
-    /// alone and never hands back the Effect the wall is showing or moving toward — an off-plan cue is
-    /// asked for precisely because the wall must change. False when no focus sheet is in force to deal from.
+    /// The single deal <see cref="DecideOffPlanCue"/> reads, fed entirely from the Sighting — the Director
+    /// reads nothing back from the Switcher to answer. The card is seeded by the boundary and ask alone and
+    /// never hands back the Effect the wall is showing or moving toward — an off-plan cue is asked for
+    /// precisely because the wall must change. False when no focus sheet is in force to deal from.
     /// </summary>
-    private bool TryDealOffPlan(int boundaryBeat, int gapGrids, int ask,
+    /// <param name="sighting">The Switcher's report; supplies every scalar the sheet's deal takes.</param>
+    /// <param name="dealt">The dealt card, when a focus sheet was in force.</param>
+    /// <returns>Whether a focus sheet was in force to deal from.</returns>
+    private bool TryDealOffPlan(OffPlanSighting sighting,
         out (int EffectIndex, int TransitionIndex, bool Take) dealt)
     {
         if (!TryResolveFocusSheet(out var sheet))
@@ -543,11 +607,11 @@ public sealed class Director
         }
 
         dealt = sheet.DealOffPlanCueAt(
-            boundaryBeat,
-            gapGrids,
-            ask,
-            switcher.TransitionSourceEffectIndex,
-            switcher.TransitionTargetEffectIndex);
+            sighting.BoundaryBeat,
+            sighting.GapGrids,
+            sighting.Ask,
+            sighting.OnWallEffectIndex,
+            sighting.MovingTowardEffectIndex);
         return true;
     }
 

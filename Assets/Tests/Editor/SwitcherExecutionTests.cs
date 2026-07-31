@@ -451,6 +451,8 @@ public sealed class SwitcherExecutionTests
     public void TheFourthStillGridFiresAtItsStart()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
+        Assert.That(switcher.Status.LastOffPlanSighting, Is.Null,
+            "Before any ask the snapshot's off-plan element reads as empty.");
         var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
         var effectBefore = OnWallEffect();
         var ceilingBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
@@ -467,6 +469,20 @@ public sealed class SwitcherExecutionTests
         Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
         Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(ceilingBeat),
             "The Ceiling cue anchors to the Grid start it was taken at.");
+
+        // The Live tab's data source: after an off-plan think the snapshot carries the question that was
+        // asked and the answer that came back — last value only, empty history stays in the traces.
+        var status = switcher.Status;
+        Assert.That(status.LastOffPlanSighting, Is.Not.Null, "The snapshot carries the last off-plan question.");
+        var sighting = status.LastOffPlanSighting.Value;
+        Assert.That(sighting.Anomaly, Is.EqualTo(OffPlanAnomaly.StillnessUp));
+        Assert.That(sighting.BoundaryBeat, Is.EqualTo(ceilingBeat));
+        Assert.That(sighting.GapGrids, Is.EqualTo(TrackCueSheet.MaximumGapGrids));
+        Assert.That(sighting.OnWallEffectIndex, Is.EqualTo(effectBefore),
+            "The Sighting snapshots what the wall was showing when it was asked.");
+        Assert.That(status.LastOffPlanAnswer.Perform, Is.True, "The answer that came back was a take.");
+        Assert.That(status.LastOffPlanAnswer.EffectIndex, Is.EqualTo(OnWallEffect()),
+            "The take on the snapshot is the take on the wall.");
     }
 
     /// <summary>
