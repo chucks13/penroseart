@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Legacy OSC Control Surface — PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "dark",
+        securityLevel: "loose",
+      });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- ─────────────────────────────  HEADER  ───────────────────────────── -->
+      <header class="space-y-4">
+        <p class="text-xs uppercase tracking-wider text-slate-400">PenroseArt · Investigation</p>
+        <h1 class="text-3xl font-serif">The legacy OSC control surface</h1>
+        <p class="text-slate-400 text-sm">
+          What <span class="font-mono">Assets/OSC.cs</span> and <span class="font-mono">Assets/OSCReader.cs</span>
+          actually do, end to end · 2026-08-01
+        </p>
+        <div class="flex flex-wrap gap-2 pt-2">
+          <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-emerald-700 text-emerald-300">Read from source</span>
+          <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-slate-700 text-slate-300">9 files traced</span>
+          <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-slate-700 text-slate-300">No runtime capture</span>
+          <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-amber-700 text-amber-300">7 sharp edges</span>
+        </div>
+
+        <nav class="pt-4 text-sm text-slate-400">
+          <ol class="flex flex-wrap gap-x-4 gap-y-1">
+            <li><a class="hover:text-emerald-300" href="#answer">1 Answer</a></li>
+            <li><a class="hover:text-emerald-300" href="#flow">2 Flow</a></li>
+            <li><a class="hover:text-emerald-300" href="#anatomy">3 Anatomy</a></li>
+            <li><a class="hover:text-emerald-300" href="#wire">4 Wire format</a></li>
+            <li><a class="hover:text-emerald-300" href="#inbound">5 Inbound messages</a></li>
+            <li><a class="hover:text-emerald-300" href="#outbound">6 Outbound traffic</a></li>
+            <li><a class="hover:text-emerald-300" href="#live">7 Live vs inert</a></li>
+            <li><a class="hover:text-emerald-300" href="#dead">8 Dead code</a></li>
+            <li><a class="hover:text-emerald-300" href="#risks">9 Sharp edges</a></li>
+            <li><a class="hover:text-emerald-300" href="#open">10 Open questions</a></li>
+          </ol>
+        </nav>
+      </header>
+
+      <!-- ─────────────────────────────  ANSWER  ───────────────────────────── -->
+      <section id="answer" class="space-y-4">
+        <div class="rounded-lg border-l-4 border-emerald-500 border-y border-r border-slate-800 bg-slate-900 p-6 space-y-3">
+          <h2 class="text-xl font-serif">In one paragraph</h2>
+          <p>
+            The legacy stack is a 2015 copy of
+            <a class="text-emerald-300 hover:underline" href="https://github.com/thomasfredericks/UnityOSC">thomasfredericks/UnityOSC</a>
+            wired to a <strong>TouchOSC-style tablet control surface</strong>. A background thread listens on
+            <span class="font-mono">UDP 6969</span>, parses OSC packets, and hands every message to one root handler
+            on the Unity main thread. That handler fans the message out to three page handlers — Controller page 1,
+            camera page 2/6, drums page 3 — and collects reply messages, which go back out to
+            <span class="font-mono">192.168.1.255:6161</span>. It is a bidirectional remote control, not a data feed:
+            it owns <strong>master brightness</strong>, the <strong>NYE overlay toggle</strong>, <strong>direct effect
+            selection</strong>, the <strong>effect dwell time</strong>, and <strong>drum-overlay triggers</strong>, and it
+            mirrors that state back to the surface once per frame so the tablet's faders and buttons stay in sync.
+          </p>
+          <p class="text-slate-400 text-sm">
+            It shares nothing with the RaveSystem stack — different port, different files, different parser, different
+            consumers. The two only meet as sibling components added to the same GameObject in
+            <span class="font-mono">Controller.Start()</span>.
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  FLOW  ───────────────────────────── -->
+      <section id="flow" class="space-y-4">
+        <h2 class="text-xl font-serif">2 · How a message travels</h2>
+        <p class="text-sm text-slate-400">
+          Two threads. The reader thread only parses and queues; every side effect happens on the Unity main thread
+          inside <span class="font-mono">OSCReader.Update()</span>.
+        </p>
+
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-4 overflow-x-auto">
+<pre class="mermaid">
+flowchart TD
+  tablet["TouchOSC surface"] -- "UDP 6969" --> sock["UDPPacketIO.ReceivePacket()"]
+
+  subgraph reader["Reader thread — OSCReader.Read()"]
+    direction TB
+    sock --> parse["OSC.PacketToOscMessages()"]
+    parse --> queue["messagesReceived (locked)"]
+  end
+
+  queue --> dispatch["OSCReader.Update() — main thread"]
+  dispatch --> root["Controller.OscHandler(om)"]
+
+  subgraph pages["Page handlers — each may append replies"]
+    direction TB
+    root --> p1["Controller.OSCpage1 — brightness, NYE, effects, dwell"]
+    root --> p2["CameraReader.OSCpage2 — off in SampleScene"]
+    root --> p3["drums.OSCpage3 — hits and rings"]
+  end
+
+  p1 --> replies["ArrayList oms"]
+  p2 --> replies
+  p3 --> replies
+  replies -- "UDP 6161" --> tabletBack["TouchOSC surface"]
+
+  ping["Controller.OSCping() — every frame"] --> root2["synthetic /ping through the same pages"]
+  root2 --> replies
+
+  classDef node fill:#1e293b,stroke:#64748b,color:#e2e8f0;
+  classDef live fill:#052e2b,stroke:#10b981,stroke-width:3px,color:#d1fae5;
+  classDef offNode fill:#422006,stroke:#d97706,color:#fef3c7;
+  class tablet,sock,parse,queue,dispatch,root,replies,tabletBack,ping,root2,p3 node;
+  class p1 live;
+  class p2 offNode;
+</pre>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  ANATOMY  ───────────────────────────── -->
+      <section id="anatomy" class="space-y-6">
+        <h2 class="text-xl font-serif">3 · Anatomy of the two files</h2>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-3">
+            <h3 class="text-xs uppercase tracking-wider text-slate-400">Assets/OSC.cs</h3>
+            <p class="text-sm">
+              Vendored UnityOSC v1.01 (2015-05-27), itself derived from the Make Controller Kit library — the
+              provenance comment is still at the top of the file
+              (<span class="font-mono text-xs">OSC.cs:1-5</span>).
+            </p>
+            <ul class="text-sm space-y-2 text-slate-300">
+              <li><span class="font-mono text-emerald-300">OscMessage</span> — <span class="font-mono">string address</span> plus an untyped <span class="font-mono">ArrayList values</span>, with <span class="font-mono">GetInt</span>/<span class="font-mono">GetFloat</span> coercing between int and float and logging <em>"Wrong type"</em> for anything else (<span class="font-mono text-xs">:316-402</span>).</li>
+              <li><span class="font-mono text-emerald-300">OscMessageHandler</span> — the <span class="font-mono">void h(OscMessage)</span> delegate the whole stack is built on.</li>
+              <li><span class="font-mono text-emerald-300">class OSC : MonoBehaviour</span> — a full second copy of the reader. Only its <strong>static</strong> parse/serialize helpers are ever called; see <a class="text-emerald-300 hover:underline" href="#dead">§8</a>.</li>
+            </ul>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-3">
+            <h3 class="text-xs uppercase tracking-wider text-slate-400">Assets/OSCReader.cs</h3>
+            <p class="text-sm">The half of the library that actually runs.</p>
+            <ul class="text-sm space-y-2 text-slate-300">
+              <li><span class="font-mono text-emerald-300">UDPPacketIO</span> — a <span class="font-mono">UdpClient</span> pair. The receiver binds <span class="font-mono">IPAddress.Any:localPort</span>; the sender is unbound and targets host/port per call. Sockets open lazily on first send or receive (<span class="font-mono text-xs">:21-206</span>).</li>
+              <li><span class="font-mono text-emerald-300">OSCReader : MonoBehaviour</span> — <span class="font-mono">Awake()</span> builds the transport, allocates a single 1000-byte buffer, and starts a background <span class="font-mono">Read()</span> thread (<span class="font-mono text-xs">:237-259</span>).</li>
+              <li><span class="font-mono">Update()</span> drains the queue under <span class="font-mono">ReadThreadLock</span>, calling the all-message handler for each message (<span class="font-mono text-xs">:284-312</span>).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-3">
+          <h3 class="text-xs uppercase tracking-wider text-slate-400">Wiring and configuration</h3>
+          <p class="text-sm">
+            <span class="font-mono">Controller.Start()</span> adds the component at runtime and registers the root
+            handler (<span class="font-mono text-xs">Controller.cs:1413-1414</span>):
+          </p>
+<pre class="font-mono text-xs bg-slate-950 border border-slate-800 rounded p-4 overflow-x-auto text-slate-300">osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
+osc.SetAllMessageHandler(OscHandler);
+raveOsc = gameObject.AddComponent&lt;RaveOscReceiver&gt;();   // the other stack, UDP 7000</pre>
+          <p class="text-sm text-slate-400">
+            Neither <span class="font-mono">OSC.cs</span> nor <span class="font-mono">OSCReader.cs</span> appears by GUID
+            in <span class="font-mono">Assets/Scenes/SampleScene.unity</span>, so nothing overrides the serialized
+            defaults. The ports below are the hardcoded field initializers, and they are what runs.
+          </p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-xs uppercase tracking-wider text-slate-400 text-left">
+                  <th class="py-2 pr-4">Setting</th><th class="py-2 pr-4">Value</th><th class="py-2">Source</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800">
+                <tr><td class="py-2 pr-4 font-mono">inPort</td><td class="py-2 pr-4 font-mono text-emerald-300">6969</td><td class="py-2 text-slate-400 font-mono text-xs">OSCReader.cs:214</td></tr>
+                <tr><td class="py-2 pr-4 font-mono">outIP</td><td class="py-2 pr-4 font-mono text-emerald-300">192.168.1.255</td><td class="py-2 text-slate-400 font-mono text-xs">OSCReader.cs:215</td></tr>
+                <tr><td class="py-2 pr-4 font-mono">outPort</td><td class="py-2 pr-4 font-mono text-emerald-300">6161</td><td class="py-2 text-slate-400 font-mono text-xs">OSCReader.cs:216</td></tr>
+                <tr><td class="py-2 pr-4 font-mono">buffer</td><td class="py-2 pr-4 font-mono">1000 bytes, shared</td><td class="py-2 text-slate-400 font-mono text-xs">OSCReader.cs:246</td></tr>
+                <tr><td class="py-2 pr-4">RaveSystem port, for contrast</td><td class="py-2 pr-4 font-mono">7000</td><td class="py-2 text-slate-400 font-mono text-xs">RaveOscReceiver.cs:15</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  WIRE  ───────────────────────────── -->
+      <section id="wire" class="space-y-4">
+        <h2 class="text-xl font-serif">4 · What the parser supports</h2>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2 text-sm">
+            <h3 class="text-xs uppercase tracking-wider text-slate-400">Receive</h3>
+            <p><span class="font-mono">ExtractMessages()</span> switches on the first byte: <span class="font-mono">'/'</span> is a single message, <span class="font-mono">'#'</span> is checked for the literal <span class="font-mono">#bundle</span>, then skips 16 bytes and walks the length-prefixed elements (<span class="font-mono text-xs">OSC.cs:908-933</span>).</p>
+            <p><span class="font-mono">ExtractMessage()</span> reads the address, the type tag, then only <span class="font-mono">s</span>, <span class="font-mono">i</span>, and <span class="font-mono">f</span> — ints big-endian, floats byte-reversed through a <span class="font-mono">BinaryReader</span> (<span class="font-mono text-xs">:946-990</span>).</p>
+            <p class="text-slate-400">Blobs, timetags, bools, and every other OSC 1.0 type are silently skipped <em>without advancing the read index</em>, which desynchronizes the rest of the message.</p>
+          </div>
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2 text-sm">
+            <h3 class="text-xs uppercase tracking-wider text-slate-400">Send</h3>
+            <p>One reply goes out as a plain message; two or more are wrapped in a <span class="font-mono">#bundle</span> with per-element length prefixes (<span class="font-mono text-xs">OSC.cs:782-810</span>).</p>
+            <p>Every reply built by PenroseArt is a single float — <span class="font-mono">Controller.makemessage(address, value)</span> (<span class="font-mono text-xs">Controller.cs:930</span>).</p>
+            <p class="text-amber-300/90">
+              Vendored quirk: the comment says <em>"write a null timestamp"</em> but the code runs
+              <span class="font-mono">packet[index++]++</span> eight times, so the timetag ships as
+              <span class="font-mono">01 01 01 01 01 01 01 01</span>, not zero. Harmless here because the receiving
+              surface ignores it, and the reader skips a fixed 16 bytes anyway.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  INBOUND  ───────────────────────────── -->
+      <section id="inbound" class="space-y-6">
+        <h2 class="text-xl font-serif">5 · Every inbound address, and what it does</h2>
+        <p class="text-sm text-slate-400">
+          <span class="font-mono">Controller.OscHandler()</span> (<span class="font-mono text-xs">Controller.cs:912-926</span>)
+          runs <em>every</em> message through <em>all three</em> page handlers in order, then stamps the message text into
+          the on-screen HUD for 20 frames and flushes any replies.
+        </p>
+
+        <h3 class="text-xs uppercase tracking-wider text-slate-400 pt-2">Page 1 — Controller.OSCpage1 (live)</h3>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900">
+              <tr class="text-xs uppercase tracking-wider text-slate-400 text-left">
+                <th class="py-3 px-4">Address</th><th class="py-3 px-4">Arg</th><th class="py-3 px-4">Effect</th><th class="py-3 px-4">Reply</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/1/vscroll1</td>
+                <td class="py-3 px-4 font-mono text-xs">float</td>
+                <td class="py-3 px-4">Master brightness. <span class="font-mono">brightness = Lerp(255, 0, v)</span> — <strong>inverted</strong>: fader at 0.0 is full output, 1.0 is black. This byte multiplies every channel in both the serial and E1.31 output paths (<span class="font-mono text-xs">Controller.cs:684, :712</span>) and is forced to 0 when <span class="font-mono">displayOn</span> is false.</td>
+                <td class="py-3 px-4 text-slate-400">—</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/1/nav1*</td>
+                <td class="py-3 px-4 font-mono text-xs">int == 1</td>
+                <td class="py-3 px-4">Toggles <span class="font-mono">NYE</span>, which replaces the whole render with the sparse white-pixel overlay (<span class="font-mono text-xs">Controller.cs:1606-1614</span>). Prefix match, so any <span class="font-mono">/1/nav1…</span> address hits it.</td>
+                <td class="py-3 px-4 text-slate-400">—</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/1/push&lt;n&gt;</td>
+                <td class="py-3 px-4 font-mono text-xs">int == 1</td>
+                <td class="py-3 px-4">
+                  <span class="font-mono">button = n - 1</span>. Button 23 (i.e. <span class="font-mono">/1/push24</span>)
+                  flips <span class="font-mono">keyboardBase</span>; anything else calls
+                  <span class="font-mono">JumpToEffect(button + keyboardBase, effectTime)</span>, which routes into
+                  <span class="font-mono">Director.ShowNow()</span> when the Director exists
+                  (<span class="font-mono text-xs">Controller.cs:777-797</span>). This is the one place the legacy stack
+                  reaches into the modern switching model.
+                </td>
+                <td class="py-3 px-4 font-mono text-xs text-slate-300">echo, 1.0</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/1/hscroll1</td>
+                <td class="py-3 px-4 font-mono text-xs">float</td>
+                <td class="py-3 px-4">
+                  Effect dwell time, as a coarse ladder of sequential <span class="font-mono">if</span>s:
+                  <span class="font-mono">== 1.0 → 3600s</span>, <span class="font-mono">&lt; 0.87 → 120s</span>,
+                  <span class="font-mono">&lt; 0.62 → 10s</span>, <span class="font-mono">&lt; 0.37 → 5s</span>,
+                  <span class="font-mono">&lt; 0.12 → 1s</span>. Later tests overwrite earlier ones, so the smallest
+                  matching bucket wins.
+                </td>
+                <td class="py-3 px-4 text-slate-400">—</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/ping</td>
+                <td class="py-3 px-4 font-mono text-xs">any</td>
+                <td class="py-3 px-4">State mirror. Also sent to itself once per frame — see <a class="text-emerald-300 hover:underline" href="#outbound">§6</a>.</td>
+                <td class="py-3 px-4 font-mono text-xs text-slate-300">/1/vscroll1 + one /1/push&lt;n&gt;</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-slate-500">/beat</td>
+                <td class="py-3 px-4 font-mono text-xs text-slate-500">—</td>
+                <td class="py-3 px-4 text-slate-500">Branch exists and is empty <span class="font-mono">{ }</span> (<span class="font-mono text-xs">Controller.cs:914-915</span>). Beat now arrives over RaveSystem on 7000.</td>
+                <td class="py-3 px-4 text-slate-500">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="text-xs uppercase tracking-wider text-slate-400 pt-2">Page 3 — drums.OSCpage3 (live)</h3>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900">
+              <tr class="text-xs uppercase tracking-wider text-slate-400 text-left">
+                <th class="py-3 px-4">Address</th><th class="py-3 px-4">Arg</th><th class="py-3 px-4">Effect</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/disk</td>
+                <td class="py-3 px-4 font-mono text-xs">int 1-5</td>
+                <td class="py-3 px-4">Fires an expanding ring overlay: <span class="font-mono">rings[i-1] = 5f</span> (<span class="font-mono text-xs">drums.cs:225-231</span>). The intensity argument is accepted and ignored.</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-emerald-300">/3/toggle&lt;n&gt;</td>
+                <td class="py-3 px-4 font-mono text-xs">int == 1</td>
+                <td class="py-3 px-4">Fires drum pad <span class="font-mono">n-1</span> (pads 0-4): <span class="font-mono">hits[i] = 5f; speed[i] = 0f</span> (<span class="font-mono text-xs">drums.cs:211-218</span>).</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono text-slate-500">/3/rotary*, /ping</td>
+                <td class="py-3 px-4 font-mono text-xs text-slate-500">—</td>
+                <td class="py-3 px-4 text-slate-500">Empty branches, kept as placeholders.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-400">
+          Separate from OSC, <span class="font-mono">drums</span> also runs its own raw UDP listener on
+          <span class="font-mono">8500</span> for OpenPixel-style trigger packets
+          (<span class="font-mono text-xs">drums.cs:83</span>). Same overlay, different wire — not part of this stack.
+        </p>
+
+        <h3 class="text-xs uppercase tracking-wider text-amber-400 pt-2">Pages 2 &amp; 6 — CameraReader.OSCpage2 (inert)</h3>
+        <div class="rounded-lg border border-amber-900/60 bg-amber-950/20 p-5 space-y-3 text-sm">
+          <p>
+            <span class="font-mono">SampleScene.unity</span> serializes <span class="font-mono">useCamera: 0</span>, so
+            <span class="font-mono">cameraOverlay</span> is never constructed and this whole page is unreachable in the
+            shipped scene (<span class="font-mono text-xs">Controller.cs:919, :1424-1429</span>). Documented here because
+            it is fully implemented and one bool away from live.
+          </p>
+          <ul class="space-y-1 text-slate-300">
+            <li><span class="font-mono text-emerald-300">/2/fader1…9</span>, <span class="font-mono text-emerald-300">/2/rotary1</span> — write the ten-element <span class="font-mono">settings[]</span> array that tunes the webcam overlay.</li>
+            <li><span class="font-mono text-emerald-300">/2/push1…8</span> — reset the matching setting to its default and echo the new knob value.</li>
+            <li><span class="font-mono text-emerald-300">/2/nav4</span>, <span class="font-mono text-emerald-300">/2/nav5</span> — cycle camera device 0 and 1.</li>
+            <li><span class="font-mono text-emerald-300">/6/toggle&lt;33+n&gt;</span> — a 3&times;8 radio grid; selecting one clears the previous member of that row and echoes both states.</li>
+            <li><span class="font-mono text-emerald-300">/2</span> — page-open handshake: dumps all ten knobs and the three active toggles.</li>
+            <li><span class="font-mono text-emerald-300">/ping</span> — round-robins one of 34 state values per call (10 knobs, then 24 toggles).</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  OUTBOUND  ───────────────────────────── -->
+      <section id="outbound" class="space-y-4">
+        <h2 class="text-xl font-serif">6 · The outbound heartbeat</h2>
+        <p class="text-sm">
+          <span class="font-mono">Controller.OSCping()</span> is called unconditionally at the end of every
+          <span class="font-mono">Update()</span> (<span class="font-mono text-xs">Controller.cs:1687</span>). It
+          fabricates a local <span class="font-mono">/ping</span> message and pushes it through the same page handlers
+          the network uses, so the reply path is driven by the render loop rather than by the tablet.
+        </p>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-3 text-sm">
+          <p>Per frame, at <span class="font-mono">Application.targetFrameRate = 60</span>, that produces:</p>
+          <ul class="space-y-1 text-slate-300 list-disc list-inside">
+            <li>one packet carrying <span class="font-mono">/1/vscroll1</span> = <span class="font-mono">1 - brightness/255</span>, so the fader tracks brightness changed by keyboard, telnet, or the scene slider;</li>
+            <li>one packet carrying <span class="font-mono">/1/push&lt;pingIndex+1&gt;</span> = 1 or 0, lighting exactly one button of the effect matrix per frame and cycling <span class="font-mono">pingIndex</span> through <span class="font-mono">effects.Length</span> — the whole matrix refreshes in about <span class="font-mono">effects.Length / 60</span> seconds;</li>
+            <li>plus <span class="font-mono">/1/reset</span> whenever the current effect index is out of range.</li>
+          </ul>
+          <p class="text-slate-400">
+            The current index is read from <span class="font-mono">switcher.CurrentEffectIndex</span> when a Switcher
+            exists, falling back to <span class="font-mono">currentEffect</span> — so the legacy surface reflects the
+            modern switching model rather than a stale copy of it.
+          </p>
+        </div>
+        <div class="rounded-lg border border-amber-700/60 bg-amber-950/20 p-4 text-sm text-amber-100">
+          Roughly <strong>120 UDP packets per second</strong> leave the process whether or not a control surface is
+          listening, and nothing throttles or gates it.
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  LIVE VS INERT  ───────────────────────────── -->
+      <section id="live" class="space-y-4">
+        <h2 class="text-xl font-serif">7 · What it actually controls today</h2>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-emerald-800 bg-slate-900 p-5 space-y-2">
+            <h3 class="text-xs uppercase tracking-wider text-emerald-300">Live</h3>
+            <ul class="text-sm space-y-1 text-slate-300 list-disc list-inside">
+              <li>Master output brightness (serial <em>and</em> E1.31 paths)</li>
+              <li>NYE overlay on/off</li>
+              <li>Direct effect selection, via <span class="font-mono">Director.ShowNow</span></li>
+              <li>Effect bank toggle (<span class="font-mono">keyboardBase</span>)</li>
+              <li>Effect dwell time (<span class="font-mono">effectTime</span>)</li>
+              <li>Drum pad and ring overlay triggers</li>
+              <li>The transient bottom-HUD message line</li>
+              <li>Continuous state mirroring back to the surface</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <h3 class="text-xs uppercase tracking-wider text-slate-400">Not its job</h3>
+            <ul class="text-sm space-y-1 text-slate-400 list-disc list-inside">
+              <li>Beat, BPM, transport, loop state — RaveSystem on 7000</li>
+              <li>Cue sheets, planning, switching decisions — Director/Switcher</li>
+              <li>External pixel sources — <span class="font-mono">PixelReceiver</span>, UDP 7778</li>
+              <li>Frame output — <span class="font-mono">SerialOut</span> / E1.31</li>
+              <li>Camera overlay — implemented, disabled in the scene</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  DEAD  ───────────────────────────── -->
+      <section id="dead" class="space-y-4">
+        <h2 class="text-xl font-serif">8 · Dead and inert code inside the stack</h2>
+        <p class="text-sm text-slate-400">
+          Verified by reference search rather than by reading, so callers outside the obvious files are included.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-900">
+              <tr class="text-xs uppercase tracking-wider text-slate-400 text-left">
+                <th class="py-3 px-4">Item</th><th class="py-3 px-4">Status</th><th class="py-3 px-4">Evidence</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr>
+                <td class="py-3 px-4 font-mono">class OSC : MonoBehaviour</td>
+                <td class="py-3 px-4"><span class="text-xs uppercase tracking-wider text-red-300">unreachable</span></td>
+                <td class="py-3 px-4 text-slate-400">Every reference to <span class="font-mono">OSC</span> in the repo is a call to one of its four static packet helpers. Its GUID appears in no <span class="font-mono">.unity</span> file and nothing does <span class="font-mono">AddComponent&lt;OSC&gt;</span>, so <span class="font-mono">Awake</span>, <span class="font-mono">Read</span>, <span class="font-mono">Send</span>, <span class="font-mono">SetAddressHandler</span>, <span class="font-mono">StringToOscMessage</span>, and <span class="font-mono">HandleOnPlayModeChanged</span> never execute. It is a near-duplicate of <span class="font-mono">OSCReader</span>.</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono">OSCReader.AddressTable</td>
+                <td class="py-3 px-4"><span class="text-xs uppercase tracking-wider text-red-300">never populated</span></td>
+                <td class="py-3 px-4 text-slate-400">Allocated in <span class="font-mono">Awake</span> and read on every dispatch (<span class="font-mono text-xs">:299</span>), but <span class="font-mono">OSCReader</span> has no <span class="font-mono">SetAddressHandler</span> — that method stayed behind on the dead <span class="font-mono">OSC</span> class. Costs a synchronized hashtable wrapper per message for nothing.</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono">OSCReader.paused</td>
+                <td class="py-3 px-4"><span class="text-xs uppercase tracking-wider text-red-300">always false</span></td>
+                <td class="py-3 px-4 text-slate-400"><span class="font-mono">OnApplicationPause</span> has its entire body commented out (<span class="font-mono text-xs">:272-278</span>), so the pause gate in <span class="font-mono">Read()</span> never closes.</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono">/beat branch</td>
+                <td class="py-3 px-4"><span class="text-xs uppercase tracking-wider text-red-300">empty</span></td>
+                <td class="py-3 px-4 text-slate-400"><span class="font-mono text-xs">Controller.cs:914-915</span> — a leftover from before RaveSystem owned the beat.</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono">Camera pages 2 &amp; 6</td>
+                <td class="py-3 px-4"><span class="text-xs uppercase tracking-wider text-amber-300">disabled</span></td>
+                <td class="py-3 px-4 text-slate-400">Complete implementation, gated off by <span class="font-mono">useCamera: 0</span> in the scene.</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-mono">Controller - nova.cs</td>
+                <td class="py-3 px-4"><span class="text-xs uppercase tracking-wider text-slate-400">not compiled</span></td>
+                <td class="py-3 px-4 text-slate-400">Whole file is inside <span class="font-mono">#if false</span>; its copy of <span class="font-mono">OSCpage1</span> is reference material only.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  RISKS  ───────────────────────────── -->
+      <section id="risks" class="space-y-4">
+        <h2 class="text-xl font-serif">9 · Sharp edges</h2>
+        <p class="text-sm text-slate-400">
+          Found by reading; none of these were reproduced at runtime. Ordered by how much they would hurt.
+        </p>
+
+        <div class="space-y-4">
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold">A malformed <span class="font-mono">/1/push</span> address can wedge the message queue permanently.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-red-700 text-red-300 shrink-0">high</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              <span class="font-mono">int.Parse(om.address.Substring(7))</span> (<span class="font-mono text-xs">Controller.cs:864</span>)
+              throws on any <span class="font-mono">/1/push…</span> address that is not followed by digits. The throw
+              unwinds out of <span class="font-mono">OSCReader.Update()</span> <em>before</em>
+              <span class="font-mono">messagesReceived.Clear()</span> (<span class="font-mono text-xs">OSCReader.cs:309</span>),
+              so the offending message stays queued and is re-dispatched — and re-throws — every frame from then on.
+              Unity swallows the exception per frame; the surface just stops responding.
+            </p>
+            <p class="text-sm text-slate-400 italic">Same shape applies to <span class="font-mono">/3/toggle</span> and <span class="font-mono">/6/toggle</span>, and to <span class="font-mono">GetInt</span>/<span class="font-mono">GetFloat</span> on an argument-less message, which would throw on the <span class="font-mono">values[0]</span> index.</p>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold">The OSC bank toggle and the keyboard bank toggle disagree.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-amber-700 text-amber-300 shrink-0">likely bug</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              Both flip the same <span class="font-mono">keyboardBase</span> flag, but the keyboard path offsets by
+              <span class="font-mono">keyboardBase * 23</span> (<span class="font-mono text-xs">Controller.cs:1567</span>)
+              while the OSC path offsets by <span class="font-mono">keyboardBase</span> alone
+              (<span class="font-mono text-xs">:870</span>). Pressing the OSC bank button therefore shifts the button
+              matrix by <strong>one</strong> effect, not by a bank of 23 — and the ping feedback, which compares raw
+              indices, will light the wrong button while the bank is flipped.
+            </p>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold">Replies are addressed to a subnet this machine is not on.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-amber-700 text-amber-300 shrink-0">verify</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              <span class="font-mono">outIP</span> is hardcoded to the directed broadcast
+              <span class="font-mono">192.168.1.255</span>, while the documented workstation LAN is
+              <span class="font-mono">192.168.10.0/24</span>. If the installation network matches the workstation's, the
+              entire outbound half of this stack — the whole state-mirroring heartbeat — is landing nowhere. Nothing in
+              the code reads back a delivery result, so this would fail completely silently. Worth confirming against
+              the real installation network before treating any of §6 as working.
+            </p>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold"><span class="font-mono">Thread.Abort()</span> on shutdown.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-amber-700 text-amber-300 shrink-0">portability</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              <span class="font-mono">Close()</span> aborts the reader thread and only then closes the socket
+              (<span class="font-mono text-xs">OSCReader.cs:332-344</span>), while that thread is parked in a blocking
+              <span class="font-mono">UdpClient.Receive</span>. It works today because
+              <span class="font-mono">ProjectSettings.asset</span> names no Standalone scripting backend, leaving the
+              Mono default. Under IL2CPP <span class="font-mono">Thread.Abort</span> is not supported, and the shutdown
+              path would throw instead of stopping the thread. Closing the socket first and letting
+              <span class="font-mono">Receive</span> fault out is the conventional fix.
+            </p>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold">The dispatch lock is held across the entire handler chain.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-slate-700 text-slate-300 shrink-0">design</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              <span class="font-mono">Update()</span> holds <span class="font-mono">ReadThreadLock</span> while running
+              <span class="font-mono">OscHandler</span>, which can reach as far as <span class="font-mono">Director.ShowNow</span>
+              and a full effect start. The reader thread blocks for that whole span, and any packet arriving meanwhile
+              waits in the socket buffer. Harmless at this traffic level; a hazard if the handler chain ever grows.
+            </p>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold">Fixed 1000-byte buffer, silently truncating.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-slate-700 text-slate-300 shrink-0">robustness</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              <span class="font-mono">ReceivePacket</span> copies <span class="font-mono">min(buffer, incoming)</span>
+              and reports the truncated length (<span class="font-mono text-xs">OSCReader.cs:143-158</span>). A larger
+              bundle is cut mid-message and the parser walks the remains. The send path has the same 1000-byte ceiling
+              with no bounds check on the reply bundle.
+            </p>
+          </div>
+
+          <div class="rounded-lg border border-slate-800 bg-slate-900 p-5 space-y-2">
+            <div class="flex items-start justify-between gap-4">
+              <h3 class="font-semibold">No sender filtering.</h3>
+              <span class="text-xs uppercase tracking-wider px-2 py-1 rounded-full border border-slate-700 text-slate-300 shrink-0">exposure</span>
+            </div>
+            <p class="text-sm text-slate-300">
+              The socket binds <span class="font-mono">IPAddress.Any</span> and the handler ignores the sender endpoint
+              entirely. Any host that can reach UDP 6969 can black out the wall or change the effect. Appropriate to
+              a closed installation LAN; worth knowing before the machine sits on anything wider.
+            </p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ─────────────────────────────  OPEN  ───────────────────────────── -->
+      <section id="open" class="space-y-4">
+        <h2 class="text-xl font-serif">10 · Open questions</h2>
+        <ul class="text-sm space-y-3 text-slate-300 list-disc list-inside">
+          <li>
+            <strong>Is there still a control surface?</strong> The address vocabulary
+            (<span class="font-mono">/1/push*</span>, <span class="font-mono">/2/fader*</span>,
+            <span class="font-mono">/6/toggle33+</span>, page-open handshakes) is TouchOSC's default layout scheme, but
+            the layout file itself is not in this repo. Whether a tablet is still pointed at this port is a fact only
+            you have.
+          </li>
+          <li>
+            <strong>What is the installation subnet?</strong> Resolves sharp edge #3 outright, and decides whether the
+            per-frame heartbeat is doing anything at all.
+          </li>
+          <li>
+            <strong>Is the camera overlay retired or paused?</strong> <span class="font-mono">useCamera: 0</span> makes
+            roughly 80 lines of page 2/6 handling and the whole <span class="font-mono">CameraReader</span> unreachable.
+            If it is retired, that is the largest single cut available here.
+          </li>
+          <li>
+            <strong>Nothing was run.</strong> This is a source read — no Unity session, no packet capture, no log
+            evidence. Every claim traces to a file and line above; none of them were observed executing.
+          </li>
+        </ul>
+      </section>
+
+      <footer class="pt-8 border-t border-slate-800 text-xs text-slate-500 space-y-1">
+        <p>Traced files: <span class="font-mono">Assets/OSC.cs</span>, <span class="font-mono">Assets/OSCReader.cs</span>, <span class="font-mono">Assets/core/Runtime/Controller.cs</span>, <span class="font-mono">Assets/core/ReactiveInputs/drums.cs</span>, <span class="font-mono">Assets/core/ReactiveInputs/CameraReader.cs</span>, <span class="font-mono">Assets/core/IO/RaveOscReceiver.cs</span>, <span class="font-mono">Assets/core/helpers/ExtensionMethods.cs</span>, <span class="font-mono">Assets/Scenes/SampleScene.unity</span>, <span class="font-mono">ProjectSettings/ProjectSettings.asset</span>.</p>
+        <p>Line numbers are 1-based and current as of this commit.</p>
+      </footer>
+
+    </main>
+  </body>
+</html>
