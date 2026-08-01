@@ -178,11 +178,11 @@ public sealed class Switcher
     private int? lastSeenBeat;
 
     /// <summary>
-    /// BeatManager's Grid-start count as of the last think, so each crossing thinks exactly once however
-    /// the frames land. The count — not a sampled grid position — is the Grid-start fact, because the
-    /// wire publishes positions, not events.
+    /// Grid position at the last observed beat — the same watch-for-change pattern as
+    /// <see cref="lastSeenBeat"/>. A Grid start is the position going down between two observed beats,
+    /// never a frame happening to sample exactly 1.
     /// </summary>
-    private int lastSeenGridStarts;
+    private int? lastSeenGridBeat;
 
     /// <summary>
     /// Whether a think has established the stillness baseline. The first think observes a Grid start with
@@ -375,14 +375,17 @@ public sealed class Switcher
             Trace(() => $"SWITCHER_LAPSE mark={lapsedMarkBeat} fire={lapsedFireBeat} beat={beat}");
         }
 
-        // Thinks follow BeatManager's Grid-start count — crossings measure elapsed music. Sampling the
-        // grid position for exactly 1 lost a whole think whenever a snap-back's timing-grid datagram
-        // landed a frame behind the beat lane (2026-07-31: beat=65 arrived with gridBeat=16; the skipped
-        // think passed a planned mark in silence and undercounted stillness).
-        var gridStarts = controller.beatManager.Grid.StartsSeen;
-        if (gridStarts != lastSeenGridStarts)
+        // Thinks once per Grid, at its start. A start is the grid position going down since the last
+        // observed beat — or holding at the One across a beat (a phrase restarting one beat past a
+        // boundary) — never a frame happening to sample exactly 1: a snap-back's grid datagram can land
+        // a frame behind the beat lane (2026-07-31: beat=65 arrived with gridBeat=16, the ==1 sample
+        // missed, and the skipped think passed a planned mark in silence and undercounted stillness).
+        var crossed = lastSeenGridBeat is { } lastGrid
+            ? gridBeat < lastGrid || (gridBeat == 1 && lastGrid == 1)
+            : gridBeat == 1;
+        lastSeenGridBeat = gridBeat;
+        if (crossed)
         {
-            lastSeenGridStarts = gridStarts;
             Think(beat);
         }
     }
