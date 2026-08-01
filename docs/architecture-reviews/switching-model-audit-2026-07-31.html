@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Switching Model Audit — PenroseArt</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #071019;
+        --panel: #0d1824;
+        --panel-2: #111f2e;
+        --line: #243447;
+        --line-strong: #38516b;
+        --text: #edf4fb;
+        --muted: #9eb0c2;
+        --faint: #71859a;
+        --accent: #45d6a8;
+        --accent-soft: rgba(69, 214, 168, 0.12);
+        --amber: #f5bd55;
+        --amber-soft: rgba(245, 189, 85, 0.12);
+        --red: #ff727d;
+        --red-soft: rgba(255, 114, 125, 0.12);
+        --blue: #75baff;
+        --blue-soft: rgba(117, 186, 255, 0.12);
+        --shadow: 0 22px 60px rgba(0, 0, 0, 0.25);
+        --radius: 14px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 14% -8%, rgba(69, 214, 168, 0.08), transparent 30rem),
+          radial-gradient(circle at 96% 8%, rgba(117, 186, 255, 0.07), transparent 28rem),
+          var(--page);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 16px;
+        line-height: 1.62;
+      }
+
+      a { color: var(--accent); text-underline-offset: 3px; }
+      a:hover { color: #8aeacb; }
+
+      code, .mono {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.9em;
+      }
+
+      code {
+        padding: 0.08rem 0.3rem;
+        border: 1px solid rgba(158, 176, 194, 0.14);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.035);
+        color: #dce9f5;
+      }
+
+      h1, h2, h3, h4, p { margin-top: 0; }
+      h1, h2, h3 { text-wrap: balance; }
+      h1 { margin-bottom: 1rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.45rem, 6vw, 4.8rem); line-height: 0.98; letter-spacing: -0.045em; }
+      h2 { margin-bottom: 1rem; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.75rem, 3vw, 2.45rem); line-height: 1.15; letter-spacing: -0.025em; }
+      h3 { margin-bottom: 0.55rem; font-size: 1.12rem; line-height: 1.28; }
+      h4 { margin-bottom: 0.35rem; font-size: 0.98rem; }
+
+      ul, ol { margin-top: 0; padding-left: 1.25rem; }
+      li + li { margin-top: 0.35rem; }
+
+      .shell {
+        width: min(100% - 2rem, 1240px);
+        margin: 0 auto;
+        padding: 3.5rem 0 6rem;
+      }
+
+      .hero {
+        max-width: 970px;
+        padding: 2.5rem 0 3rem;
+      }
+
+      .eyebrow, .label, .badge {
+        font-size: 0.72rem;
+        font-weight: 750;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow { margin-bottom: 1rem; color: var(--accent); }
+      .dek { max-width: 790px; margin-bottom: 1.4rem; color: #c3d2df; font-size: clamp(1.05rem, 2vw, 1.3rem); line-height: 1.5; }
+      .meta { display: flex; flex-wrap: wrap; gap: 0.55rem 1.3rem; color: var(--muted); font-size: 0.86rem; }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 3rem;
+        align-items: start;
+      }
+
+      .toc {
+        position: sticky;
+        top: 1rem;
+        padding: 1rem 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .toc .label { margin-bottom: 0.75rem; color: var(--faint); }
+      .toc ol { margin: 0; padding: 0; list-style: none; counter-reset: toc; }
+      .toc li { counter-increment: toc; margin: 0; }
+      .toc a { display: grid; grid-template-columns: 1.7rem 1fr; gap: 0.25rem; padding: 0.28rem 0; color: var(--muted); font-size: 0.82rem; text-decoration: none; }
+      .toc a::before { content: counter(toc, decimal-leading-zero); color: var(--faint); font-family: "SFMono-Regular", monospace; }
+      .toc a:hover { color: var(--text); }
+
+      main { min-width: 0; }
+      section { padding: 1rem 0 3.8rem; scroll-margin-top: 1rem; }
+      section + section { border-top: 1px solid var(--line); padding-top: 3.8rem; }
+      .section-lead { max-width: 760px; color: var(--muted); font-size: 1.04rem; }
+
+      .verdict {
+        margin: 0 0 1.6rem;
+        padding: 1.6rem 1.7rem;
+        border: 1px solid rgba(69, 214, 168, 0.34);
+        border-left: 5px solid var(--accent);
+        border-radius: var(--radius);
+        background: linear-gradient(135deg, rgba(69, 214, 168, 0.1), rgba(117, 186, 255, 0.035));
+        box-shadow: var(--shadow);
+      }
+
+      .verdict strong { color: #b5f4df; }
+      .verdict p:last-child { margin-bottom: 0; }
+
+      .metric-grid, .status-grid, .cards-2, .cards-3 {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .status-grid, .cards-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+      .metric, .status-card, .card, .finding, .decision-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, rgba(17, 31, 46, 0.86), rgba(13, 24, 36, 0.9));
+      }
+
+      .metric { padding: 1.15rem; }
+      .metric .value { display: block; color: var(--text); font-family: Georgia, serif; font-size: 2rem; line-height: 1; }
+      .metric .caption { display: block; margin-top: 0.55rem; color: var(--muted); font-size: 0.78rem; line-height: 1.35; }
+
+      .status-card { padding: 1.25rem; }
+      .status-card p, .card p, .decision-card p { margin-bottom: 0; color: var(--muted); font-size: 0.92rem; }
+
+      .card { padding: 1.35rem; }
+      .card + .card { margin-top: 0.9rem; }
+      .card ul:last-child, .card p:last-child { margin-bottom: 0; }
+
+      .badge-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 0.75rem; }
+      .badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.28rem 0.55rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,0.025); }
+      .badge.pass { border-color: rgba(69,214,168,.34); color: #90e8cb; background: var(--accent-soft); }
+      .badge.partial, .badge.high { border-color: rgba(245,189,85,.34); color: #ffd98e; background: var(--amber-soft); }
+      .badge.fail, .badge.critical { border-color: rgba(255,114,125,.38); color: #ffaab1; background: var(--red-soft); }
+      .badge.info { border-color: rgba(117,186,255,.34); color: #b8dcff; background: var(--blue-soft); }
+
+      .callout {
+        margin: 1.5rem 0;
+        padding: 1rem 1.15rem;
+        border-left: 4px solid var(--amber);
+        border-radius: 0 10px 10px 0;
+        background: var(--amber-soft);
+        color: #f7ddb0;
+      }
+
+      .callout.red { border-left-color: var(--red); background: var(--red-soft); color: #ffc5c9; }
+      .callout.blue { border-left-color: var(--blue); background: var(--blue-soft); color: #c8e4ff; }
+      .callout p:last-child { margin-bottom: 0; }
+
+      .flow-wrap {
+        margin-top: 1.5rem;
+        overflow-x: auto;
+        padding: 1.3rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(6, 14, 22, 0.55);
+      }
+
+      .flow {
+        min-width: 760px;
+        display: grid;
+        grid-template-columns: 1fr 2.1rem 1fr 2.1rem 1fr 2.1rem 1fr;
+        gap: 0.45rem;
+        align-items: center;
+      }
+
+      .flow + .flow { margin-top: 0.8rem; }
+      .flow-box { min-height: 88px; display: grid; align-content: center; padding: 0.8rem; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel-2); text-align: center; }
+      .flow-box strong { display: block; font-size: 0.9rem; }
+      .flow-box span { display: block; margin-top: 0.25rem; color: var(--muted); font-size: 0.72rem; line-height: 1.35; }
+      .flow-box.good { border-color: rgba(69,214,168,.5); }
+      .flow-box.bad { border-color: rgba(255,114,125,.58); background: var(--red-soft); }
+      .flow-arrow { color: var(--faint); font-size: 1.35rem; text-align: center; }
+      .flow-arrow.bad { color: var(--red); }
+      .flow-label { min-width: 760px; margin: 1.2rem 0 0.45rem; color: var(--faint); }
+
+      .table-wrap { margin-top: 1.35rem; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+      table { width: 100%; min-width: 720px; border-collapse: collapse; background: rgba(13,24,36,.72); font-size: 0.86rem; }
+      caption { padding: 0.8rem 1rem; color: var(--muted); text-align: left; caption-side: top; }
+      th, td { padding: 0.78rem 0.9rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { color: var(--faint); font-size: 0.7rem; letter-spacing: 0.11em; text-transform: uppercase; background: rgba(255,255,255,.025); }
+      tr:last-child td { border-bottom: 0; }
+      tbody tr:hover { background: rgba(255,255,255,.018); }
+      td.status { width: 7.5rem; }
+      td:first-child { color: #dce9f5; }
+
+      .timeline { margin-top: 1.5rem; padding-left: 1.15rem; border-left: 1px solid var(--line-strong); }
+      .timeline-item { position: relative; padding: 0 0 1.25rem 1.2rem; }
+      .timeline-item::before { content: ""; position: absolute; left: -1.46rem; top: 0.38rem; width: 0.58rem; height: 0.58rem; border: 2px solid var(--page); border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 1px var(--line-strong); }
+      .timeline-item.good::before { background: var(--accent); }
+      .timeline-item.warn::before { background: var(--amber); }
+      .timeline-item.bad::before { background: var(--red); }
+      .timeline-item p { margin-bottom: 0; color: var(--muted); font-size: 0.9rem; }
+      .timeline-item .when { color: var(--faint); font-size: 0.74rem; }
+
+      .finding-list { display: grid; gap: 1rem; margin-top: 1.5rem; }
+      .finding { padding: 1.35rem 1.45rem; }
+      .finding.critical { border-left: 5px solid var(--red); }
+      .finding.high { border-left: 5px solid var(--amber); }
+      .finding.medium { border-left: 5px solid var(--blue); }
+      .finding.low { border-left: 5px solid var(--line-strong); }
+      .finding p { color: var(--muted); }
+      .finding p:last-child, .finding ul:last-child { margin-bottom: 0; }
+      .finding .evidence { margin-top: 0.8rem; color: var(--faint); font-size: 0.8rem; }
+      .finding .evidence a { color: #9bcfff; }
+
+      .split-title { margin-top: 2.1rem; }
+      .plain-list { list-style: none; padding: 0; }
+      .plain-list li { position: relative; padding-left: 1.25rem; }
+      .plain-list li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+      .decision-card { padding: 1.35rem; }
+      .decision-card .number { display: inline-grid; place-items: center; width: 1.8rem; height: 1.8rem; margin-bottom: 0.7rem; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--accent); font-family: Georgia, serif; }
+
+      .recommendation {
+        margin-top: 1.5rem;
+        padding: 1.6rem;
+        border: 2px solid rgba(69,214,168,.4);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, var(--accent-soft), rgba(13,24,36,.75));
+      }
+      .recommendation ol { margin-bottom: 0; }
+
+      .source-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem 1.2rem; padding: 0; list-style: none; }
+      .source-list li { padding: 0.8rem 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.88rem; }
+      .source-list strong { display: block; color: var(--text); }
+
+      footer { padding-top: 2rem; border-top: 1px solid var(--line); color: var(--faint); font-size: 0.82rem; }
+
+      @media (max-width: 980px) {
+        .layout { grid-template-columns: 1fr; gap: 1.5rem; }
+        .toc { position: static; }
+        .toc ol { columns: 2; column-gap: 1.5rem; }
+        .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 700px) {
+        .shell { width: min(100% - 1.2rem, 1240px); padding-top: 1.4rem; }
+        .hero { padding-top: 1.5rem; }
+        .status-grid, .cards-2, .cards-3, .source-list { grid-template-columns: 1fr; }
+        .toc ol { columns: 1; }
+        .metric-grid { grid-template-columns: 1fr 1fr; }
+        .metric .value { font-size: 1.65rem; }
+        section, section + section { padding-bottom: 2.8rem; }
+        section + section { padding-top: 2.8rem; }
+      }
+
+      @media print {
+        :root { color-scheme: light; --page: #fff; --panel: #fff; --panel-2: #f8fafc; --line: #d8e0e8; --line-strong: #9aabba; --text: #14202b; --muted: #425466; --faint: #5f7182; }
+        body { background: #fff; color: var(--text); }
+        .shell { width: 100%; padding: 0; }
+        .layout { grid-template-columns: 1fr; }
+        .toc { display: none; }
+        .finding, .card, .decision-card, .metric, .status-card, .recommendation, .table-wrap { break-inside: avoid; box-shadow: none; }
+        a { color: #126a52; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <p class="eyebrow">Forensic architecture review · PenroseArt</p>
+        <h1>Switching model audit</h1>
+        <p class="dek">Where the 31 July simplification landed, where the runtime still contradicts the model, and what to remove without rebuilding the machinery that was deliberately killed.</p>
+        <div class="meta">
+          <span>Audit date: 31 July 2026 · America/Los_Angeles</span>
+          <span>Baseline: <span class="mono">53216340</span></span>
+          <span>Current code: <span class="mono">934a0f48</span></span>
+          <span>Branch: <span class="mono">refactor/off-plan-sighting</span></span>
+        </div>
+      </header>
+
+      <div class="layout">
+        <nav class="toc" aria-label="Report contents">
+          <p class="label">Contents</p>
+          <ol>
+            <li><a href="#verdict">Verdict</a></li>
+            <li><a href="#state">Exact state</a></li>
+            <li><a href="#timeline">What changed</a></li>
+            <li><a href="#flow">Current flow</a></li>
+            <li><a href="#compliance">Model compliance</a></li>
+            <li><a href="#findings">All findings</a></li>
+            <li><a href="#complexity">Complexity</a></li>
+            <li><a href="#tests">Tests</a></li>
+            <li><a href="#prior-review">Prior review</a></li>
+            <li><a href="#recommendations">Recommendations</a></li>
+            <li><a href="#evidence">Evidence</a></li>
+          </ol>
+        </nav>
+
+        <main>
+          <section id="verdict">
+            <p class="eyebrow">Executive verdict</p>
+            <h2>The architecture got simpler. The musical behavior is not yet faithful.</h2>
+
+            <div class="verdict">
+              <p><strong>There are no longer five or six live systems trying to count the same switching fact.</strong> The prepared-execution branch was discarded, the BeatManager Grid-start counter was added and then removed, Transition tags were deleted, stillness has one runtime owner, and all three anomalies now use one doorway.</p>
+              <p>The remaining problem is narrower and more concrete: the runtime cannot always identify the exact Grid seam, then compensates with heuristics that allow decisions and impacts inside a Grid. The planner also throws away real structure data. Those are correctness defects, not a reason to introduce another coordination system.</p>
+            </div>
+
+            <div class="status-grid" aria-label="Audit verdict by dimension">
+              <article class="status-card">
+                <div class="badge-row"><span class="badge pass">Architecture · strong</span></div>
+                <h3>Ownership cut holds</h3>
+                <p>Director decides and casts. Switcher owns the move. BeatManager remains the musical source. One anomaly doorway and one stillness counter remain.</p>
+              </article>
+              <article class="status-card">
+                <div class="badge-row"><span class="badge fail">Behavior · not conforming</span></div>
+                <h3>Seams and Anchors are wrong</h3>
+                <p>Late Grid data, raw off-plan starts, omitted track tails, and rewritten Drop/Fill positions directly contradict the current model and wire contract.</p>
+              </article>
+              <article class="status-card">
+                <div class="badge-row"><span class="badge partial">Delivery · incomplete</span></div>
+                <h3>Local work is unpublished</h3>
+                <p>The local branch is seven commits beyond <span class="mono">origin/master</span>. Issues 108–110 remain open because the corresponding implementation has not reached GitHub.</p>
+              </article>
+            </div>
+
+            <h3 class="split-title">What matters most</h3>
+            <div class="metric-grid">
+              <div class="metric"><span class="value">4</span><span class="caption">high-impact truth gaps: seam timing, off-plan timing, whole-track coverage, Anchor extraction</span></div>
+              <div class="metric"><span class="value">17</span><span class="caption">commits after the pre-day baseline, including three merges and two same-day reversals</span></div>
+              <div class="metric"><span class="value">384</span><span class="caption">Unity tests passing; several currently pin or miss the wrong behavior</span></div>
+              <div class="metric"><span class="value">0</span><span class="caption">compile warnings, compatibility paths, migration layers, stubs, or temporary switching systems found</span></div>
+            </div>
+          </section>
+
+          <section id="state">
+            <p class="eyebrow">Audit boundary</p>
+            <h2>Three layers of “current” must not be mixed</h2>
+            <p class="section-lead">The code snapshot, the working authority documents, and GitHub are at different points. The report evaluates behavior against the newest authority while keeping publication state explicit.</p>
+
+            <div class="cards-3">
+              <article class="card">
+                <div class="badge-row"><span class="badge info">Committed code</span></div>
+                <h3><span class="mono">934a0f48</span></h3>
+                <p>Local branch <span class="mono">refactor/off-plan-sighting</span>. This is the runtime and test snapshot measured and compiled.</p>
+              </article>
+              <article class="card">
+                <div class="badge-row"><span class="badge partial">Uncommitted authority</span></div>
+                <h3>Three documentation files</h3>
+                <p><a href="../../CONTEXT.md">CONTEXT.md</a>, <a href="../adr/0009-the-director-owns-the-plan-the-switcher-owns-the-move.md">ADR-0009</a>, and <a href="../switching-model.md">switching-model.md</a> contain 19 additions and 10 deletions made outside this audit.</p>
+              </article>
+              <article class="card">
+                <div class="badge-row"><span class="badge high">Published GitHub</span></div>
+                <h3><span class="mono">origin/master = 438ba781</span></h3>
+                <p>Published work ends after PR 107. Later Sighting, trace, and Grid-edge changes exist only locally.</p>
+              </article>
+            </div>
+
+            <div class="callout blue">
+              <p><strong>The nudge changed the audit materially.</strong> The current documents now say a Grid Boundary is a seam between beats, a cue needs runway on the current Grid and tail on the next, off-plan cues must land at the closing seam, and every started move survives sheet changes and loop snap-backs.</p>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <caption>Measured change from the last commit before local midnight to current HEAD.</caption>
+                <thead><tr><th>Measure</th><th>Baseline</th><th>Current</th><th>Change</th></tr></thead>
+                <tbody>
+                  <tr><td>Director + Switcher + TrackCueSheet</td><td>2,620 physical lines</td><td>2,731 physical lines</td><td>+111 · +4.2%</td></tr>
+                  <tr><td>Their three primary test files</td><td>2,278 physical lines</td><td>2,607 physical lines</td><td>+329 · +14.4%</td></tr>
+                  <tr><td>Whole baseline→HEAD diff</td><td>—</td><td>32 files</td><td>+2,346 / −1,530</td></tr>
+                  <tr><td>Changed-line churn</td><td>—</td><td>1,844 test · 1,489 non-test C#</td><td>Tests changed more than runtime</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="timeline">
+            <p class="eyebrow">Reconstruction</p>
+            <h2>What happened during the day</h2>
+            <p class="section-lead">The day began by rejecting an enterprise-style consolidation, locked the artistic model, rebuilt three slices, then debugged a real missed boundary. The final change reversed the attempted BeatManager expansion.</p>
+
+            <div class="timeline">
+              <article class="timeline-item bad">
+                <span class="when">Issues 89–93 · rejected branch</span>
+                <h3>One large consolidation became four machinery tickets</h3>
+                <p>The proposal included a retained Grid lattice, a heard-beat counter, a prepared execution record, deadline/coverage queries, and heartbeat preparation. Issue 96 killed those mechanisms; issue 98 records the discarded branch of roughly 1,500 lines, about 1,100 of them tests.</p>
+              </article>
+              <article class="timeline-item good">
+                <span class="when">10:36 · <span class="mono">0246d9f6</span> · issue 95</span>
+                <h3>The switching model became the authority</h3>
+                <p><a href="../switching-model.md">docs/switching-model.md</a> defined Director ownership, Cue Sheets, Grids, Marks, Anchors, stillness, and one anomaly doorway.</p>
+              </article>
+              <article class="timeline-item good">
+                <span class="when">11:07–11:11 · <span class="mono">830e9fc6</span>, <span class="mono">d7dc84b4</span></span>
+                <h3>Knowledge and the OSC contract were reconciled</h3>
+                <p>Docs were updated to the model and the synced wire contract was corrected before implementation.</p>
+              </article>
+              <article class="timeline-item good">
+                <span class="when">12:58–14:29 · issues 102–104 · PRs 105–107</span>
+                <h3>The plan, execution loop, and anomaly doorway were rebuilt</h3>
+                <p><span class="mono">f0155cdf</span> rebuilt Cue Sheet planning; <span class="mono">6d5752a0</span> rebuilt Grid-start execution; <span class="mono">73314057</span> converged anomalies on one doorway. The corresponding PRs were merged.</p>
+              </article>
+              <article class="timeline-item good">
+                <span class="when">13:05 · <span class="mono">b4a2d4d0</span></span>
+                <h3>Unread Transition tags were deleted</h3>
+                <p>This was a complete hard cut: 17 files changed, 71 net lines removed, and no parallel compatibility form remains.</p>
+              </article>
+              <article class="timeline-item good">
+                <span class="when">16:06–16:39 · <span class="mono">99ab1b79</span> through <span class="mono">4d270068</span></span>
+                <h3>The first review, Sighting doorway, helper cleanup, and traces landed locally</h3>
+                <p>The self-describing Sighting implementation corresponds to issues 108–110, but those commits are not published. A small name-formatting duplication was added and removed in the same span.</p>
+              </article>
+              <article class="timeline-item warn">
+                <span class="when">17:01 · <span class="mono">8824300a</span></span>
+                <h3>A Grid-start counter was added to BeatManager</h3>
+                <p>The change responded to a live incident where the beat lane arrived before the Grid lane. It expanded BeatManager with <span class="mono">GridValues.StartsSeen</span>.</p>
+              </article>
+              <article class="timeline-item good">
+                <span class="when">17:11 · <span class="mono">934a0f48</span></span>
+                <h3>The counter was removed again</h3>
+                <p>The final code restored a Switcher-local previous-value edge. That obeys the glossary’s permitted consumer-local Edge pattern and avoids a second public musical surface. The timing defect itself remains.</p>
+              </article>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <caption>Every commit after the baseline. Merge commits carry no unique delta beyond their merged commit.</caption>
+                <thead><tr><th>Local time</th><th>Commit</th><th>Purpose</th><th>Delta</th></tr></thead>
+                <tbody>
+                  <tr><td>10:36</td><td class="mono">0246d9f6</td><td>Write switching model · #95</td><td>+106 / −0</td></tr>
+                  <tr><td>11:07</td><td class="mono">830e9fc6</td><td>Reconcile project knowledge · #97</td><td>+44 / −41</td></tr>
+                  <tr><td>11:11</td><td class="mono">d7dc84b4</td><td>Sync OSC client contract</td><td>+6 / −5</td></tr>
+                  <tr><td>12:58</td><td class="mono">f0155cdf</td><td>Implement plan rules · #102</td><td>+637 / −657</td></tr>
+                  <tr><td>13:05</td><td class="mono">b4a2d4d0</td><td>Delete unread Transition tags</td><td>+10 / −81</td></tr>
+                  <tr><td>13:07</td><td class="mono">392cbc35</td><td>Merge PR 105</td><td>merge</td></tr>
+                  <tr><td>13:46</td><td class="mono">6d5752a0</td><td>Switcher thinks at Grid starts · #103</td><td>+643 / −717</td></tr>
+                  <tr><td>13:49</td><td class="mono">9a450a78</td><td>Merge PR 106</td><td>merge</td></tr>
+                  <tr><td>14:29</td><td class="mono">73314057</td><td>One anomaly doorway · #104</td><td>+361 / −88</td></tr>
+                  <tr><td>14:48</td><td class="mono">438ba781</td><td>Merge PR 107</td><td>merge</td></tr>
+                  <tr><td>16:06</td><td class="mono">99ab1b79</td><td>Add first architecture review</td><td>+327 / −0</td></tr>
+                  <tr><td>16:07</td><td class="mono">1db69f29</td><td>Add Off-Plan Sighting glossary</td><td>+4 / −0</td></tr>
+                  <tr><td>16:20</td><td class="mono">4fd9f680</td><td>Implement self-describing Sighting · #108</td><td>+270 / −65</td></tr>
+                  <tr><td>16:24</td><td class="mono">8eaa8265</td><td>Reuse catalog name helpers</td><td>+3 / −10</td></tr>
+                  <tr><td>16:39</td><td class="mono">4d270068</td><td>Add switching incident traces</td><td>+30 / −4</td></tr>
+                  <tr><td>17:01</td><td class="mono">8824300a</td><td>Add BeatManager Grid-start counter</td><td>+99 / −13</td></tr>
+                  <tr><td>17:11</td><td class="mono">934a0f48</td><td>Remove counter; keep local Grid edge</td><td>+18 / −61</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 class="split-title">Issue and PR disposition</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>Intent</th><th>Where it stands</th></tr></thead>
+                <tbody>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/89">#89</a></td><td>Original all-in-one consolidation</td><td>Superseded; its retained lattice/prepared-execution shape was rejected.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/90">#90</a>–<a href="https://github.com/chucks13/penroseart/issues/93">#93</a></td><td>Lattice, heard-beat stillness, execution ask, prepared record/fire path</td><td>Closed and superseded by the model rulings.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/94">#94</a></td><td>KISS consolidation map for a two-person art project</td><td>Open parent map.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/95">#95</a>–<a href="https://github.com/chucks13/penroseart/issues/99">#99</a></td><td>Lock model, reconcile rulings/docs, discard old branch, write final spec</td><td>Model and reset completed.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/100">#100</a></td><td>Watch the behavior on the real wall</td><td>Open. No recorded live acceptance; green tests do not satisfy it.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/101">#101</a></td><td>Execution specification/parent</td><td>Open.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/102">#102</a>–<a href="https://github.com/chucks13/penroseart/issues/104">#104</a></td><td>Plan, Grid execution, anomaly doorway</td><td>Closed; implemented by PRs <a href="https://github.com/chucks13/penroseart/pull/105">105</a>–<a href="https://github.com/chucks13/penroseart/pull/107">107</a>.</td></tr>
+                  <tr><td><a href="https://github.com/chucks13/penroseart/issues/108">#108</a>–<a href="https://github.com/chucks13/penroseart/issues/110">#110</a></td><td>Self-describing Sighting, status, Live readout</td><td>Open and ready-for-agent on GitHub; implemented only on the unpublished local branch. Not falsely open.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="flow">
+            <p class="eyebrow">Runtime map</p>
+            <h2>The current flow is mostly one-way</h2>
+            <p class="section-lead">The ownership seam is clean. Red boxes show where the implementation stops following the model, not additional owners.</p>
+
+            <div class="flow-wrap" role="img" aria-label="Current planned and off-plan switching flow">
+              <p class="flow-label label">Planned cue</p>
+              <div class="flow">
+                <div class="flow-box good"><strong>BeatManager</strong><span>current Beat, Grid, player, structure</span></div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box bad"><strong>Switcher.Tick</strong><span>infers a seam from sampled positions</span></div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box good"><strong>Director</strong><span>answers with baked effect + transition</span></div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box good"><strong>Switcher</strong><span>schedules runway and performs A→B</span></div>
+              </div>
+              <p class="flow-label label">Off-plan cue</p>
+              <div class="flow">
+                <div class="flow-box good"><strong>One Sighting</strong><span>fired mark, self-blend, or stillness</span></div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box good"><strong>Director</strong><span>ride through or fresh deterministic cue</span></div>
+                <div class="flow-arrow bad">→</div>
+                <div class="flow-box bad"><strong>Perform now</strong><span><span class="mono">Perform(beat, beat)</span> bypasses closing-seam scheduling</span></div>
+                <div class="flow-arrow bad">→</div>
+                <div class="flow-box bad"><strong>Impact in Grid</strong><span>runway begins at the opening beat</span></div>
+              </div>
+            </div>
+
+            <div class="cards-2" style="margin-top: 1rem">
+              <article class="card">
+                <div class="badge-row"><span class="badge pass">One owner each</span></div>
+                <h3>Facts are not being re-derived everywhere</h3>
+                <p><span class="mono">lastSeenBeat</span>, <span class="mono">lastSeenGridBeat</span>, and EffectBase’s previous Grid value are consumer-local Edge snapshots explicitly permitted by <a href="../../CONTEXT.md">CONTEXT.md</a>. They are not rival musical sources.</p>
+              </article>
+              <article class="card">
+                <div class="badge-row"><span class="badge fail">One missing fact</span></div>
+                <h3>A sampled position is not an exact seam event</h3>
+                <p>The wire publishes movable current state and may arrive late or out of order. The code has no authoritative “the closing seam happened now” fact, so exact execution is guessed.</p>
+              </article>
+            </div>
+          </section>
+
+          <section id="compliance">
+            <p class="eyebrow">Rule-by-rule check</p>
+            <h2>How closely the runtime follows the model</h2>
+            <div class="table-wrap">
+              <table>
+                <caption>Status uses the current uncommitted model clarification. “Partial” means the intended module owns the behavior but an edge or fallback breaks the guarantee.</caption>
+                <thead><tr><th>Model rule</th><th>Status</th><th>Current evidence</th></tr></thead>
+                <tbody>
+                  <tr><td>Director alone chooses and casts</td><td class="status"><span class="badge pass">Pass</span></td><td>Director builds per-player sheets and answers all planned/off-plan decisions.</td></tr>
+                  <tr><td>Switcher alone owns the move</td><td class="status"><span class="badge pass">Pass</span></td><td>Switcher schedules, starts, renders, and completes transitions.</td></tr>
+                  <tr><td>BeatManager is the musical source</td><td class="status"><span class="badge pass">Pass</span></td><td>No current added counter or alternative data surface; local previous-value Edges are permitted.</td></tr>
+                  <tr><td>One whole plan per track</td><td class="status"><span class="badge fail">Fail</span></td><td><span class="mono">Build</span> uses phrases only and ignores <span class="mono">TotalBeats</span>; an analyzed tail can have no marks.</td></tr>
+                  <tr><td>Cue Marks sit at Grid seams</td><td class="status"><span class="badge partial">Partial</span></td><td>Planner marks use phrase-relative boundaries, but runtime seam recognition may be late and <span class="mono">NextBoundaryMark</span> can look beyond the immediate closing seam.</td></tr>
+                  <tr><td>Runway + tail ≤ 12</td><td class="status"><span class="badge pass">Pass</span></td><td>Transition repertoire enforces the duration ceiling.</td></tr>
+                  <tr><td>Runway on current Grid; tail on next</td><td class="status"><span class="badge fail">Fail</span></td><td>Fresh off-plan cues start raw at the thinking beat and do not target the current Grid’s closing seam.</td></tr>
+                  <tr><td>Started transitions are fire-and-forget</td><td class="status"><span class="badge partial">Partial</span></td><td>Cast and loop snap-back do not cancel a move, but public <span class="mono">StartTransition</span>/Show Now replaces one already running.</td></tr>
+                  <tr><td>No two blends overlap</td><td class="status"><span class="badge pass">Pass</span></td><td>Planned fit arithmetic prevents overlap, and runtime replacement keeps only one active blend. Replacement is still a separate fire-and-forget violation.</td></tr>
+                  <tr><td>Irregular marks; never still beyond 64 beats</td><td class="status"><span class="badge partial">Partial</span></td><td>Rising probabilities are irregular, but the builder explicitly lets fit outrank 64 and tests omit run-in/run-out and unanalysed tails.</td></tr>
+                  <tr><td>Every Drop/Fill is owned and cleared</td><td class="status"><span class="badge fail">Fail</span></td><td>Actual Drop and Fill positions are discarded or suppressed; unsupported Anchors can disappear silently.</td></tr>
+                  <tr><td>Bag fairness and no self-change</td><td class="status"><span class="badge partial">Partial</span></td><td>Normal plan bags are deterministic and fair; capability/tiny-catalog fallbacks can repeat or return an excluded effect.</td></tr>
+                  <tr><td>Cast is idempotent and visually inert</td><td class="status"><span class="badge pass">Pass</span></td><td>Same player/generation is ignored; handover swaps plan without resetting the wall or move.</td></tr>
+                  <tr><td>Think once at the actual Grid start</td><td class="status"><span class="badge fail">Fail</span></td><td>A late Grid datagram can make Think run at Grid beat 2; repeated 1→1 is ambiguous.</td></tr>
+                  <tr><td>Skipped marks lapse</td><td class="status"><span class="badge pass">Pass</span></td><td>Only an exact scheduled fire beat performs; forward jumps clear lapsed acts.</td></tr>
+                  <tr><td>Three anomalies, one doorway</td><td class="status"><span class="badge pass">Pass</span></td><td>All three create one <span class="mono">OffPlanSighting</span>; anomaly kind remains diagnostic.</td></tr>
+                  <tr><td>Fourth completed Grid forces a cue</td><td class="status"><span class="badge partial">Partial</span></td><td>There is one correct Switcher counter, but a missed/double Grid edge corrupts the count or timing.</td></tr>
+                  <tr><td>Standalone remains separate</td><td class="status"><span class="badge pass">Pass</span></td><td>Separate seconds-based path remains; current standalone tests passed.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="findings">
+            <p class="eyebrow">Forensic findings</p>
+            <h2>Every discrepancy found</h2>
+            <p class="section-lead">Severity reflects likely show impact and contract strength, not file size. The first six should be resolved before cosmetic cleanup.</p>
+
+            <div class="finding-list">
+              <article class="finding critical">
+                <div class="badge-row"><span class="badge critical">Critical · timing</span><span class="badge info">Observed incident path</span></div>
+                <h3>1. A late Grid update moves Grid-start thinking inside the Grid</h3>
+                <p><span class="mono">Tick</span> returns immediately when the absolute beat has not changed, before observing the Grid edge. If beat 65 arrives with stale Grid 16 and Grid 1 arrives later in the same beat, that frame is ignored. If the next observed state is beat 66/Grid 2, the descending position is treated as the seam and <span class="mono">Think(66)</span> runs one beat late.</p>
+                <p>The regression test explicitly accepts this result. That saves a missed decision but violates “think at the Grid start” and can miss a runway or scheduled mark.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a> lines 344–387 · <a href="../../Assets/Tests/Editor/SwitcherExecutionTests.cs">SwitcherExecutionTests.cs</a>, <span class="mono">ALateGridDatagramAtAGridStartStillThinks</span>.</p>
+              </article>
+
+              <article class="finding critical">
+                <div class="badge-row"><span class="badge critical">Critical · direct model violation</span></div>
+                <h3>2. Fresh off-plan cues bypass runway scheduling</h3>
+                <p>At a Grid-start anomaly the code calls <span class="mono">Perform(beat, beat, answer, OffPlan)</span>. The transition begins immediately, so its authored Impact occurs <span class="mono">runway</span> beats later—inside the current Grid—not at the seam closing that Grid. A short Grid can end before the runway does.</p>
+                <p>The current model now says the opposite in explicit terms: runway on this Grid, impact at its closing seam, tail on the next, never a raw start.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a> line 522 · <a href="../switching-model.md">switching-model.md</a>, “The Switcher’s job.”</p>
+              </article>
+
+              <article class="finding high">
+                <div class="badge-row"><span class="badge high">High · whole-plan gap</span></div>
+                <h3>3. The unanalysed end of a real track receives no plan</h3>
+                <p><span class="mono">TrackCueSheet.Build</span> constructs boundaries only from the phrase list and never reads <span class="mono">StructureValues.TotalBeats</span>. The wire contract permits analyzed phrases to end before the track does. The remaining track can therefore contain no planned marks, despite the Cue Sheet being defined as the whole track’s plan.</p>
+                <p>Existing test helpers set <span class="mono">TotalBeats</span> to the last phrase end, hiding the production case.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/TrackCueSheet.cs">TrackCueSheet.cs</a>, <span class="mono">Build</span>/<span class="mono">GridBoundaries</span> · <a href="../osc-client-contract.md">osc-client-contract.md</a>, analyzed structure completeness.</p>
+              </article>
+
+              <article class="finding high">
+                <div class="badge-row"><span class="badge high">High · musical truth</span></div>
+                <h3>4. Anchor extraction rewrites the wire’s Drop and Fill facts</h3>
+                <ul>
+                  <li>A present <span class="mono">DropLandingBeat</span> is replaced with <span class="mono">phrase.StartBeat</span>.</li>
+                  <li>The <span class="mono">continue</span> after a Drop discards a Fill on the same phrase.</li>
+                  <li>A Fill followed by any Drop phrase is suppressed, even when the analyzed landing is offset.</li>
+                  <li>The Fill start is ignored; only a fabricated endpoint after the phrase is retained.</li>
+                </ul>
+                <p>A transition can cross the actual Drop landing or Fill window the plan promises to clear. The OSC contract explicitly says analyzed Drop landings may be several beats after the phrase start and defines Fill from <span class="mono">fill_start_beat</span> through phrase end.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/TrackCueSheet.cs">TrackCueSheet.cs</a> lines 602–627 · <a href="../osc-client-contract.md">osc-client-contract.md</a>.</p>
+              </article>
+
+              <article class="finding high">
+                <div class="badge-row"><span class="badge high">High · silent guarantee loss</span></div>
+                <h3>5. Capability failures are silently converted into ordinary show behavior</h3>
+                <p>If no effect advertises an Anchor capability, <span class="mono">OwnableAnchors</span> drops that Anchor and returns its landing to the ordinary candidate pool. If two nearby Anchors share one carrier and no effect supports the combined capabilities, <span class="mono">Deal</span> can resolve only the first while the tests inspect only returned resolutions.</p>
+                <p>This is speculative fallback behavior for catalogs that the current production catalog does not have. It weakens an absolute artistic rule and makes a future catalog edit fail silently. A plain validation error is simpler and safer.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/TrackCueSheet.cs">TrackCueSheet.cs</a>, <span class="mono">OwnableAnchors</span> and Anchor dealing · <a href="../../Assets/Tests/Editor/TrackCueSheetTests.cs">TrackCueSheetTests.cs</a>.</p>
+              </article>
+
+              <article class="finding high">
+                <div class="badge-row"><span class="badge high">High · unresolved contract</span></div>
+                <h3>6. Show Now can replace a move that the model calls fire-and-forget</h3>
+                <p>Calling <span class="mono">StartTransition</span> while a transition is rendering replaces it and uses the prior target as the new source. <span class="mono">Director.ShowNow</span> calls that method directly. A test locks this replacement behavior.</p>
+                <p>The docs also describe Show Now as happening “at once,” so this is a real product decision—not a safe refactor assumption. Hunter must choose whether Show Now is the sole emergency interruption or whether every move truly completes.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/Director.cs">Director.cs</a>, <span class="mono">ShowNow</span> · <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a>, <span class="mono">StartTransition</span> · test <span class="mono">StartTransitionWhileRenderingReplacesMoveFromPreviousTarget</span>.</p>
+              </article>
+
+              <article class="finding medium">
+                <div class="badge-row"><span class="badge info">Medium · ceiling</span></div>
+                <h3>7. “Never beyond 64 beats” is not actually an invariant</h3>
+                <p>The planner says fit outranks the 64-beat ceiling on a degenerate boundary lattice and delegates the result to runtime Stillness. Tests check only gaps between marks that were emitted—not the track run-in, run-out, omitted tail, or every possible constrained plan.</p>
+                <p>The same 64-beat idea is represented as beats in planning and four Grids at runtime, then converted through a hard-coded 16-beat round trip for off-plan take probability. Short Grids make those facts different.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/TrackCueSheet.cs">TrackCueSheet.cs</a> lines 151–166 and 497–594.</p>
+              </article>
+
+              <article class="finding medium">
+                <div class="badge-row"><span class="badge info">Medium · short Grids</span></div>
+                <h3>8. “Next mark within 16 beats” does not mean “this Grid’s closing seam”</h3>
+                <p><span class="mono">NextBoundaryMark</span> selects the first future mark within 16 beats. On short Grids, several real Grid seams can fall in that window. The Switcher may decide a later mark one or more Grids early, consuming a staged override or Hold decision at the wrong think even if the authored fire beat remains correct.</p>
+                <p>This is an information problem disguised as arithmetic: the Switcher needs the immediate closing seam, not a nominal 16-beat window.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a>, <span class="mono">NextBoundaryMark</span>.</p>
+              </article>
+
+              <article class="finding medium">
+                <div class="badge-row"><span class="badge info">Medium · ambiguous edge</span></div>
+                <h3>9. The repeated 1→1 rule cannot distinguish music from a lagging datagram</h3>
+                <p>The crossing predicate treats <span class="mono">gridBeat == 1 &amp;&amp; lastGrid == 1</span> as a new Grid to support consecutive one-beat phrases. The same observation can also be a repeated/stale position 1. If Think already ran, the heuristic can double-count stillness or ask twice.</p>
+                <p>No test covers both interpretations. More flags cannot resolve an event that the input does not identify.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a> lines 382–387.</p>
+              </article>
+
+              <article class="finding medium">
+                <div class="badge-row"><span class="badge info">Medium · tiny catalogs</span></div>
+                <h3>10. Off-plan exclusion falls back to the excluded effect</h3>
+                <p><span class="mono">Bag.DealPreferred</span> returns the top card when no card satisfies “not on wall and not moving toward.” In a one- or two-effect catalog, a fresh cue can therefore select exactly the effect the model says it must never return.</p>
+                <p>The current production catalog is large, so this is latent. The simplest answer is an explicit catalog precondition, not a clever fallback.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/TrackCueSheet.cs">TrackCueSheet.cs</a> lines 274 and 907 onward.</p>
+              </article>
+
+              <article class="finding low">
+                <div class="badge-row"><span class="badge">Low · semantics</span></div>
+                <h3>11. One frozen value represents several different answers</h3>
+                <p><span class="mono">CueDecision.Frozen</span> means ride-through, no focus sheet, or a held-wall refusal. The Live panel renders every non-perform result as “RIDE,” which can misreport a Hold or absent plan during diagnosis.</p>
+                <p>No new decision hierarchy is warranted. A diagnostic reason can be derived at the decision site or the label can simply say “NO CUE.”</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Switching/Director.cs">Director.cs</a>, <span class="mono">DecideOffPlanCue</span> · <a href="../../Assets/Editor/Tuning/PenroseTuningWindow.cs">PenroseTuningWindow.cs</a>.</p>
+              </article>
+
+              <article class="finding low">
+                <div class="badge-row"><span class="badge">Low · mutable mirror</span></div>
+                <h3>12. <span class="mono">Controller.currentTransition</span> mirrors state with five production writers</h3>
+                <p>The field is written by four Director paths and one Switcher path, then used mainly as a startup seed plus inspector/test state. It is a pre-existing second mutable representation of “current/next transition,” and it can drift.</p>
+                <p>Delete only after identifying the one production read and choosing the existing owner’s value. Do not use it as a reason to restructure Controller.</p>
+                <p class="evidence">Evidence: <a href="../../Assets/core/Runtime/Controller.cs">Controller.cs</a>, <a href="../../Assets/core/Switching/Director.cs">Director.cs</a>, and <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a>.</p>
+              </article>
+
+              <article class="finding low">
+                <div class="badge-row"><span class="badge">Low · dead surface</span></div>
+                <h3>13. Several public members exist only for tests or duplicate status</h3>
+                <ul>
+                  <li>Four Director aliases have no external semantic references: next effect, next transition, and the two Hold properties.</li>
+                  <li><span class="mono">Switcher.Sheet</span> has no production caller; six tests read it.</li>
+                  <li><span class="mono">Deck.TryFindPreferred</span> is production-public but tests-only.</li>
+                  <li><span class="mono">CuePlanMark.FiredAtBeat</span> has a public setter used to construct an otherwise impossible test state.</li>
+                  <li><span class="mono">SheetSalt</span> is publicly mutable mainly for deterministic tests.</li>
+                </ul>
+                <p>These are good hard-cut candidates. They do not justify interfaces or a new construction framework.</p>
+              </article>
+
+              <article class="finding low">
+                <div class="badge-row"><span class="badge">Low · naming drift</span></div>
+                <h3>14. Code still calls a seam an absolute beat</h3>
+                <p><span class="mono">CuePlanMark.Beat</span>, parameter names such as <span class="mono">boundaryBeat</span>, and XML comments describe the mark as a beat. The current glossary now says the seam is not a beat; its opening beat is only the label.</p>
+                <p>If renamed, make one hard cut across code and tests. Do not introduce a <span class="mono">GridBoundary</span> object merely to encode the wording.</p>
+              </article>
+
+              <article class="finding low">
+                <div class="badge-row"><span class="badge">Low · shallow representation</span></div>
+                <h3>15. Small data shapes add friction but are not urgent architecture</h3>
+                <p>One-field <span class="mono">EffectDescriptor</span>/<span class="mono">TransitionDescriptor</span> values cause repeated projection loops. <span class="mono">smallRunway</span> and <span class="mono">smallTail</span> travel together through planner methods even though <span class="mono">TransitionRepertoire</span> already owns both. A default Cue Sheet is partially formed, so callers repeat generation/null checks.</p>
+                <p>Collapse these only when touching their behavior; a cleanup-only type rewrite would create churn without show value.</p>
+              </article>
+
+              <article class="finding low">
+                <div class="badge-row"><span class="badge">Low · process</span></div>
+                <h3>16. Test scaffolding and documentation are heavier than the runtime seam</h3>
+                <p>Three fixtures create Controller GameObjects and reflect into the private Singleton instance. Ten touched <span class="mono">TrackCueSheetTests</span> methods lack the repository-required XML scenario/outcome comments. The fixtures are repetitive, but tests alone are not a production caller for new Director/Switcher interfaces.</p>
+                <p>Consolidate fixture setup locally if the files are touched. Do not narrow production construction solely to make tests prettier.</p>
+              </article>
+            </div>
+          </section>
+
+          <section id="complexity">
+            <p class="eyebrow">KISS / YAGNI assessment</p>
+            <h2>Large does not automatically mean over-engineered</h2>
+            <p class="section-lead">The current complexity is concentrated in three deep modules. That is healthier than moving the same behavior through services, events, records, and adapters. The useful cleanup target is exposed or duplicated state—not line count by itself.</p>
+
+            <div class="table-wrap">
+              <table>
+                <caption>Primary-type inventory from semantic symbol maps; nested helper members are excluded from the field/method columns.</caption>
+                <thead><tr><th>Module</th><th>Physical lines</th><th>Fields</th><th>Properties</th><th>Methods</th><th>Assessment</th></tr></thead>
+                <tbody>
+                  <tr><td>Director</td><td>896</td><td>13</td><td>8</td><td>38</td><td>Deep and justified: plans, decisions, overrides, Standalone. Some dead public aliases.</td></tr>
+                  <tr><td>Switcher</td><td>811</td><td>24</td><td>5</td><td>23</td><td>Deep and justified: execution state is real. Timing inference is the defect.</td></tr>
+                  <tr><td>TrackCueSheet</td><td>1,024</td><td>6</td><td>4</td><td>13</td><td>Large planner plus nested deterministic Bag. Keep one deep module; fix lost inputs and fallbacks.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="cards-2" style="margin-top:1rem">
+              <article class="card">
+                <div class="badge-row"><span class="badge pass">Earned complexity</span></div>
+                <ul class="plain-list">
+                  <li>One deterministic Cue Sheet builder</li>
+                  <li>One Director/Switcher ownership seam</li>
+                  <li>One stillness counter</li>
+                  <li>One anomaly question shape</li>
+                  <li>Three scheduled fields for one pending act</li>
+                  <li>31 incident traces during live diagnosis</li>
+                  <li>Cast idempotence and fired-mark history</li>
+                </ul>
+              </article>
+              <article class="card">
+                <div class="badge-row"><span class="badge high">Actual excess</span></div>
+                <ul class="plain-list">
+                  <li>Dead/test-only public surfaces</li>
+                  <li>Mutable transition mirror</li>
+                  <li>Beat↔Grid ceiling round trip</li>
+                  <li>Silent synthetic catalog fallbacks</li>
+                  <li>Repeated fixture construction</li>
+                  <li>One-field descriptor projections</li>
+                  <li>Three meanings hidden behind Frozen</li>
+                </ul>
+              </article>
+            </div>
+
+            <div class="callout">
+              <p><strong>Do not “simplify” by moving off-plan dealing out of TrackCueSheet without a deletion proof.</strong> The sheet currently shares the deterministic seed, Bag, and catalog rules with plan construction. Moving the method into Director could redistribute the same implementation rather than remove it. Fix its contract first; move it only if the resulting code actually deletes a second responsibility.</p>
+            </div>
+
+            <h3 class="split-title">Claims investigated and rejected</h3>
+            <div class="cards-2">
+              <article class="card"><h3>“Local previous values are duplicate musical sources.”</h3><p>Rejected. The glossary explicitly permits an Edge to compare current and previous consumer-local values.</p></article>
+              <article class="card"><h3>“Three anomalies are three systems.”</h3><p>Rejected. They are three reasons feeding one Sighting, one Director decision, and one execution branch.</p></article>
+              <article class="card"><h3>“Director/Switcher should be split into services.”</h3><p>Rejected. Their interfaces are narrower than their implementations; splitting would lower locality and add seams with no second production adapter.</p></article>
+              <article class="card"><h3>“TrackCueSheet’s Bag is speculative.”</h3><p>Rejected. It is the implementation behind deterministic, fair plan dealing and has a real production caller.</p></article>
+              <article class="card"><h3>“The Sighting status and traces are YAGNI.”</h3><p>Rejected. Issues 104/108 and live incidents asked for this diagnostic evidence. They do not originate decisions.</p></article>
+              <article class="card"><h3>“Issues 108–110 are falsely open.”</h3><p>Rejected. Their code is only local. Closing them before publishing would make GitHub less truthful.</p></article>
+            </div>
+          </section>
+
+          <section id="tests">
+            <p class="eyebrow">Test audit</p>
+            <h2>Green is real, but not proof of the model</h2>
+            <p class="section-lead">Unity compilation passed with zero warnings and all 384 tests passed. Several tests are good behavior contracts. Several others mirror implementation or explicitly lock the behavior now known to be wrong.</p>
+
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Test / pattern</th><th>What it currently proves</th><th>Problem</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">ALateGridDatagramAtAGridStartStillThinks</td><td>A descending Grid position eventually triggers Think.</td><td>It expects wall action at the next beat/Grid 2, certifying mid-Grid behavior.</td></tr>
+                  <tr><td class="mono">StartTransitionWhileRenderingReplacesMoveFromPreviousTarget</td><td>Show Now / direct start can replace a running move.</td><td>Conflicts with the newly explicit global fire-and-forget wording.</td></tr>
+                  <tr><td class="mono">EveryPlannedBlendStartsAtBoundaryMinusRunwayAcrossShortGrids</td><td>Fire beat equals mark label minus runway.</td><td>Does not prove the runway fits the immediately preceding short Grid.</td></tr>
+                  <tr><td class="mono">DropLandingsAndFillWindowsBecomeAnchors</td><td>Current synthesized fixtures map to current Anchor outputs.</td><td>Uses Drop values equal to phrase starts and treats Fill as one endpoint.</td></tr>
+                  <tr><td class="mono">EveryAnchorIsCleared…</td><td>Every returned resolution is capable and cleared.</td><td>Does not compare source Anchors to returned resolutions; omissions pass.</td></tr>
+                  <tr><td class="mono">ConsecutiveMarkGapsNeverExceedTheCeiling</td><td>Emitted consecutive marks are close in sampled plans.</td><td>Omits run-in, run-out, unanalysed tail, and explicit degenerate exception.</td></tr>
+                  <tr><td class="mono">AReCrossedFiredMark…</td><td>Re-crossing uses the doorway and does not replay.</td><td>Expected answer is computed by the same dealer, so selection errors can mirror through.</td></tr>
+                  <tr><td>Singleton reflection fixtures</td><td>End-to-end wiring through real concrete classes.</td><td>Repeated setup is costly, but not a justification for production interfaces.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 class="split-title">Missing independent cases</h3>
+            <ul>
+              <li>Beat and Grid update on separate frames of the same absolute beat: stale 16 then 1.</li>
+              <li>Grid update arrives at the next beat as 2: the system must not call that the seam.</li>
+              <li>Repeated 1 from a one-beat phrase versus repeated/stale 1.</li>
+              <li><span class="mono">TotalBeats &gt; Phrases[^1].EndBeat</span>.</li>
+              <li>Analyzed Drop offset from phrase start plus a Fill in the same phrase.</li>
+              <li>Fill window from <span class="mono">FillStartBeat</span> through phrase end.</li>
+              <li>Two Anchors sharing a carrier with no combined-capability effect.</li>
+              <li>One- and two-effect catalogs for off-plan exclusion.</li>
+              <li>Off-plan impact exactly at the current Grid’s closing seam across short Grids.</li>
+              <li>Sheet change and loop snap-back while the transition tail is still running.</li>
+            </ul>
+          </section>
+
+          <section id="prior-review">
+            <p class="eyebrow">Review of the earlier review</p>
+            <h2>Which earlier recommendations survived contact with the model</h2>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Earlier candidate</th><th>Disposition</th><th>Current judgment</th></tr></thead>
+                <tbody>
+                  <tr><td>One self-describing Sighting</td><td><span class="badge pass">Implemented</span></td><td>Good hard cut. One question; no Director back-reads; anomaly kind diagnostic only.</td></tr>
+                  <tr><td>Narrow Director/Switcher construction</td><td><span class="badge partial">Not done</span></td><td>Do not add interfaces for test fixtures. Tests are not the first real production caller.</td></tr>
+                  <tr><td>One retained lattice / stillness owner</td><td><span class="badge fail">Reject</span></td><td>Would resurrect issue 90 and ruling 9 machinery. Local Edge state is the approved current shape.</td></tr>
+                  <tr><td>Remove <span class="mono">currentTransition</span> mirror</td><td><span class="badge partial">Still valid</span></td><td>Small hard cut after the one production read is redirected; no Controller rewrite.</td></tr>
+                  <tr><td>Make empty Cue Sheet valid</td><td><span class="badge partial">Still valid, low</span></td><td>Could remove sentinel checks, but behavior fixes outrank it.</td></tr>
+                  <tr><td>Delete vestigial public surface</td><td><span class="badge pass">Partly done</span></td><td>Transition tags are gone. Dead aliases, test-only Sheet/member setters, and one-field descriptors remain.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="recommendations">
+            <p class="eyebrow">Suggested path</p>
+            <h2>Fix truth first. Delete second. Do not build a new coordination system.</h2>
+
+            <div class="cards-2">
+              <article class="decision-card">
+                <span class="number">1</span>
+                <h3>Decide the authoritative Grid-seam fact</h3>
+                <p>The current sampled Beat/Grid state cannot distinguish an exact seam from delayed or repeated state in every case. Choose where coherence lives before changing counters.</p>
+              </article>
+              <article class="decision-card">
+                <span class="number">2</span>
+                <h3>Decide whether Show Now may interrupt</h3>
+                <p>“At once” and “every started transition completes” cannot both be unconditional. Name the one exception or remove replacement behavior.</p>
+              </article>
+            </div>
+
+            <div class="recommendation">
+              <div class="badge-row"><span class="badge pass">Recommended order</span></div>
+              <ol>
+                <li><strong>Make seam observation coherent.</strong> As a necessary first step, observe a same-beat 16→1 Grid update before the once-per-beat execution return. Treat that as insufficient for the next-beat/Grid-2 case; solve that at the authoritative input seam, not with more Switcher guesses.</li>
+                <li><strong>Put fresh off-plan cues through the existing runway scheduler.</strong> Schedule impact at the Grid closing seam and require the selected transition to fit that Grid. Extend the existing scheduled state first; introduce a private record only if it deletes parallel branches.</li>
+                <li><strong>Make TrackCueSheet consume all structure truth.</strong> Extend ordinary Grid boundaries through <span class="mono">TotalBeats</span>. Use actual Drop landings and the full Fill interval. Preserve both when one phrase contains both.</li>
+                <li><strong>Replace silent catalog fallbacks with plain validation.</strong> If the production catalog cannot honor an Anchor or fresh-cue exclusion, fail the sheet/catalog clearly. Do not quietly reinterpret the model.</li>
+                <li><strong>Replace tests that pin wrong behavior with independent oracles.</strong> Assert exact seams and source structure values, not results computed by the same implementation.</li>
+                <li><strong>Run the real wall verification in issue 100.</strong> Only then publish the local branch and reconcile issues 108–110 with the commits that actually reached GitHub.</li>
+                <li><strong>Perform one deletion pass.</strong> Remove dead aliases, test-only public surfaces, the transition mirror, primitive beat/Grid conversion, and redundant fixture setup where each deletion is proven.</li>
+              </ol>
+            </div>
+
+            <h3 class="split-title">Boundary-source design preflight</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Required question</th><th>Answer before implementation</th></tr></thead>
+                <tbody>
+                  <tr><td>Who is the first real caller?</td><td><span class="mono">Switcher.Think</span>, which needs the current Grid’s exact closing seam for planned and off-plan execution.</td></tr>
+                  <tr><td>Which existing seams were inspected?</td><td>BeatManager’s read-only Grid values, Rave OSC bundle/state ingestion, TrackCueSheet’s known phrase-relative boundaries, and Switcher’s local Edge.</td></tr>
+                  <tr><td>Why is new structure needed?</td><td>Only if coherent input or retained existing plan data cannot express the seam. “The heuristic is awkward” is not enough.</td></tr>
+                  <tr><td>What gets deleted?</td><td>The nominal ≤16-beat next-mark heuristic, any duplicate Grid-start guess, and the raw off-plan execution branch. If nothing dies, do not add the structure.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="callout red">
+              <p><strong>Do not build:</strong> a prepared-execution lifecycle; a deadline/coverage lattice; a second Stillness module; a BeatManager event counter without Hunter’s explicit musical-surface approval; services/interfaces solely for tests; compatibility or migration paths; parallel legacy/V2 forms; or a broad Controller refactor. Do not split <span class="mono">Think</span> merely because it is long.</p>
+            </div>
+          </section>
+
+          <section id="evidence">
+            <p class="eyebrow">Method and sources</p>
+            <h2>What this report is based on</h2>
+            <ul class="source-list">
+              <li><strong>Canonical model</strong><a href="../switching-model.md">docs/switching-model.md</a> at its current uncommitted working-tree state.</li>
+              <li><strong>Vocabulary and decisions</strong><a href="../../CONTEXT.md">CONTEXT.md</a> and all 11 files under <a href="../adr/">docs/adr/</a>.</li>
+              <li><strong>Wire truth</strong><a href="../osc-client-contract.md">docs/osc-client-contract.md</a>, including delayed/out-of-order state and analyzed structure semantics.</li>
+              <li><strong>Runtime</strong><a href="../../Assets/core/Switching/Director.cs">Director.cs</a>, <a href="../../Assets/core/Switching/Switcher.cs">Switcher.cs</a>, <a href="../../Assets/core/Switching/TrackCueSheet.cs">TrackCueSheet.cs</a>, and semantic references.</li>
+              <li><strong>Tests</strong><a href="../../Assets/Tests/Editor/DirectorReducerTests.cs">DirectorReducerTests.cs</a>, <a href="../../Assets/Tests/Editor/SwitcherExecutionTests.cs">SwitcherExecutionTests.cs</a>, <a href="../../Assets/Tests/Editor/TrackCueSheetTests.cs">TrackCueSheetTests.cs</a>, staging and timeline suites.</li>
+              <li><strong>History</strong>Git log/diffs from <span class="mono">53216340</span> through <span class="mono">934a0f48</span>; GitHub issues/PRs 89–110 fetched with <span class="mono">gh</span>.</li>
+              <li><strong>Independent checks</strong>Three read-only Codex reviews: model compliance, C#/repo standards, and KISS/deletion analysis. Claims were checked against primary sources.</li>
+              <li><strong>Validation</strong><span class="mono">scripts/unity-compile.sh</span>: 0 warnings. <span class="mono">scripts/unity-tests.sh</span>: 384/384 passed, 0 skipped.</li>
+            </ul>
+
+            <div class="callout">
+              <p><strong>Known limit:</strong> this is a code/history/model audit, not live artistic acceptance. Issue 100 still requires watching the wall through track starts, short Grids, Drop/Fill moments, loop snap-backs, handovers, stillness recovery, and Show Now.</p>
+            </div>
+          </section>
+
+          <footer>
+            <p>Prepared as an adapted architecture-review report: forensic chronology + model compliance + deletion review. Dark editorial preset, self-contained HTML, no runtime code changed by this audit.</p>
+          </footer>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
