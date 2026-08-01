@@ -53,8 +53,8 @@ The wall's phase-keeping timing mechanism: a repeating count of where the wall s
 _Avoid_: hardcoding 16 beats as a Grid's length or deriving boundaries by dividing beats; using "grid" when the whole Phrase is meant; assuming every Grid Boundary must trigger a change; conflating the wall's Grid with RaveSystem's **Beat Grid** (the analyzed per-beat → time map, which the wall does not use under this name).
 
 **Grid Boundary**:
-The beat where a Grid starts — the Grid count returning to one. Because the count is phrase-relative, a Phrase boundary always begins a Grid, and consecutive Grid Boundaries are therefore not always the same distance apart.
-_Avoid_: calling every bar downbeat a Grid Boundary; assuming consecutive Grid Boundaries are always 16 beats apart; assuming a Phrase divides evenly into Grids.
+The crossing between two Grids — not a beat, but the seam between the last beat of one Grid and the first beat of the next, observed as the Grid count returning to one and labeled by the beat that opens the new Grid. Because the count is phrase-relative, a Phrase boundary always begins a Grid, and consecutive Grid Boundaries are therefore not always the same distance apart.
+_Avoid_: calling a Grid Boundary a beat — the opening beat labels the crossing, it is not the crossing; calling every bar downbeat a Grid Boundary; assuming consecutive Grid Boundaries are always 16 beats apart; assuming a Phrase divides evenly into Grids.
 
 **Grid Beat**:
 The wall's 1-based beat within the current Grid (the wire's `beat`). A 4-beat Runway begins at grid beat 13 of a nominal Grid so the Impact Point lands on the next Grid Boundary: `13, 14, 15, 16, X`.
@@ -243,8 +243,8 @@ A track-scoped show plan built the moment a track's song structure arrives: ever
 _Avoid_: the retired per-Phrase empty-marks sheet; treating it as a queue of pending cues; treating the sheet as something an override or an Off-Plan Cue edits.
 
 **Cue Mark**:
-A beat position in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment. Marks sit on Grid Boundaries and nowhere else; a Phrase boundary always begins a Grid, so a Phrase end is an ordinary candidate, never a mandate. Where a Drop or Fill owns a boundary, the Anchor rule applies: a capable Effect is already on the wall and the moment is cleared of Runways and Tails.
-_Avoid_: calling a Cue Mark an Impact Point, Transition start, Transition Completion, or Selected Grid Boundary; empty marks awaiting cast-time selection (retired).
+A Grid Boundary in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment, and labeled by the beat that opens the new Grid. Marks sit at Grid Boundaries and nowhere else because a cue needs the crossing: its Runway runs on the Grid before the boundary and its Tail on the Grid after. A Phrase boundary always begins a Grid, so a Phrase end is an ordinary candidate, never a mandate. Where a Drop or Fill owns a boundary, the Anchor rule applies: a capable Effect is already on the wall and the moment is cleared of Runways and Tails.
+_Avoid_: calling a Cue Mark a beat position, an Impact Point, a Transition start, a Transition Completion, or a Selected Grid Boundary; empty marks awaiting cast-time selection (retired).
 
 **Cast**:
 The Director's act of handing the Switcher the Cue Sheet now in force — the cast list for the on-air track. An Off-Plan Cue is not a Cast: the Switcher already holds the plan, and the Director simply answers with one freshly dealt card.

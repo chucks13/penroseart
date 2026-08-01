@@ -44,14 +44,18 @@ Everything is counted in beats, musically: 1-2-3-4, no beat zero.
 
 ## Marks and transitions
 
-- A **cue mark** sits on a grid boundary. It means: something happens crossing this
-  boundary.
+- A grid boundary is not a beat — it is the crossing in between beats, between one
+  grid and the next, labeled by the beat that opens the new grid.
+- A **cue mark** sits at a grid boundary. It means: something happens crossing this
+  boundary. It has to sit there, because its runway must run on the current grid and
+  its tail on the next.
 - A transition is an A-to-B blend with a **runway** (beats before the boundary) and
   a **tail** (beats after). Runway + tail ≤ 12 beats. The blend runs from the start
   of the runway to the end of the tail, crossing the boundary.
 - The Switcher starts the blend at boundary minus runway. Once started, a transition
   is **fire and forget**: it runs to completion no matter what — even if the cue
-  sheet changes mid-flight.
+  sheet changes mid-flight or a loop snaps the beat counter back. That is the simple
+  way to handle looping, and it guarantees the tail always gets done.
 
 ## The Director's job
 
@@ -84,7 +88,9 @@ The Switcher thinks once per grid, at the grid's start, from BeatManager state:
 - Marks skipped over by a forward jump simply lapse — no late firing.
 - Anomalies go through **one doorway**: the Switcher tells the Director what it
   sees, and the Director decides — ride through, or here is a fresh cue
-  (Director-cast, as always). The anomalies:
+  (Director-cast, as always). A fresh cue is still a cue: it lands at the boundary
+  closing the current grid, runway on this grid and tail on the next, like any
+  other — never started raw with its impact landing inside a grid. The anomalies:
   - the mark at hand has already fired (looping),
   - the mark transitions into the effect already on the wall,
   - stillness is up.
