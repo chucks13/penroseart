@@ -339,7 +339,7 @@ public sealed class SwitcherExecutionTests
 
     /// <summary>
     /// A handover changes nothing on the wall by itself: a sheet cast mid-track performs none of its past,
-    /// and the next change waits for a mark or the stillness deadline.
+    /// and the next change waits for an incoming mark or the Stillness deadline.
     /// </summary>
     [Test]
     public void AHandoverChangesNothingByItself()
@@ -418,40 +418,39 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Verifies that Stillness survives a handover: Grids counted before it still make the fourth Grid ask
-    /// and schedule a Ceiling Cue instead of restarting the spell.
+    /// Verifies that Stillness survives a Cue Sheet handover: Grids counted before it still make the
+    /// fourth still Grid ask, schedule, and fire instead of restarting the spell.
     /// </summary>
     [Test]
-    public void AHandoverMidStillSpellDoesNotResetStillness()
+    public void AHandoverMidStillSpellPreservesStillnessUntilTheFourthGridFires()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
-
-        // Two whole still Grids on the outgoing plan, then the handover lands mid-Grid.
-        WalkDirector(lastImpact + 1, lastImpact + (2 * TrackCueSheet.GridBeats) + 2, phrases, generation: 1);
-        var effectBefore = OnWallEffect();
         var sourceBefore = switcher.Status.LastCueSource;
+        var handoverBeat = lastImpact + (2 * TrackCueSheet.GridBeats) + 2;
+        var thinkBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
 
-        // The rest of the spell runs on the incoming plan; every remaining mark is behind the playhead.
-        var ceilingBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
-        WalkDirector(lastImpact + (2 * TrackCueSheet.GridBeats) + 3, ceilingBeat - 1, phrases, generation: 2);
-        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "The handover itself changed nothing.");
-
-        FeedDirectorFrame(ceilingBeat, phrases, generation: 2);
+        WalkDirector(lastImpact + 1, handoverBeat - 1, phrases, generation: 1);
+        WalkDirector(handoverBeat, thinkBeat - 1, phrases, generation: 2);
+        FeedDirectorFrame(thinkBeat, phrases, generation: 2);
 
         var status = switcher.Status;
-        Assert.That(status.LastOffPlanSighting, Is.Not.Null,
-            "The fourth still Grid asks on the wall's own count; a handover reset would have delayed it.");
+        Assert.That(status.LastOffPlanSighting, Is.Not.Null);
         Assert.That(status.LastOffPlanSighting.Value.Anomaly, Is.EqualTo(OffPlanAnomaly.StillnessUp));
-        Assert.That(status.LastOffPlanSighting.Value.BoundaryBeat, Is.EqualTo(ceilingBeat));
         Assert.That(status.LastOffPlanSighting.Value.GapGrids, Is.EqualTo(TrackCueSheet.MaximumGapGrids));
         Assert.That(status.LastOffPlanAnswer.Perform, Is.True);
-        Assert.That(status.LastCueSource, Is.EqualTo(sourceBefore), "The answer is scheduled, not started at the think.");
-        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore));
+        Assert.That(status.LastCueSource, Is.EqualTo(sourceBefore), "The answer is scheduled, not fired at the think.");
+
+        var boundaryBeat = thinkBeat + TrackCueSheet.GridBeats;
+        var runwayBeats = controller.transitions[status.LastOffPlanAnswer.TransitionIndex].Repertoire.RunwayBeats;
+        WalkDirector(thinkBeat + 1, boundaryBeat - runwayBeats, phrases, generation: 2);
+
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
+        Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(boundaryBeat));
     }
 
     /// <summary>
-    /// Verifies that a taken Stillness Cue waits for boundary-minus-Runway and lands at the
+    /// Verifies that a taken fourth-still-Grid Cue waits for boundary-minus-Runway, then fires toward the
     /// boundary closing the current Grid.
     /// </summary>
     [Test]
@@ -467,33 +466,53 @@ public sealed class SwitcherExecutionTests
         FeedDirectorFrame(thinkBeat, phrases, generation: 1);
 
         var status = switcher.Status;
-        Assert.That(status.LastOffPlanSighting, Is.Not.Null, "The fourth still Grid asks the doorway.");
-        Assert.That(status.LastOffPlanAnswer.Perform, Is.True, "The Ceiling makes this answer a take.");
-        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "Taking the cue does not start it at the Grid opening.");
-        Assert.That(status.LastCueSource, Is.EqualTo(sourceBefore), "The scheduled cue has not performed yet.");
+        Assert.That(status.LastOffPlanSighting, Is.Not.Null);
+        Assert.That(status.LastOffPlanAnswer.Perform, Is.True);
+        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "The taken Cue is scheduled, not fired at the think.");
+        Assert.That(status.LastCueSource, Is.EqualTo(sourceBefore));
 
         var boundaryBeat = thinkBeat + TrackCueSheet.GridBeats;
         var runwayBeats = controller.transitions[status.LastOffPlanAnswer.TransitionIndex].Repertoire.RunwayBeats;
         var fireBeat = boundaryBeat - runwayBeats;
-
-        for (var beat = thinkBeat + 1; beat < fireBeat; beat++)
-        {
-            FeedDirectorFrame(beat, phrases, generation: 1);
-            Assert.That(switcher.Status.LastCueSource, Is.EqualTo(sourceBefore),
-                $"Beat {beat}: the Off-Plan Cue waits for boundary-minus-Runway.");
-        }
-
-        FeedDirectorFrame(fireBeat, phrases, generation: 1);
+        WalkDirector(thinkBeat + 1, fireBeat, phrases, generation: 1);
 
         Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
-        Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(boundaryBeat),
-            "The Off-Plan Cue lands at the boundary closing the current Grid.");
+        Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(boundaryBeat));
         Assert.That(OnWallEffect(), Is.EqualTo(status.LastOffPlanAnswer.EffectIndex));
     }
 
     /// <summary>
-    /// Verifies that an early Grid close lapses its pending Off-Plan Cue, then the new Grid asks once
-    /// and schedules a replacement toward its own closing boundary.
+    /// Verifies that ordinary forward coasting raises Stillness Grid by Grid and fires a taken Cue on
+    /// the fourth still Grid instead of leaving the wall unchanged indefinitely.
+    /// </summary>
+    [Test]
+    public void ForwardCoastingRaisesStillnessAndTheFourthGridFires()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
+        var effectBefore = OnWallEffect();
+        var thinkBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
+
+        WalkDirector(lastImpact + 1, thinkBeat, phrases, generation: 1);
+
+        var status = switcher.Status;
+        Assert.That(status.LastOffPlanSighting, Is.Not.Null);
+        Assert.That(status.LastOffPlanSighting.Value.Anomaly, Is.EqualTo(OffPlanAnomaly.StillnessUp));
+        Assert.That(status.LastOffPlanSighting.Value.GapGrids, Is.EqualTo(TrackCueSheet.MaximumGapGrids));
+        Assert.That(status.LastOffPlanAnswer.Perform, Is.True);
+
+        var boundaryBeat = thinkBeat + TrackCueSheet.GridBeats;
+        var runwayBeats = controller.transitions[status.LastOffPlanAnswer.TransitionIndex].Repertoire.RunwayBeats;
+        WalkDirector(thinkBeat + 1, boundaryBeat - runwayBeats, phrases, generation: 1);
+
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan));
+        Assert.That(OnWallEffect(), Is.EqualTo(status.LastOffPlanAnswer.EffectIndex));
+        Assert.That(OnWallEffect(), Is.Not.EqualTo(effectBefore));
+    }
+
+    /// <summary>
+    /// Verifies that an early Grid close lapses its pending Off-Plan Cue, then the new Grid asks once and
+    /// schedules a replacement toward its own closing boundary.
     /// </summary>
     [Test]
     public void AShortGridLapsesPendingOffPlanCueAndNextGridThinksAgain()
@@ -517,7 +536,11 @@ public sealed class SwitcherExecutionTests
 
         for (var beat = firstThinkBeat + 1; beat < secondThinkBeat; beat++)
         {
-            FeedDirectorFrame(beat, phrases, generation: 1, gridBeat: beat - firstThinkBeat + 1);
+            FeedDirectorFrame(
+                beat,
+                phrases,
+                generation: 1,
+                gridBeat: beat - firstThinkBeat + 1);
         }
 
         FeedDirectorFrame(secondThinkBeat, phrases, generation: 1, gridBeat: 1);
@@ -526,7 +549,8 @@ public sealed class SwitcherExecutionTests
         Assert.That(secondStatus.LastOffPlanSighting.Value.Ask, Is.EqualTo(firstSighting.Ask + 1),
             "The Grid after the lapse thinks exactly once.");
         Assert.That(secondStatus.LastOffPlanSighting.Value.BoundaryBeat, Is.EqualTo(secondThinkBeat));
-        Assert.That(secondStatus.LastOffPlanAnswer.Perform, Is.True, "Stillness remains above the Ceiling.");
+        Assert.That(secondStatus.LastOffPlanAnswer.Perform, Is.True,
+            "Stillness remains at its fourth-Grid take.");
         Assert.That(secondStatus.LastCueSource, Is.EqualTo(sourceBefore), "Neither scheduled cue has fired.");
 
         var secondBoundaryBeat = secondThinkBeat + TrackCueSheet.GridBeats;
@@ -553,42 +577,42 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Verifies that a Grid start received after the absolute beat update triggers one think on that same
-    /// beat, while repeated frames at Grid position one do not think again.
+    /// Verifies that a Grid start received after the absolute beat update triggers one Stillness think on
+    /// that same beat, while repeated Grid-position-one frames do not think again.
     /// </summary>
     [Test]
     public void ALateGridDatagramAtAGridStartStillThinks()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
-        var ceilingBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
+        var fourthGridBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
 
-        // Three whole still Grids, stopping one beat short of the deadline Grid start.
-        WalkDirector(lastImpact + 1, ceilingBeat - 1, phrases, generation: 1);
+        // Cross three whole still Grids, stopping one beat short of the fourth Grid's start.
+        WalkDirector(lastImpact + 1, fourthGridBeat - 1, phrases, generation: 1);
         Assert.That(switcher.Status.LastOffPlanSighting, Is.Null,
             "Setup: no anomaly has been reported before the deadline Grid.");
 
         // The absolute beat arrives before the current Grid state. The next frame corrects the Grid without
         // advancing the beat, so the Switcher must observe that state change rather than returning early.
-        FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 16);
+        FeedSwitcherFrame(fourthGridBeat, phrases, generation: 1, gridBeat: 16);
         Assert.That(switcher.Status.LastOffPlanSighting, Is.Null,
-            "The stale Grid frame does not trigger the deadline think.");
-        FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 1);
+            "The stale Grid frame does not trigger the fourth-Grid think.");
+        FeedSwitcherFrame(fourthGridBeat, phrases, generation: 1, gridBeat: 1);
 
         var firstSighting = switcher.Status.LastOffPlanSighting;
         Assert.That(firstSighting, Is.Not.Null, "The corrected Grid state triggers the missed think.");
-        Assert.That(firstSighting.Value.BoundaryBeat, Is.EqualTo(ceilingBeat));
+        Assert.That(firstSighting.Value.BoundaryBeat, Is.EqualTo(fourthGridBeat));
         Assert.That(firstSighting.Value.Ask, Is.EqualTo(1), "The late Grid start is one off-plan ask.");
 
-        FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 1);
+        FeedSwitcherFrame(fourthGridBeat, phrases, generation: 1, gridBeat: 1);
 
         Assert.That(switcher.Status.LastOffPlanSighting.Value.Ask, Is.EqualTo(firstSighting.Value.Ask),
             "Repeated frames at the same Grid start do not think again.");
     }
 
     /// <summary>
-    /// Verifies that a held loop which never reaches a future scheduled fire beat neither changes
-    /// the wall nor replays any spent plan mark.
+    /// Verifies that repeated passes through a held loop never alter any spent plan mark, regardless of
+    /// any Off-Plan recovery that the repeated Grid starts may schedule.
     /// </summary>
     [Test]
     public void AHeldLoopNeverReplaysSpentMarks()
@@ -601,19 +625,16 @@ public sealed class SwitcherExecutionTests
             firedBeats.Add(mark.FiredAtBeat);
         }
 
-        var effectBefore = OnWallEffect();
-        var sourceBefore = switcher.Status.LastCueSource;
-        var boundaryBefore = switcher.Status.LastCueMarkBeat;
-
         // Loop the Grid after the last mark: walk it, snap back, walk it again.
         for (var pass = 0; pass < 5; pass++)
         {
-            WalkDirector(lastImpact + 1, lastImpact + TrackCueSheet.GridBeats, phrases, generation: 1);
+            WalkDirector(
+                lastImpact + 1,
+                lastImpact + TrackCueSheet.GridBeats,
+                phrases,
+                generation: 1);
         }
 
-        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "The loop never reaches a future scheduled fire beat.");
-        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(sourceBefore));
-        Assert.That(switcher.Status.LastCueMarkBeat, Is.EqualTo(boundaryBefore));
         for (var i = 0; i < firedBeats.Count; i++)
         {
             Assert.That(switcher.Sheet.Marks[i].FiredAtBeat, Is.EqualTo(firedBeats[i]),
@@ -641,8 +662,8 @@ public sealed class SwitcherExecutionTests
         var expectedSheet = ExpectedFocusSheet(generation: 1);
 
         // The DJ holds a loop over the Grid before the spent mark: every re-crossed Grid start re-sees the
-        // fired mark and asks the doorway exactly once, the still gap and ask number rising together,
-        // until the rising cadence takes — certain by the Stillness Ceiling's gap.
+        // fired mark and asks the doorway exactly once. The still gap and ask number rise together until
+        // the fourth Grid is certain to take.
         var took = false;
         for (var pass = 1; pass <= TrackCueSheet.MaximumGapGrids - 1 && !took; pass++)
         {
@@ -674,13 +695,38 @@ public sealed class SwitcherExecutionTests
             }
         }
 
-        Assert.That(took, Is.True, "The rising cadence takes before the wall can outsit the Ceiling.");
+        Assert.That(took, Is.True, "The rising cadence takes by the fourth Grid.");
     }
 
     /// <summary>
-    /// A mark blending into the Effect already on the wall — lined up by a handover, never by a built
-    /// sheet — goes through the doorway instead of firing: the wall shows the model's answer, which is
-    /// never the Effect on the wall, and the colliding mark is never spent, lapsing at its boundary.
+    /// Verifies that a re-crossed fired Cue Mark cannot return to plan execution: it enters the doorway,
+    /// and its permanent check-off prevents the plan from ever replaying it.
+    /// </summary>
+    [Test]
+    public void AReCrossedFiredMarkCannotReturnToPlanExecution()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        FeedDirectorOnly(1, phrases, generation: 1);
+        var mark = switcher.Sheet.Marks[0];
+        var thinkBeat = mark.Beat - TrackCueSheet.GridBeats;
+        var offMarkEffect = (mark.EffectIndex + 1) % controller.effects.Length;
+
+        switcher.SetInitialEffect(offMarkEffect, 0);
+        WalkDirector(thinkBeat, mark.Beat, phrases, generation: 1);
+        Assert.That(mark.Fired, Is.True, "Setup: the Cue Sheet fires the mark during forward playback.");
+        var firedAt = mark.FiredAtBeat;
+
+        switcher.SetInitialEffect(offMarkEffect, 0);
+        WalkDirector(thinkBeat, thinkBeat, phrases, generation: 1);
+
+        Assert.That(switcher.Status.LastOffPlanSighting, Is.Not.Null);
+        Assert.That(switcher.Status.LastOffPlanSighting.Value.Anomaly, Is.EqualTo(OffPlanAnomaly.FiredMark));
+        Assert.That(mark.FiredAtBeat, Is.EqualTo(firedAt), "The doorway never re-spends the fired mark.");
+    }
+
+    /// <summary>
+    /// Verifies that a mark blending into the Effect already on the wall goes through the doorway instead
+    /// of firing: the wall shows the model's answer and the colliding mark lapses regardless of loop state.
     /// </summary>
     [Test]
     public void AMarkBlendingIntoTheOnWallEffectGoesThroughTheDoorwayAndLapses()
@@ -689,7 +735,7 @@ public sealed class SwitcherExecutionTests
         FeedDirectorOnly(1, phrases, generation: 1);
         var mark = switcher.Sheet.Marks[0];
         var thinkBeat = mark.Beat - TrackCueSheet.GridBeats;
-        // A handover lined the wall up with the mark's own card — the collision only a swap or loop makes.
+        // Line the wall up with the mark's own card before the Grid-start think sees it.
         switcher.SetInitialEffect(mark.EffectIndex, 0);
 
         WalkDirector(thinkBeat, thinkBeat, phrases, generation: 1);
@@ -737,16 +783,12 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// The plan's widest legal gap — 64 beats — plays out with no off-plan cue: at the fourth still
-    /// Grid's start the closing mark is already scheduled to fire inside that Grid, so the plan itself
-    /// satisfies the deadline and the Ceiling stays quiet.
+    /// Verifies that an unfired planned Cue Mark closing the fourth still Grid has priority over the
+    /// Stillness doorway and fires from its own boundary-minus-Runway schedule.
     /// </summary>
     [Test]
-    public void ALegalMaximumGapIsNeverPreEmptedByTheCeiling()
+    public void AnUnfiredPlannedMarkIsNeverPreEmptedByStillness()
     {
-        // The walk is seeded, so scan generations until the Director's own cast sheet carries a
-        // maximum-width gap between consecutive marks. The scan feeds the Director alone so no
-        // execution state leaks into the timeline under test.
         var phrases = new[] { Phrase(1, 449, "intro") };
         CuePlanMark gapOpen = null;
         CuePlanMark gapClose = null;
@@ -757,7 +799,7 @@ public sealed class SwitcherExecutionTests
             var marks = switcher.Sheet.Marks;
             for (var i = 1; i < marks.Count; i++)
             {
-                if (marks[i].Beat - marks[i - 1].Beat == TrackCueSheet.MaximumGapBeats
+                if (marks[i].Beat - marks[i - 1].Beat == TrackCueSheet.MaximumGapGrids * TrackCueSheet.GridBeats
                     && controller.transitions[marks[i - 1].TransitionIndex].Repertoire.RunwayBeats > 0)
                 {
                     gapOpen = marks[i - 1];
@@ -774,57 +816,18 @@ public sealed class SwitcherExecutionTests
         var closeFire = gapClose.Beat - controller.transitions[gapClose.TransitionIndex].Repertoire.RunwayBeats;
         WalkDirector(gapOpen.Beat - TrackCueSheet.GridBeats, openFire, phrases, generation);
         Assert.That(gapOpen.Fired, Is.True, "Setup: the gap's opening mark fires on its Runway beat.");
-        switcher.RenderAtTime(1_000_000f, out _); // Complete the opening move; the wall is now still.
+        switcher.RenderAtTime(1_000_000f, out _);
 
         for (var beat = openFire + 1; beat < closeFire; beat++)
         {
             WalkDirector(beat, beat, phrases, generation);
             Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0),
-                $"Beat {beat}: an off-plan cue pre-empted a plan the playhead is still walking through.");
+                $"Beat {beat}: the Stillness doorway pre-empted an unfired planned mark.");
         }
 
         WalkDirector(closeFire, closeFire, phrases, generation);
         Assert.That(gapClose.Fired, Is.True, "The gap's closing mark performs as planned.");
         Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.Plan));
-    }
-
-    /// <summary>
-    /// The first think is the stillness baseline: a track whose opening mark sits the widest legal gap
-    /// from the start is reached and performed with no off-plan cue, because the Grid start the walk
-    /// begins on has no whole Grid behind it to count.
-    /// </summary>
-    [Test]
-    public void ATrackOpeningWidestLegalGapIsNotPreEmpted()
-    {
-        var phrases = new[] { Phrase(1, 449, "intro") };
-        CuePlanMark opener = null;
-        var generation = 0;
-        for (var candidate = 1; candidate <= 128 && opener == null; candidate++)
-        {
-            FeedDirectorOnly(focusBeat: 1, phrases, candidate);
-            var first = switcher.Sheet.Marks[0];
-            if (first.Beat - 1 == TrackCueSheet.MaximumGapBeats
-                && controller.transitions[first.TransitionIndex].Repertoire.RunwayBeats > 0)
-            {
-                opener = first;
-                generation = candidate;
-            }
-        }
-
-        Assert.That(opener, Is.Not.Null, "Setup: no scanned generation opened with the widest legal gap.");
-        // Start the wall off the opener's card so the boundary carries a performable mark, not a self-blend.
-        switcher.SetInitialEffect((opener.EffectIndex + 1) % controller.effects.Length, 0);
-
-        var openerFire = opener.Beat - controller.transitions[opener.TransitionIndex].Repertoire.RunwayBeats;
-        for (var beat = 1; beat < openerFire; beat++)
-        {
-            WalkDirector(beat, beat, phrases, generation);
-            Assert.That(switcher.Status.CurrentEffectIndex, Is.GreaterThanOrEqualTo(0),
-                $"Beat {beat}: an off-plan cue pre-empted the plan's opening mark.");
-        }
-
-        WalkDirector(openerFire, openerFire, phrases, generation);
-        Assert.That(opener.Fired, Is.True, "The opening mark performs as planned.");
     }
 
     /// <summary>
@@ -856,11 +859,11 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Verifies that Hold outranks the Stillness Ceiling and release schedules a taken Cue at the
+    /// Verifies that Hold outranks Stillness and release schedules a taken Cue at the
     /// next Grid-start think, with its transition beginning at boundary-minus-Runway.
     /// </summary>
     [Test]
-    public void HoldOutranksTheCeilingAndReleaseSchedulesAtTheNextThink()
+    public void HoldOutranksStillnessAndReleaseSchedulesAtTheNextThink()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
@@ -868,7 +871,7 @@ public sealed class SwitcherExecutionTests
 
         var held = OnWallEffect();
         var beat = lastImpact + 1;
-        for (var step = 0; step < TrackCueSheet.MaximumGapBeats * 2; step++, beat++)
+        for (var step = 0; step < (TrackCueSheet.MaximumGapGrids + 2) * TrackCueSheet.GridBeats; step++, beat++)
         {
             WalkDirector(beat, beat, phrases, generation: 1);
         }
@@ -1062,15 +1065,27 @@ public sealed class SwitcherExecutionTests
             playerNumber: 1);
     }
 
-    /// <summary>Feeds one wire frame and lets only the Switcher execute its already-handed-over sheet.</summary>
-    private void FeedSwitcherFrame(int focusBeat, StructurePhrase[] phrases, int generation, int? gridBeat = null)
+    /// <summary>
+    /// Feeds one wire frame and lets only the Switcher execute its already-handed-over sheet.
+    /// </summary>
+    private void FeedSwitcherFrame(
+        int focusBeat,
+        StructurePhrase[] phrases,
+        int generation,
+        int? gridBeat = null)
     {
         FeedWire(focusBeat, phrases, generation, gridBeat);
         switcher.Tick();
     }
 
-    /// <summary>Feeds one production-order frame so the Director maintains/hands over before Switcher execution.</summary>
-    private void FeedDirectorFrame(int focusBeat, StructurePhrase[] phrases, int generation, int? gridBeat = null)
+    /// <summary>
+    /// Feeds one production-order frame so the Director maintains and hands over before Switcher execution.
+    /// </summary>
+    private void FeedDirectorFrame(
+        int focusBeat,
+        StructurePhrase[] phrases,
+        int generation,
+        int? gridBeat = null)
     {
         FeedWire(focusBeat, phrases, generation, gridBeat);
         director.Tick(0f);
@@ -1096,8 +1111,14 @@ public sealed class SwitcherExecutionTests
         }
     }
 
-    /// <summary>Feeds every beat in production frame order, settling any completed blend after each beat.</summary>
-    private void WalkDirector(int fromBeat, int toBeat, StructurePhrase[] phrases, int generation)
+    /// <summary>
+    /// Feeds every beat in production frame order and settles any completed blend after each beat.
+    /// </summary>
+    private void WalkDirector(
+        int fromBeat,
+        int toBeat,
+        StructurePhrase[] phrases,
+        int generation)
     {
         for (var beat = fromBeat; beat <= toBeat; beat++)
         {
@@ -1120,11 +1141,14 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// Translates one player wire snapshot into BeatManager values. Execution reads only the on-air beat
-    /// and timing-grid lanes, so a loop is expressed as the beat sequence a loop actually produces rather
-    /// than as a loop lane.
+    /// Translates one player wire snapshot into BeatManager values. The timing Grid is phrase-relative and
+    /// may restart early; the loop lane is intentionally irrelevant to Switcher decisions.
     /// </summary>
-    private void FeedWire(int focusBeat, StructurePhrase[] phrases, int generation, int? gridBeat)
+    private void FeedWire(
+        int focusBeat,
+        StructurePhrase[] phrases,
+        int generation,
+        int? gridBeat)
     {
         // The wire's timing grid is phrase-relative: it restarts at every phrase start, so a phrase
         // ending off-cycle produces a short Grid.

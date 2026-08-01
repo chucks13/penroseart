@@ -231,27 +231,27 @@ The decision layer that owns *what* plays on the wall — which Performer comes 
 _Avoid_: "choreographer" (retired name); using "Director" for whatever decides when a move starts — that is the Switcher's; describing the Director as something that draws buffers or owns transition mechanics.
 
 **Mechanical Switcher** (a.k.a. **Switcher**):
-The mechanism that executes the Cue Sheet it has been handed. It thinks once per Grid, at the Grid's start, and owns all transition timing — Runway, Impact Point, Tail, start, progress, and completion — firing each Cue Mark so the Impact Point lands on it. It chooses no Cue Mark, Performer, or Transition: every anomaly — a re-crossed fired mark, a mark moving into the Effect already on the wall, Stillness up — goes through one doorway, where the Switcher tells the Director what it sees and the Director decides.
-_Avoid_: putting musical or casting decisions in the Switcher; treating the plan as a statement of what must be on the wall at a given beat; calling it "dumb" instead of execution-only; a second doorway or a Switcher-local fallback choice.
+The execution mechanism for the current Cue Sheet. At each Grid start, it gives an unfired, non-self-blend Cue Mark priority and owns all transition timing — Runway, Impact Point, Tail, start, progress, and completion. It reports every anomaly — a re-crossed fired mark, self-blend, or Stillness — through the single Off-Plan doorway; it chooses none of the content.
+_Avoid_: putting musical or casting decisions in the Switcher; allowing Off-Plan recovery to preempt an unfired Cue Mark; treating the plan as a statement of what must be on the wall at a given beat; calling it "dumb" instead of execution-only; a second doorway or a Switcher-local fallback choice.
 
 **Cue**:
 The directive for a musical change. A Cue is not the change itself — it *triggers* one: a stage-directed Cue directs the Switcher to swap Performers at a Cue Mark, and an effect-directed Cue tells the on-screen effect to respond ("respond to this fill", "play at this energy"). A Cue carries intent, never pixel-level commands.
 _Avoid_: "call" (collides with calling a Performer on stage); treating a Cue as the change itself; a Cue that micromanages a Performer's internal parameters.
 
 **Cue Sheet**:
-A track-scoped show plan built when a track's complete Song Structure arrives. Every Cue Mark carries its baked Effect and Transition assignment.
+A track-scoped show plan built when a track's complete Song Structure arrives. Every Cue Mark is placed against the real Phrase map with its Effect and Transition assignment baked in; one sheet describes one track on one player from start to finish.
 _Avoid_: the retired per-Phrase empty-marks sheet; treating it as a queue of pending cues; treating the sheet as something an override or an Off-Plan Cue edits.
 
 **Cue Mark**:
-A Grid Boundary in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment, and labeled by the beat that opens the new Grid. Marks sit at Grid Boundaries and nowhere else because a cue needs the crossing: its Runway runs on the Grid before the boundary and its Tail on the Grid after. A Phrase boundary always begins a Grid, so a Phrase end is an ordinary candidate, never a mandate. Where a Drop or Fill owns a boundary, the Anchor rule applies: a capable Effect is already on the wall and the moment is cleared of Runways and Tails.
-_Avoid_: calling a Cue Mark a beat position, an Impact Point, a Transition start, a Transition Completion, or a Selected Grid Boundary; empty marks awaiting cast-time selection (retired).
+A Grid Boundary in a Cue Sheet where a stage-directed Cue musically lands, carrying its baked Effect and Transition assignment, and labeled by the beat that opens the new Grid. Marks sit at Grid Boundaries and nowhere else because a cue needs the crossing: its Runway runs on the Grid before the boundary and its Tail on the Grid after. A Phrase boundary always begins a Grid, so a Phrase end is an ordinary candidate, never a mandate. Where a Drop or Fill owns a boundary, the Anchor rule applies: a capable Effect is already on the wall and the moment is cleared of Runways and Tails. Once a Cue Mark fires, its check-off remains set for the life of that Cue Sheet; re-crossing it never makes it unfired.
+_Avoid_: calling a Cue Mark a beat position, an Impact Point, a Transition start, a Transition Completion, or a Selected Grid Boundary; empty marks awaiting cast-time selection (retired); replaying a fired Cue Mark after a Loop ends.
 
 **Cast**:
 The Director's act of handing the Switcher the Cue Sheet now in force — the cast list for the on-air track. An Off-Plan Cue is not a Cast: the Switcher already holds the plan, and the Director simply answers with one freshly dealt card.
 _Avoid_: cast-time selection (retired — selection happens at sheet build); casting individual Cue Marks at their Runway start (retired — that put transition timing in the Director); a lock or revocation window after casting.
 
 **Anchor**:
-A moment in a Cue Sheet at the first beat of a Drop Phrase or at a Phrase-ending Fill. A capable Effect is already on the wall and owns the moment, and no Transition's Runway or Tail crosses it.
+A moment owned by a Drop landing or live Fill window: a capable Effect is already on the wall, and no Transition's Runway or Tail crosses it.
 _Avoid_: "Anchor treatment" (retired — there is one way to perform an Anchor, not a choice of two); scheduling any Transition whose Runway or Tail crosses the moment; treating every phrase boundary as an Anchor; resolving Anchors at cast time (retired); treating an Anchor as a plan for where a Fill begins or how long it runs.
 
 **Ride-through**:
@@ -263,19 +263,19 @@ The seeded fairness mechanism sheet building deals from: one shuffled bag per ca
 _Avoid_: weights or scoring; filtering the deal by energy affinity (energy is a Performer input, not a casting one); per-cast random picks; treating a one-card catalog's unavoidable repeat as a defect.
 
 **Off-Plan Cue**:
-The Cue the Director deals when the plan in force cannot feed the playhead; its answer is a fresh card or a ride-through, never the Effect already on the wall or the one being moved toward, and it leaves the Cue Sheet exactly as it was. A taken Off-Plan Cue lands at the Grid Boundary closing the current Grid, exactly like a planned Cue.
-_Avoid_: "staleness cue" (retired name); calling it a Cast, an override, or a Missed Cue's replacement; treating it as something that spends a Cue Mark; using the Sighting's Grid Boundary as its landing.
+The Director's answer through the single anomaly doorway when no unfired planned Cue has priority — for a re-crossed fired mark, self-blend, or Stillness. It supplies a fresh eligible move or a ride-through, uses the normal scheduler to land at the closing Grid Boundary, and leaves the Cue Sheet and its check-offs unchanged.
+_Avoid_: "staleness cue" (retired name); calling it a Cast, an override, or a Missed Cue's replacement; treating it as something that spends a Cue Mark.
 
 **Off-Plan Sighting** (a.k.a. **Sighting**):
-The Switcher's whole report through the anomaly doorway — which anomaly it saw, the Grid Boundary at hand, how still the wall has been, which ask this is, and what the wall is showing and moving toward. It is everything the Director's answer may draw on; the anomaly kind itself is diagnostic — it feeds traces and displays, never the deal.
+The Switcher's report through the anomaly doorway: the anomaly, Grid Boundary, Stillness gap, ask number, and the Effects on the wall and in flight. The anomaly kind is diagnostic; it never changes the deal.
 _Avoid_: reading the anomaly kind as a decision input; the Director reaching back into the Switcher for anything the Sighting should carry; a second doorway or a looser-argument variant of the question.
 
 **Stillness**:
-How long the wall has held still — whole Grids since the last fired cue, checked at every Grid start. It is a property of the wall, not of any sheet: a handover changes nothing on the wall and resets nothing.
-_Avoid_: counting stillness in beats or beat positions (loops and jumps break both — Grids crossed at Grid start is the measure); treating stillness as sheet state a handover restarts.
+How long the wall has held still — whole Grids since the last fired Cue, checked at every Grid start. It is a property of the wall, not of any sheet: only a fired Cue resets it; a handover changes nothing on the wall and resets nothing.
+_Avoid_: counting Stillness in beats or beat positions; treating Stillness as sheet state a handover restarts; gating it on a Loop or any other condition.
 
 **Ceiling**:
-The bound on Stillness: three Grids since the last fire make the fourth Grid's Sighting yield a taken Off-Plan Cue. If an early Grid close lapses that Cue before its Runway begins, the next Grid thinks with Stillness still up.
+The bound on Stillness: three Grids since the last fire means the fourth Grid must fire, short or not. A Director-built sheet never violates it on its own — only sheet swaps and loops push the wall toward it — and the Grid-start check catches both through the anomaly doorway.
 _Avoid_: a ceiling counted in heard beats (retired); treating a Ceiling take as an immediate fire; taking a Ceiling Cue anywhere but a Grid start.
 
 **Missed Cue**:
@@ -295,8 +295,8 @@ _Avoid_: reading the Cue Log back into runtime behavior; treating a missing or f
 The override and inspection surface below is debugging and verification tooling — for testing Performers and steering inspection, never show behavior. It must never degrade the show model.
 
 **Fire-and-forget**:
-The rule for every move started by synced automation: **nothing changes a Transition once it is in flight.** A later automated decision applies to a later move; debug commands are outside this show guarantee.
-_Avoid_: re-deciding, re-targeting, or re-timing an automated Transition in flight; treating a staged pick as retroactive.
+The rule governing every performed move: **nothing changes a Transition once it is in flight.** A later pick or decision applies to a later move, not the current one.
+_Avoid_: re-deciding, re-targeting, or re-timing an in-flight Transition; treating a staged pick as retroactive.
 
 **Next Transition**:
 A staged override for the Transition of the very next Cue Mark performed: a one-shot pick that replaces exactly the next dealt card, after which the plan resumes verbatim; with Hold Selected it trumps every deal until released. Overrides mask the Cue Sheet, never edit it.

@@ -116,14 +116,14 @@ public readonly struct CueDecision
 }
 
 /// <summary>
-/// The kind of anomaly the Switcher saw at a Grid start that the plan cannot feed — the condition an
-/// <see cref="OffPlanSighting"/> reports through the one anomaly doorway,
+/// The kind of anomaly the Switcher sights at a Grid start — the condition
+/// an <see cref="OffPlanSighting"/> reports through the one anomaly doorway,
 /// <see cref="Director.DecideOffPlanCue"/>. Diagnostic forever: it feeds the decision-site trace and the
 /// Live tab, never the deal — two Sightings identical except for this kind get the identical answer.
 /// </summary>
 public enum OffPlanAnomaly
 {
-    /// <summary>The mark at the coming boundary has already fired — the DJ looped back over spent plan (ADR-0011).</summary>
+    /// <summary>The mark at the coming boundary has already fired, so its permanent check-off prevents replay (ADR-0011).</summary>
     FiredMark,
 
     /// <summary>
@@ -132,22 +132,21 @@ public enum OffPlanAnomaly
     /// </summary>
     SelfBlend,
 
-    /// <summary>Stillness is up: three whole Grids since the last fired cue, so this fourth Grid must fire.</summary>
+    /// <summary>Stillness is up: three whole Grids passed without a fired cue.</summary>
     StillnessUp,
 }
 
 /// <summary>
 /// The Switcher's whole report through the anomaly doorway — the one self-describing question
 /// <see cref="Director.DecideOffPlanCue"/> answers from alone: which anomaly it saw, the Grid Boundary at
-/// hand, how still the wall has been, which ask this is, and what the wall is showing and moving toward.
-/// Pure data: constructing one has no side effects, and the stillness and ask counters it snapshots stay
-/// the Switcher's own.
+/// hand, the Stillness gap, which ask this is, and what the wall is showing and moving toward.
+/// Pure data: constructing one has no side effects, and the counters it snapshots stay the Switcher's own.
 /// </summary>
 public readonly struct OffPlanSighting
 {
     /// <summary>
     /// The anomaly the Switcher saw. Diagnostic forever: it feeds the decision-site trace and the Live tab,
-    /// never the deal — stillness pressure already rides in <see cref="GapGrids"/>.
+    /// never the deal — Stillness pressure already rides in <see cref="GapGrids"/>.
     /// </summary>
     public readonly OffPlanAnomaly Anomaly;
 
@@ -158,14 +157,14 @@ public readonly struct OffPlanSighting
     public readonly int BoundaryBeat;
 
     /// <summary>
-    /// The gap in whole Grids riding through here would let the wall reach, as the Switcher counts it; at
+    /// The gap in whole Grids since the last fired cue. At
     /// <see cref="TrackCueSheet.MaximumGapGrids"/> the deal is taken no matter what.
     /// </summary>
     public readonly int GapGrids;
 
     /// <summary>
     /// Which off-plan ask this is on the current run. The Director remembers nothing across asks, so this
-    /// is what separates one deal from the next when a loop re-crosses the same boundary.
+    /// is what separates one deal from the next when the same boundary is sighted again.
     /// </summary>
     public readonly int Ask;
 
@@ -206,8 +205,8 @@ public readonly struct OffPlanSighting
 /// Decides what plays; it never times a fire (ADR-0009). In Synced Mode it builds one
 /// track-scoped <see cref="TrackCueSheet"/> per player the moment that player's structure generation
 /// changes, hands the on-air focus player's sheet to the <see cref="Switcher"/> every tick (an idempotent
-/// Cast), and answers the Switcher's two questions — what a planned mark plays, and whether a boundary the
-/// DJ has looped back over gets a fresh cue or is ridden through. It holds no Runway arithmetic, follows no
+/// Cast), and answers the Switcher's two questions — what a planned mark plays, and whether an anomaly at a
+/// Grid start gets a fresh cue or is ridden through. It holds no Runway arithmetic, follows no
 /// position, observes no Grid, and keeps no cast memory: execution belongs wholly to the Switcher.
 /// Standalone Mode (timer-driven, no wire) is unchanged.
 /// </summary>
@@ -402,7 +401,7 @@ public sealed class Director
     /// The operator's immediate pick — a keyboard jump, an OSC button, or engaging a Held Effect.
     /// Performs <paramref name="effectIndex"/> as a real Transition (the staged card, started at this
     /// instant with no Runway) rather than cutting to it. Fire-and-forget: the plan in force and its
-    /// check-offs are left alone, so the sheet simply resumes at its next unfired Cue Mark.
+    /// check-offs are left alone, so the sheet simply resumes at its next incoming Cue Mark.
     /// <paramref name="durationSeconds"/> re-arms the Standalone cadence.
     /// </summary>
     public void ShowNow(int effectIndex, float durationSeconds)
@@ -556,15 +555,13 @@ public sealed class Director
     }
 
     /// <summary>
-    /// The one anomaly doorway: answers the Switcher about a Grid start the plan cannot feed. The Switcher
-    /// reports what it saw — one self-describing <see cref="OffPlanSighting"/> — and the Director decides
-    /// from that argument alone, one of two ways: ride through (no-perform), or a fresh Off-Plan Cue,
-    /// Director-cast as always. Which way is dealt with the same rising cadence the plan walk uses, so
-    /// changes land one to four Grids apart and taking is certain once the Sighting's gap reaches
-    /// <see cref="TrackCueSheet.MaximumGapGrids"/> — that certainty is what makes the Stillness Ceiling a
-    /// bound whichever anomaly carried the ask. A dealt cue is never the Effect on the wall and never the
-    /// one being moved toward, and it leaves the Cue Sheet exactly as it was. Frozen under Hold, and when
-    /// there is no focus or no built sheet.
+    /// The one anomaly doorway. Whenever the Switcher sights a fired mark, self-blend, or Stillness at a Grid
+    /// start, it reports one self-describing <see cref="OffPlanSighting"/>. The Director answers from that
+    /// argument alone: ride through (no-perform), or a fresh Off-Plan Cue, Director-cast as always. A fresh cue
+    /// lands at the closing Grid Boundary through the Switcher's normal scheduler. Taking becomes certain once
+    /// the Sighting reaches <see cref="TrackCueSheet.MaximumGapGrids"/>. A dealt cue is never the Effect on the
+    /// wall or the one being moved toward, and it leaves the Cue Sheet exactly as it was. Frozen under Hold,
+    /// and when there is no focus or no built sheet.
     /// </summary>
     /// <param name="sighting">
     /// The Switcher's whole report — everything this answer may draw on. Its anomaly kind is diagnostic

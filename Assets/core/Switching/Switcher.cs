@@ -134,11 +134,11 @@ public readonly struct SwitcherStatus
 /// Mechanical stage switcher for Penrose performers. It executes the Cue Sheet handed over by the
 /// Director (ADR-0009) and thinks once per Grid, at the Grid's start, from the on-air BeatManager
 /// surface — the on-air grid is the timing authority, and the Switcher knows no player number at
-/// execution time. The think decides everything the Grid needs: whether the next boundary's mark fires
-/// (asked of the bound <see cref="Director"/>, which resolves any staged override at that moment), and
-/// whether stillness is up. Starting the blend at boundary-minus-Runway is a mechanical scheduled act
-/// of that decision, not a fresh decision. A mark whose fire beat the playhead never lands on is a
-/// Missed Cue: not performed, not spent, never fired late. A handover changes nothing on the wall by
+/// execution time. The think gives the closing boundary's unfired mark priority, then routes a fired
+/// mark, self-blend, or Stillness through one doorway to the bound <see cref="Director"/>. Starting the
+/// blend at boundary-minus-Runway is a mechanical scheduled act of that decision, not a fresh decision.
+/// A mark whose fire beat the playhead never lands on is a Missed Cue: not performed, not spent, never
+/// fired late. A handover changes nothing on the wall by
 /// itself and resets nothing. It owns all Runway/Impact/Tail timing and selects nothing — every
 /// decision is asked of the Director. It holds no cue lifecycle: no Standby Cue, no Lock Point, no
 /// verdict, no revocation window.
@@ -165,15 +165,15 @@ public sealed class Switcher
 
     /// <summary>
     /// The plan in force. Each mark records the beat it fired on, so firing a cue marks the cue; what the
-    /// Switcher keeps beside the sheet is the wall's own state — stillness, the Grid's scheduled act, the
+    /// Switcher keeps beside the sheet is the wall's own state — Stillness, the Grid's scheduled act, the
     /// last-observed beat, the ask counter, and the last cue's provenance badge.
     /// </summary>
     private TrackCueSheet sheet;
 
     /// <summary>
     /// The on-air beat <see cref="Tick"/> last acted on. Tick runs every frame and a beat spans many of
-    /// them, so this is what makes each beat observed once. A loop shows up here as the beat counter
-    /// snapping back (…190, 191, 160, 161…); the wire loop flag corroborates traces only (ADR-0011).
+    /// them, so this is what makes each beat observed once. A beat snap-back is logged as a discontinuity;
+    /// the wire loop flag may corroborate traces but never selects behavior.
     /// </summary>
     private int? lastSeenBeat;
 
@@ -185,7 +185,7 @@ public sealed class Switcher
     private int? lastSeenGridBeat;
 
     /// <summary>
-    /// Whether a think has established the stillness baseline. The first think observes a Grid start with
+    /// Whether a think has established the Stillness baseline. The first think observes a Grid start with
     /// no whole Grid behind it, so it counts nothing; every later think counts the Grid it closes.
     /// </summary>
     private bool hasBaseline;
@@ -193,11 +193,11 @@ public sealed class Switcher
     /// <summary>
     /// Stillness: whole Grids the wall has sat through since the last fired cue. A property of the wall,
     /// not of any sheet — it survives handovers — and it is checked at every Grid start: three still
-    /// Grids since the last fire make the fourth Grid ask, and the Ceiling makes the answer a take.
+    /// Grids since the last fire make the fourth Grid ask.
     /// </summary>
     private int stillGrids;
 
-    /// <summary>Whether a cue fired since the last think — the fact the next think's stillness update consumes.</summary>
+    /// <summary>Whether a cue fired since the last think — the fact the next think's Stillness update consumes.</summary>
     private bool firedSinceThink;
 
     /// <summary>
@@ -305,10 +305,11 @@ public sealed class Switcher
     /// <summary>
     /// The handover: takes the Cue Sheet now in force. "Cast" hands over the plan — it does not time a fire;
     /// <see cref="Tick"/> performs the marks. A handover changes nothing on the wall by itself and resets
-    /// nothing of the wall's own: stillness, the check-offs, and any Transition already in flight all
-    /// stand, and the next change comes at a mark or at the stillness deadline. An unstarted scheduled
+    /// nothing of the wall's own: Stillness, the check-offs, and any Transition already in flight all
+    /// stand, and the next change comes at a mark or at the Stillness deadline. An unstarted scheduled
     /// act is the outgoing plan's decision, not the wall's, so it leaves with its sheet — only a started
-    /// Transition is fire-and-forget. Idempotent on the sheet's (<see cref="TrackCueSheet.PlayerNumber"/>, <see cref="TrackCueSheet.StructureGeneration"/>)
+    /// Transition is fire-and-forget. Idempotent on the sheet's
+    /// (<see cref="TrackCueSheet.PlayerNumber"/>, <see cref="TrackCueSheet.StructureGeneration"/>)
     /// identity, so the Director calls it every synced tick and keeps zero handover state. <c>Cast(default)</c>
     /// clears the plan (generation 0, player 0) and is how Standalone Mode turns sheet execution off.
     /// </summary>
@@ -406,16 +407,16 @@ public sealed class Switcher
 
     /// <summary>
     /// The once-per-Grid decision, taken at the Grid's start from on-air state — everything this Grid
-    /// needs. Stillness is counted first; then the next boundary's unfired mark is decided and its blend
-    /// scheduled at boundary-minus-Runway; and every anomaly — a re-crossed fired mark, a mark blending
-    /// into the Effect already on the wall, Stillness up — goes through the one doorway,
-    /// <see cref="Director.DecideOffPlanCue"/>, at most once per think, with a taken Cue scheduled
-    /// toward the boundary closing the current Grid.
+    /// needs. Stillness is counted first. An unfired, non-self-blend mark on the closing boundary has
+    /// priority and is scheduled at boundary-minus-Runway. Otherwise a fired mark, self-blend, or Stillness
+    /// goes through <see cref="Director.DecideOffPlanCue"/> at most once, with a taken Cue scheduled toward
+    /// that same closing boundary.
     /// </summary>
     /// <param name="beat">The on-air beat observed when this Grid starts.</param>
     /// <param name="gridBeat">The current one-based Grid position.</param>
     private void Think(int beat, int gridBeat)
     {
+        var loopRolling = controller.beatManager.Loop.Rolling;
         if (!hasBaseline)
         {
             // The first think has no whole Grid behind it, so there is nothing to count yet.
@@ -456,7 +457,7 @@ public sealed class Switcher
         // unseen" — without it a silent think and a skipped think read identically (2026-07-31 session).
         var seenCandidate = candidate;
         var scheduledKind = scheduledMark == null ? CueSource.OffPlan : CueSource.Plan;
-        Trace(() => $"SWITCHER_THINK beat={beat} stillGrids={stillGrids} candidate={(seenCandidate == null ? "none" : seenCandidate.Fired ? $"{seenCandidate.Beat}:fired" : seenCandidate.Beat.ToString())} scheduled={(scheduledFireBeat == null ? "none" : $"{scheduledKind}:{scheduledBoundaryBeat}")} onWall={FormatEffect(TransitionSourceEffectIndex)} toward={FormatEffect(TransitionTargetEffectIndex)}");
+        Trace(() => $"SWITCHER_THINK beat={beat} loopRolling={loopRolling} stillGrids={stillGrids} candidate={(seenCandidate == null ? "none" : seenCandidate.Fired ? $"{seenCandidate.Beat}:fired" : seenCandidate.Beat.ToString())} scheduled={(scheduledFireBeat == null ? "none" : $"{scheduledKind}:{scheduledBoundaryBeat}")} onWall={FormatEffect(TransitionSourceEffectIndex)} toward={FormatEffect(TransitionTargetEffectIndex)}");
 
         OffPlanAnomaly? anomaly = null;
 
@@ -464,14 +465,12 @@ public sealed class Switcher
         {
             if (candidate.Fired)
             {
-                // The DJ looped back over spent plan; a fired mark is never performed again (ADR-0011).
+                // A fired mark is permanently checked off and can only enter the doorway.
                 anomaly = OffPlanAnomaly.FiredMark;
             }
             else if (candidate.EffectIndex == TransitionTargetEffectIndex)
             {
-                // The mark blends into the Effect the wall is showing or already moving toward. A built
-                // sheet never writes a Transition from an Effect into itself, so only a sheet swap or a
-                // loop can line these up.
+                // A mark that blends into the Effect already on the wall can only enter the doorway.
                 anomaly = OffPlanAnomaly.SelfBlend;
             }
             else
@@ -490,26 +489,22 @@ public sealed class Switcher
             }
         }
 
-        // Three whole Grids since the last fire and nothing scheduled or fired to feed this one: Stillness
-        // is up, so the fourth Grid asks and the Ceiling makes the answer a take. Only sheet swaps and loops
-        // push the wall here — a Director-built sheet never violates Stillness on its own, because its widest
-        // legal gap puts the closing mark's fire inside this Grid.
+        // Three whole Grids since the last fire and nothing scheduled to feed this one: the fourth Grid
+        // asks. A planned unfired mark always wins because it was scheduled above.
         if (anomaly == null
             && stillGrids >= TrackCueSheet.MaximumGapGrids - 1
-            && scheduledFireBeat == null
-            && !firedSinceThink)
+            && scheduledFireBeat == null)
         {
             anomaly = OffPlanAnomaly.StillnessUp;
         }
 
         // Every anomaly goes through one doorway, at most once per think: the Switcher reports what it
         // saw and the Director decides — ride through, or a fresh Off-Plan Cue scheduled toward this
-        // Grid's closing boundary. The answer leaves the sheet exactly as it was; an anomalous mark is
-        // never spent by it.
+        // Grid's closing boundary. The anomaly kind is diagnostic only.
         if (anomaly is { } seen)
         {
             // The ask is counted here, before the value is built, so constructing a Sighting stays pure
-            // data — the stillness and ask counters never leave the Switcher; the Sighting carries snapshots.
+            // data — the Stillness and ask counters never leave the Switcher; the Sighting carries snapshots.
             offPlanAsks++;
             var sighting = new OffPlanSighting(
                 seen,
@@ -523,7 +518,8 @@ public sealed class Switcher
             lastOffPlanAnswer = answer;
             if (answer.Perform)
             {
-                var boundaryBeat = beat + TrackCueSheet.GridBeats - gridBeat + 1;
+                // TODO: TrackCueSheet does not expose the current Grid's closing boundary when no mark occupies it.
+                var boundaryBeat = candidate?.Beat ?? beat + TrackCueSheet.GridBeats - gridBeat + 1;
                 ScheduleAct(beat, boundaryBeat, answer, null);
             }
         }
@@ -726,8 +722,7 @@ public sealed class Switcher
         lastCueSource = source;
         lastCueBoundaryBeat = boundaryBeat;
 
-        // Any performed cue, whatever its source, ends the wall's still spell; the next think's
-        // stillness update consumes this.
+        // A performed cue is the only Stillness reset cause; the next think consumes this fact.
         firedSinceThink = true;
 
         // A synced cue is denominated in beats, so its seconds come off the live clock rather than the

@@ -1,6 +1,6 @@
 // Seam tests for the pure track-scoped Cue Sheet builder (TrackCueSheet.Build). Synthetic structures and
 // descriptor catalogs go in; the built sheet's constraints, determinism, and fairness come out. Tests assert
-// caller-visible guarantees — the gap ceiling, Anchor clearance, blend fit, determinism, bag fairness —
+// caller-visible guarantees — four-Grid spacing, Anchor clearance, blend fit, determinism, bag fairness —
 // never the private walk order or bag internals.
 
 #nullable enable
@@ -17,8 +17,6 @@ using NUnit.Framework;
 public sealed class TrackCueSheetTests
 {
     private const int GridBeats = TrackCueSheet.GridBeats;
-    private const int MaximumGapBeats = TrackCueSheet.MaximumGapBeats;
-
     private static readonly int[] Generations = { 1, 2, 3, 7, 42, 100, 9999 };
     private static readonly int[] Players = { 1, 2, 3, 4, 5, 6 };
 
@@ -37,10 +35,14 @@ public sealed class TrackCueSheetTests
             Phrase(434, 456, PhraseType.Outro));                           // irregular length 23
     }
 
+    /// <summary>
+    /// Builds plans over regular, short, and anchored Phrase maps and verifies that no two consecutive
+    /// Cue Marks span more than four actual phrase-relative Grids, regardless of their beat lengths.
+    /// </summary>
     [Test]
-    public void ConsecutiveMarkGapsNeverExceedTheCeiling()
+    public void ConsecutiveMarksAreAtMostFourActualGridsApart()
     {
-        // Never more than 64 beats without a transition, whatever the seed and however the Anchors fell.
+        // Never more than four actual Grids without a transition, whatever the seed and however the Anchors fell.
         // There is deliberately no lower-bound assertion: the model has no fixed spacing floor — small gaps
         // are rare by cadence judgment, not forbidden by constant.
         var effects = MixedEffects();
@@ -53,11 +55,12 @@ public sealed class TrackCueSheetTests
             {
                 var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
                 var marks = sheet.Marks;
+                var boundaries = GridBoundaries(structure);
                 for (var i = 1; i < marks.Count; i++)
                 {
-                    var gap = marks[i].Beat - marks[i - 1].Beat;
-                    Assert.That(gap, Is.LessThanOrEqualTo(MaximumGapBeats),
-                        $"gen={generation} player={player}: gap {gap} above four Grids");
+                    var gapGrids = boundaries.IndexOf(marks[i].Beat) - boundaries.IndexOf(marks[i - 1].Beat);
+                    Assert.That(gapGrids, Is.LessThanOrEqualTo(TrackCueSheet.MaximumGapGrids),
+                        $"gen={generation} player={player}: gap {gapGrids} above four actual Grids");
                 }
             }
         }
@@ -155,24 +158,23 @@ public sealed class TrackCueSheetTests
     }
 
     [Test]
-    public void AnOffPlanDealIsAlwaysTakenAtTheCeiling()
+    public void AnOffPlanDealIsAlwaysTakenAtFourGrids()
     {
-        // The whole 64-beat rule reduces to this: however the earlier boundaries fell, the deal at the fourth
-        // is certain, so the wall cannot hold still past MaximumGapBeats.
+        // However the earlier boundaries fell, the deal at the fourth actual Grid is certain.
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
         for (var ask = 1; ask <= 256; ask++)
         {
             Assert.That(sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids, ask, -1, -1).Take, Is.True,
-                $"ask {ask} would hold the wall past {TrackCueSheet.MaximumGapBeats} beats");
+                $"ask {ask} would ride through the fourth Grid");
             Assert.That(sheet.DealOffPlanCueAt(81, TrackCueSheet.MaximumGapGrids + 1, ask, -1, -1).Take, Is.True,
                 "An overshot count must not wrap back into riding.");
         }
     }
 
     [Test]
-    public void BelowTheCeilingAnOffPlanDealBothRidesAndIsTaken()
+    public void BeforeFourGridsAnOffPlanDealBothRidesAndIsTaken()
     {
-        // Below the ceiling the choice is real, which is what spreads changes over one to four Grids instead of
+        // Before the fourth Grid the choice is real, which spreads changes over one to four Grids instead of
         // pinning every one of them to the fourth boundary.
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
         for (var boundaries = 1; boundaries < TrackCueSheet.MaximumGapGrids; boundaries++)
@@ -215,8 +217,8 @@ public sealed class TrackCueSheetTests
     [Test]
     public void AnOffPlanDealNeverHandsBackWhatIsAlreadyOnTheWall()
     {
-        // The freeze this closes: the ceiling fired on time and dealt the Effect already showing, so the wall
-        // transitioned to itself and the 64-beat rule was met on paper while nothing moved.
+        // An Off-Plan deal must not hand back the Effect already showing, which would transition the wall
+        // into itself while satisfying the fourth-Grid take only on paper.
         var effects = MixedEffects();
         var sheet = TrackCueSheet.Build(MixedTrack(), effects, MixedTransitions(), 7, 2);
         for (var onWall = 0; onWall < effects.Count; onWall++)
@@ -264,7 +266,7 @@ public sealed class TrackCueSheetTests
     public void TheOffPlanCardDoesNotDependOnHowLongTheWallHasHeld()
     {
         // Only whether the deal is taken reads the count; the card itself is drawn first, so one boundary's card
-        // is the same whether it is the first ask after a change or the last before the ceiling.
+        // is the same whether it is the first ask after a change or the last before the fourth Grid.
         var sheet = TrackCueSheet.Build(MixedTrack(), MixedEffects(), MixedTransitions(), 7, 2);
         var atFirstBoundary = sheet.DealOffPlanCueAt(97, gapGrids: 1, ask: 3, onWallEffectIndex: -1, movingTowardEffectIndex: -1);
         for (var boundaries = 2; boundaries <= TrackCueSheet.MaximumGapGrids; boundaries++)
@@ -310,7 +312,7 @@ public sealed class TrackCueSheetTests
         // Marks sit on Grid Boundaries and nowhere else, and the Grid restarts on every Phrase: a Boundary
         // is a Grid multiple from the start of the Phrase *containing* the mark — never a multiple of
         // sixteen counted from track beat one, and a Phrase shorter than sixteen beats simply makes a short
-        // Grid. The lattice is derived independently here so alignment to some other Phrase cannot pass.
+        // Grid. The boundaries are derived independently here so alignment to some other Phrase cannot pass.
         // Marks must also be strictly ascending.
         var effects = MixedEffects();
         var transitions = MixedTransitions();
@@ -321,10 +323,10 @@ public sealed class TrackCueSheetTests
             foreach (var player in Players)
             {
                 var sheet = TrackCueSheet.Build(structure, effects, transitions, generation, player);
-                var lattice = GridBoundaryLattice(structure);
+                var boundaries = GridBoundaries(structure);
                 foreach (var mark in sheet.Marks)
                 {
-                    Assert.That(lattice.Contains(mark.Beat), Is.True,
+                    Assert.That(boundaries.Contains(mark.Beat), Is.True,
                         $"gen={generation} player={player}: the mark at beat {mark.Beat} "
                         + "is not a Grid Boundary of the Phrase containing it");
                 }
@@ -703,7 +705,7 @@ public sealed class TrackCueSheetTests
     }
 
     /// <summary>
-    /// A run of short irregular Phrases, so the boundary lattice carries many short Grids and consecutive
+    /// A run of short irregular Phrases, so the ordered boundaries include many short Grids and consecutive
     /// candidates sit well under sixteen beats apart. The stress fixture for blend fit: with no fixed
     /// spacing floor, marks may land close together and every dealt transition still has to fit its slot.
     /// </summary>
@@ -722,9 +724,8 @@ public sealed class TrackCueSheetTests
     }
 
     /// <summary>
-    /// Two drop Anchors set deep enough in the track that each has a preceding carrier mark: at least
-    /// <see cref="MaximumGapBeats"/> of music ahead of the landing, where the cadence ceiling guarantees a
-    /// mark — the Effect that will be on the wall when the moment hits.
+    /// Two drop Anchors set deep enough in the track that the four-Grid planning cadence can place a
+    /// preceding carrier mark — the Effect that will be on the wall when the moment hits.
     /// </summary>
     private static StructureValues TwoDropTrack()
     {
@@ -817,9 +818,9 @@ public sealed class TrackCueSheetTests
     /// Every Grid Boundary of a structure, derived independently of the builder: each Phrase contributes
     /// its start and every sixteenth beat after that still falls inside the Phrase.
     /// </summary>
-    private static HashSet<int> GridBoundaryLattice(StructureValues structure)
+    private static List<int> GridBoundaries(StructureValues structure)
     {
-        var boundaries = new HashSet<int>();
+        var boundaries = new List<int>();
         foreach (var phrase in structure.Phrases)
         {
             var length = phrase.EndBeat - phrase.StartBeat + 1;

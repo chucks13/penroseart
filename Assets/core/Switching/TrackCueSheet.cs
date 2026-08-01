@@ -76,16 +76,16 @@ public sealed class CuePlanMark
     public int TransitionIndex { get; }
 
     /// <summary>
-    /// The beat this cue's Transition left on, or -1 while the cue is still pending. Set once by the Switcher
+    /// The beat this cue's Transition left on, or -1 while the cue is still pending. Recorded by the Switcher
     /// when it fires. The beat is recorded rather than a bare flag because a cue's Runway start is not fixed by
-    /// the plan alone — an override Transition with a different Runway leaves on a different beat — and only the
-    /// beat it actually left on identifies the one place a loop can bring the playhead back over it.
+    /// the plan alone — an override Transition with a different Runway leaves on a different beat — and the
+    /// recorded beat identifies exactly when the permanent check-off was set.
     /// </summary>
     public int FiredAtBeat { get; set; } = -1;
 
     /// <summary>
-    /// Whether this cue has been performed. A DJ looping brings the playhead back over a fired mark, which is
-    /// how the Switcher knows to ask for a fresh cue instead of playing the same one twice.
+    /// Whether this cue has been performed. Once set, this check-off is permanent for the life of the sheet:
+    /// re-crossing the mark never replays it, and any Off-Plan Cue lives outside the sheet.
     /// </summary>
     public bool Fired => FiredAtBeat >= 0;
 }
@@ -133,10 +133,10 @@ public readonly struct AnchorResolution
 /// This is the track-scoped "Cue Sheet" of the track-cue-sheets spec (ADR-0010): it superseded and replaced
 /// the phrase-scoped index of empty Cue Marks over a single Phrase.
 ///
-/// Mark placement is one walk over the whole track's Grid Boundaries, counted in beats. Each
-/// candidate boundary is taken with a probability that rises with the gap behind it, so changes spread
-/// irregularly instead of clustering; a mark is never forced onto a boundary except to keep the
-/// <see cref="MaximumGapBeats"/> ceiling or to put a capable Effect on the wall ahead of an Anchor. There
+/// Mark placement is one walk over the whole track's Grid Boundaries. Each
+/// candidate boundary is taken with a probability that rises with the actual Grid count behind it, so
+/// changes spread irregularly instead of clustering; a mark is never forced onto a boundary except to keep
+/// the <see cref="MaximumGapGrids"/> limit or to put a capable Effect on the wall ahead of an Anchor. There
 /// is no fixed spacing floor: the only lower bound on a gap is that the catalog's transitions must fit the
 /// space they are given, so no two blends can ever overlap. Phrase ends carry no special status — a Phrase
 /// boundary begins a Grid, so it is simply one more candidate. Around each owned Anchor the landing
@@ -148,21 +148,15 @@ public readonly struct TrackCueSheet
     /// <summary>Beats in one Grid — the 16-beat cycle every Cue Mark lands on.</summary>
     public const int GridBeats = 16;
 
-    /// <summary>Largest legal gap between consecutive Cue Marks, in beats (four Grids).</summary>
-    public const int MaximumGapBeats = 64;
-
-    /// <summary>
-    /// The largest legal gap counted in Grid Boundaries rather than beats — how the Switcher measures it,
-    /// because a loop re-crosses the same beat numbers and only boundary crossings measure elapsed music.
-    /// </summary>
-    public const int MaximumGapGrids = MaximumGapBeats / GridBeats;
+    /// <summary>Largest legal gap between consecutive Cue Marks, measured in actual Grids.</summary>
+    public const int MaximumGapGrids = 4;
 
     /// <summary>
     /// The chance, as a percentage, that a candidate Grid Boundary becomes a Cue Mark, indexed by how many
-    /// whole Grids of music sit behind it (under two Grids at index zero, four at index three). Rising rather
+    /// actual Grids of music sit behind it (one Grid at index zero, four at index three). Rising rather
     /// than uniform is the anti-clustering rule: a boundary shortly after the last change is nearly always
-    /// let past, while the fourth Grid is certain, which caps every gap at <see cref="MaximumGapBeats"/>
-    /// and puts the mean near 43 beats.
+    /// let past, while the fourth Grid is certain, which caps every consecutive planned gap at
+    /// <see cref="MaximumGapGrids"/> actual Grids.
     /// </summary>
     private static readonly int[] TakeChancePercent = { 8, 35, 65, 100 };
 
@@ -235,14 +229,13 @@ public readonly struct TrackCueSheet
     public int PlayerNumber { get; }
 
     /// <summary>
-    /// Deals what to do at a Grid Boundary the plan cannot cover: a fresh Effect and Transition, and whether
-    /// to take them here or ride through to the next boundary. Wanted whenever the plan has nothing left to
-    /// give at the playhead — the DJ has looped back over a cue already performed, or an inspection freeze has
-    /// just ended. Taking is dealt so changes land evenly one to four Grids apart, and is certain once
-    /// <paramref name="gapGrids"/> reaches <see cref="MaximumGapGrids"/>, which is what makes holding the wall
-    /// still past <see cref="MaximumGapBeats"/> beats impossible. The card is seeded from the sheet's own seed
-    /// pair, the boundary, and <paramref name="ask"/> only, so it is reproducible and independent of how long
-    /// the wall has held. Leaves the sheet untouched. Valid on any <see cref="Build"/> sheet.
+    /// Deals a fresh Effect and Transition for an anomaly at a Grid Boundary, and whether to take them here or
+    /// ride through to the next boundary. Taking follows the same one-to-four-Grid cadence as planning and is
+    /// certain once <paramref name="gapGrids"/> reaches <see cref="MaximumGapGrids"/>. This Off-Plan Cue does
+    /// not spend a Cue Mark or change any fired check-off. The card is seeded from the sheet's own seed pair,
+    /// the boundary, and
+    /// <paramref name="ask"/> only, so it is reproducible and independent of prior asks. Leaves the sheet
+    /// untouched. Valid on any <see cref="Build"/> sheet.
     /// </summary>
     /// <param name="boundaryBeat">Absolute Grid Boundary beat being asked about.</param>
     /// <param name="gapGrids">
@@ -275,10 +268,9 @@ public readonly struct TrackCueSheet
         var effectIndex = effectBag.DealPreferred(card => card != onWallEffectIndex && card != movingTowardEffectIndex);
         var transitionIndex = transitionBag.DealTop();
 
-        // The same rising cadence the plan walk uses, so an off-plan cue spreads exactly like a
-        // planned one instead of carrying its own rule. Drawn after the cards so the card never depends on
-        // how long the wall has held.
-        var take = TakeBoundary(gapGrids * GridBeats, rng);
+        // The same Grid-counted cadence the plan walk uses. Drawn after the cards so the card never
+        // depends on how long the wall has held.
+        var take = TakeBoundary(gapGrids, rng);
         return (effectIndex, transitionIndex, take);
     }
 
@@ -356,7 +348,7 @@ public readonly struct TrackCueSheet
         var anchors = CollectAnchors(phrases);
         var owned = OwnableAnchors(anchors, boundaries, startBeat, effects, smallRunway, smallTail);
         var candidates = WithoutClearanceZones(boundaries, owned, smallRunway, smallTail);
-        var markBeats = WalkTrack(candidates, owned, startBeat, smallRunway, smallTail, rng);
+        var markBeats = WalkTrack(candidates, boundaries, owned, startBeat, smallRunway, smallTail, rng);
         return Deal(
             markBeats, owned, effects, transitions, effectBag, transitionBag,
             startBeat, smallRunway, structureGeneration, playerNumber, salt);
@@ -407,7 +399,7 @@ public readonly struct TrackCueSheet
     /// <summary>
     /// Decides which Anchors the plan can own under the single Anchor treatment: the catalog holds a capable
     /// Effect, and a carrier Cue Mark can exist before the landing — either because an earlier owned Anchor
-    /// already forces one, or because the lattice offers a boundary that can legally be the first mark and
+    /// already forces one, or because a candidate boundary can legally be the first mark and
     /// still clears the moment. An Anchor that cannot be owned is dropped here: no resolution is recorded and
     /// its landing boundary goes back to being an ordinary candidate.
     /// </summary>
@@ -457,9 +449,9 @@ public readonly struct TrackCueSheet
     }
 
     /// <summary>
-    /// Withholds each owned Anchor's clearance zone from the candidate lattice: the landing boundary itself
-    /// (no Cue Mark sits on it) and any boundary so close that even the shortest card's Tail or Runway would
-    /// cross the moment. What remains is every boundary a mark may legally land on.
+    /// Withholds each owned Anchor's clearance zone from the candidate Grid Boundaries: the landing boundary
+    /// itself (no Cue Mark sits on it) and any boundary so close that even the shortest card's Tail or Runway
+    /// would cross the moment. What remains is every boundary a mark may legally land on.
     /// </summary>
     private static List<int> WithoutClearanceZones(
         List<int> boundaries,
@@ -495,16 +487,14 @@ public readonly struct TrackCueSheet
     }
 
     /// <summary>
-    /// Walks the candidate boundaries once, in beats, taking each with a chance that rises with the gap
+    /// Walks the candidate boundaries once, taking each with a chance that rises with the actual Grid count
     /// behind it. Nothing resets at a Phrase seam, and a boundary is forced only twice over: when skipping it
-    /// would leave the next candidate past the <see cref="MaximumGapBeats"/> ceiling, and when it is the last
-    /// chance to put a mark — the Effect that will be on the wall — ahead of the earliest owned Anchor. A
-    /// boundary whose gap is too small for the shortest card to fit is never taken, which is the only lower
-    /// bound on spacing: fit, not a fixed floor. Fit outranks the ceiling: on a degenerate lattice whose
-    /// usable boundaries sit further apart than the ceiling allows, the gap runs long rather than taking a
-    /// boundary no card can serve — the Switcher's Stillness check owns that case at execution time.
+    /// would leave the next candidate past <see cref="MaximumGapGrids"/>, and when it is the last chance to put
+    /// the Effect that will be on the wall ahead of the earliest owned Anchor. A boundary whose beat gap is
+    /// too small for the shortest card to fit is never taken; fit is the only lower bound on spacing.
     /// </summary>
-    /// <param name="candidates">The boundary lattice with every clearance zone already withheld.</param>
+    /// <param name="candidates">The candidate Grid Boundaries with every clearance zone already withheld.</param>
+    /// <param name="boundaries">Every actual phrase-relative Grid Boundary, ascending.</param>
     /// <param name="owned">The owned Anchors, ascending by landing beat.</param>
     /// <param name="startBeat">The track's opening downbeat; the first blend may not start before it.</param>
     /// <param name="smallRunway">Runway of the catalog's shortest blend.</param>
@@ -513,6 +503,7 @@ public readonly struct TrackCueSheet
     /// <returns>Every placed mark beat, ascending.</returns>
     private static List<int> WalkTrack(
         List<int> candidates,
+        List<int> boundaries,
         List<Anchor> owned,
         int startBeat,
         int smallRunway,
@@ -536,25 +527,28 @@ public readonly struct TrackCueSheet
 
             // Fit legality: the shortest card must fit here. The first mark only needs its Runway to clear
             // the opening downbeat; a later mark also needs to clear the previous mark's Tail.
-            var gap = boundary - lastMark;
-            var fits = marks.Count == 0 ? gap >= smallRunway : gap >= smallRunway + smallTail + 1;
+            var gapBeats = boundary - lastMark;
+            var fits = marks.Count == 0 ? gapBeats >= smallRunway : gapBeats >= smallRunway + smallTail + 1;
             if (!fits)
             {
                 continue;
             }
 
             var next = i + 1 < candidates.Count ? candidates[i + 1] : int.MaxValue;
+            var lastMarkGrid = boundaries.IndexOf(lastMark);
+            var boundaryGrid = boundaries.IndexOf(boundary);
+            var gapGrids = boundaryGrid - lastMarkGrid;
 
             // The last chance to cast the Effect that will be on the wall at the earliest Anchor: with no
             // mark yet and no further candidate before the landing, this boundary carries the moment.
             var mustCarry = marks.Count == 0 && boundary < earliestLanding && next > earliestLanding;
 
-            // The ceiling is enforced against the *next* candidate, not this one: candidates are not evenly
-            // spaced (short Grids, withheld clearance zones), so the last boundary under the ceiling has to
-            // be taken while it is still under it.
-            var lastChance = next != int.MaxValue && next - lastMark > MaximumGapBeats;
+            // Candidates may skip actual Grids around Anchors, so take the last available boundary before
+            // the next candidate would cross the four-Grid limit.
+            var lastChance = next != int.MaxValue
+                && boundaries.IndexOf(next) - lastMarkGrid > MaximumGapGrids;
 
-            if (!mustCarry && !lastChance && !TakeBoundary(gap, rng))
+            if (!mustCarry && !lastChance && !TakeBoundary(gapGrids, rng))
             {
                 continue;
             }
@@ -567,32 +561,21 @@ public readonly struct TrackCueSheet
     }
 
     /// <summary>
-    /// Whether a candidate Grid Boundary becomes a Cue Mark, given the beats of music behind it. At
-    /// <see cref="MaximumGapBeats"/> the answer is always yes; below it the chance rises with the gap
-    /// (<see cref="TakeChancePercent"/>), with everything under two Grids sharing the lowest band — small
-    /// gaps are rare by judgment, not forbidden by floor. Consumes a roll only when the answer is open.
+    /// Whether a candidate Grid Boundary becomes a Cue Mark, given the actual Grids behind it. At
+    /// <see cref="MaximumGapGrids"/> the answer is always yes; below it the chance rises with the gap
+    /// (<see cref="TakeChancePercent"/>). Small gaps are rare by judgment, not forbidden by floor.
+    /// Consumes a roll only when the answer is open.
     /// </summary>
-    /// <param name="gapBeats">Beats between the last placed mark and this boundary.</param>
+    /// <param name="gapGrids">Actual Grids between the last placed mark and this boundary.</param>
     /// <param name="rng">The roll stream to draw from.</param>
-    private static bool TakeBoundary(int gapBeats, Rng rng)
+    private static bool TakeBoundary(int gapGrids, Rng rng)
     {
-        if (gapBeats >= MaximumGapBeats)
+        if (gapGrids >= MaximumGapGrids)
         {
             return true;
         }
 
-        var index = gapBeats / GridBeats - 1;
-        if (index < 0)
-        {
-            index = 0;
-        }
-
-        if (index >= TakeChancePercent.Length)
-        {
-            index = TakeChancePercent.Length - 1;
-        }
-
-        return rng.Bounded(100) < TakeChancePercent[index];
+        return rng.Bounded(100) < TakeChancePercent[gapGrids - 1];
     }
 
     /// <summary>
@@ -820,7 +803,7 @@ public readonly struct TrackCueSheet
         /// <summary>
         /// Folds two further dimensions into the seed for an off-plan deterministic deal (the boundary beat
         /// and which ask it is). A distinct stream from the two-argument build seed, so the
-        /// off-plan deal never disturbs the sheet's own roll, and distinct per ask, so a loop asking again at
+        /// off-plan deal never disturbs the sheet's own roll, and distinct per ask, so the doorway asking again at
         /// the same boundary is not handed the same answer.
         /// </summary>
         public Rng(int first, int second, int third, int fourth)
