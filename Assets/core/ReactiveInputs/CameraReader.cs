@@ -12,7 +12,6 @@ public class CameraReader
 {
     WebCamTexture webcamTexture;
 
-    private int pingstate = 0;
     private float expandMin, expandMax;
     protected static int width = -1;
     protected static int height = -1;
@@ -29,8 +28,9 @@ public class CameraReader
     private int[] effects = { 0, 1, -1 };
     private float[] defaults = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0.5f };
     private float[] settings = new float[10] { 0.25f, 0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0.5f };
-    private string[] knobs = new string[10] { "/2/fader1", "/2/fader2", "/2/fader3", "/2/fader4", "/2/fader5", "/2/fader6", "/2/fader7", "/2/fader8", "/2/fader9", "/2/rotary1", };
-    private string[] resets = new string[8] { "/2/push1", "/2/push2", "/2/push3", "/2/push4", "/2/push5", "/2/push6", "/2/push7", "/2/push8" };
+
+    /// <summary>How many leading <see cref="settings"/> entries <see cref="Init"/> restores from <see cref="defaults"/>.</summary>
+    private const int ResettableSettingCount = 8;
 
     /// <summary>
     /// Called ever frame to update the debug UI text element 
@@ -39,14 +39,6 @@ public class CameraReader
     /// <summary>
     /// Called once when effect is created
     /// </summary>              
-
-    public OscMessage makemessage(string address, float value)
-    {
-        OscMessage message = new OscMessage();
-        message.address = address;
-        message.values.Add(value);
-        return message;
-    }
 
     /// <summary>
     /// Allocates camera/sample buffers, discovers webcams, requests permission, and starts the active WebCamTexture.
@@ -59,7 +51,7 @@ public class CameraReader
         // create the 2d buffer
         screenBuffer = new Color[width * height];
 
-        for (int i = 0; i < resets.Length; i++)     // resets
+        for (int i = 0; i < ResettableSettingCount; i++)
         {
             settings[i] = defaults[i];
         }
@@ -290,114 +282,6 @@ public class CameraReader
     public class Settings
     {
     };
-
-    /// <summary>
-    /// Selects a camera by OSC button state.
-    /// </summary>
-    private void selectCamera(OscMessage om, int n)
-    {
-        if (om.GetInt(0) == 1)
-        {
-            WebCamDevice[] devices = WebCamTexture.devices;
-            if (n < devices.Length)
-            {
-                webcamTexture.Stop();
-                webcamTexture.deviceName = devices[n].name;
-                webcamTexture.Play();
-
-            }
-        }
-    }
-    /// <summary>
-    /// Handles OSC page-2 controls for camera overlay parameters and camera selection.
-    /// </summary>
-    public void OSCpage2(OscMessage om, ArrayList oms)
-    {
-        for (int i = 0; i < resets.Length; i++)     // resets
-        {
-            if (om.address == resets[i])
-            {
-                settings[i] = defaults[i];
-                oms.Add(makemessage(knobs[i], settings[i]));
-                return;
-            }
-        }
-        for (int i = 0; i < knobs.Length; i++)     // knobs
-        {
-            if (om.address == knobs[i])
-            {
-                settings[i] = om.GetFloat(0);
-                return;
-            }
-        }
-
-        if (om.address == "/2/nav4")       // switch cameras
-        {
-            selectCamera(om, 0);
-            return;
-        }
-
-
-        if (om.address == "/2/nav5")       // switch cameras
-        {
-            selectCamera(om, 1);
-            return;
-        }
-
-
-        if (om.address.StartsWith("/6/toggle"))
-        {
-            int button = int.Parse(om.address.Substring(9));
-            button -= 33;
-            int effect = button / 8;
-            int setting = button % 8;
-            String answer = "/6/toggle" + (33 + (effect * 8) + effects[effect]);
-            oms.Add(makemessage(answer, 0));
-            effects[effect] = setting;
-            answer = "/6/toggle" + (33 + (effect * 8) + effects[effect]);
-            oms.Add(makemessage(answer, 1));
-            return;
-        }
-        if (om.address == "/2")         // init page
-        {
-            for (int i = 0; i < knobs.Length; i++)
-                oms.Add(makemessage(knobs[i], settings[i]));
-            for (int i = 0; i < 3; i++)
-                oms.Add(makemessage("/6/toggle" + (33 + (i * 8) + effects[i]), 1.0f));
-            return;
-        }
-        if (om.address == "/ping")
-        {
-            if (pingstate < 10)
-            {
-                oms.Add(makemessage(knobs[pingstate], settings[pingstate]));
-
-            }
-            else
-            {
-                int button = pingstate - 10;
-                int row = button / 8;
-                int column = button % 8;
-                bool state = effects[row] == column;
-                oms.Add(makemessage("/6/toggle" + (33 + button), state ? 1f : 0f));
-
-            }
-
-
-            pingstate++;
-            pingstate %= (10 + 24);
-
-        }
-        return;
-    }
-
-    /// <summary>
-    /// OSC entry point called by Controller when camera overlay is enabled.
-    /// </summary>
-    public void OSCHandler(OscMessage om, ArrayList oms)
-    {
-        OSCpage2(om, oms);
-    }
 
     /// <summary>
     /// Enumerates available webcam devices and updates the camera count.

@@ -362,8 +362,21 @@ public class Controller : Singleton<Controller>
     // OSC, frame timing, and private frame state
     // ---------------------------------------------------------------------
 
-    /// <summary>Legacy TouchOSC reader component added to the Controller GameObject.</summary>
-    private OSCReader osc;
+    /// <summary>TouchOSC control-surface transport component added to the Controller GameObject.</summary>
+    private TouchOscSurface touchOsc;
+
+    /// <summary>The last grid cell, which flips the effect bank instead of selecting an effect.</summary>
+    private static int KeyboardBankToggleButton => TouchOscSurface.GridCellCount - 1;
+
+    /// <summary>How many grid cells select an effect. Doubles as the bank stride, so the two cannot drift.</summary>
+    private static int SelectableGridCells => TouchOscSurface.GridCellCount - 1;
+
+    // Last values pushed to the control surface. Feedback is sent only on change, so these are the
+    // record of what the surface already believes.
+    private byte lastSentBrightness;
+    private bool lastSentResetActive;
+    private int lastSentLitCell = -1;
+    private int lastSentKeyboardBase = -1;
 
     /// <summary>RaveSystem OSC receiver backed by the new RaveSystem.Osc stack.</summary>
     private RaveOscReceiver raveOsc;
@@ -402,9 +415,6 @@ public class Controller : Singleton<Controller>
 
     /// <summary>Last sampled Time.frameCount used to calculate <see cref="fps"/>.</summary>
     private float lastCount;
-
-    /// <summary>Current effect-button index used to stream OSC button state over repeated pings.</summary>
-    private int pingIndex;
 
     /// <summary>
     /// Samples frame count once per second for the debug display.
@@ -480,7 +490,6 @@ public class Controller : Singleton<Controller>
             //        effects[i].initialIndex = i;
         }
         effectDeck = initDeck(effects.Length);
-        pingIndex = 0;
 
         Debug.Log($"Effects ({effects.Length}):\n{FormatCatalog(factory.Names)}");
 
@@ -844,97 +853,146 @@ public class Controller : Singleton<Controller>
         }
     }
     /// <summary>
-    /// Handles page-1 OSC controls for brightness, effect jumps, and runtime UI feedback.
+    /// Drains queued TouchOSC operator intents and refreshes the control surface for this frame.
     /// </summary>
-    public void OSCpage1(OscMessage om, ArrayList oms)
+    /// <remarks>
+    /// Each intent is applied and acknowledged in its own datagram, so a press is confirmed individually.
+    /// The per-frame refresh then reports brightness and advances the button matrix by a single cell, which
+    /// streams a large effect catalog to the surface instead of blasting it in one packet.
+    /// </remarks>
+    private void PumpTouchOsc()
     {
-        if (om.address == "/1/vscroll1")       // brightness
+        while (touchOsc.TryDequeue(out TouchOscCommand command))
         {
-            brightness = (byte)om.GetFloat(0).Lerp(255f, 0f);
+            ApplyTouchOscCommand(command);
+            OSCtext = command.Text;
+            OSCtimer = 20;
         }
-        if (om.address.StartsWith("/1/nav1"))
+
+        // A surface that has only just been discovered knows nothing about the wall, so it is owed every
+        // value at once. Otherwise only differences go out, which is why this is not sent every frame.
+        bool refreshAll = touchOsc.ConsumePeerChanged();
+
+        if (refreshAll || brightness != lastSentBrightness)
         {
-            if (om.GetInt(0) == 1)
+            touchOsc.QueueBrightness(1f - (float)brightness / 255f);
+            lastSentBrightness = brightness;
+        }
+
+        bool resetActive = CurrentEffectIndexForSurface() >= effects.Length;
+        if ((refreshAll || resetActive != lastSentResetActive) && resetActive)
+        {
+            touchOsc.QueueReset(1f - (float)brightness / 255f);
+        }
+        lastSentResetActive = resetActive;
+
+        RefreshGrid(refreshAll);
+        touchOsc.FlushReplies();
+    }
+
+    /// <summary>
+    /// Keeps the surface's grid lamps matching the live effect, sending only the cells that changed.
+    /// </summary>
+    /// <param name="refreshAll">
+    /// When true every cell is restated, which a newly discovered surface or a bank flip requires because
+    /// the surface's whole grid changes meaning at once.
+    /// </param>
+    private void RefreshGrid(bool refreshAll)
+    {
+        int litCell = TouchOscCellForEffect(CurrentEffectIndexForSurface());
+        refreshAll |= keyboardBase != lastSentKeyboardBase;
+
+        if (refreshAll)
+        {
+            for (int cell = 0; cell < SelectableGridCells; cell++)
+            {
+                touchOsc.QueueButtonState(cell, cell == litCell);
+            }
+        }
+        else if (litCell != lastSentLitCell)
+        {
+            if (lastSentLitCell >= 0)
+                touchOsc.QueueButtonState(lastSentLitCell, false);
+            if (litCell >= 0)
+                touchOsc.QueueButtonState(litCell, true);
+        }
+
+        lastSentLitCell = litCell;
+        lastSentKeyboardBase = keyboardBase;
+    }
+
+    /// <summary>
+    /// Maps a catalog index to the grid cell showing it, or <c>-1</c> when it belongs to another bank.
+    /// </summary>
+    private int TouchOscCellForEffect(int effectIndex)
+    {
+        int cell = effectIndex - (keyboardBase * SelectableGridCells);
+        return cell >= 0 && cell < SelectableGridCells ? cell : -1;
+    }
+
+    /// <summary>Applies one decoded TouchOSC operator intent to runtime state.</summary>
+    private void ApplyTouchOscCommand(TouchOscCommand command)
+    {
+        switch (command.Kind)
+        {
+            case TouchOscCommandKind.Brightness:
+                brightness = (byte)command.Value.Lerp(255f, 0f);
+                break;
+
+            case TouchOscCommandKind.ToggleNye:
                 NYE = !NYE;
-        }
-        if (om.address.StartsWith("/1/push"))
-        {
-            if (om.GetInt(0) == 1)
-            {
-                int button = int.Parse(om.address.Substring(7)) - 1;
-                if (button == 23)
-                {
-                    keyboardBase = 1 - keyboardBase;
-                }
-                else
-                {
-                    int i = (button + keyboardBase);
-                    JumpToEffect(i, effectTime);
-                    oms.Add(makemessage(om.address, 1f));
-                }
-            }
+                break;
 
-        }
-        if (om.address == "/1/hscroll1")       // period
-        {
-            float position = om.GetFloat(0);
-            if (position == 1f) effectTime = 60 * 60;
-            if (position < 0.87f) effectTime = 2 * 60;
-            if (position < 0.62f) effectTime = 10;
-            if (position < 0.37f) effectTime = 5;
-            if (position < 0.12f) effectTime = 1;
-        }
+            case TouchOscCommandKind.EffectPeriod:
+                ApplyEffectPeriod(command.Value);
+                break;
 
-        int currentEffectIndex = switcher != null ? switcher.CurrentEffectIndex : currentEffect;
-        if (currentEffectIndex >= effects.Length)
-        {
-            oms.Add(makemessage("/1/reset", 1f - (float)brightness / 255f));
-
+            case TouchOscCommandKind.PressButton:
+                ApplyGridPress(command.Button);
+                break;
         }
-        if (om.address == "/ping")
-        {
-            oms.Add(makemessage("/1/vscroll1", 1f - (float)brightness / 255f));
-            // update the current effect button
-            // stream these one at a time for the button matrix
-            if (currentEffectIndex >= 0)
-            {
-                osc.Send(makemessage("/1/push" + (pingIndex + 1), (pingIndex == currentEffectIndex) ? 1f : 0f));
-                pingIndex++;
-                pingIndex %= effects.Length;
-            }
-        }
-
     }
-
 
     /// <summary>
-    /// Root OSC router called by OSCReader for every received message.
+    /// Maps the surface's period fader to <see cref="effectTime"/>.
     /// </summary>
-    public void OscHandler(OscMessage om)
+    /// <remarks>
+    /// The bands are tested coarse-to-fine so each lower band overrides the one above it. A position in the
+    /// open interval (0.87, 1) matches no band and deliberately leaves the current period untouched.
+    /// </remarks>
+    private void ApplyEffectPeriod(float position)
     {
-        if (om.address == "/beat")
-        { }
+        if (position == 1f) effectTime = 60 * 60;
+        if (position < 0.87f) effectTime = 2 * 60;
+        if (position < 0.62f) effectTime = 10;
+        if (position < 0.37f) effectTime = 5;
+        if (position < 0.12f) effectTime = 1;
+    }
 
-        ArrayList oms = new ArrayList();        // make a list of replies
-        OSCpage1(om, oms);
-        if (useCamera)
-            cameraOverlay.OSCHandler(om, oms);
-        drum.OSCHandler(om, oms);
-        OSCtext = om.ToString();
-        OSCtimer = 20;
-        if (oms.Count > 0)                      // send any replies
-            osc.Send(oms);
-    }
     /// <summary>
-    /// Creates a single-float OSC message for replies to the control surface.
+    /// Applies a press on the surface's effect grid: the last cell flips the bank, every other cell jumps to
+    /// an effect and lights itself.
     /// </summary>
-    public OscMessage makemessage(string address, float value)
+    /// <remarks>
+    /// The bank offset is a full <see cref="SelectableGridCells"/> stride. It was previously
+    /// <c>keyboardBase</c> alone, which shifted the grid by one cell instead of one page and left the tail
+    /// of the catalog unreachable from the surface.
+    /// </remarks>
+    private void ApplyGridPress(int button)
     {
-        OscMessage message = new OscMessage();
-        message.address = address;
-        message.values.Add(value);
-        return message;
+        if (button == KeyboardBankToggleButton)
+        {
+            keyboardBase = 1 - keyboardBase;
+            return;
+        }
+
+        // No lamp is echoed here: the jump moves the live effect index, and RefreshGrid lights the cell
+        // that index maps to. One source of truth for what is lit.
+        JumpToEffect(button + (keyboardBase * SelectableGridCells), effectTime);
     }
+
+    /// <summary>The effect index the control surface should reflect: the Switcher's once it exists, else the raw field.</summary>
+    private int CurrentEffectIndexForSurface() => switcher != null ? switcher.CurrentEffectIndex : currentEffect;
 
     /// <summary>
     /// Applies a new legacy UDP/E1.31 destination address, reporting parse/setup failures to the Unity log.
@@ -965,21 +1023,6 @@ public class Controller : Singleton<Controller>
     }
     /// <summary>Updates the master display gate from the UI toggle.</summary>
     private void displayOnChange(bool isOn) { displayOn = isOn; }
-
-    /// <summary>
-    /// Sends periodic OSC state updates back to the control surface.
-    /// </summary>
-    public void OSCping()
-    {
-        ArrayList oms = new ArrayList();        // make a list of replies
-        OscMessage om = makemessage("/ping", 0);
-        OSCpage1(om, oms);
-        if (useCamera)
-            cameraOverlay.OSCHandler(om, oms);
-        drum.OSCHandler(om, oms);
-        if (oms.Count > 0)                      // send any replies
-            osc.Send(oms);
-    }
 
     /// <summary>
     /// Parses the small JSON-like response used by the PREP_CAPTURE wall status endpoint.
@@ -1408,11 +1451,10 @@ public class Controller : Singleton<Controller>
         SetupBlenders();
         setIP(IP);
 
-        // Input/overlay helpers. OSCReader is a MonoBehaviour added to this
-        // GameObject; drums and PixelReceiver are plain C# objects with their
-        // own UDP listeners.
-        osc = gameObject.AddComponent(typeof(OSCReader)) as OSCReader;
-        osc.SetAllMessageHandler(OscHandler);
+        // Input/overlay helpers. The OSC receivers are MonoBehaviours added to
+        // this GameObject; drums and PixelReceiver are plain C# objects with
+        // their own UDP listeners.
+        touchOsc = gameObject.AddComponent<TouchOscSurface>();
         raveOsc = gameObject.AddComponent<RaveOscReceiver>();
         drum = new drums();
         drum.RandomizeTime();
@@ -1683,9 +1725,9 @@ public class Controller : Singleton<Controller>
         sendUDPFrame(penrose.buffer);
 #endif
 
-        // 10. Local Unity preview and outbound OSC control-surface state.
+        // 10. Local Unity preview and the TouchOSC control-surface exchange.
         penrose.UpdateModelColors();
-        OSCping();
+        PumpTouchOsc();
 
 #if ENABLE_SERIAL
         if (serial != null) renderDebugText += serial.GetDebugInfo();

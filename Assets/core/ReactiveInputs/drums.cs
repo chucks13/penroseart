@@ -246,43 +246,6 @@ public class drums
         }
     }
 
-    /// <summary>
-    /// Handles OSC page-3 drum controls and appends any replies to <paramref name="oms"/>.
-    /// </summary>
-    private void OSCpage3(OscMessage om, ArrayList oms)
-    {
-        if (om.address == "/disk")      // test the drums
-        {
-            ring(om.GetInt(0), 1f);
-        }
-
-        if (om.address.StartsWith("/3/toggle"))      // test the drums
-        {
-            if (om.GetInt(0) == 1)
-            {
-                int pad = int.Parse(om.address.Substring(9));
-                hit(pad - 1, 1f);
-
-            }
-        }
-        if (om.address.StartsWith("/3/rotary"))
-        {
-
-        }
-        if (om.address == "/ping")
-        {
-
-        }
-    }
-
-    /// <summary>
-    /// OSC entry point called by Controller after it handles the shared/root OSC controls.
-    /// </summary>
-    public void OSCHandler(OscMessage om, ArrayList oms)
-    {
-        OSCpage3(om, oms);
-    }
-
 }
 
 // starburst, 0,8,11,16,20
