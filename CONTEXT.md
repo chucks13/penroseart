@@ -87,7 +87,7 @@ RaveSystem's name for the analyzed phrase signal: current/next phrase labels, ac
 _Avoid_: confusing Track Phase with **Bar Phase** or the wall's **Grid**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Song Structure**:
-The ordered Phrase list created for a track when it loads — e.g. intro, up, drop, chorus, down, up, drop, down, outro — with Fills marked anywhere within its Phrases. Each player broadcasts its own Song Structure, keyed by Structure Generation; the on-air drop and fill lanes are conveniences carved off it because those moments are used so much.
+The complete ordered Phrase list created for a track when it loads — e.g. intro, up, drop, chorus, down, up, drop, down, outro — with Fills marked anywhere within its Phrases. Each player broadcasts its own Song Structure, keyed by Structure Generation; the on-air drop and fill lanes are conveniences carved off it because those moments are used so much.
 _Avoid_: treating the on-air drop/fill lanes as a separate musical source from the structure; "phrase map" or "structure phrase" as distinct concepts — the list is the Song Structure and its pieces are Phrases.
 
 **Phrase**:
@@ -106,7 +106,7 @@ _Avoid_: using the track id to detect structure change; comparing generations wi
 A short musical moment marked within a Phrase — anywhere inside it, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats` and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
 
 **Drop**:
-The climactic section of a track. A Drop is its own Phrase, and support for it lands at that Phrase's beginning. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
+The climactic section of a track. A Drop is its own Phrase and starts on that Phrase's first beat. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
 
 **Energy**:
 Intensity on one closed three-step ladder — Low, Mid, High. `BeatManager.Energy` exposes the current wire level, countdown, length, progress, derived `Trend`, and `Build()`/`Decay()`. The explicitly named next wire lane lives separately at `BeatManager.NextEnergy`. A **Waveform's** Energy is derived from its shape — how many peaks it has and how tightly they pack — computed from the notation itself.
@@ -239,7 +239,7 @@ The directive for a musical change. A Cue is not the change itself — it *trigg
 _Avoid_: "call" (collides with calling a Performer on stage); treating a Cue as the change itself; a Cue that micromanages a Performer's internal parameters.
 
 **Cue Sheet**:
-A track-scoped show plan built the moment a track's song structure arrives: every Cue Mark placed against the real Phrase map with its Effect and Transition assignment baked in. One sheet describes one track on one player, start to finish.
+A track-scoped show plan built when a track's complete Song Structure arrives. Every Cue Mark carries its baked Effect and Transition assignment.
 _Avoid_: the retired per-Phrase empty-marks sheet; treating it as a queue of pending cues; treating the sheet as something an override or an Off-Plan Cue edits.
 
 **Cue Mark**:
@@ -251,7 +251,7 @@ The Director's act of handing the Switcher the Cue Sheet now in force — the ca
 _Avoid_: cast-time selection (retired — selection happens at sheet build); casting individual Cue Marks at their Runway start (retired — that put transition timing in the Director); a lock or revocation window after casting.
 
 **Anchor**:
-A moment in a Cue Sheet that a Drop landing or Fill window owns, performed one way: a Drop/Fill-capable Effect is already on the wall, and no Transition's Runway or Tail crosses the moment — the Effect shows off, and the Director's whole contribution is casting and clearance. A Phrase's Drop and Fill markers say only *that* the Phrase carries one; where the moment sits *now* comes from the live Drop and Fill values, which the cast performer reads for itself.
+A moment in a Cue Sheet at the first beat of a Drop Phrase or at a Phrase-ending Fill. A capable Effect is already on the wall and owns the moment, and no Transition's Runway or Tail crosses it.
 _Avoid_: "Anchor treatment" (retired — there is one way to perform an Anchor, not a choice of two); scheduling any Transition whose Runway or Tail crosses the moment; treating every phrase boundary as an Anchor; resolving Anchors at cast time (retired); treating an Anchor as a plan for where a Fill begins or how long it runs.
 
 **Ride-through**:
@@ -295,8 +295,8 @@ _Avoid_: reading the Cue Log back into runtime behavior; treating a missing or f
 The override and inspection surface below is debugging and verification tooling — for testing Performers and steering inspection, never show behavior. It must never degrade the show model.
 
 **Fire-and-forget**:
-The rule governing every override and every performed move: **nothing changes a Transition once it is in flight.** A pick made after a Transition has started applies to the next move, not the current one; the move on the wall plays out as it left.
-_Avoid_: re-deciding, re-targeting, or re-timing an in-flight Transition; treating a staged pick as retroactive.
+The rule for every move started by synced automation: **nothing changes a Transition once it is in flight.** A later automated decision applies to a later move; debug commands are outside this show guarantee.
+_Avoid_: re-deciding, re-targeting, or re-timing an automated Transition in flight; treating a staged pick as retroactive.
 
 **Next Transition**:
 A staged override for the Transition of the very next Cue Mark performed: a one-shot pick that replaces exactly the next dealt card, after which the plan resumes verbatim; with Hold Selected it trumps every deal until released. Overrides mask the Cue Sheet, never edit it.
@@ -307,7 +307,7 @@ A staged override for the destination Effect of the very next Cue Mark performed
 _Avoid_: confusing the Next Effect with the currently on-wall Effect; using an effect hold to freeze the wall when the goal is to steer the next destination; mutating the sheet.
 
 **Show Now**:
-The other override, and the opposite of the staged kind: a person picks an Effect and the wall moves to it at once — a keyboard jump, an OSC button, or engaging a Held Effect. It is a performed move, not a cut, and it is off the Grid — there is no Cue Mark for it to fly toward. Fire-and-forget — the plan in force is untouched and resumes at its next unfired Cue Mark.
+The debug override that starts a move toward a selected Effect at once. It is not a cut, has no Cue Mark, and does not edit the Cue Sheet; the plan resumes at its next unfired Cue Mark.
 _Avoid_: cutting instantly to the Effect (retired); confusing it with Next Effect, which changes what the *next Cue Mark* moves toward; expecting the pick to survive the next Cue Mark (that is a Held Effect).
 
 **Held Effect**:

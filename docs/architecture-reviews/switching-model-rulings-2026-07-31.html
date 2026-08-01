@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Switching Model Rulings — PenroseArt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @media print {
+        .card { break-inside: avoid; }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 font-sans">
+    <main class="max-w-3xl mx-auto px-6 py-12 space-y-12">
+
+      <header class="space-y-3">
+        <p class="text-xs uppercase tracking-wider text-emerald-400 font-bold">Decision record · Grill session · PenroseArt</p>
+        <h1 class="text-3xl font-serif">Switching model rulings</h1>
+        <p class="text-slate-400">Hunter's decisions on the open questions from the
+          <a href="switching-model-audit-2026-07-31.html" class="text-emerald-400 underline underline-offset-4">31 July switching-model audit</a>.
+          Every audit finding is now either a ruled decision, a small fix, or closed as impossible by design.</p>
+        <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+          <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-300">31 July 2026</span>
+          <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-300">8 rulings</span>
+          <span class="px-2 py-1 rounded-full border border-emerald-700 text-emerald-300">2 code changes implied</span>
+          <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-300">Branch: refactor/off-plan-sighting</span>
+        </div>
+      </header>
+
+      <!-- Answer card -->
+      <section class="rounded-lg border-2 border-emerald-700 bg-slate-900 p-6 space-y-3 card">
+        <p class="text-xs uppercase tracking-wider text-emerald-400 font-bold">The outcome in three sentences</p>
+        <p>The architecture survives untouched: no new systems, counters, lattices, or queries.
+          Nearly every remaining audit finding closed as a <em>decision</em> — the wire is the only truth, cleverness is
+          replaced by self-healing, and several "defects" were declared impossible by design.</p>
+        <p>Exactly two code changes fall out: fix the <span class="font-mono text-sm">Tick</span> sampling bug that ignores
+          a mid-beat grid datagram, and route off-plan cues through the same scheduling path planned cues already use.</p>
+      </section>
+
+      <!-- The model -->
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">The model, in Hunter's words</h2>
+        <div class="rounded-lg border border-slate-800 bg-slate-900 p-6 card">
+          <ol class="list-decimal pl-5 space-y-2 text-slate-200">
+            <li>The Director builds a new Cue Sheet on every track load. The Switcher follows the Cue Sheet.</li>
+            <li>The Switcher thinks at the beginning of a grid and decides what happens at the end of it — 16 beats, more than enough time for any runway.</li>
+            <li>If the Switcher thinks it needs a new cue, it asks the Director. The Director decides. A cue is a cue — off-plan or planned, it lands at the boundary closing the current grid.</li>
+            <li>Once a transition starts firing, it goes through its runway and its tail. No checks, no cancellation, no replanning — because loops and resets used to double-fire everything, and fire-and-forget is what makes looping safe.</li>
+            <li>Effects and transitions are first-class citizens: they report what they support through the repertoire, and they know what to do with the music on their own.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Rulings -->
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">The rulings</h2>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 1</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: seam-source question</span>
+          </div>
+          <p class="font-bold">The wire's grid is the wall's only grid.</p>
+          <p class="text-slate-300 text-sm">The on-air <span class="font-mono">timing_grid</span> is a source of truth sent by
+            RaveSystem, which knows and understands what is happening on the network. The wall never re-derives a grid from
+            beat plus structure, and never queries the plan for boundaries. Multiple systems reinventing the same fact and
+            drifting out of sync is exactly how the codebase got into trouble before.</p>
+          <p class="text-slate-500 text-sm italic">Rejected: deriving the grid from /beat + structure; retaining a boundary list on the Cue Sheet; any second grid tracker.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 2</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit findings 1 &amp; 9</span>
+            <span class="px-2 py-1 rounded-full border border-amber-700 text-amber-300">Code change</span>
+          </div>
+          <p class="font-bold">Late observation self-heals; no compensation machinery.</p>
+          <p class="text-slate-300 text-sm">If a grid datagram is milliseconds late — or even half a second late for some
+            unknown reason — who cares: it self-heals. A late think is a correct think, and lapsed marks lapse.
+            The one real defect is ours, not the wire's: <span class="font-mono">Switcher.Tick</span> checks the grid only on
+            the first frame of each new beat, so a grid update landing mid-beat is ignored. That gets fixed so the grid lane
+            is observed on every frame.</p>
+          <p class="text-slate-500 text-sm italic">Rejected: seam-repair heuristics, retry logic, any "was that really the seam" detection.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 3</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit finding 8</span>
+          </div>
+          <p class="font-bold">Think at the grid's start decides the grid's end; the ≤16-beat window is "this grid."</p>
+          <p class="text-slate-300 text-sm">Cue marks happen at boundaries. At the beginning of a grid the Switcher checks
+            what should happen at the end of it — at most 16 beats away, more than enough time for a large runway (runway ≤ 12).
+            No boundary lookup, no plan query. The code already lets an early decision stand across re-thinks and already
+            treats a runway that cannot fit its launch grid as a traced Miss, never compressed.</p>
+          <p class="text-slate-500 text-sm italic">Accepted residual: on a short grid, an override staged after an early decision can miss that mark. Self-heals.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 4</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit finding 2</span>
+            <span class="px-2 py-1 rounded-full border border-amber-700 text-amber-300">Code change</span>
+          </div>
+          <p class="font-bold">A cue is a cue — off-plan cues schedule like planned ones.</p>
+          <p class="text-slate-300 text-sm">The Switcher sees it needs a cue, asks the Director at the beginning of the grid,
+            and if the Director gives one, it lands at the boundary closing that grid — runway on this grid, tail on the next,
+            like any other cue. The current <span class="font-mono">Perform(beat,&nbsp;beat)</span> raw-start branch, which
+            begins the blend immediately with its impact landing mid-grid, gets deleted. Stillness relief gets no special
+            immediate-start carve-out.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 5</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit finding 6</span>
+          </div>
+          <p class="font-bold">Fire-and-forget is absolute. Everything keyboard-driven is debug tooling.</p>
+          <p class="text-slate-300 text-sm">Once the Switcher starts switching, the move goes to the end — the decision
+            process continues in parallel, but the running blend is never reset or replaced by the machine. The past
+            failure mode was checks that reset and double-fired moves during loops; those checks stay dead.
+            Show&nbsp;Now, the keyboard jumps, and telnet commands are debug mechanisms: the production wall runs headless
+            on a machine with no keyboard attached. The model's guarantees describe wire-driven automation only, and
+            whatever the debug paths do mid-blend is immaterial to the show.</p>
+          <p class="text-slate-500 text-sm italic">Noted, not scheduled: Hunter's instinct that a keyboard jump should behave like Hold (pin the effect under debug) — an optional debug-tool tweak, decided if ever needed.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 6</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit finding 3</span>
+          </div>
+          <p class="font-bold">No planner change for track ends; the existing machinery already covers every edge.</p>
+          <p class="text-slate-300 text-sm">Every loaded track has a song structure divided into phrases; every phrase is
+            divided into grids (the last grid of a phrase may run short — not every phrase is a power of four). If playback
+            ever runs past the plan, the wire keeps supplying a grid (the contract's <span class="font-mono">coasting</span>
+            state), the Switcher keeps thinking, and the stillness doorway deals fresh cues. DJs switch tracks before the
+            end; if a track truly runs out and nothing plays, the OSC data goes to −1 and Standalone mode takes over — a
+            mechanism that already exists.</p>
+          <p class="text-slate-500 text-sm italic">Verification during implementation: confirm BeatManager passes a coasting grid through rather than dropping it.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 7</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit finding 4</span>
+          </div>
+          <p class="font-bold">Drops land on the first beat of their phrase. The wall ignores the rest.</p>
+          <p class="text-slate-300 text-sm">That is what a drop is: it builds up, then hits, and every grid restarts at a
+            phrase beginning. The structure-source distinctions (<span class="font-mono">analyzed</span> /
+            <span class="font-mono">fused</span> / <span class="font-mono">synthesized</span>) and the
+            <span class="font-mono">drop_landing_beat</span> field are RaveSystem internals — RaveSystem corrects everything
+            before it broadcasts. The wall deliberately treats every drop as landing on its phrase's
+            <span class="font-mono">start_beat</span>, by decision, so no future review re-flags it.</p>
+          <p class="text-slate-500 text-sm italic">Side note for RaveSystem (not this repo): Hunter flagged that the OSC client contract over-describes analysis internals a client should never care about.</p>
+        </article>
+
+        <article class="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-3 card">
+          <div class="flex flex-wrap gap-2 text-xs uppercase tracking-wider">
+            <span class="px-2 py-1 rounded-full bg-emerald-900/50 border border-emerald-700 text-emerald-300">Ruling 8</span>
+            <span class="px-2 py-1 rounded-full border border-slate-700 text-slate-400">Closes: audit findings 5 &amp; 10</span>
+          </div>
+          <p class="font-bold">The repertoire is the capability contract; missing-capability scenarios cannot happen.</p>
+          <p class="text-slate-300 text-sm">Effects and transitions are first-class citizens: they decide what happens and
+            report what they support via the repertoire. The Director checks support when it sees a drop. Practically every
+            effect supports drops and every effect will — and even without a drop-capable pick, the effect on the wall still
+            knows what to do with the music. No loud validation, no fallback rework. Left exactly as it is.</p>
+        </article>
+      </section>
+
+      <!-- Work list -->
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">The work this implies</h2>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="w-full text-sm bg-slate-900">
+            <thead>
+              <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-800">
+                <th class="text-left px-4 py-3">Item</th>
+                <th class="text-left px-4 py-3">Kind</th>
+                <th class="text-left px-4 py-3">From</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-300">
+              <tr class="border-b border-slate-800">
+                <td class="px-4 py-3">Observe the grid lane on every frame of a beat in <span class="font-mono">Switcher.Tick</span> (a mid-beat grid datagram must not be ignored); update the late-datagram regression test.</td>
+                <td class="px-4 py-3">Code fix</td>
+                <td class="px-4 py-3">Ruling 2</td>
+              </tr>
+              <tr class="border-b border-slate-800">
+                <td class="px-4 py-3">Route off-plan cues through the scheduled-act path — impact at the boundary closing the current grid — and delete the raw <span class="font-mono">Perform(beat,&nbsp;beat)</span> branch; add tests.</td>
+                <td class="px-4 py-3">Code fix</td>
+                <td class="px-4 py-3">Ruling 4</td>
+              </tr>
+              <tr class="border-b border-slate-800">
+                <td class="px-4 py-3">Record rulings 3, 5, 6, and 7 in <span class="font-mono">docs/switching-model.md</span> (and glossary where a term needs it) so docs stop contradicting decided behavior.</td>
+                <td class="px-4 py-3">Docs</td>
+                <td class="px-4 py-3">Rulings 3–7</td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3">Verify BeatManager passes a <span class="font-mono">coasting</span> grid through rather than nulling it.</td>
+                <td class="px-4 py-3">Fact-check</td>
+                <td class="px-4 py-3">Ruling 6</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rounded-lg border-l-4 border-amber-500 bg-amber-950/30 p-4 text-sm text-amber-200">
+          Deliberately untouched: every other audit item. The deletion pass (dead public aliases, the
+          <span class="font-mono">Controller.currentTransition</span> mirror, test-only surfaces) stays available as a
+          separate cleanup whenever wanted — it needs no decisions.
+        </div>
+      </section>
+
+      <!-- Open items -->
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">Still open</h2>
+        <ul class="list-disc pl-5 space-y-2 text-slate-300 text-sm">
+          <li><span class="font-bold">Sequencing:</span> whether the two code fixes happen directly on
+            <span class="font-mono">refactor/off-plan-sighting</span> or get written up as tickets first.</li>
+          <li><span class="font-bold">Publication:</span> the branch is unpublished pending the real-wall verification
+            (issue&nbsp;100); issues 108–110 stay open until their commits reach GitHub.</li>
+          <li><span class="font-bold">Debug-tool unification</span> (keyboard jump behaving as Hold) — optional, undecided,
+            zero show impact.</li>
+        </ul>
+      </section>
+
+      <footer class="pt-8 border-t border-slate-800 text-xs text-slate-500 space-y-1">
+        <p>Companion to the <a href="switching-model-audit-2026-07-31.html" class="text-emerald-400 underline underline-offset-4">switching model audit</a> of the same date.
+          Model authority: <span class="font-mono">docs/switching-model.md</span>, <span class="font-mono">CONTEXT.md</span>, ADR-0009.
+          Wire authority: <span class="font-mono">docs/osc-client-contract.md</span>.</p>
+        <p>Recorded from the 31 July 2026 grill session; rulings are Hunter's, lightly edited for print.</p>
+      </footer>
+
+    </main>
+  </body>
+</html>

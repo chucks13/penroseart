@@ -34,13 +34,17 @@ Everything is counted in beats, musically: 1-2-3-4, no beat zero.
 - Every track has a total number of beats with **phrases** laid over it (intro, up,
   down, chorus, bridge, outro, …). The grid restarts at every new phrase. An
   irregular phrase means a short grid at its end — known at track load.
-- Two phrase events matter today (more later): a **drop** — a key moment, the
-  build-up to something great — and a **fill** — a short piece at the end of a
-  phrase/grid that separates into the next part.
+- Two phrase events matter today (more later). A **drop** is its own Phrase and
+  starts on the first beat of that Phrase. A **fill** is a short piece at the end of a
+  Phrase or Grid that separates it from the next part.
 - The **on-air grid from the wire is the timing authority.** Anything the DJ does is
   represented in it. Beats are watched for one thing: a **loop** shows up as the
   beat counter snapping back (…190, 191, 160, 161…). The wire's loop flag
   corroborates but is not the signal.
+
+The Grid is current state, not a delivered event. The Switcher observes the Grid
+on every frame. A late update can cause a late think. A lapsed Cue Mark stays
+lapsed. The wall does not repair or predict a Grid Boundary.
 
 ## Marks and transitions
 
@@ -56,6 +60,9 @@ Everything is counted in beats, musically: 1-2-3-4, no beat zero.
   is **fire and forget**: it runs to completion no matter what — even if the cue
   sheet changes mid-flight or a loop snaps the beat counter back. That is the simple
   way to handle looping, and it guarantees the tail always gets done.
+
+This guarantee applies to wire-driven automation. Keyboard, OSC control, and
+telnet commands are debug tools outside the show model.
 
 ## The Director's job
 
@@ -73,16 +80,25 @@ sheet:
 - On a short grid, cast a transition whose runway fits. All of this is knowable at
   track load.
 
+The complete Song Structure is the only input to a Cue Sheet. The Director does
+not extend a Cue Sheet from `TotalBeats`. If playback moves beyond its marks, the wire Grid
+continues and Stillness keeps the wall changing. The production Repertoire supplies
+each required Drop and Fill capability. A catalog that cannot do this is outside
+the switching model.
+
 The Director keeps a cue sheet for every loaded player and hands the Switcher the
 sheet of the **latest player to come on air** — the only sheet that matters. (The
 wire lists live players most-recent-first, up to six.)
 
 ## The Switcher's job
 
-The Switcher thinks once per grid, at the grid's start, from BeatManager state:
+The Switcher thinks once per Grid when it observes the Grid start in BeatManager
+state:
 
-- If the next boundary carries an unfired mark, fire its transition at boundary
-  minus runway. Mark it fired.
+- At a Grid start, treat the next future Cue Mark within 16 beats as the mark for
+  this Grid. Do not ask the Cue Sheet for a separate boundary.
+- If nobody has fired that Cue Mark, fire its Transition at the Grid Boundary minus its
+  Runway. Mark it fired.
 - A handover (a new sheet arrives) changes nothing on the wall by itself. The next
   change comes at a mark or at the stillness deadline.
 - Marks skipped over by a forward jump simply lapse — no late firing.
@@ -95,6 +111,9 @@ The Switcher thinks once per grid, at the grid's start, from BeatManager state:
   - the mark transitions into the effect already on the wall,
   - stillness is up.
 
+If a short Grid closes before a scheduled Off-Plan Cue starts, that Cue lapses.
+The next Grid thinks again. The Switcher does not predict the short boundary.
+
 ## Stillness
 
 **Stillness** is the time since the last fired cue — a property of the wall, not of
@@ -106,6 +125,8 @@ can push the wall toward it, and the grid-start check catches both.
 ## Modes
 
 - All of the above is **sync mode** (live DJ on the wire).
+- A usable musical clock keeps the wall in sync mode. The wall stays in sync mode
+  while the Grid reports Coasting.
 - **Standalone mode** is a separate, old, simple mechanism that works. This model
   does not describe it, and nothing here may reach into it or disturb it.
 - Entering sync mode may change the effect instantly — mode flips are rare, and the
