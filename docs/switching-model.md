@@ -117,10 +117,11 @@ The next Grid thinks again. The Switcher does not predict the short boundary.
 ## Stillness
 
 **Stillness** is the time since the last fired cue — a property of the wall, not of
-any sheet. It is measured in whole grids and checked at every grid start: three
-grids since the last fire means the fourth grid must fire, short or not. A
-Director-built sheet never violates stillness on its own; only sheet swaps and loops
-can push the wall toward it, and the grid-start check catches both.
+any sheet. It is measured in whole Grids and checked at every Grid start: three
+Grids since the last fire means the fourth Grid asks, and the Stillness Ceiling
+makes the answer a take. A Director-built sheet never violates Stillness on its
+own; only sheet swaps and loops can push the wall toward it, and the Grid-start
+check catches both.
 
 ## Modes
 

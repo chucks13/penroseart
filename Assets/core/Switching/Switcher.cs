@@ -12,7 +12,7 @@ public enum CueSource
 
     /// <summary>
     /// Dealt through the anomaly doorway — a re-crossed fired mark, a self-blend mark, or Stillness up —
-    /// and performed at the Grid start the sighting was reported from.
+    /// and scheduled toward the boundary closing the Grid where the sighting was reported.
     /// </summary>
     OffPlan,
 }
@@ -67,7 +67,7 @@ public readonly struct SwitcherStatus
     /// </summary>
     public readonly CueSource LastCueSource;
 
-    /// <summary>The mark beat the most recent synced cue anchored to, or -1 before any cue has performed.</summary>
+    /// <summary>The Grid Boundary beat of the most recent synced cue, or -1 before any cue has performed.</summary>
     public readonly int LastCueMarkBeat;
 
     /// <summary>
@@ -92,7 +92,7 @@ public readonly struct SwitcherStatus
     /// <param name="currentTransitionName">Display name of the running Transition.</param>
     /// <param name="transitionProgress">Transition progress, clamped to 0-to-1.</param>
     /// <param name="lastCueSource">Where the most recent synced cue came from.</param>
-    /// <param name="lastCueMarkBeat">Mark beat the most recent synced cue anchored to, or -1 before any.</param>
+    /// <param name="lastCueMarkBeat">Grid Boundary beat of the most recent synced Cue, or -1 before any.</param>
     /// <param name="lastOffPlanSighting">Last question asked through the anomaly doorway, or null before any ask.</param>
     /// <param name="lastOffPlanAnswer">The Director's answer to that question; a no-perform is a ride-through.</param>
     public SwitcherStatus(
@@ -193,7 +193,7 @@ public sealed class Switcher
     /// <summary>
     /// Stillness: whole Grids the wall has sat through since the last fired cue. A property of the wall,
     /// not of any sheet — it survives handovers — and it is checked at every Grid start: three still
-    /// Grids since the last fire mean the fourth Grid fires, short or not.
+    /// Grids since the last fire make the fourth Grid ask, and the Ceiling makes the answer a take.
     /// </summary>
     private int stillGrids;
 
@@ -201,16 +201,19 @@ public sealed class Switcher
     private bool firedSinceThink;
 
     /// <summary>
-    /// The Grid's one scheduled act: the mark the think decided to fire, or null when this Grid needs
-    /// nothing. Decided once at the Grid's start; the fire itself is mechanical.
+    /// The Cue Sheet mark behind the scheduled act, or null when the act is Off-Plan.
+    /// Meaningless while <see cref="scheduledFireBeat"/> is null.
     /// </summary>
     private CuePlanMark scheduledMark;
 
-    /// <summary>The Director's answer for <see cref="scheduledMark"/>, decided at the think.</summary>
+    /// <summary>The Director's answer for the scheduled act.</summary>
     private CueDecision scheduledCue;
 
-    /// <summary>The beat the scheduled act leaves on — its mark's boundary minus the decided Transition's Runway.</summary>
-    private int scheduledFireBeat;
+    /// <summary>The Grid Boundary beat where the scheduled act lands.</summary>
+    private int scheduledBoundaryBeat;
+
+    /// <summary>The beat the scheduled act leaves on, or null when no act is scheduled.</summary>
+    private int? scheduledFireBeat;
 
     /// <summary>
     /// How many off-plan asks this run has made — the seed dimension that stops a loop re-crossing one
@@ -234,8 +237,8 @@ public sealed class Switcher
     /// </summary>
     private CueSource lastCueSource = CueSource.Plan;
 
-    /// <summary>Mark beat the most recent synced cue anchored to, or -1 before any cue has performed.</summary>
-    private int lastCueMarkBeat = -1;
+    /// <summary>Grid Boundary beat of the most recent synced Cue, or -1 before any Cue has performed.</summary>
+    private int lastCueBoundaryBeat = -1;
 
     /// <summary>
     /// The Cue Sheet in force — the plan this Switcher is performing. A default sheet
@@ -355,7 +358,7 @@ public sealed class Switcher
         {
             if (crossed)
             {
-                Think(beat);
+                Think(beat, gridBeat);
             }
 
             return;
@@ -371,27 +374,33 @@ public sealed class Switcher
 
         lastSeenBeat = beat;
 
-        if (scheduledMark != null && beat == scheduledFireBeat)
+        if (scheduledFireBeat is { } fireBeat && beat == fireBeat)
         {
             var mark = scheduledMark;
             var cue = scheduledCue;
+            var boundaryBeat = scheduledBoundaryBeat;
+            var source = mark == null ? CueSource.OffPlan : CueSource.Plan;
             ClearScheduledAct();
-            mark.FiredAtBeat = beat;
-            Perform(beat, mark.Beat, cue, CueSource.Plan);
+            if (mark != null)
+            {
+                mark.FiredAtBeat = beat;
+            }
+
+            Perform(beat, boundaryBeat, cue, source);
         }
-        else if (scheduledMark != null && beat > scheduledFireBeat)
+        else if (scheduledFireBeat is { } missedFireBeat && beat > missedFireBeat)
         {
             // The playhead escaped past the fire beat without landing on it — a forward jump. The act
-            // lapses and its mark stays unspent; a lapsed mark never fires late.
-            var lapsedMarkBeat = scheduledMark.Beat;
-            var lapsedFireBeat = scheduledFireBeat;
+            // lapses, and a plan mark remains unspent.
+            var lapsedBoundaryBeat = scheduledBoundaryBeat;
+            var lapsedSource = scheduledMark == null ? CueSource.OffPlan : CueSource.Plan;
             ClearScheduledAct();
-            Trace(() => $"SWITCHER_LAPSE mark={lapsedMarkBeat} fire={lapsedFireBeat} beat={beat}");
+            Trace(() => $"SWITCHER_LAPSE boundary={lapsedBoundaryBeat} fire={missedFireBeat} beat={beat} source={lapsedSource}");
         }
 
         if (crossed)
         {
-            Think(beat);
+            Think(beat, gridBeat);
         }
     }
 
@@ -400,11 +409,12 @@ public sealed class Switcher
     /// needs. Stillness is counted first; then the next boundary's unfired mark is decided and its blend
     /// scheduled at boundary-minus-Runway; and every anomaly — a re-crossed fired mark, a mark blending
     /// into the Effect already on the wall, Stillness up — goes through the one doorway,
-    /// <see cref="Director.DecideOffPlanCue"/>, at most once per think, with a taken cue performed here
-    /// at the Grid start — never mid-Grid.
+    /// <see cref="Director.DecideOffPlanCue"/>, at most once per think, with a taken Cue scheduled
+    /// toward the boundary closing the current Grid.
     /// </summary>
-    /// <param name="beat">The on-air beat this Grid starts on.</param>
-    private void Think(int beat)
+    /// <param name="beat">The on-air beat observed when this Grid starts.</param>
+    /// <param name="gridBeat">The current one-based Grid position.</param>
+    private void Think(int beat, int gridBeat)
     {
         if (!hasBaseline)
         {
@@ -424,24 +434,33 @@ public sealed class Switcher
 
         var candidate = NextBoundaryMark(beat);
 
-        // A short Grid restarts the Grid early, so a think can arrive with the same closing mark still
-        // ahead. The decision already taken stands — re-deciding would consume a staged override twice.
-        if (scheduledMark != null && !ReferenceEquals(scheduledMark, candidate))
+        // A pending Off-Plan act belongs to the Grid that just closed, so it lapses before this Grid
+        // decides. A plan act may survive a short Grid when the same closing mark is still ahead.
+        if (scheduledFireBeat is { } pendingFireBeat)
         {
-            var droppedMarkBeat = scheduledMark.Beat;
-            var droppedFireBeat = scheduledFireBeat;
-            Trace(() => $"SWITCHER_UNSCHEDULE mark={droppedMarkBeat} fire={droppedFireBeat} beat={beat}");
-            ClearScheduledAct();
+            if (scheduledMark == null)
+            {
+                var lapsedBoundaryBeat = scheduledBoundaryBeat;
+                ClearScheduledAct();
+                Trace(() => $"SWITCHER_LAPSE boundary={lapsedBoundaryBeat} fire={pendingFireBeat} beat={beat} source={CueSource.OffPlan}");
+            }
+            else if (!ReferenceEquals(scheduledMark, candidate))
+            {
+                var droppedMarkBeat = scheduledMark.Beat;
+                Trace(() => $"SWITCHER_UNSCHEDULE mark={droppedMarkBeat} fire={pendingFireBeat} beat={beat}");
+                ClearScheduledAct();
+            }
         }
 
         // One line per think makes the log distinguish "no mark at this boundary" from "a mark passed
         // unseen" — without it a silent think and a skipped think read identically (2026-07-31 session).
         var seenCandidate = candidate;
-        Trace(() => $"SWITCHER_THINK beat={beat} stillGrids={stillGrids} candidate={(seenCandidate == null ? "none" : seenCandidate.Fired ? $"{seenCandidate.Beat}:fired" : seenCandidate.Beat.ToString())} scheduled={(scheduledMark == null ? "none" : scheduledMark.Beat.ToString())} onWall={FormatEffect(TransitionSourceEffectIndex)} toward={FormatEffect(TransitionTargetEffectIndex)}");
+        var scheduledKind = scheduledMark == null ? CueSource.OffPlan : CueSource.Plan;
+        Trace(() => $"SWITCHER_THINK beat={beat} stillGrids={stillGrids} candidate={(seenCandidate == null ? "none" : seenCandidate.Fired ? $"{seenCandidate.Beat}:fired" : seenCandidate.Beat.ToString())} scheduled={(scheduledFireBeat == null ? "none" : $"{scheduledKind}:{scheduledBoundaryBeat}")} onWall={FormatEffect(TransitionSourceEffectIndex)} toward={FormatEffect(TransitionTargetEffectIndex)}");
 
         OffPlanAnomaly? anomaly = null;
 
-        if (candidate != null && scheduledMark == null)
+        if (candidate != null && scheduledFireBeat == null)
         {
             if (candidate.Fired)
             {
@@ -466,48 +485,27 @@ public sealed class Switcher
                 }
                 else
                 {
-                    // The Runway belongs to the Transition the Director decided, so a staged override flies
-                    // its own Runway and still lands its Impact on the mark.
-                    var fireBeat = candidate.Beat - transitions[cue.TransitionIndex].Repertoire.RunwayBeats;
-                    if (fireBeat == beat)
-                    {
-                        // The Runway exactly fills this Grid (a short Grid under a card that just fits):
-                        // the blend leaves here, at the Grid start, and still flies whole onto the mark.
-                        candidate.FiredAtBeat = beat;
-                        Perform(beat, candidate.Beat, cue, CueSource.Plan);
-                    }
-                    else if (fireBeat < beat)
-                    {
-                        // A Runway longer than the Grid it would launch from: a Runway is never compressed
-                        // and nothing fires late, so this is a Missed Cue — not performed, not spent.
-                        Trace(() => $"SWITCHER_MISS mark={candidate.Beat} fire={fireBeat} beat={beat}");
-                    }
-                    else
-                    {
-                        scheduledMark = candidate;
-                        scheduledCue = cue;
-                        scheduledFireBeat = fireBeat;
-                        Trace(() => $"SWITCHER_SCHEDULE mark={candidate.Beat} fire={fireBeat} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
-                    }
+                    ScheduleAct(beat, candidate.Beat, cue, candidate);
                 }
             }
         }
 
         // Three whole Grids since the last fire and nothing scheduled or fired to feed this one: Stillness
-        // is up, and the fourth Grid fires at its start, short or not. Only sheet swaps and loops push the
-        // wall here — a Director-built sheet never violates stillness on its own, because its widest legal
-        // gap puts the closing mark's fire inside this Grid.
+        // is up, so the fourth Grid asks and the Ceiling makes the answer a take. Only sheet swaps and loops
+        // push the wall here — a Director-built sheet never violates Stillness on its own, because its widest
+        // legal gap puts the closing mark's fire inside this Grid.
         if (anomaly == null
             && stillGrids >= TrackCueSheet.MaximumGapGrids - 1
-            && scheduledMark == null
+            && scheduledFireBeat == null
             && !firedSinceThink)
         {
             anomaly = OffPlanAnomaly.StillnessUp;
         }
 
         // Every anomaly goes through one doorway, at most once per think: the Switcher reports what it
-        // saw and the Director decides — ride through, or a fresh Off-Plan Cue performed here at the Grid
-        // start. The answer leaves the sheet exactly as it was; an anomalous mark is never spent by it.
+        // saw and the Director decides — ride through, or a fresh Off-Plan Cue scheduled toward this
+        // Grid's closing boundary. The answer leaves the sheet exactly as it was; an anomalous mark is
+        // never spent by it.
         if (anomaly is { } seen)
         {
             // The ask is counted here, before the value is built, so constructing a Sighting stays pure
@@ -525,7 +523,8 @@ public sealed class Switcher
             lastOffPlanAnswer = answer;
             if (answer.Perform)
             {
-                Perform(beat, beat, answer, CueSource.OffPlan);
+                var boundaryBeat = beat + TrackCueSheet.GridBeats - gridBeat + 1;
+                ScheduleAct(beat, boundaryBeat, answer, null);
             }
         }
     }
@@ -555,12 +554,53 @@ public sealed class Switcher
         return next != null && next.Beat - beat <= TrackCueSheet.GridBeats ? next : null;
     }
 
+    /// <summary>
+    /// Turns one Director answer into the Grid's single act, or performs it now when its Runway starts
+    /// on this think beat.
+    /// </summary>
+    /// <param name="thinkBeat">Absolute beat where the decision was made.</param>
+    /// <param name="boundaryBeat">Grid Boundary beat where the Cue lands.</param>
+    /// <param name="cue">Director answer to perform.</param>
+    /// <param name="planMark">Cue Sheet mark to spend on fire, or null for an Off-Plan Cue.</param>
+    private void ScheduleAct(
+        int thinkBeat,
+        int boundaryBeat,
+        CueDecision cue,
+        CuePlanMark planMark)
+    {
+        var source = planMark == null ? CueSource.OffPlan : CueSource.Plan;
+        var fireBeat = boundaryBeat - transitions[cue.TransitionIndex].Repertoire.RunwayBeats;
+        if (fireBeat == thinkBeat)
+        {
+            if (planMark != null)
+            {
+                planMark.FiredAtBeat = thinkBeat;
+            }
+
+            Perform(thinkBeat, boundaryBeat, cue, source);
+            return;
+        }
+
+        if (fireBeat < thinkBeat)
+        {
+            Trace(() => $"SWITCHER_MISS boundary={boundaryBeat} fire={fireBeat} beat={thinkBeat} source={source}");
+            return;
+        }
+
+        scheduledMark = planMark;
+        scheduledCue = cue;
+        scheduledBoundaryBeat = boundaryBeat;
+        scheduledFireBeat = fireBeat;
+        Trace(() => $"SWITCHER_SCHEDULE boundary={boundaryBeat} fire={fireBeat} source={source} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+    }
+
     /// <summary>Forgets the Grid's scheduled act.</summary>
     private void ClearScheduledAct()
     {
         scheduledMark = null;
         scheduledCue = default;
-        scheduledFireBeat = 0;
+        scheduledBoundaryBeat = 0;
+        scheduledFireBeat = null;
     }
 
     /// <summary>
@@ -671,24 +711,20 @@ public sealed class Switcher
     }
 
     /// <summary>
-    /// Performs one cue. It is fired on its Runway beat, so the Transition starts now and reaches its mark
-    /// one Runway later, resolving its Tail after that. The Runway is the dealt Transition's own, so an
-    /// override or an off-plan card reaches the mark on its own timing rather than the plan's baked card's.
+    /// Performs one Cue at its Runway beat. The Transition starts now, reaches its Impact Point at the
+    /// Grid Boundary one Runway later, then resolves its Tail. The Runway is always the decided
+    /// Transition's own.
     /// </summary>
-    /// <param name="fireBeat">The beat this cue leaves on — one Runway before its mark.</param>
-    /// <param name="markBeat">
-    /// The beat this cue is anchored to — the stillness anchor: its Cue Mark, or for an
-    /// off-plan deal the Grid Boundary the ask borrowed as its mark. Equals <paramref name="fireBeat"/>
-    /// when the cue fires on the very boundary it was asked about, whose landing then trails past it.
-    /// </param>
+    /// <param name="fireBeat">The absolute beat where the Transition starts.</param>
+    /// <param name="boundaryBeat">The Grid Boundary beat where the Cue lands.</param>
     /// <param name="cue">What the Director said to play.</param>
-    /// <param name="source">Where this cue came from: the sheet's mark, a loop re-deal, or the ceiling.</param>
-    private void Perform(int fireBeat, int markBeat, CueDecision cue, CueSource source)
+    /// <param name="source">Whether the Cue came from the plan or the anomaly doorway.</param>
+    private void Perform(int fireBeat, int boundaryBeat, CueDecision cue, CueSource source)
     {
         var repertoire = transitions[cue.TransitionIndex].Repertoire;
         var nowSeconds = Time.time;
         lastCueSource = source;
-        lastCueMarkBeat = markBeat;
+        lastCueBoundaryBeat = boundaryBeat;
 
         // Any performed cue, whatever its source, ends the wall's still spell; the next think's
         // stillness update consumes this.
@@ -704,7 +740,7 @@ public sealed class Switcher
             nowSeconds);
         // The Switcher owns what is on stage, so it owns the Controller's transition mirror.
         controller.currentTransition = cue.TransitionIndex;
-        Trace(() => $"SWITCHER_PERFORM mark={markBeat} source={source} fire={fireBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
+        Trace(() => $"SWITCHER_PERFORM boundary={boundaryBeat} source={source} fire={fireBeat} runway={repertoire.RunwayBeats} tail={repertoire.TailBeats} transition={FormatTransition(cue.TransitionIndex)} target={FormatEffect(cue.EffectIndex)}");
     }
 
     /// <summary>Live seconds per beat, falling back to the established 120-BPM cadence.</summary>
@@ -749,7 +785,7 @@ public sealed class Switcher
                 transition.Name,
                 transitionProgress,
                 lastCueSource,
-                lastCueMarkBeat,
+                lastCueBoundaryBeat,
                 lastOffPlanSighting,
                 lastOffPlanAnswer);
         }
@@ -765,7 +801,7 @@ public sealed class Switcher
             string.Empty,
             0f,
             lastCueSource,
-            lastCueMarkBeat,
+            lastCueBoundaryBeat,
             lastOffPlanSighting,
             lastOffPlanAnswer);
     }

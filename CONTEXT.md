@@ -263,8 +263,8 @@ The seeded fairness mechanism sheet building deals from: one shuffled bag per ca
 _Avoid_: weights or scoring; filtering the deal by energy affinity (energy is a Performer input, not a casting one); per-cast random picks; treating a one-card catalog's unavoidable repeat as a defect.
 
 **Off-Plan Cue**:
-The cue the Director deals when the plan in force cannot feed the playhead. Its answer is a fresh card or a ride-through, never the Effect already on the wall or the one being moved toward, and it leaves the Cue Sheet exactly as it was.
-_Avoid_: "staleness cue" (retired name); calling it a Cast, an override, or a Missed Cue's replacement; treating it as something that spends a Cue Mark.
+The Cue the Director deals when the plan in force cannot feed the playhead; its answer is a fresh card or a ride-through, never the Effect already on the wall or the one being moved toward, and it leaves the Cue Sheet exactly as it was. A taken Off-Plan Cue lands at the Grid Boundary closing the current Grid, exactly like a planned Cue.
+_Avoid_: "staleness cue" (retired name); calling it a Cast, an override, or a Missed Cue's replacement; treating it as something that spends a Cue Mark; using the Sighting's Grid Boundary as its landing.
 
 **Off-Plan Sighting** (a.k.a. **Sighting**):
 The Switcher's whole report through the anomaly doorway — which anomaly it saw, the Grid Boundary at hand, how still the wall has been, which ask this is, and what the wall is showing and moving toward. It is everything the Director's answer may draw on; the anomaly kind itself is diagnostic — it feeds traces and displays, never the deal.
@@ -275,8 +275,8 @@ How long the wall has held still — whole Grids since the last fired cue, check
 _Avoid_: counting stillness in beats or beat positions (loops and jumps break both — Grids crossed at Grid start is the measure); treating stillness as sheet state a handover restarts.
 
 **Ceiling**:
-The bound on Stillness: three Grids since the last fire means the fourth Grid must fire, short or not. A Director-built sheet never violates it on its own — only sheet swaps and loops push the wall toward it — and the Grid-start check catches both through the anomaly doorway.
-_Avoid_: a ceiling counted in heard beats (retired); taking a ceiling cue anywhere but a Grid start.
+The bound on Stillness: three Grids since the last fire make the fourth Grid's Sighting yield a taken Off-Plan Cue. If an early Grid close lapses that Cue before its Runway begins, the next Grid thinks with Stillness still up.
+_Avoid_: a ceiling counted in heard beats (retired); treating a Ceiling take as an immediate fire; taking a Ceiling Cue anywhere but a Grid start.
 
 **Missed Cue**:
 A Cue Mark the playhead went past without firing, because its Runway beat elapsed while the wall was somewhere else — a fresh Cast, a mid-track focus handover, a needle-drop, a late entry, or an inspection freeze. A cue *is* its Runway, Impact Point, and Tail, so one whose Runway is already behind the playhead cannot be performed as written and is therefore not performed at all. A missed mark is not spent: it is still plan.
