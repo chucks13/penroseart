@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Sockets;
 using RaveSystem.Osc;
 using UnityEngine;
 
@@ -22,6 +21,9 @@ public enum TouchOscCommandKind
 
     /// <summary>Effect-period fader moved. <see cref="TouchOscCommand.Value"/> is the raw 0..1 fader position.</summary>
     EffectPeriod,
+
+    /// <summary>The reset button was pressed: release the held effect and let the deck rotate again.</summary>
+    ReleaseHold,
 }
 
 /// <summary>
@@ -85,10 +87,8 @@ public sealed class TouchOscSurface : MonoBehaviour
     /// <summary>UDP port the TouchOSC tablet listens on for feedback.</summary>
     private const int ReplyPort = 6161;
 
-    // The grid is 24 cells: cell 23 is the bank toggle (see Controller.ApplyTouchOscCommand), which fixes
-    // the highest inbound address at /1/push24. Feedback runs over the whole effect catalog and is not
-    // bounded by this count.
-    private const int PushButtonCount = 24;
+    /// <summary>The number of named effect controls exposed by the TouchOSC surface.</summary>
+    private const int PushButtonCount = 27;
 
     // Deep enough that ordinary bursts (a fader sweep is ~60 messages/second) never touch it. Reaching the
     // cap means the main thread has stalled, so the oldest intents are dropped first: an operator's most
@@ -108,17 +108,21 @@ public sealed class TouchOscSurface : MonoBehaviour
     private OscUdpSocket socket;
     private OscUdpSender sender;
 
-    // Peer discovery. The socket thread records whoever last talked to us; the main thread notices the
-    // change and re-points the sender. Feedback starts as a link-local broadcast so a cold-booted wall
-    // lights a surface that has not spoken yet, then narrows to unicast, which Wi-Fi acknowledges and
-    // retries where it neither acknowledges nor retries a broadcast frame.
-    /// <summary>Reusable template for turning a received <see cref="System.Net.SocketAddress"/> into an endpoint.</summary>
-    private static readonly IPEndPoint PeerTemplate = new IPEndPoint(IPAddress.Any, 0);
+    // Feedback is broadcast, never narrowed to one peer. Any number of surfaces can drive the wall at
+    // once, and none of them is "the" surface: a surface that has never transmitted still receives, and
+    // a surface that joins late catches up on the next heartbeat. Unicast would be the more reliable
+    // single delivery -- Wi-Fi acks and retries it where it does neither for a broadcast frame -- but a
+    // heartbeat retransmits by repetition, so a dropped frame costs one interval of staleness instead of
+    // a wrong lamp until the next change.
+    /// <summary>Seconds between full-state restatements. Sends between them carry only what changed.</summary>
+    [Tooltip("Seconds between full-state broadcasts to every control surface. Lower is more responsive to changes made outside the surface; the whole state is under a kilobyte.")]
+    [SerializeField]
+    private float heartbeatSeconds = 0.5f;
 
-    private readonly object peerLock = new object();
-    private IPAddress observedPeer;
-    private IPAddress activePeer;
-    private bool peerChanged;
+    /// <summary>Floor on <see cref="heartbeatSeconds"/>, so a mistyped Inspector value cannot flood the link.</summary>
+    private const float MinHeartbeatSeconds = 0.05f;
+
+    private float nextHeartbeatTime;
 
     private readonly object errorLock = new object();
     private Exception pendingError;
@@ -126,11 +130,8 @@ public sealed class TouchOscSurface : MonoBehaviour
     private int droppedCommands;
     private bool loggedSendFailure;
 
-    /// <summary>The number of cells the surface's effect grid exposes, including the bank toggle.</summary>
+    /// <summary>The number of named effect cells the surface exposes.</summary>
     public static int GridCellCount => PushButtonCount;
-
-    /// <summary>The address feedback currently goes to, or <c>null</c> while still broadcasting.</summary>
-    public IPAddress Peer => activePeer;
 
     private void Awake()
     {
@@ -149,49 +150,23 @@ public sealed class TouchOscSurface : MonoBehaviour
     }
 
     /// <summary>
-    /// Reports, once per occurrence, that feedback has been re-pointed at a different surface.
+    /// Reports whether this frame owes every control surface a full restatement of the wall's state.
     /// </summary>
     /// <remarks>
-    /// A surface that has just been discovered knows nothing about the wall's state, so the caller owes it
-    /// a full refresh. This also fires the first time a broadcast peer resolves to a real address.
+    /// Feedback is otherwise edge-driven, which leaves a surface wrong until the next change if a
+    /// datagram is lost, and leaves a surface that joined late wrong indefinitely. The heartbeat is the
+    /// corrector: send-on-change keeps presses instant, and this keeps everyone converging on the truth.
     /// </remarks>
-    /// <returns><c>true</c> exactly once after each peer change.</returns>
-    public bool ConsumePeerChanged()
+    /// <returns><c>true</c> when the heartbeat interval has elapsed, including on the first call.</returns>
+    public bool ConsumeFullStateDue()
     {
-        RepointSenderIfPeerChanged();
-
-        lock (peerLock)
+        if (Time.unscaledTime < nextHeartbeatTime)
         {
-            if (!peerChanged)
-            {
-                return false;
-            }
-
-            peerChanged = false;
-            return true;
-        }
-    }
-
-    /// <summary>Swaps the sender over to a newly observed peer, replacing the cold-start broadcast sender.</summary>
-    private void RepointSenderIfPeerChanged()
-    {
-        IPAddress peer;
-        lock (peerLock)
-        {
-            if (observedPeer == null || observedPeer.Equals(activePeer))
-            {
-                return;
-            }
-
-            peer = observedPeer;
-            activePeer = peer;
-            peerChanged = true;
+            return false;
         }
 
-        sender?.Dispose();
-        sender = new OscUdpSender(new IPEndPoint(peer, ReplyPort));
-        loggedSendFailure = false;
-        Debug.Log($"[TouchOscSurface] Control surface found at {peer}; feedback is now unicast to {peer}:{ReplyPort}.");
+        nextHeartbeatTime = Time.unscaledTime + Mathf.Max(MinHeartbeatSeconds, heartbeatSeconds);
+        return true;
     }
 
     /// <summary>
@@ -220,8 +195,11 @@ public sealed class TouchOscSurface : MonoBehaviour
     /// <summary>Queues feedback moving the brightness fader to <paramref name="faderValue"/> (0..1).</summary>
     public void QueueBrightness(float faderValue) => QueueReply("/1/vscroll1", faderValue);
 
-    /// <summary>Queues the surface reset signal carrying <paramref name="value"/>.</summary>
-    public void QueueReset(float value) => QueueReply("/1/reset", value);
+    /// <summary>Queues feedback moving the effect-period fader to <paramref name="faderValue"/> (0..1).</summary>
+    public void QueueEffectPeriod(float faderValue) => QueueReply("/1/hscroll1", faderValue);
+
+    /// <summary>Queues the reset lamp, lit while an effect is held and the deck is frozen.</summary>
+    public void QueueReset(bool held) => QueueReply("/1/reset", held ? 1f : 0f);
 
     /// <summary>
     /// Sends everything queued since the last flush as one datagram, then clears the queue. A single reply
@@ -312,14 +290,13 @@ public sealed class TouchOscSurface : MonoBehaviour
         dispatcher = new OscDispatcher();
         RegisterPageOne();
 
-        // Cold start: 255.255.255.255 is the limited broadcast address, which reaches the local link
-        // without knowing the subnet, so no address is configured anywhere. The first inbound packet
-        // replaces this with unicast to the surface that sent it.
+        // 255.255.255.255 is the limited broadcast address, which reaches the local link without knowing
+        // the subnet, so no address is configured anywhere and every surface is reached the same way.
         sender = new OscUdpSender(new IPEndPoint(IPAddress.Broadcast, ReplyPort), broadcast: true);
         socket = new OscUdpSocket(new IPEndPoint(IPAddress.Any, ListenPort));
         socket.PacketReceived += OnPacketReceived;
         socket.Start();
-        Debug.Log($"[TouchOscSurface] Listening for TouchOSC on UDP {ListenPort}; broadcasting feedback to port {ReplyPort} until a surface answers.");
+        Debug.Log($"[TouchOscSurface] Listening for TouchOSC on UDP {ListenPort}; broadcasting feedback to port {ReplyPort}.");
     }
 
     private void StopListening()
@@ -348,6 +325,9 @@ public sealed class TouchOscSurface : MonoBehaviour
 
         dispatcher.Register("/1/nav1", (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) =>
             EnqueuePressGated(TouchOscCommandKind.ToggleNye, "/1/nav1", -1, ref reader));
+
+        dispatcher.Register("/1/reset", (ReadOnlySpan<byte> _, ref OscReader reader, OscTimeTag __) =>
+            EnqueuePressGated(TouchOscCommandKind.ReleaseHold, "/1/reset", -1, ref reader));
 
         for (int i = 0; i < PushButtonCount; i++)
         {
@@ -430,36 +410,12 @@ public sealed class TouchOscSurface : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Records the address of whoever just sent a packet, so feedback can narrow from broadcast to unicast.
-    /// Runs on the socket thread.
-    /// </summary>
-    private void NotePeer(System.Net.SocketAddress from)
-    {
-        // The socket binds IPv4, so anything else is not a surface we can answer.
-        if (from.Family != AddressFamily.InterNetwork)
-        {
-            return;
-        }
-
-        // The SocketAddress instance is reused across receives, so the address must be copied out here
-        // rather than retained.
-        if (!(PeerTemplate.Create(from) is IPEndPoint endPoint))
-        {
-            return;
-        }
-
-        lock (peerLock)
-        {
-            observedPeer = endPoint.Address;
-        }
-    }
-
+    /// <summary>Decodes one inbound packet on the socket thread. The sender's address is not recorded:
+    /// feedback goes to every surface on the link, so there is nobody to single out.</summary>
     private void OnPacketReceived(ReadOnlySpan<byte> packet, System.Net.SocketAddress from)
     {
         try
         {
-            NotePeer(from);
             dispatcher.Dispatch(packet);
         }
         catch (Exception ex)

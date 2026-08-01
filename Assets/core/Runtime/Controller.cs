@@ -365,18 +365,12 @@ public class Controller : Singleton<Controller>
     /// <summary>TouchOSC control-surface transport component added to the Controller GameObject.</summary>
     private TouchOscSurface touchOsc;
 
-    /// <summary>The last grid cell, which flips the effect bank instead of selecting an effect.</summary>
-    private static int KeyboardBankToggleButton => TouchOscSurface.GridCellCount - 1;
-
-    /// <summary>How many grid cells select an effect. Doubles as the bank stride, so the two cannot drift.</summary>
-    private static int SelectableGridCells => TouchOscSurface.GridCellCount - 1;
-
     // Last values pushed to the control surface. Feedback is sent only on change, so these are the
     // record of what the surface already believes.
     private byte lastSentBrightness;
     private bool lastSentResetActive;
     private int lastSentLitCell = -1;
-    private int lastSentKeyboardBase = -1;
+    private float lastSentEffectTime = -1f;
 
     /// <summary>RaveSystem OSC receiver backed by the new RaveSystem.Osc stack.</summary>
     private RaveOscReceiver raveOsc;
@@ -869,22 +863,34 @@ public class Controller : Singleton<Controller>
             OSCtimer = 20;
         }
 
-        // A surface that has only just been discovered knows nothing about the wall, so it is owed every
-        // value at once. Otherwise only differences go out, which is why this is not sent every frame.
-        bool refreshAll = touchOsc.ConsumePeerChanged();
+        // On the heartbeat every surface is owed the whole state, because a surface that joined late or
+        // missed a datagram has no other way back to the truth. Between heartbeats only differences go
+        // out, which is what keeps a press feeling instant.
+        bool refreshAll = touchOsc.ConsumeFullStateDue();
 
         if (refreshAll || brightness != lastSentBrightness)
         {
-            touchOsc.QueueBrightness(1f - (float)brightness / 255f);
+            touchOsc.QueueBrightness((float)brightness / 255f);
             lastSentBrightness = brightness;
         }
 
-        bool resetActive = CurrentEffectIndexForSurface() >= effects.Length;
-        if ((refreshAll || resetActive != lastSentResetActive) && resetActive)
+        // The period can change without the surface asking — from the Inspector, or from another
+        // surface — so it is echoed like any other wall state rather than assumed to match the fader.
+        if (refreshAll || !Mathf.Approximately(effectTime, lastSentEffectTime))
         {
-            touchOsc.QueueReset(1f - (float)brightness / 255f);
+            touchOsc.QueueEffectPeriod(EffectPeriodPosition(effectTime));
+            lastSentEffectTime = effectTime;
         }
-        lastSentResetActive = resetActive;
+
+        // The reset lamp reports whether a hold is in force, so the frozen deck is visible on the surface
+        // and the button that releases it is the one that is lit. Both edges are sent: going dark is as
+        // much news to the surface as lighting up.
+        bool holdActive = heldEffect >= 0;
+        if (refreshAll || holdActive != lastSentResetActive)
+        {
+            touchOsc.QueueReset(holdActive);
+        }
+        lastSentResetActive = holdActive;
 
         RefreshGrid(refreshAll);
         touchOsc.FlushReplies();
@@ -894,17 +900,15 @@ public class Controller : Singleton<Controller>
     /// Keeps the surface's grid lamps matching the live effect, sending only the cells that changed.
     /// </summary>
     /// <param name="refreshAll">
-    /// When true every cell is restated, which a newly discovered surface or a bank flip requires because
-    /// the surface's whole grid changes meaning at once.
+    /// When true, every cell is restated for a newly discovered surface or a requested full refresh.
     /// </param>
     private void RefreshGrid(bool refreshAll)
     {
         int litCell = TouchOscCellForEffect(CurrentEffectIndexForSurface());
-        refreshAll |= keyboardBase != lastSentKeyboardBase;
 
         if (refreshAll)
         {
-            for (int cell = 0; cell < SelectableGridCells; cell++)
+            for (int cell = 0; cell < TouchOscSurface.GridCellCount; cell++)
             {
                 touchOsc.QueueButtonState(cell, cell == litCell);
             }
@@ -918,16 +922,14 @@ public class Controller : Singleton<Controller>
         }
 
         lastSentLitCell = litCell;
-        lastSentKeyboardBase = keyboardBase;
     }
 
     /// <summary>
-    /// Maps a catalog index to the grid cell showing it, or <c>-1</c> when it belongs to another bank.
+    /// Maps a catalog index to its surface cell, or <c>-1</c> when the grid does not expose it.
     /// </summary>
     private int TouchOscCellForEffect(int effectIndex)
     {
-        int cell = effectIndex - (keyboardBase * SelectableGridCells);
-        return cell >= 0 && cell < SelectableGridCells ? cell : -1;
+        return effectIndex >= 0 && effectIndex < TouchOscSurface.GridCellCount ? effectIndex : -1;
     }
 
     /// <summary>Applies one decoded TouchOSC operator intent to runtime state.</summary>
@@ -936,7 +938,7 @@ public class Controller : Singleton<Controller>
         switch (command.Kind)
         {
             case TouchOscCommandKind.Brightness:
-                brightness = (byte)command.Value.Lerp(255f, 0f);
+                brightness = (byte)command.Value.Lerp(0f, 255f);
                 break;
 
             case TouchOscCommandKind.ToggleNye:
@@ -950,6 +952,10 @@ public class Controller : Singleton<Controller>
             case TouchOscCommandKind.PressButton:
                 ApplyGridPress(command.Button);
                 break;
+
+            case TouchOscCommandKind.ReleaseHold:
+                heldEffect = -1;
+                break;
         }
     }
 
@@ -960,35 +966,76 @@ public class Controller : Singleton<Controller>
     /// The bands are tested coarse-to-fine so each lower band overrides the one above it. A position in the
     /// open interval (0.87, 1) matches no band and deliberately leaves the current period untouched.
     /// </remarks>
+    /// <summary>
+    /// The effect-period fader's detents, shortest first. The fader is a coarse selector rather than a
+    /// continuous control, so travel is split into equal bands and each band names one period.
+    /// </summary>
+    /// <remarks>
+    /// This replaces a chain of one-way thresholds (0.12/0.37/0.62/0.87, then an equality test on 1.0)
+    /// whose top band matched no branch at all: anywhere from 0.87 up to but excluding 1.0 silently left
+    /// the period unchanged. Equal bands preserve the original boundaries to within a thousandth and
+    /// close that gap. A single table is also the only way the mapping can be inverted, which surface
+    /// feedback needs: the fader has to be moved to the position that stands for the live period.
+    /// </remarks>
+    private static readonly float[] EffectPeriodSteps = { 1f, 5f, 10f, 2 * 60f, 60 * 60f };
+
+    /// <summary>The fader position that stands for detent <paramref name="step"/>, spread evenly over the travel.</summary>
+    private static float EffectPeriodPositionOf(int step) => (float)step / (EffectPeriodSteps.Length - 1);
+
+    /// <summary>Sets the effect period from a 0..1 fader position, snapping to the nearest detent.</summary>
     private void ApplyEffectPeriod(float position)
     {
-        if (position == 1f) effectTime = 60 * 60;
-        if (position < 0.87f) effectTime = 2 * 60;
-        if (position < 0.62f) effectTime = 10;
-        if (position < 0.37f) effectTime = 5;
-        if (position < 0.12f) effectTime = 1;
+        int last = EffectPeriodSteps.Length - 1;
+        int step = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp01(position) * last), 0, last);
+        effectTime = EffectPeriodSteps[step];
     }
 
     /// <summary>
-    /// Applies a press on the surface's effect grid: the last cell flips the bank, every other cell jumps to
-    /// an effect and lights itself.
+    /// The fader position standing for the live effect period, for surface feedback.
     /// </summary>
     /// <remarks>
-    /// The bank offset is a full <see cref="SelectableGridCells"/> stride. It was previously
-    /// <c>keyboardBase</c> alone, which shifted the grid by one cell instead of one page and left the tail
-    /// of the catalog unreachable from the surface.
+    /// A period set outside the fader — from the Inspector, say — need not be one of the detents, so the
+    /// nearest is chosen on a logarithmic scale: the detents span one second to one hour, where a ratio
+    /// is what reads as "close" and an absolute difference does not.
     /// </remarks>
+    private static float EffectPeriodPosition(float seconds)
+    {
+        if (!(seconds > 0f))
+        {
+            return 0f;
+        }
+
+        float target = Mathf.Log(seconds);
+        int nearest = 0;
+        float nearestDistance = float.MaxValue;
+        for (int step = 0; step < EffectPeriodSteps.Length; step++)
+        {
+            float distance = Mathf.Abs(Mathf.Log(EffectPeriodSteps[step]) - target);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = step;
+            }
+        }
+
+        return EffectPeriodPositionOf(nearest);
+    }
+
+    /// <summary>
+    /// Pins the effect whose catalog index matches a valid surface grid cell.
+    /// </summary>
+    /// <param name="button">The zero-based grid cell received from TouchOSC.</param>
     private void ApplyGridPress(int button)
     {
-        if (button == KeyboardBankToggleButton)
+        if (button < 0 || button >= TouchOscSurface.GridCellCount || button >= effects.Length)
         {
-            keyboardBase = 1 - keyboardBase;
             return;
         }
 
-        // No lamp is echoed here: the jump moves the live effect index, and RefreshGrid lights the cell
-        // that index maps to. One source of truth for what is lit.
-        JumpToEffect(button + (keyboardBase * SelectableGridCells), effectTime);
+        // A cell press holds its effect rather than jumping to it: ApplyHeldEffect runs every frame and
+        // moves the wall onto heldEffect, so no jump is issued here. No lamp is echoed either —
+        // RefreshGrid lights the cell the live effect index maps to, keeping one source of truth.
+        heldEffect = button;
     }
 
     /// <summary>The effect index the control surface should reflect: the Switcher's once it exists, else the raw field.</summary>
