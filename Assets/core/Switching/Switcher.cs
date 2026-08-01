@@ -326,11 +326,10 @@ public sealed class Switcher
 
     /// <summary>
     /// Executes the plan against the on-air surface. Called by the Controller each frame after
-    /// <see cref="Director.Tick"/>, so a handover always precedes execution in the same frame. Each new
-    /// on-air beat does two things: it fires the Grid's scheduled act when the beat lands on the act's
-    /// fire beat exactly — a forward jump that skips that beat leaves the mark a Missed Cue, not performed
-    /// and not spent, while a loop snap-back before it keeps the act for the re-walked pass — and it
-    /// thinks once at every Grid start, where all deciding happens.
+    /// <see cref="Director.Tick"/>, so a handover always precedes execution in the same frame. Every frame
+    /// observes the current Grid, so a Grid start that arrives after the absolute beat update still causes
+    /// one think. New absolute beats fire or lapse scheduled acts; a loop snap-back before a fire beat
+    /// keeps the act for the re-walked pass.
     /// </summary>
     public void Tick()
     {
@@ -342,8 +341,23 @@ public sealed class Switcher
             return;
         }
 
-        if (beat == lastSeenBeat)
+        var isNewBeat = beat != lastSeenBeat;
+
+        // A Grid start is a decrease in its current position. Holding at One counts only when the
+        // absolute beat advances, which preserves consecutive one-beat Grids without thinking twice
+        // when repeated frames carry the same state.
+        var crossed = lastSeenGridBeat is { } lastGrid
+            ? gridBeat < lastGrid || (isNewBeat && gridBeat == 1 && lastGrid == 1)
+            : gridBeat == 1;
+        lastSeenGridBeat = gridBeat;
+
+        if (!isNewBeat)
         {
+            if (crossed)
+            {
+                Think(beat);
+            }
+
             return;
         }
 
@@ -375,15 +389,6 @@ public sealed class Switcher
             Trace(() => $"SWITCHER_LAPSE mark={lapsedMarkBeat} fire={lapsedFireBeat} beat={beat}");
         }
 
-        // Thinks once per Grid, at its start. A start is the grid position going down since the last
-        // observed beat — or holding at the One across a beat (a phrase restarting one beat past a
-        // boundary) — never a frame happening to sample exactly 1: a snap-back's grid datagram can land
-        // a frame behind the beat lane (2026-07-31: beat=65 arrived with gridBeat=16, the ==1 sample
-        // missed, and the skipped think passed a planned mark in silence and undercounted stillness).
-        var crossed = lastSeenGridBeat is { } lastGrid
-            ? gridBeat < lastGrid || (gridBeat == 1 && lastGrid == 1)
-            : gridBeat == 1;
-        lastSeenGridBeat = gridBeat;
         if (crossed)
         {
             Think(beat);

@@ -486,34 +486,37 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
-    /// A Grid start whose timing-grid datagram lands a frame behind the beat lane still thinks: the
-    /// Grid-start fact is BeatManager's crossing count, not a lucky sample of grid position 1. Pins the
-    /// 2026-07-31 live session where beat 65 arrived with the stored grid still reading 16, the sampled
-    /// think was skipped, a planned mark passed in silence, and stillness undercounted.
+    /// Verifies that a Grid start received after the absolute beat update triggers one think on that same
+    /// beat, while repeated frames at Grid position one do not think again.
     /// </summary>
     [Test]
     public void ALateGridDatagramAtAGridStartStillThinks()
     {
         var phrases = new[] { Phrase(1, 128, "intro") };
         var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
-        var effectBefore = OnWallEffect();
         var ceilingBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
 
         // Three whole still Grids, stopping one beat short of the deadline Grid start.
         WalkDirector(lastImpact + 1, ceilingBeat - 1, phrases, generation: 1);
-        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "Setup: the wall holds through three still Grids.");
+        Assert.That(switcher.Status.LastOffPlanSighting, Is.Null,
+            "Setup: no anomaly has been reported before the deadline Grid.");
 
-        // The deadline Grid start arrives as the skewed pair a loop snap-back produces on the wire: the
-        // continuous beat lane moves first while the stored grid still reads the old position, and the
-        // grid datagram lands on the next frame — already past position 1.
+        // The absolute beat arrives before the current Grid state. The next frame corrects the Grid without
+        // advancing the beat, so the Switcher must observe that state change rather than returning early.
         FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 16);
-        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "The skewed frame alone changes nothing.");
-        FeedSwitcherFrame(ceilingBeat + 1, phrases, generation: 1, gridBeat: 2);
+        Assert.That(switcher.Status.LastOffPlanSighting, Is.Null,
+            "The stale Grid frame does not trigger the deadline think.");
+        FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 1);
 
-        Assert.That(OnWallEffect(), Is.Not.EqualTo(effectBefore),
-            "The think ran on the crossing even though no frame ever sampled grid position 1.");
-        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan),
-            "The recovered think saw stillness up and took the Ceiling cue.");
+        var firstSighting = switcher.Status.LastOffPlanSighting;
+        Assert.That(firstSighting, Is.Not.Null, "The corrected Grid state triggers the missed think.");
+        Assert.That(firstSighting.Value.BoundaryBeat, Is.EqualTo(ceilingBeat));
+        Assert.That(firstSighting.Value.Ask, Is.EqualTo(1), "The late Grid start is one off-plan ask.");
+
+        FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 1);
+
+        Assert.That(switcher.Status.LastOffPlanSighting.Value.Ask, Is.EqualTo(firstSighting.Value.Ask),
+            "Repeated frames at the same Grid start do not think again.");
     }
 
     /// <summary>
