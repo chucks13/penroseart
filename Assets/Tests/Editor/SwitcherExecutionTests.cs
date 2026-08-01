@@ -486,6 +486,37 @@ public sealed class SwitcherExecutionTests
     }
 
     /// <summary>
+    /// A Grid start whose timing-grid datagram lands a frame behind the beat lane still thinks: the
+    /// Grid-start fact is BeatManager's crossing count, not a lucky sample of grid position 1. Pins the
+    /// 2026-07-31 live session where beat 65 arrived with the stored grid still reading 16, the sampled
+    /// think was skipped, a planned mark passed in silence, and stillness undercounted.
+    /// </summary>
+    [Test]
+    public void ALateGridDatagramAtAGridStartStillThinks()
+    {
+        var phrases = new[] { Phrase(1, 128, "intro") };
+        var lastImpact = WalkDirectorPastAllMarks(phrases, generation: 1);
+        var effectBefore = OnWallEffect();
+        var ceilingBeat = lastImpact + (3 * TrackCueSheet.GridBeats);
+
+        // Three whole still Grids, stopping one beat short of the deadline Grid start.
+        WalkDirector(lastImpact + 1, ceilingBeat - 1, phrases, generation: 1);
+        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "Setup: the wall holds through three still Grids.");
+
+        // The deadline Grid start arrives as the skewed pair a loop snap-back produces on the wire: the
+        // continuous beat lane moves first while the stored grid still reads the old position, and the
+        // grid datagram lands on the next frame — already past position 1.
+        FeedSwitcherFrame(ceilingBeat, phrases, generation: 1, gridBeat: 16);
+        Assert.That(OnWallEffect(), Is.EqualTo(effectBefore), "The skewed frame alone changes nothing.");
+        FeedSwitcherFrame(ceilingBeat + 1, phrases, generation: 1, gridBeat: 2);
+
+        Assert.That(OnWallEffect(), Is.Not.EqualTo(effectBefore),
+            "The think ran on the crossing even though no frame ever sampled grid position 1.");
+        Assert.That(switcher.Status.LastCueSource, Is.EqualTo(CueSource.OffPlan),
+            "The recovered think saw stillness up and took the Ceiling cue.");
+    }
+
+    /// <summary>
     /// A held loop after the plan's last mark: re-crossed Grid starts are elapsed music, so stillness
     /// keeps counting and the fourth crossing fires a fresh Ceiling cue — while the spent mark itself is
     /// never re-fired.

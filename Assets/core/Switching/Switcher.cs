@@ -178,6 +178,13 @@ public sealed class Switcher
     private int? lastSeenBeat;
 
     /// <summary>
+    /// BeatManager's Grid-start count as of the last think, so each crossing thinks exactly once however
+    /// the frames land. The count — not a sampled grid position — is the Grid-start fact, because the
+    /// wire publishes positions, not events.
+    /// </summary>
+    private int lastSeenGridStarts;
+
+    /// <summary>
     /// Whether a think has established the stillness baseline. The first think observes a Grid start with
     /// no whole Grid behind it, so it counts nothing; every later think counts the Grid it closes.
     /// </summary>
@@ -340,13 +347,12 @@ public sealed class Switcher
             return;
         }
 
-        if (lastSeenBeat != 0 && beat != lastSeenBeat + 1)
+        if (lastSeenBeat is { } previousBeat && beat != previousBeat + 1)
         {
             // A discontinuity is the wire's story: a snap-back is a loop, a forward skip is frames
-            // outrunning beats or a needle-drop. The Grid lane rides along so a straddled Grid start —
-            // a think that never ran — is visible in the log instead of inferred from silence.
-            var from = lastSeenBeat;
-            Trace(() => $"SWITCHER_BEAT_JUMP from={from} to={beat} gridBeat={gridBeat}");
+            // outrunning beats or a needle-drop. The Grid lane rides along so a lagging grid datagram
+            // at the jump is visible in the log instead of inferred from silence.
+            Trace(() => $"SWITCHER_BEAT_JUMP from={previousBeat} to={beat} gridBeat={gridBeat}");
         }
 
         lastSeenBeat = beat;
@@ -369,11 +375,14 @@ public sealed class Switcher
             Trace(() => $"SWITCHER_LAPSE mark={lapsedMarkBeat} fire={lapsedFireBeat} beat={beat}");
         }
 
-        // The Grid lane returning to one is a Grid start — phrase-relative, so a shortened phrase
-        // restarts it early and the think follows the music. A loop that snaps the beat back re-crosses
-        // Grid starts and thinks again: crossings measure elapsed music.
-        if (gridBeat == 1)
+        // Thinks follow BeatManager's Grid-start count — crossings measure elapsed music. Sampling the
+        // grid position for exactly 1 lost a whole think whenever a snap-back's timing-grid datagram
+        // landed a frame behind the beat lane (2026-07-31: beat=65 arrived with gridBeat=16; the skipped
+        // think passed a planned mark in silence and undercounted stillness).
+        var gridStarts = controller.beatManager.Grid.StartsSeen;
+        if (gridStarts != lastSeenGridStarts)
         {
+            lastSeenGridStarts = gridStarts;
             Think(beat);
         }
     }
