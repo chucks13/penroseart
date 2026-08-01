@@ -166,6 +166,9 @@ public readonly struct TrackCueSheet
     /// <summary>The empty Anchor list a structure-less sheet returns, shared for the same reason as <see cref="NoMarks"/>.</summary>
     private static readonly IReadOnlyList<AnchorResolution> NoAnchors = Array.Empty<AnchorResolution>();
 
+    /// <summary>The empty boundary list a structure-less sheet returns, shared for the same reason as <see cref="NoMarks"/>.</summary>
+    private static readonly IReadOnlyList<int> NoBoundaries = Array.Empty<int>();
+
     /// <summary>
     /// The Effect catalog this sheet was dealt from, retained so <see cref="DealOffPlanCueAt"/> can deal one
     /// more card without the live build-time bags. Descriptors are pure repertoire values with no engine
@@ -183,6 +186,12 @@ public readonly struct TrackCueSheet
     /// </summary>
     private readonly int salt;
 
+    /// <summary>
+    /// Every Grid Boundary of the built structure, ascending — the phrase-relative lattice the walk placed
+    /// marks on, retained so <see cref="ClosingBoundaryAfter"/> can answer from the plan's own knowledge.
+    /// </summary>
+    private readonly IReadOnlyList<int> boundaries;
+
     /// <summary>Captures one finished plan. Private because <see cref="Build"/> is the only way to make a real sheet.</summary>
     /// <param name="marks">Every placed Cue Mark, ascending by beat.</param>
     /// <param name="anchors">Every owned Anchor resolution, ascending by landing beat.</param>
@@ -191,6 +200,7 @@ public readonly struct TrackCueSheet
     /// <param name="structureGeneration">First half of the deal seed and of the sheet's identity.</param>
     /// <param name="playerNumber">Second half of the deal seed and of the sheet's identity.</param>
     /// <param name="salt">Run-scoped seed salt the deal was drawn under (ADR-0008).</param>
+    /// <param name="boundaries">Every Grid Boundary of the built structure, ascending.</param>
     private TrackCueSheet(
         IReadOnlyList<CuePlanMark> marks,
         IReadOnlyList<AnchorResolution> anchors,
@@ -198,7 +208,8 @@ public readonly struct TrackCueSheet
         IReadOnlyList<TransitionDescriptor> transitions,
         int structureGeneration,
         int playerNumber,
-        int salt)
+        int salt,
+        IReadOnlyList<int> boundaries)
     {
         Marks = marks;
         Anchors = anchors;
@@ -207,6 +218,7 @@ public readonly struct TrackCueSheet
         StructureGeneration = structureGeneration;
         PlayerNumber = playerNumber;
         this.salt = salt;
+        this.boundaries = boundaries;
     }
 
     /// <summary>Every placed Cue Mark, ascending by beat; the complete fire schedule the Switcher performs.</summary>
@@ -255,6 +267,32 @@ public readonly struct TrackCueSheet
     /// Honoured unless the catalog has no other card to give.
     /// </param>
     /// <returns>The dealt Effect and Transition catalog indices, and whether to take them at this boundary.</returns>
+    /// <summary>
+    /// The Grid Boundary closing the Grid that contains <paramref name="beat"/> — the first boundary of the
+    /// plan's phrase-relative lattice strictly after it, short Grids included, known at track load. Null when
+    /// the plan cannot answer: a structure-less sheet, or a beat at or past the track's last boundary — the
+    /// caller falls back to nominal Grid math there, and a wrong nominal guess self-heals at the next
+    /// Grid-start think.
+    /// </summary>
+    /// <param name="beat">The on-air beat to look ahead from, normally a Grid's opening beat.</param>
+    public int? ClosingBoundaryAfter(int beat)
+    {
+        if (boundaries == null)
+        {
+            return null;
+        }
+
+        foreach (var boundary in boundaries)
+        {
+            if (boundary > beat)
+            {
+                return boundary;
+            }
+        }
+
+        return null;
+    }
+
     public (int EffectIndex, int TransitionIndex, bool Take) DealOffPlanCueAt(
         int boundaryBeat,
         int gapGrids,
@@ -331,7 +369,7 @@ public readonly struct TrackCueSheet
         var phrases = structure.Phrases;
         if (phrases.Count == 0)
         {
-            return new TrackCueSheet(NoMarks, NoAnchors, effects, transitions, structureGeneration, playerNumber, salt);
+            return new TrackCueSheet(NoMarks, NoAnchors, effects, transitions, structureGeneration, playerNumber, salt, NoBoundaries);
         }
 
         var rng = new Rng(structureGeneration ^ salt, playerNumber);
@@ -351,7 +389,7 @@ public readonly struct TrackCueSheet
         var markBeats = WalkTrack(candidates, boundaries, owned, startBeat, smallRunway, smallTail, rng);
         return Deal(
             markBeats, owned, effects, transitions, effectBag, transitionBag,
-            startBeat, smallRunway, structureGeneration, playerNumber, salt);
+            startBeat, smallRunway, structureGeneration, playerNumber, salt, boundaries);
     }
 
     /// <summary>
@@ -635,7 +673,8 @@ public readonly struct TrackCueSheet
         int smallRunway,
         int structureGeneration,
         int playerNumber,
-        int salt)
+        int salt,
+        IReadOnlyList<int> boundaries)
     {
         // Carrier map: each owned Anchor keys to the last mark before its landing. The walk guarantees one
         // exists. Adjacent Anchors can share a carrier; the one incumbent then rides every one of them.
@@ -731,7 +770,7 @@ public readonly struct TrackCueSheet
         }
 
         resolutions.Sort(static (a, b) => a.LandingBeat.CompareTo(b.LandingBeat));
-        return new TrackCueSheet(marks, resolutions, effects, transitions, structureGeneration, playerNumber, salt);
+        return new TrackCueSheet(marks, resolutions, effects, transitions, structureGeneration, playerNumber, salt, boundaries);
     }
 
     /// <summary>Phrase length in beats: an inclusive one-based span, so its end mark is the next downbeat.</summary>

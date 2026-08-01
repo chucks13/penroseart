@@ -66,6 +66,32 @@ public sealed class TrackCueSheetTests
         }
     }
 
+    /// <summary>
+    /// Verifies that ClosingBoundaryAfter answers from the plan's own phrase-relative lattice — each
+    /// boundary names the next one, short Grids included — and returns null past the last boundary and
+    /// on a structure-less sheet, where callers fall back to nominal Grid math.
+    /// </summary>
+    [Test]
+    public void ClosingBoundaryAfterAnswersThePlansOwnLatticeIncludingShortGrids()
+    {
+        var structure = MixedTrack();
+        var sheet = TrackCueSheet.Build(structure, MixedEffects(), MixedTransitions(), 7, 2);
+        var boundaries = GridBoundaries(structure);
+
+        for (var i = 0; i < boundaries.Count - 1; i++)
+        {
+            Assert.That(sheet.ClosingBoundaryAfter(boundaries[i]), Is.EqualTo(boundaries[i + 1]),
+                $"The Grid opening at {boundaries[i]} closes at the lattice's next boundary.");
+            Assert.That(sheet.ClosingBoundaryAfter(boundaries[i + 1] - 1), Is.EqualTo(boundaries[i + 1]),
+                "A late look from inside the Grid still names the same closing boundary.");
+        }
+
+        Assert.That(sheet.ClosingBoundaryAfter(boundaries[boundaries.Count - 1]), Is.Null,
+            "Past the last boundary the plan has no answer.");
+        Assert.That(default(TrackCueSheet).ClosingBoundaryAfter(1), Is.Null,
+            "A structure-less sheet has no lattice to answer from.");
+    }
+
     [Test]
     public void MarksAreIrregularlySpacedNeverClumpedNeverMetronomic()
     {

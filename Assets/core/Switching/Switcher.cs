@@ -518,8 +518,12 @@ public sealed class Switcher
             lastOffPlanAnswer = answer;
             if (answer.Perform)
             {
-                // TODO: TrackCueSheet does not expose the current Grid's closing boundary when no mark occupies it.
-                var boundaryBeat = candidate?.Beat ?? beat + TrackCueSheet.GridBeats - gridBeat + 1;
+                // The plan knows its Grid lattice at track load, short Grids included. Only a sheet that
+                // cannot answer — no structure, or past the last boundary — falls back to the nominal Grid,
+                // and a wrong nominal guess lapses at the next Grid-start think and asks again.
+                var boundaryBeat = candidate?.Beat
+                    ?? sheet.ClosingBoundaryAfter(beat)
+                    ?? beat + TrackCueSheet.GridBeats - gridBeat + 1;
                 ScheduleAct(beat, boundaryBeat, answer, null);
             }
         }
