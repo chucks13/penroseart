@@ -67,7 +67,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/RhythmText.cs` | Editor-side text formatting for nullable musical beat/count facts (`"16b"`, plain counts, `"—"` for null). |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPoolEditor.cs` | Waveform Pool editor window and save path. |
 | `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Sample` output. |
-| `Assets/Editor/Effects/EffectSelectorDrawer.cs` | Effect selector property drawer. |
+| `Assets/Editor/Effects/EffectHoldRenderer.cs` | Shared Effect / Hold control for the Controller inspector and Tuning Window. |
 | `Assets/Editor/Transitions/TransitionSettingsAssetUtility.cs` | Transition settings asset creation/restoration utility. |
 | `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Tuning window for transitions and related authoring controls. |
 | `Assets/Editor/Shared/LiveControllerAccess.cs` | Shared editor helper for resolving live Controller state and play-mode repaint. |

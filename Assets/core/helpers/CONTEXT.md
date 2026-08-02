@@ -7,7 +7,6 @@ Most runtime systems have moved into explicit `Assets/core/` subdirectories such
 ## Current helper files
 
 - `Factory.cs` — reflection catalog builder and `[RuntimeCatalogIgnore]` attribute for effects, transitions, and blenders.
-- `EffectSelectorAttribute.cs` — Inspector selector metadata for effect-related fields.
 - `GPalette.cs` — shared palette parsing, sampling, and animated palette transitions.
 - `Timer.cs` — lightweight countdown timer used by runtime switching paths.
 - `Singleton.cs` — generic Unity `MonoBehaviour` singleton base used by `Controller`.

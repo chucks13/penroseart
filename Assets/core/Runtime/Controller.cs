@@ -184,15 +184,14 @@ public class Controller : Singleton<Controller>
     /// </para>
     /// <para>
     /// Replaces the former <c>forceEffect</c> (bool) + <c>forceEffectName</c> (string prefix) pair: the bool is
-    /// now simply "is this <c>&gt;= 0</c>", and the target is the value itself. The inspector renders this as a
-    /// catalog dropdown via <c>EffectSelectorDrawer</c> (row 0 = Random); pressing <c>Escape</c> resets it to
+    /// now simply "is this <c>&gt;= 0</c>", and the target is the value itself. Editor surfaces render it through
+    /// the shared <c>EffectHoldRenderer</c> (row 0 = Random); pressing <c>Escape</c> resets it to
     /// <c>-1</c>. The blank <c>EmptyEffect</c> template is never selectable because <see cref="Factory{T}"/>
     /// excludes its <c>[RuntimeCatalogIgnore]</c> type from <see cref="effects"/> entirely.
     /// </para>
     /// </summary>
     [Tooltip("Random (-1) lets the deck rotate normally. Any other choice holds that effect and stops the " +
              "random switching until you pick Random again. Escape also resets this to Random.")]
-    [EffectSelector]
     public int heldEffect = -1;
 
     /// <summary>Whether to create and draw the optional camera overlay.</summary>

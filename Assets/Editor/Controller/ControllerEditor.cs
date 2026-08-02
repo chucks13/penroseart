@@ -7,17 +7,20 @@ using UnityEngine;
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
 {
-    /// <summary>Serialized properties owned by the canonical Tuning Window instead of the compact Inspector.</summary>
-    private static readonly string[] TuningWindowProperties = { "m_Script", "beatManager" };
+    /// <summary>Serialized properties drawn outside the Inspector's scene and configuration list.</summary>
+    private static readonly string[] TuningWindowProperties = { "m_Script", "beatManager", "heldEffect" };
 
-    /// <summary>Draws the workspace entry, concise runtime health, and remaining scene/configuration properties.</summary>
+    /// <summary>Draws the workspace entry, runtime health, shared Effect / Hold control, and scene configuration.</summary>
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
+        var controller = (Controller)target;
 
         DrawTuningWindowEntry();
         EditorGUILayout.Space(6f);
-        DrawRuntimeHealth((Controller)target);
+        DrawRuntimeHealth(controller);
+        EditorGUILayout.Space(6f);
+        EffectHoldRenderer.Draw(controller, controller.DirectorStatus);
         EditorGUILayout.Space(8f);
 
         EditorGUILayout.LabelField("Scene & Configuration", EditorStyles.boldLabel);
@@ -79,11 +82,6 @@ public sealed class ControllerEditor : Editor
             director.IsStandaloneCadenceFrozen
                 ? "Standalone Mode · Cadence Frozen"
                 : director.IsSyncedMode ? "Synced Mode" : "Standalone Mode");
-        EditorGUILayout.LabelField("Director Next", ControllerStatusText.FormatDirectorNext(director));
-        EditorGUILayout.LabelField(
-            "Hold Selected",
-            $"Effect {(director.HoldSelectedEffect ? "On" : "Off")} · Transition {(director.HoldSelectedTransition ? "On" : "Off")}");
-        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(director));
         EditorGUILayout.LabelField("Switcher Active", ControllerStatusText.FormatSwitcherActive(switcher));
     }
 }

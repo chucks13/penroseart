@@ -137,9 +137,6 @@ public sealed class PenroseTuningWindow : EditorWindow
 
     private Type[] transitionTypes = Array.Empty<Type>();
     private string[] transitionNames = Array.Empty<string>();
-    /// <summary>The live Effect catalog index selected for Director steering.</summary>
-    [SerializeField]
-    private int selectedEffectIndex = -1;
     /// <summary>The catalog index whose saved Transition Settings are currently being edited.</summary>
     [SerializeField]
     private int selectedTransitionIndex = -1;
@@ -286,7 +283,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         return false;
     }
 
-    /// <summary>Draws live switching state, Director steering, and the sticky Cue Sheet tracker.</summary>
+    /// <summary>Draws live switching state, the shared Effect / Hold control, and the sticky Cue Sheet tracker.</summary>
     private void DrawLiveTab()
     {
         if (!LiveControllerAccess.TryGet(out var controller))
@@ -308,7 +305,7 @@ public sealed class PenroseTuningWindow : EditorWindow
 
         TransitionBarRenderer.Draw(switcher.Status);
         DrawOffPlanReadout(switcher.Status, controller);
-        DrawLiveEffectSteering(controller);
+        EffectHoldRenderer.Draw(controller, controller.DirectorStatus);
 
         var viewWidth = position.width - 20f;
         var activeSlot = DrawSheetSlotToolbar(director.Sheets, beatManager);
@@ -388,47 +385,6 @@ public sealed class PenroseTuningWindow : EditorWindow
         EditorGUILayout.LabelField(
             "Off-Plan",
             $"{sighting.Anomaly} @ {sighting.BoundaryBeat} · gap {sighting.GapGrids} · ask {sighting.Ask} → {verdict}");
-    }
-
-    /// <summary>
-    /// Steers the Director through its existing Effect override contract without owning runtime state.
-    /// </summary>
-    private void DrawLiveEffectSteering(Controller controller)
-    {
-        var directorReady = controller.director != null;
-        var directorStatus = controller.DirectorStatus;
-        var effectNames = EffectNamesOf(controller);
-
-        using (new EditorGUILayout.HorizontalScope())
-        {
-            EditorGUILayout.LabelField("Next Effect", GUILayout.Width(70f));
-            selectedEffectIndex = EditorGUILayout.Popup(selectedEffectIndex, effectNames);
-            var validSelection = selectedEffectIndex >= 0 && selectedEffectIndex < effectNames.Length;
-
-            using (new EditorGUI.DisabledScope(!directorReady || !validSelection))
-            {
-                if (GUILayout.Button("Stage Next"))
-                {
-                    controller.director.SetNextEffect(selectedEffectIndex);
-                    Repaint();
-                }
-
-                EditorGUI.BeginChangeCheck();
-                var holdSelected = EditorGUILayout.ToggleLeft(
-                    "Hold Selected",
-                    directorStatus.HoldSelectedEffect);
-                if (EditorGUI.EndChangeCheck() && directorReady)
-                {
-                    if (holdSelected)
-                    {
-                        controller.director.SetNextEffect(selectedEffectIndex);
-                    }
-
-                    controller.director.SetHoldSelectedEffect(holdSelected);
-                    Repaint();
-                }
-            }
-        }
     }
 
     /// <summary>
@@ -743,7 +699,6 @@ public sealed class PenroseTuningWindow : EditorWindow
         EditorGUILayout.LabelField(
             "Switcher Stage",
             string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
-        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(directorStatus));
     }
 
     /// <summary>Draws every serialized Transition setting except the shared Runway and Tail controls.</summary>
