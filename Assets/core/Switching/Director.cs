@@ -381,7 +381,7 @@ public sealed class Director
         Trace(() => $"NEXT_TRANSITION_HOLD_SET hold={holdSelectedTransition} nextTransition={FormatTransition(nextTransitionIndex)}");
     }
 
-    /// <summary>Advances the Director's Standalone cadence clock or, in Synced Mode, the plan-driven reducer.</summary>
+    /// <summary>Runs Synced plan maintenance or advances the Standalone cadence unless Hold freezes its clock.</summary>
     public void Tick(float deltaTime)
     {
         LogModeIfChanged();
@@ -418,7 +418,7 @@ public sealed class Director
         StageNextChoices();
     }
 
-    /// <summary>Applies Hold as an inspection freeze: keeps the held effect on stage, suspending rotation.</summary>
+    /// <summary>Engages Hold by showing its selected effect when it is not already the Switcher's destination.</summary>
     public void ApplyHold()
     {
         if (!controller.TryGetHeldEffectIndex(out var heldEffectIndex))
@@ -429,10 +429,6 @@ public sealed class Director
         if (switcher.TransitionTargetEffectIndex != heldEffectIndex)
         {
             ShowNow(heldEffectIndex, controller.effectTime);
-        }
-        else
-        {
-            standaloneTimer.Reset();
         }
     }
 
@@ -449,12 +445,19 @@ public sealed class Director
         RunStandaloneTimerDecision();
     }
 
-    /// <summary>Advances Standalone cadence after clearing synchronized reducer state.</summary>
+    /// <summary>Clears synchronized reducer state, then advances Standalone cadence unless Hold freezes its clock.</summary>
     private void TickStandaloneMode(float deltaTime)
     {
         // The mode boundary clears the sheet slots and the Switcher's in-force sheet so no stale plan
         // crosses a Standalone gap. Idempotent every frame (ADR-0003).
         ResetReducerMemory();
+
+        // Hold freezes only the Standalone cadence; Synced plan maintenance stays in TickSyncedMode.
+        if (controller.TryGetHeldEffectIndex(out _))
+        {
+            return;
+        }
+
         standaloneTimer.Update(deltaTime);
     }
 
@@ -749,24 +752,9 @@ public sealed class Director
         lastLoggedMode = mode;
     }
 
-    /// <summary>Consumes one Standalone timer wake, honoring Effect Hold or starting the staged move.</summary>
+    /// <summary>Consumes one Standalone timer wake by starting the staged move.</summary>
     private void RunStandaloneTimerDecision()
     {
-        if (controller.TryGetHeldEffectIndex(out var heldEffectIndex))
-        {
-            Trace(() => $"STANDALONE_HOLD held={FormatEffect(heldEffectIndex)} current={FormatEffect(switcher.TransitionTargetEffectIndex)}");
-            if (switcher.TransitionTargetEffectIndex != heldEffectIndex)
-            {
-                ShowNow(heldEffectIndex, controller.effectTime);
-            }
-            else
-            {
-                standaloneTimer.Reset();
-            }
-
-            return;
-        }
-
         var transitionIndex = nextTransitionIndex;
         var targetEffectIndex = nextEffectIndex;
         ValidateTransitionIndex(transitionIndex);
