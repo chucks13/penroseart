@@ -198,19 +198,6 @@ public class Controller : Singleton<Controller>
     /// <summary>Whether to create and draw the optional camera overlay.</summary>
     public bool useCamera;
 
-    [Header("Effect Switching")]
-    /// <summary>
-    /// Serialized legacy field for an initial effect index. Current startup uses
-    /// the effect deck / force override instead, so this is not actively read.
-    /// </summary>
-    public int startEffect;
-
-    /// <summary>
-    /// Index into <see cref="effects"/> for the currently playing effect. Set to
-    /// -1 while an effect-to-effect transition is active.
-    /// </summary>
-    private int currentEffect;
-
     /// <summary>Read-only Director sequencing snapshot for inspectors and status displays.</summary>
     public DirectorStatus DirectorStatus => director != null ? director.Status : DirectorStatus.NotReady;
 
@@ -234,23 +221,11 @@ public class Controller : Singleton<Controller>
 
     [Header("Transition Switching")]
     /// <summary>
-    /// Serialized legacy toggle from the older random-transition path. Current
-    /// code always uses <see cref="transitionDeck"/> selection after startup.
-    /// </summary>
-    public bool randomTransition = true;
-
-    /// <summary>
     /// Index into <see cref="transitions"/> for the active or next transition.
     /// The scene-serialized value controls the first transition before deck
     /// selection takes over.
     /// </summary>
     public int currentTransition;
-
-    /// <summary>
-    /// Legacy serialized transition duration retained for scene compatibility.
-    /// Active Standalone Mode transition timing now comes from each transition's repertoire.
-    /// </summary>
-    public float transitionTime = 4f;
 
     // ---------------------------------------------------------------------
     // Scene-provided source data and helper systems
@@ -393,9 +368,6 @@ public class Controller : Singleton<Controller>
     /// <summary>Reusable byte buffer for legacy UDP/E1.31 frame packets.</summary>
     private byte[] udpFrameBuffer;
 
-    /// <summary>Whether the controller is currently drawing a transition instead of a single effect.</summary>
-    private bool inTransition;
-
 #if PREP_CAPTURE
     /// <summary>Local time accumulator for PREP_CAPTURE dummy signal generation.</summary>
     public float diagnosticTime;
@@ -468,9 +440,10 @@ public class Controller : Singleton<Controller>
 
     /// <summary>
     /// Builds the top-level effect catalog, initializes every effect once,
-    /// creates the effect deck, and starts the first selected effect.
+    /// creates the effect deck, and starts the selected startup effect.
     /// </summary>
-    private void SetupEffects()
+    /// <returns>The catalog index of the started effect for the Switcher's initial stage state.</returns>
+    private int SetupEffects()
     {
         var factory = new Factory<EffectBase>();
 
@@ -487,13 +460,11 @@ public class Controller : Singleton<Controller>
 
         Debug.Log($"Effects ({effects.Length}):\n{FormatCatalog(factory.Names)}");
 
-        //    effects[startEffect].sortIndex = -1;
-        //    ReSortEffectsArray();
-        currentEffect = GetNewEffectIndex();
-        effects[currentEffect].RandomizeTime();
+        int initialEffectIndex = GetNewEffectIndex();
+        effects[initialEffectIndex].RandomizeTime();
+        effects[initialEffectIndex].OnStart();
 
-        effects[currentEffect].OnStart();
-
+        return initialEffectIndex;
     }
 
     /// <summary>
@@ -774,30 +745,16 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Puts the effect at the requested catalog index on the wall now. Once the Director exists this is
-    /// an operator override that performs a real Transition into it (<see cref="Director.ShowNow"/>);
-    /// only the pre-Director startup fallback still cuts.
+    /// Puts a valid effect catalog index on the wall through the Director's Show Now override.
     /// </summary>
+    /// <param name="i">The destination effect catalog index.</param>
+    /// <param name="time">Seconds to keep the Standalone timer on the requested effect.</param>
     public void JumpToEffect(int i, float time)
     {
         if (i < 0) return;
         if (i >= effects.Length) return;
 
-        if (director != null)
-        {
-            director.ShowNow(i, time);
-            return;
-        }
-
-        // Startup/fallback path before Director/Switcher are initialized.
-        EffectBase.APalette.Change();
-        inTransition = false;
-        currentEffect = i;
-        effects[currentEffect].RandomizeTime();
-        effects[currentEffect].OnStart();
-        timer.Set(time);
-        timer.Reset();
-        effectText.text = effects[currentEffect].Name;
+        director.ShowNow(i, time);
     }
 
     /// <summary>
@@ -822,30 +779,17 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Per-frame hook (called from <see cref="Update"/>) that keeps the wall on the held effect while one is held.
+    /// Delegates per-frame Held Effect enforcement to the Director.
     /// </summary>
     /// <remarks>
-    /// No-op for the <c>-1</c> Random sentinel. When an effect is held but the wall is mid-transition or showing a
-    /// different effect — e.g. because the held effect was just changed in the dropdown, or the deck had rotated
-    /// elsewhere before the lock — this cancels any transition and enters the held effect immediately rather than
-    /// waiting for the next timer tick.
+    /// <see cref="Director.ApplyHold"/> treats the <c>-1</c> Random sentinel as a no-op and uses Show Now when
+    /// the Switcher's current destination differs from a valid held selection.
     /// </remarks>
     private void ApplyHeldEffect()
     {
-        if (director != null)
-        {
-            director.ApplyHold();
-            return;
-        }
-
-        if (!TryGetHeldEffectIndex(out int heldEffectIndex))
-            return;
-
-        if (inTransition || currentEffect != heldEffectIndex)
-        {
-            JumpToEffect(heldEffectIndex, effectTime);
-        }
+        director.ApplyHold();
     }
+
     /// <summary>
     /// Drains queued TouchOSC operator intents and refreshes the control surface for this frame.
     /// </summary>
@@ -1038,8 +982,8 @@ public class Controller : Singleton<Controller>
         heldEffect = button;
     }
 
-    /// <summary>The effect index the control surface should reflect: the Switcher's once it exists, else the raw field.</summary>
-    private int CurrentEffectIndexForSurface() => switcher != null ? switcher.CurrentEffectIndex : currentEffect;
+    /// <summary>The Switcher's current effect index for TouchOSC feedback.</summary>
+    private int CurrentEffectIndexForSurface() => switcher.CurrentEffectIndex;
 
     /// <summary>
     /// Applies a new legacy UDP/E1.31 destination address, reporting parse/setup failures to the Unity log.
@@ -1491,9 +1435,9 @@ public class Controller : Singleton<Controller>
         onToggle.onValueChanged.AddListener(displayOnChange);
 
         // Build runtime catalogs. These are plain C# objects, not scene objects.
-        // Effects are also started here because the first frame needs an active
-        // currentEffect before the timer state machine begins.
-        SetupEffects();
+        // SetupEffects starts and returns the first active effect so the Switcher
+        // can adopt that same catalog index when its stage state is created.
+        int initialEffectIndex = SetupEffects();
         SetupTransitions();
         SetupBlenders();
         setIP(IP);
@@ -1524,7 +1468,7 @@ public class Controller : Singleton<Controller>
         cueLog = CueLog.CreateForSession(Path.Combine(Application.persistentDataPath, "Logs"));
         timer = new Timer(effectTime, false);
         switcher = new Switcher(this, effects, transitions);
-        switcher.SetInitialEffect(currentEffect, currentTransition);
+        switcher.SetInitialEffect(initialEffectIndex, currentTransition);
         director = new Director(this, switcher, timer, effectDeck, transitionDeck, currentTransition);
         switcher.BindDirector(director);
         timer.onFinished += director.OnTimerFinished;
@@ -1549,16 +1493,13 @@ public class Controller : Singleton<Controller>
 
 
     /// <summary>
-    /// Picks the next effect: the held effect when one is held, otherwise the next card off the rotating deck.
+    /// Selects the startup effect: a valid Held Effect selection, otherwise the next rotating-deck card.
     /// </summary>
     private int GetNewEffectIndex()
     {
-        // A held effect (heldEffect >= 0) always wins; the -1 Random sentinel falls through to deck rotation,
-        // which is the default behavior.
-        if (TryGetHeldEffectIndex(out int heldEffectIndex))
-            return heldEffectIndex;
-
-        return Deck.PullRandom(effectDeck, _ => true, (minInclusive, maxExclusive) => Random.Range(minInclusive, maxExclusive));
+        return TryGetHeldEffectIndex(out int heldEffectIndex)
+            ? heldEffectIndex
+            : Deck.PullRandom(effectDeck, _ => true, (minInclusive, maxExclusive) => Random.Range(minInclusive, maxExclusive));
     }
 
     /// <summary>
@@ -1660,7 +1601,7 @@ public class Controller : Singleton<Controller>
                     {
                         // The keyboard bank walks past the end of shorter catalogs, so the guard belongs here:
                         // the Director takes only catalog indices and rejects anything else.
-                        if (i >= 0 && i < effects.Length && director != null)
+                        if (i >= 0 && i < effects.Length)
                         {
                             director.SetNextEffect(i);
                         }
