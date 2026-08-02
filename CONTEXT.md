@@ -10,6 +10,10 @@ The shared glossary for the Penrose Wall project — rhythm, visuals, sequencing
 The Penrose Wall itself — the physical LED installation and, by extension, whatever is showing on it right now. "The wall changes" means a new Performer came on; "the wall holds still" means none has.
 _Avoid_: using "wall" for the Unity preview mesh specifically; treating the preview and the installation as different subjects.
 
+**On the Wall**:
+The Effect the wall is showing right now — the **A** side while a Transition is in flight, and the current Effect otherwise. It is what a viewer sees, never where the wall is headed.
+_Avoid_: reading "on the wall" as a Transition's destination; the questions that ask "are we already going there?" — self-blend and Held Effect — compare against **B**, the Effect the wall is moving toward, which is a different question with a different answer mid-move.
+
 **Buffer**:
 One frame of the wall as color values, one per logical tile. Every Effect, Transition, Mixer, and overlay reads and writes buffers; the buffer is the only thing the runtime hands to hardware.
 _Avoid_: treating a buffer as a screen or an image — the tile layout is irregular; bypassing the buffer to drive tiles directly.
@@ -310,17 +314,13 @@ _Avoid_: confusing the Next Effect with the currently on-wall Effect; using an e
 The debug override that starts a move toward a selected Effect at once. It is not a cut, has no Cue Mark, and does not edit the Cue Sheet; the plan resumes at its next unfired Cue Mark.
 _Avoid_: cutting instantly to the Effect (retired); confusing it with Next Effect, which changes what the *next Cue Mark* moves toward; expecting the pick to survive the next Cue Mark (that is a Held Effect).
 
-**Held Effect**:
-A single selection that either lets the wall rotate or pins it to one Effect. The **Random** state lets normal rotation continue; choosing a specific Effect *holds* it, suppressing both rotation and transitions until Random is chosen again.
-_Avoid_: confusing Held Effect with Hold Selected; treating a hold as a second sequencer that commands around the Director.
+**Held Effect** (a.k.a. **Hold**):
+One operator selection with two states: **Random** lets the wall rotate normally, and choosing an Effect *holds* it — the wall moves there once through an ordinary Transition, and then switching stops until Random is chosen again. It exists so a developer can sit on one Effect, watch it work through the music, and tweak it live; the held Effect keeps reading the music and keeps its own Drop and Fill responses. Hold is a refused answer, not a command: the Director keeps planning and the Switcher keeps thinking, and every Cue the Switcher asks about comes back frozen. Standalone Mode has no plan to refuse, so there Hold stops the cadence clock instead.
+_Avoid_: confusing Held Effect with Hold Selected; modeling Hold as a Director selection decision, or as a second sequencer that commands the Switcher around the Director; expecting the Cue Marks a hold covered to be deferred — they lapse like any other passed mark.
 
 **Hold Selected**:
 A Tuning Window mode where the selected Effect or Transition remains the Director's next choice after each move completes. Turning it off returns that choice to normal random selection.
-_Avoid_: confusing this with Held Effect; Hold Selected keeps the Director/Switcher path running, while Held Effect freezes rotation around one on-wall Effect.
-
-**Hold**:
-An inspection freeze that suspends the Director so a developer can sit on one effect, watch it, and tweak its settings live — a Unity Editor development affordance, not normal show operation. It is not a selection input and not a second decider: while held, nothing is performed and the chosen Performer simply stays on screen.
-_Avoid_: modeling Hold as a Director selection decision, or as a path that commands the Switcher around the Director; expecting a freeze to defer the cues it covered.
+_Avoid_: confusing this with Held Effect; Hold Selected keeps the Director/Switcher path running and the wall still changes, while Held Effect stops switching altogether.
 
 ### Transitions
 

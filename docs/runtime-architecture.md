@@ -86,7 +86,7 @@ At runtime the Director hands the focus player's current sheet to the Switcher o
 
 **Nothing changes a Transition in flight.** Once `Perform(...)` has started a move, that move plays out as it left — no re-targeting, no re-timing, no re-deciding from the clock. A pick made mid-flight applies to the next move.
 
-The override surface — staged Next Effect / Next Transition, Hold Selected, Held Effect, Show Now, and Hold — is debugging and verification tooling for testing Performers, never show behavior; it must never degrade the show model.
+The override surface — staged Next Effect / Next Transition, Hold Selected, Held Effect, and Show Now — is debugging and verification tooling for testing Performers, never show behavior; it must never degrade the show model.
 
 Staged and held Effect/Transition choices mask the assignment when the Switcher asks `Director.DecideCue(...)` or `Director.DecideOffPlanCue(...)`; they never mutate the sheet. Both return a `CueDecision`; `Perform == false` means Hold or a ride-through, and the Switcher checks nothing off.
 
@@ -195,7 +195,14 @@ The Director keeps staged **Next Effect** and **Next Transition** choices as ove
 
 ## Held Effect override
 
-`heldEffect` is the active inspection freeze. The `-1` Random sentinel lets the Director rotate normally. Any non-negative catalog index holds that Effect on the wall and suspends Director rotation until Random is chosen again or Escape resets it.
+`Controller.heldEffect` is the whole control: the `-1` Random sentinel lets the wall rotate normally, and any non-negative catalog index holds that Effect until Random is chosen again. `Controller.TryGetHeldEffectIndex(...)` is the single read, and an out-of-range index degrades to Random rather than throwing. Three input surfaces write that one field — the shared `Effect / Hold` dropdown (Controller inspector and Tuning Window), Escape as the quick release, and the TouchOSC grid, whose cell press holds and whose release button returns to Random.
+
+Hold stops switching along both drive paths, because the two modes drive the wall differently:
+
+- **Synced pulls.** `Director.Decide(...)` — the choke point under both `DecideCue(...)` and `DecideOffPlanCue(...)` — returns `CueDecision.Frozen` while held, so the Switcher performs nothing and checks nothing off. A mark passed under a hold stays unfired and simply lapses. Plan maintenance in `TickSyncedMode` is untouched: sheets keep building and handing over, so a release resumes against a current plan.
+- **Standalone pushes.** There is no sheet to refuse — the Director's own `standaloneTimer` cues the Switcher — so `TickStandaloneMode(...)` returns before `standaloneTimer.Update(...)` while held. The clock stops rather than rewinding, and `DirectorStatus.IsStandaloneCadenceFrozen` reports that state and only that state.
+
+`Director.ApplyHold()` engages the selection: it starts a Show Now toward the held Effect unless `Switcher.TransitionTargetEffectIndex` already matches, so a move already in flight toward that destination is left to land.
 
 Hold is not a second sequencer and does not command around the Director. It exists so a developer can inspect and tune one Effect live.
 

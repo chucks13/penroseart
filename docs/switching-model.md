@@ -106,7 +106,35 @@ can push the wall toward it, and the grid-start check catches both.
 ## Modes
 
 - All of the above is **sync mode** (live DJ on the wire).
-- **Standalone mode** is a separate, old, simple mechanism that works. This model
-  does not describe it, and nothing here may reach into it or disturb it.
+- **Standalone mode** is a separate, old, simple mechanism that works: no wire, no cue
+  sheet, no marks — the Director runs its own timer and cues the Switcher when it
+  fires. This model does not describe it. Nothing here may reach into it or disturb
+  it, with one exception: hold, below, stops that timer.
 - Entering sync mode may change the effect instantly — mode flips are rare, and the
   change is acceptable.
+
+## Hold
+
+**Hold** is the one operator control over what the wall shows, and it does exactly one
+thing: it turns the switching off. Pick an effect and the wall moves to it once,
+through an ordinary transition; then nothing changes until the selection goes back to
+**Random**. It is there so a developer can sit on one effect and watch it work — the
+held effect goes on reading the music and doing its own drop and fill moves, because
+nothing about a performer changes when switching stops.
+
+Hold is a refused answer, never a command. It does not talk to the Switcher, and it
+does not suspend the Director. What it stops depends on which way the mode drives the
+wall:
+
+- **Sync mode pulls.** The Director keeps reading structure, keeps its sheets current
+  through every handover, and the Switcher keeps thinking once per grid. Every cue it
+  asks about — a planned mark or an anomaly through the doorway — comes back frozen,
+  so nothing fires. The marks a hold sits through simply lapse, like any mark passed
+  over. Release it and the current sheet is still the current sheet; the wall changes
+  again at the next mark ahead of it.
+- **Standalone mode pushes.** There is no sheet to refuse, so the Director's own timer
+  is what has to stop, and hold stops it. Release it and the timer picks up where it
+  stopped.
+
+Engaging hold while a transition is already in flight toward the chosen effect starts
+nothing new — that move is fire and forget, and it lands where hold wants it anyway.
