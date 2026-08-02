@@ -170,28 +170,16 @@ public class Controller : Singleton<Controller>
     public CameraReader cameraOverlay;
 
     // ---------------------------------------------------------------------
-    // Effect forcing and playback state
+    // Held Effect and playback state
     // ---------------------------------------------------------------------
 
-    [Header("Effect Lock")]
+    [Header("Held Effect")]
     /// <summary>
-    /// The held effect, as a single source of truth for whether the wall rotates or stays put.
-    /// <para>
-    /// <c>-1</c> is the <b>Random</b> sentinel: the deck rotates normally through the Director,
-    /// and this is the default so a fresh scene behaves exactly like the old unlocked state. Any value
-    /// <c>&gt;= 0</c> is an index into <see cref="effects"/> that is <b>held</b>: the timer state machine and
-    /// the deck never switch away from it until this is set back to <c>-1</c>.
-    /// </para>
-    /// <para>
-    /// Replaces the former <c>forceEffect</c> (bool) + <c>forceEffectName</c> (string prefix) pair: the bool is
-    /// now simply "is this <c>&gt;= 0</c>", and the target is the value itself. Editor surfaces render it through
-    /// the shared <c>EffectHoldRenderer</c> (row 0 = Random); pressing <c>Escape</c> resets it to
-    /// <c>-1</c>. The blank <c>EmptyEffect</c> template is never selectable because <see cref="Factory{T}"/>
-    /// excludes its <c>[RuntimeCatalogIgnore]</c> type from <see cref="effects"/> entirely.
-    /// </para>
+    /// Operator selection for the Held Effect. <c>-1</c> permits normal switching; a valid index into
+    /// <see cref="effects"/> holds that Effect until the selection returns to <c>-1</c>.
     /// </summary>
-    [Tooltip("Random (-1) lets the deck rotate normally. Any other choice holds that effect and stops the " +
-             "random switching until you pick Random again. Escape also resets this to Random.")]
+    [Tooltip("Select Random for normal switching. Select an Effect to hold it until you select Random again. " +
+             "Press Escape to select Random.")]
     public int heldEffect = -1;
 
     /// <summary>Whether to create and draw the optional camera overlay.</summary>
@@ -778,18 +766,6 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// Delegates per-frame Held Effect enforcement to the Director.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Director.ApplyHold"/> treats the <c>-1</c> Random sentinel as a no-op and uses Show Now when
-    /// the Switcher's current destination differs from a valid held selection.
-    /// </remarks>
-    private void ApplyHeldEffect()
-    {
-        director.ApplyHold();
-    }
-
-    /// <summary>
     /// Drains queued TouchOSC operator intents and refreshes the control surface for this frame.
     /// </summary>
     /// <remarks>
@@ -975,8 +951,8 @@ public class Controller : Singleton<Controller>
             return;
         }
 
-        // A cell press holds its effect rather than jumping to it: ApplyHeldEffect runs every frame and
-        // moves the wall onto heldEffect, so no jump is issued here. No lamp is echoed either —
+        // A cell press holds its Effect rather than jumping to it. The frame loop calls Director.ApplyHold,
+        // which moves the wall toward heldEffect, so no jump is issued here. No lamp is echoed either —
         // RefreshGrid lights the cell the live effect index maps to, keeping one source of truth.
         heldEffect = button;
     }
@@ -1584,7 +1560,7 @@ public class Controller : Singleton<Controller>
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             heldEffect = -1;
-            Debug.Log("[Controller] Effect lock released — back to Random (deck rotation).");
+            Debug.Log("[Controller] Hold released. Random selected. Normal switching resumed.");
         }
 
         if (Input.GetKeyDown(KeyCode.Space))
@@ -1621,7 +1597,7 @@ public class Controller : Singleton<Controller>
         }
         if (Input.GetKeyDown(KeyCode.X)) keyboardBase = 1 - keyboardBase;       // toggle base
 
-        ApplyHeldEffect();
+        director.ApplyHold();
 
         // 4. Drum test keys and overlay update.
         // test drums

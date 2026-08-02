@@ -7,8 +7,8 @@ using UnityEngine;
 [CustomEditor(typeof(Controller))]
 public sealed class ControllerEditor : Editor
 {
-    /// <summary>Serialized properties drawn outside the Inspector's scene and configuration list.</summary>
-    private static readonly string[] TuningWindowProperties = { "m_Script", "beatManager", "heldEffect" };
+    /// <summary>Serialized properties intentionally omitted from the Scene & Configuration list.</summary>
+    private static readonly string[] SceneConfigurationExcludedProperties = { "m_Script", "beatManager", "heldEffect" };
 
     /// <summary>Draws the workspace entry, runtime health, shared Effect / Hold control, and scene configuration.</summary>
     public override void OnInspectorGUI()
@@ -24,7 +24,7 @@ public sealed class ControllerEditor : Editor
         EditorGUILayout.Space(8f);
 
         EditorGUILayout.LabelField("Scene & Configuration", EditorStyles.boldLabel);
-        DrawPropertiesExcluding(serializedObject, TuningWindowProperties);
+        DrawPropertiesExcluding(serializedObject, SceneConfigurationExcludedProperties);
         serializedObject.ApplyModifiedProperties();
     }
 

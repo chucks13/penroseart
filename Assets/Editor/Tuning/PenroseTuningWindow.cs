@@ -329,7 +329,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         liveTimelineScroll = CueSheetTimelineRenderer.AutoScroll(
             liveTimelineScroll,
             playheadRow,
-            lastPlayheadRow >= 0 ? lastPlayheadRow : (int?)null,
+            lastPlayheadRow >= 0 ? lastPlayheadRow : null,
             liveViewHeight);
         lastPlayheadRow = playheadRow ?? -1;
 

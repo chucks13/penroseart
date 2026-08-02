@@ -122,9 +122,11 @@ through an ordinary transition; then nothing changes until the selection goes ba
 held effect goes on reading the music and doing its own drop and fill moves, because
 nothing about a performer changes when switching stops.
 
-Hold is a refused answer, never a command. It does not talk to the Switcher, and it
-does not suspend the Director. What it stops depends on which way the mode drives the
-wall:
+Hold has two moments. If the wall is not already moving toward the selected Effect, the
+Director starts one ordinary Transition. While the selection stays held, Hold is a
+refused answer, never another command: it sends no repeated instruction to the Switcher
+and does not suspend the Director. What Hold stops after engagement depends on which way
+the mode drives the wall:
 
 - **Sync mode pulls.** The Director keeps reading structure, keeps its sheets current
   through every handover, and the Switcher keeps thinking once per grid. Every cue it

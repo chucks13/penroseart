@@ -69,7 +69,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `Assets/Editor/Rhythm/Waveforms/WaveformPlot.cs` | Shared editor plotter for runtime `Waveform.Sample` output. |
 | `Assets/Editor/Effects/EffectHoldRenderer.cs` | Shared Effect / Hold control for the Controller inspector and Tuning Window. |
 | `Assets/Editor/Transitions/TransitionSettingsAssetUtility.cs` | Transition settings asset creation/restoration utility. |
-| `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Tuning window for transitions and related authoring controls. |
+| `Assets/Editor/Tuning/PenroseTuningWindow.cs` | Live switching and rhythm inspection with Transition authoring controls. |
 | `Assets/Editor/Shared/LiveControllerAccess.cs` | Shared editor helper for resolving live Controller state and play-mode repaint. |
 | `Assets/Editor/Tuning/CueSheetTimeline.cs` | Pure Unity-free projection of a Cue Sheet into Grid rows: `CueSheetBeatMark` flags, `CueSheetGridRow`, and `Build`. Rows restart at every phrase, as the Grid itself does. |
 | `Assets/Editor/Tuning/CueSheetTimelineRenderer.cs` | IMGUI tracker rendering of the Cue Sheet: one row per Grid, up to 16 columns with a short row where a phrase ends, hollow pending marks and solid fired ones. |

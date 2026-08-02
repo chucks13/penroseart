@@ -315,7 +315,7 @@ The debug override that starts a move toward a selected Effect at once. It is no
 _Avoid_: cutting instantly to the Effect (retired); confusing it with Next Effect, which changes what the *next Cue Mark* moves toward; expecting the pick to survive the next Cue Mark (that is a Held Effect).
 
 **Held Effect** (a.k.a. **Hold**):
-One operator selection with two states: **Random** lets the wall rotate normally, and choosing an Effect *holds* it — the wall moves there once through an ordinary Transition, and then switching stops until Random is chosen again. It exists so a developer can sit on one Effect, watch it work through the music, and tweak it live; the held Effect keeps reading the music and keeps its own Drop and Fill responses. Hold is a refused answer, not a command: the Director keeps planning and the Switcher keeps thinking, and every Cue the Switcher asks about comes back frozen. Standalone Mode has no plan to refuse, so there Hold stops the cadence clock instead.
+One operator selection with two states. **Random** permits normal switching. Choosing an Effect moves the wall to it once through an ordinary Transition, then stops stage-directed switching until Random is chosen again. The held Effect still reads the music and performs its own Drop and Fill responses. Cue Marks passed during Hold lapse instead of waiting for release. In Standalone Mode, Hold pauses the change cadence and resumes it from the same point.
 _Avoid_: confusing Held Effect with Hold Selected; modeling Hold as a Director selection decision, or as a second sequencer that commands the Switcher around the Director; expecting the Cue Marks a hold covered to be deferred — they lapse like any other passed mark.
 
 **Hold Selected**:

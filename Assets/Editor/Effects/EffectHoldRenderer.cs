@@ -1,4 +1,4 @@
-// Shared IMGUI drawing for the operator's one Effect / Hold control.
+// Shared IMGUI drawing for the Held Effect control.
 // DirectorStatus supplies live facts; the selected row writes Controller.heldEffect directly.
 #nullable enable
 
@@ -6,17 +6,17 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Draws one catalog selector that chooses between normal rotation and pinning an Effect to the wall.
+/// Draws one catalog selector that chooses between normal switching and holding an Effect.
 /// </summary>
 internal static class EffectHoldRenderer
 {
-    /// <summary>Popup label for the <c>-1</c> sentinel that permits normal rotation.</summary>
-    private const string RandomLabel = "Random (deck rotation)";
+    /// <summary>Popup label for the <c>-1</c> sentinel that permits normal switching.</summary>
+    private const string RandomLabel = "Random (normal switching)";
 
-    /// <summary>Explains that selecting an Effect engages the real wall freeze rather than staging a cue.</summary>
+    /// <summary>Explains that selecting an Effect activates Hold instead of staging the next Cue.</summary>
     private static readonly GUIContent ControlLabel = new(
         "Effect / Hold",
-        "Random permits normal rotation. Choosing an Effect pins it to the wall until Random is chosen again.");
+        "Select Random for normal switching. Select an Effect to hold it until you select Random again.");
 
     /// <summary>Cached popup rows in runtime catalog order, prefixed by the Random sentinel.</summary>
     private static string[]? cachedOptions;
@@ -61,8 +61,8 @@ internal static class EffectHoldRenderer
         if (Application.isPlaying)
         {
             Debug.Log(next < 0
-                ? "[Controller] Effect Hold released — back to Random (deck rotation)."
-                : $"[Controller] Effect held: {options[selectedRow]} (index {next}).");
+                ? "[Controller] Hold released. Random selected. Normal switching resumed."
+                : $"[Controller] Hold active. Effect {options[selectedRow]} (index {next}).");
         }
     }
 
@@ -78,13 +78,13 @@ internal static class EffectHoldRenderer
 
         if (status.HeldEffectIndex < 0)
         {
-            return "Random · normal rotation";
+            return "Random · normal switching";
         }
 
         var heldEffect = ControllerStatusText.FormatHeldEffect(status);
         return status.IsStandaloneCadenceFrozen
-            ? $"{heldEffect} · wall pinned · Standalone cadence frozen"
-            : $"{heldEffect} · wall pinned";
+            ? $"{heldEffect} · Hold active · Standalone cadence frozen"
+            : $"{heldEffect} · Hold active";
     }
 
     /// <summary>Builds the Random row and reflection-discovered Effect catalog once per domain load.</summary>

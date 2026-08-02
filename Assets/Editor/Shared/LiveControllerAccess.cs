@@ -38,7 +38,7 @@ internal static class ControllerStatusText
             FormatCatalogChoice(status.NextTransitionIndex, status.NextTransitionName);
     }
 
-    /// <summary>Formats the current Effect hold independently from the editor's Hold Selected behavior.</summary>
+    /// <summary>Formats the Held Effect independently from Hold Selected.</summary>
     internal static string FormatHeldEffect(DirectorStatus status)
     {
         return status.HeldEffectIndex < 0
