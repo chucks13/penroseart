@@ -16,10 +16,13 @@ public enum DirectorMode
 /// <summary>Read-only snapshot of the Director reducer's real state for the HUD and Unity Inspector.</summary>
 public readonly struct DirectorStatus
 {
-    /// <summary>The snapshot shown before the Director exists: no mode, nothing staged, nothing held.</summary>
+    /// <summary>The snapshot shown before the Director exists: no mode, nothing staged or held, and no frozen cadence.</summary>
     public static DirectorStatus NotReady { get; } = new DirectorStatus(
         DirectorMode.NotReady,
         false,
+        false,
+        -1,
+        string.Empty,
         -1,
         string.Empty,
         -1,
@@ -32,6 +35,18 @@ public readonly struct DirectorStatus
 
     /// <summary>True when the wall is in Synced Mode (the reducer is live).</summary>
     public readonly bool IsSyncedMode;
+
+    /// <summary>
+    /// True when a valid Held Effect is suppressing the Standalone cadence timer in this frame.
+    /// False in Synced Mode, where Hold is a refused Director answer instead.
+    /// </summary>
+    public readonly bool IsStandaloneCadenceFrozen;
+
+    /// <summary>Held Effect catalog index, or -1 when Random permits normal rotation.</summary>
+    public readonly int HeldEffectIndex;
+
+    /// <summary>Display name of the Held Effect, or empty when Random permits normal rotation.</summary>
+    public readonly string HeldEffectName;
 
     /// <summary>
     /// Staged effect index for the next A-to-B move, or -1 when nothing is staged. It serves the next
@@ -60,6 +75,9 @@ public readonly struct DirectorStatus
     /// <summary>Captures one Director snapshot for downstream HUDs and inspectors.</summary>
     /// <param name="mode">Which operating mode the Director is in this frame.</param>
     /// <param name="isSyncedMode">Whether a usable beat clock is running.</param>
+    /// <param name="isStandaloneCadenceFrozen">Whether Hold is suppressing the Standalone cadence timer.</param>
+    /// <param name="heldEffectIndex">Held Effect catalog index, or -1 when Random permits rotation.</param>
+    /// <param name="heldEffectName">Display name of the Held Effect.</param>
     /// <param name="nextEffectIndex">Staged Effect catalog index, or -1 when nothing is staged.</param>
     /// <param name="nextEffectName">Display name of the staged Effect.</param>
     /// <param name="nextTransitionIndex">Staged Transition catalog index, or -1 before the Director is ready.</param>
@@ -69,6 +87,9 @@ public readonly struct DirectorStatus
     public DirectorStatus(
         DirectorMode mode,
         bool isSyncedMode,
+        bool isStandaloneCadenceFrozen,
+        int heldEffectIndex,
+        string heldEffectName,
         int nextEffectIndex,
         string nextEffectName,
         int nextTransitionIndex,
@@ -78,6 +99,9 @@ public readonly struct DirectorStatus
     {
         Mode = mode;
         IsSyncedMode = isSyncedMode;
+        IsStandaloneCadenceFrozen = isStandaloneCadenceFrozen;
+        HeldEffectIndex = heldEffectIndex;
+        HeldEffectName = heldEffectName ?? string.Empty;
         NextEffectIndex = nextEffectIndex;
         NextEffectName = nextEffectName ?? string.Empty;
         NextTransitionIndex = nextTransitionIndex;
@@ -720,12 +744,15 @@ public sealed class Director
     private DirectorStatus BuildStatus()
     {
         var isSynced = IsSyncedMode;
-        var isHeld = controller.TryGetHeldEffectIndex(out _);
+        var isHeld = controller.TryGetHeldEffectIndex(out var heldEffectIndex);
         var mode = isHeld ? DirectorMode.Hold : isSynced ? DirectorMode.Synced : DirectorMode.Standalone;
 
         return new DirectorStatus(
             mode,
             isSynced,
+            isHeld && !isSynced,
+            heldEffectIndex,
+            EffectName(heldEffectIndex),
             nextEffectIndex,
             EffectName(nextEffectIndex),
             nextTransitionIndex,

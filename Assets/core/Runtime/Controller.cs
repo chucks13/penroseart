@@ -1234,6 +1234,13 @@ public class Controller : Singleton<Controller>
         return "Starting Director…";
     }
 
+    /// <summary>
+    /// Builds the compact runtime detail line from Director and Switcher snapshots.
+    /// </summary>
+    /// <param name="directorStatus">Current Director snapshot, including any explicit Standalone cadence freeze.</param>
+    /// <param name="switcherStatus">Current Switcher stage snapshot.</param>
+    /// <param name="transientMessage">Optional higher-priority transient text.</param>
+    /// <returns>The sanitized transient message, or the current sequencing and runtime detail text.</returns>
     private string BuildRuntimeDetailLine(DirectorStatus directorStatus, SwitcherStatus switcherStatus, string transientMessage)
     {
         if (!string.IsNullOrWhiteSpace(transientMessage))
@@ -1249,9 +1256,9 @@ public class Controller : Singleton<Controller>
             AppendIfNotEmpty(builder, FormatGridPosition());
             AppendIfNotEmpty(builder, FormatDropCue());
         }
-        else if (directorStatus.Mode == DirectorMode.Hold)
+        else if (directorStatus.IsStandaloneCadenceFrozen)
         {
-            AppendIfNotEmpty(builder, "Director suspended");
+            AppendIfNotEmpty(builder, "Standalone cadence frozen");
         }
 
         if (switcherStatus.Ready && switcherStatus.CurrentEffectIndex < 0)

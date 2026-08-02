@@ -39,16 +39,11 @@ internal static class ControllerStatusText
     }
 
     /// <summary>Formats the current Effect hold independently from the editor's Hold Selected behavior.</summary>
-    internal static string FormatHeldEffect(Controller controller)
+    internal static string FormatHeldEffect(DirectorStatus status)
     {
-        if (!controller.TryGetHeldEffectIndex(out var effectIndex))
-        {
-            return "Random";
-        }
-
-        return controller.effects != null && effectIndex < controller.effects.Length && controller.effects[effectIndex] != null
-            ? controller.effects[effectIndex].GetType().Name
-            : $"Effect {effectIndex}";
+        return status.HeldEffectIndex < 0
+            ? "Random"
+            : FormatCatalogChoice(status.HeldEffectIndex, status.HeldEffectName);
     }
 
     /// <summary>Formats the Switcher's current Effect or active Transition without implying future intent.</summary>

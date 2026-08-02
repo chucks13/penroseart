@@ -74,12 +74,16 @@ public sealed class ControllerEditor : Editor
             return;
         }
 
-        EditorGUILayout.LabelField("Mode", director.IsSyncedMode ? "Synced Mode" : "Standalone Mode");
+        EditorGUILayout.LabelField(
+            "Mode",
+            director.IsStandaloneCadenceFrozen
+                ? "Standalone Mode · Cadence Frozen"
+                : director.IsSyncedMode ? "Synced Mode" : "Standalone Mode");
         EditorGUILayout.LabelField("Director Next", ControllerStatusText.FormatDirectorNext(director));
         EditorGUILayout.LabelField(
             "Hold Selected",
             $"Effect {(director.HoldSelectedEffect ? "On" : "Off")} · Transition {(director.HoldSelectedTransition ? "On" : "Off")}");
-        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(liveController));
+        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(director));
         EditorGUILayout.LabelField("Switcher Active", ControllerStatusText.FormatSwitcherActive(switcher));
     }
 }

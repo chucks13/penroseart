@@ -743,7 +743,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         EditorGUILayout.LabelField(
             "Switcher Stage",
             string.IsNullOrEmpty(switcherStatus.StageName) ? "Not Ready" : switcherStatus.StageName);
-        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(liveController));
+        EditorGUILayout.LabelField("Held Effect", ControllerStatusText.FormatHeldEffect(directorStatus));
     }
 
     /// <summary>Draws every serialized Transition setting except the shared Runway and Tail controls.</summary>
