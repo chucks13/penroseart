@@ -39,6 +39,7 @@ Hunter set this policy on 2026-08-07. Do not lower either selection.
 3. State goals, never a design. The worker proposes the design and you judge it.
 
 4. Give every brief these boundaries:
+   - Implement directly in this session - never delegate to another worker or agent. (#115: a resumed worker followed the global delegation guidance and spawned its own nested implementer, doubling Sol-max cost for nothing.)
    - Never run Unity or `scripts/unity-*.sh`.
    - Never create or edit `.meta` or `.asset` files.
    - Do not commit.
