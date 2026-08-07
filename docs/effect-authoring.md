@@ -12,6 +12,10 @@ Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. 
 
 `EmptyEffect` itself is intentionally ignored by the runtime catalog. It exists only as a documented starter template.
 
+### Start with Effect Settings
+
+A new Effect starts with `// Standalone Defaults` and `// Sync Defaults` blocks at the top of its source file, plus its typed Sync Settings asset. Its Standalone Settings remain exactly its Standalone Defaults, while its Sync Settings resolve from the saved asset with the file-local Sync Defaults as fallback. Follow [`Tunnel`](../Assets/effects/Tunnel.cs) and [`TunnelSyncSettingsAsset`](../Assets/effects/TunnelSyncSettingsAsset.cs) as the worked example, adapting the value shape to the Effect instead of forcing common fields.
+
 [`Flock`](../Assets/effects/Flock.cs) is the advanced reference for a production music-reactive effect. Its source is organized in
 reading order—signal hierarchy, artistic tuning, runtime state, lifecycle, frame pipeline, musical mappings,
 and simulation—and documents why each musical source controls its particular visual consequence. Start from

@@ -83,6 +83,24 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.CenterScale, Is.EqualTo(second.CenterScale));
     }
 
+    /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
+    [Test]
+    public void RippleStandaloneSettingsResolveToStandaloneDefaults()
+    {
+        var first = Ripple.StandaloneSettings;
+        var second = Ripple.StandaloneSettings;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.Intensity.Min, Is.EqualTo(second.Intensity.Min));
+        Assert.That(first.Intensity.Max, Is.EqualTo(second.Intensity.Max));
+        Assert.That(first.Velocity.Min, Is.EqualTo(second.Velocity.Min));
+        Assert.That(first.Velocity.Max, Is.EqualTo(second.Velocity.Max));
+        Assert.That(first.VelocityDivisor, Is.EqualTo(second.VelocityDivisor));
+        Assert.That(first.DistanceDivisor, Is.EqualTo(second.DistanceDivisor));
+        Assert.That(first.PaletteOffset, Is.EqualTo(second.PaletteOffset));
+        Assert.That(first.HueShift, Is.EqualTo(second.HueShift));
+    }
+
     /// <summary>Restore replaces every edited Tunnel Sync Setting with the current file-local Sync Defaults.</summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryTunnelValue()
@@ -110,6 +128,21 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
         Assert.That(asset.Settings.DropRush, Is.EqualTo(defaults.DropRush));
         Assert.That(asset.Settings.DropZoom, Is.EqualTo(defaults.DropZoom));
+    }
+
+    /// <summary>Restore replaces every edited Ripple Sync Setting with the current file-local Sync Defaults.</summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryRippleValue()
+    {
+        var asset = (RippleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(Ripple),
+            TempAssetFolder);
+        asset.Settings.HueShiftMax = 0.9f;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
+
+        var defaults = Ripple.SyncDefaults;
+        Assert.That(asset.Settings.HueShiftMax, Is.EqualTo(defaults.HueShiftMax));
     }
 
     /// <summary>Deletes the temporary test roots through Unity so generated assets and metadata stay paired.</summary>
