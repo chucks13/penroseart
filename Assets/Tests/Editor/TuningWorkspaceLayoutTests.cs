@@ -8,11 +8,13 @@ using UnityEngine.TestTools;
 /// <summary>Specifies the visible Tuning Window navigation and responsive layout contract.</summary>
 public sealed class TuningWorkspaceLayoutTests
 {
-    /// <summary>The canonical workspace exposes only the three focused tabs approved by the ticket.</summary>
+    /// <summary>The canonical workspace exposes live, rhythm, Transition, and Effect authoring tabs.</summary>
     [Test]
-    public void CanonicalTabsAreLiveRhythmAndTransitions()
+    public void CanonicalTabsIncludeEffects()
     {
-        Assert.That(PenroseTuningWindow.WorkspaceTabs, Is.EqualTo(new[] { "Live", "Rhythm", "Transitions" }));
+        Assert.That(
+            PenroseTuningWindow.WorkspaceTabs,
+            Is.EqualTo(new[] { "Live", "Rhythm", "Transitions", "Effects" }));
     }
 
     /// <summary>A narrow desktop window stacks Transition navigation above its settings.</summary>

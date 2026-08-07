@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9d478a8b69f84579aad5581d8228dce, type: 3}
+  m_Name: TunnelSettings
+  m_EditorClassIdentifier: Assembly-CSharp::TunnelSyncSettingsAsset
+  effectTypeName: Tunnel
+  settings:
+    WaveformEnergyOne: 0
+    WaveformEnergyTwo: 1
+    FillRush: 5
+    FillZoom: 3
+    BeatBrightnessFloor: 0.75
+    DropBars: 2
+    DropRush: 10
+    DropZoom: 6

@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>Describes how the Transitions workspace arranges navigation and settings.</summary>
+/// <summary>Describes how a tuning workspace arranges navigation and settings.</summary>
 internal enum TuningWorkspaceFlow
 {
-    /// <summary>Places Transition navigation above the selected settings.</summary>
+    /// <summary>Places performer navigation above the selected settings.</summary>
     Stacked,
 
-    /// <summary>Places Transition navigation beside the selected settings.</summary>
+    /// <summary>Places performer navigation beside the selected settings.</summary>
     Split,
 }
 
@@ -122,7 +122,7 @@ internal readonly struct TransitionAuthoringSelection
 }
 
 /// <summary>
-/// Canonical authoring window for live sequencing, rhythm observation, and saved Transition tuning.
+/// Canonical authoring window for live sequencing, rhythm observation, and saved Effect or Transition tuning.
 /// </summary>
 public sealed class PenroseTuningWindow : EditorWindow
 {
@@ -130,13 +130,19 @@ public sealed class PenroseTuningWindow : EditorWindow
     private const float SplitViewWidth = 760f;
 
     /// <summary>The focused workspaces presented by the canonical Tuning Window.</summary>
-    internal static readonly string[] WorkspaceTabs = { "Live", "Rhythm", "Transitions" };
+    internal static readonly string[] WorkspaceTabs = { "Live", "Rhythm", "Transitions", "Effects" };
 
     /// <summary>Labels for the explicit Transition authoring selection modes.</summary>
     private static readonly string[] TransitionSelectionModeLabels = { "Follow Director", "Pin Selection" };
 
     private Type[] transitionTypes = Array.Empty<Type>();
     private string[] transitionNames = Array.Empty<string>();
+    /// <summary>Sorted runtime Effect catalog shown by the Effects workspace.</summary>
+    private Type[] effectTypes = Array.Empty<Type>();
+    /// <summary>Display names parallel to <see cref="effectTypes"/>.</summary>
+    private string[] effectNames = Array.Empty<string>();
+    /// <summary>Declared Sync Settings asset types parallel to <see cref="effectTypes"/>.</summary>
+    private Type[] effectSettingsAssetTypes = Array.Empty<Type>();
     /// <summary>The catalog index whose saved Transition Settings are currently being edited.</summary>
     [SerializeField]
     private int selectedTransitionIndex = -1;
@@ -146,10 +152,18 @@ public sealed class PenroseTuningWindow : EditorWindow
     /// <summary>The author's stable Transition catalog choice retained independently of live intent.</summary>
     [SerializeField]
     private int pinnedTransitionIndex = -1;
+    /// <summary>The catalog index whose saved Effect Sync Settings are currently being edited.</summary>
+    [SerializeField]
+    private int selectedEffectIndex = -1;
+    /// <summary>The active top-level tuning workspace tab.</summary>
     private int selectedTab;
     private Vector2 transitionListScroll;
+    /// <summary>Scroll position for the Effect catalog.</summary>
+    private Vector2 effectListScroll;
     /// <summary>Scroll position for the selected Transition Settings editor.</summary>
     private Vector2 settingsScroll;
+    /// <summary>Scroll position for the selected Effect Sync Settings editor.</summary>
+    private Vector2 effectSettingsScroll;
     /// <summary>Scroll position for the live sequencing timeline.</summary>
     private Vector2 liveTimelineScroll;
     /// <summary>Player slot pinned in the Cue Sheet tracker; -1 follows the on-air focus player.</summary>
@@ -162,6 +176,11 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 rhythmScroll;
     private TransitionSettingsAsset selectedAsset;
     private SerializedObject selectedSerializedObject;
+    /// <summary>The selected Effect's saved Sync Settings asset, when it exists.</summary>
+    private EffectSyncSettingsAsset selectedEffectAsset;
+    /// <summary>Serialized editor wrapper for <see cref="selectedEffectAsset"/>.</summary>
+    private SerializedObject selectedEffectSerializedObject;
+    /// <summary>Whether an Effect or Transition settings edit still needs an AssetDatabase save.</summary>
     private bool settingsChangedSinceLastSave;
 
     /// <summary>Opens or focuses the canonical Penrose Tuning Window.</summary>
@@ -175,12 +194,14 @@ public sealed class PenroseTuningWindow : EditorWindow
         window.Focus();
     }
 
+    /// <summary>Restores catalogs and Editor lifecycle hooks after the window or domain reloads.</summary>
     private void OnEnable()
     {
         titleContent = new GUIContent("Penrose Tuning");
         EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
         EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
         ReloadTransitions();
+        ReloadEffects();
     }
 
     private void OnDisable()
@@ -194,7 +215,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         LiveControllerAccess.RepaintDuringPlayMode(this);
     }
 
-    /// <summary>Draws the active workspace tab without mutating runtime sequencing state.</summary>
+    /// <summary>Draws the currently selected tuning workspace without mutating runtime sequencing state.</summary>
     private void OnGUI()
     {
         selectedTab = GUILayout.Toolbar(selectedTab, WorkspaceTabs, EditorStyles.toolbarButton);
@@ -211,7 +232,241 @@ public sealed class PenroseTuningWindow : EditorWindow
             case 2:
                 DrawTransitionsTab();
                 break;
+            case 3:
+                DrawEffectsTab();
+                break;
         }
+    }
+
+    /// <summary>Draws Effect selection beside or above the selected Sync Settings asset.</summary>
+    private void DrawEffectsTab()
+    {
+        using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+        {
+            if (GUILayout.Button("Reload", EditorStyles.toolbarButton, GUILayout.Width(64f)))
+            {
+                ReloadEffects();
+            }
+
+            if (GUILayout.Button("Create Missing Sync Settings", EditorStyles.toolbarButton, GUILayout.Width(190f)))
+            {
+                EffectSyncSettingsAssetUtility.EnsureCatalogAssets();
+                ReloadEffects();
+            }
+
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("Saved Effect Sync Settings", EditorStyles.miniLabel);
+        }
+
+        if (FlowForWidth(position.width) == TuningWorkspaceFlow.Split)
+        {
+            using var row = new EditorGUILayout.HorizontalScope();
+            DrawEffectList(GUILayout.Width(260f));
+            DrawSelectedEffectSyncSettings();
+            return;
+        }
+
+        var listHeight = Mathf.Clamp(position.height * 0.32f, 150f, 260f);
+        DrawEffectList(GUILayout.Height(listHeight));
+        EditorGUILayout.Space(6f);
+        DrawSelectedEffectSyncSettings();
+    }
+
+    /// <summary>Draws the runtime Effect catalog without creating or mutating settings assets.</summary>
+    private void DrawEffectList(params GUILayoutOption[] layoutOptions)
+    {
+        using (new EditorGUILayout.VerticalScope(layoutOptions))
+        {
+            EditorGUILayout.LabelField("Effects", EditorStyles.boldLabel);
+            using var scroll = new EditorGUILayout.ScrollViewScope(effectListScroll, GUI.skin.box);
+            effectListScroll = scroll.scrollPosition;
+            for (var i = 0; i < effectTypes.Length; i++)
+            {
+                var isSelected = i == selectedEffectIndex;
+                var previousColor = GUI.backgroundColor;
+                if (isSelected)
+                {
+                    GUI.backgroundColor = new Color(0.3f, 0.55f, 0.7f);
+                }
+
+                var suffix = effectSettingsAssetTypes[i] == null ? " (not fitted)" : string.Empty;
+                var label = isSelected ? $"▶ {effectNames[i]}{suffix}" : $"{effectNames[i]}{suffix}";
+                if (GUILayout.Button(label, EditorStyles.miniButton))
+                {
+                    SelectEffect(i);
+                    GUI.FocusControl(null);
+                }
+
+                GUI.backgroundColor = previousColor;
+            }
+        }
+    }
+
+    /// <summary>Draws only the selected Effect's editable saved Sync Settings.</summary>
+    private void DrawSelectedEffectSyncSettings()
+    {
+        using (new EditorGUILayout.VerticalScope())
+        {
+            if (!IsValidEffectIndex(selectedEffectIndex))
+            {
+                EditorGUILayout.HelpBox("Select an Effect to inspect its Sync Settings.", MessageType.Info);
+                return;
+            }
+
+            EditorGUILayout.LabelField(effectNames[selectedEffectIndex], EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "Standalone Settings are exactly the file-local Standalone Defaults and are not editable here.",
+                MessageType.None);
+
+            if (effectSettingsAssetTypes[selectedEffectIndex] == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "This Effect has not been fitted with Sync Settings yet.",
+                    MessageType.Info);
+                return;
+            }
+
+            LoadSelectedEffectAsset();
+            if (selectedEffectAsset == null || selectedEffectSerializedObject == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "No saved Sync Settings asset exists. Until one is created, the Effect resolves to its Sync Defaults.",
+                    MessageType.Warning);
+                if (GUILayout.Button("Create Sync Settings Asset", GUILayout.Width(190f)))
+                {
+                    CreateSelectedEffectSyncSettingsAsset();
+                }
+
+                return;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    EditorGUILayout.ObjectField(
+                        "Sync Settings Asset",
+                        selectedEffectAsset,
+                        typeof(EffectSyncSettingsAsset),
+                        false);
+                }
+
+                if (GUILayout.Button("Restore Sync Defaults", GUILayout.Width(150f)))
+                {
+                    RestoreSelectedEffectSyncDefaults();
+                }
+            }
+
+            EditorGUILayout.Space();
+            using var scroll = new EditorGUILayout.ScrollViewScope(effectSettingsScroll);
+            effectSettingsScroll = scroll.scrollPosition;
+            selectedEffectSerializedObject.Update();
+            var settingsProperty = selectedEffectSerializedObject.FindProperty(
+                EffectSyncSettingsAsset.SerializedSettingsFieldName);
+            if (settingsProperty == null)
+            {
+                EditorGUILayout.HelpBox(
+                    $"{selectedEffectAsset.GetType().Name} has no serialized Sync Settings field.",
+                    MessageType.Error);
+                return;
+            }
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(settingsProperty, new GUIContent("Sync Settings"), true);
+            if (EditorGUI.EndChangeCheck() &&
+                EffectSyncSettingsAssetUtility.ApplySettings(selectedEffectSerializedObject))
+            {
+                settingsChangedSinceLastSave = true;
+                selectedEffectSerializedObject.Update();
+            }
+        }
+    }
+
+    /// <summary>Reloads the Effect catalog and its declared Sync Settings asset types.</summary>
+    private void ReloadEffects()
+    {
+        var factory = new Factory<EffectBase>();
+        effectTypes = factory.Types;
+        effectNames = new string[effectTypes.Length];
+        effectSettingsAssetTypes = new Type[effectTypes.Length];
+        for (var i = 0; i < effectTypes.Length; i++)
+        {
+            effectNames[i] = effectTypes[i].Name;
+            effectSettingsAssetTypes[i] = EffectSyncSettingsProvider.SettingsAssetTypeFor(effectTypes[i]);
+        }
+
+        selectedEffectIndex = effectTypes.Length == 0
+            ? -1
+            : Mathf.Clamp(selectedEffectIndex < 0 ? 0 : selectedEffectIndex, 0, effectTypes.Length - 1);
+        selectedEffectAsset = null;
+        selectedEffectSerializedObject = null;
+        Repaint();
+    }
+
+    /// <summary>Selects one Effect for Sync Settings authoring without changing the running Effect.</summary>
+    private void SelectEffect(int index)
+    {
+        if (!IsValidEffectIndex(index) || index == selectedEffectIndex)
+        {
+            return;
+        }
+
+        selectedEffectIndex = index;
+        selectedEffectAsset = null;
+        selectedEffectSerializedObject = null;
+        Repaint();
+    }
+
+    /// <summary>Loads the selected Effect's existing Sync Settings asset without creating it.</summary>
+    private void LoadSelectedEffectAsset()
+    {
+        if (selectedEffectAsset != null && selectedEffectSerializedObject != null)
+        {
+            return;
+        }
+
+        if (!IsValidEffectIndex(selectedEffectIndex))
+        {
+            return;
+        }
+
+        selectedEffectAsset = EffectSyncSettingsAssetUtility.LoadAsset(effectTypes[selectedEffectIndex]);
+        selectedEffectSerializedObject = selectedEffectAsset == null
+            ? null
+            : new SerializedObject(selectedEffectAsset);
+    }
+
+    /// <summary>Creates the selected Effect's missing Sync Settings asset from its Sync Defaults.</summary>
+    private void CreateSelectedEffectSyncSettingsAsset()
+    {
+        if (!IsValidEffectIndex(selectedEffectIndex))
+        {
+            return;
+        }
+
+        selectedEffectAsset = EffectSyncSettingsAssetUtility.EnsureAsset(effectTypes[selectedEffectIndex]);
+        selectedEffectSerializedObject = new SerializedObject(selectedEffectAsset);
+        Repaint();
+    }
+
+    /// <summary>Restores the selected saved Sync Settings from the Effect's file-local Sync Defaults.</summary>
+    private void RestoreSelectedEffectSyncDefaults()
+    {
+        if (!IsValidEffectIndex(selectedEffectIndex))
+        {
+            return;
+        }
+
+        selectedEffectAsset = EffectSyncSettingsAssetUtility.RestoreSyncDefaults(effectTypes[selectedEffectIndex]);
+        selectedEffectSerializedObject = new SerializedObject(selectedEffectAsset);
+        settingsChangedSinceLastSave = false;
+        Repaint();
+    }
+
+    /// <summary>Reports whether an index belongs to the current Effect catalog.</summary>
+    private bool IsValidEffectIndex(int index)
+    {
+        return index >= 0 && index < effectTypes.Length;
     }
 
     /// <summary>Draws the scene Controller's read-only BeatManager dashboard.</summary>
