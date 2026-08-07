@@ -45,8 +45,153 @@ using Random = UnityEngine.Random;
 /// <item><description>PALETTE — a fresh wall palette is selected at the start of every 16-beat Grid.</description></item>
 /// </list>
 /// </remarks>
+[EffectSyncSettings(typeof(CrystalGrowthSyncSettingsAsset))]
 public class CrystalGrowth : EffectBase
 {
+    // Standalone Defaults
+
+    /// <summary>Front heat below this is treated as cold and stops advancing the rim (the tail dies here).</summary>
+    private const float StandaloneHeatEpsilon = 0.01f;
+
+    /// <summary>Fraction of its heat the front carries into the next ring; near 1 keeps the leading edge bright as it travels.</summary>
+    private const float StandaloneFrontPush = 0.95f;
+
+    /// <summary>Fraction of the wall the current generation must claim before the next layer blooms on top.</summary>
+    private const float StandaloneCoverageToAdvance = 0.85f;
+
+    /// <summary>Cap on ring passes advanced in one frame, so a long frame hitch catches up a little rather than detonating the front across the whole wall in a single step.</summary>
+    private const int StandaloneMaxFrontPassesPerFrame = 6;
+
+    /// <summary>A grown tile's brightness never fades below this — the crystal lingers as a dim layer instead of going black. Unreached tiles still render pure black.</summary>
+    private const float StandaloneCrystalFloor = 0.5f;
+
+    /// <summary>How fast a grown tile eases its color toward its same-layer neighbors, softening crystal seams.</summary>
+    private const float StandaloneHueRelaxPerSec = 0.6f;
+
+    /// <summary>Maximum hue relaxation applied during one frame, so a long frame hitch can't over-relax in one step.</summary>
+    private const float StandaloneHueRelaxMaxPerFrame = 0.5f;
+
+    /// <summary>Average-band energy at/below which the track is treated as fully quiet by the self-driven spread machinery (a third minus a soft band).</summary>
+    private const float StandaloneQuietEnergy = 0.233f;
+
+    /// <summary>Average-band energy at/above which the track is fully "driving" for the self-driven spread machinery (a third plus a soft band).</summary>
+    private const float StandaloneActiveEnergy = 0.433f;
+
+    /// <summary>Golden-ratio conjugate: the step that spaces successive seed colors evenly across the palette.</summary>
+    private const float StandaloneGoldenStep = 0.618034f;
+
+    /// <summary>Authored minimum front spread rolled for each activation.</summary>
+    private const float StandaloneSpreadPerSecMin = 12f;
+
+    /// <summary>Authored maximum front spread rolled for each activation.</summary>
+    private const float StandaloneSpreadPerSecMax = 20f;
+
+    /// <summary>Authored minimum front leak rolled for each activation.</summary>
+    private const float StandaloneLeakPerSecMin = 0.22f;
+
+    /// <summary>Authored maximum front leak rolled for each activation.</summary>
+    private const float StandaloneLeakPerSecMax = 0.5f;
+
+    /// <summary>Authored minimum spread-surge multiple rolled for each activation.</summary>
+    private const float StandaloneBeatSurgeMin = 1.5f;
+
+    /// <summary>Authored maximum spread-surge multiple rolled for each activation.</summary>
+    private const float StandaloneBeatSurgeMax = 3.5f;
+
+    /// <summary>Minimum seconds between idle seeds in Standalone Mode, where the self-metronome drives all growth.</summary>
+    private const float StandaloneSeedIntervalMin = 0.18f;
+
+    /// <summary>Maximum seconds between idle seeds in Standalone Mode, where the self-metronome drives all growth.</summary>
+    private const float StandaloneSeedIntervalMax = 0.35f;
+
+    /// <summary>Minimum seconds per synthetic Standalone downbeat (the period is re-jittered on every downbeat so it never feels mechanical).</summary>
+    private const float StandaloneSelfBeatPeriodMin = 1.2f;
+
+    /// <summary>Maximum seconds per synthetic Standalone downbeat (the period is re-jittered on every downbeat so it never feels mechanical).</summary>
+    private const float StandaloneSelfBeatPeriodMax = 2.2f;
+
+    /// <summary>Per-second decay of the Standalone spread surge, so each synthetic downbeat is a lunge, not a sustained sprint.</summary>
+    private const float StandaloneSelfPulseDecayPerSec = 2.5f;
+
+    /// <summary>Authored heat threshold at which the crystal tip begins whitening.</summary>
+    private const float StandaloneTipThreshold = 0.8f;
+
+    /// <summary>Authored maximum amount of white mixed into the crystal tip.</summary>
+    private const float StandaloneTipWhitenAmount = 0.5f;
+
+    /// <summary>Authored base seed count added to every randomly varied bloom.</summary>
+    private const int StandaloneBloomCountBase = 3;
+
+    /// <summary>Authored inclusive minimum random offset added to a bloom's base seed count.</summary>
+    private const int StandaloneBloomCountOffsetMinInclusive = 0;
+
+    /// <summary>Authored exclusive maximum random offset added to a bloom's base seed count.</summary>
+    private const int StandaloneBloomCountOffsetMaxExclusive = 3;
+
+    // Sync Defaults
+
+    /// <summary>Low-band level above which the four-on-the-floor bass kick is considered present (a third).</summary>
+    private const float SyncKickThreshold = 1f / 3f;
+
+    /// <summary>Average-band energy at/below which the track is treated as fully quiet — beat coupling gates off here (a third minus a soft band).</summary>
+    private const float SyncQuietEnergy = 0.233f;
+
+    /// <summary>Average-band energy at/above which the track is fully "driving" — beat coupling at full strength (a third plus a soft band).</summary>
+    private const float SyncActiveEnergy = 0.433f;
+
+    /// <summary>Bars the Drop sparkle is drawn out over: full machine-gun at the hit, fading back to normal growth across this many bars.</summary>
+    private const int SyncDropFadeBars = 2;
+
+    /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP FLASH readout.</summary>
+    private const float SyncDropFlashBrightness = 1.2f;
+
+    /// <summary>Extra spread multiplier at the peak of the Drop flash, so the fresh layer sweeps briskly across the wall. Tune on the DROP FLASH readout.</summary>
+    private const float SyncDropFlashSpread = 1.5f;
+
+    /// <summary>Seeds of the fresh Drop layer planted at the flash onset, sharing one hue so they read as a single colored wave.</summary>
+    private const int SyncDropFlashSeeds = 3;
+
+    /// <summary>Minimum seconds between idle "heartbeat" seeds when synced — slower than Standalone, because the bass kick does the heavy seeding.</summary>
+    private const float SyncIdleSeedIntervalMin = 0.5f;
+
+    /// <summary>Maximum seconds between idle "heartbeat" seeds when synced — slower than Standalone, because the bass kick does the heavy seeding.</summary>
+    private const float SyncIdleSeedIntervalMax = 0.9f;
+
+    /// <summary>Extra spread multiplier added on each sixteenth's on-phase during a Drop — the front lunges in stutters.</summary>
+    private const float SyncDropRatchetSpread = 4f;
+
+    /// <summary>How far the whole field is knocked toward black on a Drop sixteenth's off-phase — the hard strobe depth.</summary>
+    private const float SyncDropStrobeDepth = 0.9f;
+
+    /// <summary>Seeds planted on each sixteenth onset during a Drop, so the wall machine-guns for the whole drop window.</summary>
+    private const int SyncDropSeedBurst = 12;
+
+    /// <summary>Authored Drop envelope threshold above which sixteenth seed bursts fire.</summary>
+    private const float SyncDropSeedBurstThreshold = 0.5f;
+
+    /// <summary>How far the base spread is reined in at full Fill — the crystal visibly tenses and compresses going into the phrase change. 0.65 means growth drops to 35% of normal speed at the fill's peak.</summary>
+    private const float SyncFillHoldback = 0.65f;
+
+    /// <summary>Luminance swell across the whole grown crystal at full Fill, so the hold-back reads as charging up rather than stalling. Tune on the FILL readout.</summary>
+    private const float SyncFillSwell = 0.35f;
+
+    /// <summary>Authored brightness floor while Synced average-band energy is fully active.</summary>
+    private const float SyncDrivingBrightnessFloor = 0.8f;
+
+    /// <summary>Authored minimum seed burst produced by a detected bass kick.</summary>
+    private const float SyncKickBurstMin = 2f;
+
+    /// <summary>Authored maximum seed burst produced by a detected bass kick.</summary>
+    private const float SyncKickBurstMax = 6f;
+
+    /// <summary>Authored extra seed count added on beat one of a bar.</summary>
+    private const int SyncDownbeatSeedBonus = 2;
+
+    // Runtime mechanism constants
+
+    /// <summary>Common-time beats per bar, matching BeatManager's beat-slot model.</summary>
+    private const int BeatsPerBar = 4;
+
     /// <summary>Crystal Growth expresses both phrase cues: the fill ratchet builds the strobe/lunge into the change,
     /// and the Drop downbeat fires its one-shot whole-wall surge. Advertise both so the Director can deliberately
     /// cast it into Fill and Drop moments, not only react when it happens to be on-air. Its growth stays calm and
@@ -54,85 +199,63 @@ public class CrystalGrowth : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    /// <summary>Front heat below this is treated as cold and stops advancing the rim (the tail dies here).</summary>
-    private const float HeatEpsilon = 0.01f;
+    /// <summary>Resolves a fresh copy of Crystal Growth's Standalone Defaults for one activation.</summary>
+    public static CrystalGrowthStandaloneSettings StandaloneSettings => new CrystalGrowthStandaloneSettings
+    {
+        HeatEpsilon = StandaloneHeatEpsilon,
+        FrontPush = StandaloneFrontPush,
+        CoverageToAdvance = StandaloneCoverageToAdvance,
+        MaxFrontPassesPerFrame = StandaloneMaxFrontPassesPerFrame,
+        CrystalFloor = StandaloneCrystalFloor,
+        HueRelaxPerSec = StandaloneHueRelaxPerSec,
+        HueRelaxMaxPerFrame = StandaloneHueRelaxMaxPerFrame,
+        QuietEnergy = StandaloneQuietEnergy,
+        ActiveEnergy = StandaloneActiveEnergy,
+        GoldenStep = StandaloneGoldenStep,
+        SpreadPerSec = new FloatRange(StandaloneSpreadPerSecMin, StandaloneSpreadPerSecMax),
+        LeakPerSec = new FloatRange(StandaloneLeakPerSecMin, StandaloneLeakPerSecMax),
+        BeatSurge = new FloatRange(StandaloneBeatSurgeMin, StandaloneBeatSurgeMax),
+        SeedInterval = new FloatRange(StandaloneSeedIntervalMin, StandaloneSeedIntervalMax),
+        SelfBeatPeriod = new FloatRange(StandaloneSelfBeatPeriodMin, StandaloneSelfBeatPeriodMax),
+        SelfPulseDecayPerSec = StandaloneSelfPulseDecayPerSec,
+        TipThreshold = StandaloneTipThreshold,
+        TipWhitenAmount = StandaloneTipWhitenAmount,
+        BloomCountBase = StandaloneBloomCountBase,
+        BloomCountOffsetMinInclusive = StandaloneBloomCountOffsetMinInclusive,
+        BloomCountOffsetMaxExclusive = StandaloneBloomCountOffsetMaxExclusive,
+    };
 
-    /// <summary>Fraction of its heat the front carries into the next ring; near 1 keeps the leading edge bright as it travels.</summary>
-    private const float FrontPush = 0.95f;
+    /// <summary>Resolves a fresh copy of Crystal Growth's file-local Sync Defaults.</summary>
+    public static CrystalGrowthSyncSettings SyncDefaults => new CrystalGrowthSyncSettings
+    {
+        KickThreshold = SyncKickThreshold,
+        QuietEnergy = SyncQuietEnergy,
+        ActiveEnergy = SyncActiveEnergy,
+        DropFadeBars = SyncDropFadeBars,
+        DropFlashBrightness = SyncDropFlashBrightness,
+        DropFlashSpread = SyncDropFlashSpread,
+        DropFlashSeeds = SyncDropFlashSeeds,
+        IdleSeedIntervalMin = SyncIdleSeedIntervalMin,
+        IdleSeedIntervalMax = SyncIdleSeedIntervalMax,
+        DropRatchetSpread = SyncDropRatchetSpread,
+        DropStrobeDepth = SyncDropStrobeDepth,
+        DropSeedBurst = SyncDropSeedBurst,
+        DropSeedBurstThreshold = SyncDropSeedBurstThreshold,
+        FillHoldback = SyncFillHoldback,
+        FillSwell = SyncFillSwell,
+        DrivingBrightnessFloor = SyncDrivingBrightnessFloor,
+        KickBurstMin = SyncKickBurstMin,
+        KickBurstMax = SyncKickBurstMax,
+        DownbeatSeedBonus = SyncDownbeatSeedBonus,
+    };
 
-    /// <summary>Fraction of the wall the current generation must claim before the next layer blooms on top.</summary>
-    private const float CoverageToAdvance = 0.85f;
+    /// <summary>The Standalone Settings fixed for the current activation.</summary>
+    private CrystalGrowthStandaloneSettings standaloneSettings = StandaloneSettings;
 
-    /// <summary>Cap on ring passes advanced in one frame, so a long frame hitch catches up a little rather than
-    /// detonating the front across the whole wall in a single step.</summary>
-    private const int MaxFrontPassesPerFrame = 6;
+    /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
+    private CrystalGrowthSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>A grown tile's brightness never fades below this — the crystal lingers as a dim layer instead of going black. Unreached tiles still render pure black.</summary>
-    private const float CrystalFloor = 0.5f;
-
-    /// <summary>How fast a grown tile eases its color toward its same-layer neighbors, softening crystal seams.</summary>
-    private const float HueRelaxPerSec = 0.6f;
-
-    /// <summary>Low-band level above which the four-on-the-floor bass kick is considered present (a third).</summary>
-    private const float KickThreshold = 1f / 3f;
-
-    /// <summary>Average-band energy at/below which the track is treated as fully quiet — beat coupling gates off here.</summary>
-    private const float QuietEnergy = 0.233f; // a third minus a soft band
-
-    /// <summary>Average-band energy at/above which the track is fully "driving" — beat coupling at full strength.</summary>
-    private const float ActiveEnergy = 0.433f; // a third plus a soft band
-
-    /// <summary>Golden-ratio conjugate: the step that spaces successive seed colors evenly across the palette.</summary>
-    private const float GoldenStep = 0.618034f;
-
-    /// <summary>Common-time beats per bar, matching BeatManager's beat-slot model — used to size the Drop flash in bars.</summary>
-    private const int BeatsPerBar = 4;
-
-    /// <summary>Bars the Drop sparkle is drawn out over: full machine-gun at the hit, fading back to normal growth across this many bars.</summary>
-    private const int DropFadeBars = 2;
-
-    /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP FLASH readout.</summary>
-    private const float DropFlashBrightness = 1.2f;
-
-    /// <summary>Extra spread multiplier at the peak of the Drop flash, so the fresh layer sweeps briskly across the wall. Tune on the DROP FLASH readout.</summary>
-    private const float DropFlashSpread = 1.5f;
-
-    /// <summary>Seeds of the fresh Drop layer planted at the flash onset, sharing one hue so they read as a single colored wave.</summary>
-    private const int DropFlashSeeds = 3;
-
-    /// <summary>Seconds between idle seeds in Standalone Mode, where the self-metronome drives all growth.</summary>
-    private const float StandaloneSeedMin = 0.18f;
-    private const float StandaloneSeedMax = 0.35f;
-
-    /// <summary>Seconds between idle "heartbeat" seeds when synced — slower, because the bass kick does the heavy seeding.</summary>
-    private const float SyncedIdleSeedMin = 0.5f;
-    private const float SyncedIdleSeedMax = 0.9f;
-
-    /// <summary>Seconds per synthetic Standalone downbeat (re-jittered each tick so it never feels mechanical).</summary>
-    private const float SelfBeatPeriodMin = 1.2f;
-    private const float SelfBeatPeriodMax = 2.2f;
-
-    /// <summary>Per-second decay of the Standalone spread surge, so each synthetic downbeat is a lunge, not a sustained sprint.</summary>
-    private const float SelfPulseDecayPerSec = 2.5f;
-
-    /// <summary>Extra spread multiplier added on each sixteenth's on-phase during a Drop — the front lunges in stutters.</summary>
-    private const float DropRatchetSpread = 4f;
-
-    /// <summary>How far the whole field is knocked toward black on a Drop sixteenth's off-phase — the hard strobe depth.</summary>
-    private const float DropStrobeDepth = 0.9f;
-
-    /// <summary>Seeds planted on each sixteenth onset during a Drop, so the wall machine-guns for the whole drop window.</summary>
-    private const int DropSeedBurst = 12;
-
-    /// <summary>How far the base spread is reined in at full Fill — the crystal visibly tenses and compresses going
-    /// into the phrase change. 0.65 means growth drops to 35% of normal speed at the fill's peak.</summary>
-    private const float FillHoldback = 0.65f;
-
-    /// <summary>Luminance swell across the whole grown crystal at full Fill, so the hold-back reads as charging
-    /// up rather than stalling. Tune on the FILL readout.</summary>
-    private const float FillSwell = 0.35f;
-
-    /// <summary>Per-tile front heat in [0..1]; the bright moving band. Decays toward 0, but a grown tile still renders at <see cref="CrystalFloor"/> (keyed on <see cref="gen"/>), so charge is only the bright part above the floor.</summary>
+    /// <summary>Per-tile front heat in [0..1]; the bright moving band. Decays toward 0, but a grown tile still renders at the Standalone Settings floor (keyed on <see cref="gen"/>), so charge is only the bright part above the floor.</summary>
     private float[] charge;
 
     /// <summary>Per-tile palette position in [0..1]; the color the claiming generation painted onto the tile.</summary>
@@ -223,6 +346,10 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     public override void OnStart()
     {
+        standaloneSettings = StandaloneSettings;
+        SyncSettings = EffectSyncSettingsProvider.Resolve(
+            typeof(CrystalGrowth),
+            SyncDefaults);
         waveform = waveforms.Random();
 
         Array.Clear(charge, 0, charge.Length);
@@ -231,17 +358,17 @@ public class CrystalGrowth : EffectBase
 
         // Per-activation variety: faster spread with a sharper leak reads as a crisp racing front; slower
         // spread with a gentler leak reads as a thick, creeping bloom.
-        spreadPerSec = Random.Range(12f, 20f);
-        leakPerSec = Random.Range(0.22f, 0.5f);
-        beatSurge = Random.Range(1.5f, 3.5f);
-        seedInterval = Random.Range(StandaloneSeedMin, StandaloneSeedMax);
+        spreadPerSec = Random.Range(standaloneSettings.SpreadPerSec.Min, standaloneSettings.SpreadPerSec.Max);
+        leakPerSec = Random.Range(standaloneSettings.LeakPerSec.Min, standaloneSettings.LeakPerSec.Max);
+        beatSurge = Random.Range(standaloneSettings.BeatSurge.Min, standaloneSettings.BeatSurge.Max);
+        seedInterval = Random.Range(standaloneSettings.SeedInterval.Min, standaloneSettings.SeedInterval.Max);
 
         spreadBudget = 0f;
         generation = 1;
         hueCursor = Random.value;
         seedTimer = 0f;
         selfBeatPhase = 0f;
-        selfBeatPeriod = Random.Range(SelfBeatPeriodMin, SelfBeatPeriodMax);
+        selfBeatPeriod = Random.Range(standaloneSettings.SelfBeatPeriod.Min, standaloneSettings.SelfBeatPeriod.Max);
         selfPulse = 0f;
         lastKick = false;
         energyNow = 0f;
@@ -264,7 +391,7 @@ public class CrystalGrowth : EffectBase
     public override string DebugText()
     {
         string mode = beatManager.IsSynced ? "Synced" : "Standalone (self-driven)";
-        string levels = $"Energy: {energyNow:0.00}{(energyNow < KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > KickThreshold ? "ON" : "--")}";
+        string levels = $"Energy: {energyNow:0.00}{(energyNow < SyncSettings.KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > SyncSettings.KickThreshold ? "ON" : "--")}";
         string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (hold-back + swell)" : "";
         string dropReadout = dropFlash > 0f ? $"\nDROP SPARKLE {dropFlash:0.00}" : "";
         return $"Crystal Growth\nMode: {mode}\nLayer: {generation}\n{levels}{fillReadout}{dropReadout}";
@@ -304,14 +431,14 @@ public class CrystalGrowth : EffectBase
         if (dropActive && !previousDropActive)
         {
             generation++;
-            PlantUnisonSeeds(DropFlashSeeds);
+            PlantUnisonSeeds(SyncSettings.DropFlashSeeds);
         }
         previousDropActive = dropActive;
-        dropFlash = drop.In.Decay(DropFadeBars * BeatsPerBar);
+        dropFlash = drop.In.Decay(SyncSettings.DropFadeBars * BeatsPerBar);
 
-        if (sixteenthOn && !previousSixteenthOn && dropFlash > 0.5f)
+        if (sixteenthOn && !previousSixteenthOn && dropFlash > SyncSettings.DropSeedBurstThreshold)
         {
-            PlantSeeds(DropSeedBurst);
+            PlantSeeds(SyncSettings.DropSeedBurst);
         }
         previousSixteenthOn = sixteenthOn;
 
@@ -324,14 +451,14 @@ public class CrystalGrowth : EffectBase
         float pulse = (beatManager.IsSynced ? beatManager.Pulses.Beat : selfPulse) * activity;
         float spread = spreadPerSec
             * (1f + (beatSurge * pulse))
-            * fillAmount.Lerp(1f, 1f - FillHoldback)
-            * (1f + (DropRatchetSpread * dropFlash * ratchet))
-            * (1f + (DropFlashSpread * dropFlash));
+            * fillAmount.Lerp(1f, 1f - SyncSettings.FillHoldback)
+            * (1f + (SyncSettings.DropRatchetSpread * dropFlash * ratchet))
+            * (1f + (SyncSettings.DropFlashSpread * dropFlash));
 
         // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
         spreadBudget += spread * deltaTime;
         int passes = 0;
-        while (spreadBudget >= 1f && passes < MaxFrontPassesPerFrame)
+        while (spreadBudget >= 1f && passes < standaloneSettings.MaxFrontPassesPerFrame)
         {
             spreadBudget -= 1f;
             passes++;
@@ -355,17 +482,17 @@ public class CrystalGrowth : EffectBase
 
         RelaxHue(deltaTime);
 
-        // Brightness pulses with the music; the floor is shallow (0.8) so lit tiles stay bright, and it lifts
-        // toward steady as the track quietens so a quiet break never strobes to an inaudible beat.
-        float minimumBrightness = activity.Lerp(1f, 0.8f);
+        // Brightness pulses with the music; the configured floor keeps lit tiles bright, and it lifts toward
+        // steady as the track quietens so a quiet break never strobes to an inaudible beat.
+        float minimumBrightness = activity.Lerp(1f, SyncSettings.DrivingBrightnessFloor);
         float rhythmBrightness = waveform.Lerp(minimumBrightness, 1f);
 
         // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
         // the wall flashes on each 16th for the drop's whole window (falling linearly with the release). Applied to
         // the final color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to
         // 1 (no strobe) outside a Drop. The Fill instead swells the glow while the hold-back compresses growth.
-        float strobe = 1f - (dropFlash * (1f - ratchet) * DropStrobeDepth);
-        float swell = 1f + (FillSwell * fillAmount);
+        float strobe = 1f - (dropFlash * (1f - ratchet) * SyncSettings.DropStrobeDepth);
+        float swell = 1f + (SyncSettings.FillSwell * fillAmount);
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -381,15 +508,16 @@ public class CrystalGrowth : EffectBase
             // never drops below CrystalFloor, so the crystal lingers as a dim layer instead of going black. The
             // very tip whitens slightly into a crystalline sparkle.
             Color col = APalette.read(hue[i], true);
-            float tip = c.Remap(0.8f, 1f, 0f, 1f, clamp: true);
-            col = Color.Lerp(col, Color.white, tip * 0.5f);
+            float tip = c.Remap(standaloneSettings.TipThreshold, 1f, 0f, 1f, clamp: true);
+            col = Color.Lerp(col, Color.white, tip * standaloneSettings.TipWhitenAmount);
 
             // sqrt widens the bright band: the whole active growth area stays bright and only the oldest tail
             // eases down to the floor, so the crystal reads as a defined glowing region instead of a bright dot.
             // The Drop flash adds a luminance lift weighted by front heat (c) and the linear envelope, so the boost
             // rides the sweeping leading edge — a bright colored wavefront crossing the wall — and trails back to
             // normal behind it, all in the tile's own palette color (never toward white). Collapses to ×1 off a flash.
-            float factor = Mathf.Max(Mathf.Sqrt(c) * rhythmBrightness, CrystalFloor) * (1f + DropFlashBrightness * dropFlash * c);
+            float factor = Mathf.Max(Mathf.Sqrt(c) * rhythmBrightness, standaloneSettings.CrystalFloor) *
+                (1f + (SyncSettings.DropFlashBrightness * dropFlash * c));
             buffer[i] = col * (factor * strobe * swell);
         }
     }
@@ -404,7 +532,9 @@ public class CrystalGrowth : EffectBase
     private void RelaxHue(float dt)
     {
         // Clamp the blend rate so a long frame hitch can't over-relax in one step.
-        float k = Mathf.Min(HueRelaxPerSec * dt, 0.5f);
+        float k = Mathf.Min(
+            standaloneSettings.HueRelaxPerSec * dt,
+            standaloneSettings.HueRelaxMaxPerFrame);
         if (k <= 0f)
         {
             return;
@@ -474,7 +604,9 @@ public class CrystalGrowth : EffectBase
         if (selfBeatPhase >= 1f)
         {
             selfBeatPhase -= 1f;
-            selfBeatPeriod = Random.Range(SelfBeatPeriodMin, SelfBeatPeriodMax);
+            selfBeatPeriod = Random.Range(
+                standaloneSettings.SelfBeatPeriod.Min,
+                standaloneSettings.SelfBeatPeriod.Max);
             selfPulse = 1f; // peak surge, decays below
 
             PlantSeeds(BloomCount());
@@ -486,25 +618,33 @@ public class CrystalGrowth : EffectBase
         {
             PlantSeed();
             seedTimer = 0f;
-            seedInterval = Random.Range(StandaloneSeedMin, StandaloneSeedMax);
+            seedInterval = Random.Range(
+                standaloneSettings.SeedInterval.Min,
+                standaloneSettings.SeedInterval.Max);
         }
 
         // Decay the synthetic surge toward 0 so each downbeat is a lunge, not a sustained sprint.
-        selfPulse = Mathf.Max(0f, selfPulse - (dt * SelfPulseDecayPerSec));
+        selfPulse = Mathf.Max(0f, selfPulse - (dt * standaloneSettings.SelfPulseDecayPerSec));
     }
 
     /// <summary>
     /// Samples the live smoothed <see cref="BeatManager.Levels"/> into this frame's <see cref="kickLow"/> /
     /// <see cref="energyNow"/> and returns the beat-coupling "activity" in [0..1]:
-    /// 0 in a fully quiet break, 1 while the track drives, ramped across <see cref="QuietEnergy"/>..
-    /// <see cref="ActiveEnergy"/> (straddling a third). Missing wire levels read as zero.
+    /// 0 in a fully quiet break and 1 while the track drives. Standalone reads its fixed thresholds so
+    /// a saved Sync Settings edit cannot move the self-driven spread. Missing wire levels read as zero.
     /// </summary>
     private float ReadLevels()
     {
         var levels = beatManager.Levels;
         kickLow = levels.Smoothed.Low;
         energyNow = levels.Smoothed.Average;
-        return energyNow.Remap(QuietEnergy, ActiveEnergy, 0f, 1f, clamp: true);
+        float quietEnergy = beatManager.IsSynced
+            ? SyncSettings.QuietEnergy
+            : standaloneSettings.QuietEnergy;
+        float activeEnergy = beatManager.IsSynced
+            ? SyncSettings.ActiveEnergy
+            : standaloneSettings.ActiveEnergy;
+        return energyNow.Remap(quietEnergy, activeEnergy, 0f, 1f, clamp: true);
     }
 
     /// <summary>
@@ -520,14 +660,14 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void SeedFromEnergy(float dt, int bib)
     {
-        bool kickNow = kickLow > KickThreshold;
+        bool kickNow = kickLow > SyncSettings.KickThreshold;
         if (kickNow && !lastKick)
         {
-            float kickAmount = kickLow.Remap(KickThreshold, 1f, 0f, 1f, clamp: true);
-            int burst = Mathf.RoundToInt(kickAmount.Lerp(2f, 6f));
+            float kickAmount = kickLow.Remap(SyncSettings.KickThreshold, 1f, 0f, 1f, clamp: true);
+            int burst = Mathf.RoundToInt(kickAmount.Lerp(SyncSettings.KickBurstMin, SyncSettings.KickBurstMax));
             if (bib == 1)
             {
-                burst += 2; // extra weight on the bar's one
+                burst += SyncSettings.DownbeatSeedBonus;
             }
 
             // The fill is NOT seeded here — it gets its own drastic sixteenth ratchet in SeedFillRatchet, and the
@@ -543,7 +683,9 @@ public class CrystalGrowth : EffectBase
         {
             PlantSeed();
             seedTimer = 0f;
-            seedInterval = Random.Range(SyncedIdleSeedMin, SyncedIdleSeedMax);
+            seedInterval = Random.Range(
+                SyncSettings.IdleSeedIntervalMin,
+                SyncSettings.IdleSeedIntervalMax);
         }
     }
 
@@ -554,7 +696,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void PlantSeed()
     {
-        hueCursor = Mathf.Repeat(hueCursor + GoldenStep, 1f);
+        hueCursor = Mathf.Repeat(hueCursor + standaloneSettings.GoldenStep, 1f);
 
         int t = Random.Range(0, charge.Length);
         charge[t] = 1f;
@@ -578,7 +720,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void PlantUnisonSeeds(int count)
     {
-        hueCursor = Mathf.Repeat(hueCursor + GoldenStep, 1f);
+        hueCursor = Mathf.Repeat(hueCursor + standaloneSettings.GoldenStep, 1f);
         for (int s = 0; s < count; s++)
         {
             int t = Random.Range(0, charge.Length);
@@ -603,12 +745,12 @@ public class CrystalGrowth : EffectBase
         for (int i = 0; i < charge.Length; i++)
         {
             float c = charge[i];
-            if (c <= HeatEpsilon)
+            if (c <= standaloneSettings.HeatEpsilon)
             {
                 continue;
             }
 
-            float push = c * FrontPush;
+            float push = c * standaloneSettings.FrontPush;
             int gi = gen[i];
             float hi = hue[i];
 
@@ -655,7 +797,7 @@ public class CrystalGrowth : EffectBase
             }
         }
 
-        if (claimed >= (int)(CoverageToAdvance * Penrose.Total))
+        if (claimed >= (int)(standaloneSettings.CoverageToAdvance * Penrose.Total))
         {
             StartNextGeneration();
         }
@@ -672,5 +814,165 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>A bloom is 3–5 seeds — used for the bar's-one bloom, a new generation, and the Standalone downbeat.</summary>
-    private int BloomCount() => 3 + Random.Range(0, 3);
+    private int BloomCount() => standaloneSettings.BloomCountBase + Random.Range(
+        standaloneSettings.BloomCountOffsetMinInclusive,
+        standaloneSettings.BloomCountOffsetMaxExclusive);
+}
+
+/// <summary>The resolved Standalone Settings that preserve Crystal Growth's authored no-music look and machinery.</summary>
+public sealed class CrystalGrowthStandaloneSettings
+{
+    /// <summary>Front heat below which the growing rim stops advancing.</summary>
+    public float HeatEpsilon;
+
+    /// <summary>Fraction of front heat carried into the next adjacency ring.</summary>
+    public float FrontPush;
+
+    /// <summary>Fraction of the wall claimed before the next generation blooms.</summary>
+    public float CoverageToAdvance;
+
+    /// <summary>Maximum front passes advanced during one frame.</summary>
+    public int MaxFrontPassesPerFrame;
+
+    /// <summary>Minimum brightness retained by every grown tile.</summary>
+    public float CrystalFloor;
+
+    /// <summary>Per-second rate for relaxing same-layer hue seams.</summary>
+    public float HueRelaxPerSec;
+
+    /// <summary>Maximum hue relaxation applied during one frame.</summary>
+    public float HueRelaxMaxPerFrame;
+
+    /// <summary>Average-band level treated as fully quiet by the Standalone spread machinery.</summary>
+    public float QuietEnergy;
+
+    /// <summary>Average-band level treated as fully active by the Standalone spread machinery.</summary>
+    public float ActiveEnergy;
+
+    /// <summary>Golden-ratio palette step between successive seed colors.</summary>
+    public float GoldenStep;
+
+    /// <summary>Per-activation range for front spread in rings per second.</summary>
+    public FloatRange SpreadPerSec;
+
+    /// <summary>Per-activation range for the fraction of front brightness lost each second.</summary>
+    public FloatRange LeakPerSec;
+
+    /// <summary>Per-activation range for the synthetic spread-surge multiplier.</summary>
+    public FloatRange BeatSurge;
+
+    /// <summary>Range in seconds between free-running Standalone seeds.</summary>
+    public FloatRange SeedInterval;
+
+    /// <summary>Range in seconds between synthetic Standalone downbeats.</summary>
+    public FloatRange SelfBeatPeriod;
+
+    /// <summary>Per-second decay of the synthetic Standalone spread surge.</summary>
+    public float SelfPulseDecayPerSec;
+
+    /// <summary>Front heat at which the crystal tip begins whitening.</summary>
+    public float TipThreshold;
+
+    /// <summary>Maximum amount of white mixed into the crystal tip.</summary>
+    public float TipWhitenAmount;
+
+    /// <summary>Base seed count added to every randomly varied bloom.</summary>
+    public int BloomCountBase;
+
+    /// <summary>Inclusive minimum random offset added to a bloom's base seed count.</summary>
+    public int BloomCountOffsetMinInclusive;
+
+    /// <summary>Exclusive maximum random offset added to a bloom's base seed count.</summary>
+    public int BloomCountOffsetMaxExclusive;
+}
+
+/// <summary>The saved-or-default musical-response settings used by Crystal Growth in Synced Mode.</summary>
+[Serializable]
+public sealed class CrystalGrowthSyncSettings
+{
+    /// <summary>Low-band threshold for detecting a bass-kick edge.</summary>
+    [Range(0f, 1f)] public float KickThreshold;
+
+    /// <summary>Average-band level treated as fully quiet.</summary>
+    [Range(0f, 1f)] public float QuietEnergy;
+
+    /// <summary>Average-band level treated as fully active.</summary>
+    [Range(0f, 1f)] public float ActiveEnergy;
+
+    /// <summary>Drop-flash decay length in bars.</summary>
+    [Min(1)] public int DropFadeBars;
+
+    /// <summary>Peak luminance gain on the Drop wavefront.</summary>
+    [Min(0f)] public float DropFlashBrightness;
+
+    /// <summary>Extra spread multiplier at the peak of the Drop flash.</summary>
+    [Min(0f)] public float DropFlashSpread;
+
+    /// <summary>Unison seed count planted at Drop-flash onset.</summary>
+    [Min(0)] public int DropFlashSeeds;
+
+    /// <summary>Minimum seconds between Synced idle-heartbeat seeds.</summary>
+    [Min(0f)] public float IdleSeedIntervalMin;
+
+    /// <summary>Maximum seconds between Synced idle-heartbeat seeds.</summary>
+    [Min(0f)] public float IdleSeedIntervalMax;
+
+    /// <summary>Drop sixteenth-ratchet spread multiplier.</summary>
+    [Min(0f)] public float DropRatchetSpread;
+
+    /// <summary>Depth of the Drop sixteenth strobe.</summary>
+    [Range(0f, 1f)] public float DropStrobeDepth;
+
+    /// <summary>Seed count planted on a qualifying Drop sixteenth.</summary>
+    [Min(0)] public int DropSeedBurst;
+
+    /// <summary>Drop envelope threshold above which sixteenth seed bursts fire.</summary>
+    [Range(0f, 1f)] public float DropSeedBurstThreshold;
+
+    /// <summary>Fraction of base spread held back at a full Fill.</summary>
+    [Range(0f, 1f)] public float FillHoldback;
+
+    /// <summary>Whole-field luminance swell at a full Fill.</summary>
+    [Min(0f)] public float FillSwell;
+
+    /// <summary>Brightness floor while average-band energy is fully active.</summary>
+    [Range(0f, 1f)] public float DrivingBrightnessFloor;
+
+    /// <summary>Minimum seed burst produced by a detected bass kick.</summary>
+    [Min(0f)] public float KickBurstMin;
+
+    /// <summary>Maximum seed burst produced by a detected bass kick.</summary>
+    [Min(0f)] public float KickBurstMax;
+
+    /// <summary>Extra seed count added on beat one of a bar.</summary>
+    [Min(0)] public int DownbeatSeedBonus;
+
+    /// <summary>Copies every Crystal Growth Sync Setting from another value.</summary>
+    public void CopyFrom(CrystalGrowthSyncSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        KickThreshold = source.KickThreshold;
+        QuietEnergy = source.QuietEnergy;
+        ActiveEnergy = source.ActiveEnergy;
+        DropFadeBars = source.DropFadeBars;
+        DropFlashBrightness = source.DropFlashBrightness;
+        DropFlashSpread = source.DropFlashSpread;
+        DropFlashSeeds = source.DropFlashSeeds;
+        IdleSeedIntervalMin = source.IdleSeedIntervalMin;
+        IdleSeedIntervalMax = source.IdleSeedIntervalMax;
+        DropRatchetSpread = source.DropRatchetSpread;
+        DropStrobeDepth = source.DropStrobeDepth;
+        DropSeedBurst = source.DropSeedBurst;
+        DropSeedBurstThreshold = source.DropSeedBurstThreshold;
+        FillHoldback = source.FillHoldback;
+        FillSwell = source.FillSwell;
+        DrivingBrightnessFloor = source.DrivingBrightnessFloor;
+        KickBurstMin = source.KickBurstMin;
+        KickBurstMax = source.KickBurstMax;
+        DownbeatSeedBonus = source.DownbeatSeedBonus;
+    }
 }

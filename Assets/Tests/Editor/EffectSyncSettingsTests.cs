@@ -101,6 +101,42 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.HueShift, Is.EqualTo(second.HueShift));
     }
 
+    /// <summary>Crystal Growth Standalone Settings resolve as fresh copies of its scalar and machinery defaults.</summary>
+    [Test]
+    public void CrystalGrowthStandaloneSettingsResolveToStandaloneDefaults()
+    {
+        var first = CrystalGrowth.StandaloneSettings;
+        var second = CrystalGrowth.StandaloneSettings;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.HeatEpsilon, Is.EqualTo(second.HeatEpsilon));
+        Assert.That(first.FrontPush, Is.EqualTo(second.FrontPush));
+        Assert.That(first.CoverageToAdvance, Is.EqualTo(second.CoverageToAdvance));
+        Assert.That(first.MaxFrontPassesPerFrame, Is.EqualTo(second.MaxFrontPassesPerFrame));
+        Assert.That(first.CrystalFloor, Is.EqualTo(second.CrystalFloor));
+        Assert.That(first.HueRelaxPerSec, Is.EqualTo(second.HueRelaxPerSec));
+        Assert.That(first.HueRelaxMaxPerFrame, Is.EqualTo(second.HueRelaxMaxPerFrame));
+        Assert.That(first.QuietEnergy, Is.EqualTo(second.QuietEnergy));
+        Assert.That(first.ActiveEnergy, Is.EqualTo(second.ActiveEnergy));
+        Assert.That(first.GoldenStep, Is.EqualTo(second.GoldenStep));
+        Assert.That(first.SpreadPerSec.Min, Is.EqualTo(second.SpreadPerSec.Min));
+        Assert.That(first.SpreadPerSec.Max, Is.EqualTo(second.SpreadPerSec.Max));
+        Assert.That(first.LeakPerSec.Min, Is.EqualTo(second.LeakPerSec.Min));
+        Assert.That(first.LeakPerSec.Max, Is.EqualTo(second.LeakPerSec.Max));
+        Assert.That(first.BeatSurge.Min, Is.EqualTo(second.BeatSurge.Min));
+        Assert.That(first.BeatSurge.Max, Is.EqualTo(second.BeatSurge.Max));
+        Assert.That(first.SeedInterval.Min, Is.EqualTo(second.SeedInterval.Min));
+        Assert.That(first.SeedInterval.Max, Is.EqualTo(second.SeedInterval.Max));
+        Assert.That(first.SelfBeatPeriod.Min, Is.EqualTo(second.SelfBeatPeriod.Min));
+        Assert.That(first.SelfBeatPeriod.Max, Is.EqualTo(second.SelfBeatPeriod.Max));
+        Assert.That(first.SelfPulseDecayPerSec, Is.EqualTo(second.SelfPulseDecayPerSec));
+        Assert.That(first.TipThreshold, Is.EqualTo(second.TipThreshold));
+        Assert.That(first.TipWhitenAmount, Is.EqualTo(second.TipWhitenAmount));
+        Assert.That(first.BloomCountBase, Is.EqualTo(second.BloomCountBase));
+        Assert.That(first.BloomCountOffsetMinInclusive, Is.EqualTo(second.BloomCountOffsetMinInclusive));
+        Assert.That(first.BloomCountOffsetMaxExclusive, Is.EqualTo(second.BloomCountOffsetMaxExclusive));
+    }
+
     /// <summary>Restore replaces every edited Tunnel Sync Setting with the current file-local Sync Defaults.</summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryTunnelValue()
@@ -143,6 +179,57 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = Ripple.SyncDefaults;
         Assert.That(asset.Settings.HueShiftMax, Is.EqualTo(defaults.HueShiftMax));
+    }
+
+    /// <summary>Restore replaces every edited Crystal Growth Sync Setting with its file-local Sync Default.</summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryCrystalGrowthValue()
+    {
+        var asset = (CrystalGrowthSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(CrystalGrowth),
+            TempAssetFolder);
+        asset.Settings.KickThreshold = 0.9f;
+        asset.Settings.QuietEnergy = 0.1f;
+        asset.Settings.ActiveEnergy = 0.8f;
+        asset.Settings.DropFadeBars = 7;
+        asset.Settings.DropFlashBrightness = 4f;
+        asset.Settings.DropFlashSpread = 5f;
+        asset.Settings.DropFlashSeeds = 6;
+        asset.Settings.IdleSeedIntervalMin = 1.1f;
+        asset.Settings.IdleSeedIntervalMax = 1.8f;
+        asset.Settings.DropRatchetSpread = 8f;
+        asset.Settings.DropStrobeDepth = 0.2f;
+        asset.Settings.DropSeedBurst = 9;
+        asset.Settings.DropSeedBurstThreshold = 0.7f;
+        asset.Settings.FillHoldback = 0.3f;
+        asset.Settings.FillSwell = 1.4f;
+        asset.Settings.DrivingBrightnessFloor = 0.4f;
+        asset.Settings.KickBurstMin = 4f;
+        asset.Settings.KickBurstMax = 10f;
+        asset.Settings.DownbeatSeedBonus = 5;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(CrystalGrowth), TempAssetFolder);
+
+        var defaults = CrystalGrowth.SyncDefaults;
+        Assert.That(asset.Settings.KickThreshold, Is.EqualTo(defaults.KickThreshold));
+        Assert.That(asset.Settings.QuietEnergy, Is.EqualTo(defaults.QuietEnergy));
+        Assert.That(asset.Settings.ActiveEnergy, Is.EqualTo(defaults.ActiveEnergy));
+        Assert.That(asset.Settings.DropFadeBars, Is.EqualTo(defaults.DropFadeBars));
+        Assert.That(asset.Settings.DropFlashBrightness, Is.EqualTo(defaults.DropFlashBrightness));
+        Assert.That(asset.Settings.DropFlashSpread, Is.EqualTo(defaults.DropFlashSpread));
+        Assert.That(asset.Settings.DropFlashSeeds, Is.EqualTo(defaults.DropFlashSeeds));
+        Assert.That(asset.Settings.IdleSeedIntervalMin, Is.EqualTo(defaults.IdleSeedIntervalMin));
+        Assert.That(asset.Settings.IdleSeedIntervalMax, Is.EqualTo(defaults.IdleSeedIntervalMax));
+        Assert.That(asset.Settings.DropRatchetSpread, Is.EqualTo(defaults.DropRatchetSpread));
+        Assert.That(asset.Settings.DropStrobeDepth, Is.EqualTo(defaults.DropStrobeDepth));
+        Assert.That(asset.Settings.DropSeedBurst, Is.EqualTo(defaults.DropSeedBurst));
+        Assert.That(asset.Settings.DropSeedBurstThreshold, Is.EqualTo(defaults.DropSeedBurstThreshold));
+        Assert.That(asset.Settings.FillHoldback, Is.EqualTo(defaults.FillHoldback));
+        Assert.That(asset.Settings.FillSwell, Is.EqualTo(defaults.FillSwell));
+        Assert.That(asset.Settings.DrivingBrightnessFloor, Is.EqualTo(defaults.DrivingBrightnessFloor));
+        Assert.That(asset.Settings.KickBurstMin, Is.EqualTo(defaults.KickBurstMin));
+        Assert.That(asset.Settings.KickBurstMax, Is.EqualTo(defaults.KickBurstMax));
+        Assert.That(asset.Settings.DownbeatSeedBonus, Is.EqualTo(defaults.DownbeatSeedBonus));
     }
 
     /// <summary>Deletes the temporary test roots through Unity so generated assets and metadata stay paired.</summary>
@@ -194,4 +281,3 @@ public sealed class TestSettingsEffect : EffectBase
     {
     }
 }
-
