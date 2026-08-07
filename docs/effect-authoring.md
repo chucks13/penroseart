@@ -4,17 +4,69 @@ Effects are plain C# classes that fill a 900-color buffer for the Penrose Wall. 
 
 ## Create a new effect
 
-1. Copy `Assets/effects/EmptyEffect.cs`.
-2. Rename the file and class to the new effect name.
-3. Remove `[RuntimeCatalogIgnore]` from the copy.
-4. Implement `Draw()`.
-5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
+1. Copy `Assets/effects/EmptyEffect.cs` and `Assets/effects/EmptyEffectSyncSettingsAsset.cs`.
 
-`EmptyEffect` itself is intentionally ignored by the runtime catalog. It exists only as a documented starter template.
+2. Rename the copied files and the `EmptyEffect` class for the new Effect.
+
+3. Rename `EmptyEffectStandaloneSettings`, `EmptyEffectSyncSettings`, and `EmptyEffectSyncSettingsAsset` for the new Effect. Update the copied `[CreateAssetMenu(...)]` file and menu names and the `[EffectSyncSettings(typeof(...))]` attribute.
+
+4. Fill in the copied Effect Settings scaffold with the new Effect's authored values.
+
+5. Remove `[RuntimeCatalogIgnore]` from the Effect copy.
+
+6. Delete the `EXAMPLE` members that the Effect does not need and implement `Draw()`.
+
+7. Enter Play Mode or run a compile/import check. Unity then generates both `.meta` files and compiles both classes.
+
+8. Create the Sync Settings asset from the Tuning Window's Effects tab — compiling alone does not create it (see [Wire the Sync Settings path](#wire-the-sync-settings-path)).
+
+The runtime catalog intentionally ignores `EmptyEffect`. Keep, rename, and fill in its Effect Settings scaffold. Delete the illustrative `EXAMPLE` members as needed.
 
 ### Start with Effect Settings
 
-A new Effect starts with `// Standalone Defaults` and `// Sync Defaults` blocks at the top of its source file, plus its typed Sync Settings asset. Its Standalone Settings remain exactly its Standalone Defaults, while its Sync Settings resolve from the saved asset with the file-local Sync Defaults as fallback. Follow [`Tunnel`](../Assets/effects/Tunnel.cs) and [`TunnelSyncSettingsAsset`](../Assets/effects/TunnelSyncSettingsAsset.cs) as the worked example, adapting the value shape to the Effect instead of forcing common fields.
+Use the canonical [`CONTEXT.md` Effect configuration terms](../CONTEXT.md#effect-configuration). They are Effect Settings, Standalone Defaults, Sync Defaults, Standalone Settings, and Sync Settings. [`ADR-0012`](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md) records the standing decision. This guide shows its code layout and does not redefine the vocabulary.
+
+Put `// Standalone Defaults` and `// Sync Defaults` before runtime state. Put values that shape Standalone Mode under Standalone Defaults. Put values that author musical response under Sync Defaults. Keep structural literals and runtime state outside both blocks. Treat each randomization range as a setting. Author both bounds instead of leaving them inline in `Random.Range(...)`.
+
+No editor surface edits Standalone values. Change them only in the source file for the Effect. ADR-0012 permits a read-only display.
+
+The Effect defines its carrier shape. These three calibration Effects establish proven shapes.
+
+| Calibration | Proven shape |
+| --- | --- |
+| [`Tunnel`](../Assets/effects/Tunnel.cs) and its [`TunnelSyncSettingsAsset`](../Assets/effects/TunnelSyncSettingsAsset.cs) | Scalar authored constants. Standalone randomization bounds grouped as `FloatRange` values. A constructor builds `TunnelStandaloneSettings`. |
+| [`Ripple`](../Assets/effects/Ripple.cs) and its [`RippleSyncSettingsAsset`](../Assets/effects/RippleSyncSettingsAsset.cs) | The Effect moves tuned inline literals into settings. It dual-homes the `Waveform.Lerp` to-slot as a Standalone Default and a Sync Default. The call site selects one with `beatManager.IsSynced`. |
+| [`CrystalGrowth`](../Assets/effects/CrystalGrowth.cs) and its [`CrystalGrowthSyncSettingsAsset`](../Assets/effects/CrystalGrowthSyncSettingsAsset.cs) | A large field-based `CrystalGrowthStandaloneSettings` uses an object initializer. Separate minimum and maximum fields in Sync Settings define each randomization range, so each endpoint carries its own `[Min]` inspector bound — `FloatRange` endpoints cannot carry one. |
+
+Choose the shape that fits the Effect. Do not force common fields or mechanically copy one calibration.
+
+The scaffold standardizes where authored values live and how an Effect reaches its Sync Settings — nothing more. Re-rolls, Grid response, Waveform use, and every musical mapping remain the Effect's own decisions ([ADR-0012](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md)).
+
+#### Wire the Sync Settings path
+
+The copied `EmptyEffect` skeleton already wires the Sync Settings path. Rename and fill in each piece. Do not delete and rebuild the structure.
+
+1. Rename `EmptyEffectStandaloneSettings` and `EmptyEffectSyncSettings` for the new Effect.
+
+   The Standalone Settings type carries the fixed Standalone Settings in code. The Sync Settings type defines the serializable saved shape. Replace the placeholder fields. Keep suitable `[Range]` or `[Min]` bounds on Inspector values.
+
+2. Update the copied `StandaloneSettings`, `SyncDefaults`, and `SyncSettings` properties with the new type names.
+
+   The Standalone Settings property builds a fresh value from Standalone Defaults. The Sync Defaults property builds a fresh value from the file-local Sync Defaults. The Sync Settings property holds the saved or fallback value for the current activation.
+
+3. Rename `EmptyEffectSyncSettingsAsset.cs` and `EmptyEffectSyncSettingsAsset` for the new Effect. Update the copied `[CreateAssetMenu(...)]` file and menu names. Update the copied `[EffectSyncSettings(typeof(...))]` attribute. The asset stores the serialized Sync Settings for its Effect. The restore method copies the current file-local Sync Defaults over the saved copy.
+
+4. Call `EffectSyncSettingsProvider.Resolve(typeof(<EffectName>), SyncDefaults)` wherever the Effect refreshes its settings — activation (`OnStart`) is the usual spot, and whether it also refreshes elsewhere is the Effect's choice. The provider loads `Resources/EffectSyncSettings/<EffectName>Settings`. When no asset exists, the provider uses the supplied file-local Sync Defaults. The provider consumes no `UnityEngine.Random`, so resolution never disturbs an Effect's roll order.
+
+The compile/import step imports and compiles the scripts. It does not create a Sync Settings asset. Create the saved asset from one of two surfaces.
+
+- The Tuning Window **Effects** tab: select the Effect and use its **Create Sync Settings Asset** button, or use the tab's **Create Missing Sync Settings** toolbar button for the whole catalog.
+
+- The **Window > Penrose > Create Missing Effect Sync Settings** menu item.
+
+Never hand-create the `.asset` file. Commit the Unity-generated `.asset` and `.meta` with the Effect.
+
+Read musical-response values from the resolved Sync Settings. A call-site slot can preserve a fixed Standalone value and accept a live Synced value. Keep the two authored values in their respective default blocks. Select between `SyncSettings` and Standalone Settings with `beatManager.IsSynced`, as Ripple does.
 
 [`Flock`](../Assets/effects/Flock.cs) is the advanced reference for a production music-reactive effect. Its source is organized in
 reading order—signal hierarchy, artistic tuning, runtime state, lifecycle, frame pipeline, musical mappings,
