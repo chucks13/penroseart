@@ -369,6 +369,28 @@ _Avoid_: using Duration when only the pre-impact lead time is meant; that lead t
 The moment an A-to-B Transition has fully reached B. Completion may happen on the same beat as the Impact Point or after it, depending on the Transition Repertoire.
 _Avoid_: assuming Completion is the timed musical target; the timed target is the Impact Point.
 
+### Effect configuration
+
+**Effect Settings**:
+The umbrella for everything an Effect is tuned by — its Standalone Defaults, Sync Defaults, Standalone Settings, and Sync Settings taken together. Every Effect has all four, Mixers included, since a Mixer is an Effect like any other.
+_Avoid_: using it for any single one of the four; reading it as one storage location; assuming every Effect expresses them the same way — each Effect is hand-built and takes the shape that suits it.
+
+**Standalone Defaults**:
+An Effect's authored values for how it looks with no music. They sit at the top of that Effect's own source file and change only by editing that file.
+_Avoid_: making them editable on an editor surface (displaying them read-only is fine); treating them as a starting point that something later overrides; **Code Defaults**, which is the Transition-side term for a different arrangement.
+
+**Sync Defaults**:
+An Effect's authored values for its musical response, sitting at the top of the same file beside the Standalone Defaults and likewise changed only by editing that file. They are what Sync Settings reset back to.
+_Avoid_: keeping them in the saved settings instead of the file; classing a value that shapes the Standalone look as a Sync Default.
+
+**Standalone Settings**:
+What an Effect reads in Standalone Mode. Standalone has no editable layer, so these are always exactly the Standalone Defaults; the term names the cell, not a second place to look.
+_Avoid_: hunting for them in an asset or an editor surface; expecting them to ever differ from the Standalone Defaults.
+
+**Sync Settings**:
+What an Effect reads in Synced Mode: a saved copy that can be tweaked while the wall runs and reset back to the Sync Defaults at any moment.
+_Avoid_: treating a live tweak as finished authoring before it has been written back into the file; changing an Effect's intended values by editing the saved copy rather than the Sync Defaults.
+
 ### Authoring surfaces
 
 **Play Mode**:
