@@ -45,7 +45,8 @@ Never leave that split to the worker.
 
 ## Phase B - Implement and validate
 
-1. With the `codex-worker` skill, brief one implementation worker (mode implement, `--events`).
+1. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). There is no
+   `--events` flag; `codex-worker.py` rejects it. Read progress with `tail --label <label>`.
 
 2. Put in the brief the goals, the acceptance criteria, the vocabulary, ADR-0012, the Tunnel precedent, and the boundaries below.
 
