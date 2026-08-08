@@ -30,6 +30,19 @@ Hunter set this policy on 2026-08-07. Do not lower either selection.
 
 5. With the `using-git-branch` skill, create branch `refactor/effect-settings-<effect>` from master.
 
+## Tests
+
+Hunter ruled on 2026-08-07: "We should never be pinning values through tests. If we have old
+tests at the wrong seams, they should be corrected."
+
+An existing test whose assertion encodes an authored tuning number is at the wrong seam. Delete
+it during that Effect's conversion. Do not preserve it, and do not write a replacement. Keep only
+the assertions that hold whatever the authored values are - geometry, vector math, and
+frame-rate invariance.
+
+You classify every test in the file and hand the worker an explicit delete list and keep list.
+Never leave that split to the worker.
+
 ## Phase B - Implement and validate
 
 1. With the `codex-worker` skill, brief one implementation worker (mode implement, `--events`).
@@ -53,6 +66,12 @@ Hunter set this policy on 2026-08-07. Do not lower either selection.
    - Confirm resolution consumes no Random.
    - Confirm the vocabulary matches `CONTEXT.md` exactly.
    - Confirm tests stay on the agreed seam - resolution and restore only, no rendering asserts, no pinned authored values.
+   - Confirm the worker added no guard that did not exist before. (#116: it added five
+     `if (!IsSynced) return 0f;` short-circuits. `IsSynced` is beat position only, so levels
+     keep streaming when the transport stops - the guards changed the Standalone look. Compile,
+     355 tests, and the diff review all passed them; the Spec-axis review caught it.)
+   - Confirm no Standalone branch passes an inline literal. `docs/effect-authoring.md:68`
+     requires both authored values to live in their default blocks, the inert identity included.
 
 6. Fix small defects directly. Send design-level rework back to the worker with `codex exec resume`.
 
