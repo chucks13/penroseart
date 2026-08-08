@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb9ab2e574bce4a5a81e107863b82654, type: 3}
+  m_Name: AnglesSettings
+  m_EditorClassIdentifier: Assembly-CSharp::AnglesSyncSettingsAsset
+  effectTypeName: Angles
+  settings:
+    FrontSoftness: 0.12
+    BeatKick: 0.15
+    AnticipationCurvePower: 5
+    AnticipationPrimerCap: 0.18
+    AnticipationBeats: 32
+    DropBeats: 3
+    DarkFloor: 0.04
+    BlackHold: 0.12
+    ClassSnapWidth: 0.08
+    RoutineEnergyOne: 1
+    RoutineEnergyTwo: 0
+    RoutineEnergyThree: 1
+    RoutineEnergyFour: 0
+    ShadeDepthLow: 0.12
+    ShadeDepthHigh: 0.4
+    EnergySmoothing: 2
+    RhythmHueOffsetMin: 0.8
+    RhythmHueOffsetMax: 1
