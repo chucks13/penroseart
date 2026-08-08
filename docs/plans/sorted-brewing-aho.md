@@ -6,7 +6,7 @@ RaveSystem shipped OSC schema v2 (their ADR-0021, one hard break): `phase_state`
 
 Goal: bring in every new lane, and in sync mode rely on wire truth instead of the things we were faking in code until OSC support existed. **No functionality is removed** — every locally-synthesized stand-in is replaced by its wire truth; genuine enrichments of real data stay.
 
-Decisions made (Hunter):
+Decided:
 - Energy drives **effect casting** (prefer effects matching the level; cast ahead of a change). Energy does not create cue marks.
 - Loop: keep simple — ingest + display; the Director keeps cueing while looping. No cue-hold.
 - Phrase + grid always on the wire in sync mode → all fallback machinery goes (GridSync, coasting, synthetic phrase ADR-0008).

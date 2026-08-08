@@ -1,8 +1,7 @@
 # The Switching Model
 
 The model of the switching product: how the wall changes, and who decides, while a
-live DJ plays (sync mode). Written from Hunter's head on 2026-07-31 with the old
-docs closed. This document is the single source of truth for switching behavior;
+live DJ plays (sync mode). A direct statement of the intended model, written with the old docs closed. This document is the single source of truth for switching behavior;
 older text that disagrees must justify itself against this or die.
 
 ## The players

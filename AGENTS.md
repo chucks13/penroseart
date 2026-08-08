@@ -99,7 +99,7 @@ Start with these before adding new structures:
 
 `Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it. Small wiring changes needed to connect an approved runtime model change are allowed; broad Controller restructuring still requires explicit approval.
 
-`BeatManager.cs` is the single musical source: no other module re-derives musical facts. Adding or changing any BeatManager data surface requires asking Hunter first, with a proposal that states the musical fact, the consumer that needs it, and why. Do not add a surface speculatively, and do not compute a musical fact locally to avoid the ask.
+`BeatManager.cs` is the single musical source: no other module re-derives musical facts. Adding or changing any BeatManager data surface requires asking the maintainer first, with a proposal that states the musical fact, the consumer that needs it, and why. Do not add a surface speculatively, and do not compute a musical fact locally to avoid the ask.
 
 ## Adding Effects, Transitions, and Blenders
 
@@ -172,6 +172,8 @@ Start with these before adding new structures:
 
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
 - **Document what you touch:** any symbol you touch or create — public or private, production or test — gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). New files start with a `//` file-purpose comment. Touched tests document the scenario under test and the asserted outcome; `<inheritdoc/>` is not a stand-in for that. Repair documentation warnings (bad cref, placement) — never delete a doc comment to silence one. There is deliberately no compiler-enforced documentation gate.
+- **Rules, not rulers:** documents state rules and name roles, never people. A rule stands on its location and its reason, never on who decided it. Attribution lives in git history and the issue tracker. When a document must mark a settled point, label the point as decided and state it.
+- **History earns its place:** keep skills, plans, and canonical docs free of history. Record a past event only when it changes behavior now, for example a failed approach that must not return. Full provenance belongs in the historical records under `docs/investigation/` and `docs/architecture-reviews/`.
 - `docs/investigation/` is historical context, not canonical current documentation. Do not edit historical notes to make them look current; update canonical docs and link back when needed.
 
 ## Project-wide Boundaries

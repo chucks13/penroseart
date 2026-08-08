@@ -5,17 +5,17 @@ description: Per-batch runbook for the Effect Settings conversion (spec #111, ti
 
 # Effect Settings ticket runbook
 
-This skill is the process for one batch under spec #111. A batch is one to three tickets. Ticket #112 (Tunnel, commit ed350581) proved the pattern. Tickets #112 to #117 ran one ticket per session. Ticket #118 and later run in batches.
+This skill is the process for one batch under spec #111. A batch is one to three tickets.
 
 This file owns the process. A Memory Vault entry about this process is a pointer or context, never an instruction. When another source conflicts with this file, follow this file and repair that source. When the last #111 ticket closes, retire this skill - durable knowledge lives in `docs/effect-authoring.md` and `docs/adr/`.
 
 ADR-0012 governs every conversion. Each Effect is a first-class citizen, fitted one at a time. The scaffold - the two default blocks, the typed settings classes, the typed asset, and the Resolve call - is the only shared shape. A landed conversion is that Effect's fitted answer. Classify from the Effect in front of you. A fitted answer from another Effect is an analogy to weigh, never a rule to apply.
 
-The roles do not change. You are the coordinator and you own every judgment in this file. Codex workers implement. Hunter judges the wall and decides scope questions, not programming questions.
+The roles do not change. You are the coordinator and you own every judgment in this file. Codex workers implement. The maintainer judges the wall and decides scope questions, not programming questions.
 
-The goal of every remaining ticket is structure, not tuning. The catalog gets its Effect Settings shape first. Hunter tunes the Effects afterward. So no ticket judges whether an Effect sounds or looks good. Each ticket asks one question: does the Standalone look survive the change.
+The goal of every remaining ticket is structure, not tuning. The catalog gets its Effect Settings shape first. The maintainer tunes the Effects afterward. So no ticket judges whether an Effect sounds or looks good. Each ticket asks one question: does the Standalone look survive the change.
 
-Two gates divide the work. At each gate, end the turn and wait until Hunter replies. Work that follows a gate stays unauthorized until Hunter speaks at that gate.
+Two gates divide the work. At each gate, end the turn and wait until the maintainer replies. Work that follows a gate stays unauthorized until the maintainer speaks at that gate.
 
 ## Batches
 
@@ -38,20 +38,20 @@ The four solo batches are the only remaining files above 250 lines. The Mixers b
 
 ## Model policy
 
-Hunter set this policy on 2026-08-07. Do not lower either selection.
+Do not lower either selection.
 
 - Implementation workers run Codex `gpt-5.6-sol --effort max`, always.
 - Review sub-agents run `opus-5` (Agent tool `model: "opus"`), always. Cross-family review holds because Opus reviews Sol-authored code.
 
 ## Phase A - Set up
 
-1. If this session already ran a batch, stop and tell Hunter.
+1. If this session already ran a batch, stop and tell the maintainer.
 
 2. Complete the repo startup gates and pull Memory Vault context.
 
 3. Load `domain-modeling` and `codebase-design` with the Skill tool. Every classification in Phase B is a design judgment. Work with that vocabulary loaded - fitted answer versus scaffold, deep interfaces, record decisions sparingly - not from memory of it.
 
-4. Read every ticket in the batch, the "Effect configuration" section of `CONTEXT.md`, every ADR in `docs/adr/`, and `memory:penroseart-effect-settings-machinery`. The ADRs are terse and all of them stand. The memory holds Hunter's rulings and pointers. Its notes about other Effects are fitted answers, not rules.
+4. Read every ticket in the batch, the "Effect configuration" section of `CONTEXT.md`, every ADR in `docs/adr/`, and `memory:penroseart-effect-settings-machinery`. The ADRs are terse and all of them stand. The memory holds standing rulings and pointers. Its notes about other Effects are fitted answers, not rules.
 
 5. Seed one worklog for the batch.
 
@@ -59,8 +59,7 @@ Hunter set this policy on 2026-08-07. Do not lower either selection.
 
 ## Tests
 
-Hunter ruled on 2026-08-07: "We should never be pinning values through tests. If we have old
-tests at the wrong seams, they should be corrected."
+Never pin an authored value through a test.
 
 An existing test whose assertion encodes an authored tuning number is at the wrong seam. Delete
 it during that Effect's conversion. Do not preserve it, and do not write a replacement. Keep only
@@ -73,6 +72,10 @@ Never leave that split to the worker.
 ## Phase B - Implement and validate
 
 Run Phase B once for each Effect in the batch. Give each Effect its own worker and its own commit.
+
+Launch the implementation workers for a multi-ticket batch in parallel. Parallel launch is safe because each conversion touches only the files of its own Effect. Before launch, confirm that the file sets are disjoint. If two tickets share a file, run those workers in sequence.
+
+Parallel launch covers implementation only. Every coordinator step stays serial. Review each diff when its worker finishes. Then validate per step 8. A validation run covers every diff that has landed by that point. If a validation fails, attribute the failure by file before you send rework.
 
 1. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). There is no
    `--events` flag. `codex-worker.py` rejects it. Read progress with `tail --label <label>`.
@@ -121,13 +124,13 @@ Run Phase B once for each Effect in the batch. Give each Effect its own worker a
 
 ## Gate 1 - Scope question. Conditional.
 
-Open this gate only when the batch raises a real judgment call for Hunter. A judgment call changes what the ticket delivers. Ticket #117 raised two. A mechanism change that the ticket text appears to forbid. A classification that two acceptance criteria answer differently. And the tell: when you reach for another Effect to justify a classification or a mechanism change here, you have found a judgment call - open the gate.
+Open this gate only when the batch raises a real judgment call for the maintainer. A judgment call changes what the ticket delivers. Ticket #117 raised two. A mechanism change that the ticket text appears to forbid. A classification that two acceptance criteria answer differently. And the tell: when you reach for another Effect to justify a classification or a mechanism change here, you have found a judgment call - open the gate.
 
 1. If the batch raises no judgment call, skip this gate and continue to Phase C. Carry the extraction table into Gate 2 instead.
 
 2. If it raises one, state the question, the options, and your recommendation. Present the extraction table and the validation results with it.
 
-3. End the turn. Nothing that depends on the answer proceeds until Hunter rules.
+3. End the turn. Nothing that depends on the answer proceeds until the maintainer rules.
 
 ## Phase C - Code review
 
@@ -135,7 +138,7 @@ Open this gate only when the batch raises a real judgment call for Hunter. A jud
 
 2. Verify any precedent a review agent cites before you act on it. (#117: a Standards agent cited the `energyRecipe` in Flock as a settings precedent. It is a per-roll local variable, not a setting.)
 
-3. If a finding removes a feature or changes scope, ask Hunter before you act.
+3. If a finding removes a feature or changes scope, ask the maintainer before you act.
 
 4. Apply the agreed fixes. Run the compile and test scripts again.
 
@@ -143,15 +146,15 @@ Open this gate only when the batch raises a real judgment call for Hunter. A jud
 
 1. Report per Effect: the extraction table, the findings, the review results, and the validation results.
 
-2. End the turn. Commits, pushes, and closes wait until Hunter rules here.
+2. End the turn. Commits, pushes, and closes wait until the maintainer rules here.
 
-3. Confirm the Sync Settings asset exists and restores. Open editor surfaces create it at import. If it is missing, Hunter creates it through the Effects tab.
+3. Confirm the Sync Settings asset exists and restores. Open editor surfaces create it at import. If it is missing, the maintainer creates it through the Effects tab.
 
-4. Hunter live-edits the Sync Settings in Play Mode, then confirms persistence and Restore.
+4. The maintainer live-edits the Sync Settings in Play Mode, then confirms persistence and Restore.
 
-5. Hunter confirms the Standalone look is unchanged. Synced Mode sits at its defaults by construction, so this gate does not judge it. Tuning comes after the catalog carries the structure.
+5. The maintainer confirms the Standalone look is unchanged. Synced Mode sits at its defaults by construction, so this gate does not judge it. Tuning comes after the catalog carries the structure.
 
-6. If Hunter reports a defect, return to Phase B. Nothing lands without wall approval.
+6. If the maintainer reports a defect, return to Phase B. Nothing lands without wall approval.
 
 ## Phase D - Land and close
 
@@ -165,4 +168,4 @@ Open this gate only when the batch raises a real judgment call for Hunter. A jud
 
 5. Append every reported finding to the findings list on #111. That list is the work-list for the tuning phase. Nobody reads a finding again after it stays in the comments of a closed ticket.
 
-6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this skill only for a Hunter ruling or for a process failure that repeated - a fitted answer lives in its Effect's code and its closed ticket. Retire the worklog.
+6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this skill only for a maintainer ruling or for a process failure that repeated - a fitted answer lives in its Effect's code and its closed ticket. Retire the worklog.

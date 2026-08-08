@@ -19,7 +19,7 @@ Issues record work and acceptance criteria. Architecture narrative belongs in AD
 
 - **Read the tracker at session start.** `gh issue list` is part of session startup, alongside the repo's other startup reads.
 - **Commits reference their issue.** Use a GitHub closing keyword (`Fixes #12`) where the commit completes the issue, a plain `#12` where it does not.
-- **Capture verbal asks.** When Hunter asks for something in session that no issue covers, create the issue before or alongside the work, so the requirement has provenance.
+- **Capture verbal asks.** When the maintainer asks for something in session that no issue covers, create the issue before or alongside the work, so the requirement has provenance.
 - **Maintain the issue when work pivots.** When work deliberately diverges from what an issue says, update that issue in the same session. A done-but-stale issue is false authority: never treat unmaintained issue text as current requirements.
 
 ## Pull requests as a triage surface
