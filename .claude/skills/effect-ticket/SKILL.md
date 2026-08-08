@@ -1,15 +1,36 @@
 ---
 name: effect-ticket
-description: Per-ticket runbook for the Effect Settings conversion (spec #111, tickets #112-#139). Use when a session implements, resumes, or reviews an Effect Settings ticket, or when the task names a ticket or effect under that spec.
+description: Per-batch runbook for the Effect Settings conversion (spec #111, tickets #112-#139). Use when a session implements, resumes, or reviews one or more Effect Settings tickets, or when the task names a ticket or effect under that spec.
 ---
 
 # Effect Settings ticket runbook
 
-This skill is the process for one ticket under spec #111. Ticket #112 (Tunnel, commit ed350581) proved it.
+This skill is the process for one batch under spec #111. A batch is one to three tickets. Ticket #112 (Tunnel, commit ed350581) proved the pattern. Tickets #112 to #117 ran one ticket per session. Ticket #118 and later run in batches.
 
-The roles do not change. You are the coordinator and you own every judgment in this file. Codex workers implement. Hunter judges the wall and decides scope questions, not programming questions. A session runs one ticket.
+The roles do not change. You are the coordinator and you own every judgment in this file. Codex workers implement. Hunter judges the wall and decides scope questions, not programming questions.
 
-Three gates divide the work. At each gate, end the turn and wait until Hunter replies. Work that follows a gate stays unauthorized until Hunter speaks at that gate.
+The goal of every remaining ticket is structure, not tuning. The catalog gets its Effect Settings shape first. Hunter tunes the Effects afterward. So no ticket judges whether an Effect sounds or looks good. Each ticket asks one question: does the Standalone look survive the change.
+
+Two gates divide the work. At each gate, end the turn and wait until Hunter replies. Work that follows a gate stays unauthorized until Hunter speaks at that gate.
+
+## Batches
+
+A session runs one batch. Each batch starts in a fresh session.
+
+| Batch | Tickets |
+| --- | --- |
+| Julia | #118 |
+| Lightning | #119 |
+| Kscope | #126 |
+| MazeFlyer | #120 |
+| Mixers | #137, #138, #139 |
+| Sparkle | #122, #133, #129 |
+| Loops | #125, #130, #132 |
+| Shapes | #135, #124, #127 |
+| Flow | #131, #128, #123 |
+| Glitch | #136, #134, #121 |
+
+The four solo batches are the only remaining files above 250 lines. The Mixers batch is the first to convert `MixerBase` subclasses. Its three tickets already answer the structural question, and they answer it the same way. ADR-0007 holds. A Mixer owns its children internally and captures its own values only. It publishes no child policy as a second configuration system, and how it acquires and configures its children stays unchanged.
 
 ## Model policy
 
@@ -20,15 +41,15 @@ Hunter set this policy on 2026-08-07. Do not lower either selection.
 
 ## Phase A - Set up
 
-1. If this session already ran a ticket, stop and tell Hunter.
+1. If this session already ran a batch, stop and tell Hunter.
 
 2. Complete the repo startup gates and pull Memory Vault context.
 
-3. Read `memory:penroseart-effect-settings-machinery`, the ticket, the "Effect configuration" section of `CONTEXT.md`, and ADR-0012.
+3. Read `memory:penroseart-effect-settings-machinery`, every ticket in the batch, the "Effect configuration" section of `CONTEXT.md`, and ADR-0012.
 
-4. Seed a worklog for the ticket.
+4. Seed one worklog for the batch.
 
-5. With the `using-git-branch` skill, create branch `refactor/effect-settings-<effect>` from master.
+5. With the `using-git-branch` skill, create branch `refactor/effect-settings-<batch>` from master. Use the batch name from the table above.
 
 ## Tests
 
@@ -45,8 +66,10 @@ Never leave that split to the worker.
 
 ## Phase B - Implement and validate
 
+Run Phase B once for each Effect in the batch. Give each Effect its own worker and its own commit.
+
 1. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). There is no
-   `--events` flag; `codex-worker.py` rejects it. Read progress with `tail --label <label>`.
+   `--events` flag. `codex-worker.py` rejects it. Read progress with `tail --label <label>`.
 
 2. Put in the brief the goals, the acceptance criteria, the vocabulary, ADR-0012, the Tunnel precedent, and the boundaries below.
 
@@ -73,51 +96,58 @@ Never leave that split to the worker.
      355 tests, and the diff review all passed them; the Spec-axis review caught it.)
    - Confirm no Standalone branch passes an inline literal. `docs/effect-authoring.md:68`
      requires both authored values to live in their default blocks, the inert identity included.
+   - Confirm the Effect bakes no Sync Setting into a cache that `Init` builds once. Such a cache
+     makes the setting half-live. A Play Mode edit then moves the call-site term and leaves the
+     baked term behind. (#117: Angles baked the soft-edge width into its wavefront cache.)
 
 6. Fix small defects directly. Send design-level rework back to the worker with `codex exec resume`.
 
-7. Validate yourself, never through a worker. Run `scripts/unity-compile.sh` to zero warnings. Run `scripts/unity-tests.sh` to all green.
+7. Validate yourself, never through a worker. Run `scripts/unity-compile.sh` to zero warnings. Run `scripts/unity-tests.sh` to all green. Validate after each Effect, not once at the end of the batch.
 
-## Gate 1 - Findings. End the turn.
+## Gate 1 - Scope question. Conditional.
 
-1. Present to Hunter the extraction table, the findings, and the validation results.
-   - The extraction table lists each captured literal, its new name, and its block.
-   - The findings list everything questionable that this ticket reports instead of fixes.
+Open this gate only when the batch raises a real judgment call for Hunter. A judgment call changes what the ticket delivers. Ticket #117 raised two. A mechanism change that the ticket text appears to forbid. A classification that two acceptance criteria answer differently.
 
-2. End the turn. Code review, commits, and pushes wait until Hunter rules here.
+1. If the batch raises no judgment call, skip this gate and continue to Phase C. Carry the extraction table into Gate 2 instead.
 
-## Gate 2 - Wall. Hunter acts.
+2. If it raises one, state the question, the options, and your recommendation. Present the extraction table and the validation results with it.
 
-1. Hunter creates the asset through the Effects tab.
-
-2. Hunter live-edits the Sync Settings in Play Mode, then confirms persistence and Restore.
-
-3. Hunter judges the look in both modes.
-
-4. If Hunter reports a defect, return to Phase B. Nothing proceeds without wall approval.
+3. End the turn. Nothing that depends on the answer proceeds until Hunter rules.
 
 ## Phase C - Code review
 
-1. Run the two-axis `/code-review` (standards and spec) with opus-5 sub-agents.
+1. Run the two-axis `/code-review` (standards and spec) with opus-5 sub-agents. Review the whole batch branch once, not each Effect separately.
 
-2. If a finding removes a feature or changes scope, ask Hunter before you act.
+2. Verify any precedent a review agent cites before you act on it. (#117: a Standards agent cited the `energyRecipe` in Flock as a settings precedent. It is a per-roll local variable, not a setting.)
 
-3. Apply the agreed fixes. Run the compile and test scripts again.
+3. If a finding removes a feature or changes scope, ask Hunter before you act.
 
-## Gate 3 - Landing word. End the turn.
+4. Apply the agreed fixes. Run the compile and test scripts again.
 
-1. Report the review results and the fix state.
+## Gate 2 - Wall and landing word. End the turn.
 
-2. End the turn. Wait until Hunter gives the word to land.
+1. Report per Effect: the extraction table, the findings, the review results, and the validation results.
+
+2. End the turn. Commits, pushes, and closes wait until Hunter rules here.
+
+3. Hunter creates each asset through the Effects tab.
+
+4. Hunter live-edits the Sync Settings in Play Mode, then confirms persistence and Restore.
+
+5. Hunter confirms the Standalone look is unchanged. Synced Mode sits at its defaults by construction, so this gate does not judge it. Tuning comes after the catalog carries the structure.
+
+6. If Hunter reports a defect, return to Phase B. Nothing lands without wall approval.
 
 ## Phase D - Land and close
 
-1. With the `commit` skill, make one logical commit. Include the Unity `.meta` files and the `.asset`.
+1. With the `commit` skill, make one logical commit for each Effect. Include the Unity `.meta` files and the `.asset`.
 
 2. Merge to master by ref update - `git fetch . <branch>:master` - so no file churn hits the open Editor.
 
 3. Switch to master and delete the branch.
 
-4. Push and close the ticket.
+4. Push. Close each ticket in the batch.
 
-5. Promote durable findings to Memory Vault. If the process changed, update this skill. Retire the worklog.
+5. Append every reported finding to the findings list on #111. That list is the work-list for the tuning phase. Nobody reads a finding again after it stays in the comments of a closed ticket.
+
+6. Promote durable findings to Memory Vault. If the process changed, update this skill. Retire the worklog.

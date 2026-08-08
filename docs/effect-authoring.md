@@ -68,6 +68,12 @@ Never hand-create the `.asset` file. Commit the Unity-generated `.asset` and `.m
 
 Read musical-response values from the resolved Sync Settings. A call-site slot can preserve a fixed Standalone value and accept a live Synced value. Keep the two authored values in their respective default blocks. Select between `SyncSettings` and Standalone Settings with `beatManager.IsSynced`, as Ripple does.
 
+Two consequences follow from that selection. They are properties of the pattern, so they hold for every Effect that dual-homes a value and no Effect restates them.
+
+A dual-homed value changes discontinuously. The call site selects one of the two authored values per frame, and nothing eases between them. So once the Sync copy is tuned away from the Standalone value, the output jumps the moment `beatManager.IsSynced` flips — mid-phrase included, because `IsSynced` reports beat position and not the presence of music. Smoothing an input does not smooth this: Angles eases `smoothedEnergy` and still jumps, because the jump is in the endpoints that `smoothedEnergy` interpolates between.
+
+A Sync Setting baked into an `Init`-time cache is only half-live. The cache is built once, so a Play Mode edit reaches the call-site term and never reaches the baked term, and the shape moves in part. Cache the invariant part alone and apply the setting per frame, hoisted out of any per-element loop. Angles caches bare normalized rank in `frontRank` and applies its soft-edge width in `Draw` for this reason.
+
 [`Flock`](../Assets/effects/Flock.cs) is the advanced reference for a production music-reactive effect. Its source is organized in
 reading order—signal hierarchy, artistic tuning, runtime state, lifecycle, frame pipeline, musical mappings,
 and simulation—and documents why each musical source controls its particular visual consequence. Start from
