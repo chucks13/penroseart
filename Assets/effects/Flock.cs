@@ -1,5 +1,6 @@
 // Advanced reference effect: music interpretation, event choreography, boid simulation, and tile rendering.
 
+using System;
 using Random = UnityEngine.Random;
 using UnityEngine;
 
@@ -30,8 +31,231 @@ using UnityEngine;
 /// intentional for the fixed flock of 80 boids: it keeps the wrap-aware flocking rules local and readable.
 /// </para>
 /// </remarks>
+[EffectSyncSettings(typeof(FlockSyncSettingsAsset))]
 public class Flock : EffectBase
 {
+    // Standalone Defaults
+
+    // Baseline flocking
+
+    /// <summary>Baseline weight of steering toward neighbors' travel direction.</summary>
+    private const float StandaloneBaseAlignmentWeight = 0.75f;
+
+    /// <summary>Baseline weight of steering toward the local flock center.</summary>
+    private const float StandaloneBaseCohesionWeight = 1f;
+
+    /// <summary>Baseline weight of steering away from nearby boids.</summary>
+    private const float StandaloneBaseSeparationWeight = 1.25f;
+
+    // Broad movement
+
+    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
+    private const float StandaloneQuietSpeedMultiplier = 0.1f;
+
+    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
+    private const float StandaloneActiveSpeedMultiplier = 1.5f;
+
+    /// <summary>Standalone movement posture that restores approximately the authored one-times speed.</summary>
+    private const float StandaloneMovementActivity = 0.65f;
+
+    // Routine-driven color and trails
+
+    /// <summary>Standalone Routine posture that preserves full palette color and visible trails without a Grid.</summary>
+    private const float StandaloneRoutineEnvelope = 1f;
+
+    /// <summary>Trail half-life in seconds at the top of the Routine envelope.</summary>
+    private const float StandaloneTrailHalfLifeMax = 0.25f;
+
+    /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
+    private const float StandaloneRoutineHueShift = 0.2f;
+
+    /// <summary>
+    /// Share of authored saturation retained without a Grid. Full, because
+    /// <see cref="StandaloneRoutineEnvelope"/> holds the Routine at the top of its range, where no
+    /// saturation is taken away. Lower the envelope and this floor becomes the value it lands on.
+    /// </summary>
+    private const float StandaloneRoutineSaturationFloor = 1f;
+
+    /// <summary>
+    /// Share of authored value retained without a Grid. Full, for the same reason as
+    /// <see cref="StandaloneRoutineSaturationFloor"/>.
+    /// </summary>
+    private const float StandaloneRoutineValueFloor = 1f;
+
+    // Continuous wander
+
+    /// <summary>Minimum share of a boid's steering force devoted to continuous wander.</summary>
+    private const float StandaloneWanderStrengthMin = 0.2f;
+
+    /// <summary>Maximum share of a boid's steering force devoted to continuous wander.</summary>
+    private const float StandaloneWanderStrengthMax = 0.45f;
+
+    /// <summary>Slowest wander phase rate selected for a Grid, in radians per second.</summary>
+    private const float StandaloneWanderTurnRateMin = 0.5f;
+
+    /// <summary>Fastest wander phase rate selected for a Grid, in radians per second.</summary>
+    private const float StandaloneWanderTurnRateMax = 1.1f;
+
+    /// <summary>Maximum heading offset used by a boid's continuous wander.</summary>
+    private const float StandaloneWanderHeadingRadians = 0.7853982f;
+
+    /// <summary>Minimum per-boid multiplier that prevents wander phases from moving in lockstep.</summary>
+    private const float StandaloneWanderFrequencyMin = 0.8f;
+
+    /// <summary>Maximum per-boid multiplier that prevents wander phases from moving in lockstep.</summary>
+    private const float StandaloneWanderFrequencyMax = 1.2f;
+
+    /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
+    private const float StandaloneQuietWanderMultiplier = 0.15f;
+
+    /// <summary>Share of ordinary wander turn rate retained during complete quiet.</summary>
+    private const float StandaloneQuietWanderTurnMultiplier = 0.5f;
+
+    // Sync Defaults
+
+    // Broad level-driven movement
+
+    /// <summary>Share of broad movement activity contributed by the smoothed Low band.</summary>
+    private const float SyncMovementLowWeight = 0.7f;
+
+    /// <summary>Share of broad movement activity contributed by the smoothed Mid band.</summary>
+    private const float SyncMovementMidWeight = 0.25f;
+
+    /// <summary>Share of broad movement activity contributed by the smoothed High band.</summary>
+    private const float SyncMovementHighWeight = 0.05f;
+
+    /// <summary>Weighted level below which the flock adopts its quiet posture.</summary>
+    private const float SyncQuietActivityThreshold = 0.1f;
+
+    /// <summary>Weighted level at which the flock reaches its active posture.</summary>
+    private const float SyncActiveActivityThreshold = 0.5f;
+
+    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
+    private const float SyncQuietSpeedMultiplier = 0.1f;
+
+    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
+    private const float SyncActiveSpeedMultiplier = 1.5f;
+
+    // Normalized schooling and spectral detail
+
+    /// <summary>Normalized Mid level below which no schooling maneuver is added.</summary>
+    private const float SyncMidManeuverThreshold = 0.2f;
+
+    /// <summary>Normalized Mid level that produces the full schooling maneuver.</summary>
+    private const float SyncMidManeuverFull = 0.65f;
+
+    /// <summary>Alignment lift on a strong normalized Mid-band maneuver.</summary>
+    private const float SyncMidAlignmentLift = 0.75f;
+
+    /// <summary>Cohesion lift on a strong normalized Mid-band maneuver.</summary>
+    private const float SyncMidCohesionLift = 0.5f;
+
+    /// <summary>Shared course-bending force applied by a strong normalized Mid-band maneuver.</summary>
+    private const float SyncCollectiveTurnStrength = 0.75f;
+
+    /// <summary>Normalized spectral centroid below which no extra agitation is added.</summary>
+    private const float SyncSpectralCentroidThreshold = 0.25f;
+
+    /// <summary>Normalized spectral centroid that produces full extra agitation.</summary>
+    private const float SyncSpectralCentroidFull = 0.65f;
+
+    /// <summary>Separation lift when the normalized spectrum leans toward high-frequency detail.</summary>
+    private const float SyncSpectralSeparationLift = 1f;
+
+    // Routine-driven color and trails
+
+    /// <summary>Trail half-life in seconds at the bottom of the Routine envelope.</summary>
+    private const float SyncTrailHalfLifeMin = 0.03f;
+
+    /// <summary>Trail half-life in seconds at the top of the Routine envelope.</summary>
+    private const float SyncTrailHalfLifeMax = 0.25f;
+
+    /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
+    private const float SyncRoutineHueShift = 0.2f;
+
+    /// <summary>Share of authored saturation retained at the bottom of the Routine.</summary>
+    private const float SyncRoutineSaturationFloor = 0.7f;
+
+    /// <summary>Share of authored value retained at the bottom of the Routine.</summary>
+    private const float SyncRoutineValueFloor = 0.7f;
+
+    // Fill choreography
+
+    /// <summary>The common Fill length used as the unboosted response baseline.</summary>
+    private const float SyncTypicalFillBeats = 4f;
+
+    /// <summary>The shortest supported Fill duration used to cap short-window compensation.</summary>
+    private const float SyncMinimumFillBeats = 1f;
+
+    /// <summary>Maximum number of beats used to establish the Fill orbit before onset.</summary>
+    private const float SyncMaximumFillLeadBeats = 2f;
+
+    /// <summary>Base tangential velocity added when a typical Fill begins; shorter Fills receive a duration boost.</summary>
+    private const float SyncFillOnsetImpulse = 6f;
+
+    /// <summary>Strength of continuous Fill steering around wall center.</summary>
+    private const float SyncFillOrbitSteering = 2f;
+
+    /// <summary>Share of Fill orbit retained at the end of the Drop gather, creating a tightening spiral.</summary>
+    private const float SyncFillOrbitAtFullGather = 0.35f;
+
+    /// <summary>Alignment lift at full Fill drive.</summary>
+    private const float SyncFillAlignmentLift = 0.35f;
+
+    /// <summary>Separation lift that lets a Fill-only orbit widen.</summary>
+    private const float SyncFillSeparationLift = 0.5f;
+
+    // Drop gathering and release
+
+    /// <summary>Number of beats before a Drop during which the flock gathers at wall center.</summary>
+    private const float SyncDropRunwayBeats = 8f;
+
+    /// <summary>Strength of center-seeking steering at the end of the Drop runway.</summary>
+    private const float SyncDropGatherSteering = 3f;
+
+    /// <summary>Share of ordinary separation removed at the end of the Drop runway.</summary>
+    private const float SyncDropGatherSeparationSuppression = 0.9f;
+
+    /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
+    private const int SyncDropReleaseBeats = 2;
+
+    /// <summary>Initial Drop burst speed relative to each boid's ordinary maximum speed.</summary>
+    private const float SyncDropBurstSpeedMultiplier = 1.6f;
+
+    /// <summary>Share of pre-Drop velocity retained in the radial burst so a Fill can leave angular momentum.</summary>
+    private const float SyncDropVelocityCarry = 0.35f;
+
+    /// <summary>Strength of outward steering during the short Drop release.</summary>
+    private const float SyncDropOutwardSteering = 1.5f;
+
+    /// <summary>Maximum speed lift during the short Drop release.</summary>
+    private const float SyncDropSpeedLift = 0.75f;
+
+    /// <summary>Share of cohesion removed at the start of the Drop release.</summary>
+    private const float SyncDropCohesionSuppression = 0.9f;
+
+    /// <summary>Separation lift at the start of the Drop release.</summary>
+    private const float SyncDropSeparationLift = 1.25f;
+
+    // Continuous wander response
+
+    /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
+    private const float SyncQuietWanderMultiplier = 0.15f;
+
+    /// <summary>Share of ordinary wander turn rate retained during complete quiet.</summary>
+    private const float SyncQuietWanderTurnMultiplier = 0.5f;
+
+    /// <summary>Additional wander strength at full spectral agitation.</summary>
+    private const float SyncSpectralWanderStrengthLift = 1.5f;
+
+    /// <summary>Additional wander turn rate at full spectral agitation.</summary>
+    private const float SyncSpectralWanderTurnLift = 1f;
+
+    // Runtime mechanism constants
+
+    /// <summary>Number of boids simulated by the effect.</summary>
+    private const int BoidCount = 80;
+
     // Effect identity and author-facing switches
 
     /// <summary>
@@ -45,184 +269,83 @@ public class Flock : EffectBase
     /// </summary>
     private static readonly bool TrailsEnabled = true;
 
-    /// <summary>Number of boids simulated by the effect.</summary>
-    private const int BoidCount = 80;
+    /// <summary>Resolves a fresh immutable-by-convention copy of Flock's Standalone Defaults.</summary>
+    public static FlockStandaloneSettings StandaloneSettings => new FlockStandaloneSettings
+    {
+        BaseAlignmentWeight = StandaloneBaseAlignmentWeight,
+        BaseCohesionWeight = StandaloneBaseCohesionWeight,
+        BaseSeparationWeight = StandaloneBaseSeparationWeight,
+        MovementActivity = StandaloneMovementActivity,
+        QuietSpeedMultiplier = StandaloneQuietSpeedMultiplier,
+        ActiveSpeedMultiplier = StandaloneActiveSpeedMultiplier,
+        RoutineEnvelope = StandaloneRoutineEnvelope,
+        TrailHalfLife = StandaloneTrailHalfLifeMax,
+        RoutineHueShift = StandaloneRoutineHueShift,
+        RoutineSaturationFloor = StandaloneRoutineSaturationFloor,
+        RoutineValueFloor = StandaloneRoutineValueFloor,
+        WanderStrength = new FloatRange(StandaloneWanderStrengthMin, StandaloneWanderStrengthMax),
+        WanderTurnRate = new FloatRange(StandaloneWanderTurnRateMin, StandaloneWanderTurnRateMax),
+        WanderHeadingRadians = StandaloneWanderHeadingRadians,
+        WanderFrequency = new FloatRange(StandaloneWanderFrequencyMin, StandaloneWanderFrequencyMax),
+        QuietWanderMultiplier = StandaloneQuietWanderMultiplier,
+        QuietWanderTurnMultiplier = StandaloneQuietWanderTurnMultiplier,
+    };
 
-    // Baseline flocking
+    /// <summary>Resolves a fresh copy of Flock's file-local Sync Defaults.</summary>
+    public static FlockSyncSettings SyncDefaults => new FlockSyncSettings
+    {
+        MovementLowWeight = SyncMovementLowWeight,
+        MovementMidWeight = SyncMovementMidWeight,
+        MovementHighWeight = SyncMovementHighWeight,
+        QuietActivityThreshold = SyncQuietActivityThreshold,
+        ActiveActivityThreshold = SyncActiveActivityThreshold,
+        QuietSpeedMultiplier = SyncQuietSpeedMultiplier,
+        ActiveSpeedMultiplier = SyncActiveSpeedMultiplier,
+        MidManeuverThreshold = SyncMidManeuverThreshold,
+        MidManeuverFull = SyncMidManeuverFull,
+        MidAlignmentLift = SyncMidAlignmentLift,
+        MidCohesionLift = SyncMidCohesionLift,
+        CollectiveTurnStrength = SyncCollectiveTurnStrength,
+        SpectralCentroidThreshold = SyncSpectralCentroidThreshold,
+        SpectralCentroidFull = SyncSpectralCentroidFull,
+        SpectralSeparationLift = SyncSpectralSeparationLift,
+        TrailHalfLifeMin = SyncTrailHalfLifeMin,
+        TrailHalfLifeMax = SyncTrailHalfLifeMax,
+        RoutineHueShift = SyncRoutineHueShift,
+        RoutineSaturationFloor = SyncRoutineSaturationFloor,
+        RoutineValueFloor = SyncRoutineValueFloor,
+        TypicalFillBeats = SyncTypicalFillBeats,
+        MinimumFillBeats = SyncMinimumFillBeats,
+        MaximumFillLeadBeats = SyncMaximumFillLeadBeats,
+        FillOnsetImpulse = SyncFillOnsetImpulse,
+        FillOrbitSteering = SyncFillOrbitSteering,
+        FillOrbitAtFullGather = SyncFillOrbitAtFullGather,
+        FillAlignmentLift = SyncFillAlignmentLift,
+        FillSeparationLift = SyncFillSeparationLift,
+        DropRunwayBeats = SyncDropRunwayBeats,
+        DropGatherSteering = SyncDropGatherSteering,
+        DropGatherSeparationSuppression = SyncDropGatherSeparationSuppression,
+        DropReleaseBeats = SyncDropReleaseBeats,
+        DropBurstSpeedMultiplier = SyncDropBurstSpeedMultiplier,
+        DropVelocityCarry = SyncDropVelocityCarry,
+        DropOutwardSteering = SyncDropOutwardSteering,
+        DropSpeedLift = SyncDropSpeedLift,
+        DropCohesionSuppression = SyncDropCohesionSuppression,
+        DropSeparationLift = SyncDropSeparationLift,
+        QuietWanderMultiplier = SyncQuietWanderMultiplier,
+        QuietWanderTurnMultiplier = SyncQuietWanderTurnMultiplier,
+        SpectralWanderStrengthLift = SyncSpectralWanderStrengthLift,
+        SpectralWanderTurnLift = SyncSpectralWanderTurnLift,
+    };
 
-    /// <summary>Baseline weight of steering toward neighbors' travel direction.</summary>
-    private const float BaseAlignmentWeight = 0.75f;
+    /// <summary>The Standalone Settings fixed for the current activation.</summary>
+    private FlockStandaloneSettings standaloneSettings = StandaloneSettings;
 
-    /// <summary>Baseline weight of steering toward the local flock center.</summary>
-    private const float BaseCohesionWeight = 1f;
+    /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
+    private FlockSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>Baseline weight of steering away from nearby boids.</summary>
-    private const float BaseSeparationWeight = 1.25f;
-
-    // Broad level-driven movement
-
-    /// <summary>Share of broad movement activity contributed by the smoothed Low band.</summary>
-    private const float MovementLowWeight = 0.7f;
-
-    /// <summary>Share of broad movement activity contributed by the smoothed Mid band.</summary>
-    private const float MovementMidWeight = 0.25f;
-
-    /// <summary>Share of broad movement activity contributed by the smoothed High band.</summary>
-    private const float MovementHighWeight = 0.05f;
-
-    /// <summary>Weighted level below which the flock adopts its quiet posture.</summary>
-    private const float QuietActivityThreshold = 0.1f;
-
-    /// <summary>Weighted level at which the flock reaches its active posture.</summary>
-    private const float ActiveActivityThreshold = 0.5f;
-
-    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
-    private const float QuietSpeedMultiplier = 0.1f;
-
-    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
-    private const float ActiveSpeedMultiplier = 1.5f;
-
-    /// <summary>Standalone movement posture that restores approximately the authored one-times speed.</summary>
-    private const float StandaloneMovementActivity = 0.65f;
-
-    // Normalized schooling and spectral detail
-
-    /// <summary>Normalized Mid level below which no schooling maneuver is added.</summary>
-    private const float MidManeuverThreshold = 0.2f;
-
-    /// <summary>Normalized Mid level that produces the full schooling maneuver.</summary>
-    private const float MidManeuverFull = 0.65f;
-
-    /// <summary>Alignment lift on a strong normalized Mid-band maneuver.</summary>
-    private const float MidAlignmentLift = 0.75f;
-
-    /// <summary>Cohesion lift on a strong normalized Mid-band maneuver.</summary>
-    private const float MidCohesionLift = 0.5f;
-
-    /// <summary>Shared course-bending force applied by a strong normalized Mid-band maneuver.</summary>
-    private const float CollectiveTurnStrength = 0.75f;
-
-    /// <summary>Normalized spectral centroid below which no extra agitation is added.</summary>
-    private const float SpectralCentroidThreshold = 0.25f;
-
-    /// <summary>Normalized spectral centroid that produces full extra agitation.</summary>
-    private const float SpectralCentroidFull = 0.65f;
-
-    /// <summary>Separation lift when the normalized spectrum leans toward high-frequency detail.</summary>
-    private const float SpectralSeparationLift = 1f;
-
-    // Routine-driven color and trails
-
-    /// <summary>Standalone Routine posture that preserves full palette color and visible trails without a Grid.</summary>
-    private const float StandaloneRoutineEnvelope = 1f;
-
-    /// <summary>Trail half-life in seconds at the bottom of the Routine envelope.</summary>
-    private const float TrailHalfLifeMin = 0.03f;
-
-    /// <summary>Trail half-life in seconds at the top of the Routine envelope.</summary>
-    private const float TrailHalfLifeMax = 0.25f;
-
-    /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
-    private const float RoutineHueShift = 0.2f;
-
-    /// <summary>Share of authored saturation retained at the bottom of the Routine.</summary>
-    private const float RoutineSaturationFloor = 0.7f;
-
-    /// <summary>Share of authored value retained at the bottom of the Routine.</summary>
-    private const float RoutineValueFloor = 0.7f;
-
-    // Fill choreography
-
-    /// <summary>The common Fill length used as the unboosted response baseline.</summary>
-    private const float TypicalFillBeats = 4f;
-
-    /// <summary>The shortest supported Fill duration used to cap short-window compensation.</summary>
-    private const float MinimumFillBeats = 1f;
-
-    /// <summary>Maximum number of beats used to establish the Fill orbit before onset.</summary>
-    private const float MaximumFillLeadBeats = 2f;
-
-    /// <summary>Base tangential velocity added when a typical Fill begins; shorter Fills receive a duration boost.</summary>
-    private const float FillOnsetImpulse = 6f;
-
-    /// <summary>Strength of continuous Fill steering around wall center.</summary>
-    private const float FillOrbitSteering = 2f;
-
-    /// <summary>Share of Fill orbit retained at the end of the Drop gather, creating a tightening spiral.</summary>
-    private const float FillOrbitAtFullGather = 0.35f;
-
-    /// <summary>Alignment lift at full Fill drive.</summary>
-    private const float FillAlignmentLift = 0.35f;
-
-    /// <summary>Separation lift that lets a Fill-only orbit widen.</summary>
-    private const float FillSeparationLift = 0.5f;
-
-    // Drop gathering and release
-
-    /// <summary>Number of beats before a Drop during which the flock gathers at wall center.</summary>
-    private const float DropRunwayBeats = 8f;
-
-    /// <summary>Strength of center-seeking steering at the end of the Drop runway.</summary>
-    private const float DropGatherSteering = 3f;
-
-    /// <summary>Share of ordinary separation removed at the end of the Drop runway.</summary>
-    private const float DropGatherSeparationSuppression = 0.9f;
-
-    /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
-    private const int DropReleaseBeats = 2;
-
-    /// <summary>Initial Drop burst speed relative to each boid's ordinary maximum speed.</summary>
-    private const float DropBurstSpeedMultiplier = 1.6f;
-
-    /// <summary>Share of pre-Drop velocity retained in the radial burst so a Fill can leave angular momentum.</summary>
-    private const float DropVelocityCarry = 0.35f;
-
-    /// <summary>Strength of outward steering during the short Drop release.</summary>
-    private const float DropOutwardSteering = 1.5f;
-
-    /// <summary>Maximum speed lift during the short Drop release.</summary>
-    private const float DropSpeedLift = 0.75f;
-
-    /// <summary>Share of cohesion removed at the start of the Drop release.</summary>
-    private const float DropCohesionSuppression = 0.9f;
-
-    /// <summary>Separation lift at the start of the Drop release.</summary>
-    private const float DropSeparationLift = 1.25f;
-
-    // Continuous wander
-
-    /// <summary>Minimum share of a boid's steering force devoted to continuous wander.</summary>
-    private const float WanderStrengthMin = 0.2f;
-
-    /// <summary>Maximum share of a boid's steering force devoted to continuous wander.</summary>
-    private const float WanderStrengthMax = 0.45f;
-
-    /// <summary>Slowest wander phase rate selected for a Grid, in radians per second.</summary>
-    private const float WanderTurnRateMin = 0.5f;
-
-    /// <summary>Fastest wander phase rate selected for a Grid, in radians per second.</summary>
-    private const float WanderTurnRateMax = 1.1f;
-
-    /// <summary>Maximum heading offset used by a boid's continuous wander.</summary>
-    private const float WanderHeadingRadians = 0.7853982f;
-
-    /// <summary>Minimum per-boid multiplier that prevents wander phases from moving in lockstep.</summary>
-    private const float WanderFrequencyMin = 0.8f;
-
-    /// <summary>Maximum per-boid multiplier that prevents wander phases from moving in lockstep.</summary>
-    private const float WanderFrequencyMax = 1.2f;
-
-    /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
-    private const float QuietWanderMultiplier = 0.15f;
-
-    /// <summary>Share of ordinary wander turn rate retained during complete quiet.</summary>
-    private const float QuietWanderTurnMultiplier = 0.5f;
-
-    /// <summary>Additional wander strength at full spectral agitation.</summary>
-    private const float SpectralWanderStrengthLift = 1.5f;
-
-    /// <summary>Additional wander turn rate at full spectral agitation.</summary>
-    private const float SpectralWanderTurnLift = 1f;
+    /// <summary>Whether live musical placement currently selects Sync Settings.</summary>
+    private bool IsSynced => beatManager.IsSynced;
 
     // Activation and per-frame state
 
@@ -233,10 +356,10 @@ public class Flock : EffectBase
     private Routine routine;
 
     /// <summary>Current Grid's gentle continuous wander force.</summary>
-    private float wanderStrength = (WanderStrengthMin + WanderStrengthMax) * 0.5f;
+    private float wanderStrength = (StandaloneWanderStrengthMin + StandaloneWanderStrengthMax) * 0.5f;
 
     /// <summary>Current Grid's wander phase rate.</summary>
-    private float wanderTurnRate = (WanderTurnRateMin + WanderTurnRateMax) * 0.5f;
+    private float wanderTurnRate = (StandaloneWanderTurnRateMin + StandaloneWanderTurnRateMax) * 0.5f;
 
     /// <summary>Low-dominant quiet-to-active posture derived from smoothed levels.</summary>
     private float movementActivity;
@@ -285,6 +408,12 @@ public class Flock : EffectBase
     /// </remarks>
     public override void OnStart()
     {
+        standaloneSettings = StandaloneSettings;
+        SyncSettings = EffectSyncSettingsProvider.Resolve(
+            typeof(Flock),
+            SyncDefaults);
+
+        // Resolve consumes no UnityEngine.Random, so the original roll sequence begins unchanged here.
         RerollRoutine();
         RerollWander();
         fillOrbitDirection = RollDirection();
@@ -378,8 +507,8 @@ public class Flock : EffectBase
     /// <summary>Selects the gentle wander strength and turn rate used for the current Grid.</summary>
     private void RerollWander()
     {
-        wanderStrength = Random.Range(WanderStrengthMin, WanderStrengthMax);
-        wanderTurnRate = Random.Range(WanderTurnRateMin, WanderTurnRateMax);
+        wanderStrength = Random.Range(standaloneSettings.WanderStrength.Min, standaloneSettings.WanderStrength.Max);
+        wanderTurnRate = Random.Range(standaloneSettings.WanderTurnRate.Min, standaloneSettings.WanderTurnRate.Max);
     }
 
     /// <summary>Randomly chooses one of the two directions around the wall center.</summary>
@@ -422,15 +551,14 @@ public class Flock : EffectBase
     /// <summary>Reads each musical source once and assigns it only to the visual behavior it was chosen to control.</summary>
     private void ReadMusicalInputs()
     {
-        routineEnvelope = GetRoutineEnvelope(routine.Envelope, beatManager.IsSynced);
+        routineEnvelope = GetRoutineEnvelope(routine.Envelope);
 
         LevelBands smoothed = beatManager.Levels.Smoothed;
         LevelBands normalized = beatManager.Levels.Normalized;
         movementActivity = GetMovementActivity(
             smoothed.Low,
             smoothed.Mid,
-            smoothed.High,
-            beatManager.IsSynced);
+            smoothed.High);
 
         midManeuver = GetMidManeuver(normalized.Mid, movementActivity);
         spectralAgitation = GetSpectralAgitation(normalized.Centroid, movementActivity);
@@ -456,7 +584,7 @@ public class Flock : EffectBase
 
         if (fillActive && !previousFillActive)
         {
-            float impulse = FillOnsetImpulse * GetFillDurationBoost(fill.LengthBeats);
+            float impulse = SyncSettings.FillOnsetImpulse * GetFillDurationBoost(fill.LengthBeats);
             for (int i = 0; i < flock.Length; i++)
             {
                 flock[i].ApplyTangentialImpulse(wallCenter, fillOrbitDirection, impulse);
@@ -478,12 +606,15 @@ public class Flock : EffectBase
             for (int i = 0; i < flock.Length; i++)
             {
                 Boid boid = flock[i];
-                boid.ApplyRadialImpulse(wallCenter, boid.maxSpeed * DropBurstSpeedMultiplier, DropVelocityCarry);
+                boid.ApplyRadialImpulse(
+                    wallCenter,
+                    boid.maxSpeed * SyncSettings.DropBurstSpeedMultiplier,
+                    SyncSettings.DropVelocityCarry);
             }
         }
 
         previousDropActive = dropActive;
-        dropRelease = drop.In.Decay(DropReleaseBeats);
+        dropRelease = drop.In.Decay(SyncSettings.DropReleaseBeats);
     }
 
     /// <summary>Fades the previous frame by Routine half-life, or clears it when trails are disabled.</summary>
@@ -491,7 +622,12 @@ public class Flock : EffectBase
     {
         if (TrailsEnabled)
         {
-            buffer.Fade(GetTrailRetention(routineEnvelope, effectDelta));
+            float halfLife = IsSynced
+                ? Mathf.Clamp01(routineEnvelope).Lerp(
+                    SyncSettings.TrailHalfLifeMin,
+                    SyncSettings.TrailHalfLifeMax)
+                : standaloneSettings.TrailHalfLife;
+            buffer.Fade(GetTrailRetention(halfLife, effectDelta));
         }
         else
         {
@@ -518,51 +654,69 @@ public class Flock : EffectBase
         }
     }
 
-    // Pure musical and geometry mappings
+    // Musical and geometry mappings
 
     /// <summary>Returns low-dominant broad activity, or an active default when musical levels are unavailable.</summary>
     /// <param name="low">Smoothed Low-band level in <c>[0..1]</c>.</param>
     /// <param name="mid">Smoothed Mid-band level in <c>[0..1]</c>.</param>
     /// <param name="high">Smoothed High-band level in <c>[0..1]</c>.</param>
-    /// <param name="isSynced">Whether live musical placement and levels are available.</param>
+    /// <remarks>Mode selection reads whether live musical placement and levels are available.</remarks>
     /// <returns>Calibrated quiet-to-active movement in <c>[0..1]</c>.</returns>
-    public static float GetMovementActivity(float low, float mid, float high, bool isSynced)
+    private float GetMovementActivity(float low, float mid, float high)
     {
-        if (!isSynced)
+        if (!IsSynced)
         {
-            return StandaloneMovementActivity;
+            return standaloneSettings.MovementActivity;
         }
 
-        float weighted = (Mathf.Clamp01(low) * MovementLowWeight)
-            + (Mathf.Clamp01(mid) * MovementMidWeight)
-            + (Mathf.Clamp01(high) * MovementHighWeight);
-        return weighted.Remap(QuietActivityThreshold, ActiveActivityThreshold, 0f, 1f, clamp: true);
+        float weighted = (Mathf.Clamp01(low) * SyncSettings.MovementLowWeight)
+            + (Mathf.Clamp01(mid) * SyncSettings.MovementMidWeight)
+            + (Mathf.Clamp01(high) * SyncSettings.MovementHighWeight);
+        return weighted.Remap(
+            SyncSettings.QuietActivityThreshold,
+            SyncSettings.ActiveActivityThreshold,
+            0f,
+            1f,
+            clamp: true);
     }
 
     /// <summary>Returns the live Routine envelope, or its steady visual fallback in Standalone.</summary>
     /// <param name="envelope">Current Routine envelope in <c>[0..1]</c>.</param>
-    /// <param name="isSynced">Whether a musical Grid is available to place the Routine.</param>
+    /// <remarks>Mode selection reads whether a musical Grid is available to place the Routine.</remarks>
     /// <returns>The clamped live envelope, or the authored Standalone posture.</returns>
-    public static float GetRoutineEnvelope(float envelope, bool isSynced)
+    private float GetRoutineEnvelope(float envelope)
     {
-        return isSynced ? Mathf.Clamp01(envelope) : StandaloneRoutineEnvelope;
+        return IsSynced
+            ? Mathf.Clamp01(envelope)
+            : standaloneSettings.RoutineEnvelope;
     }
 
     /// <summary>Maps broad activity to the flock's quiet-to-active ordinary speed limit.</summary>
     /// <param name="activity">Calibrated broad movement activity.</param>
     /// <returns>Multiplier applied to each boid's authored maximum speed.</returns>
-    public static float GetMovementSpeedMultiplier(float activity)
+    private float GetMovementSpeedMultiplier(float activity)
     {
-        return Mathf.Clamp01(activity).Lerp(QuietSpeedMultiplier, ActiveSpeedMultiplier);
+        float quietSpeedMultiplier = IsSynced
+            ? SyncSettings.QuietSpeedMultiplier
+            : standaloneSettings.QuietSpeedMultiplier;
+        float activeSpeedMultiplier = IsSynced
+            ? SyncSettings.ActiveSpeedMultiplier
+            : standaloneSettings.ActiveSpeedMultiplier;
+        return Mathf.Clamp01(activity).Lerp(quietSpeedMultiplier, activeSpeedMultiplier);
     }
 
     /// <summary>Returns an activity-gated schooling maneuver from normalized Mid.</summary>
     /// <param name="normalizedMid">Normalized Mid-band level.</param>
     /// <param name="activity">Broad activity gate that prevents maneuvering during silence.</param>
     /// <returns>Schooling maneuver strength in <c>[0..1]</c>.</returns>
-    public static float GetMidManeuver(float normalizedMid, float activity)
+    private float GetMidManeuver(float normalizedMid, float activity)
     {
-        float maneuver = normalizedMid.Remap(MidManeuverThreshold, MidManeuverFull, 0f, 1f, clamp: true);
+        float maneuver = normalizedMid.Remap(
+            SyncSettings.MidManeuverThreshold,
+            SyncSettings.MidManeuverFull,
+            0f,
+            1f,
+            clamp: true);
         return maneuver * Mathf.Clamp01(activity);
     }
 
@@ -570,25 +724,23 @@ public class Flock : EffectBase
     /// <param name="normalizedCentroid">Normalized spectral centroid.</param>
     /// <param name="activity">Broad activity gate that prevents agitation during silence.</param>
     /// <returns>Spectral agitation in <c>[0..1]</c>.</returns>
-    public static float GetSpectralAgitation(float normalizedCentroid, float activity)
+    private float GetSpectralAgitation(float normalizedCentroid, float activity)
     {
         float agitation = normalizedCentroid.Remap(
-            SpectralCentroidThreshold,
-            SpectralCentroidFull,
+            SyncSettings.SpectralCentroidThreshold,
+            SyncSettings.SpectralCentroidFull,
             0f,
             1f,
             clamp: true);
         return agitation * Mathf.Clamp01(activity);
     }
 
-    /// <summary>Maps the Routine envelope to frame-rate-independent trail retention for one elapsed step.</summary>
-    /// <param name="envelope">Routine envelope controlling the trail half-life.</param>
+    /// <summary>Maps an explicit trail half-life to frame-rate-independent retention for one elapsed step.</summary>
+    /// <param name="halfLife">Seconds over which the retained buffer contribution halves.</param>
     /// <param name="deltaTime">Elapsed seconds represented by this fade step.</param>
     /// <returns>Per-step buffer retention in <c>[0..1]</c>.</returns>
-    public static float GetTrailRetention(float envelope, float deltaTime)
+    public static float GetTrailRetention(float halfLife, float deltaTime)
     {
-        float halfLife = Mathf.Clamp01(envelope).Lerp(TrailHalfLifeMin, TrailHalfLifeMax);
-
         // Exponential decay gives an identical visual lifetime across different frame rates.
         return Mathf.Pow(0.5f, Mathf.Max(0f, deltaTime) / halfLife);
     }
@@ -597,13 +749,22 @@ public class Flock : EffectBase
     /// <param name="color">Live animated palette color.</param>
     /// <param name="envelope">Routine envelope controlling treatment strength.</param>
     /// <returns>The treated color with the original alpha preserved.</returns>
-    public static Color ApplyRoutineColor(Color color, float envelope)
+    private Color ApplyRoutineColor(Color color, float envelope)
     {
         float amount = Mathf.Clamp01(envelope);
+        float hueShift = IsSynced
+            ? SyncSettings.RoutineHueShift
+            : standaloneSettings.RoutineHueShift;
+        float saturationFloor = IsSynced
+            ? SyncSettings.RoutineSaturationFloor
+            : standaloneSettings.RoutineSaturationFloor;
+        float valueFloor = IsSynced
+            ? SyncSettings.RoutineValueFloor
+            : standaloneSettings.RoutineValueFloor;
         Color.RGBToHSV(color, out float hue, out float saturation, out float value);
-        float shiftedHue = (hue + (RoutineHueShift * amount)) % 1f;
-        float shiftedSaturation = saturation * Mathf.Lerp(RoutineSaturationFloor, 1f, amount);
-        float shiftedValue = value * Mathf.Lerp(RoutineValueFloor, 1f, amount);
+        float shiftedHue = (hue + (hueShift * amount)) % 1f;
+        float shiftedSaturation = saturation * Mathf.Lerp(saturationFloor, 1f, amount);
+        float shiftedValue = value * Mathf.Lerp(valueFloor, 1f, amount);
         Color shifted = Color.HSVToRGB(shiftedHue, shiftedSaturation, shiftedValue);
         shifted.a = color.a;
         return shifted;
@@ -654,15 +815,18 @@ public class Flock : EffectBase
         return offset;
     }
 
-    /// <summary>Returns the shared choreography and onset boost for Fill windows shorter than four beats.</summary>
+    /// <summary>Returns the shared choreography and onset boost for Fill windows shorter than the typical duration.</summary>
     /// <param name="lengthBeats">Known Fill length, or <see langword="null"/> when unavailable.</param>
-    /// <returns>Duration compensation: 1 for four or more beats, up to 2 for one beat.</returns>
-    public static float GetFillDurationBoost(int? lengthBeats)
+    /// <returns>Configured duration compensation for a short Fill.</returns>
+    private float GetFillDurationBoost(int? lengthBeats)
     {
         float duration = lengthBeats is > 0
-            ? Mathf.Clamp(lengthBeats.Value, MinimumFillBeats, TypicalFillBeats)
-            : TypicalFillBeats;
-        return Mathf.Sqrt(TypicalFillBeats / duration);
+            ? Mathf.Clamp(
+                lengthBeats.Value,
+                SyncSettings.MinimumFillBeats,
+                SyncSettings.TypicalFillBeats)
+            : SyncSettings.TypicalFillBeats;
+        return Mathf.Sqrt(SyncSettings.TypicalFillBeats / duration);
     }
 
     /// <summary>Builds the duration-aware orbit before Fill onset and holds it throughout the active Fill.</summary>
@@ -671,7 +835,7 @@ public class Flock : EffectBase
     /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
     /// <param name="lengthBeats">Known Fill length used for lead time and short-window compensation.</param>
     /// <returns>Fill orbit drive; short Fills may intentionally return more than 1.</returns>
-    public static float GetFillApproach(
+    private float GetFillApproach(
         bool fillActive,
         int? beatsUntil,
         float? beatProgress,
@@ -684,8 +848,11 @@ public class Flock : EffectBase
         }
 
         float leadBeats = lengthBeats is > 0
-            ? Mathf.Clamp(lengthBeats.Value, MinimumFillBeats, MaximumFillLeadBeats)
-            : MaximumFillLeadBeats;
+            ? Mathf.Clamp(
+                lengthBeats.Value,
+                SyncSettings.MinimumFillBeats,
+                SyncSettings.MaximumFillLeadBeats)
+            : SyncSettings.MaximumFillLeadBeats;
         if (beatsUntil is not { } beats || beats < 0 || beats > leadBeats)
         {
             return 0f;
@@ -696,20 +863,23 @@ public class Flock : EffectBase
         return Mathf.SmoothStep(0f, 1f, progress) * durationBoost;
     }
 
-    /// <summary>Returns a smooth zero-to-one gathering amount across the final eight beats before a Drop.</summary>
+    /// <summary>Returns a smooth zero-to-one gathering amount across the configured runway before a Drop.</summary>
     /// <param name="dropActive">Whether the Drop has already begun.</param>
     /// <param name="beatsUntil">Whole-beat countdown to Drop onset.</param>
     /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
     /// <returns>Pre-Drop gathering in <c>[0..1]</c>, or zero outside the runway.</returns>
-    public static float GetDropApproach(bool dropActive, int? beatsUntil, float? beatProgress)
+    private float GetDropApproach(bool dropActive, int? beatsUntil, float? beatProgress)
     {
-        if (dropActive || beatsUntil is not { } beats || beats < 0 || beats > DropRunwayBeats)
+        if (dropActive ||
+            beatsUntil is not { } beats ||
+            beats < 0 ||
+            beats > SyncSettings.DropRunwayBeats)
         {
             return 0f;
         }
 
         float continuousBeatsUntil = beats - Mathf.Clamp01(beatProgress ?? 0f);
-        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / DropRunwayBeats);
+        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / SyncSettings.DropRunwayBeats);
         return Mathf.SmoothStep(0f, 1f, progress);
     }
 
@@ -779,7 +949,9 @@ public class Flock : EffectBase
             velocity = new Vector2(Random.Range(-maxSpeed, maxSpeed), Random.Range(-maxSpeed, maxSpeed));
             position = new Vector2(Random.Range(min.x, max.x), Random.Range(min.y, max.y));
             wanderPhase = Random.Range(0f, Mathf.PI * 2f);
-            wanderFrequency = Random.Range(WanderFrequencyMin, WanderFrequencyMax);
+            wanderFrequency = Random.Range(
+                parent.standaloneSettings.WanderFrequency.Min,
+                parent.standaloneSettings.WanderFrequency.Max);
         }
 
         /// <summary>Adds an immediate clockwise or counter-clockwise velocity impulse around a center point.</summary>
@@ -839,13 +1011,16 @@ public class Flock : EffectBase
         /// <returns>Maximum velocity magnitude for the current frame.</returns>
         private float GetActiveSpeedLimit()
         {
-            float ordinarySpeedLimit = maxSpeed * GetMovementSpeedMultiplier(parent.movementActivity);
+            float ordinarySpeedLimit = maxSpeed * parent.GetMovementSpeedMultiplier(parent.movementActivity);
             float eventDrive = Mathf.Clamp01(Mathf.Max(parent.fillOrbitDrive, parent.dropGather));
             float speedLimit = Mathf.Lerp(
                 ordinarySpeedLimit,
                 Mathf.Max(ordinarySpeedLimit, maxSpeed),
                 eventDrive);
-            return Mathf.Lerp(speedLimit, maxSpeed * (1f + DropSpeedLift), parent.dropRelease);
+            return Mathf.Lerp(
+                speedLimit,
+                maxSpeed * (1f + parent.SyncSettings.DropSpeedLift),
+                parent.dropRelease);
         }
 
         /// <summary>Combines classic flocking forces after applying live musical weight changes.</summary>
@@ -853,16 +1028,17 @@ public class Flock : EffectBase
         private Vector2 GetWeightedFlockingAcceleration()
         {
             float fillSpread = parent.fillOrbitDrive * (1f - parent.dropGather);
-            float alignmentWeight = BaseAlignmentWeight
-                * (1f + (FillAlignmentLift * parent.fillOrbitDrive) + (MidAlignmentLift * parent.midManeuver));
-            float cohesionWeight = BaseCohesionWeight
-                * (1f + (MidCohesionLift * parent.midManeuver))
-                * (1f - (DropCohesionSuppression * parent.dropRelease));
-            float separationWeight = BaseSeparationWeight
-                * (1f + (FillSeparationLift * fillSpread)
-                    + (SpectralSeparationLift * parent.spectralAgitation)
-                    + (DropSeparationLift * parent.dropRelease))
-                * (1f - (DropGatherSeparationSuppression * parent.dropGather));
+            float alignmentWeight = parent.standaloneSettings.BaseAlignmentWeight
+                * (1f + (parent.SyncSettings.FillAlignmentLift * parent.fillOrbitDrive)
+                    + (parent.SyncSettings.MidAlignmentLift * parent.midManeuver));
+            float cohesionWeight = parent.standaloneSettings.BaseCohesionWeight
+                * (1f + (parent.SyncSettings.MidCohesionLift * parent.midManeuver))
+                * (1f - (parent.SyncSettings.DropCohesionSuppression * parent.dropRelease));
+            float separationWeight = parent.standaloneSettings.BaseSeparationWeight
+                * (1f + (parent.SyncSettings.FillSeparationLift * fillSpread)
+                    + (parent.SyncSettings.SpectralSeparationLift * parent.spectralAgitation)
+                    + (parent.SyncSettings.DropSeparationLift * parent.dropRelease))
+                * (1f - (parent.SyncSettings.DropGatherSeparationSuppression * parent.dropGather));
 
             return (alignmentSteering * alignmentWeight)
                 + (cohesionSteering * cohesionWeight)
@@ -880,15 +1056,21 @@ public class Flock : EffectBase
             // Mid bends the shared course only while Fill/Drop choreography is not dominant.
             Vector2 collectiveTurn = GetCollectiveTurnDirection(velocity, parent.courseTurnDirection);
             acceleration += Steer(collectiveTurn, speedLimit)
-                * (CollectiveTurnStrength * parent.midManeuver * (1f - eventDominance));
+                * (parent.SyncSettings.CollectiveTurnStrength * parent.midManeuver * (1f - eventDominance));
 
             // Every boid wanders independently; Drop choreography suppresses that local disagreement.
+            float quietWanderMultiplier = parent.IsSynced
+                ? parent.SyncSettings.QuietWanderMultiplier
+                : parent.standaloneSettings.QuietWanderMultiplier;
+            float quietWanderTurnMultiplier = parent.IsSynced
+                ? parent.SyncSettings.QuietWanderTurnMultiplier
+                : parent.standaloneSettings.QuietWanderTurnMultiplier;
             float activeWanderStrength = parent.wanderStrength
-                * Mathf.Lerp(QuietWanderMultiplier, 1f, parent.movementActivity)
-                * (1f + (SpectralWanderStrengthLift * parent.spectralAgitation));
+                * Mathf.Lerp(quietWanderMultiplier, 1f, parent.movementActivity)
+                * (1f + (parent.SyncSettings.SpectralWanderStrengthLift * parent.spectralAgitation));
             float activeWanderTurnRate = parent.wanderTurnRate
-                * Mathf.Lerp(QuietWanderTurnMultiplier, 1f, parent.movementActivity)
-                * (1f + (SpectralWanderTurnLift * parent.spectralAgitation));
+                * Mathf.Lerp(quietWanderTurnMultiplier, 1f, parent.movementActivity)
+                * (1f + (parent.SyncSettings.SpectralWanderTurnLift * parent.spectralAgitation));
             acceleration += UpdateWander(
                     deltaTime,
                     speedLimit,
@@ -901,12 +1083,14 @@ public class Flock : EffectBase
             Vector2 tangent = new(-radial.y, radial.x);
             float orbitAmount = parent.fillOrbitDrive * Mathf.Lerp(
                 1f,
-                FillOrbitAtFullGather,
+                parent.SyncSettings.FillOrbitAtFullGather,
                 parent.dropGather);
             acceleration += Steer(tangent * parent.fillOrbitDirection, speedLimit)
-                * (FillOrbitSteering * orbitAmount);
-            acceleration += Steer(-radial, speedLimit) * (DropGatherSteering * parent.dropGather);
-            acceleration += Steer(radial, speedLimit) * (DropOutwardSteering * parent.dropRelease);
+                * (parent.SyncSettings.FillOrbitSteering * orbitAmount);
+            acceleration += Steer(-radial, speedLimit)
+                * (parent.SyncSettings.DropGatherSteering * parent.dropGather);
+            acceleration += Steer(radial, speedLimit)
+                * (parent.SyncSettings.DropOutwardSteering * parent.dropRelease);
         }
 
         /// <summary>Advances this boid's independent wander phase and returns its gentle steering force.</summary>
@@ -924,7 +1108,7 @@ public class Flock : EffectBase
             wanderPhase = Mathf.Repeat(
                 wanderPhase + (Mathf.Max(0f, deltaTime) * activeWanderTurnRate * wanderFrequency),
                 Mathf.PI * 2f);
-            float headingOffset = Mathf.Sin(wanderPhase) * WanderHeadingRadians;
+            float headingOffset = Mathf.Sin(wanderPhase) * parent.standaloneSettings.WanderHeadingRadians;
             return Steer(GetWanderDirection(velocity, headingOffset), desiredSpeed) * activeWanderStrength;
         }
 
@@ -1024,5 +1208,243 @@ public class Flock : EffectBase
             separationSteering -= velocity;
             separationSteering = Vector2.ClampMagnitude(separationSteering, maxForce);
         }
+    }
+}
+
+/// <summary>The fixed Standalone Settings resolved from Flock's file-local defaults.</summary>
+public sealed class FlockStandaloneSettings
+{
+    /// <summary>Baseline weight of steering toward neighbors' travel direction.</summary>
+    public float BaseAlignmentWeight;
+
+    /// <summary>Baseline weight of steering toward the local flock center.</summary>
+    public float BaseCohesionWeight;
+
+    /// <summary>Baseline weight of steering away from nearby boids.</summary>
+    public float BaseSeparationWeight;
+
+    /// <summary>Fixed broad movement activity used without live musical placement.</summary>
+    public float MovementActivity;
+
+    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
+    public float QuietSpeedMultiplier;
+
+    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
+    public float ActiveSpeedMultiplier;
+
+    /// <summary>Fixed Routine posture used without a musical Grid.</summary>
+    public float RoutineEnvelope;
+
+    /// <summary>Fixed trail half-life in seconds.</summary>
+    public float TrailHalfLife;
+
+    /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
+    public float RoutineHueShift;
+
+    /// <summary>Share of authored saturation retained at the bottom of the Routine.</summary>
+    public float RoutineSaturationFloor;
+
+    /// <summary>Share of authored value retained at the bottom of the Routine.</summary>
+    public float RoutineValueFloor;
+
+    /// <summary>Per-Grid range for continuous wander strength.</summary>
+    public FloatRange WanderStrength;
+
+    /// <summary>Per-Grid range for wander phase rate in radians per second.</summary>
+    public FloatRange WanderTurnRate;
+
+    /// <summary>Maximum heading offset used by continuous wander.</summary>
+    public float WanderHeadingRadians;
+
+    /// <summary>Per-boid range for the independent wander-frequency multiplier.</summary>
+    public FloatRange WanderFrequency;
+
+    /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
+    public float QuietWanderMultiplier;
+
+    /// <summary>Share of ordinary wander turn rate retained during complete quiet.</summary>
+    public float QuietWanderTurnMultiplier;
+}
+
+/// <summary>The serializable musical-response settings saved for Flock.</summary>
+[Serializable]
+public sealed class FlockSyncSettings
+{
+    /// <summary>Share of broad movement activity contributed by the smoothed Low band.</summary>
+    [Range(0f, 1f)] public float MovementLowWeight;
+
+    /// <summary>Share of broad movement activity contributed by the smoothed Mid band.</summary>
+    [Range(0f, 1f)] public float MovementMidWeight;
+
+    /// <summary>Share of broad movement activity contributed by the smoothed High band.</summary>
+    [Range(0f, 1f)] public float MovementHighWeight;
+
+    /// <summary>Weighted level below which the flock adopts its quiet posture.</summary>
+    [Range(0f, 1f)] public float QuietActivityThreshold;
+
+    /// <summary>Weighted level at which the flock reaches its active posture.</summary>
+    [Range(0f, 1f)] public float ActiveActivityThreshold;
+
+    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
+    [Min(0f)] public float QuietSpeedMultiplier;
+
+    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
+    [Min(0f)] public float ActiveSpeedMultiplier;
+
+    /// <summary>Normalized Mid level below which no schooling maneuver is added.</summary>
+    [Range(0f, 1f)] public float MidManeuverThreshold;
+
+    /// <summary>Normalized Mid level that produces the full schooling maneuver.</summary>
+    [Range(0f, 1f)] public float MidManeuverFull;
+
+    /// <summary>Alignment lift on a strong normalized Mid-band maneuver.</summary>
+    [Min(0f)] public float MidAlignmentLift;
+
+    /// <summary>Cohesion lift on a strong normalized Mid-band maneuver.</summary>
+    [Min(0f)] public float MidCohesionLift;
+
+    /// <summary>Shared course-bending force applied by a strong normalized Mid-band maneuver.</summary>
+    [Min(0f)] public float CollectiveTurnStrength;
+
+    /// <summary>Normalized spectral centroid below which no extra agitation is added.</summary>
+    [Range(0f, 1f)] public float SpectralCentroidThreshold;
+
+    /// <summary>Normalized spectral centroid that produces full extra agitation.</summary>
+    [Range(0f, 1f)] public float SpectralCentroidFull;
+
+    /// <summary>Separation lift when the normalized spectrum leans toward high-frequency detail.</summary>
+    [Min(0f)] public float SpectralSeparationLift;
+
+    /// <summary>Trail half-life in seconds at the bottom of the Routine envelope.</summary>
+    [Min(0.0001f)] public float TrailHalfLifeMin;
+
+    /// <summary>Trail half-life in seconds at the top of the Routine envelope.</summary>
+    [Min(0.0001f)] public float TrailHalfLifeMax;
+
+    /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
+    [Range(0f, 1f)] public float RoutineHueShift;
+
+    /// <summary>Share of authored saturation retained at the bottom of the Routine.</summary>
+    [Range(0f, 1f)] public float RoutineSaturationFloor;
+
+    /// <summary>Share of authored value retained at the bottom of the Routine.</summary>
+    [Range(0f, 1f)] public float RoutineValueFloor;
+
+    /// <summary>The common Fill length used as the unboosted response baseline.</summary>
+    [Min(0.0001f)] public float TypicalFillBeats;
+
+    /// <summary>The shortest supported Fill duration used to cap short-window compensation.</summary>
+    [Min(0.0001f)] public float MinimumFillBeats;
+
+    /// <summary>Maximum number of beats used to establish the Fill orbit before onset.</summary>
+    [Min(0.0001f)] public float MaximumFillLeadBeats;
+
+    /// <summary>Base tangential velocity added when a typical Fill begins.</summary>
+    [Min(0f)] public float FillOnsetImpulse;
+
+    /// <summary>Strength of continuous Fill steering around wall center.</summary>
+    [Min(0f)] public float FillOrbitSteering;
+
+    /// <summary>Share of Fill orbit retained at the end of the Drop gather.</summary>
+    [Range(0f, 1f)] public float FillOrbitAtFullGather;
+
+    /// <summary>Alignment lift at full Fill drive.</summary>
+    [Min(0f)] public float FillAlignmentLift;
+
+    /// <summary>Separation lift that lets a Fill-only orbit widen.</summary>
+    [Min(0f)] public float FillSeparationLift;
+
+    /// <summary>Number of beats before a Drop during which the flock gathers at wall center.</summary>
+    [Min(0.0001f)] public float DropRunwayBeats;
+
+    /// <summary>Strength of center-seeking steering at the end of the Drop runway.</summary>
+    [Min(0f)] public float DropGatherSteering;
+
+    /// <summary>Share of ordinary separation removed at the end of the Drop runway.</summary>
+    [Range(0f, 1f)] public float DropGatherSeparationSuppression;
+
+    /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
+    [Min(1)] public int DropReleaseBeats;
+
+    /// <summary>Initial Drop burst speed relative to each boid's ordinary maximum speed.</summary>
+    [Min(0f)] public float DropBurstSpeedMultiplier;
+
+    /// <summary>Share of pre-Drop velocity retained in the radial burst.</summary>
+    [Range(0f, 1f)] public float DropVelocityCarry;
+
+    /// <summary>Strength of outward steering during the short Drop release.</summary>
+    [Min(0f)] public float DropOutwardSteering;
+
+    /// <summary>Maximum speed lift during the short Drop release.</summary>
+    [Min(0f)] public float DropSpeedLift;
+
+    /// <summary>Share of cohesion removed at the start of the Drop release.</summary>
+    [Range(0f, 1f)] public float DropCohesionSuppression;
+
+    /// <summary>Separation lift at the start of the Drop release.</summary>
+    [Min(0f)] public float DropSeparationLift;
+
+    /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
+    [Range(0f, 1f)] public float QuietWanderMultiplier;
+
+    /// <summary>Share of ordinary wander turn rate retained during complete quiet.</summary>
+    [Range(0f, 1f)] public float QuietWanderTurnMultiplier;
+
+    /// <summary>Additional wander strength at full spectral agitation.</summary>
+    [Min(0f)] public float SpectralWanderStrengthLift;
+
+    /// <summary>Additional wander turn rate at full spectral agitation.</summary>
+    [Min(0f)] public float SpectralWanderTurnLift;
+
+    /// <summary>Copies every Flock Sync Setting from another value.</summary>
+    public void CopyFrom(FlockSyncSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        MovementLowWeight = source.MovementLowWeight;
+        MovementMidWeight = source.MovementMidWeight;
+        MovementHighWeight = source.MovementHighWeight;
+        QuietActivityThreshold = source.QuietActivityThreshold;
+        ActiveActivityThreshold = source.ActiveActivityThreshold;
+        QuietSpeedMultiplier = source.QuietSpeedMultiplier;
+        ActiveSpeedMultiplier = source.ActiveSpeedMultiplier;
+        MidManeuverThreshold = source.MidManeuverThreshold;
+        MidManeuverFull = source.MidManeuverFull;
+        MidAlignmentLift = source.MidAlignmentLift;
+        MidCohesionLift = source.MidCohesionLift;
+        CollectiveTurnStrength = source.CollectiveTurnStrength;
+        SpectralCentroidThreshold = source.SpectralCentroidThreshold;
+        SpectralCentroidFull = source.SpectralCentroidFull;
+        SpectralSeparationLift = source.SpectralSeparationLift;
+        TrailHalfLifeMin = source.TrailHalfLifeMin;
+        TrailHalfLifeMax = source.TrailHalfLifeMax;
+        RoutineHueShift = source.RoutineHueShift;
+        RoutineSaturationFloor = source.RoutineSaturationFloor;
+        RoutineValueFloor = source.RoutineValueFloor;
+        TypicalFillBeats = source.TypicalFillBeats;
+        MinimumFillBeats = source.MinimumFillBeats;
+        MaximumFillLeadBeats = source.MaximumFillLeadBeats;
+        FillOnsetImpulse = source.FillOnsetImpulse;
+        FillOrbitSteering = source.FillOrbitSteering;
+        FillOrbitAtFullGather = source.FillOrbitAtFullGather;
+        FillAlignmentLift = source.FillAlignmentLift;
+        FillSeparationLift = source.FillSeparationLift;
+        DropRunwayBeats = source.DropRunwayBeats;
+        DropGatherSteering = source.DropGatherSteering;
+        DropGatherSeparationSuppression = source.DropGatherSeparationSuppression;
+        DropReleaseBeats = source.DropReleaseBeats;
+        DropBurstSpeedMultiplier = source.DropBurstSpeedMultiplier;
+        DropVelocityCarry = source.DropVelocityCarry;
+        DropOutwardSteering = source.DropOutwardSteering;
+        DropSpeedLift = source.DropSpeedLift;
+        DropCohesionSuppression = source.DropCohesionSuppression;
+        DropSeparationLift = source.DropSeparationLift;
+        QuietWanderMultiplier = source.QuietWanderMultiplier;
+        QuietWanderTurnMultiplier = source.QuietWanderTurnMultiplier;
+        SpectralWanderStrengthLift = source.SpectralWanderStrengthLift;
+        SpectralWanderTurnLift = source.SpectralWanderTurnLift;
     }
 }

@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 49f4910097371445ab559f7f5fea8305, type: 3}
+  m_Name: FlockSettings
+  m_EditorClassIdentifier: Assembly-CSharp::FlockSyncSettingsAsset
+  effectTypeName: Flock
+  settings:
+    MovementLowWeight: 0.7
+    MovementMidWeight: 0.25
+    MovementHighWeight: 0.05
+    QuietActivityThreshold: 0.1
+    ActiveActivityThreshold: 0.5
+    QuietSpeedMultiplier: 0.1
+    ActiveSpeedMultiplier: 1.5
+    MidManeuverThreshold: 0.2
+    MidManeuverFull: 0.65
+    MidAlignmentLift: 0.75
+    MidCohesionLift: 0.5
+    CollectiveTurnStrength: 0.75
+    SpectralCentroidThreshold: 0.25
+    SpectralCentroidFull: 0.65
+    SpectralSeparationLift: 1
+    TrailHalfLifeMin: 0.03
+    TrailHalfLifeMax: 0.25
+    RoutineHueShift: 0.2
+    RoutineSaturationFloor: 0.7
+    RoutineValueFloor: 0.7
+    TypicalFillBeats: 4
+    MinimumFillBeats: 1
+    MaximumFillLeadBeats: 2
+    FillOnsetImpulse: 6
+    FillOrbitSteering: 2
+    FillOrbitAtFullGather: 0.35
+    FillAlignmentLift: 0.35
+    FillSeparationLift: 0.5
+    DropRunwayBeats: 8
+    DropGatherSteering: 3
+    DropGatherSeparationSuppression: 0.9
+    DropReleaseBeats: 2
+    DropBurstSpeedMultiplier: 1.6
+    DropVelocityCarry: 0.35
+    DropOutwardSteering: 1.5
+    DropSpeedLift: 0.75
+    DropCohesionSuppression: 0.9
+    DropSeparationLift: 1.25
+    QuietWanderMultiplier: 0.15
+    QuietWanderTurnMultiplier: 0.5
+    SpectralWanderStrengthLift: 1.5
+    SpectralWanderTurnLift: 1
