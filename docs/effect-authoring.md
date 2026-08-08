@@ -66,7 +66,13 @@ The compile/import step imports and compiles the scripts. It does not create a S
 
 Never hand-create the `.asset` file. Commit the Unity-generated `.asset` and `.meta` with the Effect.
 
-Read musical-response values from the resolved Sync Settings. A call-site slot can preserve a fixed Standalone value and accept a live Synced value. Keep the two authored values in their respective default blocks. Select between `SyncSettings` and Standalone Settings with `beatManager.IsSynced`, as Ripple does.
+Read musical-response values from the resolved Sync Settings.
+
+Classify each authored value by the mode that reads it. A value that only Standalone rendering reads is a Standalone Default. A value that only Synced rendering reads is a Sync Default. A value that both modes read is dual-homed. A dual-homed value keeps a fixed value in the Standalone Defaults and a live value in the Sync Defaults. The call site selects one with `beatManager.IsSynced`.
+
+A mode reads a slot when a change to that value can change the rendering of that mode, however rare the state. The `Waveform.Lerp` to-slot in Ripple shows the dual-home shape.
+
+A dual-homed slot needs both values. An operator can edit Sync Settings while the wall runs, and ADR-0012 fixes the Standalone look. One shared value would let a live tweak change the Standalone look. Two authored values keep each mode on its own value, so the two modes stay independent.
 
 Two consequences follow from that selection. They are properties of the pattern, so they hold for every Effect that dual-homes a value and no Effect restates them.
 
