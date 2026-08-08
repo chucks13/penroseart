@@ -391,6 +391,10 @@ _Avoid_: hunting for them in an asset or an editor surface; expecting them to ev
 What an Effect reads in Synced Mode: a saved copy that can be tweaked while the wall runs and reset back to the Sync Defaults at any moment.
 _Avoid_: treating a live tweak as finished authoring before it has been written back into the file; changing an Effect's intended values by editing the saved copy rather than the Sync Defaults.
 
+**Roll**:
+The moment at activation when an Effect determines every value it randomizes and discards every piece of carried motion state. A re-roll is the same determination run again on reactivation; after any Roll, nothing from the previous activation shows on the wall.
+_Avoid_: partial rolls that redraw random values but keep stale orientation or progress; confusing the Roll with camera roll, the aviation-sense rotation some Effects animate.
+
 ### Authoring surfaces
 
 **Play Mode**:

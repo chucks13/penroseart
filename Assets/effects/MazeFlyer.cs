@@ -137,7 +137,7 @@ public class MazeFlyer : EffectBase
     /// <summary>Fixed width, height, and depth of the cubic voxel-grid algorithm.</summary>
     private const int GRID_SIZE = 16;
 
-    /// <summary>The current camera-roll angle retained across frames and activations.</summary>
+    /// <summary>The current camera-roll angle, discarded to zero by each activation's Roll.</summary>
     private float currentRollAngle = 0.0f;
 
     /// <summary>The musical capabilities and energy range advertised by MazeFlyer.</summary>
@@ -145,9 +145,8 @@ public class MazeFlyer : EffectBase
      Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow;
 
     /// <summary>
-    /// Resolves a fresh immutable-by-convention copy of MazeFlyer's Standalone Defaults. The curated
-    /// palette aliases the shared authored table rather than copying it, so the convention is
-    /// load-bearing there: a write through one activation's settings would reach every activation.
+    /// Resolves a fresh copy of MazeFlyer's Standalone Defaults. The curated palette is cloned
+    /// per resolve, so no activation shares mutable state with the authored table.
     /// </summary>
     public static MazeFlyerStandaloneSettings StandaloneSettings => new MazeFlyerStandaloneSettings
     {
@@ -164,7 +163,7 @@ public class MazeFlyer : EffectBase
         BlockHueJitter = new FloatRange(StandaloneBlockHueJitterMin, StandaloneBlockHueJitterMax),
         BlockRegionsSaturation = StandaloneBlockRegionsSaturation,
         BlockRegionsValue = StandaloneBlockRegionsValue,
-        CuratedPalette = StandaloneCuratedPalette,
+        CuratedPalette = (Color[])StandaloneCuratedPalette.Clone(),
         FocalLength = StandaloneFocalLength,
         TurnBlendStart = StandaloneTurnBlendStart,
         CameraRollReturnSpeed = StandaloneCameraRollReturnSpeed,
@@ -226,13 +225,10 @@ public class MazeFlyer : EffectBase
     /// <summary>The current camera-turn speed derived from <see cref="flySpeed"/>.</summary>
     private float turnSpeed;
 
-    public override void Init()
-    {
-        base.Init();
-        OnStart();
-    }
-
-    /// <summary>Resolves Effect Settings, then initializes activation rolls and the voxel maze.</summary>
+    /// <summary>
+    /// Performs MazeFlyer's Roll: resolves Effect Settings, discards all carried flight state,
+    /// rolls the activation's randomized values, and regenerates the voxel maze.
+    /// </summary>
     public override void OnStart()
     {
         base.OnStart();
@@ -241,6 +237,15 @@ public class MazeFlyer : EffectBase
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(MazeFlyer),
             SyncDefaults);
+
+        // Discard carried flight state so the Roll is complete: no orientation, direction,
+        // progress, or camera-roll angle survives from the previous activation.
+        currentRollAngle = 0.0f;
+        cameraRot = Quaternion.identity;
+        targetRot = Quaternion.identity;
+        moveDir = Vector3Int.forward;
+        nextMoveDir = Vector3Int.forward;
+        moveProgress = 0.0f;
 
         // Unfiltered acquisition spans the complete curated Waveform Pool, so MazeFlyer has no
         // authored Waveform-selection subrange to expose as Effect Settings.
@@ -371,7 +376,7 @@ public class MazeFlyer : EffectBase
     /// <summary>Advances the camera and traces one voxel ray for every Penrose tile.</summary>
     public override void Draw()
     {
-        UpdateCameraNavigation(Time.deltaTime);
+        UpdateCameraNavigation(effectDelta);
 
         // Check if beat tracking is active via the boolean flag
         bool isBeatSynced = beatManager.IsSynced;
@@ -400,6 +405,8 @@ public class MazeFlyer : EffectBase
 
     /// <summary>
     /// Handles camera movement along the grid path and smooth look-ahead rotation blending.
+    /// Advances on the effect clock's <see cref="EffectBase.effectDelta"/> so flight, turning,
+    /// and roll decay honor any authored Drop slowdown alongside the recoloring pulses.
     /// </summary>
     private void UpdateCameraNavigation(float deltaTime)
     {
@@ -409,7 +416,9 @@ public class MazeFlyer : EffectBase
         {
             currentCell = targetCell;
             moveDir = nextMoveDir;
-            moveProgress = 0.0f;
+            // Carry the overshoot into the next segment so motion stays continuous
+            // instead of hitching at high fly speeds or low frame rates.
+            moveProgress -= 1.0f;
             SelectNextMoveDirection();
         }
 
@@ -433,7 +442,7 @@ public class MazeFlyer : EffectBase
         // ========================================================================
         // FILL EVENT: DYNAMIC CAMERA ROLL (Continuous with smoothing)
         // ========================================================================
-        if (beatManager.IsSynced && (beatManager.Fill.Active))
+        if (beatManager.IsSynced && beatManager.Fill.Active)
         {
             currentRollAngle = SyncSettings.FillCameraRollAngle;
         }
@@ -450,6 +459,7 @@ public class MazeFlyer : EffectBase
         cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed)
                   * Quaternion.AngleAxis(currentRollAngle, Vector3.forward);
     }
+
     /// <summary>
     /// Pathfinding step: Sets immediate target cell and peeks one cell ahead to predict upcoming turns.
     /// </summary>
@@ -536,9 +546,9 @@ public class MazeFlyer : EffectBase
         // Apply spatial pulse along ray direction when audio is present and synced
         Vector3 pulsedOrigin = rayOrigin + (rayDir * (rhythm * SyncSettings.PulseStrength));
 
-        float rx = Mathf.Abs(rayDir.x) < 1e-6f ? 1e-6f : rayDir.x;
-        float ry = Mathf.Abs(rayDir.y) < 1e-6f ? 1e-6f : rayDir.y;
-        float rz = Mathf.Abs(rayDir.z) < 1e-6f ? 1e-6f : rayDir.z;
+        float rx = ClampAwayFromZero(rayDir.x);
+        float ry = ClampAwayFromZero(rayDir.y);
+        float rz = ClampAwayFromZero(rayDir.z);
 
         Vector3 currentPos = pulsedOrigin;
 
@@ -575,29 +585,20 @@ public class MazeFlyer : EffectBase
 
             if (voxelColor.a > 0.0f)
             {
-                // Gate Drop and Fill checks using the boolean flag
-                if (isBeatSynced)
+                // Gate Drop and Fill recoloring using the boolean flag
+                if (isBeatSynced && (beatManager.Drop.Active || beatManager.Fill.Active))
                 {
-                    if (beatManager.Drop.Active)
+                    int checker = (vx + vy + vz) % SyncSettings.EventCheckerModulo;
+                    if (checker == 0)
                     {
-                        int checker = (vx + vy + vz) % SyncSettings.EventCheckerModulo;
-                        if (checker == 0)
-                        {
-                            var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
-                                .Remap(0f, 2, 0f, 1f, clamp: true);
-                            voxelColor = Color.HSVToRGB(0f, 0f, t);
-                        }
-                    }
+                        var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
+                            .Remap(0f, 2, 0f, 1f, clamp: true);
 
-                    if (beatManager.Fill.Active)
-                    {
-                        int checker = (vx + vy + vz) % SyncSettings.EventCheckerModulo;
-                        if (checker == 0)
-                        {
-                            var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
-                                .Remap(0f, 2, 0f, 1f, clamp: true);
-                            voxelColor = Color.HSVToRGB(t, 1f, 1f);
-                        }
+                        // Fill wins when both events are active, matching the original
+                        // apply order (Drop first, Fill overwrote it).
+                        voxelColor = beatManager.Fill.Active
+                            ? Color.HSVToRGB(t, 1f, 1f)
+                            : Color.HSVToRGB(0f, 0f, t);
                     }
                 }
 
@@ -642,6 +643,20 @@ public class MazeFlyer : EffectBase
         }
 
         return Color.black;
+    }
+
+    /// <summary>
+    /// Clamps a near-zero ray component to a small epsilon while preserving its sign, so DDA
+    /// step distances stay finite and near-axis-aligned rays keep their true step direction.
+    /// </summary>
+    private static float ClampAwayFromZero(float component)
+    {
+        if (Mathf.Abs(component) >= 1e-6f)
+        {
+            return component;
+        }
+
+        return component < 0f ? -1e-6f : 1e-6f;
     }
 
     private static int PositiveModulo(int value, int length)
