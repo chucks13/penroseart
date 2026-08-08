@@ -1,30 +1,197 @@
-using UnityEngine;
+using System;
 using System.Collections.Generic;
+using UnityEngine;
+using Random = UnityEngine.Random;
 
+/// <summary>Renders a first-person flight through a randomized voxel maze onto the Penrose tile buffer.</summary>
+[EffectSyncSettings(typeof(MazeFlyerSyncSettingsAsset))]
 public class MazeFlyer : EffectBase
 {
-    private const int GRID_SIZE = 16;
-    private const float MAX_RAY_DIST = 20.0f;
+    // Standalone Defaults
 
+    /// <summary>Authored inclusive minimum for the per-activation integer flight-speed roll.</summary>
+    private const int StandaloneOverallSpeedMin = 1;
+
+    /// <summary>Authored exclusive maximum for the per-activation integer flight-speed roll.</summary>
+    private const int StandaloneOverallSpeedMaxExclusive = 5;
+
+    /// <summary>Authored multiplier deriving camera turn speed from the rolled flight speed.</summary>
+    private const float StandaloneTurnSpeedMultiplier = 2.5f;
+
+    /// <summary>Authored probability that a non-guaranteed voxel cell is filled.</summary>
+    private const float StandaloneFillProbability = 0.25f;
+
+    /// <summary>Authored coordinate scale used to generate the Spatial Waves hue field.</summary>
+    private const float StandaloneSpatialScale = 0.15f;
+
+    /// <summary>Authored voxel-block width used by the Block Regions color mode.</summary>
+    private const int StandaloneBlockSize = 4;
+
+    /// <summary>Authored saturation of voxels in the Pure Random color mode.</summary>
+    private const float StandalonePureRandomSaturation = 0.9f;
+
+    /// <summary>Authored value of voxels in the Pure Random color mode.</summary>
+    private const float StandalonePureRandomValue = 0.95f;
+
+    /// <summary>Authored saturation of voxels in the Spatial Waves color mode.</summary>
+    private const float StandaloneSpatialWavesSaturation = 0.85f;
+
+    /// <summary>Authored value of voxels in the Spatial Waves color mode.</summary>
+    private const float StandaloneSpatialWavesValue = 0.95f;
+
+    /// <summary>Authored minimum hue jitter applied within each Block Regions voxel.</summary>
+    private const float StandaloneBlockHueJitterMin = -0.05f;
+
+    /// <summary>Authored maximum hue jitter applied within each Block Regions voxel.</summary>
+    private const float StandaloneBlockHueJitterMax = 0.05f;
+
+    /// <summary>Authored saturation of voxels in the Block Regions color mode.</summary>
+    private const float StandaloneBlockRegionsSaturation = 0.88f;
+
+    /// <summary>Authored value of voxels in the Block Regions color mode.</summary>
+    private const float StandaloneBlockRegionsValue = 0.95f;
+
+    /// <summary>Authored colors sampled by the Curated Palette mode.</summary>
+    private static readonly Color[] StandaloneCuratedPalette =
+    {
+        Color.HSVToRGB(0.78f, 0.9f, 0.95f), // Purple/Magenta
+        Color.HSVToRGB(0.55f, 0.9f, 0.95f), // Cyan/Blue
+        Color.HSVToRGB(0.18f, 0.9f, 0.95f), // Yellow/Gold
+        Color.HSVToRGB(0.38f, 0.9f, 0.95f)  // Lime Green
+    };
+
+    /// <summary>Authored camera focal length used to project tile centers into voxel rays.</summary>
+    private const float StandaloneFocalLength = 18.0f;
+
+    /// <summary>Authored normalized move progress at which look-ahead turn blending begins.</summary>
+    private const float StandaloneTurnBlendStart = 0.2f;
+
+    /// <summary>
+    /// Authored smoothing rate that returns camera roll to zero when no live clock is placing Fills —
+    /// reachable while a residual roll relaxes after the wire drops out.
+    /// </summary>
+    private const float StandaloneCameraRollReturnSpeed = 3.0f;
+
+    /// <summary>
+    /// Authored navigation threshold: rolls above this value continue ahead, while rolls at or below
+    /// it enter the non-reversing direction choice when alternatives exist.
+    /// </summary>
+    private const float StandaloneDirectionChoiceThreshold = 0.35f;
+
+    /// <summary>Authored maximum ray distance and baseline fog range.</summary>
+    private const float StandaloneMaxRayDistance = 20.0f;
+
+    /// <summary>Authored shade multiplier for voxel faces hit across the X axis.</summary>
+    private const float StandaloneXAxisFaceShade = 0.75f;
+
+    /// <summary>Authored shade multiplier for voxel faces hit across the Y axis.</summary>
+    private const float StandaloneYAxisFaceShade = 0.95f;
+
+    /// <summary>Authored shade multiplier for voxel faces hit across the Z axis.</summary>
+    private const float StandaloneZAxisFaceShade = 0.60f;
+
+    // Sync Defaults
+
+    /// <summary>
+    /// Authored maximum ray displacement on heavy beat hits. High values produce bigger wall recoil.
+    /// This audio-reactivity control is a beat-feel tuning point. The response is temporarily disabled
+    /// at 0f; the commented suggestion was 0.20f, with a recommended range of 0.05f to 0.40f.
+    /// </summary>
+    private const float SyncPulseStrength = 0f;
+
+    /// <summary>
+    /// Authored extra brightness boost added to voxel faces on audio peaks. This audio-reactivity control
+    /// is a beat-feel tuning point. The response is temporarily disabled at 0f; the commented suggestion
+    /// was 0.25f, with a recommended range of 0.00f to 0.50f.
+    /// </summary>
+    private const float SyncPeakBrightnessBoost = 0f;
+
+    /// <summary>
+    /// Authored amount by which fog distance contracts or expands with the rhythm, where 0 means off.
+    /// This audio-reactivity control is a beat-feel tuning point. The response is temporarily disabled
+    /// at 0f; the commented suggestion was 3.0f, with a recommended range of 0.0f to 6.0f.
+    /// </summary>
+    private const float SyncDynamicFogAmount = 0f;
+
+    /// <summary>Authored synced Fill assignment for the dynamic camera-roll response.</summary>
+    /// <remarks>
+    /// The call-site note described directly adding degrees per frame to currentRollAngle, while the
+    /// existing path assigns 5f directly. Its unresolved authored alternatives were 45f, incrementing
+    /// by 2f, and a continuous 30.0f * localDelta spin. The tuning note said to modify 30.0f to change
+    /// the continuous spin speed, and the section described the response as continuous with smoothing.
+    /// This capture preserves that intent trail without choosing among the alternatives.
+    /// </remarks>
+    private const float SyncFillCameraRollAngle = 5f;
+
+    /// <summary>Authored smoothing rate that returns camera roll to zero between synced Fills.</summary>
+    private const float SyncCameraRollReturnSpeed = 3.0f;
+
+    /// <summary>Authored modulo selecting one quarter of hit voxels for synced Fill and Drop recoloring.</summary>
+    private const int SyncEventCheckerModulo = 4;
+
+    /// <summary>Authored effect-time multiplier driving synced Fill and Drop recoloring pulses.</summary>
+    private const float SyncEventPulseSpeed = 4f;
+
+    // Runtime mechanism constants and state
+
+    /// <summary>Fixed width, height, and depth of the cubic voxel-grid algorithm.</summary>
+    private const int GRID_SIZE = 16;
+
+    /// <summary>The current camera-roll angle retained across frames and activations.</summary>
     private float currentRollAngle = 0.0f;
 
-    // ========================================================================
-    // AUDIO REACTIVITY SETTINGS (Tweak these to adjust beat feel)
-    // temporarily disables with 0f values
-    // ========================================================================
-    [Header("Audio Reactivity Settings")]
-    [Tooltip("Maximum ray displacement on heavy beat hits. High values = bigger wall recoil.")]
-    private float pulseStrength = 0f;//0.20f; // Recommended: 0.05f to 0.40f
-
-    [Tooltip("Extra brightness boost added to voxel faces on audio peaks.")]
-    private float peakBrightnessBoost = 0f;// 0.25f; // Recommended: 0.00f to 0.50f
-
-    [Tooltip("How much the fog distance contracts/expands with the rhythm (0 = off).")]
-    private float dynamicFogAmount = 0f;//3.0f; // Recommended: 0.0f to 6.0f
-    // ========================================================================
-
+    /// <summary>The musical capabilities and energy range advertised by MazeFlyer.</summary>
     public override Repertoire Repertoire =>
      Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow;
+
+    /// <summary>
+    /// Resolves a fresh immutable-by-convention copy of MazeFlyer's Standalone Defaults. The curated
+    /// palette aliases the shared authored table rather than copying it, so the convention is
+    /// load-bearing there: a write through one activation's settings would reach every activation.
+    /// </summary>
+    public static MazeFlyerStandaloneSettings StandaloneSettings => new MazeFlyerStandaloneSettings
+    {
+        OverallSpeedMin = StandaloneOverallSpeedMin,
+        OverallSpeedMaxExclusive = StandaloneOverallSpeedMaxExclusive,
+        TurnSpeedMultiplier = StandaloneTurnSpeedMultiplier,
+        FillProbability = StandaloneFillProbability,
+        SpatialScale = StandaloneSpatialScale,
+        BlockSize = StandaloneBlockSize,
+        PureRandomSaturation = StandalonePureRandomSaturation,
+        PureRandomValue = StandalonePureRandomValue,
+        SpatialWavesSaturation = StandaloneSpatialWavesSaturation,
+        SpatialWavesValue = StandaloneSpatialWavesValue,
+        BlockHueJitter = new FloatRange(StandaloneBlockHueJitterMin, StandaloneBlockHueJitterMax),
+        BlockRegionsSaturation = StandaloneBlockRegionsSaturation,
+        BlockRegionsValue = StandaloneBlockRegionsValue,
+        CuratedPalette = StandaloneCuratedPalette,
+        FocalLength = StandaloneFocalLength,
+        TurnBlendStart = StandaloneTurnBlendStart,
+        CameraRollReturnSpeed = StandaloneCameraRollReturnSpeed,
+        DirectionChoiceThreshold = StandaloneDirectionChoiceThreshold,
+        MaxRayDistance = StandaloneMaxRayDistance,
+        XAxisFaceShade = StandaloneXAxisFaceShade,
+        YAxisFaceShade = StandaloneYAxisFaceShade,
+        ZAxisFaceShade = StandaloneZAxisFaceShade,
+    };
+
+    /// <summary>Resolves a fresh copy of MazeFlyer's file-local Sync Defaults.</summary>
+    public static MazeFlyerSyncSettings SyncDefaults => new MazeFlyerSyncSettings
+    {
+        PulseStrength = SyncPulseStrength,
+        PeakBrightnessBoost = SyncPeakBrightnessBoost,
+        DynamicFogAmount = SyncDynamicFogAmount,
+        FillCameraRollAngle = SyncFillCameraRollAngle,
+        CameraRollReturnSpeed = SyncCameraRollReturnSpeed,
+        EventCheckerModulo = SyncEventCheckerModulo,
+        EventPulseSpeed = SyncEventPulseSpeed,
+    };
+
+    /// <summary>The Standalone Settings fixed for the current activation.</summary>
+    private MazeFlyerStandaloneSettings standaloneSettings = StandaloneSettings;
+
+    /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
+    private MazeFlyerSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
     // Color generation modes
     private enum ColorMode
@@ -35,7 +202,8 @@ public class MazeFlyer : EffectBase
         CuratedPalette
     }
 
-    private ColorMode activeColorMode = ColorMode.PureRandom;
+    /// <summary>The color mode selected from the enum's complete four-member domain on activation.</summary>
+    private ColorMode activeColorMode;
 
     // 16x16x16 Voxel grid colors. Color.clear (alpha=0) indicates an empty voxel.
     private Color[,,] voxelGrid = new Color[GRID_SIZE, GRID_SIZE, GRID_SIZE];
@@ -52,17 +220,11 @@ public class MazeFlyer : EffectBase
     private Quaternion cameraRot = Quaternion.identity;
     private Quaternion targetRot = Quaternion.identity;
     private float moveProgress = 1.0f;
-    private float flySpeed = 2.0f;
-    private float turnSpeed = 4.0f;
+    /// <summary>The current flight speed rolled on activation.</summary>
+    private float flySpeed;
 
-    // Pre-defined palette for CuratedPalette mode
-    private Color[] curatedPalette = new Color[]
-    {
-        Color.HSVToRGB(0.78f, 0.9f, 0.95f), // Purple/Magenta
-        Color.HSVToRGB(0.55f, 0.9f, 0.95f), // Cyan/Blue
-        Color.HSVToRGB(0.18f, 0.9f, 0.95f), // Yellow/Gold
-        Color.HSVToRGB(0.38f, 0.9f, 0.95f)  // Lime Green
-    };
+    /// <summary>The current camera-turn speed derived from <see cref="flySpeed"/>.</summary>
+    private float turnSpeed;
 
     public override void Init()
     {
@@ -70,16 +232,29 @@ public class MazeFlyer : EffectBase
         OnStart();
     }
 
+    /// <summary>Resolves Effect Settings, then initializes activation rolls and the voxel maze.</summary>
     public override void OnStart()
     {
         base.OnStart();
+
+        standaloneSettings = StandaloneSettings;
+        SyncSettings = EffectSyncSettingsProvider.Resolve(
+            typeof(MazeFlyer),
+            SyncDefaults);
+
+        // Unfiltered acquisition spans the complete curated Waveform Pool, so MazeFlyer has no
+        // authored Waveform-selection subrange to expose as Effect Settings.
         waveform = waveforms.Random();
 
-        float overallSpeed = (float)Random.Range(1, 5);
+        float overallSpeed = (float)Random.Range(
+            standaloneSettings.OverallSpeedMin,
+            standaloneSettings.OverallSpeedMaxExclusive);
         flySpeed = overallSpeed;
-        turnSpeed = overallSpeed * 2.5f;
+        turnSpeed = overallSpeed * standaloneSettings.TurnSpeedMultiplier;
 
         // 1. Randomly choose one of the 4 color modes
+        // The enum has four members and GetVoxelColor handles all four, so [0, 4) is the complete
+        // selector domain rather than an authored subrange.
         activeColorMode = (ColorMode)Random.Range(0, 4);
 
         // 2. Generate the grid with the selected color style
@@ -94,9 +269,9 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private void GenerateVoxelGrid()
     {
-        float fillProbability = 0.25f;
-        float spatialScale = 0.15f;
-        int blockSize = 4;
+        float fillProbability = standaloneSettings.FillProbability;
+        float spatialScale = standaloneSettings.SpatialScale;
+        int blockSize = standaloneSettings.BlockSize;
 
         for (int x = 0; x < GRID_SIZE; x++)
         {
@@ -106,6 +281,9 @@ public class MazeFlyer : EffectBase
                 {
                     bool isEvenIndex = (x % 2 == 0) && (y % 2 == 0) && (z % 2 == 0);
 
+                    // Random.value spans the complete probability domain; FillProbability authors its threshold.
+                    // Guaranteed even-index cells short-circuit before that roll, so they consume no
+                    // Random.value and retain the original mode-specific roll order.
                     if (isEvenIndex || Random.value < fillProbability)
                     {
                         voxelGrid[x, y, z] = GetVoxelColor(x, y, z, spatialScale, blockSize);
@@ -127,11 +305,18 @@ public class MazeFlyer : EffectBase
         switch (activeColorMode)
         {
             case ColorMode.PureRandom:
-                return Color.HSVToRGB(Random.value, 0.9f, 0.95f);
+                // Random.value spans the complete hue-wheel domain; only saturation and value are authored settings.
+                return Color.HSVToRGB(
+                    Random.value,
+                    standaloneSettings.PureRandomSaturation,
+                    standaloneSettings.PureRandomValue);
 
             case ColorMode.SpatialWaves:
                 float waveHue = (Mathf.Sin(x * spatialScale) + Mathf.Cos(y * spatialScale) + Mathf.Sin(z * spatialScale) + 3f) / 6f;
-                return Color.HSVToRGB(waveHue, 0.85f, 0.95f);
+                return Color.HSVToRGB(
+                    waveHue,
+                    standaloneSettings.SpatialWavesSaturation,
+                    standaloneSettings.SpatialWavesValue);
 
             case ColorMode.BlockRegions:
                 int blockX = x / blockSize;
@@ -140,11 +325,19 @@ public class MazeFlyer : EffectBase
                 int blockHash = blockX * 73 + blockY * 179 + blockZ * 283;
 
                 float baseHue = (Mathf.Abs(blockHash) % 100) / 100.0f;
-                float blockHue = (baseHue + Random.Range(-0.05f, 0.05f) + 1.0f) % 1.0f;
-                return Color.HSVToRGB(blockHue, 0.88f, 0.95f);
+                float blockHue = (
+                    baseHue +
+                    Random.Range(standaloneSettings.BlockHueJitter.Min, standaloneSettings.BlockHueJitter.Max) +
+                    1.0f) % 1.0f;
+                return Color.HSVToRGB(
+                    blockHue,
+                    standaloneSettings.BlockRegionsSaturation,
+                    standaloneSettings.BlockRegionsValue);
 
             case ColorMode.CuratedPalette:
-                return curatedPalette[Random.Range(0, curatedPalette.Length)];
+                // The inline selector spans every entry in the complete authored palette table.
+                return standaloneSettings.CuratedPalette[
+                    Random.Range(0, standaloneSettings.CuratedPalette.Length)];
 
             default:
                 return Color.white;
@@ -175,6 +368,7 @@ public class MazeFlyer : EffectBase
 
     public override string DebugText() => $"Maze Flyer [{activeColorMode}]";
 
+    /// <summary>Advances the camera and traces one voxel ray for every Penrose tile.</summary>
     public override void Draw()
     {
         UpdateCameraNavigation(Time.deltaTime);
@@ -182,14 +376,17 @@ public class MazeFlyer : EffectBase
         // Check if beat tracking is active via the boolean flag
         bool isBeatSynced = beatManager.IsSynced;
 
-        // Sample waveform envelope only when synced
+        // Sample waveform envelope only when synced. The hard 0f is what keeps the
+        // rhythm-scaled Sync Settings (PulseStrength, PeakBrightnessBoost, DynamicFogAmount)
+        // classified sync-only: Standalone frames reach those slots, but scaled by this 0f a
+        // live tweak cannot change the Standalone look.
         float rhythm = isBeatSynced ? waveform.Envelope : 0.0f;
 
         Vector3 cameraForward = cameraRot * Vector3.forward;
         Vector3 cameraRight = cameraRot * Vector3.right;
         Vector3 cameraUp = cameraRot * Vector3.up;
 
-        float focalLength = 18.0f;
+        float focalLength = standaloneSettings.FocalLength;
 
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -223,7 +420,10 @@ public class MazeFlyer : EffectBase
         Vector3 currentDirVec = new Vector3(moveDir.x, moveDir.y, moveDir.z);
         Vector3 nextDirVec = new Vector3(nextMoveDir.x, nextMoveDir.y, nextMoveDir.z);
 
-        Vector3 blendedForward = Vector3.Lerp(currentDirVec, nextDirVec, Mathf.SmoothStep(0.2f, 1.0f, moveProgress)).normalized;
+        Vector3 blendedForward = Vector3.Lerp(
+            currentDirVec,
+            nextDirVec,
+            Mathf.SmoothStep(standaloneSettings.TurnBlendStart, 1.0f, moveProgress)).normalized;
 
         if (blendedForward != Vector3.zero)
         {
@@ -235,13 +435,16 @@ public class MazeFlyer : EffectBase
         // ========================================================================
         if (beatManager.IsSynced && (beatManager.Fill.Active))
         {
-            // Directly add degrees per frame to currentRollAngle
-            // Modify 30.0f to change the continuous spin speed
-            currentRollAngle = 5f;//45f;//+= 2f;//30.0f * localDelta;
+            currentRollAngle = SyncSettings.FillCameraRollAngle;
         }
         else
         {
-            currentRollAngle = Mathf.LerpAngle(currentRollAngle, 0.0f, deltaTime * 3.0f);
+            currentRollAngle = Mathf.LerpAngle(
+                currentRollAngle,
+                0.0f,
+                deltaTime * (beatManager.IsSynced
+                    ? SyncSettings.CameraRollReturnSpeed
+                    : standaloneSettings.CameraRollReturnSpeed));
         }
 
         cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed)
@@ -266,7 +469,9 @@ public class MazeFlyer : EffectBase
 
         bool canContinueAhead = nextOpenDirs.Contains(moveDir);
 
-        if (canContinueAhead && (Random.value > 0.35f || nextOpenDirs.Count == 1))
+        // Random.value spans the complete probability domain; DirectionChoiceThreshold authors its split.
+        if (canContinueAhead &&
+            (Random.value > standaloneSettings.DirectionChoiceThreshold || nextOpenDirs.Count == 1))
         {
             nextMoveDir = moveDir;
         }
@@ -277,6 +482,7 @@ public class MazeFlyer : EffectBase
 
             if (nonReversingDirs.Count > 0)
             {
+                // The inline selector spans every currently valid non-reversing direction.
                 nextMoveDir = nonReversingDirs[Random.Range(0, nonReversingDirs.Count)];
             }
             else
@@ -328,7 +534,7 @@ public class MazeFlyer : EffectBase
     private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir, float rhythm, bool isBeatSynced)
     {
         // Apply spatial pulse along ray direction when audio is present and synced
-        Vector3 pulsedOrigin = rayOrigin + (rayDir * (rhythm * pulseStrength));
+        Vector3 pulsedOrigin = rayOrigin + (rayDir * (rhythm * SyncSettings.PulseStrength));
 
         float rx = Mathf.Abs(rayDir.x) < 1e-6f ? 1e-6f : rayDir.x;
         float ry = Mathf.Abs(rayDir.y) < 1e-6f ? 1e-6f : rayDir.y;
@@ -356,7 +562,8 @@ public class MazeFlyer : EffectBase
         int hitSide = 0;
 
         // Dynamic max fog distance modulation on beats
-        float currentMaxDist = MAX_RAY_DIST + (rhythm * dynamicFogAmount);
+        float currentMaxDist =
+            standaloneSettings.MaxRayDistance + (rhythm * SyncSettings.DynamicFogAmount);
 
         while (distanceTraveled < currentMaxDist)
         {
@@ -373,28 +580,34 @@ public class MazeFlyer : EffectBase
                 {
                     if (beatManager.Drop.Active)
                     {
-                        int checker = (vx + vy + vz) % 4;
+                        int checker = (vx + vy + vz) % SyncSettings.EventCheckerModulo;
                         if (checker == 0)
                         {
-                            var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
+                            var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
+                                .Remap(0f, 2, 0f, 1f, clamp: true);
                             voxelColor = Color.HSVToRGB(0f, 0f, t);
                         }
                     }
 
                     if (beatManager.Fill.Active)
                     {
-                        int checker = (vx + vy + vz) % 4;
+                        int checker = (vx + vy + vz) % SyncSettings.EventCheckerModulo;
                         if (checker == 0)
                         {
-                            var t = Mathf.PingPong(effectTime * 4, 2).Remap(0f, 2, 0f, 1f, clamp: true);
+                            var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
+                                .Remap(0f, 2, 0f, 1f, clamp: true);
                             voxelColor = Color.HSVToRGB(t, 1f, 1f);
                         }
                     }
                 }
 
                 // Shading calculations with audio peak boost
-                float baseShade = hitSide == 0 ? 0.75f : (hitSide == 1 ? 0.95f : 0.60f);
-                float shade = baseShade + (rhythm * peakBrightnessBoost);
+                float baseShade = hitSide == 0
+                    ? standaloneSettings.XAxisFaceShade
+                    : (hitSide == 1
+                        ? standaloneSettings.YAxisFaceShade
+                        : standaloneSettings.ZAxisFaceShade);
+                float shade = baseShade + (rhythm * SyncSettings.PeakBrightnessBoost);
                 float fog = 1.0f - Mathf.Clamp01(distanceTraveled / currentMaxDist);
 
                 return new Color(
@@ -439,5 +652,147 @@ public class MazeFlyer : EffectBase
 
     public override void OnEnd()
     {
+    }
+}
+
+/// <summary>The fixed Standalone Settings resolved from MazeFlyer's file-local Standalone Defaults.</summary>
+public sealed class MazeFlyerStandaloneSettings
+{
+    /// <summary>Inclusive minimum for the per-activation integer flight-speed roll.</summary>
+    public int OverallSpeedMin;
+
+    /// <summary>Exclusive maximum for the per-activation integer flight-speed roll.</summary>
+    public int OverallSpeedMaxExclusive;
+
+    /// <summary>Multiplier deriving camera turn speed from the rolled flight speed.</summary>
+    public float TurnSpeedMultiplier;
+
+    /// <summary>Probability that a non-guaranteed voxel cell is filled.</summary>
+    public float FillProbability;
+
+    /// <summary>Coordinate scale used to generate the Spatial Waves hue field.</summary>
+    public float SpatialScale;
+
+    /// <summary>Voxel-block width used by the Block Regions color mode.</summary>
+    public int BlockSize;
+
+    /// <summary>Saturation of voxels in the Pure Random color mode.</summary>
+    public float PureRandomSaturation;
+
+    /// <summary>Value of voxels in the Pure Random color mode.</summary>
+    public float PureRandomValue;
+
+    /// <summary>Saturation of voxels in the Spatial Waves color mode.</summary>
+    public float SpatialWavesSaturation;
+
+    /// <summary>Value of voxels in the Spatial Waves color mode.</summary>
+    public float SpatialWavesValue;
+
+    /// <summary>Per-voxel hue-jitter range used by the Block Regions color mode.</summary>
+    public FloatRange BlockHueJitter;
+
+    /// <summary>Saturation of voxels in the Block Regions color mode.</summary>
+    public float BlockRegionsSaturation;
+
+    /// <summary>Value of voxels in the Block Regions color mode.</summary>
+    public float BlockRegionsValue;
+
+    /// <summary>Colors sampled by the Curated Palette mode.</summary>
+    public Color[] CuratedPalette;
+
+    /// <summary>Camera focal length used to project tile centers into voxel rays.</summary>
+    public float FocalLength;
+
+    /// <summary>Normalized move progress at which look-ahead turn blending begins.</summary>
+    public float TurnBlendStart;
+
+    /// <summary>Smoothing rate that returns camera roll to zero outside an active synced Fill.</summary>
+    public float CameraRollReturnSpeed;
+
+    /// <summary>Threshold separating forward continuation from alternate non-reversing direction selection.</summary>
+    public float DirectionChoiceThreshold;
+
+    /// <summary>Maximum ray distance and baseline fog range.</summary>
+    public float MaxRayDistance;
+
+    /// <summary>Shade multiplier for voxel faces hit across the X axis.</summary>
+    public float XAxisFaceShade;
+
+    /// <summary>Shade multiplier for voxel faces hit across the Y axis.</summary>
+    public float YAxisFaceShade;
+
+    /// <summary>Shade multiplier for voxel faces hit across the Z axis.</summary>
+    public float ZAxisFaceShade;
+}
+
+/// <summary>The saved musical-response settings used by MazeFlyer in Synced Mode.</summary>
+[Serializable]
+public sealed class MazeFlyerSyncSettings
+{
+    /// <summary>
+    /// Maximum ray displacement on heavy beat hits. High values produce bigger wall recoil. Zero
+    /// temporarily disables the response. This is a beat-feel tuning control; 0.20 was suggested,
+    /// with 0.05 to 0.40 recommended.
+    /// </summary>
+    [Header("Audio Reactivity Settings")]
+    [Tooltip("Maximum ray displacement on heavy beat hits. High values = bigger wall recoil. 0 disables it; recommended: 0.05 to 0.40.")]
+    [Range(0f, 0.40f)]
+    public float PulseStrength;
+
+    /// <summary>
+    /// Extra brightness boost added to voxel faces on audio peaks. Zero temporarily disables the
+    /// response. This is a beat-feel tuning control; 0.25 was suggested, with 0.00 to 0.50 recommended.
+    /// </summary>
+    [Tooltip("Extra brightness boost added to voxel faces on audio peaks. 0 disables it; recommended: 0.00 to 0.50.")]
+    [Range(0f, 0.50f)]
+    public float PeakBrightnessBoost;
+
+    /// <summary>
+    /// Amount by which fog distance contracts or expands with the rhythm. Zero means off and
+    /// temporarily disables the response. This is a beat-feel tuning control; 3.0 was suggested,
+    /// with 0.0 to 6.0 recommended.
+    /// </summary>
+    [Tooltip("How much fog distance contracts or expands with the rhythm. 0 disables it; recommended: 0.0 to 6.0.")]
+    [Range(0f, 6.0f)]
+    public float DynamicFogAmount;
+
+    /// <summary>Camera-roll angle assigned during an active synced Fill.</summary>
+    /// <remarks>
+    /// The call-site note described directly adding degrees per frame to currentRollAngle, while the
+    /// captured assignment sets it to 5 degrees. Unresolved authored alternatives were 45 degrees,
+    /// incrementing by 2 degrees, and a continuous 30.0 * localDelta spin; the old tuning note said
+    /// to modify 30.0 to change continuous spin speed, and described the response as continuous with smoothing.
+    /// </remarks>
+    [Tooltip("Synced Fill camera-roll assignment. Current: 5 degrees. Unresolved alternatives: 45 degrees, += 2 degrees, or 30 * localDelta continuous spin; the old note said to modify 30 for spin speed.")]
+    [Min(0f)]
+    public float FillCameraRollAngle;
+
+    /// <summary>Smoothing rate (per second) easing camera roll back to zero between synced Fills.</summary>
+    [Min(0f)]
+    public float CameraRollReturnSpeed;
+
+    /// <summary>Modulo selecting hit voxels for synced Fill and Drop recoloring.</summary>
+    [Min(1)]
+    public int EventCheckerModulo;
+
+    /// <summary>Effect-time multiplier driving synced Fill and Drop recoloring pulses.</summary>
+    [Min(0f)]
+    public float EventPulseSpeed;
+
+    /// <summary>Copies every MazeFlyer Sync Setting from another value.</summary>
+    public void CopyFrom(MazeFlyerSyncSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        PulseStrength = source.PulseStrength;
+        PeakBrightnessBoost = source.PeakBrightnessBoost;
+        DynamicFogAmount = source.DynamicFogAmount;
+        FillCameraRollAngle = source.FillCameraRollAngle;
+        CameraRollReturnSpeed = source.CameraRollReturnSpeed;
+        EventCheckerModulo = source.EventCheckerModulo;
+        EventPulseSpeed = source.EventPulseSpeed;
     }
 }
