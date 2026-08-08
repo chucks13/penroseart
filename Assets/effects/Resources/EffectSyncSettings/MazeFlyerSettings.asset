@@ -17,7 +17,18 @@ MonoBehaviour:
     PulseStrength: 0
     PeakBrightnessBoost: 0
     DynamicFogAmount: 0
-    FillCameraRollAngle: 5
-    CameraRollReturnSpeed: 3
+    OnBeatLowThreshold: 0.35
+    OnBeatBrightnessPulse: 0.5
+    LowEnergySpeed: 1
+    MidEnergySpeed: 1.6
+    HighEnergySpeed: 2.25
+    SpeedSmoothTime: 2
+    SpeedRampBeats: 8
+    DropStopBeats: 4
+    DropSitBeats: 2
+    DropLaunchMultiplier: 2.5
+    DropSpinSpeed: 90
+    FillEdgeInversion: 1
+    FillLineGlow: 2
     EventCheckerModulo: 4
     EventPulseSpeed: 4
