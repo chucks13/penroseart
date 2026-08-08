@@ -3,7 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-/// <summary>Renders a first-person flight through a randomized voxel maze onto the Penrose tile buffer.</summary>
+/// <summary>
+/// Renders a first-person flight through a randomized voxel maze onto the Penrose tile buffer.
+/// Each activation Rolls a fresh maze and flight; each frame advances the camera one step along
+/// the maze path, then traces one voxel ray per tile (a 3D DDA over a toroidal 16-cubed grid).
+/// </summary>
 [EffectSyncSettings(typeof(MazeFlyerSyncSettingsAsset))]
 public class MazeFlyer : EffectBase
 {
@@ -132,17 +136,7 @@ public class MazeFlyer : EffectBase
     /// <summary>Authored effect-time multiplier driving synced Fill and Drop recoloring pulses.</summary>
     private const float SyncEventPulseSpeed = 4f;
 
-    // Runtime mechanism constants and state
-
-    /// <summary>Fixed width, height, and depth of the cubic voxel-grid algorithm.</summary>
-    private const int GRID_SIZE = 16;
-
-    /// <summary>The current camera-roll angle, discarded to zero by each activation's Roll.</summary>
-    private float currentRollAngle = 0.0f;
-
-    /// <summary>The musical capabilities and energy range advertised by MazeFlyer.</summary>
-    public override Repertoire Repertoire =>
-     Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow;
+    // Effect Settings resolution
 
     /// <summary>
     /// Resolves a fresh copy of MazeFlyer's Standalone Defaults. The curated palette is cloned
@@ -192,38 +186,78 @@ public class MazeFlyer : EffectBase
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private MazeFlyerSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    // Color generation modes
+    // Effect contract
+
+    /// <summary>The musical capabilities and energy range advertised by MazeFlyer.</summary>
+    public override Repertoire Repertoire =>
+     Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow;
+
+    /// <summary>Names the effect and the color mode the current activation rolled.</summary>
+    public override string DebugText() => $"Maze Flyer [{activeColorMode}]";
+
+    // Maze state
+
+    /// <summary>Fixed width, height, and depth of the cubic voxel-grid algorithm.</summary>
+    private const int VoxelGridSize = 16;
+
+    /// <summary>The voxel coloring styles one activation can roll.</summary>
     private enum ColorMode
     {
+        /// <summary>Every voxel rolls an independent hue.</summary>
         PureRandom,
+
+        /// <summary>Hue follows a smooth sine field over voxel coordinates.</summary>
         SpatialWaves,
+
+        /// <summary>Voxel blocks share a hashed base hue with per-voxel jitter.</summary>
         BlockRegions,
+
+        /// <summary>Every voxel samples the authored curated palette.</summary>
         CuratedPalette
     }
 
     /// <summary>The color mode selected from the enum's complete four-member domain on activation.</summary>
     private ColorMode activeColorMode;
 
-    // 16x16x16 Voxel grid colors. Color.clear (alpha=0) indicates an empty voxel.
-    private Color[,,] voxelGrid = new Color[GRID_SIZE, GRID_SIZE, GRID_SIZE];
+    /// <summary>Voxel colors of the maze. Color.clear (alpha 0) marks an empty voxel.</summary>
+    private Color[,,] voxelGrid = new Color[VoxelGridSize, VoxelGridSize, VoxelGridSize];
 
-    // Flying camera navigation state
-    private Vector3Int currentCell = new Vector3Int(1, 1, 1);
-    private Vector3Int targetCell = new Vector3Int(1, 1, 1);
+    // Flight state
+
+    /// <summary>The cell the camera is flying from.</summary>
+    private Vector3Int currentCell;
+
+    /// <summary>The cell the camera is flying toward.</summary>
+    private Vector3Int targetCell;
+
+    /// <summary>The direction of the current move.</summary>
     private Vector3Int moveDir = Vector3Int.forward;
 
-    // Look-Ahead Navigation: Next move direction peeked 1 step ahead for turn anticipation
+    /// <summary>The move direction peeked one step ahead, used to blend upcoming turns early.</summary>
     private Vector3Int nextMoveDir = Vector3Int.forward;
 
+    /// <summary>The camera position interpolated along the current move.</summary>
     private Vector3 cameraPos;
+
+    /// <summary>The camera orientation, smoothed toward <see cref="targetRot"/> each frame.</summary>
     private Quaternion cameraRot = Quaternion.identity;
+
+    /// <summary>The orientation the camera is turning toward, blended from the current and next move.</summary>
     private Quaternion targetRot = Quaternion.identity;
-    private float moveProgress = 1.0f;
+
+    /// <summary>Normalized progress of the current move, from 0 at the start cell to 1 at the target.</summary>
+    private float moveProgress;
+
     /// <summary>The current flight speed rolled on activation.</summary>
     private float flySpeed;
 
     /// <summary>The current camera-turn speed derived from <see cref="flySpeed"/>.</summary>
     private float turnSpeed;
+
+    /// <summary>The current camera-roll angle, discarded to zero by each activation's Roll.</summary>
+    private float currentRollAngle;
+
+    // Lifecycle
 
     /// <summary>
     /// Performs MazeFlyer's Roll: resolves Effect Settings, discards all carried flight state,
@@ -257,121 +291,20 @@ public class MazeFlyer : EffectBase
         flySpeed = overallSpeed;
         turnSpeed = overallSpeed * standaloneSettings.TurnSpeedMultiplier;
 
-        // 1. Randomly choose one of the 4 color modes
         // The enum has four members and GetVoxelColor handles all four, so [0, 4) is the complete
         // selector domain rather than an authored subrange.
         activeColorMode = (ColorMode)Random.Range(0, 4);
 
-        // 2. Generate the grid with the selected color style
         GenerateVoxelGrid();
-
-        // 3. Place camera in a valid empty spot
         InitializeCameraPosition();
     }
 
-    /// <summary>
-    /// Populates the 16x16x16 voxel grid based on activeColorMode.
-    /// </summary>
-    private void GenerateVoxelGrid()
+    /// <summary>MazeFlyer holds no external resources, so ending an activation needs no teardown.</summary>
+    public override void OnEnd()
     {
-        float fillProbability = standaloneSettings.FillProbability;
-        float spatialScale = standaloneSettings.SpatialScale;
-        int blockSize = standaloneSettings.BlockSize;
-
-        for (int x = 0; x < GRID_SIZE; x++)
-        {
-            for (int y = 0; y < GRID_SIZE; y++)
-            {
-                for (int z = 0; z < GRID_SIZE; z++)
-                {
-                    bool isEvenIndex = (x % 2 == 0) && (y % 2 == 0) && (z % 2 == 0);
-
-                    // Random.value spans the complete probability domain; FillProbability authors its threshold.
-                    // Guaranteed even-index cells short-circuit before that roll, so they consume no
-                    // Random.value and retain the original mode-specific roll order.
-                    if (isEvenIndex || Random.value < fillProbability)
-                    {
-                        voxelGrid[x, y, z] = GetVoxelColor(x, y, z, spatialScale, blockSize);
-                    }
-                    else
-                    {
-                        voxelGrid[x, y, z] = Color.clear;
-                    }
-                }
-            }
-        }
     }
 
-    /// <summary>
-    /// Evaluates color according to the active mode selected on Start.
-    /// </summary>
-    private Color GetVoxelColor(int x, int y, int z, float spatialScale, int blockSize)
-    {
-        switch (activeColorMode)
-        {
-            case ColorMode.PureRandom:
-                // Random.value spans the complete hue-wheel domain; only saturation and value are authored settings.
-                return Color.HSVToRGB(
-                    Random.value,
-                    standaloneSettings.PureRandomSaturation,
-                    standaloneSettings.PureRandomValue);
-
-            case ColorMode.SpatialWaves:
-                float waveHue = (Mathf.Sin(x * spatialScale) + Mathf.Cos(y * spatialScale) + Mathf.Sin(z * spatialScale) + 3f) / 6f;
-                return Color.HSVToRGB(
-                    waveHue,
-                    standaloneSettings.SpatialWavesSaturation,
-                    standaloneSettings.SpatialWavesValue);
-
-            case ColorMode.BlockRegions:
-                int blockX = x / blockSize;
-                int blockY = y / blockSize;
-                int blockZ = z / blockSize;
-                int blockHash = blockX * 73 + blockY * 179 + blockZ * 283;
-
-                float baseHue = (Mathf.Abs(blockHash) % 100) / 100.0f;
-                float blockHue = (
-                    baseHue +
-                    Random.Range(standaloneSettings.BlockHueJitter.Min, standaloneSettings.BlockHueJitter.Max) +
-                    1.0f) % 1.0f;
-                return Color.HSVToRGB(
-                    blockHue,
-                    standaloneSettings.BlockRegionsSaturation,
-                    standaloneSettings.BlockRegionsValue);
-
-            case ColorMode.CuratedPalette:
-                // The inline selector spans every entry in the complete authored palette table.
-                return standaloneSettings.CuratedPalette[
-                    Random.Range(0, standaloneSettings.CuratedPalette.Length)];
-
-            default:
-                return Color.white;
-        }
-    }
-
-    private void InitializeCameraPosition()
-    {
-        for (int x = 0; x < GRID_SIZE; x++)
-        {
-            for (int y = 0; y < GRID_SIZE; y++)
-            {
-                for (int z = 0; z < GRID_SIZE; z++)
-                {
-                    if (IsCellEmpty(new Vector3Int(x, y, z)))
-                    {
-                        currentCell = new Vector3Int(x, y, z);
-                        targetCell = currentCell;
-                        cameraPos = GetCellCenter(currentCell);
-
-                        SelectNextMoveDirection();
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    public override string DebugText() => $"Maze Flyer [{activeColorMode}]";
+    // Frame loop
 
     /// <summary>Advances the camera and traces one voxel ray for every Penrose tile.</summary>
     public override void Draw()
@@ -400,6 +333,122 @@ public class MazeFlyer : EffectBase
 
             Vector3 rayDir = (cameraForward * focalLength + cameraRight * px + cameraUp * py).normalized;
             buffer[i] = TraceVoxelRay(cameraPos, rayDir, rhythm, isBeatSynced);
+        }
+    }
+
+    // Maze generation
+
+    /// <summary>Populates the voxel grid, coloring filled cells by the rolled color mode.</summary>
+    private void GenerateVoxelGrid()
+    {
+        for (int x = 0; x < VoxelGridSize; x++)
+        {
+            for (int y = 0; y < VoxelGridSize; y++)
+            {
+                for (int z = 0; z < VoxelGridSize; z++)
+                {
+                    // Cells on the even lattice (all three coordinates even) are always filled,
+                    // guaranteeing the maze a regular pillar structure to fly between.
+                    bool onEvenLattice = (x % 2 == 0) && (y % 2 == 0) && (z % 2 == 0);
+
+                    // Random.value spans the complete probability domain; FillProbability authors its
+                    // threshold. Guaranteed even-lattice cells short-circuit before that roll, so they
+                    // consume no Random.value and retain the original mode-specific roll order.
+                    if (onEvenLattice || Random.value < standaloneSettings.FillProbability)
+                    {
+                        voxelGrid[x, y, z] = GetVoxelColor(x, y, z);
+                    }
+                    else
+                    {
+                        voxelGrid[x, y, z] = Color.clear;
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>Evaluates one voxel's color according to the color mode the Roll selected.</summary>
+    private Color GetVoxelColor(int x, int y, int z)
+    {
+        switch (activeColorMode)
+        {
+            case ColorMode.PureRandom:
+                // Random.value spans the complete hue-wheel domain; only saturation and value are authored settings.
+                return Color.HSVToRGB(
+                    Random.value,
+                    standaloneSettings.PureRandomSaturation,
+                    standaloneSettings.PureRandomValue);
+
+            case ColorMode.SpatialWaves:
+                float spatialScale = standaloneSettings.SpatialScale;
+                float waveHue = (Mathf.Sin(x * spatialScale) + Mathf.Cos(y * spatialScale) + Mathf.Sin(z * spatialScale) + 3f) / 6f;
+                return Color.HSVToRGB(
+                    waveHue,
+                    standaloneSettings.SpatialWavesSaturation,
+                    standaloneSettings.SpatialWavesValue);
+
+            case ColorMode.BlockRegions:
+                int blockSize = standaloneSettings.BlockSize;
+                int blockX = x / blockSize;
+                int blockY = y / blockSize;
+                int blockZ = z / blockSize;
+
+                // Prime multipliers hash the block coordinates into a stable per-block base hue.
+                int blockHash = blockX * 73 + blockY * 179 + blockZ * 283;
+
+                float baseHue = (Mathf.Abs(blockHash) % 100) / 100.0f;
+                float blockHue = (
+                    baseHue +
+                    Random.Range(standaloneSettings.BlockHueJitter.Min, standaloneSettings.BlockHueJitter.Max) +
+                    1.0f) % 1.0f;
+                return Color.HSVToRGB(
+                    blockHue,
+                    standaloneSettings.BlockRegionsSaturation,
+                    standaloneSettings.BlockRegionsValue);
+
+            case ColorMode.CuratedPalette:
+                // The inline selector spans every entry in the complete authored palette table.
+                return standaloneSettings.CuratedPalette[
+                    Random.Range(0, standaloneSettings.CuratedPalette.Length)];
+
+            default:
+                return Color.white;
+        }
+    }
+
+    // Flight navigation
+
+    /// <summary>The six cardinal step directions a flight move can take, in authored scan order.</summary>
+    private static readonly Vector3Int[] CardinalDirections =
+    {
+        Vector3Int.forward, Vector3Int.back,
+        Vector3Int.left, Vector3Int.right,
+        Vector3Int.up, Vector3Int.down
+    };
+
+    /// <summary>
+    /// Places the camera in the first empty cell of a deterministic x, y, z scan and aims the
+    /// first move from it.
+    /// </summary>
+    private void InitializeCameraPosition()
+    {
+        for (int x = 0; x < VoxelGridSize; x++)
+        {
+            for (int y = 0; y < VoxelGridSize; y++)
+            {
+                for (int z = 0; z < VoxelGridSize; z++)
+                {
+                    if (IsCellEmpty(new Vector3Int(x, y, z)))
+                    {
+                        currentCell = new Vector3Int(x, y, z);
+                        targetCell = currentCell;
+                        cameraPos = GetCellCenter(currentCell);
+
+                        SelectNextMoveDirection();
+                        return;
+                    }
+                }
+            }
         }
     }
 
@@ -439,9 +488,9 @@ public class MazeFlyer : EffectBase
             targetRot = Quaternion.LookRotation(blendedForward);
         }
 
-        // ========================================================================
-        // FILL EVENT: DYNAMIC CAMERA ROLL (Continuous with smoothing)
-        // ========================================================================
+        // An active synced Fill pins the camera roll at the authored angle; otherwise the roll
+        // eases back to zero at the mode's return speed. The Fill response's authored design is
+        // unresolved — the FillCameraRollAngle remarks preserve the intent trail.
         if (beatManager.IsSynced && beatManager.Fill.Active)
         {
             currentRollAngle = SyncSettings.FillCameraRollAngle;
@@ -465,10 +514,9 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private void SelectNextMoveDirection()
     {
-        // 1. Advance target cell along current move direction
+        // Advance the target cell along the current move direction, then look ahead from it to
+        // predict the turn after this one.
         targetCell = currentCell + moveDir;
-
-        // 2. Look ahead from targetCell to predict the turn after this one
         List<Vector3Int> nextOpenDirs = GetOpenDirectionsFrom(targetCell);
 
         if (nextOpenDirs.Count == 0)
@@ -479,7 +527,9 @@ public class MazeFlyer : EffectBase
 
         bool canContinueAhead = nextOpenDirs.Contains(moveDir);
 
-        // Random.value spans the complete probability domain; DirectionChoiceThreshold authors its split.
+        // Random.value spans the complete probability domain; DirectionChoiceThreshold authors its
+        // split. The short-circuit is load-bearing: the roll is consumed only when continuing ahead
+        // is possible, so restructuring this condition would change the Standalone look.
         if (canContinueAhead &&
             (Random.value > standaloneSettings.DirectionChoiceThreshold || nextOpenDirs.Count == 1))
         {
@@ -502,18 +552,12 @@ public class MazeFlyer : EffectBase
         }
     }
 
+    /// <summary>Collects the cardinal directions whose neighboring cell is empty, in scan order.</summary>
     private List<Vector3Int> GetOpenDirectionsFrom(Vector3Int cell)
     {
         List<Vector3Int> openDirs = new List<Vector3Int>();
 
-        Vector3Int[] neighbors = new Vector3Int[]
-        {
-            Vector3Int.forward, Vector3Int.back,
-            Vector3Int.left, Vector3Int.right,
-            Vector3Int.up, Vector3Int.down
-        };
-
-        foreach (var dir in neighbors)
+        foreach (var dir in CardinalDirections)
         {
             if (IsCellEmpty(cell + dir))
             {
@@ -524,22 +568,35 @@ public class MazeFlyer : EffectBase
         return openDirs;
     }
 
+    /// <summary>Reports whether the cell is empty, wrapping coordinates toroidally into the grid.</summary>
     private bool IsCellEmpty(Vector3Int cell)
     {
-        int vx = PositiveModulo(cell.x, GRID_SIZE);
-        int vy = PositiveModulo(cell.y, GRID_SIZE);
-        int vz = PositiveModulo(cell.z, GRID_SIZE);
+        int vx = PositiveModulo(cell.x, VoxelGridSize);
+        int vy = PositiveModulo(cell.y, VoxelGridSize);
+        int vz = PositiveModulo(cell.z, VoxelGridSize);
 
         return voxelGrid[vx, vy, vz].a == 0.0f;
     }
 
-    private Vector3 GetCellCenter(Vector3Int cell)
+    /// <summary>Converts a cell coordinate to the world-space center of that cell.</summary>
+    private static Vector3 GetCellCenter(Vector3Int cell)
     {
         return new Vector3(cell.x + 0.5f, cell.y + 0.5f, cell.z + 0.5f);
     }
 
+    // Voxel ray tracing
+
+    /// <summary>The grid axis a ray crossed when it entered the voxel it hit.</summary>
+    private enum Axis
+    {
+        X,
+        Y,
+        Z
+    }
+
     /// <summary>
-    /// Executes 3D DDA voxel ray stepping with audio-driven spatial recoil.
+    /// Executes 3D DDA voxel ray stepping with audio-driven spatial recoil, returning the shaded,
+    /// fogged color of the first filled voxel or black past the fog range.
     /// </summary>
     private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir, float rhythm, bool isBeatSynced)
     {
@@ -569,7 +626,10 @@ public class MazeFlyer : EffectBase
         float sideDistZ = (stepZ > 0) ? (mapZ + 1.0f - currentPos.z) * deltaDistZ : (currentPos.z - mapZ) * deltaDistZ;
 
         float distanceTraveled = 0f;
-        int hitSide = 0;
+
+        // A ray that starts inside a filled voxel (possible when the pulse displaces the origin)
+        // shades as an X-axis face.
+        Axis hitAxis = Axis.X;
 
         // Dynamic max fog distance modulation on beats
         float currentMaxDist =
@@ -577,37 +637,26 @@ public class MazeFlyer : EffectBase
 
         while (distanceTraveled < currentMaxDist)
         {
-            int vx = PositiveModulo(mapX, GRID_SIZE);
-            int vy = PositiveModulo(mapY, GRID_SIZE);
-            int vz = PositiveModulo(mapZ, GRID_SIZE);
+            int vx = PositiveModulo(mapX, VoxelGridSize);
+            int vy = PositiveModulo(mapY, VoxelGridSize);
+            int vz = PositiveModulo(mapZ, VoxelGridSize);
 
             Color voxelColor = voxelGrid[vx, vy, vz];
 
             if (voxelColor.a > 0.0f)
             {
-                // Gate Drop and Fill recoloring using the boolean flag
-                if (isBeatSynced && (beatManager.Drop.Active || beatManager.Fill.Active))
+                if (isBeatSynced)
                 {
-                    int checker = (vx + vy + vz) % SyncSettings.EventCheckerModulo;
-                    if (checker == 0)
-                    {
-                        var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
-                            .Remap(0f, 2, 0f, 1f, clamp: true);
-
-                        // Fill wins when both events are active, matching the original
-                        // apply order (Drop first, Fill overwrote it).
-                        voxelColor = beatManager.Fill.Active
-                            ? Color.HSVToRGB(t, 1f, 1f)
-                            : Color.HSVToRGB(0f, 0f, t);
-                    }
+                    voxelColor = ApplySyncedEventRecolor(voxelColor, vx, vy, vz);
                 }
 
                 // Shading calculations with audio peak boost
-                float baseShade = hitSide == 0
-                    ? standaloneSettings.XAxisFaceShade
-                    : (hitSide == 1
-                        ? standaloneSettings.YAxisFaceShade
-                        : standaloneSettings.ZAxisFaceShade);
+                float baseShade = hitAxis switch
+                {
+                    Axis.X => standaloneSettings.XAxisFaceShade,
+                    Axis.Y => standaloneSettings.YAxisFaceShade,
+                    _ => standaloneSettings.ZAxisFaceShade,
+                };
                 float shade = baseShade + (rhythm * SyncSettings.PeakBrightnessBoost);
                 float fog = 1.0f - Mathf.Clamp01(distanceTraveled / currentMaxDist);
 
@@ -624,26 +673,53 @@ public class MazeFlyer : EffectBase
                 distanceTraveled = sideDistX;
                 sideDistX += deltaDistX;
                 mapX += stepX;
-                hitSide = 0;
+                hitAxis = Axis.X;
             }
             else if (sideDistY < sideDistZ)
             {
                 distanceTraveled = sideDistY;
                 sideDistY += deltaDistY;
                 mapY += stepY;
-                hitSide = 1;
+                hitAxis = Axis.Y;
             }
             else
             {
                 distanceTraveled = sideDistZ;
                 sideDistZ += deltaDistZ;
                 mapZ += stepZ;
-                hitSide = 2;
+                hitAxis = Axis.Z;
             }
         }
 
         return Color.black;
     }
+
+    /// <summary>
+    /// Recolors one checker-selected slice of hit voxels while a synced Fill or Drop is active:
+    /// Drop flashes a grayscale pulse and Fill flashes a hue-cycling pulse. Fill wins when both
+    /// events are active, matching the original apply order (Drop first, Fill overwrote it).
+    /// </summary>
+    private Color ApplySyncedEventRecolor(Color voxelColor, int vx, int vy, int vz)
+    {
+        if (!beatManager.Drop.Active && !beatManager.Fill.Active)
+        {
+            return voxelColor;
+        }
+
+        if ((vx + vy + vz) % SyncSettings.EventCheckerModulo != 0)
+        {
+            return voxelColor;
+        }
+
+        var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
+            .Remap(0f, 2, 0f, 1f, clamp: true);
+
+        return beatManager.Fill.Active
+            ? Color.HSVToRGB(t, 1f, 1f)
+            : Color.HSVToRGB(0f, 0f, t);
+    }
+
+    // Math helpers
 
     /// <summary>
     /// Clamps a near-zero ray component to a small epsilon while preserving its sign, so DDA
@@ -659,14 +735,11 @@ public class MazeFlyer : EffectBase
         return component < 0f ? -1e-6f : 1e-6f;
     }
 
+    /// <summary>Wraps a coordinate into [0, length), which is what makes the voxel grid toroidal.</summary>
     private static int PositiveModulo(int value, int length)
     {
         int result = value % length;
         return result < 0 ? result + length : result;
-    }
-
-    public override void OnEnd()
-    {
     }
 }
 
