@@ -6,18 +6,28 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// Renders a first-person flight through a randomized voxel maze onto the Penrose tile buffer.
 /// Each activation Rolls a fresh maze and flight; each frame advances the camera one step along
-/// the maze path, then traces one voxel ray per tile (a 3D DDA over a toroidal 16-cubed grid).
+/// the maze path, then traces four rotated-grid voxel rays per tile (a 3D DDA over a toroidal
+/// 16-cubed grid) and averages them into the tile's color.
 /// </summary>
 [EffectSyncSettings(typeof(MazeFlyerSyncSettingsAsset))]
 public class MazeFlyer : EffectBase
 {
     // Standalone Defaults
 
-    /// <summary>Authored inclusive minimum for the per-activation integer flight-speed roll.</summary>
-    private const int StandaloneOverallSpeedMin = 1;
+    /// <summary>
+    /// Authored inclusive minimum for the per-activation flight-speed roll, in voxel cells per
+    /// second.
+    /// </summary>
+    private const float StandaloneOverallSpeedMin = 1.0f;
 
-    /// <summary>Authored exclusive maximum for the per-activation integer flight-speed roll.</summary>
-    private const int StandaloneOverallSpeedMaxExclusive = 5;
+    /// <summary>
+    /// Authored inclusive maximum for the per-activation flight-speed roll, in voxel cells per
+    /// second. The continuous roll replaced the original integer roll whose top speed of 4 read
+    /// as streaking: corridor walls pass ~0.5 units from the camera, so a wall feature crossed
+    /// the whole ~75-degree view in ~0.16 s. Near 2.25 the fastest rolls stay brisk but readable.
+    /// Governs the Standalone roll only; synced energy-driven speed is planned separately.
+    /// </summary>
+    private const float StandaloneOverallSpeedMax = 2.25f;
 
     /// <summary>Authored multiplier deriving camera turn speed from the rolled flight speed.</summary>
     private const float StandaloneTurnSpeedMultiplier = 2.5f;
@@ -82,8 +92,12 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private const float StandaloneDirectionChoiceThreshold = 0.35f;
 
-    /// <summary>Authored maximum ray distance and baseline fog range.</summary>
-    private const float StandaloneMaxRayDistance = 20.0f;
+    /// <summary>
+    /// Authored maximum ray distance and baseline fog range. Pulled in from 20 so the fog curve
+    /// concentrates on distances rays actually hit (most land within 2-6 units); the far corridor
+    /// goes black sooner in exchange for visible depth falloff in the midrange.
+    /// </summary>
+    private const float StandaloneMaxRayDistance = 14.0f;
 
     /// <summary>Authored shade multiplier for voxel faces hit across the X axis.</summary>
     private const float StandaloneXAxisFaceShade = 0.75f;
@@ -93,6 +107,47 @@ public class MazeFlyer : EffectBase
 
     /// <summary>Authored shade multiplier for voxel faces hit across the Z axis.</summary>
     private const float StandaloneZAxisFaceShade = 0.60f;
+
+    /// <summary>
+    /// Authored density of the squared-exponential fog curve over the normalized ray distance.
+    /// The squared curve keeps near walls bright and crushes the sub-tile far field toward black,
+    /// unlike the linear fade it replaced, which compressed midrange contrast. First-audition
+    /// value pending wall judgment.
+    /// </summary>
+    private const float StandaloneFogDensity = 2.5f;
+
+    /// <summary>
+    /// Authored on-wall thickness of voxel edge lines, in tile pitches. The band converts to
+    /// voxel-space width per hit (thickness * distance / focal length), so lines render at
+    /// constant thickness at every depth: near faces get crisp lines instead of swollen bands,
+    /// and far faces keep a band wide enough to register on a point-sampled tile. Edge lines
+    /// draw the voxel lattice onto wall faces so corridor geometry reads at the wall's 900-tile
+    /// resolution. First-audition value pending wall judgment.
+    /// </summary>
+    private const float StandaloneEdgeLineThicknessTiles = 0.7f;
+
+    /// <summary>
+    /// Authored shade multiplier at the very edge of a voxel face, ramping linearly back to 1
+    /// across <see cref="StandaloneEdgeLineThicknessTiles"/>. First-audition value pending wall
+    /// judgment.
+    /// </summary>
+    private const float StandaloneEdgeLineShade = 0.25f;
+
+    /// <summary>
+    /// Authored scale of the rotated-grid supersample pattern, in tile-center units; 0.7 spans
+    /// roughly one tile pitch, so the four rays cover the tile's footprint rather than its center
+    /// point. Smaller sharpens toward point sampling; larger blurs across neighboring tiles.
+    /// First-audition value pending wall judgment.
+    /// </summary>
+    private const float StandaloneSampleSpread = 0.7f;
+
+    /// <summary>
+    /// Authored minimum HSV value for colors rolled from the shared palette. Palettes may carry
+    /// dark entries, and face shading and fog only multiply downward from the rolled color, so a
+    /// dark roll reads as an unlit wall. The floor lifts value while keeping the entry's hue and
+    /// saturation. First-audition value pending wall judgment.
+    /// </summary>
+    private const float StandaloneSharedPaletteMinValue = 0.8f;
 
     // Sync Defaults
 
@@ -145,7 +200,7 @@ public class MazeFlyer : EffectBase
     public static MazeFlyerStandaloneSettings StandaloneSettings => new MazeFlyerStandaloneSettings
     {
         OverallSpeedMin = StandaloneOverallSpeedMin,
-        OverallSpeedMaxExclusive = StandaloneOverallSpeedMaxExclusive,
+        OverallSpeedMax = StandaloneOverallSpeedMax,
         TurnSpeedMultiplier = StandaloneTurnSpeedMultiplier,
         FillProbability = StandaloneFillProbability,
         SpatialScale = StandaloneSpatialScale,
@@ -166,6 +221,11 @@ public class MazeFlyer : EffectBase
         XAxisFaceShade = StandaloneXAxisFaceShade,
         YAxisFaceShade = StandaloneYAxisFaceShade,
         ZAxisFaceShade = StandaloneZAxisFaceShade,
+        FogDensity = StandaloneFogDensity,
+        EdgeLineThicknessTiles = StandaloneEdgeLineThicknessTiles,
+        EdgeLineShade = StandaloneEdgeLineShade,
+        SampleSpread = StandaloneSampleSpread,
+        SharedPaletteMinValue = StandaloneSharedPaletteMinValue,
     };
 
     /// <summary>Resolves a fresh copy of MazeFlyer's file-local Sync Defaults.</summary>
@@ -203,7 +263,7 @@ public class MazeFlyer : EffectBase
     /// <summary>The voxel coloring styles one activation can roll.</summary>
     private enum ColorMode
     {
-        /// <summary>Every voxel rolls an independent hue.</summary>
+        /// <summary>Every vertical column rolls an independent hue.</summary>
         PureRandom,
 
         /// <summary>Hue follows a smooth sine field over voxel coordinates.</summary>
@@ -212,15 +272,27 @@ public class MazeFlyer : EffectBase
         /// <summary>Voxel blocks share a hashed base hue with per-voxel jitter.</summary>
         BlockRegions,
 
-        /// <summary>Every voxel samples the authored curated palette.</summary>
-        CuratedPalette
+        /// <summary>Every vertical column samples the authored curated palette.</summary>
+        CuratedPalette,
+
+        /// <summary>Every vertical column rolls a position in the shared animated show palette.</summary>
+        SharedPalette
     }
 
-    /// <summary>The color mode selected from the enum's complete four-member domain on activation.</summary>
+    /// <summary>The color mode selected from the enum's complete five-member domain on activation.</summary>
     private ColorMode activeColorMode;
 
     /// <summary>Voxel colors of the maze. Color.clear (alpha 0) marks an empty voxel.</summary>
     private Color[,,] voxelGrid = new Color[VoxelGridSize, VoxelGridSize, VoxelGridSize];
+
+    /// <summary>
+    /// Column colors rolled per activation for the column-unit color modes (Pure Random, Curated
+    /// Palette, and Shared Palette), indexed by (x, z). The unit of color is the vertical column —
+    /// a pillar and the fill stacked above it — so color boundaries align with the maze's
+    /// structure and a pillar reads as one object on the wall instead of a stack of unrelated
+    /// hues.
+    /// </summary>
+    private readonly Color[,] columnColors = new Color[VoxelGridSize, VoxelGridSize];
 
     // Flight state
 
@@ -285,15 +357,15 @@ public class MazeFlyer : EffectBase
         // authored Waveform-selection subrange to expose as Effect Settings.
         waveform = waveforms.Random();
 
-        float overallSpeed = (float)Random.Range(
+        float overallSpeed = Random.Range(
             standaloneSettings.OverallSpeedMin,
-            standaloneSettings.OverallSpeedMaxExclusive);
+            standaloneSettings.OverallSpeedMax);
         flySpeed = overallSpeed;
         turnSpeed = overallSpeed * standaloneSettings.TurnSpeedMultiplier;
 
-        // The enum has four members and GetVoxelColor handles all four, so [0, 4) is the complete
+        // The enum has five members and GetVoxelColor handles all five, so [0, 5) is the complete
         // selector domain rather than an authored subrange.
-        activeColorMode = (ColorMode)Random.Range(0, 4);
+        activeColorMode = (ColorMode)Random.Range(0, 5);
 
         GenerateVoxelGrid();
         InitializeCameraPosition();
@@ -306,7 +378,24 @@ public class MazeFlyer : EffectBase
 
     // Frame loop
 
-    /// <summary>Advances the camera and traces one voxel ray for every Penrose tile.</summary>
+    /// <summary>
+    /// Rotated-grid supersample offsets in tile-pitch units, applied around each tile center and
+    /// scaled by the authored sample spread. Four rays per tile turn the point sample into an
+    /// area sample: edges antialias, and sub-tile features fade with distance instead of popping
+    /// in and out as the camera moves.
+    /// </summary>
+    private static readonly Vector2[] RaySampleOffsets =
+    {
+        new Vector2(0.125f, 0.375f),
+        new Vector2(0.375f, -0.125f),
+        new Vector2(-0.125f, -0.375f),
+        new Vector2(-0.375f, 0.125f)
+    };
+
+    /// <summary>
+    /// Advances the camera, then traces four rotated-grid voxel rays for every Penrose tile and
+    /// averages them into the tile's color.
+    /// </summary>
     public override void Draw()
     {
         UpdateCameraNavigation(effectDelta);
@@ -325,14 +414,28 @@ public class MazeFlyer : EffectBase
         Vector3 cameraUp = cameraRot * Vector3.up;
 
         float focalLength = standaloneSettings.FocalLength;
+        float sampleSpread = standaloneSettings.SampleSpread;
+        float sampleWeight = 1.0f / RaySampleOffsets.Length;
 
         for (int i = 0; i < buffer.Length; i++)
         {
             float px = tiles[i].center.x;
             float py = tiles[i].center.y;
 
-            Vector3 rayDir = (cameraForward * focalLength + cameraRight * px + cameraUp * py).normalized;
-            buffer[i] = TraceVoxelRay(cameraPos, rayDir, rhythm, isBeatSynced);
+            float r = 0f, g = 0f, b = 0f;
+            foreach (Vector2 offset in RaySampleOffsets)
+            {
+                float sx = px + (offset.x * sampleSpread);
+                float sy = py + (offset.y * sampleSpread);
+
+                Vector3 rayDir = (cameraForward * focalLength + cameraRight * sx + cameraUp * sy).normalized;
+                Color sample = TraceVoxelRay(cameraPos, rayDir, rhythm, isBeatSynced);
+                r += sample.r;
+                g += sample.g;
+                b += sample.b;
+            }
+
+            buffer[i] = new Color(r * sampleWeight, g * sampleWeight, b * sampleWeight, 1.0f);
         }
     }
 
@@ -341,6 +444,18 @@ public class MazeFlyer : EffectBase
     /// <summary>Populates the voxel grid, coloring filled cells by the rolled color mode.</summary>
     private void GenerateVoxelGrid()
     {
+        // The column-unit modes roll their colors up front, one per vertical (x, z) column.
+        if (activeColorMode is ColorMode.PureRandom or ColorMode.CuratedPalette or ColorMode.SharedPalette)
+        {
+            for (int x = 0; x < VoxelGridSize; x++)
+            {
+                for (int z = 0; z < VoxelGridSize; z++)
+                {
+                    columnColors[x, z] = RollColumnColor();
+                }
+            }
+        }
+
         for (int x = 0; x < VoxelGridSize; x++)
         {
             for (int y = 0; y < VoxelGridSize; y++)
@@ -373,11 +488,9 @@ public class MazeFlyer : EffectBase
         switch (activeColorMode)
         {
             case ColorMode.PureRandom:
-                // Random.value spans the complete hue-wheel domain; only saturation and value are authored settings.
-                return Color.HSVToRGB(
-                    Random.value,
-                    standaloneSettings.PureRandomSaturation,
-                    standaloneSettings.PureRandomValue);
+            case ColorMode.CuratedPalette:
+            case ColorMode.SharedPalette:
+                return columnColors[x, z];
 
             case ColorMode.SpatialWaves:
                 float spatialScale = standaloneSettings.SpatialScale;
@@ -406,13 +519,44 @@ public class MazeFlyer : EffectBase
                     standaloneSettings.BlockRegionsSaturation,
                     standaloneSettings.BlockRegionsValue);
 
-            case ColorMode.CuratedPalette:
+            default:
+                return Color.white;
+        }
+    }
+
+    /// <summary>
+    /// Rolls one column color for the column-unit modes (Pure Random, Curated Palette, Shared
+    /// Palette). The color itself is fixed here at Roll time, so an activation keeps the colors
+    /// it rolled for its whole flight.
+    /// </summary>
+    private Color RollColumnColor()
+    {
+        switch (activeColorMode)
+        {
+            case ColorMode.PureRandom:
+                // Random.value spans the complete hue-wheel domain; only saturation and value are authored settings.
+                return Color.HSVToRGB(
+                    Random.value,
+                    standaloneSettings.PureRandomSaturation,
+                    standaloneSettings.PureRandomValue);
+
+            case ColorMode.SharedPalette:
+            {
+                // Random.value rolls a blended position across the shared animated show palette.
+                // The rolled color's HSV value is lifted to the authored floor — face shading and
+                // fog only multiply downward, so a dark palette entry would read as an unlit wall.
+                Color rolled = APalette.read(Random.value, true);
+                Color.RGBToHSV(rolled, out float hue, out float saturation, out float value);
+                return Color.HSVToRGB(
+                    hue,
+                    saturation,
+                    Mathf.Max(value, standaloneSettings.SharedPaletteMinValue));
+            }
+
+            default:
                 // The inline selector spans every entry in the complete authored palette table.
                 return standaloneSettings.CuratedPalette[
                     Random.Range(0, standaloneSettings.CuratedPalette.Length)];
-
-            default:
-                return Color.white;
         }
     }
 
@@ -595,8 +739,9 @@ public class MazeFlyer : EffectBase
     }
 
     /// <summary>
-    /// Executes 3D DDA voxel ray stepping with audio-driven spatial recoil, returning the shaded,
-    /// fogged color of the first filled voxel or black past the fog range.
+    /// Executes 3D DDA voxel ray stepping with audio-driven spatial recoil, returning the color of
+    /// the first filled voxel — face-shaded, edge-darkened, and squared-exponentially fogged — or
+    /// black past the fog range.
     /// </summary>
     private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir, float rhythm, bool isBeatSynced)
     {
@@ -658,12 +803,21 @@ public class MazeFlyer : EffectBase
                     _ => standaloneSettings.ZAxisFaceShade,
                 };
                 float shade = baseShade + (rhythm * SyncSettings.PeakBrightnessBoost);
-                float fog = 1.0f - Mathf.Clamp01(distanceTraveled / currentMaxDist);
+
+                // Squared-exponential fog over the normalized ray distance: near walls stay
+                // bright, the sub-tile far field crushes toward black. At the range cutoff the
+                // curve is already near zero, so the black past-range return stays seamless.
+                float normalizedDistance = distanceTraveled / currentMaxDist;
+                float fogExponent = standaloneSettings.FogDensity * normalizedDistance;
+                float fog = Mathf.Exp(-fogExponent * fogExponent);
+
+                float edge = EdgeLineFactor(pulsedOrigin + (rayDir * distanceTraveled), hitAxis, distanceTraveled);
+                float brightness = shade * fog * edge;
 
                 return new Color(
-                    Mathf.Clamp01(voxelColor.r * shade * fog),
-                    Mathf.Clamp01(voxelColor.g * shade * fog),
-                    Mathf.Clamp01(voxelColor.b * shade * fog),
+                    Mathf.Clamp01(voxelColor.r * brightness),
+                    Mathf.Clamp01(voxelColor.g * brightness),
+                    Mathf.Clamp01(voxelColor.b * brightness),
                     1.0f
                 );
             }
@@ -692,6 +846,47 @@ public class MazeFlyer : EffectBase
         }
 
         return Color.black;
+    }
+
+    /// <summary>
+    /// Computes the edge-darkening multiplier for a ray hit: 1 across the face interior, ramping
+    /// down to the authored edge shade near any voxel edge. The band's voxel-space width scales
+    /// with hit distance so the rendered line keeps a constant on-wall thickness in tiles at
+    /// every depth. Drawing the voxel lattice onto wall faces keeps corridor geometry legible at
+    /// the wall's 900-tile resolution, where a face only reads as structure when contrast lives
+    /// at its boundaries.
+    /// </summary>
+    private float EdgeLineFactor(Vector3 hitPos, Axis hitAxis, float hitDistance)
+    {
+        // Constant on-wall thickness: one tile pitch at the focal plane projects from a
+        // voxel-space width of distance / focalLength. Capped at half a face span, where the
+        // bands from opposite edges meet.
+        float bandWidth = Mathf.Min(
+            standaloneSettings.EdgeLineThicknessTiles * hitDistance / standaloneSettings.FocalLength,
+            0.5f);
+        if (bandWidth <= 0.0f)
+        {
+            return 1.0f;
+        }
+
+        // The two coordinates spanning the hit face; the third axis is the face plane itself.
+        (float u, float v) = hitAxis switch
+        {
+            Axis.X => (hitPos.y, hitPos.z),
+            Axis.Y => (hitPos.x, hitPos.z),
+            _ => (hitPos.x, hitPos.y),
+        };
+
+        float uFrac = Mathf.Repeat(u, 1.0f);
+        float vFrac = Mathf.Repeat(v, 1.0f);
+        float edgeDistance = Mathf.Min(
+            Mathf.Min(uFrac, 1.0f - uFrac),
+            Mathf.Min(vFrac, 1.0f - vFrac));
+
+        return Mathf.Lerp(
+            standaloneSettings.EdgeLineShade,
+            1.0f,
+            Mathf.Clamp01(edgeDistance / bandWidth));
     }
 
     /// <summary>
@@ -746,11 +941,11 @@ public class MazeFlyer : EffectBase
 /// <summary>The fixed Standalone Settings resolved from MazeFlyer's file-local Standalone Defaults.</summary>
 public sealed class MazeFlyerStandaloneSettings
 {
-    /// <summary>Inclusive minimum for the per-activation integer flight-speed roll.</summary>
-    public int OverallSpeedMin;
+    /// <summary>Inclusive minimum for the per-activation flight-speed roll, in voxel cells per second.</summary>
+    public float OverallSpeedMin;
 
-    /// <summary>Exclusive maximum for the per-activation integer flight-speed roll.</summary>
-    public int OverallSpeedMaxExclusive;
+    /// <summary>Inclusive maximum for the per-activation flight-speed roll, in voxel cells per second.</summary>
+    public float OverallSpeedMax;
 
     /// <summary>Multiplier deriving camera turn speed from the rolled flight speed.</summary>
     public float TurnSpeedMultiplier;
@@ -811,6 +1006,21 @@ public sealed class MazeFlyerStandaloneSettings
 
     /// <summary>Shade multiplier for voxel faces hit across the Z axis.</summary>
     public float ZAxisFaceShade;
+
+    /// <summary>Density of the squared-exponential fog curve over the normalized ray distance.</summary>
+    public float FogDensity;
+
+    /// <summary>On-wall thickness of voxel edge lines, in tile pitches, held constant across depth.</summary>
+    public float EdgeLineThicknessTiles;
+
+    /// <summary>Shade multiplier at the very edge of a voxel face, ramping back to 1 across <see cref="EdgeLineThicknessTiles"/>.</summary>
+    public float EdgeLineShade;
+
+    /// <summary>Scale of the rotated-grid supersample pattern, in tile-center units.</summary>
+    public float SampleSpread;
+
+    /// <summary>Minimum HSV value for colors rolled from the shared palette.</summary>
+    public float SharedPaletteMinValue;
 }
 
 /// <summary>The saved musical-response settings used by MazeFlyer in Synced Mode.</summary>
