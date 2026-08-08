@@ -273,18 +273,6 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private const float SyncDropSpinSpeed = 90f;
 
-    /// <summary>
-    /// Authored modulo selecting one quarter of hit voxels for the retired event recoloring —
-    /// currently unwired, retained pending the Fill edge inversion's wall check.
-    /// </summary>
-    private const int SyncEventCheckerModulo = 4;
-
-    /// <summary>
-    /// Authored effect-time multiplier driving the retired event recoloring pulses — currently
-    /// unwired, retained pending the Fill edge inversion's wall check.
-    /// </summary>
-    private const float SyncEventPulseSpeed = 4f;
-
     // Effect Settings resolution
 
     /// <summary>
@@ -341,8 +329,6 @@ public class MazeFlyer : EffectBase
         DropSpinSpeed = SyncDropSpinSpeed,
         FillEdgeInversion = SyncFillEdgeInversion,
         FillLineGlow = SyncFillLineGlow,
-        EventCheckerModulo = SyncEventCheckerModulo,
-        EventPulseSpeed = SyncEventPulseSpeed,
     };
 
     /// <summary>The Standalone Settings fixed for the current activation.</summary>
@@ -1314,37 +1300,6 @@ public class MazeFlyer : EffectBase
         return Mathf.Lerp(normal, inverted, frame.EdgeInversion);
     }
 
-    /// <summary>
-    /// Recolors one checker-selected slice of hit voxels while a synced Fill or Drop is active:
-    /// Drop flashes a grayscale pulse and Fill flashes a hue-cycling pulse. Fill wins when both
-    /// events are active, matching the original apply order (Drop first, Fill overwrote it).
-    /// </summary>
-    /// <remarks>
-    /// Currently unwired: the Drop response moved to the stop-and-launch speed envelope and the
-    /// Fill response to the edge inversion. Retained pending the edge inversion's wall check —
-    /// if the inversion fails there, the grayscale flash moves over to Fill; otherwise this
-    /// mechanism and its two settings (EventCheckerModulo, EventPulseSpeed) get deleted.
-    /// </remarks>
-    private Color ApplySyncedEventRecolor(Color voxelColor, int vx, int vy, int vz)
-    {
-        if (!beatManager.Drop.Active && !beatManager.Fill.Active)
-        {
-            return voxelColor;
-        }
-
-        if ((vx + vy + vz) % SyncSettings.EventCheckerModulo != 0)
-        {
-            return voxelColor;
-        }
-
-        var t = Mathf.PingPong(effectTime * SyncSettings.EventPulseSpeed, 2)
-            .Remap(0f, 2, 0f, 1f, clamp: true);
-
-        return beatManager.Fill.Active
-            ? Color.HSVToRGB(t, 1f, 1f)
-            : Color.HSVToRGB(0f, 0f, t);
-    }
-
     // Math helpers
 
     /// <summary>
@@ -1595,14 +1550,6 @@ public sealed class MazeFlyerSyncSettings
     [Min(0f)]
     public float DropSpinSpeed;
 
-    /// <summary>Modulo selecting hit voxels for synced Fill and Drop recoloring.</summary>
-    [Min(1)]
-    public int EventCheckerModulo;
-
-    /// <summary>Effect-time multiplier driving synced Fill and Drop recoloring pulses.</summary>
-    [Min(0f)]
-    public float EventPulseSpeed;
-
     /// <summary>Copies every MazeFlyer Sync Setting from another value.</summary>
     public void CopyFrom(MazeFlyerSyncSettings source)
     {
@@ -1627,7 +1574,5 @@ public sealed class MazeFlyerSyncSettings
         DropSpinSpeed = source.DropSpinSpeed;
         FillEdgeInversion = source.FillEdgeInversion;
         FillLineGlow = source.FillLineGlow;
-        EventCheckerModulo = source.EventCheckerModulo;
-        EventPulseSpeed = source.EventPulseSpeed;
     }
 }

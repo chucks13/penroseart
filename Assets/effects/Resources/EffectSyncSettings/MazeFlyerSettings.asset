@@ -30,5 +30,3 @@ MonoBehaviour:
     DropSpinSpeed: 90
     FillEdgeInversion: 1
     FillLineGlow: 2
-    EventCheckerModulo: 4
-    EventPulseSpeed: 4
