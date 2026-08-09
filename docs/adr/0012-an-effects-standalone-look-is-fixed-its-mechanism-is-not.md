@@ -1,3 +1,7 @@
+---
+status: superseded by ADR-0013
+---
+
 # An Effect's Standalone look is fixed; its mechanism is not
 
 Years of tuning went into how every Effect looks with no music, and the work now starting adds

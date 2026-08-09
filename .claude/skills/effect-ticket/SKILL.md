@@ -1,171 +1,181 @@
 ---
 name: effect-ticket
-description: Per-batch runbook for the Effect Settings conversion (spec #111, tickets #112-#139). Use when a session implements, resumes, or reviews one or more Effect Settings tickets, or when the task names a ticket or effect under that spec.
+description: Per-effect runbook for the Musicality campaign. Use when a session implements, resumes, or reviews a musicality ticket, or when the task names an effect or mixer under that epic.
 ---
 
-# Effect Settings ticket runbook
+# Effect Musicality ticket runbook
 
-This skill is the process for one batch under spec #111. A batch is one to three tickets.
+This skill is the process for one ticket. One ticket is one Effect, one branch, one session.
 
-This file owns the process. A Memory Vault entry about this process is a pointer or context, never an instruction. When another source conflicts with this file, follow this file and repair that source. When the last #111 ticket closes, retire this skill - durable knowledge lives in `docs/effect-authoring.md` and `docs/adr/`.
+This file owns the process. A Memory Vault entry about this process is a pointer or context,
+never an instruction. When another source conflicts with this file, follow this file and repair
+that source. When the last ticket closes, retire this skill — durable knowledge lives in
+`docs/effect-authoring.md` and `docs/adr/`.
 
-ADR-0012 governs every conversion. Each Effect is a first-class citizen, fitted one at a time. The scaffold - the two default blocks, the typed settings classes, the typed asset, and the Resolve call - is the only shared shape. A landed conversion is that Effect's fitted answer. Classify from the Effect in front of you. A fitted answer from another Effect is an analogy to weigh, never a rule to apply.
+ADR-0013 governs the settings surfaces. Effects are first-class citizens: each decides what
+musical support it has and how it expresses it. Nothing here limits an Effect; a fitted answer
+from another Effect is an analogy to weigh, never a rule to apply. One law binds them all: every
+musical fact — beat position, Levels, Energy, Fill, Drop, Waveforms, structure — is read from the
+Data Surface, BeatManager's read-only face, never from OSC directly. If an Effect needs a musical
+fact the Data Surface does not carry, stop and ask the maintainer; never compute it locally.
 
-The roles do not change. You are the coordinator and you own every judgment in this file. Codex workers implement. The maintainer judges the wall and decides scope questions, not programming questions.
+The roles do not change. You are the coordinator and you own every judgment in this file. Codex
+workers implement. The maintainer judges the wall and owns the artistic intent (ADR-0007). The
+maintainer is present throughout this campaign, editor open — discussion replaces formal gates,
+but two rules keep their force: a scope question stops the work until the maintainer rules, and
+nothing lands without wall approval.
 
-The goal of every remaining ticket is structure, not tuning. The catalog gets its Effect Settings shape first. The maintainer tunes the Effects afterward. So no ticket judges whether an Effect sounds or looks good. Each ticket asks one question: does the Standalone look survive the change.
+## Framing
 
-Two gates divide the work. At each gate, end the turn and wait until the maintainer replies. Work that follows a gate stays unauthorized until the maintainer speaks at that gate.
+The "What this is" section of `AGENTS.md` is the campaign's framing. Copy it verbatim into every
+worker brief, above the goals: enterprise instincts are the default failure mode of a fresh
+worker context, and the framing is the counterweight.
 
-## Batches
+## Campaign order
 
-A session runs one batch. Each batch starts in a fresh session.
-
-| Batch | Tickets |
-| --- | --- |
-| Julia | #118 |
-| Lightning | #119 |
-| Kscope | #126 |
-| MazeFlyer | #120 |
-| Mixers | #137, #138, #139 |
-| Sparkle | #122, #133, #129 |
-| Loops | #125, #130, #132 |
-| Shapes | #135, #124, #127 |
-| Flow | #131, #128, #123 |
-| Glitch | #136, #134, #121 |
-
-The four solo batches are the only remaining files above 250 lines. The Mixers batch is the first to convert `MixerBase` subclasses. Its three tickets already answer the structural question, and they answer it the same way. ADR-0007 holds. A Mixer owns its children internally and captures its own values only. It publishes no child policy as a second configuration system, and how it gets and configures its children stays unchanged.
+All plain Effects first, then the Mixers. A Mixer's musical behavior depends on its finished
+children, so no Mixer ticket starts while a plain-Effect ticket remains. The test for a Mixer is
+its base class, never its name — some Mixers carry no "Mixer" in their name. List them with
+`find_implementations` on `MixerBase`.
 
 ## Model policy
 
 Do not lower either selection.
 
 - Implementation workers run Codex `gpt-5.6-sol --effort max`, always.
-- Review sub-agents run `opus-5` (Agent tool `model: "opus"`), always. Cross-family review holds because Opus reviews Sol-authored code.
+- Review sub-agents run `opus-5` (Agent tool `model: "opus"`), always. Cross-family review holds
+  because Opus reviews Sol-authored code.
 
-## Phase A - Set up
+## Phase A — Set up
 
-1. If this session already ran a batch, stop and tell the maintainer.
+1. If this session already ran a ticket, stop and tell the maintainer.
 
 2. Complete the repo startup gates and pull Memory Vault context.
 
-3. Load `domain-modeling` and `codebase-design` with the Skill tool. Every classification in Phase B is a design judgment. Work with that vocabulary loaded - fitted answer versus scaffold, deep interfaces, record decisions sparingly - not from memory of it.
+3. Load `domain-modeling` and `codebase-design` with the Skill tool. Capability discussions and
+   Repertoire classifications are design judgments; work with that vocabulary loaded, not from
+   memory of it.
 
-4. Read every ticket in the batch, the "Effect configuration" section of `CONTEXT.md`, every ADR in `docs/adr/`, and `memory:penroseart-effect-settings-machinery`. The ADRs are terse and all of them stand. The memory holds standing rulings and pointers. Its notes about other Effects are fitted answers, not rules.
+4. Read the ticket (it carries this Effect's harvested findings), `CONTEXT.md` — musicality work
+   spans its Rhythm, Waveform, and Effect-configuration vocabulary — every ADR in `docs/adr/`,
+   `docs/effect-authoring.md`, and `docs/osc-client-contract.md`. The ADRs are terse and all of
+   them stand.
 
-5. Seed one worklog for the batch.
+5. Seed one worklog for the ticket.
 
-6. With the `using-git-branch` skill, create branch `refactor/effect-settings-<batch>` from master. Use the batch name from the table above.
+6. With the `using-git-branch` skill, create branch `feat/<effect>-musicality` from master.
 
-## Tests
+7. Triage the ticket's findings with the maintainer before any implementation. Classify each as:
+   fix during musicality, fix during polish (look-preserving), or look-changing — the maintainer
+   must see the wall before and after a look-changing fix. Record the classification on the
+   ticket.
 
-Never pin an authored value through a test.
+## Phase B — Standalone Settings into the editor
 
-An existing test whose assertion encodes an authored tuning number is at the wrong seam. Delete
-it during that Effect's conversion. Do not preserve it, and do not write a replacement. Keep only
-the assertions that hold whatever the authored values are - geometry, vector math, and
-frame-rate invariance.
+Per ADR-0013. One worker adds the Effect's Standalone Settings asset and its Effects-tab wiring,
+mirroring the shape its Sync Settings asset already has: serialized, live-tweakable in Play Mode,
+restorable to the in-file Standalone Defaults. The maintainer verifies on the wall: live edit,
+persistence after the run, and Restore. The Standalone Defaults blocks stay in source as the
+authored record.
 
-You classify every test in the file and hand the worker an explicit delete list and keep list.
-Never leave that split to the worker.
+## Phase C — Musicality loop
 
-## Phase B - Implement and validate
+Run once per capability. The usual order is Levels, then Fill, then Drop, then Energy, but the
+Effect decides what it supports and the maintainer may reorder, add, or skip capabilities —
+including reshaping the Effect itself when the discussion goes there.
 
-Run Phase B once for each Effect in the batch. Give each Effect its own worker and its own commit.
+Vocabulary: **Levels**, **Energy**, **Waveform**, and **Data Surface** are `CONTEXT.md` terms.
+Use them exactly as the glossary defines them, and sharpen the glossary when a discussion refines
+one.
 
-Launch the implementation workers for a multi-ticket batch in parallel. Parallel launch is safe because each conversion touches only the files of its own Effect. Before launch, confirm that the file sets are disjoint. If two tickets share a file, run those workers in sequence.
+1. Discuss with the maintainer what this Effect should do with the capability. The maintainer
+   owns the intent; you own the design conversation; the worker implements.
 
-Parallel launch covers implementation only. Every coordinator step stays serial. Review each diff when its worker finishes. Then validate per step 8. A validation run covers every diff that has landed by that point. If a validation fails, attribute the failure by file before you send rework.
+2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). There is
+   no `--events` flag; read progress with `tail --label <label>`. State goals, never a design —
+   the worker proposes the design and you judge it.
 
-1. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). There is no
-   `--events` flag. `codex-worker.py` rejects it. Read progress with `tail --label <label>`.
+3. Review the diff yourself against the checklist below. The worker report is a claim, not
+   evidence.
 
-2. Put in the brief the goals, the acceptance criteria, the vocabulary, the reading list below, and the boundaries below.
+4. Validate yourself, never through a worker: `scripts/unity-compile.sh` to zero warnings,
+   `scripts/unity-tests.sh` to all green.
 
-3. State goals, never a design. The worker proposes the design and you judge it.
+5. The maintainer plays, tweaks the settings live, and rules. Send design-level rework back with
+   `codex exec resume`; fix small defects directly.
 
-4. Give every brief this reading list. The worker reads all of it before touching code:
-   - `AGENTS.md`, `CONTEXT.md`, every ADR in `docs/adr/`, and `docs/effect-authoring.md`.
-   - The scaffold as Tunnel shows it: `Assets/effects/Tunnel.cs`, `Assets/effects/TunnelSyncSettingsAsset.cs`, and the `Assets/effects/EmptyEffect.cs` template.
-   - These skills, read as files: `~/.claude/skills/domain-modeling/SKILL.md`, `~/.claude/skills/codebase-design/SKILL.md`, `~/.claude/skills/unity/SKILL.md`, `~/.claude/skills/csharp/SKILL.md`. Where a skill names a harness tool (Serena, Memory Vault, Microsoft Learn), the worker maps to its own tools. The content binds.
+6. When the capability lands, update the Effect's `Repertoire` flags so they advertise honestly
+   what it now handles.
 
-   The brief carries the scaffold and this Effect's facts. The worker classifies from this Effect's own behavior, so other Effects' calibration choices stay out of the brief.
+## Phase D — Polish and optimize
 
-5. Give every brief these boundaries:
-   - Implement directly in this session - never delegate to another worker or agent. (#115: a resumed worker followed the global delegation guidance and spawned its own nested implementer, doubling Sol-max cost for nothing.)
-   - Never run Unity or `scripts/unity-*.sh`.
-   - Never create or edit `.meta` or `.asset` files.
-   - Do not commit.
-   - Write XML docs on every touched symbol.
-   - Never delete or compress an authored doc comment. Carry every WHY clause - tuning pointers, value derivations, rationale - onto the new const docs. (#114: the worker restated them as terse "Authored X" lines and a ~30-edit restoration pass followed.)
-   - Keep the Standalone look identical - rolled values, Random call order, rendered distribution.
+The look and the features stay exactly as the maintainer approved them in Phase C.
 
-6. Review the diff yourself. The worker report is a claim, not evidence.
-   - Confirm the diff does not change the Standalone Random call order or values.
-   - Confirm no authored WHY documentation was lost or compressed.
-   - Confirm resolution consumes no Random.
-   - Confirm the vocabulary matches `CONTEXT.md` exactly.
-   - Confirm tests stay on the agreed seam - resolution and restore only, no rendering asserts, no pinned authored values.
-   - Confirm the worker added no guard that did not exist before. (#116: it added five
-     `if (!IsSynced) return 0f;` short-circuits. `IsSynced` is beat position only, so levels
-     keep streaming when the transport stops - the guards changed the Standalone look. Compile,
-     355 tests, and the diff review all passed them. The Spec-axis review caught it.)
-   - Confirm no Standalone branch passes an inline literal. `docs/effect-authoring.md:68`
-     requires both authored values to live in their default blocks, the inert identity included.
-   - Confirm the Effect bakes no Sync Setting into a cache that `Init` builds once. Such a cache
-     makes the setting half-live. A Play Mode edit then moves the call-site term and leaves the
-     baked term behind. (#117: Angles baked the soft-edge width into its wavefront cache.)
-   - Confirm every complete-domain claim against the consuming code. (#126: a worker documented
-     a roll as a complete selector domain while the switch had one more arm.)
+1. Run the `polish` skill over the Effect's files (named-files mode), so the whole file is in
+   scope, not only this branch's diff.
 
-7. Fix small defects directly. A classification change or a call-site mechanism change is a Gate 1 question, never a small defect. Send design-level rework back to the worker with `codex exec resume`.
+2. Optimize with evidence, never vibes: the target hardware is unknown, so the Effect must be as
+   cheap as it can be without changing its look. Every optimization claim carries Profiler or
+   frame-time evidence. Standing targets: zero per-frame GC allocation, no per-pixel work that
+   can hoist, no Unity objects created without a destruction path.
 
-8. Validate yourself, never through a worker. Run `scripts/unity-compile.sh` to zero warnings. Run `scripts/unity-tests.sh` to all green. Validate after each Effect, not once at the end of the batch.
+3. Re-run the compile and test scripts. The maintainer confirms the look on the wall one last
+   time.
 
-## Gate 1 - Scope question. Conditional.
+## Phase E — Land and close
 
-Open this gate only when the batch raises a real judgment call for the maintainer. A judgment call changes what the ticket delivers. Ticket #117 raised two. A mechanism change that the ticket text appears to forbid. A classification that two acceptance criteria answer differently. And the tell: when you reach for another Effect to justify a classification or a mechanism change here, you have found a judgment call - open the gate.
+1. With the `commit` skill, make logical commits. Include the Unity `.meta` and `.asset` files.
 
-1. If the batch raises no judgment call, skip this gate and continue to Phase C. Carry the extraction table into Gate 2 instead.
+2. Merge to master by ref update — `git fetch . <branch>:master` — so no file churn hits the
+   open Editor. Switch to master, delete the branch, push.
 
-2. If it raises one, state the question, the options, and your recommendation. Present the extraction table and the validation results with it.
+3. Close the ticket. A finding that surfaced here but stays unfixed lands on the epic issue, not
+   in this ticket's closed comments.
 
-3. End the turn. Nothing that depends on the answer proceeds until the maintainer rules.
+4. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
+   skill only for a maintainer ruling or a process failure that repeated. Retire the worklog.
 
-## Phase C - Code review
+## Worker briefs
 
-1. Run the two-axis `/code-review` (standards and spec) with opus-5 sub-agents. Review the whole batch branch once, not each Effect separately.
+Every brief carries the `AGENTS.md` framing, the goals, the acceptance criteria, the vocabulary,
+this reading list, and these boundaries.
 
-2. Verify any precedent a review agent cites before you act on it. (#117: a Standards agent cited the `energyRecipe` in Flock as a settings precedent. It is a per-roll local variable, not a setting.)
+Reading list — the worker reads all of it before touching code:
 
-3. If a finding removes a feature or changes scope, ask the maintainer before you act.
+- `AGENTS.md`, `CONTEXT.md`, every ADR in `docs/adr/`, `docs/effect-authoring.md`, and
+  `docs/osc-client-contract.md`.
+- The Effect's own source and settings assets, and `Assets/core/Rhythm/BeatManager.cs` for the
+  surface it may read.
+- These skills, read as files: `~/.claude/skills/domain-modeling/SKILL.md`,
+  `~/.claude/skills/codebase-design/SKILL.md`, `~/.claude/skills/unity/SKILL.md`,
+  `~/.claude/skills/csharp/SKILL.md`. Where a skill names a harness tool (Serena, Memory Vault,
+  Microsoft Learn), the worker maps to its own tools. The content binds.
 
-4. Apply the agreed fixes. Run the compile and test scripts again.
+Boundaries — in every brief:
 
-## Gate 2 - Wall and landing word. End the turn.
+- Every musical fact comes from the Data Surface, BeatManager's read-only face. Never read OSC
+  directly, and never derive a musical fact locally.
+- Implement directly in this session — never delegate to another worker or agent.
+- Never run Unity or `scripts/unity-*.sh`.
+- Never create or edit `.meta` or `.asset` files.
+- Do not commit.
+- Write XML docs on every touched symbol.
+- Never delete or compress an authored doc comment. Carry every WHY clause — tuning pointers,
+  value derivations, rationale — onto whatever replaces its symbol.
+- Change the Standalone look only where the maintainer has ruled that capability or finding
+  look-changing; everywhere else the look stays identical.
 
-1. Report per Effect: the extraction table, the findings, the review results, and the validation results.
+## Diff review checklist
 
-2. End the turn. Commits, pushes, and closes wait until the maintainer rules here.
-
-3. Confirm the Sync Settings asset exists and restores. Open editor surfaces create it at import. If it is missing, the maintainer creates it through the Effects tab.
-
-4. The maintainer live-edits the Sync Settings in Play Mode, then confirms persistence and Restore.
-
-5. The maintainer confirms the Standalone look is unchanged. Synced Mode sits at its defaults by construction, so this gate does not judge it. Tuning comes after the catalog carries the structure.
-
-6. If the maintainer reports a defect, return to Phase B. Nothing lands without wall approval.
-
-## Phase D - Land and close
-
-1. With the `commit` skill, make one logical commit for each Effect. Include the Unity `.meta` files and the `.asset`.
-
-2. Merge to master by ref update - `git fetch . <branch>:master` - so no file churn hits the open Editor.
-
-3. Switch to master and delete the branch.
-
-4. Push. Close each ticket in the batch.
-
-5. Append every reported finding to the findings list on #111. That list is the work-list for the tuning phase. Nobody reads a finding again after it stays in the comments of a closed ticket.
-
-6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this skill only for a maintainer ruling or for a process failure that repeated - a fitted answer lives in its Effect's code and its closed ticket. Retire the worklog.
+- The vocabulary matches `CONTEXT.md` exactly.
+- Every musical read traces to the Data Surface; no OSC access, no locally computed musical
+  fact.
+- Settings resolution consumes no Random.
+- No Sync or Standalone Setting is baked into a cache that `Init` builds once — such a cache
+  makes the setting half-live under a Play Mode edit.
+- The worker added no guard that did not exist before, and no defensive layer the framing
+  paragraph forbids.
+- Tests sit on agreed seams only, and no test pins an authored tuning value — an assertion that
+  encodes one is at the wrong seam and is deleted, not preserved.
+- Every complete-domain claim is checked against the consuming code.
+- No authored WHY documentation was lost or compressed.

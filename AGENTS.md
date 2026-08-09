@@ -4,6 +4,15 @@ PenroseArt is a Unity-hosted C# creative/hardware runtime for the Penrose Wall L
 
 Follow the existing creative-coding / installation-controller shape. Do not turn this into a conventional prefab-heavy Unity app or enterprise service architecture unless the user explicitly asks for that larger change.
 
+## What this is
+
+This is a piece of art with two developers and no external clients. Nothing here ships to
+customers, so enterprise instincts do not apply: no hardening, no security posture, no defensive
+layers for callers that do not exist, no configuration systems for deployments that will never
+happen. Effects and Transitions are the first-class citizens of this codebase. The bar for every
+change is that the wall works, looks right, and runs optimized and stable for the length of a
+show.
+
 Navigation/editing: Serena first — activate Serena project `penroseart` before repo navigation or edits.
 
 ## Session Startup (mandatory)
