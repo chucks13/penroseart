@@ -78,9 +78,9 @@ The controller updates the palette every frame. Pressing Return reloads palette 
 
 ## Output paths
 
-The active compiled output path is USB serial through `SerialOut` because `Controller.cs` currently defines `ENABLE_SERIAL`.
+The active compiled output path is ACN/E1.31 UDP (`Controller.sendUDPFrame()` / `sendACN()`) because `#define ENABLE_SERIAL` at the top of `Controller.cs` is currently commented out.
 
-The older ACN/E1.31 UDP path remains in the code and is used only when serial is not compiled in.
+The USB serial path through `SerialOut` remains in the code and compiles in only when `ENABLE_SERIAL` is defined.
 
 ## Debug controls
 

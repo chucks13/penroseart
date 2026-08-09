@@ -144,7 +144,7 @@ Start with these before adding new structures:
 
 ## Serial, Output, and Cross-Platform Rules
 
-- Current target focus is Windows, with macOS development also important. The project should stay as cross-platform as practical, but serial output is a core requirement.
+- Current target focus is Windows, with macOS development also important. The project should stay as cross-platform as practical. UDP/E1.31 (ACN) is the active output path; serial output support stays in the codebase behind `ENABLE_SERIAL` but is not currently in use.
 - Standalone API compatibility is intentionally `.NET Standard 2.1`; `System.IO.Ports` support is provided through platform-specific Unity plugin assets under `Assets/Plugins/System.IO.Ports/`.
 - Do not switch Standalone back to `.NET Framework 4.8 + Unity additions` unless the desktop serial plugin path is proven unsuitable or the user explicitly approves the rollback.
 - Ask before changing any hardware/control path:
@@ -156,7 +156,7 @@ Start with these before adding new structures:
   - `PixelReceiver`
   - drum or camera overlay behavior
   - telnet/debug command behavior
-- The UDP/E1.31 path still exists, but serial is currently the active compiled output path.
+- UDP/E1.31 (ACN) is currently the active compiled output path: `#define ENABLE_SERIAL` at the top of `Controller.cs` is commented out after issues with serial in use, so the serial path is not compiled in. Do not re-enable serial without asking.
 - If Android/IL2CPP becomes a production target, do not assume the Standalone serial approach applies; that likely needs a platform-specific USB serial transport.
 
 ## OSC Boundary

@@ -53,7 +53,7 @@ The active runtime frame flow is:
 7. Otherwise, anomalies — a re-crossed fired mark, a mark moving into the Effect already on the wall, or Stillness — go through one doorway: the Switcher reports a Sighting and the Director decides — ride through, or a fresh Director-cast cue. A taken cue uses the normal scheduler to land at the same closing boundary; the sheet itself never changes.
 8. `Switcher.RenderAtTime(...)` renders the current Effect or active A-to-B Transition into `penrose.buffer`.
 9. Filters, drums, camera, and external pixel blending may modify `penrose.buffer`.
-10. The active serial path or legacy UDP/ACN path sends the frame to hardware.
+10. The active UDP/ACN path (or the serial path, when `ENABLE_SERIAL` is defined) sends the frame to hardware.
 11. `Penrose.UpdateModelColors()` applies the buffer to the Unity preview mesh and HUD/OSC status is updated.
 
 ## Sequencing model
@@ -212,11 +212,11 @@ Hold is not a second sequencer and does not command around the Director. It exis
 Switcher-rendered Effect or Transition buffer
   -> penrose.buffer
   -> optional filter/drum/camera/pixel-source blending
-  -> serial or UDP hardware output
+  -> UDP or serial hardware output
   -> Penrose.UpdateModelColors() for Unity preview
 ```
 
-`Penrose.Total` is 900 logical tiles. The active serial path expands those logical tiles through the Controller's flattened wire map into physical LED order before sending packets to the S2 Mini / ESP32 boards.
+`Penrose.Total` is 900 logical tiles. Both hardware output paths expand those logical tiles through the Controller's flattened wire map into physical LED order — the UDP path into E1.31/ACN universes, the serial path into packets for the S2 Mini / ESP32 boards.
 
 ## Wall data files
 
@@ -231,12 +231,12 @@ The project uses conditional compilation for optional output and control paths.
 
 | Symbol | Effect |
 | --- | --- |
-| `ENABLE_SERIAL` | File-defined at the top of `Controller.cs`, making USB serial the active output path for the compiled controller. |
+| `ENABLE_SERIAL` | File-defined at the top of `Controller.cs`; when defined, makes USB serial the active output path. Currently commented out, so the compiled output is UDP/E1.31. |
 | `ENABLE_TELNET` | Enables the remote command-line interface on port 23. Inactive by default; revisit before re-enabling. |
 | `ENABLE_BLENDING` | Enables `PixelReceiver` and dual-source frame blending. |
 | `PREP_CAPTURE` | Enables localhost pixel feedback/capture helper behavior and a synthetic blend source for testing. |
 
-**Primary output** is USB serial through `SerialOut`: `sendSerialFrame()` expands the 900 logical tiles through the wire map into physical LED order for the S2 Mini / ESP32 boards. **Legacy output** is ACN/E1.31 UDP, still present in `Controller.sendUDPFrame()` / `sendACN()`, used only when serial is not compiled in.
+**Active output** is ACN/E1.31 UDP through `Controller.sendUDPFrame()` / `sendACN()`, targeting the destination IP from the Controller's `IP` field / UI input. **Serial output** through `SerialOut` (`sendSerialFrame()` sends wire-mapped physical LED order to the S2 Mini / ESP32 boards) compiles in only when `ENABLE_SERIAL` is defined; it is currently disabled after issues with serial in use.
 
 Standalone API compatibility is intentionally `.NET Standard 2.1`; desktop `System.IO.Ports` support comes from platform-specific plugin assets under `Assets/Plugins/System.IO.Ports/` for macOS, Windows, and Linux x64. Android, iOS, and WebGL are not covered by that plugin setup — if they become production targets they need either serial-disabled builds or a platform-specific USB serial transport.
 

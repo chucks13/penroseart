@@ -137,7 +137,7 @@ public class Controller : Singleton<Controller>
     // ---------------------------------------------------------------------
 
     [Header("UDP")]
-    /// <summary>Destination IP for the legacy UDP/E1.31 output path.</summary>
+    /// <summary>Destination IP for the UDP/E1.31 output path.</summary>
     public string IP;
 
     /// <summary>Master output brightness multiplier, 0-255.</summary>
@@ -149,7 +149,7 @@ public class Controller : Singleton<Controller>
     /// <summary>Unused/static local port placeholder retained by the UDP setup code.</summary>
     private static int localPort;
 
-    /// <summary>Destination endpoint for the legacy UDP/E1.31 output path.</summary>
+    /// <summary>Destination endpoint for the UDP/E1.31 output path.</summary>
     IPEndPoint remoteEndPoint;
 
     /// <summary>UDP client used by E1.31 output and PREP_CAPTURE pixel feedback.</summary>
@@ -352,7 +352,7 @@ public class Controller : Singleton<Controller>
     /// <summary>Latest compact detail HUD text shown on screen.</summary>
     private string lastRuntimeDetailLine = string.Empty;
 
-    /// <summary>Reusable byte buffer for legacy UDP/E1.31 frame packets.</summary>
+    /// <summary>Reusable byte buffer for UDP/E1.31 frame packets.</summary>
     private byte[] udpFrameBuffer;
 
 #if PREP_CAPTURE
@@ -455,7 +455,7 @@ public class Controller : Singleton<Controller>
     }
 
     /// <summary>
-    /// E1.31/ACN packet template used by the legacy UDP output path.
+    /// E1.31/ACN packet template used by the UDP output path.
     /// Runtime fields such as packet lengths, sender UUID, sequence, universe,
     /// and payload size are patched before each universe is sent.
     /// </summary>
@@ -492,7 +492,7 @@ public class Controller : Singleton<Controller>
     /// <summary>Sender UUID written into the ACN packet template during UDP setup.</summary>
     Guid g;
 
-    /// <summary>Legacy UDP/E1.31 frame sequence byte, incremented after each frame.</summary>
+    /// <summary>UDP/E1.31 frame sequence byte, incremented after each frame.</summary>
     byte sequence = 0;
 
 
@@ -516,7 +516,7 @@ public class Controller : Singleton<Controller>
 
 
     /// <summary>
-    /// Prepares the legacy UDP/E1.31 output endpoint and fills the ACN sender UUID.
+    /// Prepares the UDP/E1.31 output endpoint and fills the ACN sender UUID.
     /// </summary>
     private void setupUDP(string address)
     {
@@ -629,7 +629,7 @@ public class Controller : Singleton<Controller>
         }
     }
     /// <summary>
-    /// Legacy output path: expands 900 logical tile colors through the 1800-entry wire map and sends E1.31/ACN UDP packets.
+    /// Active output path when serial is not compiled in: expands 900 logical tile colors through the 1800-entry wire map and sends E1.31/ACN UDP packets.
     /// </summary>
     private void sendUDPFrame(Color[] data)
     {
@@ -667,7 +667,7 @@ public class Controller : Singleton<Controller>
 
 #if ENABLE_SERIAL
     /// <summary>
-    /// Active hardware output path: expands 900 logical tile colors through the 1800-entry wire map and sends them over SerialOut.
+    /// Serial output path, compiled only when ENABLE_SERIAL is defined: expands 900 logical tile colors through the 1800-entry wire map and sends them over SerialOut.
     /// </summary>
     private void sendSerialFrame(Color[] data)
     {
@@ -961,7 +961,7 @@ public class Controller : Singleton<Controller>
     private int CurrentEffectIndexForSurface() => switcher.CurrentEffectIndex;
 
     /// <summary>
-    /// Applies a new legacy UDP/E1.31 destination address, reporting parse/setup failures to the Unity log.
+    /// Applies a new UDP/E1.31 destination address, reporting parse/setup failures to the Unity log.
     /// </summary>
     private void setIP(string address)
     {
@@ -981,7 +981,7 @@ public class Controller : Singleton<Controller>
     private void onTimeEndEditCallback(string input) { onMinute = int.Parse(input); }
     /// <summary>Updates the scheduled display-off minute from the UI field.</summary>
     private void offTimeEndEditCallback(string input) { offMinute = int.Parse(input); }
-    /// <summary>Updates the legacy UDP/E1.31 destination IP from the UI field.</summary>
+    /// <summary>Updates the UDP/E1.31 destination IP from the UI field.</summary>
     private void destIPEndEditCallback(string input)
     {
         IP = input;
@@ -1410,7 +1410,7 @@ public class Controller : Singleton<Controller>
         onToggle.isOn = displayOn;
 
         // UI callbacks update the serialized/runtime fields directly. The IP
-        // callback also rebuilds the legacy UDP endpoint.
+        // callback also rebuilds the UDP endpoint.
         onTime.onEndEdit.AddListener(onTimeEndEditCallback);
         offTime.onEndEdit.AddListener(offTimeEndEditCallback);
         destIP.onEndEdit.AddListener(destIPEndEditCallback);
@@ -1464,7 +1464,7 @@ public class Controller : Singleton<Controller>
         server.Start();     // start telnet server
 #endif
 #if ENABLE_SERIAL
-        // Active hardware output path for desktop controller builds.
+        // Serial output path for desktop controller builds (ENABLE_SERIAL only).
         serial = new SerialOut();
         // 2,000,000 baud is required for 900 pixels @ 60fps (~1.6Mbps raw data)
         serial.Init(2000000);
@@ -1687,8 +1687,8 @@ public class Controller : Singleton<Controller>
                 penrose.buffer = (Color[])blendBuffer.Clone();
         }
 
-        // 9. Hardware output. Serial is the active compiled path when
-        // ENABLE_SERIAL is defined; otherwise this falls back to legacy UDP/E1.31.
+        // 9. Hardware output. UDP/E1.31 is the active compiled path; serial
+        // is used instead only when ENABLE_SERIAL is defined.
 #if ENABLE_SERIAL
         sendSerialFrame(penrose.buffer);
 #else
