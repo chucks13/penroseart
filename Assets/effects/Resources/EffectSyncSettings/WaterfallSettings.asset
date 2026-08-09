@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75d31f0654b7b4ebd9267708bb6dda63, type: 3}
+  m_Name: WaterfallSettings
+  m_EditorClassIdentifier: Assembly-CSharp::WaterfallSyncSettingsAsset
+  effectTypeName: Waterfall
+  settings:
+    WaveformTroughHeight: 1
+    WaveformPeakHeight: 0
+    BeatModeMin: 0
+    BeatModeMaxExclusive: 2
+    PulseDirectionMin: 0
+    PulseDirectionMaxExclusive: 2
+    PulseMultiplierMin: 0.125
+    PulseMultiplierMax: 0.25
+    PulseScaleDivisor: 200
+    SaturationPulseMultiplier: 2
+    DropCountMin: 70
+    DropCountMaxExclusive: 100
+    BackgroundStretchMin: 0.001
+    BackgroundStretchMax: 0.025
+    BackgroundSpeedMin: 0.01
+    BackgroundSpeedMax: 0.3
+    DropSpawnHeightMinMultiplier: 1
+    DropSpawnHeightMaxMultiplier: 10
+    DropRadiusMin: 0.2
+    DropRadiusMax: 2
+    DropSpeedMin: 0.005
+    DropSpeedMax: 0.05
+    DropIntensityMin: 0.1
+    DropIntensityMax: 0.5
+    DropTrailFalloff: 25
+    DropRespawnHeightMultiplier: -15
