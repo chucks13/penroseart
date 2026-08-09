@@ -24,11 +24,11 @@ The runtime catalog intentionally ignores `EmptyEffect`. Keep, rename, and fill 
 
 ### Start with Effect Settings
 
-Use the canonical [`CONTEXT.md` Effect configuration terms](../CONTEXT.md#effect-configuration). They are Effect Settings, Standalone Defaults, Sync Defaults, Standalone Settings, and Sync Settings. [`ADR-0012`](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md) records the standing decision. This guide shows its code layout and does not redefine the vocabulary.
+Use the canonical [`CONTEXT.md` Effect configuration terms](../CONTEXT.md#effect-configuration). They are Effect Settings, Standalone Defaults, Sync Defaults, Standalone Settings, and Sync Settings. [`ADR-0013`](adr/0013-standalone-settings-join-the-editor.md) records the standing decision, superseding [`ADR-0012`](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md). This guide shows its code layout and does not redefine the vocabulary.
 
-Put `// Standalone Defaults` and `// Sync Defaults` before runtime state. Put values that shape Standalone Mode under Standalone Defaults. Put values that author musical response under Sync Defaults. Keep structural literals and runtime state outside both blocks. Treat each randomization range as a setting. Author both bounds instead of leaving them inline in `Random.Range(...)`.
+Put `// Standalone Defaults` and `// Sync Defaults` before runtime state. Put values that shape Standalone Mode under Standalone Defaults. Put values that author musical response under Sync Defaults. Keep structural literals and runtime state outside both blocks. Treat each randomization range as a setting. Author both bounds instead of leaving them inline in `Random.Range(...)`. Carry a two-ended range as a [`FloatRange`](../Assets/core/Effects/FloatRange.cs) or an [`IntRange`](../Assets/core/Effects/IntRange.cs) — `IntRange` is inclusive-min/exclusive-max, matching `Random.Range(int, int)`. Both types carry their own Rails, and the shared [`NumericRangeDrawer`](../Assets/Editor/NumericRangeDrawer.cs) draws every range as editable Rails, exact endpoint fields, and a two-thumb slider. One-ended values stay scalar.
 
-No editor surface edits Standalone values. Change them only in the source file for the Effect. ADR-0012 permits a read-only display.
+Per ADR-0013, a fitted Effect also carries a saved Standalone Settings asset with the same contract as its Sync Settings asset: serialized, live-tweakable in Play Mode from the Effects tab, and restorable at any moment to the in-file Standalone Defaults, which remain the one authored record of the look. The Standalone path mirrors the Sync path below — `[EffectStandaloneSettings(typeof(...))]` on the Effect, `EffectStandaloneSettingsProvider.Resolve(typeof(<EffectName>), StandaloneDefaults)` at activation, and the asset under `Resources/EffectStandaloneSettings/<EffectName>Settings`. [`Waterfall`](../Assets/effects/Waterfall.cs) and its [`WaterfallStandaloneSettingsAsset`](../Assets/effects/WaterfallStandaloneSettingsAsset.cs) are the fitted reference.
 
 The Effect defines its carrier shape. These three calibration Effects establish proven shapes.
 
@@ -36,11 +36,11 @@ The Effect defines its carrier shape. These three calibration Effects establish 
 | --- | --- |
 | [`Tunnel`](../Assets/effects/Tunnel.cs) and its [`TunnelSyncSettingsAsset`](../Assets/effects/TunnelSyncSettingsAsset.cs) | Scalar authored constants. Standalone randomization bounds grouped as `FloatRange` values. A constructor builds `TunnelStandaloneSettings`. |
 | [`Ripple`](../Assets/effects/Ripple.cs) and its [`RippleSyncSettingsAsset`](../Assets/effects/RippleSyncSettingsAsset.cs) | The Effect moves tuned inline literals into settings. It dual-homes the `Waveform.Lerp` to-slot as a Standalone Default and a Sync Default. The call site selects one with `beatManager.IsSynced`. |
-| [`CrystalGrowth`](../Assets/effects/CrystalGrowth.cs) and its [`CrystalGrowthSyncSettingsAsset`](../Assets/effects/CrystalGrowthSyncSettingsAsset.cs) | A large field-based `CrystalGrowthStandaloneSettings` uses an object initializer. Separate minimum and maximum fields in Sync Settings define each randomization range, so each endpoint carries its own `[Min]` inspector bound — `FloatRange` endpoints cannot carry one. |
+| [`CrystalGrowth`](../Assets/effects/CrystalGrowth.cs) and its [`CrystalGrowthSyncSettingsAsset`](../Assets/effects/CrystalGrowthSyncSettingsAsset.cs) | A large field-based `CrystalGrowthStandaloneSettings` uses an object initializer. Separate minimum and maximum fields in Sync Settings define each randomization range — a shape from before Rails existed, kept until this Effect's own musicality ticket migrates it. Rails now carry the per-use slider bounds that once justified the split, so new and migrated work uses `FloatRange`/`IntRange` instead of separated scalar pairs. |
 
 Choose the shape that fits the Effect. Do not force common fields or mechanically copy one calibration.
 
-The scaffold standardizes where authored values live and how an Effect reaches its Sync Settings — nothing more. Re-rolls, Grid response, Waveform use, and every musical mapping remain the Effect's own decisions ([ADR-0012](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md)).
+The scaffold standardizes where authored values live and how an Effect reaches its Sync Settings — nothing more. Re-rolls, Grid response, Waveform use, and every musical mapping remain the Effect's own decisions ([ADR-0013](adr/0013-standalone-settings-join-the-editor.md)).
 
 #### Wire the Sync Settings path
 
@@ -60,11 +60,13 @@ The copied `EmptyEffect` skeleton already wires the Sync Settings path. Rename a
 
 The compile/import step imports and compiles the scripts. It does not create a Sync Settings asset. Create the saved asset from one of two surfaces.
 
-- The Tuning Window **Effects** tab: select the Effect and use its **Create Sync Settings Asset** button, or use the tab's **Create Missing Sync Settings** toolbar button for the whole catalog.
+- The Tuning Window **Effects** tab: select the Effect and use its **Create Sync Settings Asset** button (or **Create Standalone Settings Asset** for the Standalone side), or use the tab's **Create Missing Settings** toolbar button for the whole catalog.
 
-- The **Window > Penrose > Create Missing Effect Sync Settings** menu item.
+- The **Window > Penrose > Create Missing Effect Sync Settings** and **Create Missing Effect Standalone Settings** menu items.
 
 Never hand-create the `.asset` file. Commit the Unity-generated `.asset` and `.meta` with the Effect.
+
+To write a tuned look back into the file, use the Effects tab's **Copy Defaults Update** button (one per settings panel). It copies the Effect's authored defaults block to the clipboard with only the numeric literals replaced by the current saved values — doc comments, names, and formatting intact — ready to paste over the old block. The button never writes a file: defaults still change only by editing the source ([ADR-0012](adr/0012-an-effects-standalone-look-is-fixed-its-mechanism-is-not.md)/[0013](adr/0013-standalone-settings-join-the-editor.md)). Rails are not written back; the saved asset carries them, and the button's log notes when a Rail differs from what the defaults would seed.
 
 Read musical-response values from the resolved Sync Settings.
 
@@ -74,7 +76,7 @@ A mode reads a slot when a change to that value can change the rendering of that
 
 Fill and Drop are Synced Mode facts. The running clock is what carries them, so `Fill.Active` and `Drop.Active` are never true in Standalone Mode. A value read only inside a Fill- or Drop-gated branch is therefore a Sync Default, never dual-homed, and a Drop slowdown window is likewise Sync-only — `Before.Decay` rests at one in Standalone Mode, so the window cannot reach Standalone rendering.
 
-A dual-homed slot needs both values. An operator can edit Sync Settings while the wall runs, and ADR-0012 fixes the Standalone look. One shared value would let a live tweak change the Standalone look. Two authored values keep each mode on its own value, so the two modes stay independent.
+A dual-homed slot needs both values. An operator can edit either mode's saved settings while the wall runs. One shared value would let a live tweak to one mode change the other mode's look. Two authored values keep each mode on its own value, so the two modes stay independent.
 
 Two consequences follow from that selection. They are properties of the pattern, so they hold for every Effect that dual-homes a value and no Effect restates them.
 

@@ -16,7 +16,10 @@ public sealed class WaterfallSyncSettingsAsset : EffectSyncSettingsAsset, ISyncS
     /// <summary>The saved Waterfall Sync Settings.</summary>
     public WaterfallSyncSettings Settings => settings ?? (settings = Waterfall.SyncDefaults);
 
-    /// <summary>Copies Waterfall's current file-local Sync Defaults over the saved Sync Settings.</summary>
+    /// <summary>
+    /// Copies Waterfall's current file-local Sync Defaults, including each range's editor rails, over
+    /// the saved Sync Settings.
+    /// </summary>
     public override void RestoreSyncDefaults()
     {
         Settings.CopyFrom(Waterfall.SyncDefaults);

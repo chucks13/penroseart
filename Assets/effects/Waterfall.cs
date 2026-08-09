@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Renders falling screen-space droplets over an animated palette background.
 /// </summary>
 [EffectSyncSettings(typeof(WaterfallSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(WaterfallStandaloneSettingsAsset))]
 public class Waterfall : ScreenEffect
 {
     // Standalone Defaults
@@ -217,25 +218,26 @@ public class Waterfall : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow |Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Waterfall's Standalone Defaults.</summary>
-    public static WaterfallStandaloneSettings StandaloneSettings => new WaterfallStandaloneSettings
+    /// <summary>Resolves a fresh immutable-by-convention copy of Waterfall's file-local Standalone Defaults.</summary>
+    public static WaterfallStandaloneSettings StandaloneDefaults => new WaterfallStandaloneSettings
     {
         WaveformPeakHeight = StandaloneWaveformPeakHeight,
-        BeatModeMin = StandaloneBeatModeMin,
-        BeatModeMaxExclusive = StandaloneBeatModeMaxExclusive,
-        PulseDirectionMin = StandalonePulseDirectionMin,
-        PulseDirectionMaxExclusive = StandalonePulseDirectionMaxExclusive,
-        PulseMultiplierMin = StandalonePulseMultiplierMin,
-        PulseMultiplierMax = StandalonePulseMultiplierMax,
+        BeatMode = new IntRange(StandaloneBeatModeMin, StandaloneBeatModeMaxExclusive),
+        PulseDirection = new IntRange(
+            StandalonePulseDirectionMin,
+            StandalonePulseDirectionMaxExclusive),
+        PulseMultiplier = new FloatRange(
+            StandalonePulseMultiplierMin,
+            StandalonePulseMultiplierMax),
         WaveformTroughHeight = StandaloneWaveformTroughHeight,
         PulseScaleDivisor = StandalonePulseScaleDivisor,
         SaturationPulseMultiplier = StandaloneSaturationPulseMultiplier,
-        DropCountMin = StandaloneDropCountMin,
-        DropCountMaxExclusive = StandaloneDropCountMaxExclusive,
+        DropCount = new IntRange(StandaloneDropCountMin, StandaloneDropCountMaxExclusive),
         BackgroundStretch = new FloatRange(StandaloneBackgroundStretchMin, StandaloneBackgroundStretchMax),
         BackgroundSpeed = new FloatRange(StandaloneBackgroundSpeedMin, StandaloneBackgroundSpeedMax),
-        DropSpawnHeightMinMultiplier = StandaloneDropSpawnHeightMinMultiplier,
-        DropSpawnHeightMaxMultiplier = StandaloneDropSpawnHeightMaxMultiplier,
+        DropSpawnHeightMultiplier = new IntRange(
+            StandaloneDropSpawnHeightMinMultiplier,
+            StandaloneDropSpawnHeightMaxMultiplier),
         DropRadius = new FloatRange(StandaloneDropRadiusMin, StandaloneDropRadiusMax),
         DropSpeed = new FloatRange(StandaloneDropSpeedMin, StandaloneDropSpeedMax),
         DropIntensity = new FloatRange(StandaloneDropIntensityMin, StandaloneDropIntensityMax),
@@ -248,34 +250,26 @@ public class Waterfall : ScreenEffect
     {
         WaveformTroughHeight = SyncWaveformTroughHeight,
         WaveformPeakHeight = SyncWaveformPeakHeight,
-        BeatModeMin = SyncBeatModeMin,
-        BeatModeMaxExclusive = SyncBeatModeMaxExclusive,
-        PulseDirectionMin = SyncPulseDirectionMin,
-        PulseDirectionMaxExclusive = SyncPulseDirectionMaxExclusive,
-        PulseMultiplierMin = SyncPulseMultiplierMin,
-        PulseMultiplierMax = SyncPulseMultiplierMax,
+        BeatMode = new IntRange(SyncBeatModeMin, SyncBeatModeMaxExclusive),
+        PulseDirection = new IntRange(SyncPulseDirectionMin, SyncPulseDirectionMaxExclusive),
+        PulseMultiplier = new FloatRange(SyncPulseMultiplierMin, SyncPulseMultiplierMax),
         PulseScaleDivisor = SyncPulseScaleDivisor,
         SaturationPulseMultiplier = SyncSaturationPulseMultiplier,
-        DropCountMin = SyncDropCountMin,
-        DropCountMaxExclusive = SyncDropCountMaxExclusive,
-        BackgroundStretchMin = SyncBackgroundStretchMin,
-        BackgroundStretchMax = SyncBackgroundStretchMax,
-        BackgroundSpeedMin = SyncBackgroundSpeedMin,
-        BackgroundSpeedMax = SyncBackgroundSpeedMax,
-        DropSpawnHeightMinMultiplier = SyncDropSpawnHeightMinMultiplier,
-        DropSpawnHeightMaxMultiplier = SyncDropSpawnHeightMaxMultiplier,
-        DropRadiusMin = SyncDropRadiusMin,
-        DropRadiusMax = SyncDropRadiusMax,
-        DropSpeedMin = SyncDropSpeedMin,
-        DropSpeedMax = SyncDropSpeedMax,
-        DropIntensityMin = SyncDropIntensityMin,
-        DropIntensityMax = SyncDropIntensityMax,
+        DropCount = new IntRange(SyncDropCountMin, SyncDropCountMaxExclusive),
+        BackgroundStretch = new FloatRange(SyncBackgroundStretchMin, SyncBackgroundStretchMax),
+        BackgroundSpeed = new FloatRange(SyncBackgroundSpeedMin, SyncBackgroundSpeedMax),
+        DropSpawnHeightMultiplier = new IntRange(
+            SyncDropSpawnHeightMinMultiplier,
+            SyncDropSpawnHeightMaxMultiplier),
+        DropRadius = new FloatRange(SyncDropRadiusMin, SyncDropRadiusMax),
+        DropSpeed = new FloatRange(SyncDropSpeedMin, SyncDropSpeedMax),
+        DropIntensity = new FloatRange(SyncDropIntensityMin, SyncDropIntensityMax),
         DropTrailFalloff = SyncDropTrailFalloff,
         DropRespawnHeightMultiplier = SyncDropRespawnHeightMultiplier,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private WaterfallStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private WaterfallStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private WaterfallSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -334,83 +328,62 @@ public class Waterfall : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Waterfall),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Waterfall),
             SyncDefaults);
 
         bool isSynced = beatManager.IsSynced;
-        int beatModeMin = isSynced ? SyncSettings.BeatModeMin : standaloneSettings.BeatModeMin;
-        int beatModeMaxExclusive = isSynced
-            ? SyncSettings.BeatModeMaxExclusive
-            : standaloneSettings.BeatModeMaxExclusive;
-        int pulseDirectionMin = isSynced
-            ? SyncSettings.PulseDirectionMin
-            : standaloneSettings.PulseDirectionMin;
-        int pulseDirectionMaxExclusive = isSynced
-            ? SyncSettings.PulseDirectionMaxExclusive
-            : standaloneSettings.PulseDirectionMaxExclusive;
-        float pulseMultiplierMin = isSynced
-            ? SyncSettings.PulseMultiplierMin
-            : standaloneSettings.PulseMultiplierMin;
-        float pulseMultiplierMax = isSynced
-            ? SyncSettings.PulseMultiplierMax
-            : standaloneSettings.PulseMultiplierMax;
+        IntRange beatModeRange = isSynced ? SyncSettings.BeatMode : standaloneSettings.BeatMode;
+        IntRange pulseDirectionRange = isSynced
+            ? SyncSettings.PulseDirection
+            : standaloneSettings.PulseDirection;
+        FloatRange pulseMultiplierRange = isSynced
+            ? SyncSettings.PulseMultiplier
+            : standaloneSettings.PulseMultiplier;
 
         waveform = waveforms.Random();
-        beatMode = Random.Range(beatModeMin, beatModeMaxExclusive);
-        pulseDirection =Random.Range(pulseDirectionMin, pulseDirectionMaxExclusive);
-        pulseMultipler = Random.value * (pulseMultiplierMax - pulseMultiplierMin) + pulseMultiplierMin;
+        beatMode = Random.Range(beatModeRange.MinInclusive, beatModeRange.MaxExclusive);
+        pulseDirection = Random.Range(
+            pulseDirectionRange.MinInclusive,
+            pulseDirectionRange.MaxExclusive);
+        pulseMultipler = Random.value * (pulseMultiplierRange.Max - pulseMultiplierRange.Min) +
+            pulseMultiplierRange.Min;
         pulsePeakSpacingMs = waveform.ShortestPeakSpacingMs;
         wave = new float[400];      // clear array
 
-        int dropCountMin = isSynced ? SyncSettings.DropCountMin : standaloneSettings.DropCountMin;
-        int dropCountMaxExclusive = isSynced
-            ? SyncSettings.DropCountMaxExclusive
-            : standaloneSettings.DropCountMaxExclusive;
-        float backgroundStretchMin = isSynced
-            ? SyncSettings.BackgroundStretchMin
-            : standaloneSettings.BackgroundStretch.Min;
-        float backgroundStretchMax = isSynced
-            ? SyncSettings.BackgroundStretchMax
-            : standaloneSettings.BackgroundStretch.Max;
-        float backgroundSpeedMin = isSynced
-            ? SyncSettings.BackgroundSpeedMin
-            : standaloneSettings.BackgroundSpeed.Min;
-        float backgroundSpeedMax = isSynced
-            ? SyncSettings.BackgroundSpeedMax
-            : standaloneSettings.BackgroundSpeed.Max;
+        IntRange dropCountRange = isSynced ? SyncSettings.DropCount : standaloneSettings.DropCount;
+        FloatRange backgroundStretchRange = isSynced
+            ? SyncSettings.BackgroundStretch
+            : standaloneSettings.BackgroundStretch;
+        FloatRange backgroundSpeedRange = isSynced
+            ? SyncSettings.BackgroundSpeed
+            : standaloneSettings.BackgroundSpeed;
 
-        numDrops = Random.Range(dropCountMin, dropCountMaxExclusive);
-        backgrounStretch = Random.Range(backgroundStretchMin, backgroundStretchMax);
-        backgroundSpeed = Random.Range(backgroundSpeedMin, backgroundSpeedMax);
+        numDrops = Random.Range(dropCountRange.MinInclusive, dropCountRange.MaxExclusive);
+        backgrounStretch = Random.Range(backgroundStretchRange.Min, backgroundStretchRange.Max);
+        backgroundSpeed = Random.Range(backgroundSpeedRange.Min, backgroundSpeedRange.Max);
         buffer.Clear();
 
-        int dropSpawnHeightMinMultiplier = isSynced
-            ? SyncSettings.DropSpawnHeightMinMultiplier
-            : standaloneSettings.DropSpawnHeightMinMultiplier;
-        int dropSpawnHeightMaxMultiplier = isSynced
-            ? SyncSettings.DropSpawnHeightMaxMultiplier
-            : standaloneSettings.DropSpawnHeightMaxMultiplier;
-        float dropRadiusMin = isSynced ? SyncSettings.DropRadiusMin : standaloneSettings.DropRadius.Min;
-        float dropRadiusMax = isSynced ? SyncSettings.DropRadiusMax : standaloneSettings.DropRadius.Max;
-        float dropSpeedMin = isSynced ? SyncSettings.DropSpeedMin : standaloneSettings.DropSpeed.Min;
-        float dropSpeedMax = isSynced ? SyncSettings.DropSpeedMax : standaloneSettings.DropSpeed.Max;
-        float dropIntensityMin = isSynced ? SyncSettings.DropIntensityMin : standaloneSettings.DropIntensity.Min;
-        float dropIntensityMax = isSynced ? SyncSettings.DropIntensityMax : standaloneSettings.DropIntensity.Max;
+        IntRange dropSpawnHeightMultiplierRange = isSynced
+            ? SyncSettings.DropSpawnHeightMultiplier
+            : standaloneSettings.DropSpawnHeightMultiplier;
+        FloatRange dropRadiusRange = isSynced ? SyncSettings.DropRadius : standaloneSettings.DropRadius;
+        FloatRange dropSpeedRange = isSynced ? SyncSettings.DropSpeed : standaloneSettings.DropSpeed;
+        FloatRange dropIntensityRange = isSynced
+            ? SyncSettings.DropIntensity
+            : standaloneSettings.DropIntensity;
 
         drops = new Drop[numDrops];
         for (int i = 0; i < drops.Length; i++)
         {
             drops[i] = new Drop(
-                dropSpawnHeightMinMultiplier,
-                dropSpawnHeightMaxMultiplier,
-                dropRadiusMin,
-                dropRadiusMax,
-                dropSpeedMin,
-                dropSpeedMax,
-                dropIntensityMin,
-                dropIntensityMax);
+                dropSpawnHeightMultiplierRange,
+                dropRadiusRange,
+                dropSpeedRange,
+                dropIntensityRange);
         }
     }
 
@@ -440,12 +413,9 @@ public class Waterfall : ScreenEffect
         float saturationPulseMultiplier = isSynced
             ? SyncSettings.SaturationPulseMultiplier
             : standaloneSettings.SaturationPulseMultiplier;
-        int dropSpawnHeightMinMultiplier = isSynced
-            ? SyncSettings.DropSpawnHeightMinMultiplier
-            : standaloneSettings.DropSpawnHeightMinMultiplier;
-        int dropSpawnHeightMaxMultiplier = isSynced
-            ? SyncSettings.DropSpawnHeightMaxMultiplier
-            : standaloneSettings.DropSpawnHeightMaxMultiplier;
+        IntRange dropSpawnHeightMultiplierRange = isSynced
+            ? SyncSettings.DropSpawnHeightMultiplier
+            : standaloneSettings.DropSpawnHeightMultiplier;
         float dropTrailFalloff = isSynced
             ? SyncSettings.DropTrailFalloff
             : standaloneSettings.DropTrailFalloff;
@@ -479,8 +449,7 @@ public class Waterfall : ScreenEffect
                     Drop drop = drops[i];
                     drop.Update(
                         effectDelta,
-                        dropSpawnHeightMinMultiplier,
-                        dropSpawnHeightMaxMultiplier,
+                        dropSpawnHeightMultiplierRange,
                         dropRespawnHeightMultiplier);
                     var distance = Vector2.Distance(screen, drop.position);
                     //drop
@@ -537,43 +506,35 @@ public class Waterfall : ScreenEffect
         /// <summary>
         /// Creates a falling drop with random position, speed, and size.
         /// </summary>
-        /// <param name="spawnHeightMinMultiplier">Inclusive lower screen-height multiplier for the position roll.</param>
-        /// <param name="spawnHeightMaxMultiplier">Exclusive upper screen-height multiplier for the position roll.</param>
-        /// <param name="radiusMin">Minimum radius supplied to the radius roll.</param>
-        /// <param name="radiusMax">Maximum radius supplied to the radius roll.</param>
-        /// <param name="speedMin">Minimum speed supplied to the speed roll.</param>
-        /// <param name="speedMax">Maximum speed supplied to the speed roll.</param>
-        /// <param name="intensityMin">Minimum intensity supplied to the intensity roll.</param>
-        /// <param name="intensityMax">Maximum intensity supplied to the intensity roll.</param>
+        /// <param name="spawnHeightMultiplierRange">Inclusive-minimum/exclusive-maximum screen-height multipliers for the position roll.</param>
+        /// <param name="radiusRange">Endpoints supplied to the radius roll.</param>
+        /// <param name="speedRange">Endpoints supplied to the speed roll.</param>
+        /// <param name="intensityRange">Endpoints supplied to the intensity roll.</param>
         public Drop(
-            int spawnHeightMinMultiplier,
-            int spawnHeightMaxMultiplier,
-            float radiusMin,
-            float radiusMax,
-            float speedMin,
-            float speedMax,
-            float intensityMin,
-            float intensityMax)
+            IntRange spawnHeightMultiplierRange,
+            FloatRange radiusRange,
+            FloatRange speedRange,
+            FloatRange intensityRange)
         {
             position = new Vector2(
                 Random.Range(0, width),
-                Random.Range(height * spawnHeightMinMultiplier, height * spawnHeightMaxMultiplier));
-            radius = Random.Range(radiusMin, radiusMax);
-            speed = Random.Range(speedMin, speedMax);
-            intensity = Random.Range(intensityMin, intensityMax);
+                Random.Range(
+                    height * spawnHeightMultiplierRange.MinInclusive,
+                    height * spawnHeightMultiplierRange.MaxExclusive));
+            radius = Random.Range(radiusRange.Min, radiusRange.Max);
+            speed = Random.Range(speedRange.Min, speedRange.Max);
+            intensity = Random.Range(intensityRange.Min, intensityRange.Max);
         }
 
         /// <summary>
         /// Moves the drop downward and respawns it above the screen after it exits.
         /// </summary>
         /// <param name="deltaTime">Frame delta applied to this update call.</param>
-        /// <param name="spawnHeightMinMultiplier">Inclusive lower screen-height multiplier for a respawn roll.</param>
-        /// <param name="spawnHeightMaxMultiplier">Exclusive upper screen-height multiplier for a respawn roll.</param>
+        /// <param name="spawnHeightMultiplierRange">Inclusive-minimum/exclusive-maximum screen-height multipliers for a respawn roll.</param>
         /// <param name="respawnHeightMultiplier">Screen-height multiplier that triggers a respawn.</param>
         public void Update(
             float deltaTime,
-            int spawnHeightMinMultiplier,
-            int spawnHeightMaxMultiplier,
+            IntRange spawnHeightMultiplierRange,
             int respawnHeightMultiplier)
         {
             var velocity = new Vector2();
@@ -582,52 +543,54 @@ public class Waterfall : ScreenEffect
             position += deltaTime * velocity;
             if (position.y < height * respawnHeightMultiplier) position = new Vector2(
                 Random.Range(0, width),
-                Random.Range(height * spawnHeightMinMultiplier, height * spawnHeightMaxMultiplier));
+                Random.Range(
+                    height * spawnHeightMultiplierRange.MinInclusive,
+                    height * spawnHeightMultiplierRange.MaxExclusive));
         }
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce Waterfall's authored no-music look.</summary>
+/// <summary>
+/// Editable no-music values saved as Waterfall's Standalone Settings and restored from its authored
+/// Standalone Defaults.
+/// </summary>
+[Serializable]
 public sealed class WaterfallStandaloneSettings
 {
     /// <summary>
     /// Waveform peak endpoint and no-clock fallback; zero keeps the pulse at rest at each peak and in
     /// Standalone Mode.
     /// </summary>
+    [Range(0f, 1f)]
     public float WaveformPeakHeight;
 
-    /// <summary>Inclusive minimum beat-mode Roll bound fixed by the Standalone Defaults.</summary>
-    public int BeatModeMin;
+    /// <summary>
+    /// Inclusive-minimum/exclusive-maximum beat-mode Roll range fixed by the Standalone Defaults.
+    /// </summary>
+    public IntRange BeatMode;
 
-    /// <summary>Exclusive maximum beat-mode Roll bound fixed by the Standalone Defaults.</summary>
-    public int BeatModeMaxExclusive;
+    /// <summary>
+    /// Inclusive-minimum/exclusive-maximum pulse-direction Roll range fixed by the Standalone Defaults.
+    /// </summary>
+    public IntRange PulseDirection;
 
-    /// <summary>Inclusive minimum pulse-direction Roll bound fixed by the Standalone Defaults.</summary>
-    public int PulseDirectionMin;
-
-    /// <summary>Exclusive maximum pulse-direction Roll bound fixed by the Standalone Defaults.</summary>
-    public int PulseDirectionMaxExclusive;
-
-    /// <summary>Minimum pulse-multiplier Roll bound fixed by the Standalone Defaults.</summary>
-    public float PulseMultiplierMin;
-
-    /// <summary>Maximum pulse-multiplier Roll bound fixed by the Standalone Defaults.</summary>
-    public float PulseMultiplierMax;
+    /// <summary>Pulse-multiplier Roll range fixed by the Standalone Defaults.</summary>
+    public FloatRange PulseMultiplier;
 
     /// <summary>Waveform trough endpoint carried as an inert identity: Standalone Mode never samples it.</summary>
+    [Range(0f, 1f)]
     public float WaveformTroughHeight;
 
     /// <summary>Pulse-spacing divisor carried as an inert identity: the pulse history rests at zero in Standalone Mode.</summary>
+    [Min(0.0001f)]
     public float PulseScaleDivisor;
 
     /// <summary>Saturation-response multiple carried as an inert identity: it multiplies the resting pulse history.</summary>
+    [Min(0f)]
     public float SaturationPulseMultiplier;
 
-    /// <summary>Inclusive minimum number of drops rolled per activation.</summary>
-    public int DropCountMin;
-
-    /// <summary>Exclusive maximum number of drops rolled per activation.</summary>
-    public int DropCountMaxExclusive;
+    /// <summary>Inclusive-minimum/exclusive-maximum number of drops rolled per activation.</summary>
+    public IntRange DropCount;
 
     /// <summary>Per-activation background palette-stretch range.</summary>
     public FloatRange BackgroundStretch;
@@ -635,11 +598,8 @@ public sealed class WaterfallStandaloneSettings
     /// <summary>Per-activation background palette-speed range.</summary>
     public FloatRange BackgroundSpeed;
 
-    /// <summary>Inclusive lower screen-height multiplier for drop spawns.</summary>
-    public int DropSpawnHeightMinMultiplier;
-
-    /// <summary>Exclusive upper screen-height multiplier for drop spawns.</summary>
-    public int DropSpawnHeightMaxMultiplier;
+    /// <summary>Inclusive-lower/exclusive-upper screen-height multiplier range for drop spawns.</summary>
+    public IntRange DropSpawnHeightMultiplier;
 
     /// <summary>Per-drop radius range.</summary>
     public FloatRange DropRadius;
@@ -651,10 +611,77 @@ public sealed class WaterfallStandaloneSettings
     public FloatRange DropIntensity;
 
     /// <summary>Distance controlling the brightness falloff along each drop trail.</summary>
+    [Min(0.0001f)]
     public float DropTrailFalloff;
 
     /// <summary>Screen-height multiplier below the wall where a drop respawns.</summary>
     public int DropRespawnHeightMultiplier;
+
+    /// <summary>Copies every Waterfall Standalone Setting from another value.</summary>
+    public void CopyFrom(WaterfallStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        WaveformPeakHeight = source.WaveformPeakHeight;
+        BeatMode = new IntRange(
+            source.BeatMode.MinInclusive,
+            source.BeatMode.MaxExclusive,
+            source.BeatMode.LowRail,
+            source.BeatMode.HighRail);
+        PulseDirection = new IntRange(
+            source.PulseDirection.MinInclusive,
+            source.PulseDirection.MaxExclusive,
+            source.PulseDirection.LowRail,
+            source.PulseDirection.HighRail);
+        PulseMultiplier = new FloatRange(
+            source.PulseMultiplier.Min,
+            source.PulseMultiplier.Max,
+            source.PulseMultiplier.LowRail,
+            source.PulseMultiplier.HighRail);
+        WaveformTroughHeight = source.WaveformTroughHeight;
+        PulseScaleDivisor = source.PulseScaleDivisor;
+        SaturationPulseMultiplier = source.SaturationPulseMultiplier;
+        DropCount = new IntRange(
+            source.DropCount.MinInclusive,
+            source.DropCount.MaxExclusive,
+            source.DropCount.LowRail,
+            source.DropCount.HighRail);
+        BackgroundStretch = new FloatRange(
+            source.BackgroundStretch.Min,
+            source.BackgroundStretch.Max,
+            source.BackgroundStretch.LowRail,
+            source.BackgroundStretch.HighRail);
+        BackgroundSpeed = new FloatRange(
+            source.BackgroundSpeed.Min,
+            source.BackgroundSpeed.Max,
+            source.BackgroundSpeed.LowRail,
+            source.BackgroundSpeed.HighRail);
+        DropSpawnHeightMultiplier = new IntRange(
+            source.DropSpawnHeightMultiplier.MinInclusive,
+            source.DropSpawnHeightMultiplier.MaxExclusive,
+            source.DropSpawnHeightMultiplier.LowRail,
+            source.DropSpawnHeightMultiplier.HighRail);
+        DropRadius = new FloatRange(
+            source.DropRadius.Min,
+            source.DropRadius.Max,
+            source.DropRadius.LowRail,
+            source.DropRadius.HighRail);
+        DropSpeed = new FloatRange(
+            source.DropSpeed.Min,
+            source.DropSpeed.Max,
+            source.DropSpeed.LowRail,
+            source.DropSpeed.HighRail);
+        DropIntensity = new FloatRange(
+            source.DropIntensity.Min,
+            source.DropIntensity.Max,
+            source.DropIntensity.LowRail,
+            source.DropIntensity.HighRail);
+        DropTrailFalloff = source.DropTrailFalloff;
+        DropRespawnHeightMultiplier = source.DropRespawnHeightMultiplier;
+    }
 }
 
 /// <summary>Editable music-response and Synced Mode values saved as Waterfall's Sync Settings.</summary>
@@ -672,23 +699,14 @@ public sealed class WaterfallSyncSettings
     /// </summary>
     [Range(0f, 1f)] public float WaveformPeakHeight;
 
-    /// <summary>Inclusive minimum hue/saturation/value response mode.</summary>
-    [Range(0, 2)] public int BeatModeMin;
+    /// <summary>Inclusive-minimum/exclusive-maximum hue/saturation/value response-mode range.</summary>
+    public IntRange BeatMode;
 
-    /// <summary>Exclusive maximum hue/saturation/value response mode.</summary>
-    [Range(1, 3)] public int BeatModeMaxExclusive;
+    /// <summary>Inclusive-minimum/exclusive-maximum pulse-direction range.</summary>
+    public IntRange PulseDirection;
 
-    /// <summary>Inclusive minimum pulse direction.</summary>
-    [Range(0, 1)] public int PulseDirectionMin;
-
-    /// <summary>Exclusive maximum pulse direction.</summary>
-    [Range(1, 2)] public int PulseDirectionMaxExclusive;
-
-    /// <summary>Minimum color-response multiplier rolled per activation.</summary>
-    [Range(0f, 1f)] public float PulseMultiplierMin;
-
-    /// <summary>Maximum color-response multiplier rolled per activation.</summary>
-    [Range(0f, 1f)] public float PulseMultiplierMax;
+    /// <summary>Color-response multiplier range rolled per activation.</summary>
+    public FloatRange PulseMultiplier;
 
     /// <summary>Divisor mapping the Waveform's shortest peak spacing onto screen rows.</summary>
     [Min(0.0001f)] public float PulseScaleDivisor;
@@ -696,47 +714,26 @@ public sealed class WaterfallSyncSettings
     /// <summary>Additional scale applied when the pulse changes saturation.</summary>
     [Min(0f)] public float SaturationPulseMultiplier;
 
-    /// <summary>Inclusive minimum number of drops rolled per activation.</summary>
-    [Min(0)] public int DropCountMin;
+    /// <summary>Inclusive-minimum/exclusive-maximum number of drops rolled per activation.</summary>
+    public IntRange DropCount;
 
-    /// <summary>Exclusive maximum number of drops rolled per activation.</summary>
-    [Min(1)] public int DropCountMaxExclusive;
+    /// <summary>Background palette-stretch range rolled per activation.</summary>
+    public FloatRange BackgroundStretch;
 
-    /// <summary>Minimum background palette stretch rolled per activation.</summary>
-    [Min(0f)] public float BackgroundStretchMin;
+    /// <summary>Background palette-speed range rolled per activation.</summary>
+    public FloatRange BackgroundSpeed;
 
-    /// <summary>Maximum background palette stretch rolled per activation.</summary>
-    [Min(0f)] public float BackgroundStretchMax;
+    /// <summary>Inclusive-lower/exclusive-upper screen-height multiplier range for drop spawns.</summary>
+    public IntRange DropSpawnHeightMultiplier;
 
-    /// <summary>Minimum background palette speed rolled per activation.</summary>
-    [Min(0f)] public float BackgroundSpeedMin;
+    /// <summary>Radius range rolled for each drop.</summary>
+    public FloatRange DropRadius;
 
-    /// <summary>Maximum background palette speed rolled per activation.</summary>
-    [Min(0f)] public float BackgroundSpeedMax;
+    /// <summary>Falling-speed range rolled for each drop.</summary>
+    public FloatRange DropSpeed;
 
-    /// <summary>Inclusive lower screen-height multiplier for drop spawns.</summary>
-    [Min(0)] public int DropSpawnHeightMinMultiplier;
-
-    /// <summary>Exclusive upper screen-height multiplier for drop spawns.</summary>
-    [Min(1)] public int DropSpawnHeightMaxMultiplier;
-
-    /// <summary>Minimum radius rolled for each drop.</summary>
-    [Min(0f)] public float DropRadiusMin;
-
-    /// <summary>Maximum radius rolled for each drop.</summary>
-    [Min(0f)] public float DropRadiusMax;
-
-    /// <summary>Minimum falling speed rolled for each drop.</summary>
-    [Min(0f)] public float DropSpeedMin;
-
-    /// <summary>Maximum falling speed rolled for each drop.</summary>
-    [Min(0f)] public float DropSpeedMax;
-
-    /// <summary>Minimum palette intensity rolled for each drop.</summary>
-    [Min(0f)] public float DropIntensityMin;
-
-    /// <summary>Maximum palette intensity rolled for each drop.</summary>
-    [Min(0f)] public float DropIntensityMax;
+    /// <summary>Palette-intensity range rolled for each drop.</summary>
+    public FloatRange DropIntensity;
 
     /// <summary>Distance controlling the brightness falloff along each drop trail.</summary>
     [Min(0.0001f)] public float DropTrailFalloff;
@@ -754,28 +751,58 @@ public sealed class WaterfallSyncSettings
 
         WaveformTroughHeight = source.WaveformTroughHeight;
         WaveformPeakHeight = source.WaveformPeakHeight;
-        BeatModeMin = source.BeatModeMin;
-        BeatModeMaxExclusive = source.BeatModeMaxExclusive;
-        PulseDirectionMin = source.PulseDirectionMin;
-        PulseDirectionMaxExclusive = source.PulseDirectionMaxExclusive;
-        PulseMultiplierMin = source.PulseMultiplierMin;
-        PulseMultiplierMax = source.PulseMultiplierMax;
+        BeatMode = new IntRange(
+            source.BeatMode.MinInclusive,
+            source.BeatMode.MaxExclusive,
+            source.BeatMode.LowRail,
+            source.BeatMode.HighRail);
+        PulseDirection = new IntRange(
+            source.PulseDirection.MinInclusive,
+            source.PulseDirection.MaxExclusive,
+            source.PulseDirection.LowRail,
+            source.PulseDirection.HighRail);
+        PulseMultiplier = new FloatRange(
+            source.PulseMultiplier.Min,
+            source.PulseMultiplier.Max,
+            source.PulseMultiplier.LowRail,
+            source.PulseMultiplier.HighRail);
         PulseScaleDivisor = source.PulseScaleDivisor;
         SaturationPulseMultiplier = source.SaturationPulseMultiplier;
-        DropCountMin = source.DropCountMin;
-        DropCountMaxExclusive = source.DropCountMaxExclusive;
-        BackgroundStretchMin = source.BackgroundStretchMin;
-        BackgroundStretchMax = source.BackgroundStretchMax;
-        BackgroundSpeedMin = source.BackgroundSpeedMin;
-        BackgroundSpeedMax = source.BackgroundSpeedMax;
-        DropSpawnHeightMinMultiplier = source.DropSpawnHeightMinMultiplier;
-        DropSpawnHeightMaxMultiplier = source.DropSpawnHeightMaxMultiplier;
-        DropRadiusMin = source.DropRadiusMin;
-        DropRadiusMax = source.DropRadiusMax;
-        DropSpeedMin = source.DropSpeedMin;
-        DropSpeedMax = source.DropSpeedMax;
-        DropIntensityMin = source.DropIntensityMin;
-        DropIntensityMax = source.DropIntensityMax;
+        DropCount = new IntRange(
+            source.DropCount.MinInclusive,
+            source.DropCount.MaxExclusive,
+            source.DropCount.LowRail,
+            source.DropCount.HighRail);
+        BackgroundStretch = new FloatRange(
+            source.BackgroundStretch.Min,
+            source.BackgroundStretch.Max,
+            source.BackgroundStretch.LowRail,
+            source.BackgroundStretch.HighRail);
+        BackgroundSpeed = new FloatRange(
+            source.BackgroundSpeed.Min,
+            source.BackgroundSpeed.Max,
+            source.BackgroundSpeed.LowRail,
+            source.BackgroundSpeed.HighRail);
+        DropSpawnHeightMultiplier = new IntRange(
+            source.DropSpawnHeightMultiplier.MinInclusive,
+            source.DropSpawnHeightMultiplier.MaxExclusive,
+            source.DropSpawnHeightMultiplier.LowRail,
+            source.DropSpawnHeightMultiplier.HighRail);
+        DropRadius = new FloatRange(
+            source.DropRadius.Min,
+            source.DropRadius.Max,
+            source.DropRadius.LowRail,
+            source.DropRadius.HighRail);
+        DropSpeed = new FloatRange(
+            source.DropSpeed.Min,
+            source.DropSpeed.Max,
+            source.DropSpeed.LowRail,
+            source.DropSpeed.HighRail);
+        DropIntensity = new FloatRange(
+            source.DropIntensity.Min,
+            source.DropIntensity.Max,
+            source.DropIntensity.LowRail,
+            source.DropIntensity.HighRail);
         DropTrailFalloff = source.DropTrailFalloff;
         DropRespawnHeightMultiplier = source.DropRespawnHeightMultiplier;
     }

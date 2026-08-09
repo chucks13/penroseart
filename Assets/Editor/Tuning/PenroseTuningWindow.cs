@@ -141,8 +141,10 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Type[] effectTypes = Array.Empty<Type>();
     /// <summary>Display names parallel to <see cref="effectTypes"/>.</summary>
     private string[] effectNames = Array.Empty<string>();
+    /// <summary>Declared Standalone Settings asset types parallel to <see cref="effectTypes"/>.</summary>
+    private Type[] effectStandaloneSettingsAssetTypes = Array.Empty<Type>();
     /// <summary>Declared Sync Settings asset types parallel to <see cref="effectTypes"/>.</summary>
-    private Type[] effectSettingsAssetTypes = Array.Empty<Type>();
+    private Type[] effectSyncSettingsAssetTypes = Array.Empty<Type>();
     /// <summary>The catalog index whose saved Transition Settings are currently being edited.</summary>
     [SerializeField]
     private int selectedTransitionIndex = -1;
@@ -162,7 +164,7 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 effectListScroll;
     /// <summary>Scroll position for the selected Transition Settings editor.</summary>
     private Vector2 settingsScroll;
-    /// <summary>Scroll position for the selected Effect Sync Settings editor.</summary>
+    /// <summary>Scroll position for the selected Effect Settings editor.</summary>
     private Vector2 effectSettingsScroll;
     /// <summary>Scroll position for the live sequencing timeline.</summary>
     private Vector2 liveTimelineScroll;
@@ -176,10 +178,14 @@ public sealed class PenroseTuningWindow : EditorWindow
     private Vector2 rhythmScroll;
     private TransitionSettingsAsset selectedAsset;
     private SerializedObject selectedSerializedObject;
+    /// <summary>The selected Effect's saved Standalone Settings asset, when it exists.</summary>
+    private EffectStandaloneSettingsAsset selectedEffectStandaloneAsset;
+    /// <summary>Serialized editor wrapper for <see cref="selectedEffectStandaloneAsset"/>.</summary>
+    private SerializedObject selectedEffectStandaloneSerializedObject;
     /// <summary>The selected Effect's saved Sync Settings asset, when it exists.</summary>
-    private EffectSyncSettingsAsset selectedEffectAsset;
-    /// <summary>Serialized editor wrapper for <see cref="selectedEffectAsset"/>.</summary>
-    private SerializedObject selectedEffectSerializedObject;
+    private EffectSyncSettingsAsset selectedEffectSyncAsset;
+    /// <summary>Serialized editor wrapper for <see cref="selectedEffectSyncAsset"/>.</summary>
+    private SerializedObject selectedEffectSyncSerializedObject;
     /// <summary>Whether an Effect or Transition settings edit still needs an AssetDatabase save.</summary>
     private bool settingsChangedSinceLastSave;
 
@@ -238,7 +244,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
-    /// <summary>Draws Effect selection beside or above the selected Sync Settings asset.</summary>
+    /// <summary>Draws Effect selection beside or above the selected Standalone and Sync Settings assets.</summary>
     private void DrawEffectsTab()
     {
         using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
@@ -248,28 +254,29 @@ public sealed class PenroseTuningWindow : EditorWindow
                 ReloadEffects();
             }
 
-            if (GUILayout.Button("Create Missing Sync Settings", EditorStyles.toolbarButton, GUILayout.Width(190f)))
+            if (GUILayout.Button("Create Missing Settings", EditorStyles.toolbarButton, GUILayout.Width(160f)))
             {
+                EffectStandaloneSettingsAssetUtility.EnsureCatalogAssets();
                 EffectSyncSettingsAssetUtility.EnsureCatalogAssets();
                 ReloadEffects();
             }
 
             GUILayout.FlexibleSpace();
-            GUILayout.Label("Saved Effect Sync Settings", EditorStyles.miniLabel);
+            GUILayout.Label("Saved Effect Settings", EditorStyles.miniLabel);
         }
 
         if (FlowForWidth(position.width) == TuningWorkspaceFlow.Split)
         {
             using var row = new EditorGUILayout.HorizontalScope();
             DrawEffectList(GUILayout.Width(260f));
-            DrawSelectedEffectSyncSettings();
+            DrawSelectedEffectSettings();
             return;
         }
 
         var listHeight = Mathf.Clamp(position.height * 0.32f, 150f, 260f);
         DrawEffectList(GUILayout.Height(listHeight));
         EditorGUILayout.Space(6f);
-        DrawSelectedEffectSyncSettings();
+        DrawSelectedEffectSettings();
     }
 
     /// <summary>Draws the runtime Effect catalog without creating or mutating settings assets.</summary>
@@ -289,7 +296,10 @@ public sealed class PenroseTuningWindow : EditorWindow
                     GUI.backgroundColor = new Color(0.3f, 0.55f, 0.7f);
                 }
 
-                var suffix = effectSettingsAssetTypes[i] == null ? " (not fitted)" : string.Empty;
+                var suffix = effectStandaloneSettingsAssetTypes[i] == null &&
+                    effectSyncSettingsAssetTypes[i] == null
+                    ? " (not fitted)"
+                    : string.Empty;
                 var label = isSelected ? $"▶ {effectNames[i]}{suffix}" : $"{effectNames[i]}{suffix}";
                 if (GUILayout.Button(label, EditorStyles.miniButton))
                 {
@@ -302,108 +312,199 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
-    /// <summary>Draws only the selected Effect's editable saved Sync Settings.</summary>
-    private void DrawSelectedEffectSyncSettings()
+    /// <summary>Draws the selected Effect's editable saved Standalone and Sync Settings.</summary>
+    private void DrawSelectedEffectSettings()
     {
         using (new EditorGUILayout.VerticalScope())
         {
             if (!IsValidEffectIndex(selectedEffectIndex))
             {
-                EditorGUILayout.HelpBox("Select an Effect to inspect its Sync Settings.", MessageType.Info);
+                EditorGUILayout.HelpBox("Select an Effect to inspect its Settings.", MessageType.Info);
                 return;
             }
 
             EditorGUILayout.LabelField(effectNames[selectedEffectIndex], EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox(
-                "Standalone Settings are exactly the file-local Standalone Defaults and are not editable here.",
-                MessageType.None);
-
-            if (effectSettingsAssetTypes[selectedEffectIndex] == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "This Effect has not been fitted with Sync Settings yet.",
-                    MessageType.Info);
-                return;
-            }
-
-            LoadSelectedEffectAsset();
-            if (selectedEffectAsset == null || selectedEffectSerializedObject == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "No saved Sync Settings asset exists. Until one is created, the Effect resolves to its Sync Defaults.",
-                    MessageType.Warning);
-                if (GUILayout.Button("Create Sync Settings Asset", GUILayout.Width(190f)))
-                {
-                    CreateSelectedEffectSyncSettingsAsset();
-                }
-
-                return;
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                using (new EditorGUI.DisabledScope(true))
-                {
-                    EditorGUILayout.ObjectField(
-                        "Sync Settings Asset",
-                        selectedEffectAsset,
-                        typeof(EffectSyncSettingsAsset),
-                        false);
-                }
-
-                if (GUILayout.Button("Restore Sync Defaults", GUILayout.Width(150f)))
-                {
-                    RestoreSelectedEffectSyncDefaults();
-                }
-            }
-
-            EditorGUILayout.Space();
             using var scroll = new EditorGUILayout.ScrollViewScope(effectSettingsScroll);
             effectSettingsScroll = scroll.scrollPosition;
-            selectedEffectSerializedObject.Update();
-            var settingsProperty = selectedEffectSerializedObject.FindProperty(
-                EffectSyncSettingsAsset.SerializedSettingsFieldName);
-            if (settingsProperty == null)
-            {
-                EditorGUILayout.HelpBox(
-                    $"{selectedEffectAsset.GetType().Name} has no serialized Sync Settings field.",
-                    MessageType.Error);
-                return;
-            }
-
-            EditorGUI.BeginChangeCheck();
-            EditorGUILayout.PropertyField(settingsProperty, new GUIContent("Sync Settings"), true);
-            if (EditorGUI.EndChangeCheck() &&
-                EffectSyncSettingsAssetUtility.ApplySettings(selectedEffectSerializedObject))
-            {
-                settingsChangedSinceLastSave = true;
-                selectedEffectSerializedObject.Update();
-            }
+            DrawSelectedEffectStandaloneSettings();
+            EditorGUILayout.Space(6f);
+            DrawSelectedEffectSyncSettings();
         }
     }
 
-    /// <summary>Reloads the Effect catalog and its declared Sync Settings asset types.</summary>
+    /// <summary>Draws only the selected Effect's editable saved Standalone Settings.</summary>
+    private void DrawSelectedEffectStandaloneSettings()
+    {
+        using var panel = new EditorGUILayout.VerticalScope(GUI.skin.box);
+        EditorGUILayout.LabelField("Standalone Settings", EditorStyles.boldLabel);
+        if (effectStandaloneSettingsAssetTypes[selectedEffectIndex] == null)
+        {
+            EditorGUILayout.HelpBox(
+                "This Effect has not been fitted with Standalone Settings yet.",
+                MessageType.Info);
+            return;
+        }
+
+        LoadSelectedEffectStandaloneAsset();
+        if (selectedEffectStandaloneAsset == null || selectedEffectStandaloneSerializedObject == null)
+        {
+            EditorGUILayout.HelpBox(
+                "No saved Standalone Settings asset exists. Until one is created, the Effect resolves to its Standalone Defaults.",
+                MessageType.Warning);
+            if (GUILayout.Button("Create Standalone Settings Asset", GUILayout.Width(220f)))
+            {
+                CreateSelectedEffectStandaloneSettingsAsset();
+            }
+
+            return;
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUILayout.ObjectField(
+                    "Standalone Settings Asset",
+                    selectedEffectStandaloneAsset,
+                    typeof(EffectStandaloneSettingsAsset),
+                    false);
+            }
+
+            if (GUILayout.Button("Restore Standalone Defaults", GUILayout.Width(190f)))
+            {
+                RestoreSelectedEffectStandaloneDefaults();
+            }
+        }
+
+        EditorGUILayout.Space();
+        selectedEffectStandaloneSerializedObject.Update();
+        var settingsProperty = selectedEffectStandaloneSerializedObject.FindProperty(
+            EffectStandaloneSettingsAsset.SerializedSettingsFieldName);
+        if (settingsProperty == null)
+        {
+            EditorGUILayout.HelpBox(
+                $"{selectedEffectStandaloneAsset.GetType().Name} has no serialized Standalone Settings field.",
+                MessageType.Error);
+            return;
+        }
+
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(settingsProperty, new GUIContent("Standalone Settings"), true);
+        if (EditorGUI.EndChangeCheck() &&
+            EffectStandaloneSettingsAssetUtility.ApplySettings(selectedEffectStandaloneSerializedObject))
+        {
+            settingsChangedSinceLastSave = true;
+            selectedEffectStandaloneSerializedObject.Update();
+        }
+
+        if (GUILayout.Button("Copy Defaults Update", GUILayout.Width(170f)))
+        {
+            EffectDefaultsClipboardUtility.CopyStandaloneDefaultsUpdate(
+                effectTypes[selectedEffectIndex],
+                settingsProperty);
+        }
+    }
+
+    /// <summary>Draws only the selected Effect's editable saved Sync Settings.</summary>
+    private void DrawSelectedEffectSyncSettings()
+    {
+        using var panel = new EditorGUILayout.VerticalScope(GUI.skin.box);
+        EditorGUILayout.LabelField("Sync Settings", EditorStyles.boldLabel);
+        if (effectSyncSettingsAssetTypes[selectedEffectIndex] == null)
+        {
+            EditorGUILayout.HelpBox(
+                "This Effect has not been fitted with Sync Settings yet.",
+                MessageType.Info);
+            return;
+        }
+
+        LoadSelectedEffectSyncAsset();
+        if (selectedEffectSyncAsset == null || selectedEffectSyncSerializedObject == null)
+        {
+            EditorGUILayout.HelpBox(
+                "No saved Sync Settings asset exists. Until one is created, the Effect resolves to its Sync Defaults.",
+                MessageType.Warning);
+            if (GUILayout.Button("Create Sync Settings Asset", GUILayout.Width(190f)))
+            {
+                CreateSelectedEffectSyncSettingsAsset();
+            }
+
+            return;
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            using (new EditorGUI.DisabledScope(true))
+            {
+                EditorGUILayout.ObjectField(
+                    "Sync Settings Asset",
+                    selectedEffectSyncAsset,
+                    typeof(EffectSyncSettingsAsset),
+                    false);
+            }
+
+            if (GUILayout.Button("Restore Sync Defaults", GUILayout.Width(150f)))
+            {
+                RestoreSelectedEffectSyncDefaults();
+            }
+        }
+
+        EditorGUILayout.Space();
+        selectedEffectSyncSerializedObject.Update();
+        var settingsProperty = selectedEffectSyncSerializedObject.FindProperty(
+            EffectSyncSettingsAsset.SerializedSettingsFieldName);
+        if (settingsProperty == null)
+        {
+            EditorGUILayout.HelpBox(
+                $"{selectedEffectSyncAsset.GetType().Name} has no serialized Sync Settings field.",
+                MessageType.Error);
+            return;
+        }
+
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(settingsProperty, new GUIContent("Sync Settings"), true);
+        if (EditorGUI.EndChangeCheck() &&
+            EffectSyncSettingsAssetUtility.ApplySettings(selectedEffectSyncSerializedObject))
+        {
+            settingsChangedSinceLastSave = true;
+            selectedEffectSyncSerializedObject.Update();
+        }
+
+        if (GUILayout.Button("Copy Defaults Update", GUILayout.Width(170f)))
+        {
+            EffectDefaultsClipboardUtility.CopySyncDefaultsUpdate(
+                effectTypes[selectedEffectIndex],
+                settingsProperty);
+        }
+    }
+
+    /// <summary>Reloads the Effect catalog and its declared Standalone and Sync Settings asset types.</summary>
     private void ReloadEffects()
     {
         var factory = new Factory<EffectBase>();
         effectTypes = factory.Types;
         effectNames = new string[effectTypes.Length];
-        effectSettingsAssetTypes = new Type[effectTypes.Length];
+        effectStandaloneSettingsAssetTypes = new Type[effectTypes.Length];
+        effectSyncSettingsAssetTypes = new Type[effectTypes.Length];
         for (var i = 0; i < effectTypes.Length; i++)
         {
             effectNames[i] = effectTypes[i].Name;
-            effectSettingsAssetTypes[i] = EffectSyncSettingsProvider.SettingsAssetTypeFor(effectTypes[i]);
+            effectStandaloneSettingsAssetTypes[i] =
+                EffectStandaloneSettingsProvider.SettingsAssetTypeFor(effectTypes[i]);
+            effectSyncSettingsAssetTypes[i] = EffectSyncSettingsProvider.SettingsAssetTypeFor(effectTypes[i]);
         }
 
         selectedEffectIndex = effectTypes.Length == 0
             ? -1
             : Mathf.Clamp(selectedEffectIndex < 0 ? 0 : selectedEffectIndex, 0, effectTypes.Length - 1);
-        selectedEffectAsset = null;
-        selectedEffectSerializedObject = null;
+        selectedEffectStandaloneAsset = null;
+        selectedEffectStandaloneSerializedObject = null;
+        selectedEffectSyncAsset = null;
+        selectedEffectSyncSerializedObject = null;
         Repaint();
     }
 
-    /// <summary>Selects one Effect for Sync Settings authoring without changing the running Effect.</summary>
+    /// <summary>Selects one Effect for Standalone and Sync Settings authoring without changing the running Effect.</summary>
     private void SelectEffect(int index)
     {
         if (!IsValidEffectIndex(index) || index == selectedEffectIndex)
@@ -412,15 +513,17 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
 
         selectedEffectIndex = index;
-        selectedEffectAsset = null;
-        selectedEffectSerializedObject = null;
+        selectedEffectStandaloneAsset = null;
+        selectedEffectStandaloneSerializedObject = null;
+        selectedEffectSyncAsset = null;
+        selectedEffectSyncSerializedObject = null;
         Repaint();
     }
 
-    /// <summary>Loads the selected Effect's existing Sync Settings asset without creating it.</summary>
-    private void LoadSelectedEffectAsset()
+    /// <summary>Loads the selected Effect's existing Standalone Settings asset without creating it.</summary>
+    private void LoadSelectedEffectStandaloneAsset()
     {
-        if (selectedEffectAsset != null && selectedEffectSerializedObject != null)
+        if (selectedEffectStandaloneAsset != null && selectedEffectStandaloneSerializedObject != null)
         {
             return;
         }
@@ -430,10 +533,44 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        selectedEffectAsset = EffectSyncSettingsAssetUtility.LoadAsset(effectTypes[selectedEffectIndex]);
-        selectedEffectSerializedObject = selectedEffectAsset == null
+        selectedEffectStandaloneAsset =
+            EffectStandaloneSettingsAssetUtility.LoadAsset(effectTypes[selectedEffectIndex]);
+        selectedEffectStandaloneSerializedObject = selectedEffectStandaloneAsset == null
             ? null
-            : new SerializedObject(selectedEffectAsset);
+            : new SerializedObject(selectedEffectStandaloneAsset);
+    }
+
+    /// <summary>Loads the selected Effect's existing Sync Settings asset without creating it.</summary>
+    private void LoadSelectedEffectSyncAsset()
+    {
+        if (selectedEffectSyncAsset != null && selectedEffectSyncSerializedObject != null)
+        {
+            return;
+        }
+
+        if (!IsValidEffectIndex(selectedEffectIndex))
+        {
+            return;
+        }
+
+        selectedEffectSyncAsset = EffectSyncSettingsAssetUtility.LoadAsset(effectTypes[selectedEffectIndex]);
+        selectedEffectSyncSerializedObject = selectedEffectSyncAsset == null
+            ? null
+            : new SerializedObject(selectedEffectSyncAsset);
+    }
+
+    /// <summary>Creates the selected Effect's missing Standalone Settings asset from its Standalone Defaults.</summary>
+    private void CreateSelectedEffectStandaloneSettingsAsset()
+    {
+        if (!IsValidEffectIndex(selectedEffectIndex))
+        {
+            return;
+        }
+
+        selectedEffectStandaloneAsset =
+            EffectStandaloneSettingsAssetUtility.EnsureAsset(effectTypes[selectedEffectIndex]);
+        selectedEffectStandaloneSerializedObject = new SerializedObject(selectedEffectStandaloneAsset);
+        Repaint();
     }
 
     /// <summary>Creates the selected Effect's missing Sync Settings asset from its Sync Defaults.</summary>
@@ -444,8 +581,23 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        selectedEffectAsset = EffectSyncSettingsAssetUtility.EnsureAsset(effectTypes[selectedEffectIndex]);
-        selectedEffectSerializedObject = new SerializedObject(selectedEffectAsset);
+        selectedEffectSyncAsset = EffectSyncSettingsAssetUtility.EnsureAsset(effectTypes[selectedEffectIndex]);
+        selectedEffectSyncSerializedObject = new SerializedObject(selectedEffectSyncAsset);
+        Repaint();
+    }
+
+    /// <summary>Restores the selected saved Standalone Settings from the Effect's file-local Standalone Defaults.</summary>
+    private void RestoreSelectedEffectStandaloneDefaults()
+    {
+        if (!IsValidEffectIndex(selectedEffectIndex))
+        {
+            return;
+        }
+
+        selectedEffectStandaloneAsset =
+            EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(effectTypes[selectedEffectIndex]);
+        selectedEffectStandaloneSerializedObject = new SerializedObject(selectedEffectStandaloneAsset);
+        settingsChangedSinceLastSave = false;
         Repaint();
     }
 
@@ -457,8 +609,8 @@ public sealed class PenroseTuningWindow : EditorWindow
             return;
         }
 
-        selectedEffectAsset = EffectSyncSettingsAssetUtility.RestoreSyncDefaults(effectTypes[selectedEffectIndex]);
-        selectedEffectSerializedObject = new SerializedObject(selectedEffectAsset);
+        selectedEffectSyncAsset = EffectSyncSettingsAssetUtility.RestoreSyncDefaults(effectTypes[selectedEffectIndex]);
+        selectedEffectSyncSerializedObject = new SerializedObject(selectedEffectSyncAsset);
         settingsChangedSinceLastSave = false;
         Repaint();
     }
@@ -1101,7 +1253,7 @@ public sealed class PenroseTuningWindow : EditorWindow
         }
     }
 
-    /// <summary>Persists serialized Transition Settings edits that are already constrained and dirty.</summary>
+    /// <summary>Persists serialized Effect or Transition Settings edits that are already dirty.</summary>
     private void SavePendingSettingsAssets()
     {
         if (!settingsChangedSinceLastSave)

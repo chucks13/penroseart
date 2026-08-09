@@ -378,16 +378,16 @@ The umbrella for everything an Effect is tuned by — its Standalone Defaults, S
 _Avoid_: using it for any single one of the four; reading it as one storage location; assuming every Effect expresses them the same way — each Effect is hand-built and takes the shape that suits it.
 
 **Standalone Defaults**:
-An Effect's authored values for how it looks with no music. They sit at the top of that Effect's own source file and change only by editing that file.
-_Avoid_: making them editable on an editor surface (displaying them read-only is fine); treating them as a starting point that something later overrides; **Code Defaults**, which is the Transition-side term for a different arrangement.
+An Effect's authored values for how it looks with no music. They sit at the top of that Effect's own source file and change only by editing that file; they are the one authored record of the look, and what Standalone Settings restore to.
+_Avoid_: making them editable on an editor surface (displaying them read-only is fine); **Code Defaults**, which is the Transition-side term for a different arrangement.
 
 **Sync Defaults**:
 An Effect's authored values for its musical response, sitting at the top of the same file beside the Standalone Defaults and likewise changed only by editing that file. They are what Sync Settings reset back to.
 _Avoid_: keeping them in the saved settings instead of the file; classing a value that shapes the Standalone look as a Sync Default.
 
 **Standalone Settings**:
-What an Effect reads in Standalone Mode. Standalone has no editable layer, so these are always exactly the Standalone Defaults; the term names the cell, not a second place to look.
-_Avoid_: hunting for them in an asset or an editor surface; expecting them to ever differ from the Standalone Defaults.
+What an Effect reads in Standalone Mode: a saved copy that can be tweaked while the wall runs and restored to the Standalone Defaults at any moment.
+_Avoid_: treating a live tweak as finished authoring before it has been written back into the file; changing an Effect's intended look by editing the saved copy rather than the Standalone Defaults.
 
 **Sync Settings**:
 What an Effect reads in Synced Mode: a saved copy that can be tweaked while the wall runs and reset back to the Sync Defaults at any moment.
@@ -396,6 +396,10 @@ _Avoid_: treating a live tweak as finished authoring before it has been written 
 **Roll**:
 The moment at activation when an Effect determines every value it randomizes and discards every piece of carried motion state. A re-roll is the same determination run again on reactivation; after any Roll, nothing from the previous activation shows on the wall.
 _Avoid_: partial rolls that redraw random values but keep stale orientation or progress; confusing the Roll with camera roll, the aviation-sense rotation some Effects animate.
+
+**Rail**:
+The lowest or highest value a range's tuning slider spans — per-range calibration for live tweaking, carried by the range itself and saved with the settings. Authored defaults seed Rails from the range's endpoints; a Rail stretched during tuning lives only in the saved asset.
+_Avoid_: treating Rails as the Roll bounds (the endpoints are); writing Rails back into Standalone or Sync Defaults, which carry no constants for them.
 
 ### Authoring surfaces
 
