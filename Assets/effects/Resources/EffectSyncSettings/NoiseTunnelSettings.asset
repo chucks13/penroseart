@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c32f7dc855ba748479d76323f123e225, type: 3}
+  m_Name: NoiseTunnelSettings
+  m_EditorClassIdentifier: Assembly-CSharp::NoiseTunnelSyncSettingsAsset
+  effectTypeName: NoiseTunnel
+  settings:
+    WaveformEnergyOne: 0
+    WaveformEnergyTwo: 1
+    ScaleMin: 0.05
+    ScaleMax: 0.2
+    SpeedMin: 0.1
+    SpeedMax: 1.5
+    AmplifierMin: 1
+    AmplifierMax: 5
+    StyleMinInclusive: 0
+    StyleMaxExclusive: 3
+    DirectionMinInclusive: 0
+    DirectionMaxExclusive: 2
+    BeatModeMinInclusive: 0
+    BeatModeMaxExclusive: 3
+    BrightnessAtWaveformTrough: 1
+    BrightnessAtWaveformPeak: 0.75
+    HueShiftAtWaveformPeak: 0.5
+    TimeOffsetAtWaveformPeak: 0.5
+    FillSaturation: 0
+    DropSlowdownBeats: 8
