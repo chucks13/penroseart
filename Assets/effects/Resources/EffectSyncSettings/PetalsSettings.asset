@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84262c48a404b41eb93292191984e91d, type: 3}
+  m_Name: PetalsSettings
+  m_EditorClassIdentifier: Assembly-CSharp::PetalsSyncSettingsAsset
+  effectTypeName: Petals
+  settings:
+    LayerHueMin: 0
+    LayerHueMax: 1
+    LayerSaturationMin: 0
+    LayerSaturationMax: 1
+    BackgroundHueMin: 0
+    BackgroundHueMax: 1
+    BackgroundHueAdvance: 0.1
+    BeatBrightnessAtTrough: 0.85
+    BeatBrightnessAtPeak: 1
+    WaveformHueShiftAtPeak: 0.001
+    LayerMaskMinInclusive: 0
+    LayerMaskMaxExclusive: 256
+    SparkleChance: 0.25
+    DropDensity: 0.001
+    DropSpeed: 0.5
+    SparkleValue: 10
+    TileHueSpread: 0.002
+    LayerHueAdvance: 0.00004
