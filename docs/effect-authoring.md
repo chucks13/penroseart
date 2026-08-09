@@ -72,6 +72,8 @@ Classify each authored value by the mode that reads it. A value that only Standa
 
 A mode reads a slot when a change to that value can change the rendering of that mode, however rare the state. The `Waveform.Lerp` to-slot in Ripple shows the dual-home shape.
 
+Fill and Drop are Synced Mode facts. The running clock is what carries them, so `Fill.Active` and `Drop.Active` are never true in Standalone Mode. A value read only inside a Fill- or Drop-gated branch is therefore a Sync Default, never dual-homed, and a Drop slowdown window is likewise Sync-only — `Before.Decay` rests at one in Standalone Mode, so the window cannot reach Standalone rendering.
+
 A dual-homed slot needs both values. An operator can edit Sync Settings while the wall runs, and ADR-0012 fixes the Standalone look. One shared value would let a live tweak change the Standalone look. Two authored values keep each mode on its own value, so the two modes stay independent.
 
 Two consequences follow from that selection. They are properties of the pattern, so they hold for every Effect that dual-homes a value and no Effect restates them.

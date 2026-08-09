@@ -108,9 +108,11 @@ _Avoid_: using the track id to detect structure change; comparing generations wi
 
 **Fill**:
 A short musical moment marked within a Phrase — anywhere inside it, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats` and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
+_Avoid_: expecting `Active` without the running 4-count — a Fill is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Drop**:
 The climactic section of a track. A Drop is its own Phrase and starts on that Phrase's first beat. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
+_Avoid_: expecting `Active` without the running 4-count — a Drop is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Energy**:
 Intensity on one closed three-step ladder — Low, Mid, High. `BeatManager.Energy` exposes the current wire level, countdown, length, progress, derived `Trend`, and `Build()`/`Decay()`. The explicitly named next wire lane lives separately at `BeatManager.NextEnergy`. A **Waveform's** Energy is derived from its shape — how many peaks it has and how tightly they pack — computed from the notation itself.
