@@ -78,11 +78,28 @@ restorable to the in-file Standalone Defaults. The maintainer verifies on the wa
 persistence after the run, and Restore. The Standalone Defaults blocks stay in source as the
 authored record.
 
-## Phase C — Musicality loop
+## Phase C — Reshape
+
+Run this phase only when triage or a maintainer ruling calls for structural or overall-look
+changes to the Effect's body; otherwise skip to the musicality loop. The rework comes before any
+capability work because capabilities land on the final structure — building one on a shape about
+to be recut is the same work done twice.
+
+1. Discuss the target shape with the maintainer: what the structure becomes and what the new
+   baseline look is. The maintainer owns the intent; you own the design conversation.
+
+2. Brief one implementation worker, review the diff, and validate, exactly as the musicality
+   loop's steps 2–4 prescribe.
+
+3. The maintainer judges the new baseline look on the wall. That approved look is the baseline
+   every later phase preserves, except where a later capability ruling changes it again.
+
+## Phase D — Musicality loop
 
 Run once per capability. The usual order is Levels, then Fill, then Drop, then Energy, but the
-Effect decides what it supports and the maintainer may reorder, add, or skip capabilities —
-including reshaping the Effect itself when the discussion goes there.
+Effect decides what it supports and the maintainer may reorder, add, or skip capabilities. When
+a capability discussion reopens the Effect's shape, that is a return to Reshape, judged the same
+way.
 
 Vocabulary: **Levels**, **Energy**, **Waveform**, and **Data Surface** are `CONTEXT.md` terms.
 Use them exactly as the glossary defines them, and sharpen the glossary when a discussion refines
@@ -109,9 +126,9 @@ one.
 6. When the capability lands, update the Effect's `Repertoire` flags so they advertise honestly
    what it now handles.
 
-## Phase D — Polish and optimize
+## Phase E — Polish and optimize
 
-The look and the features stay exactly as the maintainer approved them in Phase C.
+The look and the features stay exactly as the maintainer approved them in Phases C and D.
 
 1. Run the `polish` skill over the Effect's files (named-files mode), so the whole file is in
    scope, not only this branch's diff.
@@ -126,7 +143,7 @@ The look and the features stay exactly as the maintainer approved them in Phase 
    skips, so nothing lands on bridge green alone. The maintainer confirms the look on the wall
    one last time.
 
-## Phase E — Land and close
+## Phase F — Land and close
 
 1. With the `commit` skill, make logical commits. Include the Unity `.meta` and `.asset` files.
 
