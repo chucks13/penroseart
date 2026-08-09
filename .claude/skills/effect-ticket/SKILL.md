@@ -99,7 +99,9 @@ one.
    evidence.
 
 4. Validate yourself, never through a worker: `scripts/unity-compile.sh` to zero warnings,
-   `scripts/unity-tests.sh` to all green.
+   `scripts/unity-tests.sh` to all green. With the Editor open, the test bridge runs EditMode
+   synchronously and silently skips every `[UnityTest]` coroutine test — bridge green is the
+   inner loop, not the full suite.
 
 5. The maintainer plays, tweaks the settings live, and rules. Send design-level rework back with
    `codex exec resume`; fix small defects directly.
@@ -119,8 +121,10 @@ The look and the features stay exactly as the maintainer approved them in Phase 
    frame-time evidence. Standing targets: zero per-frame GC allocation, no per-pixel work that
    can hoist, no Unity objects created without a destruction path.
 
-3. Re-run the compile and test scripts. The maintainer confirms the look on the wall one last
-   time.
+3. Re-run the compile and test scripts, then one full batchmode test run with the Editor
+   closed — only batchmode executes the `[UnityTest]` coroutine tests the open-Editor bridge
+   skips, so nothing lands on bridge green alone. The maintainer confirms the look on the wall
+   one last time.
 
 ## Phase E — Land and close
 
