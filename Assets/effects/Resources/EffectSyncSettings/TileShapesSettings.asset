@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 010467b28de9c40edb4d1c32759fac6a, type: 3}
+  m_Name: TileShapesSettings
+  m_EditorClassIdentifier: Assembly-CSharp::TileShapesSyncSettingsAsset
+  effectTypeName: TileShapes
+  settings:
+    RandomColorThreshold: 0.5
+    FixedHueMin: 0
+    FixedHueMax: 1
+    ShapeSelectorMin: 0
+    ShapeSelectorMaxExclusive: 9
+    RandomColorBrightnessAtTrough: 0.75
+    RandomColorBrightnessAtPeak: 1
+    FixedHueShiftAtTrough: 0
+    FixedHueShiftAtPeak: 0.25
+    FlashCountDivisor: 5
+    RandomHueMin: 0
+    RandomHueMax: 1
