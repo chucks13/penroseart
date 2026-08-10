@@ -207,12 +207,14 @@ public class AnimPalette
     }
 
     /// <summary>
-    /// Samples the currently animated palette at normalized position i.
+    /// Samples the currently animated palette at normalized position i. The doblend request is
+    /// forwarded on both paths: dropping it on the steady-state path made callers' blended reads
+    /// silently degrade to stepped colors whenever no palette transition was running.
     /// </summary>
     public Color read(float i, bool doblend = false)
     {
         if (tween == 0f)
-            return current.read(i);
+            return current.read(i, doblend);
         else
             return Color.Lerp(next.read(i, doblend), current.read(i, doblend), tween / transitionTime);
     }
