@@ -15,10 +15,6 @@ show.
 
 Navigation/editing: Serena first — activate Serena project `penroseart` before repo navigation or edits.
 
-## Session Startup (mandatory)
-
-Load these skills via the Skill tool before any other work, every session: `unity`, `csharp`, `matt-engineering`. This is a hard gate, also injected by the SessionStart hook in `.claude/settings.json`. Do not navigate, edit, compile, or test until all three are loaded.
-
 ## Agent instruction files
 
 `AGENTS.md` is the one physical root instruction file. `CLAUDE.md` and `GEMINI.md` are symlinks to it. Edit `AGENTS.md` directly.
@@ -44,15 +40,6 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 - `docs/switching-model.md` — the single source of truth for switching behavior; read it before any Director, Switcher, or sequencing work.
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
 - `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
-- `docs/osc-client-contract.md` — the RaveSystem OSC wire contract (a synced copy owned by RaveSystem; never edited here). The single authority on what the wire actually provides — per-player clocks, transport predicates, loop state, timing grids, structure. Read it before any BeatManager, receiver, Director/Switcher, or player-data work instead of inferring wire facts from code or memory.
-- `docs/investigation/` — historical research/audit notes; useful context, but not canonical current docs.
-
-## Default Memory Reads
-
-Before Unity validation, OSC/RaveSystem work, or build/test troubleshooting, read these Memory Vault entries in addition to normal startup context:
-
-- `memory:penroseart-unity-test-runner-editor-open-options` — explains `scripts/unity-tests.sh`, the open-Editor `PenroseUnityTestBridge`, and why direct Unity batchmode fails when the project is already open.
-- `memory:penroseart-unity-osc-workflow-improvements` — records the OSC compile/test scripts and Unity Test Framework command details.
 
 ## Development Philosophy
 
@@ -127,20 +114,6 @@ Start with these before adding new structures:
 
 ## Unity and Asset Rules
 
-- **Never launch Unity yourself** — not the GUI, not `Unity -batchmode`, not via Unity Hub.
-  A second Unity instance fails when the project is already open in the Editor (which it
-  usually is on this machine). The repo scripts handle this.
-- To compile: `scripts/unity-compile.sh`. To test: `scripts/unity-tests.sh` (uses the
-  open-Editor test bridge when Unity is running). Read diagnostics from the log paths
-  the scripts print, not from stdout.
-- **Delegated workers must never run the Unity scripts or launch Unity.** Read-only and
-  workspace-write sandboxes block Unity Licensing Client state and local IPC outside
-  the repo, causing a 75-second licensing failure and misleading package/compiler errors.
-  Workers may run pure .NET checks and inspect Unity logs; the unsandboxed coordinator
-  owns Unity compile/test validation. The scripts enforce this with a host-access probe,
-  supervise the Unity process they start, and stop only their owned processes on failure.
-- `dotnet build`, Roslyn, and IDE/LSP diagnostics are not Unity compilation. Only the
-  scripts above validate a compile.
 - **`.meta` files are Unity-generated, source-controlled identity files.** Never
   hand-create, copy, or hand-edit one. For a new asset, create only the asset and let
   Unity generate its `.meta` during import; then commit both. When moving, renaming,
@@ -187,7 +160,6 @@ Start with these before adding new structures:
 
 ## Project-wide Boundaries
 
-- Do not replace the buffer/effect architecture with prefab-heavy Unity composition unless explicitly requested.
 - Do not add large dependency-injection, event-bus, service-layer, or package architectures for one-off changes.
 - Do not preserve a compatibility path that leaves the active runtime using stale data. If the user asks for a new live source of truth, migrate the relevant consumers to it.
 - Do not silently change hardware output modes, protocol details, OSC ports/messages, or control paths.
