@@ -20,9 +20,11 @@ MonoBehaviour:
       Max: 1.5
       LowRail: 0.6
       HighRail: 1.5
+    DropletWaveformEnergy: 1
+    DropletSpeedMultiplierAtWaveformPeak: 2
     StreamSurgeBrightness: 2.5
     StreamSurgeLength: 12
-    StreamSurgeWidthMultiplier: 8
+    StreamSurgeWidthMultiplier: 6
     StreamSurgeSpeedMultiplier: 6
     StreamSurgeLowLevelThreshold: 0.35
     StreamSurgeLowLevelReading: 0

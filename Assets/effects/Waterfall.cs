@@ -4,7 +4,8 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// Renders full-width falling streams and soft droplets in value space while the animated palette
-/// supplies their hue.
+/// supplies the water hue; Synced Waveforms accelerate the rain and beat surges take a
+/// palette-contrast color.
 /// </summary>
 [EffectSyncSettings(typeof(WaterfallSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(WaterfallStandaloneSettingsAsset))]
@@ -111,9 +112,24 @@ public class Waterfall : ScreenEffect
     private const float SyncEnergySpeedMultiplierMax = 1.5f;
 
     /// <summary>
-    /// Authored multiplicative value-space lift at the center of a Synced stream surge, leaving
-    /// palette hue and saturation untouched. The authored value carries the dimmed Synced resting
-    /// water to full white with a visible gradient instead of barely grazing the 1.0 clamp.
+    /// Authored Energy used to draw the droplet-speed Waveform at Roll. Mid keeps the response
+    /// clearly rhythmic without duplicating the BPM × Energy field's live intensity ladder with
+    /// either the sparsest or busiest Pool shapes.
+    /// </summary>
+    private const Energy SyncDropletWaveformEnergy = Energy.Mid;
+
+    /// <summary>
+    /// Authored droplet-speed multiplier at the held Waveform's peak. The trough is fixed at one,
+    /// so the Waveform can only raise the rolled droplet's BPM × Energy baseline.
+    /// </summary>
+    private const float SyncDropletSpeedMultiplierAtWaveformPeak = 2f;
+
+    /// <summary>
+    /// Authored multiplicative value-space lift at the center of a Synced stream surge. The same
+    /// profiled swell blends hue and saturation toward the palette-contrast color, so its vertical
+    /// envelope and stream seams shape both channels together. The authored value carries the
+    /// dimmed Synced resting water to full value with a visible gradient instead of barely grazing
+    /// the 1.0 clamp.
     /// </summary>
     private const float SyncStreamSurgeBrightness = 2.5f;
 
@@ -134,7 +150,7 @@ public class Waterfall : ScreenEffect
     /// streams so a strike reads as a broad wall hit (wall-judged); the underlying stream profile
     /// and edge seams keep the structure visible inside the swell.
     /// </summary>
-    private const float SyncStreamSurgeWidthMultiplier = 8f;
+    private const float SyncStreamSurgeWidthMultiplier = 6f;
 
     /// <summary>
     /// Authored minimum low-band level that admits a beat surge, read from the Levels reading
@@ -250,6 +266,20 @@ public class Waterfall : ScreenEffect
     /// </summary>
     private const int SurgeStarvationStreamCycles = 2;
 
+    /// <summary>
+    /// Number of evenly spaced samples used to represent the complete animated palette gradient
+    /// when deriving surge contrast. This matches the loaded gradient palette resolution while
+    /// remaining constant work independent of screen size.
+    /// </summary>
+    private const int SurgeContrastPaletteSampleCount = 32;
+
+    /// <summary>
+    /// Mean palette chroma below which every saturated contrast hue is effectively tied. The
+    /// deterministic tie keeps balanced gradients from making the chosen surge hue numerically
+    /// unstable as the shared palette fades.
+    /// </summary>
+    private const float SurgeContrastMeanChromaEpsilon = 0.001f;
+
     /// <summary>Waterfall's falling streams and droplets suit Low-, Mid-, and High-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
@@ -290,6 +320,8 @@ public class Waterfall : ScreenEffect
         EnergySpeedMultiplier = new FloatRange(
             SyncEnergySpeedMultiplierMin,
             SyncEnergySpeedMultiplierMax),
+        DropletWaveformEnergy = SyncDropletWaveformEnergy,
+        DropletSpeedMultiplierAtWaveformPeak = SyncDropletSpeedMultiplierAtWaveformPeak,
         StreamSurgeBrightness = SyncStreamSurgeBrightness,
         StreamSurgeLength = SyncStreamSurgeLength,
         StreamSurgeWidthMultiplier = SyncStreamSurgeWidthMultiplier,
@@ -344,6 +376,13 @@ public class Waterfall : ScreenEffect
     /// <summary>The value-space frame composed before palette hue is applied.</summary>
     private float[] waterValueBuffer;
 
+    /// <summary>
+    /// Per-pixel blend weight carrying each surge's profiled envelope into the final color pass.
+    /// The base-water loop resets every entry before active surges write it, avoiding a separate
+    /// clear or any per-frame allocation.
+    /// </summary>
+    private float[] surgeColorWeightBuffer;
+
     /// <summary>The cross-stream profile computed once per column, kept for edge-seam gradients.</summary>
     private float[] streamProfileByColumn;
 
@@ -368,7 +407,7 @@ public class Waterfall : ScreenEffect
     /// <summary>The number of beat selections each stable stream identity has gone unpicked.</summary>
     private int[] beatsSinceSurgeByStream;
 
-    /// <summary>The overlapping beat-launched luminance swells currently crossing the wall.</summary>
+    /// <summary>The overlapping beat-launched, contrast-colored swells currently crossing the wall.</summary>
     private StreamSurge[] streamSurges;
 
     /// <summary>The number of stable primary-harmonic stream identities in the current Roll.</summary>
@@ -387,7 +426,10 @@ public class Waterfall : ScreenEffect
     /// </summary>
     private bool surgeLaunchedThisWindow;
 
-    /// <summary>Reports the current droplet count and rolled water-motion values for debug UI.</summary>
+    /// <summary>
+    /// Reports the current droplet count, rolled water-motion values, and held Waveform envelope
+    /// for live tuning.
+    /// </summary>
     /// <returns>A multi-line description of the current activation.</returns>
     public override string DebugText()
     {
@@ -395,17 +437,19 @@ public class Waterfall : ScreenEffect
             $"Palette spread: {paletteSpread}\n" +
             $"Palette speed: {paletteSpeed}\n" +
             $"Stream width: {streamWidth}\n" +
-            $"Stream fall speed: {streamFallSpeed}\n";
+            $"Stream fall speed: {streamFallSpeed}\n" +
+            $"Droplet Waveform: {waveform.Envelope:0.00}\n";
     }
 
     /// <summary>
-    /// Allocates Waterfall's reusable value, palette, stream-identity, and surge buffers after
-    /// screen setup so Draw performs no managed allocation.
+    /// Allocates Waterfall's reusable value, surge-color, palette, stream-identity, and surge
+    /// buffers after screen setup so Draw performs no managed allocation.
     /// </summary>
     public override void Init()
     {
         base.Init();
         waterValueBuffer = new float[screenBuffer.Length];
+        surgeColorWeightBuffer = new float[screenBuffer.Length];
         streamProfileByColumn = new float[width];
         paletteHueByRow = new float[height];
         paletteSaturationByRow = new float[height];
@@ -414,7 +458,10 @@ public class Waterfall : ScreenEffect
         streamSurges = new StreamSurge[height];
     }
 
-    /// <summary>Resolves settings, performs the activation Roll, and creates the droplet field.</summary>
+    /// <summary>
+    /// Resolves settings, performs the activation Roll, creates the droplet field, and draws the
+    /// held droplet-speed Waveform after every pre-existing Roll outcome has been determined.
+    /// </summary>
     public override void OnStart()
     {
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
@@ -480,6 +527,8 @@ public class Waterfall : ScreenEffect
                 dropletSpeedRange,
                 dropletBrightnessRange);
         }
+
+        waveform = waveforms.Random(SyncSettings.DropletWaveformEnergy);
     }
 
     /// <summary>
@@ -490,8 +539,9 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Composes falling value structure, droplets, and beat-launched stream surges, applies the
-    /// unchanged palette wash, then maps the screen buffer to tiles.
+    /// Composes falling value structure, Waveform-accelerated droplets, and beat-launched stream
+    /// surges, applies the unchanged palette wash outside surge pixels, then maps the screen
+    /// buffer to tiles.
     /// </summary>
     public override void Draw()
     {
@@ -522,6 +572,10 @@ public class Waterfall : ScreenEffect
             : standaloneSettings.WaterMinBrightness;
         float streamSpeedMultiplier = CurrentStreamSpeedMultiplier(isSynced);
         float effectiveStreamFallSpeed = streamFallSpeed * streamSpeedMultiplier;
+        float dropletWaveformEnvelope = waveform.Envelope;
+        float dropletSpeedMultiplier = 1f +
+            ((SyncSettings.DropletSpeedMultiplierAtWaveformPeak - 1f) *
+                dropletWaveformEnvelope);
 
         // The flow phase is integrated rather than recomputed from effectTime: changing BPM or
         // Energy changes velocity without teleporting the water. Four stream widths is exactly one
@@ -537,11 +591,12 @@ public class Waterfall : ScreenEffect
         // Droplet physics advances exactly once per frame. Respawn remains the one permitted
         // per-frame Roll and reads the currently active mode's authored position range. Synced
         // droplets share the water body's BPM × Energy multiplier so the two falling layers do not
-        // drift apart; the multiplier rests at one in Standalone or without BPM.
+        // drift apart. Their held Waveform adds only an up-only multiplier: Envelope rests at
+        // exactly zero without BarProgress, making Standalone's multiplier exactly one.
         for (int i = 0; i < droplets.Length; i++)
         {
             droplets[i].Advance(
-                effectDelta * streamSpeedMultiplier,
+                effectDelta * streamSpeedMultiplier * dropletSpeedMultiplier,
                 dropletSpawnHeightMultiplierRange,
                 dropletRespawnHeightMultiplier);
         }
@@ -605,13 +660,15 @@ public class Waterfall : ScreenEffect
                 float stream = streamProfile * (0.55f + (0.45f * flow));
                 float value = Mathf.Lerp(darkestStream, waterBrightness, stream) * edgeFactor;
                 waterValueBuffer[screenIndex] = Mathf.Max(value, waterMinBrightness);
+                surgeColorWeightBuffer[screenIndex] = 0f;
                 screenIndex += width;
             }
         }
 
-        // Surges multiply the existing value field after its stream and edge shaping. Their x/y
-        // falloffs remain inside one stable stream identity, and multiplicative composition keeps
-        // the field's internal contrast and dark seams visible instead of painting a flat band.
+        // Surges multiply the existing value field after its stream and edge shaping, and cache the
+        // same profiled swell for color composition. Their x/y falloffs remain inside one stable
+        // stream identity, so both channels keep internal contrast and dark seams visible instead
+        // of painting a flat band.
         if (isSynced && activeSurgeCount > 0)
         {
             for (int i = 0; i < streamSurges.Length; i++)
@@ -648,6 +705,14 @@ public class Waterfall : ScreenEffect
                 out _);
         }
 
+        // AnimPalette can continue fading after this Effect's Roll, so active surges derive their
+        // hue from the complete currently blended gradient each frame. Palette offset is excluded:
+        // it moves the wash through that same gradient and must not change the contrast choice.
+        float surgeContrastHue = isSynced && activeSurgeCount > 0
+            ? DeriveSurgeContrastHue()
+            : 0f;
+        float surgeContrastHueDegrees = surgeContrastHue * 360f;
+
         for (int y = 0; y < height; y++)
         {
             int rowStart = y * width;
@@ -659,6 +724,13 @@ public class Waterfall : ScreenEffect
                 float h = rowHue;
                 float s = rowSaturation;
                 float v = waterValueBuffer[screenIndex];
+                float surgeColorWeight = surgeColorWeightBuffer[screenIndex];
+                if (surgeColorWeight > 0f)
+                {
+                    float hueDelta = Mathf.DeltaAngle(h * 360f, surgeContrastHueDegrees) / 360f;
+                    h = Mathf.Repeat(h + (hueDelta * surgeColorWeight), 1f);
+                    s = Mathf.Lerp(s, 1f, surgeColorWeight);
+                }
 
                 screenBuffer[screenIndex] = Color.HSVToRGB(h % 1f, s, v);
             }
@@ -755,10 +827,11 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Advances existing surges and launches at most one luminance swell per musical count: the
-    /// count's quarter-beat window opens the opportunity and the Smoothed low band must confirm
-    /// it. Losing Sync clears the moving response immediately so Standalone remains the approved
-    /// water-only look.
+    /// Advances existing surges and launches at most one profiled color-and-value swell per
+    /// musical count. The count's quarter-beat window opens the opportunity and the low band, in
+    /// the selected Levels reading, must confirm it. Losing Sync clears the moving response
+    /// immediately so Standalone
+    /// remains the approved water-only look.
     /// </summary>
     /// <param name="isSynced">Whether the running one-through-four count is available.</param>
     /// <param name="fallSpeed">Current downward surge speed in screen pixels per second: the
@@ -916,12 +989,13 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Multiplies one moving surge into the existing water value while reusing the selected
-    /// stream's profile and edge shade, so the swell brightens structure instead of painting over
-    /// it or changing palette color.
+    /// Multiplies one moving surge into the existing water value and records the same swell as a
+    /// contrast-color blend weight. Reusing the selected stream's profile and edge shade keeps the
+    /// color and brightness inside the structure instead of painting over it.
     /// </summary>
     /// <param name="surge">The active stream identity and vertical center to render.</param>
-    /// <param name="brightness">Multiplicative value-space lift at the surge center.</param>
+    /// <param name="brightness">Center strength shared by the multiplicative value-space lift and
+    /// contrast-color blend.</param>
     /// <param name="length">Full vertical surge length in screen pixels.</param>
     /// <param name="widthMultiplier">Surge width relative to the rolled stream width.</param>
     /// <param name="edgeShade">Current authored strength of the field's dark edge seams.</param>
@@ -967,6 +1041,9 @@ public class Waterfall : ScreenEffect
                 waterValueBuffer[screenIndex] = Mathf.Min(
                     1f,
                     waterValueBuffer[screenIndex] * (1f + swell));
+                surgeColorWeightBuffer[screenIndex] = Mathf.Max(
+                    surgeColorWeightBuffer[screenIndex],
+                    Mathf.Clamp01(swell));
             }
         }
     }
@@ -1028,6 +1105,42 @@ public class Waterfall : ScreenEffect
         }
     }
 
+    /// <summary>
+    /// Derives the saturated hue that maximizes average squared chroma distance from the complete
+    /// currently animated palette gradient. Palette samples are represented in the circular HSV
+    /// chroma plane; the optimum unit vector is opposite their mean. A balanced-gradient tie uses
+    /// cyan deterministically, and the fixed sample loop allocates nothing per frame.
+    /// </summary>
+    /// <returns>The normalized hue used at the core of every active surge this frame.</returns>
+    private static float DeriveSurgeContrastHue()
+    {
+        float meanChromaX = 0f;
+        float meanChromaY = 0f;
+        for (int i = 0; i < SurgeContrastPaletteSampleCount; i++)
+        {
+            Color sample = APalette.read(
+                (float)i / SurgeContrastPaletteSampleCount,
+                true);
+            Color.RGBToHSV(sample, out float hue, out float saturation, out _);
+            float angle = hue * Mathf.PI * 2f;
+            meanChromaX += Mathf.Cos(angle) * saturation;
+            meanChromaY += Mathf.Sin(angle) * saturation;
+        }
+
+        meanChromaX /= SurgeContrastPaletteSampleCount;
+        meanChromaY /= SurgeContrastPaletteSampleCount;
+        float meanChromaSquared =
+            (meanChromaX * meanChromaX) + (meanChromaY * meanChromaY);
+        if (meanChromaSquared <=
+            SurgeContrastMeanChromaEpsilon * SurgeContrastMeanChromaEpsilon)
+        {
+            return 0.5f;
+        }
+
+        float paletteMeanHue = Mathf.Atan2(meanChromaY, meanChromaX) / (Mathf.PI * 2f);
+        return Mathf.Repeat(paletteMeanHue + 0.5f, 1f);
+    }
+
     /// <summary>Shapes a normalized remaining-distance value into an edge-soft cubic falloff.</summary>
     /// <param name="remaining">A normalized value that is one at the core and zero at the edge.</param>
     /// <returns>The smoothed brightness contribution.</returns>
@@ -1037,7 +1150,8 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// One beat-launched luminance swell moving down a stable primary-harmonic stream identity.
+    /// One beat-launched contrast-color and luminance swell moving down a stable
+    /// primary-harmonic stream identity.
     /// </summary>
     private struct StreamSurge
     {
@@ -1261,8 +1375,20 @@ public sealed class WaterfallSyncSettings
     public FloatRange EnergySpeedMultiplier;
 
     /// <summary>
-    /// Multiplicative value-space lift at a stream surge's center; color stays owned by the
-    /// unchanged palette wash.
+    /// Energy of the immutable droplet-speed Waveform drawn from the Pool at Roll. A live edit
+    /// takes effect on the next activation; the held Waveform is never substituted per frame.
+    /// </summary>
+    public Energy DropletWaveformEnergy;
+
+    /// <summary>
+    /// Droplet-speed multiplier at the held Waveform's peak, composed after the rolled speed and
+    /// BPM × Energy multiplier. One is the fixed trough endpoint, so this value is up-only.
+    /// </summary>
+    [Min(1f)] public float DropletSpeedMultiplierAtWaveformPeak;
+
+    /// <summary>
+    /// Multiplicative value-space lift at a stream surge's center. The same profiled swell blends
+    /// hue and saturation toward the color derived against the complete animated palette gradient.
     /// </summary>
     [Min(0f)] public float StreamSurgeBrightness;
 
@@ -1375,6 +1501,9 @@ public sealed class WaterfallSyncSettings
             source.EnergySpeedMultiplier.Max,
             source.EnergySpeedMultiplier.LowRail,
             source.EnergySpeedMultiplier.HighRail);
+        DropletWaveformEnergy = source.DropletWaveformEnergy;
+        DropletSpeedMultiplierAtWaveformPeak =
+            source.DropletSpeedMultiplierAtWaveformPeak;
         StreamSurgeBrightness = source.StreamSurgeBrightness;
         StreamSurgeLength = source.StreamSurgeLength;
         StreamSurgeWidthMultiplier = source.StreamSurgeWidthMultiplier;
