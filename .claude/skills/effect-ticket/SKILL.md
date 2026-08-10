@@ -121,7 +121,10 @@ one.
    inner loop, not the full suite.
 
 5. The maintainer plays, tweaks the settings live, and rules. Send design-level rework back with
-   `codex exec resume`; fix small defects directly.
+   `codex exec resume`; fix small defects directly. A wall tuning loop may run through the
+   coordinator: adjusting authored defaults, adding a single settings slot, and baking the
+   maintainer's saved asset values back as defaults are direct edits. Structural or sizable
+   implementation still goes to a worker — the coordinator does not take over development.
 
 6. When the capability lands, update the Effect's `Repertoire` flags so they advertise honestly
    what it now handles.
