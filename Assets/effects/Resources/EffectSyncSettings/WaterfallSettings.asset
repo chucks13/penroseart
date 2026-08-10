@@ -16,10 +16,11 @@ MonoBehaviour:
   settings:
     ReferenceBpm: 124
     EnergySpeedMultiplier:
-      Min: 0.6
-      Max: 1.5
+      Min: 0.8
+      Max: 1.75
       LowRail: 0.6
-      HighRail: 1.5
+      HighRail: 2
+    FillFlowSpeed: 10
     DropletWaveformEnergy: 1
     DropletSpeedMultiplierAtWaveformPeak: 2
     StreamSurgeBrightness: 2.5

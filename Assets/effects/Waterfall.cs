@@ -4,7 +4,9 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// Renders full-width falling streams and soft droplets in value space while the animated palette
-/// supplies the water hue; Synced Waveforms accelerate the rain and beat surges take a
+/// supplies the water hue; Synced Fills drive a sustained inrush current — both half-fields of
+/// streams visibly rush toward the center line from the half-Fill runway through the Fill's
+/// last beat, then sweep back out — Waveforms accelerate the rain, and beat surges take a
 /// palette-contrast color.
 /// </summary>
 [EffectSyncSettings(typeof(WaterfallSyncSettingsAsset))]
@@ -103,13 +105,34 @@ public class Waterfall : ScreenEffect
     /// Authored Low Energy multiplier applied to the BPM-scaled stream speed. The Low/High spread
     /// is wide enough that an Energy tier change reads from across the room, not as a nuance.
     /// </summary>
-    private const float SyncEnergySpeedMultiplierMin = 0.6f;
+    private const float SyncEnergySpeedMultiplierMin = 0.8f;
 
     /// <summary>
     /// Authored High Energy multiplier applied to the BPM-scaled stream speed; Mid is the midpoint
     /// so the closed three-step Energy ladder stays evenly spaced.
     /// </summary>
-    private const float SyncEnergySpeedMultiplierMax = 1.5f;
+    private const float SyncEnergySpeedMultiplierMax = 1.75f;
+
+    /// <summary>
+    /// Authored lower display bound of the Energy multiplier's tuning slider, kept below the
+    /// authored Low endpoint so live tuning can explore slower water without editing source.
+    /// </summary>
+    private const float SyncEnergySpeedMultiplierLowRail = 0.6f;
+
+    /// <summary>
+    /// Authored upper display bound of the Energy multiplier's tuning slider, kept above the
+    /// authored High endpoint so live tuning can explore faster water without editing source.
+    /// </summary>
+    private const float SyncEnergySpeedMultiplierHighRail = 2f;
+
+    /// <summary>
+    /// Authored speed of the Fill inrush current in columns per beat. Ten sweeps roughly sixty
+    /// columns of pattern past each flank across a typical two-beat runway plus four-beat
+    /// Fill — more than the full wall rushing through the center line, unmistakable from across
+    /// the room (wall-tuned up from an initial five). Runway and release timing carry no knobs;
+    /// they derive from the Fill's own length.
+    /// </summary>
+    private const float SyncFillFlowSpeed = 10f;
 
     /// <summary>
     /// Authored Energy used to draw the droplet-speed Waveform at Roll. Mid keeps the response
@@ -280,9 +303,15 @@ public class Waterfall : ScreenEffect
     /// </summary>
     private const float SurgeContrastMeanChromaEpsilon = 0.001f;
 
-    /// <summary>Waterfall's falling streams and droplets suit Low-, Mid-, and High-energy sections.</summary>
+    /// <summary>
+    /// Waterfall handles Fills by merging its stream field into a central mass and suits Low-,
+    /// Mid-, and High-energy sections.
+    /// </summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesFill |
+        Repertoire.EnergyLow |
+        Repertoire.EnergyMid |
+        Repertoire.EnergyHigh;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Waterfall's file-local Standalone Defaults.</summary>
     public static WaterfallStandaloneSettings StandaloneDefaults => new WaterfallStandaloneSettings
@@ -319,7 +348,10 @@ public class Waterfall : ScreenEffect
         ReferenceBpm = SyncReferenceBpm,
         EnergySpeedMultiplier = new FloatRange(
             SyncEnergySpeedMultiplierMin,
-            SyncEnergySpeedMultiplierMax),
+            SyncEnergySpeedMultiplierMax,
+            SyncEnergySpeedMultiplierLowRail,
+            SyncEnergySpeedMultiplierHighRail),
+        FillFlowSpeed = SyncFillFlowSpeed,
         DropletWaveformEnergy = SyncDropletWaveformEnergy,
         DropletSpeedMultiplierAtWaveformPeak = SyncDropletSpeedMultiplierAtWaveformPeak,
         StreamSurgeBrightness = SyncStreamSurgeBrightness,
@@ -399,6 +431,28 @@ public class Waterfall : ScreenEffect
     private float streamFallOffset;
 
     /// <summary>
+    /// The Fill inrush current's accumulated pattern displacement in columns. Both half-fields
+    /// sample the stream pattern this far upstream of themselves, so the whole picture visibly
+    /// flows toward the center line for as long as the current runs. Zero is the resting field.
+    /// </summary>
+    private float fillFlowOffset;
+
+    /// <summary>
+    /// The release runway in beats — half the last active Fill's own length. The Data Surface
+    /// forgets a Fill the moment it ends, so the length is remembered here while it is active.
+    /// </summary>
+    private float fillReleaseBeats = 1f;
+
+    /// <summary>
+    /// The outward return speed in columns per beat, captured at the moment a Fill ends so the
+    /// whole accumulated displacement sweeps back out across the half-Fill release window.
+    /// </summary>
+    private float fillReleaseRate;
+
+    /// <summary>Previous Fill state retained locally to identify the moment a Fill ends.</summary>
+    private bool wasFillActive;
+
+    /// <summary>
     /// Stable stream centers derived from maxima of the pinned primary harmonic. Minor harmonics
     /// can reshape and merge the field without moving these selection identities.
     /// </summary>
@@ -427,8 +481,8 @@ public class Waterfall : ScreenEffect
     private bool surgeLaunchedThisWindow;
 
     /// <summary>
-    /// Reports the current droplet count, rolled water-motion values, and held Waveform envelope
-    /// for live tuning.
+    /// Reports the current droplet count, rolled water-motion values, Fill flow displacement, and
+    /// held Waveform envelope for live tuning.
     /// </summary>
     /// <returns>A multi-line description of the current activation.</returns>
     public override string DebugText()
@@ -438,6 +492,7 @@ public class Waterfall : ScreenEffect
             $"Palette speed: {paletteSpeed}\n" +
             $"Stream width: {streamWidth}\n" +
             $"Stream fall speed: {streamFallSpeed}\n" +
+            $"Fill flow: {fillFlowOffset:0.0}\n" +
             $"Droplet Waveform: {waveform.Envelope:0.00}\n";
     }
 
@@ -503,6 +558,12 @@ public class Waterfall : ScreenEffect
         activeSurgeCount = 0;
         nextSurgeSlot = 0;
         surgeLaunchedThisWindow = false;
+        fillFlowOffset = 0f;
+        fillReleaseBeats = 1f;
+        fillReleaseRate = 0f;
+
+        // Starting during an active Fill joins its current without inventing a false release.
+        wasFillActive = beatManager.Fill.Active;
         buffer.Clear();
 
         IntRange dropletSpawnHeightMultiplierRange = isSynced
@@ -539,9 +600,9 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Composes falling value structure, Waveform-accelerated droplets, and beat-launched stream
-    /// surges, applies the unchanged palette wash outside surge pixels, then maps the screen
-    /// buffer to tiles.
+    /// Composes the Fill-merged falling value structure, Waveform-accelerated droplets, and
+    /// beat-launched stream surges, applies the unchanged palette wash outside surge pixels, then
+    /// maps the screen buffer to tiles.
     /// </summary>
     public override void Draw()
     {
@@ -570,6 +631,8 @@ public class Waterfall : ScreenEffect
         float waterMinBrightness = isSynced
             ? SyncSettings.WaterMinBrightness
             : standaloneSettings.WaterMinBrightness;
+        AdvanceFillFlow(isSynced);
+        float fillCenterX = (width - 1f) * 0.5f;
         float streamSpeedMultiplier = CurrentStreamSpeedMultiplier(isSynced);
         float effectiveStreamFallSpeed = streamFallSpeed * streamSpeedMultiplier;
         float dropletWaveformEnvelope = waveform.Envelope;
@@ -621,17 +684,26 @@ public class Waterfall : ScreenEffect
         float mergeDrift = Mathf.Sin(effectTime * 0.047f + 2.6f) * 1.3f;
         for (int x = 0; x < width; x++)
         {
-            // The cross-stream profile depends on x (and the slow minor drifts) alone, never the
-            // fall time — a phase that mixes x with the fall term slides sideways. Three
-            // harmonics at irrational frequency ratios (1 : golden ratio : √2−1) interfere
-            // aperiodically, so stream spacing is never even; the long 0.414 wavelength unevens
-            // the grouping.
+            // The cross-stream profile depends on the sample position (and the slow minor
+            // drifts) alone, never the fall time — a phase that mixes it with the fall term
+            // slides sideways. Three harmonics at irrational frequency ratios
+            // (1 : golden ratio : √2−1) interfere aperiodically, so stream spacing is never
+            // even; the long 0.414 wavelength unevens the grouping.
+            //
+            // During a Fill each half-field samples the pattern upstream of itself by the
+            // current's accumulated displacement — pure translation, so streams keep their
+            // exact width and texture while the whole picture visibly rushes toward the center
+            // line, new streams entering from the edges for as long as the current runs. The
+            // aperiodic harmonics are defined at every real position, so the inflow never
+            // repeats. At zero displacement the sample position is exactly x — the approved
+            // baseline arithmetic.
+            float sampleX = x < fillCenterX ? x - fillFlowOffset : x + fillFlowOffset;
             float primaryStrength = 0.55f +
-                (0.45f * Mathf.Sin(x * streamFrequency * 0.23f + mergeDrift));
+                (0.45f * Mathf.Sin(sampleX * streamFrequency * 0.23f + mergeDrift));
             streamProfileByColumn[x] = 0.5f +
-                (0.24f * primaryStrength * Mathf.Sin(x * streamFrequency)) +
-                (0.16f * Mathf.Sin(x * streamFrequency * 1.618f + 1.7f + secondaryDrift)) +
-                (0.10f * Mathf.Sin(x * streamFrequency * 0.414f + groupingDrift));
+                (0.24f * primaryStrength * Mathf.Sin(sampleX * streamFrequency)) +
+                (0.16f * Mathf.Sin(sampleX * streamFrequency * 1.618f + 1.7f + secondaryDrift)) +
+                (0.10f * Mathf.Sin(sampleX * streamFrequency * 0.414f + groupingDrift));
         }
 
         for (int x = 0; x < width; x++)
@@ -647,8 +719,11 @@ public class Waterfall : ScreenEffect
             float edgeFactor = 1f - (streamEdgeShade * Mathf.Clamp01(Mathf.Abs(slope) * 1.5f));
 
             // The per-stream phase stagger is constant in time: it keeps neighboring streams'
-            // falling texture out of step so the flow never lines up into horizontal bars.
-            float streamPhase = x * streamFrequency * 0.7f;
+            // falling texture out of step so the flow never lines up into horizontal bars. It
+            // follows the same sample position as the profile, so during a Fill each stream's
+            // falling texture travels inward with the stream it belongs to.
+            float samplePhaseX = x < fillCenterX ? x - fillFlowOffset : x + fillFlowOffset;
+            float streamPhase = samplePhaseX * streamFrequency * 0.7f;
             int screenIndex = x;
 
             for (int y = 0; y < height; y++)
@@ -693,11 +768,16 @@ public class Waterfall : ScreenEffect
         }
 
         // Hue is sampled per row and its time offset carries constant-hue features toward lower
-        // y — the color wash falls with the water instead of sliding sideways across it.
+        // y — the color wash falls with the water instead of sliding sideways across it. The read
+        // position ping-pongs instead of wrapping: GPalette.read joins the gradient's last color
+        // to its first with a hard cut, and under a wrapped scroll that cut marched down the wall
+        // as a permanent hue seam. Reflecting the position retraces the gradient seamlessly, and
+        // features keep falling in the same direction at the same rate through the reflection.
         float paletteOffset = effectTime * paletteSpeed;
         for (int y = 0; y < height; y++)
         {
-            Color paletteColor = APalette.read(y * paletteSpread + paletteOffset, true);
+            Color paletteColor = APalette.read(
+                Mathf.PingPong(y * paletteSpread + paletteOffset, 1f), true);
             Color.RGBToHSV(
                 paletteColor,
                 out paletteHueByRow[y],
@@ -738,6 +818,78 @@ public class Waterfall : ScreenEffect
 
         // convert the 2D Matrix buffer to a tile buffer
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
+    }
+
+    /// <summary>
+    /// Advances the Fill inrush current and returns its accumulated pattern displacement in
+    /// columns. This is a velocity, not an envelope between two pictures: the current
+    /// accelerates across the half-Fill runway before the Fill lands (the wire announces the
+    /// upcoming Fill and its length in advance), runs at full authored speed through the whole
+    /// Fill so the wall shows motion at every moment of it, and reverses after it ends, sweeping
+    /// the entire displacement back out across a half-Fill release window. Every earlier design
+    /// interpolated toward a gathered picture, and each one read as a fade on the wall no matter
+    /// what it blended — a gesture must keep moving for its whole span, the way Flock's birds
+    /// orbit for the length of a Fill.
+    /// </summary>
+    /// <remarks>
+    /// Timing carries no authored knobs — runway and release both derive from the Fill's own
+    /// length. The release is a local visual ramp because the Data Surface forgets a Fill the
+    /// moment it ends (maintainer-approved over adding an after-the-Fill span). Standalone Mode
+    /// rests at the exact zero baseline.
+    /// </remarks>
+    /// <param name="isSynced">Whether live Fill data is available.</param>
+    /// <returns>The current inward pattern displacement in columns; zero is the resting field.</returns>
+    private float AdvanceFillFlow(bool isSynced)
+    {
+        if (!isSynced)
+        {
+            fillFlowOffset = 0f;
+            return 0f;
+        }
+
+        float drive = 0f;
+        bool fillActive = beatManager.Fill.Active;
+        if (fillActive)
+        {
+            drive = 1f;
+            if (beatManager.Fill.LengthBeats is { } lengthBeats)
+            {
+                fillReleaseBeats = Mathf.Max(1f, lengthBeats * 0.5f);
+            }
+        }
+        else if (beatManager.Fill.LengthBeats is { } upcomingLengthBeats)
+        {
+            drive = beatManager.Fill.Before.Build(Mathf.Max(1, upcomingLengthBeats / 2));
+        }
+
+        if (!fillActive && wasFillActive)
+        {
+            fillReleaseRate = fillFlowOffset / fillReleaseBeats;
+        }
+
+        wasFillActive = fillActive;
+
+        if (beatManager.Timing.Bpm is not { } bpm)
+        {
+            // Without a tempo there is no beat-based motion this frame; the pattern holds in
+            // place rather than teleporting home.
+            return fillFlowOffset;
+        }
+
+        float deltaBeats = effectDelta * bpm / 60f;
+        if (drive > 0f)
+        {
+            fillFlowOffset += SyncSettings.FillFlowSpeed * drive * deltaBeats;
+        }
+        else if (fillFlowOffset > 0f)
+        {
+            // A runway that never landed (wire glitch) leaves no captured rate; return the
+            // pattern within one beat instead of stranding it displaced.
+            float returnRate = fillReleaseRate > 0f ? fillReleaseRate : fillFlowOffset;
+            fillFlowOffset = Mathf.MoveTowards(fillFlowOffset, 0f, returnRate * deltaBeats);
+        }
+
+        return fillFlowOffset;
     }
 
     /// <summary>
@@ -1052,10 +1204,7 @@ public class Waterfall : ScreenEffect
     /// <param name="droplet">The rolled droplet to render.</param>
     /// <param name="trailLength">The screen-space distance over which the trail reaches zero.</param>
     /// <param name="trailBrightness">The fraction of droplet brightness at the trail head.</param>
-    private void AddDropletValue(
-        Droplet droplet,
-        float trailLength,
-        float trailBrightness)
+    private void AddDropletValue(Droplet droplet, float trailLength, float trailBrightness)
     {
         Vector2 position = droplet.Position;
         float radius = droplet.Radius;
@@ -1141,9 +1290,12 @@ public class Waterfall : ScreenEffect
         return Mathf.Repeat(paletteMeanHue + 0.5f, 1f);
     }
 
-    /// <summary>Shapes a normalized remaining-distance value into an edge-soft cubic falloff.</summary>
-    /// <param name="remaining">A normalized value that is one at the core and zero at the edge.</param>
-    /// <returns>The smoothed brightness contribution.</returns>
+    /// <summary>
+    /// Shapes a normalized core or envelope value into a cubic smoothstep. Zero slope at both
+    /// endpoints softens the droplet and surge splats' spatial falloffs.
+    /// </summary>
+    /// <param name="remaining">A normalized value that is one at the core or peak and zero at the edge.</param>
+    /// <returns>The smoothed spatial or envelope contribution.</returns>
     private static float SoftFalloff(float remaining)
     {
         return remaining * remaining * (3f - (2f * remaining));
@@ -1375,6 +1527,13 @@ public sealed class WaterfallSyncSettings
     public FloatRange EnergySpeedMultiplier;
 
     /// <summary>
+    /// Speed of the Fill inrush current in columns per beat: both half-fields of streams rush
+    /// toward the center line at this rate from the half-Fill runway through the Fill's last
+    /// beat, then sweep back out across the half-Fill release. Zero disables the response.
+    /// </summary>
+    [Min(0f)] public float FillFlowSpeed;
+
+    /// <summary>
     /// Energy of the immutable droplet-speed Waveform drawn from the Pool at Roll. A live edit
     /// takes effect on the next activation; the held Waveform is never substituted per frame.
     /// </summary>
@@ -1501,6 +1660,7 @@ public sealed class WaterfallSyncSettings
             source.EnergySpeedMultiplier.Max,
             source.EnergySpeedMultiplier.LowRail,
             source.EnergySpeedMultiplier.HighRail);
+        FillFlowSpeed = source.FillFlowSpeed;
         DropletWaveformEnergy = source.DropletWaveformEnergy;
         DropletSpeedMultiplierAtWaveformPeak =
             source.DropletSpeedMultiplierAtWaveformPeak;
