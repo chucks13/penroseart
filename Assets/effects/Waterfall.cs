@@ -335,7 +335,7 @@ public class Waterfall : ScreenEffect
         Repertoire.EnergyHigh;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Waterfall's file-local Standalone Defaults.</summary>
-    public static WaterfallStandaloneSettings StandaloneDefaults => new WaterfallStandaloneSettings
+    public static WaterfallStandaloneSettings StandaloneDefaults => new()
     {
         DropletCount = new IntRange(
             StandaloneDropletCountMin,
@@ -364,7 +364,7 @@ public class Waterfall : ScreenEffect
     };
 
     /// <summary>Resolves a fresh copy of Waterfall's file-local Sync Defaults.</summary>
-    public static WaterfallSyncSettings SyncDefaults => new WaterfallSyncSettings
+    public static WaterfallSyncSettings SyncDefaults => new()
     {
         ReferenceBpm = SyncReferenceBpm,
         EnergySpeedMultiplier = new FloatRange(
@@ -652,7 +652,8 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Called when effect is no longer selected to be drawn by the controller
+    /// Keeps the reusable buffers allocated between activations; <see cref="OnStart"/> resets all
+    /// activation state, so ending requires no cleanup.
     /// </summary>
     public override void OnEnd()
     {
@@ -694,10 +695,10 @@ public class Waterfall : ScreenEffect
         float fillCenterX = (width - 1f) * 0.5f;
         float streamSpeedMultiplier = CurrentStreamSpeedMultiplier(isSynced);
         float effectiveStreamFallSpeed = streamFallSpeed * streamSpeedMultiplier;
-        float dropletWaveformEnvelope = waveform.Envelope;
+        float dropletSpeedEnvelope = waveform.Envelope;
         float dropletSpeedMultiplier = 1f +
             ((SyncSettings.DropletSpeedMultiplierAtWaveformPeak - 1f) *
-                dropletWaveformEnvelope);
+                dropletSpeedEnvelope);
 
         // The flow phase is integrated rather than recomputed from effectTime: changing BPM or
         // Energy changes velocity without teleporting the water. Four stream widths is exactly one
@@ -807,15 +808,17 @@ public class Waterfall : ScreenEffect
         {
             for (int i = 0; i < streamSurges.Length; i++)
             {
-                if (streamSurges[i].Active)
+                if (!streamSurges[i].Active)
                 {
-                    AddStreamSurgeValue(
-                        streamSurges[i],
-                        SyncSettings.StreamSurgeBrightness,
-                        SyncSettings.StreamSurgeLength,
-                        SyncSettings.StreamSurgeWidthMultiplier,
-                        streamEdgeShade);
+                    continue;
                 }
+
+                AddStreamSurgeValue(
+                    streamSurges[i],
+                    SyncSettings.StreamSurgeBrightness,
+                    SyncSettings.StreamSurgeLength,
+                    SyncSettings.StreamSurgeWidthMultiplier,
+                    streamEdgeShade);
             }
         }
 
@@ -880,8 +883,8 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Advances the Fill inrush current and returns its accumulated pattern displacement in
-    /// columns. This is a velocity, not an envelope between two pictures: the current
+    /// Advances the Fill inrush current stored in <see cref="fillFlowOffset"/>. This is a
+    /// velocity, not an envelope between two pictures: the current
     /// accelerates across the half-Fill runway before the Fill lands (the wire announces the
     /// upcoming Fill and its length in advance), runs at full authored speed through the whole
     /// Fill so the wall shows motion at every moment of it, and reverses after it ends, sweeping
@@ -897,58 +900,61 @@ public class Waterfall : ScreenEffect
     /// rests at the exact zero baseline.
     /// </remarks>
     /// <param name="isSynced">Whether live Fill data is available.</param>
-    /// <returns>The current inward pattern displacement in columns; zero is the resting field.</returns>
-    private float AdvanceFillFlow(bool isSynced)
+    private void AdvanceFillFlow(bool isSynced)
     {
         if (!isSynced)
         {
             fillFlowOffset = 0f;
-            return 0f;
+            return;
         }
 
-        float drive = 0f;
-        bool fillActive = beatManager.Fill.Active;
-        if (fillActive)
+        float inrushStrength = 0f;
+        bool isFillActive = beatManager.Fill.Active;
+        if (isFillActive)
         {
-            drive = 1f;
-            if (beatManager.Fill.LengthBeats is { } lengthBeats)
+            inrushStrength = 1f;
+            if (beatManager.Fill.LengthBeats is { } fillLengthBeats)
             {
-                fillReleaseBeats = Mathf.Max(1f, lengthBeats * 0.5f);
+                fillReleaseBeats = Mathf.Max(1f, fillLengthBeats * 0.5f);
             }
         }
         else if (beatManager.Fill.LengthBeats is { } upcomingLengthBeats)
         {
-            drive = beatManager.Fill.Before.Build(Mathf.Max(1, upcomingLengthBeats / 2));
+            inrushStrength = beatManager.Fill.Before.Build(
+                Mathf.Max(1, upcomingLengthBeats / 2));
         }
 
-        if (!fillActive && wasFillActive)
+        if (!isFillActive && wasFillActive)
         {
             fillReleaseRate = fillFlowOffset / fillReleaseBeats;
         }
 
-        wasFillActive = fillActive;
+        wasFillActive = isFillActive;
 
         if (beatManager.Timing.Bpm is not { } bpm)
         {
             // Without a tempo there is no beat-based motion this frame; the pattern holds in
             // place rather than teleporting home.
-            return fillFlowOffset;
+            return;
         }
 
-        float deltaBeats = effectDelta * bpm / 60f;
-        if (drive > 0f)
+        float frameBeats = effectDelta * bpm / 60f;
+        if (inrushStrength > 0f)
         {
-            fillFlowOffset += SyncSettings.FillFlowSpeed * drive * deltaBeats;
+            fillFlowOffset += SyncSettings.FillFlowSpeed * inrushStrength * frameBeats;
         }
         else if (fillFlowOffset > 0f)
         {
             // A runway that never landed (wire glitch) leaves no captured rate; return the
             // pattern within one beat instead of stranding it displaced.
-            float returnRate = fillReleaseRate > 0f ? fillReleaseRate : fillFlowOffset;
-            fillFlowOffset = Mathf.MoveTowards(fillFlowOffset, 0f, returnRate * deltaBeats);
+            float outwardReturnRate = fillReleaseRate > 0f
+                ? fillReleaseRate
+                : fillFlowOffset;
+            fillFlowOffset = Mathf.MoveTowards(
+                fillFlowOffset,
+                0f,
+                outwardReturnRate * frameBeats);
         }
-
-        return fillFlowOffset;
     }
 
     /// <summary>
@@ -976,7 +982,7 @@ public class Waterfall : ScreenEffect
             return dropSpeedMultiplier == 1f ? 1f : heldStreamSpeedMultiplier;
         }
 
-        float energyPosition = beatManager.Energy.Level switch
+        float energyLadderPosition = beatManager.Energy.Level switch
         {
             Energy.Low => 0f,
             Energy.Mid => 0.5f,
@@ -987,31 +993,33 @@ public class Waterfall : ScreenEffect
         // Energy's Trend names the next step's direction while Progress supplies continuous
         // position through the current run. One step spans half of the normalized three-tier
         // ladder, so the rate reaches the adjacent tier at the run boundary instead of snapping.
-        if (beatManager.Energy.Progress is { } energyProgress)
+        if (beatManager.Energy.Progress is { } energyRunProgress)
         {
-            energyPosition += beatManager.Energy.Trend switch
+            energyLadderPosition += beatManager.Energy.Trend switch
             {
-                EnergyTrend.Rising => energyProgress * 0.5f,
-                EnergyTrend.Falling => energyProgress * -0.5f,
+                EnergyTrend.Rising => energyRunProgress * 0.5f,
+                EnergyTrend.Falling => energyRunProgress * -0.5f,
                 _ => 0f,
             };
         }
 
-        float energyMultiplier = Mathf.Lerp(
+        float energySpeedMultiplier = Mathf.Lerp(
             SyncSettings.EnergySpeedMultiplier.Min,
             SyncSettings.EnergySpeedMultiplier.Max,
-            Mathf.Clamp01(energyPosition));
-        float baselineSpeedMultiplier = bpm / SyncSettings.ReferenceBpm * energyMultiplier;
-        float currentDropSpeedMultiplier = AdvanceDropSpeedMultiplier(bpm);
-        if (currentDropSpeedMultiplier == 1f)
+            Mathf.Clamp01(energyLadderPosition));
+        float bpmAndEnergySpeedMultiplier =
+            bpm / SyncSettings.ReferenceBpm * energySpeedMultiplier;
+        float activeDropSpeedMultiplier = AdvanceDropSpeedMultiplier(bpm);
+        if (activeDropSpeedMultiplier == 1f)
         {
             // Skipping the extra multiply preserves the approved BPM × Energy arithmetic bit for
             // bit whenever Drop data is absent or outside its authored runway.
-            heldStreamSpeedMultiplier = baselineSpeedMultiplier;
-            return baselineSpeedMultiplier;
+            heldStreamSpeedMultiplier = bpmAndEnergySpeedMultiplier;
+            return bpmAndEnergySpeedMultiplier;
         }
 
-        heldStreamSpeedMultiplier = baselineSpeedMultiplier * currentDropSpeedMultiplier;
+        heldStreamSpeedMultiplier =
+            bpmAndEnergySpeedMultiplier * activeDropSpeedMultiplier;
         return heldStreamSpeedMultiplier;
     }
 
@@ -1027,9 +1035,9 @@ public class Waterfall : ScreenEffect
     /// <returns>The Drop-only multiplier; one is the exact no-response value.</returns>
     private float AdvanceDropSpeedMultiplier(float bpm)
     {
-        float deltaBeats = effectDelta * bpm / 60f;
-        bool dropActive = beatManager.Drop.Active;
-        if (dropActive)
+        float frameBeats = effectDelta * bpm / 60f;
+        bool isDropActive = beatManager.Drop.Active;
+        if (isDropActive)
         {
             if (beatManager.Drop.LengthBeats is > 0)
             {
@@ -1046,7 +1054,7 @@ public class Waterfall : ScreenEffect
                 dropPlungeEnvelope = Mathf.MoveTowards(
                     dropPlungeEnvelope,
                     0f,
-                    deltaBeats / DropFallbackLengthBeats);
+                    frameBeats / DropFallbackLengthBeats);
             }
 
             wasDropActive = true;
@@ -1095,7 +1103,7 @@ public class Waterfall : ScreenEffect
         dropSpeedMultiplier = Mathf.MoveTowards(
             dropSpeedMultiplier,
             1f,
-            dropRecoveryRate * deltaBeats);
+            dropRecoveryRate * frameBeats);
         if (dropSpeedMultiplier == 1f)
         {
             dropRecoveryRate = 0f;
@@ -1153,8 +1161,7 @@ public class Waterfall : ScreenEffect
     /// Advances existing surges and launches at most one profiled color-and-value swell per
     /// musical count. The count's quarter-beat window opens the opportunity and the low band, in
     /// the selected Levels reading, must confirm it. Losing Sync clears the moving response
-    /// immediately so Standalone
-    /// remains the approved water-only look.
+    /// immediately so Standalone remains the approved water-only look.
     /// </summary>
     /// <param name="isSynced">Whether the running one-through-four count is available.</param>
     /// <param name="fallSpeed">Current downward surge speed in screen pixels per second: the
@@ -1193,11 +1200,11 @@ public class Waterfall : ScreenEffect
             }
         }
 
-        bool beatWindowOpen = beatManager.Beats.OnBeat(1)
+        bool isBeatWindowOpen = beatManager.Beats.OnBeat(1)
             || beatManager.Beats.OnBeat(2)
             || beatManager.Beats.OnBeat(3)
             || beatManager.Beats.OnBeat(4);
-        if (!beatWindowOpen)
+        if (!isBeatWindowOpen)
         {
             surgeLaunchedThisWindow = false;
             return;
@@ -1207,14 +1214,14 @@ public class Waterfall : ScreenEffect
         // vanish with the kick during breakdowns. Checking every open-window frame instead of only
         // the window's rising edge lets a kick that registers a frame or two late still fire its
         // count's surge.
-        float gateLow = SyncSettings.StreamSurgeLowLevelReading switch
+        float lowBandLevel = SyncSettings.StreamSurgeLowLevelReading switch
         {
             WaterfallSyncSettings.SurgeLevelReading.Smoothed => beatManager.Levels.Smoothed.Low,
             WaterfallSyncSettings.SurgeLevelReading.Peak => beatManager.Levels.Peak.Low,
             _ => beatManager.Levels.Normalized.Low,
         };
         if (!surgeLaunchedThisWindow &&
-            gateLow >= SyncSettings.StreamSurgeLowLevelThreshold)
+            lowBandLevel >= SyncSettings.StreamSurgeLowLevelThreshold)
         {
             StartStreamSurge();
             surgeLaunchedThisWindow = true;
@@ -1232,10 +1239,10 @@ public class Waterfall : ScreenEffect
         {
             for (int offset = 0; offset < streamSurges.Length; offset++)
             {
-                int candidate = (nextSurgeSlot + offset) % streamSurges.Length;
-                if (!streamSurges[candidate].Active)
+                int candidateSlot = (nextSurgeSlot + offset) % streamSurges.Length;
+                if (!streamSurges[candidateSlot].Active)
                 {
-                    slot = candidate;
+                    slot = candidateSlot;
                     break;
                 }
             }
@@ -1256,31 +1263,34 @@ public class Waterfall : ScreenEffect
     /// <returns>The zero-based stable stream identity selected for the next surge.</returns>
     private int SelectSurgeStream()
     {
-        int oldestAge = 0;
+        int longestUnpickedBeatCount = 0;
         for (int i = 0; i < streamCount; i++)
         {
             beatsSinceSurgeByStream[i]++;
-            oldestAge = Mathf.Max(oldestAge, beatsSinceSurgeByStream[i]);
+            longestUnpickedBeatCount = Mathf.Max(
+                longestUnpickedBeatCount,
+                beatsSinceSurgeByStream[i]);
         }
 
-        int selectedStream = streamCount - 1;
-        if (oldestAge >= streamCount * SurgeStarvationStreamCycles)
+        int selectedStreamIndex = streamCount - 1;
+        if (longestUnpickedBeatCount >= streamCount * SurgeStarvationStreamCycles)
         {
-            int oldestCount = 0;
+            int oldestStreamCount = 0;
             for (int i = 0; i < streamCount; i++)
             {
-                if (beatsSinceSurgeByStream[i] == oldestAge)
+                if (beatsSinceSurgeByStream[i] == longestUnpickedBeatCount)
                 {
-                    oldestCount++;
+                    oldestStreamCount++;
                 }
             }
 
-            int oldestPick = Random.Range(0, oldestCount);
+            int oldestStreamPick = Random.Range(0, oldestStreamCount);
             for (int i = 0; i < streamCount; i++)
             {
-                if (beatsSinceSurgeByStream[i] == oldestAge && oldestPick-- == 0)
+                if (beatsSinceSurgeByStream[i] == longestUnpickedBeatCount &&
+                    oldestStreamPick-- == 0)
                 {
-                    selectedStream = i;
+                    selectedStreamIndex = i;
                     break;
                 }
             }
@@ -1290,25 +1300,25 @@ public class Waterfall : ScreenEffect
             float totalWeight = 0f;
             for (int i = 0; i < streamCount; i++)
             {
-                float ageWeight = beatsSinceSurgeByStream[i] + 1f;
-                totalWeight += ageWeight * ageWeight;
+                float unpickedBeatWeight = beatsSinceSurgeByStream[i] + 1f;
+                totalWeight += unpickedBeatWeight * unpickedBeatWeight;
             }
 
-            float weightPick = Random.value * totalWeight;
+            float weightedPick = Random.value * totalWeight;
             for (int i = 0; i < streamCount; i++)
             {
-                float ageWeight = beatsSinceSurgeByStream[i] + 1f;
-                weightPick -= ageWeight * ageWeight;
-                if (weightPick <= 0f)
+                float unpickedBeatWeight = beatsSinceSurgeByStream[i] + 1f;
+                weightedPick -= unpickedBeatWeight * unpickedBeatWeight;
+                if (weightedPick <= 0f)
                 {
-                    selectedStream = i;
+                    selectedStreamIndex = i;
                     break;
                 }
             }
         }
 
-        beatsSinceSurgeByStream[selectedStream] = 0;
-        return selectedStream;
+        beatsSinceSurgeByStream[selectedStreamIndex] = 0;
+        return selectedStreamIndex;
     }
 
     /// <summary>
@@ -1449,9 +1459,9 @@ public class Waterfall : ScreenEffect
 
         meanChromaX /= SurgeContrastPaletteSampleCount;
         meanChromaY /= SurgeContrastPaletteSampleCount;
-        float meanChromaSquared =
+        float meanChromaMagnitudeSquared =
             (meanChromaX * meanChromaX) + (meanChromaY * meanChromaY);
-        if (meanChromaSquared <=
+        if (meanChromaMagnitudeSquared <=
             SurgeContrastMeanChromaEpsilon * SurgeContrastMeanChromaEpsilon)
         {
             return 0.5f;
