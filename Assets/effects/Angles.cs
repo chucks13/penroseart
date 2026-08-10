@@ -6,18 +6,19 @@ using UnityEngine;
 /// Renders a palette hue sweep based on each tile's stored geometric angle.
 /// </summary>
 /// <remarks>
-/// FILL: a soft-edged wavefront sweeps across the tiles, ordered by each tile's hue distance from the
-/// wall's own mean hue (closest first), collapsing their hue toward that mean. The front position is
-/// driven by the Fill's <see cref="InSpan.Build"/> (so it always finishes by the Fill's end regardless of
-/// how many beats the Fill lasts), given a light pre-Fill primer from <see cref="FillValues.BeatsUntil"/>,
-/// and kicked forward once per Waveform hit so the sweep
-/// visibly lurches on the beat instead of gliding smoothly.
+/// FILL / DROP: one soft-edged wavefront, ordered by each tile's hue distance from the wall's own mean
+/// hue (closest first), compresses the wall toward that charged mean color. An active Fill advances the
+/// front through its <see cref="InSpan.Build"/>. Independently, <see cref="DropValues.Before"/> advances
+/// the same front so a Drop receives preparation even when no Fill precedes it. A Fill that ends without
+/// a Drop eases its compression away instead of snapping back or inventing a relationship the wire does
+/// not carry.
 ///
-/// DROP: from the Drop's onset the whole wall slams to near-black, then reignites as a
-/// staccato cascade through the tiling's ten orientation classes — the multiples-of-18° directional
-/// families of the underlying pentagrid. Because orientation drives hue here, each class is also a single
-/// hue, so the smooth rainbow visibly reassembles itself one hue/direction at a time out of the darkness,
-/// revealing the ten hidden families that compose it. The cascade completes over a few beats back to normal.
+/// An active Drop has exclusive priority. At its landing the whole wall holds near-black while fully
+/// compressed, then one Drop release timeline both expands the hues and reignites a staccato cascade
+/// through the tiling's ten orientation classes — the multiples-of-18° directional families of the
+/// underlying pentagrid. Because orientation drives hue here, each class is also a single hue, so the
+/// rainbow and its ten hidden families return together out of the darkness. The four-bar Routine keeps
+/// its own full-pattern hue rotation and does not drive this choreography.
 ///
 /// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
@@ -29,6 +30,7 @@ using UnityEngine;
 /// changes character every 16 beats even outside a Fill/Drop.
 /// </remarks>
 [EffectSyncSettings(typeof(AnglesSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(AnglesStandaloneSettingsAsset))]
 public class Angles : EffectBase
 {
     // Standalone Defaults
@@ -56,28 +58,19 @@ public class Angles : EffectBase
 
     // Sync Defaults
 
-    /// <summary>Width, in normalized rank space (0..1), of the collapsing wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
+    /// <summary>Width, in normalized rank space (0..1), of the hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float SyncFrontSoftness = 0.12f;
 
-    /// <summary>How far a Waveform hit punches the wavefront beyond the stock Fill Build, so the collapse advances in visible surges instead of a silky ramp. Tune on the readout.</summary>
-    private const float SyncBeatKick = 0.15f;
+    /// <summary>Per-second smoothing rate used only when hue compression has no active Fill or approaching Drop to sustain it, so an unpaired Fill relaxes instead of snapping. Tune on the TENSION readout.</summary>
+    private const float SyncCompressionReleaseRate = 2f;
 
-    /// <summary>Exponent shaping the long (<see cref="SyncAnticipationBeats"/>-beat, 32 by default) pre-Fill anticipation window so the wavefront primer stays negligible until the last few beats before a Fill actually starts.</summary>
-    private const float SyncAnticipationCurvePower = 5f;
-
-    /// <summary>Maximum wavefront envelope contributed by the pre-Fill anticipation primer, reached only right at the Fill's start.</summary>
-    private const float SyncAnticipationPrimerCap = 0.18f;
-
-    /// <summary>Length of the pre-Fill anticipation window in beats: how far ahead of a Fill the wavefront primer starts creeping up. Paired with <see cref="SyncAnticipationCurvePower"/>, whose exponent is what keeps the primer negligible across a window this long — retune the two together.</summary>
-    private const float SyncAnticipationBeats = 32f;
-
-    /// <summary>Drop length in beats: the whole blackout-and-reignite cascade plays over this many beats of the current tempo, kept short so the event reads within a 2-4 beat window.</summary>
+    /// <summary>Drop window in beats: preparation reaches full hue compression across this many beats before landing, then blackout release and orientation reignition share the same length after it. Kept short so the event reads within a 2-4 beat window.</summary>
     private const int SyncDropBeats = 3;
 
     /// <summary>Brightness the wall drops to during the blackout — a floor, not literal off, so it reads as intentional impact rather than a crash. Tune on the readout.</summary>
     private const float SyncDarkFloor = 0.04f;
 
-    /// <summary>Fraction of the Drop window held fully black before the cascade begins — the punctuation of the impact. Tune on the readout.</summary>
+    /// <summary>Fraction of the active Drop window held fully black and hue-compressed before release begins — the punctuation of the impact. Tune on the readout.</summary>
     private const float SyncBlackHold = 0.12f;
 
     /// <summary>Reignition snap width (in cascade-progress units) for each class: smaller = harder staccato pop as each orientation family lights; larger = a softer roll. Tune on the readout.</summary>
@@ -116,32 +109,38 @@ public class Angles : EffectBase
     private const int OrientationClasses = 10;
 
     /// <summary>
-    /// The wall's hue pattern collapses toward its own mean hue for a Fill, and blacks out then reignites through
-    /// its ten orientation families for a Drop. Its shading depth is subtle at Low energy and pronounced at High,
-    /// so it advertises as a Mid/High-energy Performer.
+    /// Fill and Drop coordinate one tension-to-release hue compression, with the Drop landing blacking out then
+    /// releasing through ten orientation families. Shading depth stays subtle at Low energy and pronounced at
+    /// High, so Angles advertises as a Mid/High-energy Performer.
     /// </summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Angles' Standalone Defaults.</summary>
-    public static AnglesStandaloneSettings StandaloneSettings => new AnglesStandaloneSettings
+    /// <summary>
+    /// Resolves a fresh immutable-by-convention copy of Angles' Standalone Defaults, including
+    /// independent speed and directional-shading depth ranges.
+    /// </summary>
+    public static AnglesStandaloneSettings StandaloneDefaults => new AnglesStandaloneSettings
     {
         Speed = new FloatRange(StandaloneSpeedMin, StandaloneSpeedMax),
-        ShadeDepthLow = StandaloneShadeDepthLow,
-        ShadeDepthHigh = StandaloneShadeDepthHigh,
+        ShadeDepth = new FloatRange(
+            StandaloneShadeDepthLow,
+            StandaloneShadeDepthHigh,
+            0f,
+            1f),
         Energy = StandaloneEnergy,
         EnergySmoothing = StandaloneEnergySmoothing,
         RhythmHueOffset = StandaloneRhythmHueOffset,
     };
 
-    /// <summary>Resolves a fresh copy of Angles' file-local Sync Defaults.</summary>
+    /// <summary>
+    /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent
+    /// directional-shading depth and Routine hue-offset ranges.
+    /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
         FrontSoftness = SyncFrontSoftness,
-        BeatKick = SyncBeatKick,
-        AnticipationCurvePower = SyncAnticipationCurvePower,
-        AnticipationPrimerCap = SyncAnticipationPrimerCap,
-        AnticipationBeats = SyncAnticipationBeats,
+        CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
         DarkFloor = SyncDarkFloor,
         BlackHold = SyncBlackHold,
@@ -150,15 +149,21 @@ public class Angles : EffectBase
         RoutineEnergyTwo = SyncRoutineEnergyTwo,
         RoutineEnergyThree = SyncRoutineEnergyThree,
         RoutineEnergyFour = SyncRoutineEnergyFour,
-        ShadeDepthLow = SyncShadeDepthLow,
-        ShadeDepthHigh = SyncShadeDepthHigh,
+        ShadeDepth = new FloatRange(
+            SyncShadeDepthLow,
+            SyncShadeDepthHigh,
+            0f,
+            1f),
         EnergySmoothing = SyncEnergySmoothing,
-        RhythmHueOffsetMin = SyncRhythmHueOffsetMin,
-        RhythmHueOffsetMax = SyncRhythmHueOffsetMax,
+        RhythmHueOffset = new FloatRange(
+            SyncRhythmHueOffsetMin,
+            SyncRhythmHueOffsetMax,
+            0f,
+            1f),
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private AnglesStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private AnglesStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private AnglesSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -169,8 +174,8 @@ public class Angles : EffectBase
     /// <summary>Four-bar waveform choreography, one Waveform per bar drawn from the energy pools named by <see cref="AnglesSyncSettings.RoutineEnergyOne"/> through <see cref="AnglesSyncSettings.RoutineEnergyFour"/>.</summary>
     private Routine routine;
 
-    /// <summary>Wavefront position (0..1) from the stock Fill Build, anticipation primer, and Waveform-hit kicks.</summary>
-    private float fillEnv;
+    /// <summary>Current tension (0..1) expressed as progress of the hue-compression wavefront toward <see cref="meanHue"/>.</summary>
+    private float hueCompression;
 
     /// <summary>Each tile's raw angle-hue (pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
     private float[] rawHue;
@@ -181,7 +186,7 @@ public class Angles : EffectBase
     /// <summary>Per tile, the cascade-progress point (0..~0.9) at which its orientation class reignites during a Drop — its class index / <see cref="OrientationClasses"/>. Cached once.</summary>
     private float[] classReveal;
 
-    /// <summary>Per tile, its normalized rank (0..1) by ascending hue-distance from <see cref="meanHue"/>, cached once. The tile with the closest hue ranks 0 and collapses first.</summary>
+    /// <summary>Per tile, its normalized rank (0..1) by ascending hue-distance from <see cref="meanHue"/>, cached once. The tile with the closest hue ranks 0 and compresses first.</summary>
     /// <remarks>
     /// This holds the rank alone, not the wavefront envelope value at which the tile's collapse begins.
     /// <see cref="Draw"/> scales it by the live <see cref="AnglesSyncSettings.FrontSoftness"/> each frame to
@@ -193,7 +198,7 @@ public class Angles : EffectBase
     /// <summary>Per tile, its folded orientation in [0,1) (tileangle mod 180° / 180°), cached once. Drives the directional shading; wraps smoothly so same-facing tiles (0° ≡ 180°) shade identically.</summary>
     private float[] orient01;
 
-    /// <summary>Circular mean of every tile's raw angle-hue: the color the Fill wavefront collapses toward.</summary>
+    /// <summary>Circular mean of every tile's raw angle-hue: the charged color the Fill/Drop choreography compresses toward.</summary>
     private float meanHue;
 
     /// <summary>Direction (radians) the shading gradient is "lit" from; re-rolled each Grid so the bright/shadowed sides of the orientation field shift.</summary>
@@ -213,9 +218,9 @@ public class Angles : EffectBase
     public override string DebugText() =>
         "Angles" +
         $"\nEN {smoothedEnergy:0.00}" +
-        (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
+        (hueCompression > 0.01f ? $"\nTENSION {hueCompression:0.00}" : "") +
         (beatManager.Drop.Active
-            ? $"\nDROP {1f - beatManager.Drop.In.Decay(SyncSettings.DropBeats):0.00}"
+            ? $"\nDROP {beatManager.Drop.In.Build(SyncSettings.DropBeats):0.00}"
             : "");
 
     /// <summary>
@@ -274,16 +279,18 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Initializes per-activation random state before this effect starts drawing.
+    /// Resolves Effect Settings and initializes per-activation random state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Angles),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Angles),
             SyncDefaults);
         Reroll();
-        fillEnv = 0f;
+        hueCompression = 0f;
         smoothedEnergy = standaloneSettings.Energy;
         controller.debugText.text = "Angles";
         buffer.Clear();
@@ -324,26 +331,51 @@ public class Angles : EffectBase
         (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
     /// <summary>
-    /// Updates the Fill wavefront from the stock Build, next-Fill anticipation, and continuous Routine lift.
+    /// Composes independent Fill and Drop facts into one hue-compression tension, with an active Drop owning
+    /// the blackout-to-release timeline exclusively.
     /// </summary>
-    private void UpdateFillEnvelope()
+    /// <param name="drop">The frame-coherent Drop facts used for both preparation and active release.</param>
+    /// <returns>
+    /// Progress from blackout to full reignition during an active Drop, or one outside a Drop so every
+    /// orientation class remains lit.
+    /// </returns>
+    private float UpdateChoreography(DropValues drop)
     {
-        var fill = beatManager.Fill;
-        bool filling = fill.Active;
-        float anticipation = !filling && fill.BeatsUntil is { } next
-            ? ((float)next).Remap(0f, SyncSettings.AnticipationBeats, 1f, 0f, clamp: true)
-            : 0f;
-        float primer = Mathf.Pow(anticipation, SyncSettings.AnticipationCurvePower) * SyncSettings.AnticipationPrimerCap;
-        fillEnv = Mathf.Max(fill.In.Build(), primer);
-
-        if (filling)
+        if (!beatManager.IsSynced)
         {
-            fillEnv = Mathf.Min(1f, fillEnv + (SyncSettings.BeatKick * routine.Envelope));
+            // Standalone owns a fixed no-music look, so no Synced tension carries across loss of the clock.
+            hueCompression = 0f;
+            return 1f;
         }
+
+        if (drop.Active)
+        {
+            float release = drop.In.Build(SyncSettings.DropBeats).Remap(
+                SyncSettings.BlackHold,
+                1f,
+                0f,
+                1f,
+                clamp: true);
+            hueCompression = 1f - release;
+            return release;
+        }
+
+        float target = Mathf.Max(
+            beatManager.Fill.In.Build(),
+            drop.Before.Build(SyncSettings.DropBeats));
+        hueCompression = target >= hueCompression
+            ? target
+            : SmoothToward(
+                hueCompression,
+                target,
+                SyncSettings.CompressionReleaseRate,
+                effectDelta);
+        return 1f;
     }
 
     /// <summary>
-    /// Updates musical-energy smoothing and returns the current directional-shading depth.
+    /// Updates musical-energy smoothing and interpolates the active mode's directional-shading
+    /// depth endpoints.
     /// </summary>
     private float UpdateShadeDepth()
     {
@@ -358,13 +390,10 @@ public class Angles : EffectBase
             ? SyncSettings.EnergySmoothing
             : standaloneSettings.EnergySmoothing;
         smoothedEnergy = SmoothToward(smoothedEnergy, energyTarget, energySmoothing, effectDelta);
-        float shadeDepthLow = beatManager.IsSynced
-            ? SyncSettings.ShadeDepthLow
-            : standaloneSettings.ShadeDepthLow;
-        float shadeDepthHigh = beatManager.IsSynced
-            ? SyncSettings.ShadeDepthHigh
-            : standaloneSettings.ShadeDepthHigh;
-        return smoothedEnergy.Lerp(shadeDepthLow, shadeDepthHigh);
+        FloatRange shadeDepth = beatManager.IsSynced
+            ? SyncSettings.ShadeDepth
+            : standaloneSettings.ShadeDepth;
+        return smoothedEnergy.Lerp(shadeDepth.Min, shadeDepth.Max);
     }
 
     /// <summary>
@@ -374,21 +403,13 @@ public class Angles : EffectBase
     {
         // The Routine rotates the full angle-to-hue pattern without changing the tiles' relative hues.
         float rhythmHueOffset = routine.Lerp(
-            SyncSettings.RhythmHueOffsetMin,
+            SyncSettings.RhythmHueOffset.Min,
             beatManager.IsSynced
-                ? SyncSettings.RhythmHueOffsetMax
+                ? SyncSettings.RhythmHueOffset.Max
                 : standaloneSettings.RhythmHueOffset);
-        UpdateFillEnvelope();
         var drop = beatManager.Drop;
         bool inDrop = drop.Active;
-        float cascade = inDrop
-            ? (1f - drop.In.Decay(SyncSettings.DropBeats)).Remap(
-                SyncSettings.BlackHold,
-                1f,
-                0f,
-                1f,
-                clamp: true)
-            : 1f;
+        float dropRelease = UpdateChoreography(drop);
         float shadeDepth = UpdateShadeDepth();
 
         // Hoisted: the front's soft edge is uniform across the wall, so its rank scale is one
@@ -399,7 +420,7 @@ public class Angles : EffectBase
         for (int i = 0; i < buffer.Length; i++)
         {
             float collapseStart = frontRank[i] * rankScale;
-            float collapse = fillEnv.Remap(
+            float collapse = hueCompression.Remap(
                 collapseStart,
                 collapseStart + frontSoftness,
                 0f,
@@ -413,9 +434,9 @@ public class Angles : EffectBase
             float shade = align.Lerp(1f - shadeDepth, 1f);
 
             // Drop reignition: outside a Drop every tile sits at its shaded brightness; during a Drop,
-            // each orientation class snaps up as the cascade reaches its reveal point.
+            // each orientation class snaps up as the shared release reaches its reveal point.
             float lit = inDrop
-                ? cascade.Remap(
+                ? dropRelease.Remap(
                     classReveal[i],
                     classReveal[i] + SyncSettings.ClassSnapWidth,
                     0f,
@@ -430,53 +451,67 @@ public class Angles : EffectBase
 }
 
 /// <summary>The resolved Standalone Settings that preserve Angles' authored no-music look.</summary>
+[Serializable]
 public sealed class AnglesStandaloneSettings
 {
     /// <summary>Per-activation and per-Grid sweep-speed range.</summary>
     public FloatRange Speed;
 
-    /// <summary>Fixed Low-energy directional-shading depth outside live musical placement.</summary>
-    public float ShadeDepthLow;
-
-    /// <summary>Fixed High-energy directional-shading depth outside live musical placement.</summary>
-    public float ShadeDepthHigh;
+    /// <summary>
+    /// Low- and High-energy directional-shading depth endpoints used by the Standalone fallback
+    /// interpolation, with editor rails spanning the full normalized depth.
+    /// </summary>
+    public FloatRange ShadeDepth;
 
     /// <summary>Normalized fallback energy used when no track Energy value exists.</summary>
-    public float Energy;
+    [Range(0f, 1f)] public float Energy;
 
     /// <summary>Per-second shading-depth smoothing rate outside live musical placement.</summary>
-    public float EnergySmoothing;
+    [Min(0f)] public float EnergySmoothing;
 
     /// <summary>Fixed Routine hue offset returned without live musical placement.</summary>
-    public float RhythmHueOffset;
+    [Range(0f, 1f)] public float RhythmHueOffset;
+
+    /// <summary>
+    /// Copies every Angles Standalone Setting from another value, including independent speed and
+    /// directional-shading depth endpoints and editor rails.
+    /// </summary>
+    /// <param name="source">The Standalone Settings whose values become this value.</param>
+    public void CopyFrom(AnglesStandaloneSettings source)
+    {
+        Speed = new FloatRange(
+            source.Speed.Min,
+            source.Speed.Max,
+            source.Speed.LowRail,
+            source.Speed.HighRail);
+        ShadeDepth = new FloatRange(
+            source.ShadeDepth.Min,
+            source.ShadeDepth.Max,
+            source.ShadeDepth.LowRail,
+            source.ShadeDepth.HighRail);
+        Energy = source.Energy;
+        EnergySmoothing = source.EnergySmoothing;
+        RhythmHueOffset = source.RhythmHueOffset;
+    }
 }
 
 /// <summary>The saved-or-default musical-response settings used by Angles in Synced Mode.</summary>
 [Serializable]
 public sealed class AnglesSyncSettings
 {
-    /// <summary>Width of the Fill wavefront's soft edge in normalized rank space.</summary>
+    /// <summary>Width of the Fill/Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
     [Range(0.0001f, 1f)] public float FrontSoftness;
 
-    /// <summary>Extra Fill wavefront advance contributed by a Waveform hit.</summary>
-    [Min(0f)] public float BeatKick;
+    /// <summary>Per-second smoothing rate used when an unpaired Fill's hue compression releases.</summary>
+    [Min(0.0001f)] public float CompressionReleaseRate;
 
-    /// <summary>Exponent that keeps pre-Fill anticipation negligible until the event approaches.</summary>
-    [Min(0.0001f)] public float AnticipationCurvePower;
-
-    /// <summary>Maximum Fill wavefront contribution from pre-Fill anticipation.</summary>
-    [Range(0f, 1f)] public float AnticipationPrimerCap;
-
-    /// <summary>Length of the pre-Fill anticipation window in beats.</summary>
-    [Min(0.0001f)] public float AnticipationBeats;
-
-    /// <summary>Length of the Drop blackout-and-reignition cascade in beats.</summary>
+    /// <summary>Shared length of Drop preparation before landing and blackout release after landing.</summary>
     [Min(1)] public int DropBeats;
 
     /// <summary>Minimum brightness retained during the Drop blackout.</summary>
     [Range(0f, 1f)] public float DarkFloor;
 
-    /// <summary>Fraction of the Drop window held at the blackout floor before reignition.</summary>
+    /// <summary>Fraction of the active Drop window held at the blackout floor and full hue compression.</summary>
     [Range(0f, 1f)] public float BlackHold;
 
     /// <summary>Soft-edge width used as each orientation class reignites.</summary>
@@ -494,22 +529,26 @@ public sealed class AnglesSyncSettings
     /// <summary>Fourth energy pool sampled for the four-bar Routine choreography.</summary>
     public Energy RoutineEnergyFour;
 
-    /// <summary>Directional-shading depth at Low track Energy.</summary>
-    [Range(0f, 1f)] public float ShadeDepthLow;
-
-    /// <summary>Directional-shading depth at High track Energy.</summary>
-    [Range(0f, 1f)] public float ShadeDepthHigh;
+    /// <summary>
+    /// Directional-shading depth endpoints at Low and High track Energy, with editor rails
+    /// spanning the full normalized depth.
+    /// </summary>
+    public FloatRange ShadeDepth;
 
     /// <summary>Per-second smoothing rate between track Energy shading targets.</summary>
     [Min(0f)] public float EnergySmoothing;
 
-    /// <summary>Hue rotation applied at the bottom of the live Routine envelope.</summary>
-    [Range(0f, 1f)] public float RhythmHueOffsetMin;
+    /// <summary>
+    /// Lower and upper hue rotations applied at the bottom and top of the live Routine envelope,
+    /// with editor rails spanning the full normalized hue cycle.
+    /// </summary>
+    public FloatRange RhythmHueOffset;
 
-    /// <summary>Hue rotation applied at the top of the live Routine envelope.</summary>
-    [Range(0f, 1f)] public float RhythmHueOffsetMax;
-
-    /// <summary>Copies every Angles Sync Setting from another value.</summary>
+    /// <summary>
+    /// Copies every Angles Sync Setting from another value, including independent directional-shading
+    /// depth and Routine hue-offset endpoints and editor rails.
+    /// </summary>
+    /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
     {
         if (source == null)
@@ -518,10 +557,7 @@ public sealed class AnglesSyncSettings
         }
 
         FrontSoftness = source.FrontSoftness;
-        BeatKick = source.BeatKick;
-        AnticipationCurvePower = source.AnticipationCurvePower;
-        AnticipationPrimerCap = source.AnticipationPrimerCap;
-        AnticipationBeats = source.AnticipationBeats;
+        CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;
         DarkFloor = source.DarkFloor;
         BlackHold = source.BlackHold;
@@ -530,10 +566,16 @@ public sealed class AnglesSyncSettings
         RoutineEnergyTwo = source.RoutineEnergyTwo;
         RoutineEnergyThree = source.RoutineEnergyThree;
         RoutineEnergyFour = source.RoutineEnergyFour;
-        ShadeDepthLow = source.ShadeDepthLow;
-        ShadeDepthHigh = source.ShadeDepthHigh;
+        ShadeDepth = new FloatRange(
+            source.ShadeDepth.Min,
+            source.ShadeDepth.Max,
+            source.ShadeDepth.LowRail,
+            source.ShadeDepth.HighRail);
         EnergySmoothing = source.EnergySmoothing;
-        RhythmHueOffsetMin = source.RhythmHueOffsetMin;
-        RhythmHueOffsetMax = source.RhythmHueOffsetMax;
+        RhythmHueOffset = new FloatRange(
+            source.RhythmHueOffset.Min,
+            source.RhythmHueOffset.Max,
+            source.RhythmHueOffset.LowRail,
+            source.RhythmHueOffset.HighRail);
     }
 }

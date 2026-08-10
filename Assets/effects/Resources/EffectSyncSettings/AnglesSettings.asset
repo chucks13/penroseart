@@ -15,10 +15,7 @@ MonoBehaviour:
   effectTypeName: Angles
   settings:
     FrontSoftness: 0.12
-    BeatKick: 0.15
-    AnticipationCurvePower: 5
-    AnticipationPrimerCap: 0.18
-    AnticipationBeats: 32
+    CompressionReleaseRate: 2
     DropBeats: 3
     DarkFloor: 0.04
     BlackHold: 0.12
@@ -27,8 +24,14 @@ MonoBehaviour:
     RoutineEnergyTwo: 0
     RoutineEnergyThree: 1
     RoutineEnergyFour: 0
-    ShadeDepthLow: 0.12
-    ShadeDepthHigh: 0.4
+    ShadeDepth:
+      Min: 0.12
+      Max: 0.4
+      LowRail: 0
+      HighRail: 1
     EnergySmoothing: 2
-    RhythmHueOffsetMin: 0.8
-    RhythmHueOffsetMax: 1
+    RhythmHueOffset:
+      Min: 0.8
+      Max: 1
+      LowRail: 0
+      HighRail: 1
