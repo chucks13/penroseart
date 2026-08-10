@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AnglesStandaloneSettingsAsset
   effectTypeName: Angles
   settings:
+    Spread: 1
     Speed:
       Min: 0.15
       Max: 0.4

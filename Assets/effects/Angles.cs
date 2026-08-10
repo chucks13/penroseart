@@ -6,7 +6,7 @@ using UnityEngine;
 /// Renders a palette hue sweep based on each tile's stored geometric angle.
 /// </summary>
 /// <remarks>
-/// FILL / DROP: one soft-edged wavefront, ordered by each tile's hue distance from the wall's own mean
+/// FILL / DROP (preserved behind temporary rebuild flags): one soft-edged wavefront, ordered by each tile's hue distance from the wall's own mean
 /// hue (closest first), compresses the wall toward that charged mean color. An active Fill advances the
 /// front through its <see cref="InSpan.Build"/>. Independently, <see cref="DropValues.Before"/> advances
 /// the same front so a Drop receives preparation even when no Fill precedes it. A Fill that ends without
@@ -18,22 +18,41 @@ using UnityEngine;
 /// through the tiling's ten orientation classes — the multiples-of-18° directional families of the
 /// underlying pentagrid. Because orientation drives hue here, each class is also a single hue, so the
 /// rainbow and its ten hidden families return together out of the darkness. The four-bar Routine keeps
-/// its own full-pattern hue rotation and does not drive this choreography.
+/// its own full-pattern hue rotation and does not drive this choreography; that Routine hue offset is
+/// likewise preserved behind temporary rebuild scaffolding.
 ///
-/// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
+/// SHADING (preserved behind temporary rebuild scaffolding): a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
 /// Its depth scales with musical <see cref="BeatManager.Energy"/> — subtle in low-energy sections, more
 /// pronounced in high-energy ones. This is pure geometry plus a nullable Energy read, so it renders steady
 /// at a fixed mid depth in Standalone (no beat clock) rather than going flat.
 ///
-/// On every new Grid the sweep speed, held Waveform, and shading light direction re-roll, so the look
-/// changes character every 16 beats even outside a Fill/Drop.
+/// On every new Grid the sweep speed and held Waveform re-roll, so the look changes character every 16
+/// beats even outside a Fill/Drop. The shading light direction is seeded once per activation instead:
+/// re-rolling it at a Grid caused a visible flash, and it drives no pixels while shading is disabled.
 /// </remarks>
 [EffectSyncSettings(typeof(AnglesSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(AnglesStandaloneSettingsAsset))]
 public class Angles : EffectBase
 {
+    // Temporary musical-layer rebuild flags
+
+    /// <summary>Temporary rebuild scaffolding for Fill/pre-Drop hue compression; this layer returns reshaped or is deleted when its turn comes.</summary>
+    private const bool EnableFillAndPreDropHueCompression = false;
+
+    /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
+    private const bool EnableDropBlackoutAndReignition = false;
+
+    /// <summary>Temporary rebuild scaffolding for Energy-driven directional shading; this layer returns reshaped or is deleted when its turn comes.</summary>
+    private const bool EnableEnergyDrivenDirectionalShading = false;
+
+    /// <summary>Temporary rebuild scaffolding for the Routine rhythm hue offset; this layer returns reshaped or is deleted when its turn comes.</summary>
+    private const bool EnableRoutineRhythmHueOffset = false;
+
     // Standalone Defaults
+
+    /// <summary>Angle-to-hue gain: one maps the 180° angular domain across one hue cycle, while larger values produce additional hue bands.</summary>
+    private const float StandaloneSpread = 1f;
 
     /// <summary>Minimum sweep speed re-rolled on activation and each new Grid.</summary>
     private const float StandaloneSpeedMin = 0.15f;
@@ -109,19 +128,18 @@ public class Angles : EffectBase
     private const int OrientationClasses = 10;
 
     /// <summary>
-    /// Fill and Drop coordinate one tension-to-release hue compression, with the Drop landing blacking out then
-    /// releasing through ten orientation families. Shading depth stays subtle at Low energy and pronounced at
-    /// High, so Angles advertises as a Mid/High-energy Performer.
+    /// Advertises no Fill/Drop capability or Energy character while Angles returns to its bare base effect,
+    /// preventing the Director from casting it to musical Anchors until those layers are rebuilt.
     /// </summary>
-    public override Repertoire Repertoire =>
-        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+    public override Repertoire Repertoire => Repertoire.None;
 
     /// <summary>
     /// Resolves a fresh immutable-by-convention copy of Angles' Standalone Defaults, including
-    /// independent speed and directional-shading depth ranges.
+    /// live angle spread plus independent speed and directional-shading depth ranges.
     /// </summary>
     public static AnglesStandaloneSettings StandaloneDefaults => new AnglesStandaloneSettings
     {
+        Spread = StandaloneSpread,
         Speed = new FloatRange(StandaloneSpeedMin, StandaloneSpeedMax),
         ShadeDepth = new FloatRange(
             StandaloneShadeDepthLow,
@@ -171,13 +189,16 @@ public class Angles : EffectBase
     /// <summary>Current sweep speed rolled for this activation or Grid.</summary>
     private float speed;
 
+    /// <summary>Bounded hue-wheel position integrated from sweep speed, seeded from the activation's randomized <see cref="EffectBase.effectTime"/> phase so speed changes alter velocity without teleporting position.</summary>
+    private float huePhase;
+
     /// <summary>Four-bar waveform choreography, one Waveform per bar drawn from the energy pools named by <see cref="AnglesSyncSettings.RoutineEnergyOne"/> through <see cref="AnglesSyncSettings.RoutineEnergyFour"/>.</summary>
     private Routine routine;
 
     /// <summary>Current tension (0..1) expressed as progress of the hue-compression wavefront toward <see cref="meanHue"/>.</summary>
     private float hueCompression;
 
-    /// <summary>Each tile's raw angle-hue (pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
+    /// <summary>Each tile's raw angle-hue (pre-Spread, pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
     private float[] rawHue;
 
     /// <summary>Per tile, the shortest signed hue delta (in [-0.5, 0.5)) from <see cref="rawHue"/> toward <see cref="meanHue"/>, cached once.</summary>
@@ -201,7 +222,7 @@ public class Angles : EffectBase
     /// <summary>Circular mean of every tile's raw angle-hue: the charged color the Fill/Drop choreography compresses toward.</summary>
     private float meanHue;
 
-    /// <summary>Direction (radians) the shading gradient is "lit" from; re-rolled each Grid so the bright/shadowed sides of the orientation field shift.</summary>
+    /// <summary>Direction (radians) the shading gradient is "lit" from; seeded once per activation so a Grid boundary cannot flash the bright/shadowed sides of the orientation field.</summary>
     /// <remarks>
     /// Its <c>0..2π</c> roll is deliberately not captured as a Standalone randomization range. A full turn is the
     /// complete angular domain of a direction, not an authored span — narrowing it would stop the light reaching
@@ -290,15 +311,18 @@ public class Angles : EffectBase
             typeof(Angles),
             SyncDefaults);
         Reroll();
+        lightPhase = Random.Range(0f, Mathf.PI * 2f);
+        huePhase = Mathf.Repeat(effectTime * speed, 1f);
         hueCompression = 0f;
         smoothedEnergy = standaloneSettings.Energy;
-        controller.debugText.text = "Angles";
+        controller.debugText.text = DebugText();
         buffer.Clear();
     }
 
     /// <summary>
-    /// Re-rolls the per-activation look: sweep speed, four-bar Waveform routine, and shading light direction. Called
-    /// once at activation and again on each new Grid, so the look takes a fresh character every 16 beats.
+    /// Re-rolls the per-activation or per-Grid sweep speed and four-bar Waveform Routine, so the look takes a
+    /// fresh character every 16 beats. The shading light direction is intentionally seeded only in
+    /// <see cref="OnStart"/> because changing it on a Grid caused a visible flash.
     /// </summary>
     private void Reroll()
     {
@@ -308,7 +332,6 @@ public class Angles : EffectBase
             waveforms.Random(SyncSettings.RoutineEnergyTwo),
             waveforms.Random(SyncSettings.RoutineEnergyThree),
             waveforms.Random(SyncSettings.RoutineEnergyFour));
-        lightPhase = Random.Range(0f, Mathf.PI * 2f);
     }
 
     /// <summary>
@@ -401,16 +424,22 @@ public class Angles : EffectBase
     /// </summary>
     public override void Draw()
     {
+        huePhase = Mathf.Repeat(huePhase + (speed * effectDelta), 1f);
+
         // The Routine rotates the full angle-to-hue pattern without changing the tiles' relative hues.
-        float rhythmHueOffset = routine.Lerp(
-            SyncSettings.RhythmHueOffset.Min,
-            beatManager.IsSynced
-                ? SyncSettings.RhythmHueOffset.Max
-                : standaloneSettings.RhythmHueOffset);
+        float rhythmHueOffset = EnableRoutineRhythmHueOffset
+            ? routine.Lerp(
+                SyncSettings.RhythmHueOffset.Min,
+                beatManager.IsSynced
+                    ? SyncSettings.RhythmHueOffset.Max
+                    : standaloneSettings.RhythmHueOffset)
+            : 0f;
         var drop = beatManager.Drop;
         bool inDrop = drop.Active;
         float dropRelease = UpdateChoreography(drop);
-        float shadeDepth = UpdateShadeDepth();
+        float frameHueCompression = EnableFillAndPreDropHueCompression ? hueCompression : 0f;
+        float shadeDepth = EnableEnergyDrivenDirectionalShading ? UpdateShadeDepth() : 0f;
+        float spread = standaloneSettings.Spread;
 
         // Hoisted: the front's soft edge is uniform across the wall, so its rank scale is one
         // frame-wide value rather than 900 identical products.
@@ -420,13 +449,13 @@ public class Angles : EffectBase
         for (int i = 0; i < buffer.Length; i++)
         {
             float collapseStart = frontRank[i] * rankScale;
-            float collapse = hueCompression.Remap(
+            float collapse = frameHueCompression.Remap(
                 collapseStart,
                 collapseStart + frontSoftness,
                 0f,
                 1f,
                 clamp: true);
-            float angle = rawHue[i] + (hueDelta[i] * collapse) + (effectTime * speed);
+            float angle = (rawHue[i] * spread) + (hueDelta[i] * collapse) + huePhase;
 
             // Directional shading: same-facing tiles (0° ≡ 180°) shade identically, giving the angle
             // families brightness definition on top of hue.
@@ -435,7 +464,7 @@ public class Angles : EffectBase
 
             // Drop reignition: outside a Drop every tile sits at its shaded brightness; during a Drop,
             // each orientation class snaps up as the shared release reaches its reveal point.
-            float lit = inDrop
+            float lit = EnableDropBlackoutAndReignition && inDrop
                 ? dropRelease.Remap(
                     classReveal[i],
                     classReveal[i] + SyncSettings.ClassSnapWidth,
@@ -454,6 +483,9 @@ public class Angles : EffectBase
 [Serializable]
 public sealed class AnglesStandaloneSettings
 {
+    /// <summary>Live angle-to-hue gain, with an editor rail extending above one so additional hue bands can span the angular domain.</summary>
+    [Range(0f, 4f)] public float Spread;
+
     /// <summary>Per-activation and per-Grid sweep-speed range.</summary>
     public FloatRange Speed;
 
@@ -473,12 +505,13 @@ public sealed class AnglesStandaloneSettings
     [Range(0f, 1f)] public float RhythmHueOffset;
 
     /// <summary>
-    /// Copies every Angles Standalone Setting from another value, including independent speed and
-    /// directional-shading depth endpoints and editor rails.
+    /// Copies every Angles Standalone Setting from another value, including live angle spread,
+    /// independent speed, and directional-shading depth endpoints and editor rails.
     /// </summary>
     /// <param name="source">The Standalone Settings whose values become this value.</param>
     public void CopyFrom(AnglesStandaloneSettings source)
     {
+        Spread = source.Spread;
         Speed = new FloatRange(
             source.Speed.Min,
             source.Speed.Max,
