@@ -34,8 +34,8 @@ MonoBehaviour:
     RoutineEnergyThree: 1
     RoutineEnergyFour: 0
     ShadeDepth:
-      Min: 0.12
-      Max: 0.4
+      Min: 0.5
+      Max: 0.8
       LowRail: 0
       HighRail: 1
     EnergySmoothing: 2

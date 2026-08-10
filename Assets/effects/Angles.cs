@@ -43,7 +43,12 @@ public class Angles : EffectBase
     /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
     private const bool EnableDropBlackoutAndReignition = false;
 
-    /// <summary>Temporary rebuild scaffolding for Energy-driven directional shading; this layer returns reshaped or is deleted when its turn comes.</summary>
+    /// <summary>
+    /// Temporary rebuild scaffolding for letting Energy drive the directional shading depth; this
+    /// layer returns reshaped or is deleted when its turn comes. Directional shading itself is no
+    /// longer gated: it runs at the authored depth, and the flag only decides whether Energy takes
+    /// that depth over.
+    /// </summary>
     private const bool EnableEnergyDrivenDirectionalShading = false;
 
     /// <summary>Temporary rebuild scaffolding for the Routine rhythm hue offset; this layer returns reshaped or is deleted when its turn comes.</summary>
@@ -92,11 +97,16 @@ public class Angles : EffectBase
     /// <summary>Maximum sweep speed re-rolled on activation and each new Grid.</summary>
     private const float StandaloneSpeedMax = 0.4f;
 
-    /// <summary>Directional-shading depth at Low energy: the dimmest orientation drops this far below full (so its floor is 1 - this). Kept shallow so calm sections stay subtle. Tune on the readout.</summary>
-    private const float StandaloneShadeDepthLow = 0.12f;
+    /// <summary>
+    /// Standing directional-shading depth: the dimmest orientation drops this far below full (so its
+    /// floor is 1 - this). This is the depth the wall shows whenever Energy is not driving shading, and
+    /// it doubles as the Low-energy endpoint, so the look tuned here is where the later musical
+    /// response starts rather than something Energy overrides. Set on the wall.
+    /// </summary>
+    private const float StandaloneShadeDepthLow = 0.5f;
 
-    /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Tune on the readout.</summary>
-    private const float StandaloneShadeDepthHigh = 0.4f;
+    /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Set on the wall.</summary>
+    private const float StandaloneShadeDepthHigh = 0.8f;
 
     /// <summary>Energy level assumed when <see cref="EnergyValues.Level"/> has no value: 0.5 = Mid, a steady moderate shading depth. Tune on the readout.</summary>
     private const float StandaloneEnergy = 0.5f;
@@ -157,11 +167,15 @@ public class Angles : EffectBase
     /// <summary>Fourth energy pool sampled for the four-bar Routine choreography.</summary>
     private const Energy SyncRoutineEnergyFour = Energy.Low;
 
-    /// <summary>Directional-shading depth at Low energy: the dimmest orientation drops this far below full (so its floor is 1 - this). Kept shallow so calm sections stay subtle. Tune on the readout.</summary>
-    private const float SyncShadeDepthLow = 0.12f;
+    /// <summary>
+    /// Standing directional-shading depth, mirroring Standalone so the two modes carry the same look
+    /// until a musical reason parts them: the dimmest orientation drops this far below full, and the
+    /// value doubles as the Low-energy endpoint the later Energy lerp starts from. Set on the wall.
+    /// </summary>
+    private const float SyncShadeDepthLow = 0.5f;
 
-    /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Tune on the readout.</summary>
-    private const float SyncShadeDepthHigh = 0.4f;
+    /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Set on the wall.</summary>
+    private const float SyncShadeDepthHigh = 0.8f;
 
     /// <summary>Smoothing rate (per second) easing the shading depth between energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the readout.</summary>
     private const float SyncEnergySmoothing = 2f;
@@ -611,7 +625,16 @@ public class Angles : EffectBase
         bool inDrop = drop.Active;
         float dropRelease = UpdateChoreography(drop);
         float frameHueCompression = EnableFillAndPreDropHueCompression ? hueCompression : 0f;
-        float shadeDepth = EnableEnergyDrivenDirectionalShading ? UpdateShadeDepth() : 0f;
+        // Directional shading is a standing part of the look, not a musical layer: it holds the
+        // authored depth until Energy's turn comes to drive it. ShadeDepth.Min is that authored
+        // baseline and stays the Low-energy endpoint the later Energy lerp starts from, so tuning the
+        // static look on the wall also sets where the musical response will begin.
+        FloatRange shadeDepthRange = beatManager.IsSynced
+            ? SyncSettings.ShadeDepth
+            : standaloneSettings.ShadeDepth;
+        float shadeDepth = EnableEnergyDrivenDirectionalShading
+            ? UpdateShadeDepth()
+            : shadeDepthRange.Min;
         float spread = standaloneSettings.Spread;
 
         // Hoisted: the front's soft edge is uniform across the wall, so its rank scale is one
@@ -631,7 +654,11 @@ public class Angles : EffectBase
             float angle = (rawHue[i] * spread) + (hueDelta[i] * collapse) + huePhase;
 
             // Directional shading: same-facing tiles (0° ≡ 180°) shade identically, giving the angle
-            // families brightness definition on top of hue.
+            // families brightness definition on top of hue. Alignment reads the same orientation the
+            // hue does, so brightness and colour reinforce each other rather than cutting across.
+            // lightPhase is seeded once per activation and then holds, so the lit direction stays put
+            // while huePhase sweeps colour through it — a fixed light is what lets the rhombs read as
+            // lit solids; a turning one would just add motion competing with the hue drift.
             float align = 0.5f + (0.5f * Mathf.Cos((orient01[i] * Mathf.PI * 2f) - lightPhase));
             float shade = align.Lerp(1f - shadeDepth, 1f);
 

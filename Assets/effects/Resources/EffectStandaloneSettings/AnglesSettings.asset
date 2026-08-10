@@ -30,8 +30,8 @@ MonoBehaviour:
       LowRail: 0.15
       HighRail: 0.4
     ShadeDepth:
-      Min: 0.12
-      Max: 0.4
+      Min: 0.5
+      Max: 0.8
       LowRail: 0
       HighRail: 1
     Energy: 0.5
