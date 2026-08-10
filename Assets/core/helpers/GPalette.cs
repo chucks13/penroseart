@@ -110,12 +110,13 @@ public class GPalette
 }
 
 /// <summary>
-/// Shared animated palette state that fades between loaded gradient palettes over time.
+/// Shared animated palette state that fades to a randomly selected palette when asked. A palette
+/// is picked at a Roll and holds until the next one: Change is the only mover, so nothing hops
+/// palettes mid-activation on its own.
 /// </summary>
 public class AnimPalette
 {
     List<string> names = new List<string>();
-    bool fading = false;
     List<GPalette> palettes = new List<GPalette>();
     GPalette current = null;
     GPalette next = null;
@@ -186,12 +187,11 @@ public class AnimPalette
         {
             next = palettes[Random.Range(0, palettes.Count)];
             tween = transitionTime;
-            fading = Random.Range(0, 3) > 0;
         }
     }
 
     /// <summary>
-    /// Advances animated palette fade and rotation state.
+    /// Advances the animated palette fade toward the most recently requested palette.
     /// </summary>
     public void Update()
     {
@@ -202,8 +202,6 @@ public class AnimPalette
             {
                 current = next;
                 tween = 0f;
-                if (fading)
-                    Change();
             }
         }
     }
