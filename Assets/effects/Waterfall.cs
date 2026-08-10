@@ -93,40 +93,57 @@ public class Waterfall : ScreenEffect
     // Sync Defaults
 
     /// <summary>
-    /// Authored Waveform trough height for Waterfall in Synced Mode. The authored value makes the
-    /// pulse full between rhythmic peaks.
+    /// Authored tempo at which BPM contributes a neutral one-times multiplier, keeping the rolled
+    /// StreamFallSpeed as the baseline before Energy shapes it.
     /// </summary>
-    private const float SyncWaveformTroughHeight = 1f;
+    private const float SyncReferenceBpm = 120f;
+
+    /// <summary>Authored Low Energy multiplier applied to the BPM-scaled stream speed.</summary>
+    private const float SyncEnergySpeedMultiplierMin = 0.8f;
 
     /// <summary>
-    /// Authored Waveform peak height for Waterfall in Synced Mode. The authored value returns the
-    /// pulse to zero at each rhythmic peak.
+    /// Authored High Energy multiplier applied to the BPM-scaled stream speed; Mid is the midpoint
+    /// so the closed three-step Energy ladder stays evenly spaced.
     /// </summary>
-    private const float SyncWaveformPeakHeight = 0f;
+    private const float SyncEnergySpeedMultiplierMax = 1.2f;
 
-    /// <summary>Authored inclusive minimum hue/saturation/value response mode.</summary>
-    private const int SyncBeatModeMin = 0;
+    /// <summary>
+    /// Authored multiplicative value-space lift at the center of a Synced stream surge, leaving
+    /// palette hue and saturation untouched. The authored value carries the dimmed Synced resting
+    /// water to full white with a visible gradient instead of barely grazing the 1.0 clamp.
+    /// </summary>
+    private const float SyncStreamSurgeBrightness = 2.5f;
 
-    /// <summary>Authored exclusive maximum hue/saturation/value response mode.</summary>
-    private const int SyncBeatModeMaxExclusive = 2;
+    /// <summary>
+    /// Authored full vertical length of a Synced stream surge, in screen pixels. Kept short so each
+    /// beat reads as a distinct packet rather than a long overlapping wash.
+    /// </summary>
+    private const float SyncStreamSurgeLength = 12f;
 
-    /// <summary>Authored inclusive minimum pulse direction.</summary>
-    private const int SyncPulseDirectionMin = 0;
+    /// <summary>
+    /// Authored surge fall speed relative to the water's BPM × Energy speed. Above one, each beat
+    /// strike visibly outruns the stream it brightens while the body keeps its normal flow.
+    /// </summary>
+    private const float SyncStreamSurgeSpeedMultiplier = 6f;
 
-    /// <summary>Authored exclusive maximum pulse direction.</summary>
-    private const int SyncPulseDirectionMaxExclusive = 2;
+    /// <summary>
+    /// Authored surge width relative to the rolled stream width. The authored value spans several
+    /// streams so a strike reads as a broad wall hit (wall-judged); the underlying stream profile
+    /// and edge seams keep the structure visible inside the swell.
+    /// </summary>
+    private const float SyncStreamSurgeWidthMultiplier = 8f;
 
-    /// <summary>Authored minimum color-response multiplier rolled in Synced Mode.</summary>
-    private const float SyncPulseMultiplierMin = 0.125f;
+    /// <summary>
+    /// Authored minimum Smoothed low-band level that admits a beat surge. Below it the count's
+    /// window passes without a launch, so surges disappear with the bass drum during breakdowns.
+    /// </summary>
+    private const float SyncStreamSurgeLowLevelThreshold = 0.35f;
 
-    /// <summary>Authored maximum color-response multiplier rolled in Synced Mode.</summary>
-    private const float SyncPulseMultiplierMax = 0.25f;
-
-    /// <summary>Authored divisor mapping the Waveform's shortest peak spacing onto screen rows.</summary>
-    private const float SyncPulseScaleDivisor = 200f;
-
-    /// <summary>Authored saturation-response multiple applied by saturation mode.</summary>
-    private const float SyncSaturationPulseMultiplier = 2f;
+    /// <summary>
+    /// Authored fraction of the screen width, at each edge, where no surge stream center may sit.
+    /// A surge centered that far out falls mostly off the wall and reads as a missed beat.
+    /// </summary>
+    private const float SyncStreamSurgeEdgeMargin = 0.15f;
 
     /// <summary>Authored inclusive minimum number of droplets rolled in Synced Mode.</summary>
     private const int SyncDropletCountMin = 32;
@@ -158,8 +175,12 @@ public class Waterfall : ScreenEffect
     /// <summary>Authored maximum downward travel speed of the Synced streams, in screen pixels per second.</summary>
     private const float SyncStreamFallSpeedMax = 14f;
 
-    /// <summary>Authored maximum value of the Synced water body before droplets or pulse brighten it.</summary>
-    private const float SyncWaterBrightness = 0.72f;
+    /// <summary>
+    /// Authored maximum value of the Synced water body before droplets or surges brighten it.
+    /// Rests dimmer than the Standalone body so beat surges have real headroom to strike into;
+    /// at the Standalone 0.72 a surge grazed the 1.0 clamp and read as muted shimmer.
+    /// </summary>
+    private const float SyncWaterBrightness = 0.55f;
 
     /// <summary>Authored luminance separation between bright and dark Synced streams.</summary>
     private const float SyncStreamContrast = 0.7f;
@@ -206,6 +227,12 @@ public class Waterfall : ScreenEffect
     /// <summary>Authored screen-height multiplier below the wall where Synced droplets respawn.</summary>
     private const int SyncDropletRespawnHeightMultiplier = -2;
 
+    /// <summary>
+    /// Number of complete stream-selection cycles an identity may miss before oldest-first
+    /// selection guarantees that it cannot starve.
+    /// </summary>
+    private const int SurgeStarvationStreamCycles = 2;
+
     /// <summary>Waterfall's falling streams and droplets suit Low-, Mid-, and High-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
@@ -242,13 +269,16 @@ public class Waterfall : ScreenEffect
     /// <summary>Resolves a fresh copy of Waterfall's file-local Sync Defaults.</summary>
     public static WaterfallSyncSettings SyncDefaults => new WaterfallSyncSettings
     {
-        WaveformTroughHeight = SyncWaveformTroughHeight,
-        WaveformPeakHeight = SyncWaveformPeakHeight,
-        BeatMode = new IntRange(SyncBeatModeMin, SyncBeatModeMaxExclusive),
-        PulseDirection = new IntRange(SyncPulseDirectionMin, SyncPulseDirectionMaxExclusive),
-        PulseMultiplier = new FloatRange(SyncPulseMultiplierMin, SyncPulseMultiplierMax),
-        PulseScaleDivisor = SyncPulseScaleDivisor,
-        SaturationPulseMultiplier = SyncSaturationPulseMultiplier,
+        ReferenceBpm = SyncReferenceBpm,
+        EnergySpeedMultiplier = new FloatRange(
+            SyncEnergySpeedMultiplierMin,
+            SyncEnergySpeedMultiplierMax),
+        StreamSurgeBrightness = SyncStreamSurgeBrightness,
+        StreamSurgeLength = SyncStreamSurgeLength,
+        StreamSurgeWidthMultiplier = SyncStreamSurgeWidthMultiplier,
+        StreamSurgeSpeedMultiplier = SyncStreamSurgeSpeedMultiplier,
+        StreamSurgeLowLevelThreshold = SyncStreamSurgeLowLevelThreshold,
+        StreamSurgeEdgeMargin = SyncStreamSurgeEdgeMargin,
         DropletCount = new IntRange(SyncDropletCountMin, SyncDropletCountMaxExclusive),
         PaletteSpread = new FloatRange(SyncPaletteSpreadMin, SyncPaletteSpreadMax),
         PaletteSpeed = new FloatRange(SyncPaletteSpeedMin, SyncPaletteSpeedMax),
@@ -293,7 +323,7 @@ public class Waterfall : ScreenEffect
     /// <summary>The downward screen-space speed rolled for the stream field.</summary>
     private float streamFallSpeed;
 
-    /// <summary>The value-space frame composed before palette hue and beat pulse are applied.</summary>
+    /// <summary>The value-space frame composed before palette hue is applied.</summary>
     private float[] waterValueBuffer;
 
     /// <summary>The cross-stream profile computed once per column, kept for edge-seam gradients.</summary>
@@ -305,23 +335,39 @@ public class Waterfall : ScreenEffect
     /// <summary>The palette saturation sampled once per screen row for the current frame.</summary>
     private float[] paletteSaturationByRow;
 
-    /// <summary>The color-response multiplier rolled for the current activation.</summary>
-    private float pulseMultiplier;
+    /// <summary>
+    /// The bounded downward phase of the stream texture. Integrating speed here prevents BPM or
+    /// Energy changes from multiplying Waterfall's large randomized effectTime into a phase jump.
+    /// </summary>
+    private float streamFallOffset;
 
-    /// <summary>The fixed-length pulse history propagated across screen rows.</summary>
-    private readonly float[] wave = new float[400];
+    /// <summary>
+    /// Stable stream centers derived from maxima of the pinned primary harmonic. Minor harmonics
+    /// can reshape and merge the field without moving these selection identities.
+    /// </summary>
+    private float[] streamCenterById;
 
-    /// <summary>The shortest peak spacing sampled from the Waveform acquired during the current Roll.</summary>
-    private float pulsePeakSpacingMs;
+    /// <summary>The number of beat selections each stable stream identity has gone unpicked.</summary>
+    private int[] beatsSinceSurgeByStream;
 
-    /// <summary>The current mapping from screen rows into the pulse history.</summary>
-    private float pulseScale;
+    /// <summary>The overlapping beat-launched luminance swells currently crossing the wall.</summary>
+    private StreamSurge[] streamSurges;
 
-    /// <summary>The rolled hue, saturation, or value response mode.</summary>
-    private int beatMode;
+    /// <summary>The number of stable primary-harmonic stream identities in the current Roll.</summary>
+    private int streamCount;
 
-    /// <summary>The rolled direction used to traverse the pulse history.</summary>
-    private int pulseDirection;
+    /// <summary>The number of active entries in the fixed-capacity surge array.</summary>
+    private int activeSurgeCount;
+
+    /// <summary>The first surge slot considered when the next musical count launches a swell.</summary>
+    private int nextSurgeSlot;
+
+    /// <summary>
+    /// Whether the current quarter-beat window already launched its surge. Scoping the launch to
+    /// the open window instead of its rising edge lets the low-band gate admit a count as soon as
+    /// the bass confirms it, while still launching at most one surge per musical count.
+    /// </summary>
+    private bool surgeLaunchedThisWindow;
 
     /// <summary>Reports the current droplet count and rolled water-motion values for debug UI.</summary>
     /// <returns>A multi-line description of the current activation.</returns>
@@ -334,7 +380,10 @@ public class Waterfall : ScreenEffect
             $"Stream fall speed: {streamFallSpeed}\n";
     }
 
-    /// <summary>Allocates Waterfall's reusable value and palette-column buffers after screen setup.</summary>
+    /// <summary>
+    /// Allocates Waterfall's reusable value, palette, stream-identity, and surge buffers after
+    /// screen setup so Draw performs no managed allocation.
+    /// </summary>
     public override void Init()
     {
         base.Init();
@@ -342,6 +391,9 @@ public class Waterfall : ScreenEffect
         streamProfileByColumn = new float[width];
         paletteHueByRow = new float[height];
         paletteSaturationByRow = new float[height];
+        streamCenterById = new float[width];
+        beatsSinceSurgeByStream = new int[width];
+        streamSurges = new StreamSurge[height];
     }
 
     /// <summary>Resolves settings, performs the activation Roll, and creates the droplet field.</summary>
@@ -353,22 +405,6 @@ public class Waterfall : ScreenEffect
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Waterfall),
             SyncDefaults);
-
-        // Pulse settings are Sync-only even when the Roll happens without a clock. This keeps a
-        // later clock acquisition governed by the one settings home that can affect the pulse,
-        // without inert Standalone mirrors.
-        waveform = waveforms.Random();
-        beatMode = Random.Range(
-            SyncSettings.BeatMode.MinInclusive,
-            SyncSettings.BeatMode.MaxExclusive);
-        pulseDirection = Random.Range(
-            SyncSettings.PulseDirection.MinInclusive,
-            SyncSettings.PulseDirection.MaxExclusive);
-        pulseMultiplier = Random.value *
-            (SyncSettings.PulseMultiplier.Max - SyncSettings.PulseMultiplier.Min) +
-            SyncSettings.PulseMultiplier.Min;
-        pulsePeakSpacingMs = waveform.ShortestPeakSpacingMs;
-        Array.Clear(wave, 0, wave.Length);
 
         bool isSynced = beatManager.IsSynced;
         IntRange dropletCountRange = isSynced
@@ -394,6 +430,14 @@ public class Waterfall : ScreenEffect
         paletteSpeed = Random.Range(paletteSpeedRange.Min, paletteSpeedRange.Max);
         streamWidth = Random.Range(streamWidthRange.Min, streamWidthRange.Max);
         streamFallSpeed = Random.Range(streamFallSpeedRange.Min, streamFallSpeedRange.Max);
+        streamFallOffset = Mathf.Repeat(
+            effectTime * streamFallSpeed,
+            streamWidth * 4f);
+        InitializeStreamIdentities();
+        Array.Clear(streamSurges, 0, streamSurges.Length);
+        activeSurgeCount = 0;
+        nextSurgeSlot = 0;
+        surgeLaunchedThisWindow = false;
         buffer.Clear();
 
         IntRange dropletSpawnHeightMultiplierRange = isSynced
@@ -427,7 +471,10 @@ public class Waterfall : ScreenEffect
     {
     }
 
-    /// <summary>Composes falling value structure, applies palette hue and pulse, then maps it to tiles.</summary>
+    /// <summary>
+    /// Composes falling value structure, droplets, and beat-launched stream surges, applies the
+    /// unchanged palette wash, then maps the screen buffer to tiles.
+    /// </summary>
     public override void Draw()
     {
         bool isSynced = beatManager.IsSynced;
@@ -455,32 +502,33 @@ public class Waterfall : ScreenEffect
         float waterMinBrightness = isSynced
             ? SyncSettings.WaterMinBrightness
             : standaloneSettings.WaterMinBrightness;
+        float streamSpeedMultiplier = CurrentStreamSpeedMultiplier(isSynced);
+        float effectiveStreamFallSpeed = streamFallSpeed * streamSpeedMultiplier;
+
+        // The flow phase is integrated rather than recomputed from effectTime: changing BPM or
+        // Energy changes velocity without teleporting the water. Four stream widths is exactly one
+        // vertical flow period because the falling sine uses one quarter of streamFrequency.
+        streamFallOffset = Mathf.Repeat(
+            streamFallOffset + (effectiveStreamFallSpeed * effectDelta),
+            streamWidth * 4f);
+        UpdateStreamSurges(
+            isSynced,
+            effectiveStreamFallSpeed * SyncSettings.StreamSurgeSpeedMultiplier,
+            SyncSettings.StreamSurgeLength);
 
         // Droplet physics advances exactly once per frame. Respawn remains the one permitted
-        // per-frame Roll and reads the currently active mode's authored position range.
+        // per-frame Roll and reads the currently active mode's authored position range. Synced
+        // droplets share the water body's BPM × Energy multiplier so the two falling layers do not
+        // drift apart; the multiplier rests at one in Standalone or without BPM.
         for (int i = 0; i < droplets.Length; i++)
         {
             droplets[i].Advance(
-                effectDelta,
+                effectDelta * streamSpeedMultiplier,
                 dropletSpawnHeightMultiplierRange,
                 dropletRespawnHeightMultiplier);
         }
 
-        // Feeding zero without a usable clock preserves the wave-history propagation while making
-        // the pulse itself a Sync-only response.
-        float waveHeight = isSynced
-            ? waveform.Lerp(SyncSettings.WaveformTroughHeight, SyncSettings.WaveformPeakHeight)
-            : 0f;
-        pulseScale = pulsePeakSpacingMs / SyncSettings.PulseScaleDivisor;
-        for (int i = wave.Length - 1; i > 0; i--)
-        {
-            wave[i] = wave[i - 1];
-        }
-
-        wave[0] = waveHeight;
-
         float streamFrequency = Mathf.PI * 2f / streamWidth;
-        float fallingOffset = effectTime * streamFallSpeed;
         float darkestStream = waterBrightness * (1f - streamContrast);
 
         // Only the two weaker harmonics wander, phase-oscillating in opposite directions. The
@@ -535,11 +583,30 @@ public class Waterfall : ScreenEffect
                 // Time lives only in the y term, so texture moves straight down each stream.
                 // The 0.25 factor stretches the falling features to several stream-widths tall.
                 float flow = 0.5f + (0.5f * Mathf.Sin(
-                    ((y + fallingOffset) * streamFrequency * 0.25f) + streamPhase));
+                    ((y + streamFallOffset) * streamFrequency * 0.25f) + streamPhase));
                 float stream = streamProfile * (0.55f + (0.45f * flow));
                 float value = Mathf.Lerp(darkestStream, waterBrightness, stream) * edgeFactor;
                 waterValueBuffer[screenIndex] = Mathf.Max(value, waterMinBrightness);
                 screenIndex += width;
+            }
+        }
+
+        // Surges multiply the existing value field after its stream and edge shaping. Their x/y
+        // falloffs remain inside one stable stream identity, and multiplicative composition keeps
+        // the field's internal contrast and dark seams visible instead of painting a flat band.
+        if (isSynced && activeSurgeCount > 0)
+        {
+            for (int i = 0; i < streamSurges.Length; i++)
+            {
+                if (streamSurges[i].Active)
+                {
+                    AddStreamSurgeValue(
+                        streamSurges[i],
+                        SyncSettings.StreamSurgeBrightness,
+                        SyncSettings.StreamSurgeLength,
+                        SyncSettings.StreamSurgeWidthMultiplier,
+                        streamEdgeShade);
+                }
             }
         }
 
@@ -565,14 +632,6 @@ public class Waterfall : ScreenEffect
 
         for (int y = 0; y < height; y++)
         {
-            float pulseY = pulseDirection == 0 ? y : height - y;
-            int waveIndex = (int)(pulseY * pulseScale);
-            if (waveIndex > wave.Length - 1)
-            {
-                waveIndex = wave.Length - 1;
-            }
-
-            float pulse = wave[waveIndex];
             int rowStart = y * width;
             float rowHue = paletteHueByRow[y];
             float rowSaturation = paletteSaturationByRow[y];
@@ -583,25 +642,309 @@ public class Waterfall : ScreenEffect
                 float s = rowSaturation;
                 float v = waterValueBuffer[screenIndex];
 
-                switch (beatMode)
-                {
-                    case 0:
-                        h += pulse * pulseMultiplier;
-                        break;
-                    case 1:
-                        s += pulse * pulseMultiplier * SyncSettings.SaturationPulseMultiplier;
-                        break;
-                    case 2:
-                        v += pulse * (1f - pulseMultiplier);
-                        break;
-                }
-
                 screenBuffer[screenIndex] = Color.HSVToRGB(h % 1f, s, v);
             }
         }
 
         // convert the 2D Matrix buffer to a tile buffer
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
+    }
+
+    /// <summary>
+    /// Composes the rolled stream speed with live BPM and Energy while keeping one as the exact
+    /// Standalone and BPM-unavailable multiplier.
+    /// </summary>
+    /// <param name="isSynced">Whether the running one-through-four count is available.</param>
+    /// <returns>The multiplier shared by the water body, droplets, and active surges.</returns>
+    private float CurrentStreamSpeedMultiplier(bool isSynced)
+    {
+        if (!isSynced || beatManager.Timing.Bpm is not { } bpm)
+        {
+            return 1f;
+        }
+
+        float energyPosition = beatManager.Energy.Level switch
+        {
+            Energy.Low => 0f,
+            Energy.Mid => 0.5f,
+            Energy.High => 1f,
+            _ => 0.5f,
+        };
+
+        // Energy's Trend names the next step's direction while Progress supplies continuous
+        // position through the current run. One step spans half of the normalized three-tier
+        // ladder, so the rate reaches the adjacent tier at the run boundary instead of snapping.
+        if (beatManager.Energy.Progress is { } energyProgress)
+        {
+            energyPosition += beatManager.Energy.Trend switch
+            {
+                EnergyTrend.Rising => energyProgress * 0.5f,
+                EnergyTrend.Falling => energyProgress * -0.5f,
+                _ => 0f,
+            };
+        }
+
+        float energyMultiplier = Mathf.Lerp(
+            SyncSettings.EnergySpeedMultiplier.Min,
+            SyncSettings.EnergySpeedMultiplier.Max,
+            Mathf.Clamp01(energyPosition));
+        return bpm / SyncSettings.ReferenceBpm * energyMultiplier;
+    }
+
+    /// <summary>
+    /// Derives stable stream identities from the pinned primary harmonic's maxima. The minor
+    /// harmonics can wander and merge the visible field, but their motion never changes these
+    /// centers or transfers a surge between identities. Centers inside the authored edge margin
+    /// are excluded — a surge that far out falls mostly off the wall and reads as a missed beat —
+    /// so the margin is applied here, at Roll, and a live edit takes effect on the next
+    /// activation.
+    /// </summary>
+    private void InitializeStreamIdentities()
+    {
+        Array.Clear(beatsSinceSurgeByStream, 0, beatsSinceSurgeByStream.Length);
+        streamCount = 0;
+
+        float minCenter = width * SyncSettings.StreamSurgeEdgeMargin;
+        float maxCenter = width - minCenter;
+        for (float center = streamWidth * 0.25f; center < width; center += streamWidth)
+        {
+            if (center < minCenter || center > maxCenter)
+            {
+                continue;
+            }
+
+            streamCenterById[streamCount] = center;
+            streamCount++;
+        }
+
+        if (streamCount == 0)
+        {
+            // A stretched margin rail can exclude every derived center; the center closest to
+            // mid-screen stays eligible so a beat always has a stream to strike.
+            float closestCenter = streamWidth * 0.25f;
+            for (float center = streamWidth * 0.25f; center < width; center += streamWidth)
+            {
+                if (Mathf.Abs(center - (width * 0.5f)) <
+                    Mathf.Abs(closestCenter - (width * 0.5f)))
+                {
+                    closestCenter = center;
+                }
+            }
+
+            streamCenterById[0] = closestCenter;
+            streamCount = 1;
+        }
+    }
+
+    /// <summary>
+    /// Advances existing surges and launches at most one luminance swell per musical count: the
+    /// count's quarter-beat window opens the opportunity and the Smoothed low band must confirm
+    /// it. Losing Sync clears the moving response immediately so Standalone remains the approved
+    /// water-only look.
+    /// </summary>
+    /// <param name="isSynced">Whether the running one-through-four count is available.</param>
+    /// <param name="fallSpeed">Current downward surge speed in screen pixels per second: the
+    /// water's BPM × Energy speed times the authored surge speed multiplier.</param>
+    /// <param name="surgeLength">Current authored full surge length in screen pixels.</param>
+    private void UpdateStreamSurges(bool isSynced, float fallSpeed, float surgeLength)
+    {
+        if (!isSynced)
+        {
+            surgeLaunchedThisWindow = false;
+            if (activeSurgeCount > 0)
+            {
+                Array.Clear(streamSurges, 0, streamSurges.Length);
+                activeSurgeCount = 0;
+                nextSurgeSlot = 0;
+            }
+            return;
+        }
+
+        if (activeSurgeCount > 0)
+        {
+            float halfSurgeLength = surgeLength * 0.5f;
+            for (int i = 0; i < streamSurges.Length; i++)
+            {
+                if (!streamSurges[i].Active)
+                {
+                    continue;
+                }
+
+                streamSurges[i].PositionY -= fallSpeed * effectDelta;
+                if (streamSurges[i].PositionY + halfSurgeLength < 0f)
+                {
+                    streamSurges[i].Active = false;
+                    activeSurgeCount--;
+                }
+            }
+        }
+
+        bool beatWindowOpen = beatManager.Beats.OnBeat(1)
+            || beatManager.Beats.OnBeat(2)
+            || beatManager.Beats.OnBeat(3)
+            || beatManager.Beats.OnBeat(4);
+        if (!beatWindowOpen)
+        {
+            surgeLaunchedThisWindow = false;
+            return;
+        }
+
+        // The low band gates the launch: a count without bass presence spawns no surge, so surges
+        // vanish with the kick during breakdowns. Checking every open-window frame instead of only
+        // the window's rising edge lets a kick that registers a frame or two late still fire its
+        // count's surge.
+        if (!surgeLaunchedThisWindow &&
+            beatManager.Levels.Smoothed.Low >= SyncSettings.StreamSurgeLowLevelThreshold)
+        {
+            StartStreamSurge();
+            surgeLaunchedThisWindow = true;
+        }
+    }
+
+    /// <summary>
+    /// Launches one surge at the top of its selected stable stream. The fixed array retains
+    /// overlapping beat swells without per-frame or per-event managed allocation.
+    /// </summary>
+    private void StartStreamSurge()
+    {
+        int slot = nextSurgeSlot;
+        if (activeSurgeCount < streamSurges.Length)
+        {
+            for (int offset = 0; offset < streamSurges.Length; offset++)
+            {
+                int candidate = (nextSurgeSlot + offset) % streamSurges.Length;
+                if (!streamSurges[candidate].Active)
+                {
+                    slot = candidate;
+                    break;
+                }
+            }
+            activeSurgeCount++;
+        }
+
+        streamSurges[slot].Active = true;
+        streamSurges[slot].StreamIndex = SelectSurgeStream();
+        streamSurges[slot].PositionY = height - 1f;
+        nextSurgeSlot = (slot + 1) % streamSurges.Length;
+    }
+
+    /// <summary>
+    /// Selects a stable stream by squared time-since-picked weight. A recently picked stream keeps
+    /// a small chance for natural grouping, while an identity missed for two full stream cycles is
+    /// selected oldest-first so no stream can starve over a show.
+    /// </summary>
+    /// <returns>The zero-based stable stream identity selected for the next surge.</returns>
+    private int SelectSurgeStream()
+    {
+        int oldestAge = 0;
+        for (int i = 0; i < streamCount; i++)
+        {
+            beatsSinceSurgeByStream[i]++;
+            oldestAge = Mathf.Max(oldestAge, beatsSinceSurgeByStream[i]);
+        }
+
+        int selectedStream = streamCount - 1;
+        if (oldestAge >= streamCount * SurgeStarvationStreamCycles)
+        {
+            int oldestCount = 0;
+            for (int i = 0; i < streamCount; i++)
+            {
+                if (beatsSinceSurgeByStream[i] == oldestAge)
+                {
+                    oldestCount++;
+                }
+            }
+
+            int oldestPick = Random.Range(0, oldestCount);
+            for (int i = 0; i < streamCount; i++)
+            {
+                if (beatsSinceSurgeByStream[i] == oldestAge && oldestPick-- == 0)
+                {
+                    selectedStream = i;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            float totalWeight = 0f;
+            for (int i = 0; i < streamCount; i++)
+            {
+                float ageWeight = beatsSinceSurgeByStream[i] + 1f;
+                totalWeight += ageWeight * ageWeight;
+            }
+
+            float weightPick = Random.value * totalWeight;
+            for (int i = 0; i < streamCount; i++)
+            {
+                float ageWeight = beatsSinceSurgeByStream[i] + 1f;
+                weightPick -= ageWeight * ageWeight;
+                if (weightPick <= 0f)
+                {
+                    selectedStream = i;
+                    break;
+                }
+            }
+        }
+
+        beatsSinceSurgeByStream[selectedStream] = 0;
+        return selectedStream;
+    }
+
+    /// <summary>
+    /// Multiplies one moving surge into the existing water value while reusing the selected
+    /// stream's profile and edge shade, so the swell brightens structure instead of painting over
+    /// it or changing palette color.
+    /// </summary>
+    /// <param name="surge">The active stream identity and vertical center to render.</param>
+    /// <param name="brightness">Multiplicative value-space lift at the surge center.</param>
+    /// <param name="length">Full vertical surge length in screen pixels.</param>
+    /// <param name="widthMultiplier">Surge width relative to the rolled stream width.</param>
+    /// <param name="edgeShade">Current authored strength of the field's dark edge seams.</param>
+    private void AddStreamSurgeValue(
+        StreamSurge surge,
+        float brightness,
+        float length,
+        float widthMultiplier,
+        float edgeShade)
+    {
+        float centerX = streamCenterById[surge.StreamIndex];
+        float halfWidth = streamWidth * widthMultiplier * 0.5f;
+        float halfLength = length * 0.5f;
+        int minX = Mathf.Max(0, Mathf.FloorToInt(centerX - halfWidth));
+        int maxX = Mathf.Min(width - 1, Mathf.CeilToInt(centerX + halfWidth));
+        int minY = Mathf.Max(0, Mathf.FloorToInt(surge.PositionY - halfLength));
+        int maxY = Mathf.Min(height - 1, Mathf.CeilToInt(surge.PositionY + halfLength));
+
+        for (int x = minX; x <= maxX; x++)
+        {
+            float horizontalRemaining = 1f - (Mathf.Abs(x - centerX) / halfWidth);
+            if (horizontalRemaining <= 0f)
+            {
+                continue;
+            }
+
+            float slope = streamProfileByColumn[Mathf.Min(x + 1, width - 1)] -
+                streamProfileByColumn[Mathf.Max(x - 1, 0)];
+            float edgeFactor = 1f - (edgeShade * Mathf.Clamp01(Mathf.Abs(slope) * 1.5f));
+            float crossStreamStrength = SoftFalloff(horizontalRemaining) *
+                streamProfileByColumn[x] * edgeFactor;
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                float verticalRemaining = 1f - (Mathf.Abs(y - surge.PositionY) / halfLength);
+                if (verticalRemaining <= 0f)
+                {
+                    continue;
+                }
+
+                float swell = brightness * crossStreamStrength * SoftFalloff(verticalRemaining);
+                int screenIndex = x + (y * width);
+                waterValueBuffer[screenIndex] = Mathf.Min(
+                    1f,
+                    waterValueBuffer[screenIndex] * (1f + swell));
+            }
+        }
     }
 
     /// <summary>Adds one droplet's soft core and tapered trail to the value-space frame.</summary>
@@ -667,6 +1010,21 @@ public class Waterfall : ScreenEffect
     private static float SoftFalloff(float remaining)
     {
         return remaining * remaining * (3f - (2f * remaining));
+    }
+
+    /// <summary>
+    /// One beat-launched luminance swell moving down a stable primary-harmonic stream identity.
+    /// </summary>
+    private struct StreamSurge
+    {
+        /// <summary>Whether this fixed-capacity entry currently contributes to the value field.</summary>
+        public bool Active;
+
+        /// <summary>The stable primary-harmonic stream identity selected for this swell.</summary>
+        public int StreamIndex;
+
+        /// <summary>The current vertical center of the swell in screen space.</summary>
+        public float PositionY;
     }
 
     /// <summary>One rolled, falling screen-space droplet used by Waterfall.</summary>
@@ -868,30 +1226,49 @@ public sealed class WaterfallStandaloneSettings
 public sealed class WaterfallSyncSettings
 {
     /// <summary>
-    /// Waveform trough endpoint; the authored value makes the pulse full between rhythmic peaks.
+    /// Tempo at which BPM contributes a neutral one-times multiplier to the rolled stream speed.
     /// </summary>
-    [Range(0f, 1f)] public float WaveformTroughHeight;
+    [Min(0.0001f)] public float ReferenceBpm;
 
     /// <summary>
-    /// Waveform peak endpoint whose authored value returns the pulse to zero at each rhythmic peak.
-    /// Without a clock, Draw feeds zero directly so the same resting value needs no Standalone slot.
+    /// Low- and High-Energy stream-speed multipliers; Mid uses their midpoint, and the current
+    /// Energy run's Trend and Progress move continuously between adjacent tiers.
     /// </summary>
-    [Range(0f, 1f)] public float WaveformPeakHeight;
+    public FloatRange EnergySpeedMultiplier;
 
-    /// <summary>Inclusive-minimum/exclusive-maximum hue/saturation/value response-mode range.</summary>
-    public IntRange BeatMode;
+    /// <summary>
+    /// Multiplicative value-space lift at a stream surge's center; color stays owned by the
+    /// unchanged palette wash.
+    /// </summary>
+    [Min(0f)] public float StreamSurgeBrightness;
 
-    /// <summary>Inclusive-minimum/exclusive-maximum pulse-direction range.</summary>
-    public IntRange PulseDirection;
+    /// <summary>Full vertical length of each moving stream surge, in screen pixels.</summary>
+    [Min(0.0001f)] public float StreamSurgeLength;
 
-    /// <summary>Color-response multiplier range rolled per activation.</summary>
-    public FloatRange PulseMultiplier;
+    /// <summary>
+    /// Surge width relative to rolled StreamWidth. Above one the strike spans several streams as a
+    /// broad wall hit; the profiled field and edge seams keep the structure visible inside it.
+    /// </summary>
+    [Min(0.0001f)] public float StreamSurgeWidthMultiplier;
 
-    /// <summary>Divisor mapping the Waveform's shortest peak spacing onto screen rows.</summary>
-    [Min(0.0001f)] public float PulseScaleDivisor;
+    /// <summary>
+    /// Surge fall speed relative to the water's current BPM × Energy speed; above one, each beat
+    /// strike visibly outruns the stream it brightens.
+    /// </summary>
+    [Min(0.0001f)] public float StreamSurgeSpeedMultiplier;
 
-    /// <summary>Additional scale applied when the pulse changes saturation.</summary>
-    [Min(0f)] public float SaturationPulseMultiplier;
+    /// <summary>
+    /// Minimum Smoothed low-band level that admits a beat surge; counts without bass presence
+    /// launch nothing.
+    /// </summary>
+    [Range(0f, 1f)] public float StreamSurgeLowLevelThreshold;
+
+    /// <summary>
+    /// Fraction of the screen width at each edge where no surge stream may sit; keeps strikes
+    /// visible on the wall. Applied when stream identities are derived at Roll, so a live edit
+    /// takes effect on the next activation.
+    /// </summary>
+    [Range(0f, 0.4f)] public float StreamSurgeEdgeMargin;
 
     /// <summary>Inclusive-minimum/exclusive-maximum number of droplets rolled per activation.</summary>
     public IntRange DropletCount;
@@ -908,7 +1285,7 @@ public sealed class WaterfallSyncSettings
     /// <summary>Downward speed range rolled for the flowing stream structure.</summary>
     public FloatRange StreamFallSpeed;
 
-    /// <summary>Maximum water-body value before droplets or pulse brighten it.</summary>
+    /// <summary>Maximum water-body value before droplets or surges brighten it.</summary>
     [Range(0f, 1f)] public float WaterBrightness;
 
     /// <summary>Luminance separation between the bright and dark streams.</summary>
@@ -949,25 +1326,18 @@ public sealed class WaterfallSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        WaveformTroughHeight = source.WaveformTroughHeight;
-        WaveformPeakHeight = source.WaveformPeakHeight;
-        BeatMode = new IntRange(
-            source.BeatMode.MinInclusive,
-            source.BeatMode.MaxExclusive,
-            source.BeatMode.LowRail,
-            source.BeatMode.HighRail);
-        PulseDirection = new IntRange(
-            source.PulseDirection.MinInclusive,
-            source.PulseDirection.MaxExclusive,
-            source.PulseDirection.LowRail,
-            source.PulseDirection.HighRail);
-        PulseMultiplier = new FloatRange(
-            source.PulseMultiplier.Min,
-            source.PulseMultiplier.Max,
-            source.PulseMultiplier.LowRail,
-            source.PulseMultiplier.HighRail);
-        PulseScaleDivisor = source.PulseScaleDivisor;
-        SaturationPulseMultiplier = source.SaturationPulseMultiplier;
+        ReferenceBpm = source.ReferenceBpm;
+        EnergySpeedMultiplier = new FloatRange(
+            source.EnergySpeedMultiplier.Min,
+            source.EnergySpeedMultiplier.Max,
+            source.EnergySpeedMultiplier.LowRail,
+            source.EnergySpeedMultiplier.HighRail);
+        StreamSurgeBrightness = source.StreamSurgeBrightness;
+        StreamSurgeLength = source.StreamSurgeLength;
+        StreamSurgeWidthMultiplier = source.StreamSurgeWidthMultiplier;
+        StreamSurgeSpeedMultiplier = source.StreamSurgeSpeedMultiplier;
+        StreamSurgeLowLevelThreshold = source.StreamSurgeLowLevelThreshold;
+        StreamSurgeEdgeMargin = source.StreamSurgeEdgeMargin;
         DropletCount = new IntRange(
             source.DropletCount.MinInclusive,
             source.DropletCount.MaxExclusive,
