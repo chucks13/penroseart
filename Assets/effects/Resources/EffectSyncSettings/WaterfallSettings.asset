@@ -25,7 +25,6 @@ MonoBehaviour:
     DropletWaveformEnergy: 1
     DropletSpeedMultiplierAtWaveformPeak: 2
     StreamSurgeBrightness: 2.5
-    DropImpactSurgeBrightnessMultiplier: 2
     StreamSurgeLength: 12
     StreamSurgeWidthMultiplier: 6
     StreamSurgeSpeedMultiplier: 6
