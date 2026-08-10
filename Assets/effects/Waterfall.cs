@@ -96,16 +96,19 @@ public class Waterfall : ScreenEffect
     /// Authored tempo at which BPM contributes a neutral one-times multiplier, keeping the rolled
     /// StreamFallSpeed as the baseline before Energy shapes it.
     /// </summary>
-    private const float SyncReferenceBpm = 120f;
+    private const float SyncReferenceBpm = 124f;
 
-    /// <summary>Authored Low Energy multiplier applied to the BPM-scaled stream speed.</summary>
-    private const float SyncEnergySpeedMultiplierMin = 0.8f;
+    /// <summary>
+    /// Authored Low Energy multiplier applied to the BPM-scaled stream speed. The Low/High spread
+    /// is wide enough that an Energy tier change reads from across the room, not as a nuance.
+    /// </summary>
+    private const float SyncEnergySpeedMultiplierMin = 0.6f;
 
     /// <summary>
     /// Authored High Energy multiplier applied to the BPM-scaled stream speed; Mid is the midpoint
     /// so the closed three-step Energy ladder stays evenly spaced.
     /// </summary>
-    private const float SyncEnergySpeedMultiplierMax = 1.2f;
+    private const float SyncEnergySpeedMultiplierMax = 1.5f;
 
     /// <summary>
     /// Authored multiplicative value-space lift at the center of a Synced stream surge, leaving
@@ -134,10 +137,20 @@ public class Waterfall : ScreenEffect
     private const float SyncStreamSurgeWidthMultiplier = 8f;
 
     /// <summary>
-    /// Authored minimum Smoothed low-band level that admits a beat surge. Below it the count's
-    /// window passes without a launch, so surges disappear with the bass drum during breakdowns.
+    /// Authored minimum low-band level that admits a beat surge, read from the Levels reading
+    /// SyncStreamSurgeLowLevelReading selects. Below it the count's window passes without a
+    /// launch, so surges disappear with the bass drum during breakdowns.
     /// </summary>
     private const float SyncStreamSurgeLowLevelThreshold = 0.35f;
+
+    /// <summary>
+    /// Authored Levels reading the low-band surge gate consults. Normalized is the instantaneous
+    /// wire value — the honest answer to "is a kick sounding in this window"; Smoothed lags
+    /// through the attack/release follower and Peak lingers after the hit, so both stay
+    /// selectable for wall judgment rather than being the default.
+    /// </summary>
+    private const WaterfallSyncSettings.SurgeLevelReading SyncStreamSurgeLowLevelReading =
+        WaterfallSyncSettings.SurgeLevelReading.Normalized;
 
     /// <summary>
     /// Authored fraction of the screen width, at each edge, where no surge stream center may sit.
@@ -169,11 +182,15 @@ public class Waterfall : ScreenEffect
     /// <summary>Authored maximum width of the overlapping Synced streams, in screen pixels.</summary>
     private const float SyncStreamWidthMax = 9f;
 
-    /// <summary>Authored minimum downward travel speed of the Synced streams, in screen pixels per second.</summary>
-    private const float SyncStreamFallSpeedMin = 5f;
+    /// <summary>
+    /// Authored minimum downward travel speed of the Synced streams, in screen pixels per second.
+    /// The Synced roll range sits deliberately tighter than Standalone's so BPM and Energy, not
+    /// the roll, carry the speed differences between activations.
+    /// </summary>
+    private const float SyncStreamFallSpeedMin = 8f;
 
     /// <summary>Authored maximum downward travel speed of the Synced streams, in screen pixels per second.</summary>
-    private const float SyncStreamFallSpeedMax = 14f;
+    private const float SyncStreamFallSpeedMax = 11f;
 
     /// <summary>
     /// Authored maximum value of the Synced water body before droplets or surges brighten it.
@@ -278,6 +295,7 @@ public class Waterfall : ScreenEffect
         StreamSurgeWidthMultiplier = SyncStreamSurgeWidthMultiplier,
         StreamSurgeSpeedMultiplier = SyncStreamSurgeSpeedMultiplier,
         StreamSurgeLowLevelThreshold = SyncStreamSurgeLowLevelThreshold,
+        StreamSurgeLowLevelReading = SyncStreamSurgeLowLevelReading,
         StreamSurgeEdgeMargin = SyncStreamSurgeEdgeMargin,
         DropletCount = new IntRange(SyncDropletCountMin, SyncDropletCountMaxExclusive),
         PaletteSpread = new FloatRange(SyncPaletteSpreadMin, SyncPaletteSpreadMax),
@@ -793,8 +811,14 @@ public class Waterfall : ScreenEffect
         // vanish with the kick during breakdowns. Checking every open-window frame instead of only
         // the window's rising edge lets a kick that registers a frame or two late still fire its
         // count's surge.
+        float gateLow = SyncSettings.StreamSurgeLowLevelReading switch
+        {
+            WaterfallSyncSettings.SurgeLevelReading.Smoothed => beatManager.Levels.Smoothed.Low,
+            WaterfallSyncSettings.SurgeLevelReading.Peak => beatManager.Levels.Peak.Low,
+            _ => beatManager.Levels.Normalized.Low,
+        };
         if (!surgeLaunchedThisWindow &&
-            beatManager.Levels.Smoothed.Low >= SyncSettings.StreamSurgeLowLevelThreshold)
+            gateLow >= SyncSettings.StreamSurgeLowLevelThreshold)
         {
             StartStreamSurge();
             surgeLaunchedThisWindow = true;
@@ -1258,10 +1282,29 @@ public sealed class WaterfallSyncSettings
     [Min(0.0001f)] public float StreamSurgeSpeedMultiplier;
 
     /// <summary>
-    /// Minimum Smoothed low-band level that admits a beat surge; counts without bass presence
-    /// launch nothing.
+    /// Which form of the Levels reading the low-band surge gate consults; renders as an Inspector
+    /// dropdown so the reading can be flipped live on the wall.
+    /// </summary>
+    public enum SurgeLevelReading
+    {
+        /// <summary>The instantaneous wire value — high only while the hit is actually sounding.</summary>
+        Normalized,
+
+        /// <summary>The attack/release follower — steadier, but lags the hit.</summary>
+        Smoothed,
+
+        /// <summary>Instant rise with a tempo-based linear fall — holds on after the hit fades.</summary>
+        Peak,
+    }
+
+    /// <summary>
+    /// Minimum low-band level, in the reading StreamSurgeLowLevelReading selects, that admits a
+    /// beat surge; counts without bass presence launch nothing.
     /// </summary>
     [Range(0f, 1f)] public float StreamSurgeLowLevelThreshold;
+
+    /// <summary>Levels reading the low-band surge gate reads its value from.</summary>
+    public SurgeLevelReading StreamSurgeLowLevelReading;
 
     /// <summary>
     /// Fraction of the screen width at each edge where no surge stream may sit; keeps strikes
@@ -1337,6 +1380,7 @@ public sealed class WaterfallSyncSettings
         StreamSurgeWidthMultiplier = source.StreamSurgeWidthMultiplier;
         StreamSurgeSpeedMultiplier = source.StreamSurgeSpeedMultiplier;
         StreamSurgeLowLevelThreshold = source.StreamSurgeLowLevelThreshold;
+        StreamSurgeLowLevelReading = source.StreamSurgeLowLevelReading;
         StreamSurgeEdgeMargin = source.StreamSurgeEdgeMargin;
         DropletCount = new IntRange(
             source.DropletCount.MinInclusive,

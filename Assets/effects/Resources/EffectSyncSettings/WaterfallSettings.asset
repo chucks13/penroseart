@@ -14,17 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaterfallSyncSettingsAsset
   effectTypeName: Waterfall
   settings:
-    ReferenceBpm: 120
+    ReferenceBpm: 124
     EnergySpeedMultiplier:
-      Min: 0.8
-      Max: 1.2
-      LowRail: 0.8
-      HighRail: 1.2
+      Min: 0.6
+      Max: 1.5
+      LowRail: 0.6
+      HighRail: 1.5
     StreamSurgeBrightness: 2.5
     StreamSurgeLength: 12
     StreamSurgeWidthMultiplier: 8
     StreamSurgeSpeedMultiplier: 6
     StreamSurgeLowLevelThreshold: 0.35
+    StreamSurgeLowLevelReading: 0
     StreamSurgeEdgeMargin: 0.15
     DropletCount:
       MinInclusive: 32
@@ -47,10 +48,10 @@ MonoBehaviour:
       LowRail: 4.5
       HighRail: 9
     StreamFallSpeed:
-      Min: 5
-      Max: 14
-      LowRail: 5
-      HighRail: 14
+      Min: 8
+      Max: 11
+      LowRail: 8
+      HighRail: 11
     WaterBrightness: 0.55
     StreamContrast: 0.7
     StreamEdgeShade: 0.35
