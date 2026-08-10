@@ -13,6 +13,65 @@ using Random = UnityEngine.Random;
  */
 
 /// <summary>
+/// Artistic controls for deriving an effect-local palette with balanced luminance and evenly
+/// distributed colour change while retaining the source palette's colour family.
+/// </summary>
+[Serializable]
+public struct PaletteConditioning
+{
+    /// <summary>
+    /// Working relative luminance every conditioned palette is moved toward. This is an absolute
+    /// target rather than the source palette's own mean, so a palette authored dark reaches the same
+    /// working band as one authored bright instead of being equalized to its own darkness.
+    /// </summary>
+    [Range(0.05f, 0.9f)] public float TargetLuminance;
+
+    /// <summary>
+    /// Relative-luminance floor no conditioned entry falls below. A saturated hue whose channels
+    /// clip before reaching the floor stops at its own ceiling; pure blue peaks near 0.072, so the
+    /// floor is a goal rather than a guarantee while saturation is taken as authored.
+    /// </summary>
+    [Range(0f, 0.5f)] public float MinimumLuminance;
+
+    /// <summary>Amount each visible colour's relative luminance moves toward <see cref="TargetLuminance"/>.</summary>
+    [Range(0f, 1f)] public float LuminanceEqualization;
+
+    /// <summary>
+    /// Hue spread at which <see cref="LuminanceEqualization"/> reaches full strength. Below it,
+    /// equalization backs off proportionally: a palette whose entries share one hue is separated by
+    /// brightness alone, and equalizing that brightness away would erase the only distinction it has.
+    /// </summary>
+    [Range(0.05f, 1f)] public float HueSpreadReference;
+
+    /// <summary>Upper bound on uniform RGB lift when equalizing a low-luminance colour.</summary>
+    [Min(1f)] public float MaximumLuminanceScale;
+
+    /// <summary>
+    /// Relative-luminance threshold below which an entry is rebuilt at the working target, borrowing
+    /// neighbouring hue when necessary so black never becomes colourless grey.
+    /// </summary>
+    [Range(0.001f, 0.25f)] public float DarkLuminanceThreshold;
+
+    /// <summary>Combined hue, saturation, and luminance distance below which a consecutive entry collapses into its run.</summary>
+    [Range(0f, 0.5f)] public float DuplicateThreshold;
+
+    /// <summary>Amount palette positions move from equal anchor spacing toward equal colour-distance spacing.</summary>
+    [Range(0f, 1f)] public float HueRedistribution;
+
+    /// <summary>Returns whether every conditioning control exactly matches another live settings value.</summary>
+    /// <param name="other">The value to compare without boxing or heap allocation.</param>
+    public readonly bool Matches(PaletteConditioning other) =>
+        TargetLuminance == other.TargetLuminance &&
+        MinimumLuminance == other.MinimumLuminance &&
+        LuminanceEqualization == other.LuminanceEqualization &&
+        HueSpreadReference == other.HueSpreadReference &&
+        MaximumLuminanceScale == other.MaximumLuminanceScale &&
+        DarkLuminanceThreshold == other.DarkLuminanceThreshold &&
+        DuplicateThreshold == other.DuplicateThreshold &&
+        HueRedistribution == other.HueRedistribution;
+}
+
+/// <summary>
 /// Static palette sampling helpers for discrete color palettes.
 /// </summary>
 public class GPalette
@@ -22,9 +81,24 @@ public class GPalette
     public bool blend;
     public string paletteSources;
 
+    /// <summary>
+    /// Mean relative luminance of the immutable palette table, cached when the table is populated so
+    /// effect-local conditioning never recomputes a source statistic.
+    /// </summary>
+    public float MeanRelativeLuminance { get; private set; }
+
+    /// <summary>
+    /// Saturation-weighted circular spread of the immutable palette's hues, cached beside
+    /// <see cref="MeanRelativeLuminance"/> when the table is populated. Zero means every entry sits on
+    /// one hue and only brightness tells the entries apart; one means the hues fill the wheel.
+    /// Weighting by saturation keeps a near-grey entry from voting on a hue it barely has.
+    /// </summary>
+    public float HueSpread { get; private set; }
+
     // init function
     /// <summary>
-    /// Copies source colors into the fixed palette table, optionally interpolating across all 256 entries.
+    /// Copies source colors into the fixed palette table and caches the two source statistics
+    /// conditioning reads: mean relative luminance and hue spread.
     /// </summary>
     private void Populate(Color[] initialvalues, bool blendtype = false)
     {
@@ -33,6 +107,24 @@ public class GPalette
         blend = blendtype;
         values = list;
         length = values.Length;
+
+        float luminanceTotal = 0f;
+        float hueX = 0f;
+        float hueY = 0f;
+        float saturationTotal = 0f;
+        for (int i = 0; i < length; i++)
+        {
+            luminanceTotal += values[i].RelativeLuminance();
+            Color.RGBToHSV(values[i], out float hue, out float saturation, out _);
+            float radians = hue * 2f * Mathf.PI;
+            hueX += saturation * Mathf.Cos(radians);
+            hueY += saturation * Mathf.Sin(radians);
+            saturationTotal += saturation;
+        }
+        MeanRelativeLuminance = luminanceTotal / length;
+        HueSpread = saturationTotal > 0f
+            ? 1f - (Mathf.Sqrt((hueX * hueX) + (hueY * hueY)) / saturationTotal)
+            : 0f;
     }
 
     // array constructor
@@ -71,6 +163,328 @@ public class GPalette
         Populate(values, blendtype);
     }
 
+    /// <summary>
+    /// Returns a new effect-local palette whose visible entries are luminance-balanced, whose dark
+    /// entries borrow useful neighbouring colour, and whose distinct colour movement is redistributed
+    /// across the cyclic table. The source palette and its table are never mutated.
+    /// </summary>
+    /// <param name="conditioning">The caller-owned artistic controls for this derived palette.</param>
+    public GPalette Conditioned(PaletteConditioning conditioning)
+    {
+        // Equalization earns its full strength only from a palette whose hues already do the
+        // separating. A single-hue palette is told apart by brightness alone, so flattening its
+        // brightness would leave one colour where the caller needs several.
+        float equalization = Mathf.Clamp01(conditioning.LuminanceEqualization) *
+            Mathf.Clamp01(HueSpread / Mathf.Max(0.001f, conditioning.HueSpreadReference));
+
+        // One uniform scale first carries the whole palette into the working band. Being uniform it
+        // preserves every relative luminance the palette was authored with; only the differential
+        // equalization below changes those relationships.
+        float paletteLift = MeanRelativeLuminance > 0f
+            ? Mathf.Min(
+                conditioning.TargetLuminance / MeanRelativeLuminance,
+                Mathf.Max(1f, conditioning.MaximumLuminanceScale))
+            : 1f;
+
+        Color[] balanced = new Color[length];
+        for (int i = 0; i < length; i++)
+        {
+            Color source = values[i];
+            float luminance = source.RelativeLuminance();
+            balanced[i] = luminance <= conditioning.DarkLuminanceThreshold
+                ? RepairDarkColor(i, conditioning)
+                : EqualizeLuminance(source, luminance, equalization, paletteLift, conditioning);
+        }
+
+        List<Color> anchors = CollapseNearDuplicates(
+            balanced,
+            conditioning.DuplicateThreshold);
+        Color[] redistributed = Redistribute(
+            anchors,
+            length,
+            conditioning.HueRedistribution);
+        return new GPalette(redistributed, blend);
+    }
+
+    /// <summary>
+    /// Moves a visible colour into the working luminance band by one uniform RGB scale, preserving hue
+    /// and HSV saturation exactly while bounding amplification and holding the floor.
+    /// </summary>
+    /// <param name="source">The immutable source entry, never mutated.</param>
+    /// <param name="luminance">The source entry's relative luminance, already measured by the caller.</param>
+    /// <param name="equalization">Equalization strength after the caller scaled it by palette hue spread.</param>
+    /// <param name="paletteLift">The uniform scale carrying the whole palette's mean to the target.</param>
+    /// <param name="conditioning">The caller-owned artistic controls for this derived palette.</param>
+    private Color EqualizeLuminance(
+        Color source,
+        float luminance,
+        float equalization,
+        float paletteLift,
+        PaletteConditioning conditioning)
+    {
+        float targetLuminance = Mathf.Lerp(
+            luminance * paletteLift,
+            conditioning.TargetLuminance,
+            equalization);
+        targetLuminance = Mathf.Max(targetLuminance, conditioning.MinimumLuminance);
+
+        float scale = targetLuminance / luminance;
+        scale = Mathf.Min(scale, Mathf.Max(1f, conditioning.MaximumLuminanceScale));
+
+        // A colour whose brightest channel is already near full cannot be scaled further without
+        // clipping that channel, which would shift hue. Such an entry stops short of the target
+        // instead, and a deeply saturated hue can stop short of the floor for the same reason.
+        float maximumChannel = Mathf.Max(source.r, Mathf.Max(source.g, source.b));
+        scale = Mathf.Min(scale, 1f / maximumChannel);
+        return new Color(
+            source.r * scale,
+            source.g * scale,
+            source.b * scale,
+            source.a);
+    }
+
+    /// <summary>
+    /// Rebuilds a black or near-black entry at the working luminance band. Coloured entries retain their
+    /// own hue and saturation; colourless entries borrow a cyclic interpolation of their visible
+    /// neighbours, so black never becomes grey.
+    /// </summary>
+    /// <param name="sourceIndex">Index of the dark entry in the immutable source table.</param>
+    /// <param name="conditioning">The caller-owned artistic controls for this derived palette.</param>
+    private Color RepairDarkColor(int sourceIndex, PaletteConditioning conditioning)
+    {
+        Color source = values[sourceIndex];
+        Color.RGBToHSV(source, out float hue, out float saturation, out float value);
+        if (saturation <= 0.05f || value <= 0.0001f)
+        {
+            BorrowNeighbourHue(
+                sourceIndex,
+                conditioning.DarkLuminanceThreshold,
+                out hue,
+                out saturation);
+        }
+
+        Color vivid = Color.HSVToRGB(hue, saturation, 1f);
+        float targetLuminance = Mathf.Max(
+            conditioning.TargetLuminance,
+            conditioning.MinimumLuminance);
+        float scale = Mathf.Min(
+            targetLuminance / vivid.RelativeLuminance(),
+            1f);
+        return new Color(
+            vivid.r * scale,
+            vivid.g * scale,
+            vivid.b * scale,
+            source.a);
+    }
+
+    /// <summary>
+    /// Finds the nearest useful colour on each cyclic side of a colourless dark entry and blends
+    /// their hues across the intervening run.
+    /// </summary>
+    private void BorrowNeighbourHue(
+        int sourceIndex,
+        float darkLuminanceThreshold,
+        out float hue,
+        out float saturation)
+    {
+        bool hasPrevious = false;
+        bool hasNext = false;
+        float previousHue = 0f;
+        float previousSaturation = 0f;
+        float nextHue = 0f;
+        float nextSaturation = 0f;
+        int previousDistance = 0;
+        int nextDistance = 0;
+
+        for (int distance = 1; distance < length && (!hasPrevious || !hasNext); distance++)
+        {
+            if (!hasPrevious)
+            {
+                int previousIndex = (sourceIndex - distance + length) % length;
+                hasPrevious = TryReadHueDonor(
+                    values[previousIndex],
+                    darkLuminanceThreshold,
+                    out previousHue,
+                    out previousSaturation);
+                if (hasPrevious)
+                {
+                    previousDistance = distance;
+                }
+            }
+
+            if (!hasNext)
+            {
+                int nextIndex = (sourceIndex + distance) % length;
+                hasNext = TryReadHueDonor(
+                    values[nextIndex],
+                    darkLuminanceThreshold,
+                    out nextHue,
+                    out nextSaturation);
+                if (hasNext)
+                {
+                    nextDistance = distance;
+                }
+            }
+        }
+
+        if (hasPrevious && hasNext)
+        {
+            float amount = previousDistance / (float)(previousDistance + nextDistance);
+            hue = LerpHue(previousHue, nextHue, amount);
+            saturation = Mathf.Lerp(previousSaturation, nextSaturation, amount);
+            return;
+        }
+
+        if (hasPrevious)
+        {
+            hue = previousHue;
+            saturation = previousSaturation;
+            return;
+        }
+
+        if (hasNext)
+        {
+            hue = nextHue;
+            saturation = nextSaturation;
+            return;
+        }
+
+        hue = 0f;
+        saturation = 1f;
+    }
+
+    /// <summary>Reads hue and saturation from a visible, chromatic colour suitable for repairing a dark neighbour.</summary>
+    private static bool TryReadHueDonor(
+        Color color,
+        float darkLuminanceThreshold,
+        out float hue,
+        out float saturation)
+    {
+        Color.RGBToHSV(color, out hue, out saturation, out _);
+        return color.RelativeLuminance() > darkLuminanceThreshold && saturation > 0.05f;
+    }
+
+    /// <summary>Interpolates between two hues along the shortest cyclic path.</summary>
+    private static float LerpHue(float from, float to, float amount)
+    {
+        float delta = Mathf.Repeat(to - from + 0.5f, 1f) - 0.5f;
+        return Mathf.Repeat(from + (delta * amount), 1f);
+    }
+
+    /// <summary>
+    /// Collapses consecutive near-duplicate entries into one anchor while retaining gradual runs once
+    /// their accumulated colour change clears the caller's threshold.
+    /// </summary>
+    private static List<Color> CollapseNearDuplicates(
+        Color[] colors,
+        float duplicateThreshold)
+    {
+        float threshold = Mathf.Max(0f, duplicateThreshold);
+        var anchors = new List<Color>(colors.Length) { colors[0] };
+        for (int i = 1; i < colors.Length; i++)
+        {
+            if (PaletteDistance(anchors[anchors.Count - 1], colors[i]) >= threshold)
+            {
+                anchors.Add(colors[i]);
+            }
+        }
+
+        if (anchors.Count > 1 && PaletteDistance(anchors[anchors.Count - 1], anchors[0]) < threshold)
+        {
+            anchors.RemoveAt(anchors.Count - 1);
+        }
+        return anchors;
+    }
+
+    /// <summary>
+    /// Measures cyclic hue change, saturation change, and relative-luminance change in one normalized
+    /// distance used for duplicate collapse and colour-path redistribution.
+    /// </summary>
+    private static float PaletteDistance(Color a, Color b)
+    {
+        Color.RGBToHSV(a, out float hueA, out float saturationA, out _);
+        Color.RGBToHSV(b, out float hueB, out float saturationB, out _);
+        float hueDistance = Mathf.Abs(hueA - hueB);
+        hueDistance = Mathf.Min(hueDistance, 1f - hueDistance) * 2f;
+        hueDistance *= Mathf.Min(saturationA, saturationB);
+
+        float saturationDistance = Mathf.Abs(saturationA - saturationB);
+        float luminanceDistance = Mathf.Abs(
+            a.RelativeLuminance() - b.RelativeLuminance());
+        return Mathf.Sqrt(
+            (hueDistance * hueDistance) +
+            (0.25f * saturationDistance * saturationDistance) +
+            (luminanceDistance * luminanceDistance));
+    }
+
+    /// <summary>
+    /// Resamples the cyclic anchor path into a smooth table. Full redistribution gives each palette
+    /// coordinate equal colour travel; because relative luminance is linear in RGB, interpolation
+    /// between balanced anchors keeps the same balanced luminance path without another correction pass.
+    /// </summary>
+    private static Color[] Redistribute(
+        List<Color> anchors,
+        int outputLength,
+        float hueRedistribution)
+    {
+        Color[] output = new Color[outputLength];
+        if (anchors.Count == 1)
+        {
+            for (int i = 0; i < output.Length; i++)
+            {
+                output[i] = anchors[0];
+            }
+            return output;
+        }
+
+        float[] rawDistances = new float[anchors.Count];
+        float rawTotal = 0f;
+        for (int i = 0; i < anchors.Count; i++)
+        {
+            rawDistances[i] = PaletteDistance(
+                anchors[i],
+                anchors[(i + 1) % anchors.Count]);
+            rawTotal += rawDistances[i];
+        }
+
+        float averageDistance = rawTotal / anchors.Count;
+        float redistribution = Mathf.Clamp01(hueRedistribution);
+        float[] segmentLengths = new float[anchors.Count];
+        float pathLength = 0f;
+        for (int i = 0; i < anchors.Count; i++)
+        {
+            float normalizedDistance = averageDistance > 0f
+                ? rawDistances[i] / averageDistance
+                : 1f;
+            segmentLengths[i] = Mathf.Lerp(1f, normalizedDistance, redistribution);
+            pathLength += segmentLengths[i];
+        }
+
+        int segment = 0;
+        float segmentStart = 0f;
+        float segmentEnd = segmentLengths[0];
+        for (int i = 0; i < output.Length; i++)
+        {
+            float target = i / (float)output.Length * pathLength;
+            while (segment < anchors.Count - 1 && target > segmentEnd)
+            {
+                segmentStart = segmentEnd;
+                segment++;
+                segmentEnd += segmentLengths[segment];
+            }
+
+            float segmentLength = segmentLengths[segment];
+            float amount = segmentLength > 0f
+                ? (target - segmentStart) / segmentLength
+                : 0f;
+            output[i] = Color.Lerp(
+                anchors[segment],
+                anchors[(segment + 1) % anchors.Count],
+                amount);
+        }
+        return output;
+    }
+
     // random constructor
     // general read
     /// <summary>
@@ -106,6 +520,33 @@ public class GPalette
         return new Color(0f, 0f, 0f);
     }
 
+    /// <summary>
+    /// Samples a normalized cyclic position, including the interval from the final palette entry
+    /// back to the first, without changing the established linear behavior of <see cref="read"/>.
+    /// </summary>
+    /// <param name="i">The cyclic palette coordinate, wrapped into the normalized domain.</param>
+    /// <param name="doblend">Whether this read requests interpolation between adjacent entries.</param>
+    /// <returns>The palette color at the wrapped cyclic coordinate.</returns>
+    public Color ReadCyclic(float i, bool doblend = false)
+    {
+        // Deliberately does not latch `blend` the way read() does. That latch makes the first
+        // blended caller switch every other effect sharing this palette to blended sampling for
+        // the rest of the run, so a new entry point does not get to spread it further.
+        bool useBlend = doblend || blend;
+
+        i = Mathf.Repeat(i, 1f);
+        if (i <= 0f || length == 1)
+            return values[0];
+
+        float scaled = i * length;
+        int first = Mathf.FloorToInt(scaled);
+        int second = (first + 1) % length;
+        float fract = scaled % 1f;
+        if (!useBlend)
+            return fract < 0.5f ? values[first] : values[second];
+        return Color.Lerp(values[first], values[second], fract);
+    }
+
 
 }
 
@@ -122,6 +563,27 @@ public class AnimPalette
     GPalette next = null;
     float tween = 0;
     const float transitionTime = 3f;
+
+    /// <summary>
+    /// Monotonic signal incremented whenever the current/next palette endpoint state changes, so
+    /// effect-local derived palettes can refresh without inspecting palette contents per frame.
+    /// </summary>
+    public int Revision { get; private set; }
+
+    /// <summary>The source palette at the current side of the animated fade.</summary>
+    public GPalette CurrentPalette => current;
+
+    /// <summary>The source palette at the destination side of the fade, or null before the first change.</summary>
+    public GPalette NextPalette => next;
+
+    /// <summary>Whether the shared palette is currently inside its three-second cross-fade.</summary>
+    public bool IsTransitioning => tween > 0f;
+
+    /// <summary>Normalized progress from the current palette to the next palette.</summary>
+    public float TransitionProgress => IsTransitioning
+        ? 1f - (tween / transitionTime)
+        : 1f;
+
     public static string[] StaticSamples =
     {
         "ff0000,000000,ffff00,000000,00ff00,000000,00ffff,000000,0000ff,000000,ff00ff,000000",
@@ -179,7 +641,8 @@ public class AnimPalette
         customPalette = new GPalette(customSource);
     }
     /// <summary>
-    /// Starts a transition toward a randomly selected loaded palette.
+    /// Starts a transition toward a randomly selected loaded palette and advances the shared revision
+    /// so effect-local conditioned copies can prepare both fade endpoints once.
     /// </summary>
     public void Change()
     {
@@ -187,6 +650,7 @@ public class AnimPalette
         {
             next = palettes[Random.Range(0, palettes.Count)];
             tween = transitionTime;
+            Revision++;
         }
     }
 
@@ -202,6 +666,7 @@ public class AnimPalette
             {
                 current = next;
                 tween = 0f;
+                Revision++;
             }
         }
     }
@@ -217,6 +682,24 @@ public class AnimPalette
             return current.read(i, doblend);
         else
             return Color.Lerp(next.read(i, doblend), current.read(i, doblend), tween / transitionTime);
+    }
+
+    /// <summary>
+    /// Samples the live animated palette cyclically, preserving the active cross-fade while the
+    /// final palette entry interpolates back to the first across the wrapping coordinate seam.
+    /// </summary>
+    /// <param name="i">The cyclic palette coordinate, wrapped into the normalized domain.</param>
+    /// <param name="doblend">Whether this read requests interpolation between adjacent entries.</param>
+    /// <returns>The live cross-faded palette color at the wrapped cyclic coordinate.</returns>
+    public Color ReadCyclic(float i, bool doblend = false)
+    {
+        if (tween == 0f)
+            return current.ReadCyclic(i, doblend);
+        else
+            return Color.Lerp(
+                next.ReadCyclic(i, doblend),
+                current.ReadCyclic(i, doblend),
+                tween / transitionTime);
     }
 
     /// <summary>

@@ -51,8 +51,40 @@ public class Angles : EffectBase
 
     // Standalone Defaults
 
-    /// <summary>Angle-to-hue gain: one maps the 180° angular domain across one hue cycle, while larger values produce additional hue bands.</summary>
+    /// <summary>
+    /// Angle-to-hue gain: the hue distance between adjacent orientation classes. One maps the 180°
+    /// angular domain across a single hue cycle, spacing the classes 0.1 apart; larger values push
+    /// them further apart and raise the colour contrast between directions.
+    /// </summary>
+    /// <remarks>
+    /// This does not add colours. The tiling carries exactly ten orientation clusters on the 18°
+    /// pentagrid (verified against the 900-tile data), so ten is the ceiling however high the gain
+    /// goes. Integer gains alias: the visible count is 10/gcd(10, gain), so two and four collapse to
+    /// five colours and five collapses to two. Any later musical layer that sweeps this value must
+    /// avoid resting on those points.
+    /// </remarks>
     private const float StandaloneSpread = 1f;
+
+    /// <summary>
+    /// Standalone palette-family conditioning. The absolute target and the floor put every palette in
+    /// the same working band, so a palette authored dark no longer arrives dark; luminance equalization
+    /// tames one dominant colour, backing off through the hue-spread reference on palettes whose
+    /// entries share a hue and are told apart by brightness alone; bounded lift prevents amplification
+    /// from exploding; the nonzero dark threshold replaces black and near-black stops that would switch
+    /// tiles off while retaining authored dark colour above it; duplicate collapse and full
+    /// redistribution give the ten orientation classes distinct colour positions. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning StandalonePaletteConditioning => new PaletteConditioning
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
 
     /// <summary>Minimum sweep speed re-rolled on activation and each new Grid.</summary>
     private const float StandaloneSpeedMin = 0.15f;
@@ -76,6 +108,24 @@ public class Angles : EffectBase
     private const float StandaloneRhythmHueOffset = 1f;
 
     // Sync Defaults
+
+    /// <summary>
+    /// Sync palette-family conditioning, independently authored so ADR-0013 live tuning in one mode
+    /// cannot drift the other. It starts equal to Standalone: one working luminance band with a floor,
+    /// hue-spread-aware equalization, bounded lift, no black stops, collapsed duplicates, and full
+    /// colour-distance redistribution. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning SyncPaletteConditioning => new PaletteConditioning
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
 
     /// <summary>Width, in normalized rank space (0..1), of the hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float SyncFrontSoftness = 0.12f;
@@ -135,11 +185,13 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Resolves a fresh immutable-by-convention copy of Angles' Standalone Defaults, including
-    /// live angle spread plus independent speed and directional-shading depth ranges.
+    /// live angle spread, effect-local palette conditioning, and independent speed and directional-
+    /// shading depth ranges.
     /// </summary>
     public static AnglesStandaloneSettings StandaloneDefaults => new AnglesStandaloneSettings
     {
         Spread = StandaloneSpread,
+        PaletteConditioning = StandalonePaletteConditioning,
         Speed = new FloatRange(StandaloneSpeedMin, StandaloneSpeedMax),
         ShadeDepth = new FloatRange(
             StandaloneShadeDepthLow,
@@ -152,11 +204,12 @@ public class Angles : EffectBase
     };
 
     /// <summary>
-    /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent
-    /// directional-shading depth and Routine hue-offset ranges.
+    /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
+    /// conditioning, directional-shading depth, and Routine hue-offset ranges.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
+        PaletteConditioning = SyncPaletteConditioning,
         FrontSoftness = SyncFrontSoftness,
         CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
@@ -185,6 +238,27 @@ public class Angles : EffectBase
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private AnglesSyncSettings SyncSettings { get; set; } = SyncDefaults;
+
+    /// <summary>The shared animated palette instance from which the current Angles-owned copies derive.</summary>
+    private AnimPalette conditionedPaletteOwner;
+
+    /// <summary>The shared palette endpoint revision represented by the current conditioned copies.</summary>
+    private int conditionedPaletteRevision = -1;
+
+    /// <summary>The live Angles conditioning controls represented by the current conditioned copies.</summary>
+    private PaletteConditioning conditionedPaletteSettings;
+
+    /// <summary>The immutable shared source represented by <see cref="conditionedCurrentPalette"/>.</summary>
+    private GPalette conditionedCurrentSource;
+
+    /// <summary>The immutable shared source represented by <see cref="conditionedNextPalette"/>.</summary>
+    private GPalette conditionedNextSource;
+
+    /// <summary>Angles' conditioned copy of the shared current palette endpoint.</summary>
+    private GPalette conditionedCurrentPalette;
+
+    /// <summary>Angles' conditioned copy of the shared next palette endpoint.</summary>
+    private GPalette conditionedNextPalette;
 
     /// <summary>Current sweep speed rolled for this activation or Grid.</summary>
     private float speed;
@@ -310,6 +384,9 @@ public class Angles : EffectBase
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Angles),
             SyncDefaults);
+        RefreshConditionedPalettes(beatManager.IsSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning);
         Reroll();
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
         huePhase = Mathf.Repeat(effectTime * speed, 1f);
@@ -346,6 +423,93 @@ public class Angles : EffectBase
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
     public override void OnEnd() { }
+
+    /// <summary>
+    /// Reuses a conditioned endpoint when its immutable source is already cached, otherwise derives
+    /// one new effect-local palette with the current Angles controls.
+    /// </summary>
+    /// <param name="source">The shared immutable palette endpoint to represent.</param>
+    /// <param name="previousCurrentSource">The source of the previous conditioned current endpoint.</param>
+    /// <param name="previousCurrent">The previous conditioned current endpoint.</param>
+    /// <param name="previousNextSource">The source of the previous conditioned next endpoint.</param>
+    /// <param name="previousNext">The previous conditioned next endpoint.</param>
+    /// <param name="conditioning">The unchanged live controls used by every reusable endpoint.</param>
+    /// <returns>A reusable or newly conditioned Angles-owned palette, or null for a null endpoint.</returns>
+    private static GPalette ReuseOrCondition(
+        GPalette source,
+        GPalette previousCurrentSource,
+        GPalette previousCurrent,
+        GPalette previousNextSource,
+        GPalette previousNext,
+        PaletteConditioning conditioning)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+        if (ReferenceEquals(source, previousCurrentSource))
+        {
+            return previousCurrent;
+        }
+        if (ReferenceEquals(source, previousNextSource))
+        {
+            return previousNext;
+        }
+        return source.Conditioned(conditioning);
+    }
+
+    /// <summary>
+    /// Refreshes Angles' current and next conditioned copies only when the shared palette endpoints
+    /// or live conditioning controls change. A landed next endpoint rotates into current without
+    /// reconditioning, preserving the shared three-second fade with no steady-frame allocation.
+    /// </summary>
+    private void RefreshConditionedPalettes(PaletteConditioning conditioning)
+    {
+        AnimPalette owner = APalette;
+        bool ownerChanged = !ReferenceEquals(owner, conditionedPaletteOwner);
+        bool settingsChanged = ownerChanged || !conditionedPaletteSettings.Matches(conditioning);
+        bool revisionChanged = ownerChanged || owner.Revision != conditionedPaletteRevision;
+        if (!settingsChanged && !revisionChanged)
+        {
+            return;
+        }
+
+        GPalette currentSource = owner.CurrentPalette;
+        GPalette nextSource = owner.NextPalette;
+        GPalette previousCurrentSource = conditionedCurrentSource;
+        GPalette previousCurrent = conditionedCurrentPalette;
+        GPalette previousNextSource = conditionedNextSource;
+        GPalette previousNext = conditionedNextPalette;
+
+        GPalette current = settingsChanged
+            ? currentSource.Conditioned(conditioning)
+            : ReuseOrCondition(
+                currentSource,
+                previousCurrentSource,
+                previousCurrent,
+                previousNextSource,
+                previousNext,
+                conditioning);
+        GPalette next = ReferenceEquals(nextSource, currentSource)
+            ? current
+            : settingsChanged
+                ? nextSource?.Conditioned(conditioning)
+                : ReuseOrCondition(
+                    nextSource,
+                    previousCurrentSource,
+                    previousCurrent,
+                    previousNextSource,
+                    previousNext,
+                    conditioning);
+
+        conditionedPaletteOwner = owner;
+        conditionedPaletteRevision = owner.Revision;
+        conditionedPaletteSettings = conditioning;
+        conditionedCurrentSource = currentSource;
+        conditionedNextSource = nextSource;
+        conditionedCurrentPalette = current;
+        conditionedNextPalette = next;
+    }
 
     /// <summary>
     /// Exponentially eases a value toward a target at a frame-rate-independent rate.
@@ -426,6 +590,15 @@ public class Angles : EffectBase
     {
         huePhase = Mathf.Repeat(huePhase + (speed * effectDelta), 1f);
 
+        PaletteConditioning paletteConditioning = beatManager.IsSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning;
+        RefreshConditionedPalettes(paletteConditioning);
+        GPalette frameCurrentPalette = conditionedCurrentPalette;
+        GPalette frameNextPalette = conditionedNextPalette;
+        bool paletteIsTransitioning = APalette.IsTransitioning;
+        float paletteTransitionProgress = APalette.TransitionProgress;
+
         // The Routine rotates the full angle-to-hue pattern without changing the tiles' relative hues.
         float rhythmHueOffset = EnableRoutineRhythmHueOffset
             ? routine.Lerp(
@@ -474,7 +647,30 @@ public class Angles : EffectBase
                 : 1f;
             float value = lit.Lerp(SyncSettings.DarkFloor, shade);
 
-            buffer[i] = Color.HSVToRGB(Mathf.Repeat(angle + rhythmHueOffset, 1f), 1f, value);
+            // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
+            // three-second fade while cyclic sampling joins the last entry back to the first.
+            float palettePosition = Mathf.Repeat(angle + rhythmHueOffset, 1f);
+            Color paletteColor = frameCurrentPalette.ReadCyclic(
+                palettePosition,
+                doblend: true);
+            if (paletteIsTransitioning)
+            {
+                Color nextPaletteColor = frameNextPalette.ReadCyclic(
+                    palettePosition,
+                    doblend: true);
+                paletteColor = Color.Lerp(
+                    paletteColor,
+                    nextPaletteColor,
+                    paletteTransitionProgress);
+            }
+
+            // Keep the existing dormant shading/Drop value as its separate post-palette stage; all four
+            // temporary musical-layer flags remain disabled and unchanged in this pass.
+            buffer[i] = new Color(
+                paletteColor.r * value,
+                paletteColor.g * value,
+                paletteColor.b * value,
+                paletteColor.a);
         }
     }
 }
@@ -483,8 +679,19 @@ public class Angles : EffectBase
 [Serializable]
 public sealed class AnglesStandaloneSettings
 {
-    /// <summary>Live angle-to-hue gain, with an editor rail extending above one so additional hue bands can span the angular domain.</summary>
+    /// <summary>
+    /// Live angle-to-hue gain: the hue distance between adjacent orientation classes, and so the
+    /// colour contrast between directions. The rail extends above one to widen that separation, not
+    /// to add colours — the tiling's ten orientation clusters are the ceiling. Integer values alias
+    /// (two and four show five colours, five shows two); prefer non-integer settings above one.
+    /// </summary>
     [Range(0f, 4f)] public float Spread;
+
+    /// <summary>
+    /// Live effect-local palette conditioning. Its nonzero luminance threshold keeps black outside
+    /// the authored Angles look while neighbour hue repair avoids replacing dark stops with grey.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
 
     /// <summary>Per-activation and per-Grid sweep-speed range.</summary>
     public FloatRange Speed;
@@ -506,12 +713,14 @@ public sealed class AnglesStandaloneSettings
 
     /// <summary>
     /// Copies every Angles Standalone Setting from another value, including live angle spread,
-    /// independent speed, and directional-shading depth endpoints and editor rails.
+    /// effect-local palette conditioning, independent speed, and directional-shading depth endpoints
+    /// and editor rails.
     /// </summary>
     /// <param name="source">The Standalone Settings whose values become this value.</param>
     public void CopyFrom(AnglesStandaloneSettings source)
     {
         Spread = source.Spread;
+        PaletteConditioning = source.PaletteConditioning;
         Speed = new FloatRange(
             source.Speed.Min,
             source.Speed.Max,
@@ -532,6 +741,12 @@ public sealed class AnglesStandaloneSettings
 [Serializable]
 public sealed class AnglesSyncSettings
 {
+    /// <summary>
+    /// Live effect-local palette conditioning for Synced Mode, independently saved so tuning it
+    /// cannot drift the Standalone look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
+
     /// <summary>Width of the Fill/Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
     [Range(0.0001f, 1f)] public float FrontSoftness;
 
@@ -578,8 +793,8 @@ public sealed class AnglesSyncSettings
     public FloatRange RhythmHueOffset;
 
     /// <summary>
-    /// Copies every Angles Sync Setting from another value, including independent directional-shading
-    /// depth and Routine hue-offset endpoints and editor rails.
+    /// Copies every Angles Sync Setting from another value, including independent palette
+    /// conditioning, directional-shading depth, and Routine hue-offset endpoints and editor rails.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -589,6 +804,7 @@ public sealed class AnglesSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
+        PaletteConditioning = source.PaletteConditioning;
         FrontSoftness = source.FrontSoftness;
         CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;

@@ -77,6 +77,10 @@ public static class ExtensionMethods
 
     #region Color
 
+    /// <summary>Returns linear relative luminance from normalized RGB channels.</summary>
+    public static float RelativeLuminance(this Color color) =>
+        (0.2126f * color.r) + (0.7152f * color.g) + (0.0722f * color.b);
+
     /// <summary>Returns the same color at full saturation and value.</summary>
     public static Color MaxHue(this Color color)
     {

@@ -15,6 +15,15 @@ MonoBehaviour:
   effectTypeName: Angles
   settings:
     Spread: 1
+    PaletteConditioning:
+      TargetLuminance: 0.4
+      MinimumLuminance: 0.12
+      LuminanceEqualization: 0.85
+      HueSpreadReference: 0.5
+      MaximumLuminanceScale: 4
+      DarkLuminanceThreshold: 0.03
+      DuplicateThreshold: 0.08
+      HueRedistribution: 1
     Speed:
       Min: 0.15
       Max: 0.4

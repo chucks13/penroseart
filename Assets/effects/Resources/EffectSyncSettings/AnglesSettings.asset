@@ -14,6 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AnglesSyncSettingsAsset
   effectTypeName: Angles
   settings:
+    PaletteConditioning:
+      TargetLuminance: 0.4
+      MinimumLuminance: 0.12
+      LuminanceEqualization: 0.85
+      HueSpreadReference: 0.5
+      MaximumLuminanceScale: 4
+      DarkLuminanceThreshold: 0.03
+      DuplicateThreshold: 0.08
+      HueRedistribution: 1
     FrontSoftness: 0.12
     CompressionReleaseRate: 2
     DropBeats: 3
