@@ -40,11 +40,9 @@ its base class, never its name — some Mixers carry no "Mixer" in their name. L
 
 ## Model policy
 
-Do not lower either selection.
-
-- Implementation workers run Codex `gpt-5.6-sol --effort max`, always.
-- Review sub-agents run `opus-5` (Agent tool `model: "opus"`), always. Cross-family review holds
-  because Opus reviews Sol-authored code.
+- Implementation workers run Codex `gpt-5.6-sol --effort xhigh`, always. Do not lower this
+  selection.
+- Run the `code-review` skill after the Phase F commits and before the merge.
 
 ## Phase A — Set up
 
@@ -72,10 +70,20 @@ Do not lower either selection.
 
 ## Phase B — Standalone Settings into the editor
 
-Per ADR-0013. One worker adds the Effect's Standalone Settings asset and its Effects-tab wiring,
-mirroring the shape its Sync Settings asset already has: serialized, live-tweakable in Play Mode,
-restorable to the in-file Standalone Defaults. The maintainer verifies on the wall: live edit,
-persistence after the run, and Restore. The Standalone Defaults blocks stay in source as the
+Per ADR-0013, Phase B adds Standalone Settings and audits both setting surfaces.
+
+1. Inspect every setting and its production consumers on both setting surfaces.
+2. Group two numeric values when one consumer uses them as endpoints for interpolation, selection,
+   or randomization.
+3. Use `FloatRange` or `IntRange` for each group, regardless of Min/Max, Low/High, From/To, or
+   Start/End names.
+4. Keep numeric values separate only when their production consumers use them independently.
+5. Remove the replaced scalar fields in the same pass.
+6. Ask the maintainer to restore each changed asset from the source defaults.
+
+One worker applies the audit changes and adds the Standalone Settings asset type and Effects-tab wiring.
+Make the asset serialized, editable during Play Mode, persistent after the run, and restorable. The
+maintainer verifies live edits, persistence, and Restore. Keep Standalone Defaults in source as the
 authored record.
 
 ## Phase C — Reshape
@@ -150,13 +158,16 @@ The look and the features stay exactly as the maintainer approved them in Phases
 
 1. With the `commit` skill, make logical commits. Include the Unity `.meta` and `.asset` files.
 
-2. Merge to master by ref update — `git fetch . <branch>:master` — so no file churn hits the
+2. Run the `code-review` skill against the branch fixed point. Resolve hard violations in logical
+   follow-up commits.
+
+3. Merge to master by ref update — `git fetch . <branch>:master` — so no file churn hits the
    open Editor. Switch to master, delete the branch, push.
 
-3. Close the ticket. A finding that surfaced here but stays unfixed lands on the epic issue, not
+4. Close the ticket. A finding that surfaced here but stays unfixed lands on the epic issue, not
    in this ticket's closed comments.
 
-4. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
+5. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
    skill only for a maintainer ruling or a process failure that repeated. Retire the worklog.
 
 ## Worker briefs
@@ -183,6 +194,8 @@ Boundaries — in every brief:
 - Never run Unity or `scripts/unity-*.sh`.
 - Never create or edit `.meta` or `.asset` files.
 - Do not commit.
+- After the final edit, run `git diff --check` exactly once. Report the result, then stop without
+  another edit or check.
 - Write XML docs on every touched symbol.
 - Never delete or compress an authored doc comment. Carry every WHY clause — tuning pointers,
   value derivations, rationale — onto whatever replaces its symbol.
