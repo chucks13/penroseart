@@ -6,8 +6,9 @@ using Random = UnityEngine.Random;
 /// Renders full-width falling streams and soft droplets in value space while the animated palette
 /// supplies the water hue; Synced Fills drive a sustained inrush current — both half-fields of
 /// streams visibly rush toward the center line from the half-Fill runway through the Fill's
-/// last beat, then sweep back out — Waveforms accelerate the rain, and beat surges take a
-/// palette-contrast color.
+/// last beat, then sweep back out — Synced Drops stall the shared vertical current before a
+/// downward plunge and all-stream contrast surge hit together, Waveforms accelerate the rain, and
+/// ordinary beat surges take the same palette-contrast color.
 /// </summary>
 [EffectSyncSettings(typeof(WaterfallSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(WaterfallStandaloneSettingsAsset))]
@@ -135,6 +136,13 @@ public class Waterfall : ScreenEffect
     private const float SyncFillFlowSpeed = 10f;
 
     /// <summary>
+    /// Authored multiplier at the Drop instant for the shared BPM × Energy fall speed. Four times
+    /// baseline is deliberately a wall-scale hit; the pre-Drop stall floor derives from the same
+    /// magnitude so one live control owns the full speed contrast.
+    /// </summary>
+    private const float SyncDropPlungeSpeedMultiplier = 4f;
+
+    /// <summary>
     /// Authored Energy used to draw the droplet-speed Waveform at Roll. Mid keeps the response
     /// clearly rhythmic without duplicating the BPM × Energy field's live intensity ladder with
     /// either the sparsest or busiest Pool shapes.
@@ -155,6 +163,13 @@ public class Waterfall : ScreenEffect
     /// the 1.0 clamp.
     /// </summary>
     private const float SyncStreamSurgeBrightness = 2.5f;
+
+    /// <summary>
+    /// Authored brightness-and-contrast multiplier for the all-stream surge launched at Drop
+    /// impact. Two drives each swell harder than an ordinary beat surge while the simultaneous
+    /// stream fanout supplies the wall-width scale, avoiding separate Drop size or color knobs.
+    /// </summary>
+    private const float SyncDropImpactSurgeBrightnessMultiplier = 2f;
 
     /// <summary>
     /// Authored full vertical length of a Synced stream surge, in screen pixels. Kept short so each
@@ -284,6 +299,18 @@ public class Waterfall : ScreenEffect
     private const int SyncDropletRespawnHeightMultiplier = -2;
 
     /// <summary>
+    /// Whole-beat runway over which the vertical current stalls before a Drop. Two beats leaves
+    /// the anticipation late and tense instead of slowing across half of a typical long Drop.
+    /// </summary>
+    private const int DropStallRunwayBeats = 2;
+
+    /// <summary>
+    /// Authored visual decay length used only when an active Drop has no wire length. Sixteen
+    /// beats matches the typical Drop while keeping the fallback local to Waterfall's gesture.
+    /// </summary>
+    private const int DropFallbackLengthBeats = 16;
+
+    /// <summary>
     /// Number of complete stream-selection cycles an identity may miss before oldest-first
     /// selection guarantees that it cannot starve.
     /// </summary>
@@ -304,11 +331,12 @@ public class Waterfall : ScreenEffect
     private const float SurgeContrastMeanChromaEpsilon = 0.001f;
 
     /// <summary>
-    /// Waterfall handles Fills by merging its stream field into a central mass and suits Low-,
-    /// Mid-, and High-energy sections.
+    /// Waterfall handles Fills by merging its stream field into a central mass, handles Drops with
+    /// a shared vertical stall and plunge, and suits Low-, Mid-, and High-energy sections.
     /// </summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill |
+        Repertoire.HandlesDrop |
         Repertoire.EnergyLow |
         Repertoire.EnergyMid |
         Repertoire.EnergyHigh;
@@ -352,9 +380,11 @@ public class Waterfall : ScreenEffect
             SyncEnergySpeedMultiplierLowRail,
             SyncEnergySpeedMultiplierHighRail),
         FillFlowSpeed = SyncFillFlowSpeed,
+        DropPlungeSpeedMultiplier = SyncDropPlungeSpeedMultiplier,
         DropletWaveformEnergy = SyncDropletWaveformEnergy,
         DropletSpeedMultiplierAtWaveformPeak = SyncDropletSpeedMultiplierAtWaveformPeak,
         StreamSurgeBrightness = SyncStreamSurgeBrightness,
+        DropImpactSurgeBrightnessMultiplier = SyncDropImpactSurgeBrightnessMultiplier,
         StreamSurgeLength = SyncStreamSurgeLength,
         StreamSurgeWidthMultiplier = SyncStreamSurgeWidthMultiplier,
         StreamSurgeSpeedMultiplier = SyncStreamSurgeSpeedMultiplier,
@@ -431,6 +461,48 @@ public class Waterfall : ScreenEffect
     private float streamFallOffset;
 
     /// <summary>
+    /// Current Drop-only multiplier on the BPM × Energy fall speed. One is the exact resting
+    /// value; the pre-Drop stall drives it below one and the active plunge drives it above one.
+    /// </summary>
+    private float dropSpeedMultiplier = 1f;
+
+    /// <summary>
+    /// Last active-Drop decay envelope. The wire-backed <see cref="InSpan"/> value refreshes it
+    /// while length is available; otherwise it continues as Waterfall's local visual fallback.
+    /// </summary>
+    private float dropPlungeEnvelope;
+
+    /// <summary>
+    /// Multiplier distance returned toward baseline per beat after a Drop runway disappears. It
+    /// is captured once so a missing announcement cannot strand the vertical current off-speed.
+    /// </summary>
+    private float dropRecoveryRate;
+
+    /// <summary>
+    /// Last complete BPM × Energy × Drop multiplier, held across a no-BPM frame so the gesture's
+    /// speed state freezes instead of jumping to unrelated arithmetic.
+    /// </summary>
+    private float heldStreamSpeedMultiplier = 1f;
+
+    /// <summary>
+    /// Previous active Drop state retained locally to start a missing-length fallback at impact.
+    /// </summary>
+    private bool wasDropActive;
+
+    /// <summary>
+    /// Whether the current active-Drop edge still needs its all-stream surge entries launched in
+    /// <see cref="Draw"/> before their shared plunge-speed advance.
+    /// </summary>
+    private bool dropImpactPending;
+
+    /// <summary>
+    /// Whether a future inactive-to-active Drop edge may launch the impact wave. It disarms on
+    /// impact and rearms only from an announced inactive Drop, so a missing-data blip cannot fire
+    /// the same Drop twice.
+    /// </summary>
+    private bool dropImpactArmed;
+
+    /// <summary>
     /// The Fill inrush current's accumulated pattern displacement in columns. Both half-fields
     /// sample the stream pattern this far upstream of themselves, so the whole picture visibly
     /// flows toward the center line for as long as the current runs. Zero is the resting field.
@@ -461,7 +533,11 @@ public class Waterfall : ScreenEffect
     /// <summary>The number of beat selections each stable stream identity has gone unpicked.</summary>
     private int[] beatsSinceSurgeByStream;
 
-    /// <summary>The overlapping beat-launched, contrast-colored swells currently crossing the wall.</summary>
+    /// <summary>
+    /// The overlapping contrast-colored swells currently crossing the wall. The first
+    /// <c>height</c> entries retain the complete ordinary beat-surge capacity; the trailing
+    /// <c>width</c> entries reserve one Drop-impact slot per possible stream identity.
+    /// </summary>
     private StreamSurge[] streamSurges;
 
     /// <summary>The number of stable primary-harmonic stream identities in the current Roll.</summary>
@@ -481,8 +557,8 @@ public class Waterfall : ScreenEffect
     private bool surgeLaunchedThisWindow;
 
     /// <summary>
-    /// Reports the current droplet count, rolled water-motion values, Fill flow displacement, and
-    /// held Waveform envelope for live tuning.
+    /// Reports the current droplet count, rolled water-motion values, Drop speed, Fill flow
+    /// displacement, and held Waveform envelope for live tuning.
     /// </summary>
     /// <returns>A multi-line description of the current activation.</returns>
     public override string DebugText()
@@ -492,13 +568,14 @@ public class Waterfall : ScreenEffect
             $"Palette speed: {paletteSpeed}\n" +
             $"Stream width: {streamWidth}\n" +
             $"Stream fall speed: {streamFallSpeed}\n" +
+            $"Drop speed: {dropSpeedMultiplier:0.00}x\n" +
             $"Fill flow: {fillFlowOffset:0.0}\n" +
             $"Droplet Waveform: {waveform.Envelope:0.00}\n";
     }
 
     /// <summary>
-    /// Allocates Waterfall's reusable value, surge-color, palette, stream-identity, and surge
-    /// buffers after screen setup so Draw performs no managed allocation.
+    /// Allocates Waterfall's reusable value, surge-color, palette, stream-identity, and partitioned
+    /// beat/Drop surge buffers after screen setup so Draw performs no managed allocation.
     /// </summary>
     public override void Init()
     {
@@ -510,12 +587,13 @@ public class Waterfall : ScreenEffect
         paletteSaturationByRow = new float[height];
         streamCenterById = new float[width];
         beatsSinceSurgeByStream = new int[width];
-        streamSurges = new StreamSurge[height];
+        streamSurges = new StreamSurge[height + width];
     }
 
     /// <summary>
-    /// Resolves settings, performs the activation Roll, creates the droplet field, and draws the
-    /// held droplet-speed Waveform after every pre-existing Roll outcome has been determined.
+    /// Resolves settings, performs the activation Roll, resets the Drop speed, impact, and Fill
+    /// responses, creates the droplet field, and draws the held droplet-speed Waveform after every
+    /// pre-existing Roll outcome has been determined.
     /// </summary>
     public override void OnStart()
     {
@@ -553,6 +631,15 @@ public class Waterfall : ScreenEffect
         streamFallOffset = Mathf.Repeat(
             effectTime * streamFallSpeed,
             streamWidth * 4f);
+        dropSpeedMultiplier = 1f;
+        dropPlungeEnvelope = 0f;
+        dropRecoveryRate = 0f;
+        heldStreamSpeedMultiplier = 1f;
+        wasDropActive = false;
+        dropImpactPending = false;
+        // Joining a Drop already underway must not invent its activation impact. An unsynced start
+        // stays disarmed until a subsequent synced announcement owns a future activation edge.
+        dropImpactArmed = isSynced && !beatManager.Drop.Active;
         InitializeStreamIdentities();
         Array.Clear(streamSurges, 0, streamSurges.Length);
         activeSurgeCount = 0;
@@ -600,9 +687,9 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Composes the Fill-merged falling value structure, Waveform-accelerated droplets, and
-    /// beat-launched stream surges, applies the unchanged palette wash outside surge pixels, then
-    /// maps the screen buffer to tiles.
+    /// Composes the Fill-merged falling value structure, Waveform-accelerated droplets, and beat-
+    /// and Drop-launched stream surges, applies the unchanged palette wash outside surge pixels,
+    /// then maps the screen buffer to tiles.
     /// </summary>
     public override void Draw()
     {
@@ -646,6 +733,11 @@ public class Waterfall : ScreenEffect
         streamFallOffset = Mathf.Repeat(
             streamFallOffset + (effectiveStreamFallSpeed * effectDelta),
             streamWidth * 4f);
+        if (dropImpactPending)
+        {
+            StartDropImpactSurges();
+            dropImpactPending = false;
+        }
         UpdateStreamSurges(
             isSynced,
             effectiveStreamFallSpeed * SyncSettings.StreamSurgeSpeedMultiplier,
@@ -750,12 +842,25 @@ public class Waterfall : ScreenEffect
             {
                 if (streamSurges[i].Active)
                 {
-                    AddStreamSurgeValue(
-                        streamSurges[i],
-                        SyncSettings.StreamSurgeBrightness,
-                        SyncSettings.StreamSurgeLength,
-                        SyncSettings.StreamSurgeWidthMultiplier,
-                        streamEdgeShade);
+                    if (i >= height)
+                    {
+                        AddStreamSurgeValue(
+                            streamSurges[i],
+                            SyncSettings.StreamSurgeBrightness *
+                                SyncSettings.DropImpactSurgeBrightnessMultiplier,
+                            SyncSettings.StreamSurgeLength,
+                            SyncSettings.StreamSurgeWidthMultiplier,
+                            streamEdgeShade);
+                    }
+                    else
+                    {
+                        AddStreamSurgeValue(
+                            streamSurges[i],
+                            SyncSettings.StreamSurgeBrightness,
+                            SyncSettings.StreamSurgeLength,
+                            SyncSettings.StreamSurgeWidthMultiplier,
+                            streamEdgeShade);
+                    }
                 }
             }
         }
@@ -893,16 +998,30 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Composes the rolled stream speed with live BPM and Energy while keeping one as the exact
-    /// Standalone and BPM-unavailable multiplier.
+    /// Composes the rolled stream speed with live BPM, Energy, and Waterfall's local Drop
+    /// stall/plunge state while keeping one as the exact resting Standalone multiplier.
     /// </summary>
     /// <param name="isSynced">Whether the running one-through-four count is available.</param>
     /// <returns>The multiplier shared by the water body, droplets, and active surges.</returns>
     private float CurrentStreamSpeedMultiplier(bool isSynced)
     {
-        if (!isSynced || beatManager.Timing.Bpm is not { } bpm)
+        if (!isSynced)
         {
+            dropSpeedMultiplier = 1f;
+            dropPlungeEnvelope = 0f;
+            dropRecoveryRate = 0f;
+            heldStreamSpeedMultiplier = 1f;
+            wasDropActive = false;
+            dropImpactPending = false;
+            dropImpactArmed = false;
             return 1f;
+        }
+
+        if (beatManager.Timing.Bpm is not { } bpm)
+        {
+            // A Drop response already in motion holds its complete speed state until beat-based
+            // time resumes. At rest this remains the exact pre-Drop one-times baseline.
+            return dropSpeedMultiplier == 1f ? 1f : heldStreamSpeedMultiplier;
         }
 
         float energyPosition = beatManager.Energy.Level switch
@@ -930,7 +1049,115 @@ public class Waterfall : ScreenEffect
             SyncSettings.EnergySpeedMultiplier.Min,
             SyncSettings.EnergySpeedMultiplier.Max,
             Mathf.Clamp01(energyPosition));
-        return bpm / SyncSettings.ReferenceBpm * energyMultiplier;
+        float baselineSpeedMultiplier = bpm / SyncSettings.ReferenceBpm * energyMultiplier;
+        float currentDropSpeedMultiplier = AdvanceDropSpeedMultiplier(bpm);
+        if (currentDropSpeedMultiplier == 1f)
+        {
+            // Skipping the extra multiply preserves the approved BPM × Energy arithmetic bit for
+            // bit whenever Drop data is absent or outside its authored runway.
+            heldStreamSpeedMultiplier = baselineSpeedMultiplier;
+            return baselineSpeedMultiplier;
+        }
+
+        heldStreamSpeedMultiplier = baselineSpeedMultiplier * currentDropSpeedMultiplier;
+        return heldStreamSpeedMultiplier;
+    }
+
+    /// <summary>
+    /// Advances the Drop-only speed state: a two-beat <see cref="BeforeSpan.Build(int)"/> stalls
+    /// toward a near-stop, the active <see cref="InSpan.Decay(int?)"/> slams to the authored
+    /// plunge and decays across the Drop, and a vanished runway returns to baseline instead of
+    /// stranding the current. The plunge magnitude also derives the stall floor as 0.5 raised to
+    /// that magnitude, so the authored four-times hit hangs at one-sixteenth speed without a
+    /// second tuning slot. The same active edge queues one all-stream impact wave, independently
+    /// of whether the Drop length is available.
+    /// </summary>
+    /// <param name="bpm">Current wire tempo used only to advance local fallback and recovery ramps.</param>
+    /// <returns>The Drop-only multiplier; one is the exact no-response value.</returns>
+    private float AdvanceDropSpeedMultiplier(float bpm)
+    {
+        float deltaBeats = effectDelta * bpm / 60f;
+        bool dropActive = beatManager.Drop.Active;
+        if (dropActive && !wasDropActive && dropImpactArmed)
+        {
+            dropImpactPending = true;
+            dropImpactArmed = false;
+        }
+
+        if (dropActive)
+        {
+            if (beatManager.Drop.LengthBeats is > 0)
+            {
+                dropPlungeEnvelope = beatManager.Drop.In.Decay();
+            }
+            else if (!wasDropActive)
+            {
+                // Starting without a length still gets an impact; subsequent frames decay this
+                // local visual envelope over the typical authored Drop length.
+                dropPlungeEnvelope = 1f;
+            }
+            else
+            {
+                dropPlungeEnvelope = Mathf.MoveTowards(
+                    dropPlungeEnvelope,
+                    0f,
+                    deltaBeats / DropFallbackLengthBeats);
+            }
+
+            wasDropActive = true;
+            dropRecoveryRate = 0f;
+            dropSpeedMultiplier = Mathf.Lerp(
+                1f,
+                SyncSettings.DropPlungeSpeedMultiplier,
+                dropPlungeEnvelope);
+            return dropSpeedMultiplier;
+        }
+
+        wasDropActive = false;
+        dropPlungeEnvelope = 0f;
+        if (beatManager.Drop.BeatsUntil is not null)
+        {
+            dropImpactArmed = true;
+            float stallEnvelope = beatManager.Drop.Before.Build(DropStallRunwayBeats);
+            if (stallEnvelope == 0f)
+            {
+                dropSpeedMultiplier = 1f;
+            }
+            else
+            {
+                float stallSpeedMultiplier = Mathf.Pow(
+                    0.5f,
+                    SyncSettings.DropPlungeSpeedMultiplier);
+                dropSpeedMultiplier = Mathf.Lerp(1f, stallSpeedMultiplier, stallEnvelope);
+            }
+
+            dropRecoveryRate = 0f;
+            return dropSpeedMultiplier;
+        }
+
+        if (dropSpeedMultiplier == 1f)
+        {
+            dropRecoveryRate = 0f;
+            return 1f;
+        }
+
+        if (dropRecoveryRate == 0f)
+        {
+            // A countdown that vanishes before landing unwinds over the same two beats that
+            // authored its stall, regardless of how far the response had travelled.
+            dropRecoveryRate = Mathf.Abs(dropSpeedMultiplier - 1f) / DropStallRunwayBeats;
+        }
+
+        dropSpeedMultiplier = Mathf.MoveTowards(
+            dropSpeedMultiplier,
+            1f,
+            dropRecoveryRate * deltaBeats);
+        if (dropSpeedMultiplier == 1f)
+        {
+            dropRecoveryRate = 0f;
+        }
+
+        return dropSpeedMultiplier;
     }
 
     /// <summary>
@@ -979,11 +1206,10 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Advances existing surges and launches at most one profiled color-and-value swell per
-    /// musical count. The count's quarter-beat window opens the opportunity and the low band, in
-    /// the selected Levels reading, must confirm it. Losing Sync clears the moving response
-    /// immediately so Standalone
-    /// remains the approved water-only look.
+    /// Advances existing beat and Drop surges, then launches at most one profiled color-and-value
+    /// swell per musical count. The count's quarter-beat window opens the opportunity and the low
+    /// band, in the selected Levels reading, must confirm it. Losing Sync clears the moving
+    /// response immediately so Standalone remains the approved water-only look.
     /// </summary>
     /// <param name="isSynced">Whether the running one-through-four count is available.</param>
     /// <param name="fallSpeed">Current downward surge speed in screen pixels per second: the
@@ -1051,30 +1277,53 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// Launches one surge at the top of its selected stable stream. The fixed array retains
-    /// overlapping beat swells without per-frame or per-event managed allocation.
+    /// Launches one ordinary surge at the top of its selected stable stream. The first
+    /// <c>height</c> fixed-array entries preserve the original overlapping beat-swell capacity
+    /// without per-frame or per-event managed allocation; Drop impacts cannot consume them.
     /// </summary>
     private void StartStreamSurge()
     {
         int slot = nextSurgeSlot;
-        if (activeSurgeCount < streamSurges.Length)
+        for (int offset = 0; offset < height; offset++)
         {
-            for (int offset = 0; offset < streamSurges.Length; offset++)
+            int candidate = (nextSurgeSlot + offset) % height;
+            if (!streamSurges[candidate].Active)
             {
-                int candidate = (nextSurgeSlot + offset) % streamSurges.Length;
-                if (!streamSurges[candidate].Active)
-                {
-                    slot = candidate;
-                    break;
-                }
+                slot = candidate;
+                break;
             }
+        }
+
+        if (!streamSurges[slot].Active)
+        {
             activeSurgeCount++;
         }
 
         streamSurges[slot].Active = true;
         streamSurges[slot].StreamIndex = SelectSurgeStream();
         streamSurges[slot].PositionY = height - 1f;
-        nextSurgeSlot = (slot + 1) % streamSurges.Length;
+        nextSurgeSlot = (slot + 1) % height;
+    }
+
+    /// <summary>
+    /// Launches one surge in every rolled stream identity from the top of the wall. Each identity
+    /// owns one trailing reserved slot, so the Drop wave composes with every in-flight beat swell
+    /// without selection, Random consumption, managed allocation, or active beat-surge eviction.
+    /// </summary>
+    private void StartDropImpactSurges()
+    {
+        for (int streamIndex = 0; streamIndex < streamCount; streamIndex++)
+        {
+            int slot = height + streamIndex;
+            if (!streamSurges[slot].Active)
+            {
+                activeSurgeCount++;
+            }
+
+            streamSurges[slot].Active = true;
+            streamSurges[slot].StreamIndex = streamIndex;
+            streamSurges[slot].PositionY = height - 1f;
+        }
     }
 
     /// <summary>
@@ -1302,8 +1551,8 @@ public class Waterfall : ScreenEffect
     }
 
     /// <summary>
-    /// One beat-launched contrast-color and luminance swell moving down a stable
-    /// primary-harmonic stream identity.
+    /// One beat- or Drop-launched contrast-color and luminance swell moving down a stable
+    /// primary-harmonic stream identity. Its partitioned array slot identifies the launch kind.
     /// </summary>
     private struct StreamSurge
     {
@@ -1534,6 +1783,13 @@ public sealed class WaterfallSyncSettings
     [Min(0f)] public float FillFlowSpeed;
 
     /// <summary>
+    /// Multiplier on the complete BPM × Energy fall speed at the Drop instant. It decays to one
+    /// across the active Drop, and its magnitude also derives the pre-Drop near-stop so one slot
+    /// controls the whole speed contrast.
+    /// </summary>
+    [Min(1f)] public float DropPlungeSpeedMultiplier;
+
+    /// <summary>
     /// Energy of the immutable droplet-speed Waveform drawn from the Pool at Roll. A live edit
     /// takes effect on the next activation; the held Waveform is never substituted per frame.
     /// </summary>
@@ -1550,6 +1806,13 @@ public sealed class WaterfallSyncSettings
     /// hue and saturation toward the color derived against the complete animated palette gradient.
     /// </summary>
     [Min(0f)] public float StreamSurgeBrightness;
+
+    /// <summary>
+    /// Brightness-and-contrast multiplier applied only to the all-stream Drop-impact wave. The
+    /// shared surge length and width remain its size controls; values at or above one keep each
+    /// impact swell at least as strong as an ordinary beat swell.
+    /// </summary>
+    [Min(1f)] public float DropImpactSurgeBrightnessMultiplier;
 
     /// <summary>Full vertical length of each moving stream surge, in screen pixels.</summary>
     [Min(0.0001f)] public float StreamSurgeLength;
@@ -1661,10 +1924,12 @@ public sealed class WaterfallSyncSettings
             source.EnergySpeedMultiplier.LowRail,
             source.EnergySpeedMultiplier.HighRail);
         FillFlowSpeed = source.FillFlowSpeed;
+        DropPlungeSpeedMultiplier = source.DropPlungeSpeedMultiplier;
         DropletWaveformEnergy = source.DropletWaveformEnergy;
         DropletSpeedMultiplierAtWaveformPeak =
             source.DropletSpeedMultiplierAtWaveformPeak;
         StreamSurgeBrightness = source.StreamSurgeBrightness;
+        DropImpactSurgeBrightnessMultiplier = source.DropImpactSurgeBrightnessMultiplier;
         StreamSurgeLength = source.StreamSurgeLength;
         StreamSurgeWidthMultiplier = source.StreamSurgeWidthMultiplier;
         StreamSurgeSpeedMultiplier = source.StreamSurgeSpeedMultiplier;
