@@ -437,8 +437,10 @@ public class Waterfall : ScreenEffect
     /// </summary>
     private float[] surgeColorWeightBuffer;
 
-    /// <summary>The cross-stream profile computed once per column, kept for edge-seam gradients.</summary>
-    private float[] streamProfileByColumn;
+    /// <summary>
+    /// Per-column stream samples shared by the base-water and surge composition passes.
+    /// </summary>
+    private StreamColumn[] streamColumns;
 
     /// <summary>The palette hue sampled once per screen row for the current frame.</summary>
     private float[] paletteHueByRow;
@@ -558,7 +560,7 @@ public class Waterfall : ScreenEffect
         base.Init();
         waterValueBuffer = new float[screenBuffer.Length];
         surgeColorWeightBuffer = new float[screenBuffer.Length];
-        streamProfileByColumn = new float[width];
+        streamColumns = new StreamColumn[width];
         paletteHueByRow = new float[height];
         paletteSaturationByRow = new float[height];
         streamCenterById = new float[width];
@@ -760,30 +762,30 @@ public class Waterfall : ScreenEffect
             float sampleX = x < fillCenterX ? x - fillFlowOffset : x + fillFlowOffset;
             float primaryStrength = 0.55f +
                 (0.45f * Mathf.Sin(sampleX * streamFrequency * 0.23f + mergeDrift));
-            streamProfileByColumn[x] = 0.5f +
+            ref StreamColumn column = ref streamColumns[x];
+            column.Profile = 0.5f +
                 (0.24f * primaryStrength * Mathf.Sin(sampleX * streamFrequency)) +
                 (0.16f * Mathf.Sin(sampleX * streamFrequency * 1.618f + 1.7f + secondaryDrift)) +
                 (0.10f * Mathf.Sin(sampleX * streamFrequency * 0.414f + groupingDrift));
+            column.FallPhase = sampleX * streamFrequency * 0.7f;
         }
 
         for (int x = 0; x < width; x++)
         {
-            float streamProfile = streamProfileByColumn[x];
+            ref StreamColumn column = ref streamColumns[x];
 
             // Dark seams are carved where the cross-stream slope is steepest — the boundary
             // between a stream and its neighbor — so darkness outlines every stream the way
             // MazeFlyer's edge lines outline its walls. Shading follows the field, so seams
             // hold as still as the streams they separate.
-            float slope = streamProfileByColumn[Mathf.Min(x + 1, width - 1)] -
-                streamProfileByColumn[Mathf.Max(x - 1, 0)];
-            float edgeFactor = 1f - (streamEdgeShade * Mathf.Clamp01(Mathf.Abs(slope) * 1.5f));
+            float slope = streamColumns[Mathf.Min(x + 1, width - 1)].Profile -
+                streamColumns[Mathf.Max(x - 1, 0)].Profile;
+            column.EdgeFactor = 1f - (streamEdgeShade * Mathf.Clamp01(Mathf.Abs(slope) * 1.5f));
 
             // The per-stream phase stagger is constant in time: it keeps neighboring streams'
             // falling texture out of step so the flow never lines up into horizontal bars. It
             // follows the same sample position as the profile, so during a Fill each stream's
             // falling texture travels inward with the stream it belongs to.
-            float samplePhaseX = x < fillCenterX ? x - fillFlowOffset : x + fillFlowOffset;
-            float streamPhase = samplePhaseX * streamFrequency * 0.7f;
             int screenIndex = x;
 
             for (int y = 0; y < height; y++)
@@ -791,9 +793,9 @@ public class Waterfall : ScreenEffect
                 // Time lives only in the y term, so texture moves straight down each stream.
                 // The 0.25 factor stretches the falling features to several stream-widths tall.
                 float flow = 0.5f + (0.5f * Mathf.Sin(
-                    ((y + streamFallOffset) * streamFrequency * 0.25f) + streamPhase));
-                float stream = streamProfile * (0.55f + (0.45f * flow));
-                float value = Mathf.Lerp(darkestStream, waterBrightness, stream) * edgeFactor;
+                    ((y + streamFallOffset) * streamFrequency * 0.25f) + column.FallPhase));
+                float stream = column.Profile * (0.55f + (0.45f * flow));
+                float value = Mathf.Lerp(darkestStream, waterBrightness, stream) * column.EdgeFactor;
                 waterValueBuffer[screenIndex] = Mathf.Max(value, waterMinBrightness);
                 surgeColorWeightBuffer[screenIndex] = 0f;
                 screenIndex += width;
@@ -817,8 +819,7 @@ public class Waterfall : ScreenEffect
                     streamSurges[i],
                     SyncSettings.StreamSurgeBrightness,
                     SyncSettings.StreamSurgeLength,
-                    SyncSettings.StreamSurgeWidthMultiplier,
-                    streamEdgeShade);
+                    SyncSettings.StreamSurgeWidthMultiplier);
             }
         }
 
@@ -879,7 +880,7 @@ public class Waterfall : ScreenEffect
         }
 
         // convert the 2D Matrix buffer to a tile buffer
-        ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
+        ConvertScreenBuffer(ref screenBuffer, in buffer);
     }
 
     /// <summary>
@@ -1323,21 +1324,19 @@ public class Waterfall : ScreenEffect
 
     /// <summary>
     /// Multiplies one moving surge into the existing water value and records the same swell as a
-    /// contrast-color blend weight. Reusing the selected stream's profile and edge shade keeps the
-    /// color and brightness inside the structure instead of painting over it.
+    /// contrast-color blend weight. Reusing the selected stream's cached profile and edge factor
+    /// keeps color and brightness inside the structure instead of painting over it.
     /// </summary>
     /// <param name="surge">The active stream identity and vertical center to render.</param>
     /// <param name="brightness">Center strength shared by the multiplicative value-space lift and
     /// contrast-color blend.</param>
     /// <param name="length">Full vertical surge length in screen pixels.</param>
     /// <param name="widthMultiplier">Surge width relative to the rolled stream width.</param>
-    /// <param name="edgeShade">Current authored strength of the field's dark edge seams.</param>
     private void AddStreamSurgeValue(
         StreamSurge surge,
         float brightness,
         float length,
-        float widthMultiplier,
-        float edgeShade)
+        float widthMultiplier)
     {
         float centerX = streamCenterById[surge.StreamIndex];
         float halfWidth = streamWidth * widthMultiplier * 0.5f;
@@ -1355,13 +1354,13 @@ public class Waterfall : ScreenEffect
                 continue;
             }
 
-            float slope = streamProfileByColumn[Mathf.Min(x + 1, width - 1)] -
-                streamProfileByColumn[Mathf.Max(x - 1, 0)];
-            float edgeFactor = 1f - (edgeShade * Mathf.Clamp01(Mathf.Abs(slope) * 1.5f));
+            ref readonly StreamColumn column = ref streamColumns[x];
             float crossStreamStrength = SoftFalloff(horizontalRemaining) *
-                streamProfileByColumn[x] * edgeFactor;
+                column.Profile * column.EdgeFactor;
 
-            for (int y = minY; y <= maxY; y++)
+            for (int y = minY, screenIndex = x + (minY * width);
+                y <= maxY;
+                y++, screenIndex += width)
             {
                 float verticalRemaining = 1f - (Mathf.Abs(y - surge.PositionY) / halfLength);
                 if (verticalRemaining <= 0f)
@@ -1370,7 +1369,6 @@ public class Waterfall : ScreenEffect
                 }
 
                 float swell = brightness * crossStreamStrength * SoftFalloff(verticalRemaining);
-                int screenIndex = x + (y * width);
                 waterValueBuffer[screenIndex] = Mathf.Min(
                     1f,
                     waterValueBuffer[screenIndex] * (1f + swell));
@@ -1402,12 +1400,20 @@ public class Waterfall : ScreenEffect
         {
             float horizontalDistance = Mathf.Abs(x - position.x);
             float horizontalRemaining = 1f - (horizontalDistance / radius);
+            if (horizontalRemaining <= 0f)
+            {
+                continue;
+            }
 
-            for (int y = minY; y <= maxY; y++)
+            float horizontalDistanceSquared = horizontalDistance * horizontalDistance;
+            float horizontalFalloff = SoftFalloff(horizontalRemaining);
+
+            for (int y = minY, screenIndex = x + (minY * width);
+                y <= maxY;
+                y++, screenIndex += width)
             {
                 float verticalDistance = y - position.y;
-                float distanceSquared =
-                    (horizontalDistance * horizontalDistance) +
+                float distanceSquared = horizontalDistanceSquared +
                     (verticalDistance * verticalDistance);
                 float contribution = 0f;
 
@@ -1423,11 +1429,10 @@ public class Waterfall : ScreenEffect
                 {
                     float trailRemaining = 1f - (verticalDistance / trailLength);
                     float trailContribution = brightness * trailBrightness *
-                        SoftFalloff(horizontalRemaining) * trailRemaining * trailRemaining;
+                        horizontalFalloff * trailRemaining * trailRemaining;
                     contribution = Mathf.Max(contribution, trailContribution);
                 }
 
-                int screenIndex = x + (y * width);
                 waterValueBuffer[screenIndex] = Mathf.Min(
                     1f,
                     waterValueBuffer[screenIndex] + contribution);
@@ -1480,6 +1485,19 @@ public class Waterfall : ScreenEffect
     private static float SoftFalloff(float remaining)
     {
         return remaining * remaining * (3f - (2f * remaining));
+    }
+
+    /// <summary>Cached per-column values reused across Waterfall's value-composition passes.</summary>
+    private struct StreamColumn
+    {
+        /// <summary>The current cross-stream value profile.</summary>
+        public float Profile;
+
+        /// <summary>The vertical-flow phase stagger carried by this stream.</summary>
+        public float FallPhase;
+
+        /// <summary>The current dark-seam multiplier derived from neighboring profiles.</summary>
+        public float EdgeFactor;
     }
 
     /// <summary>
