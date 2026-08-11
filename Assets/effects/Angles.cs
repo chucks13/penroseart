@@ -6,10 +6,11 @@ using UnityEngine;
 /// Renders a palette hue sweep based on each tile's stored geometric angle.
 /// </summary>
 /// <remarks>
-/// FILL: the Data Surface's own <see cref="InSpan.Build"/> advances an outer-to-inner mask through
-/// one selected Shape List. Every member of a Star, Starball, or Lotusball shares one removal
-/// threshold derived from that group's radius. Removed Tiles are written black; surviving Tiles
-/// follow the ordinary Angles path exactly. The mask snaps clear when the Fill ends so no invented
+/// FILL: the Data Surface's own <see cref="InSpan.Build"/> advances outer-to-inner through one
+/// selected Shape List. Every member of a Star, Starball, or Lotusball shares one threshold derived
+/// from that group's radius. Stars and Lotusballs are removed to black as whole motifs. A Starball
+/// instead loses only its five-Tile border and reveals its five-Tile Star as one solid palette colour
+/// derived from the Star's cached wall angle. The Fill snaps clear when it ends so no invented
 /// recovery time crosses into a following Drop.
 ///
 /// PRE-DROP / DROP (preserved behind temporary rebuild flags): one soft-edged wavefront, ordered by
@@ -45,7 +46,7 @@ public class Angles : EffectBase
 {
     // Temporary musical-layer rebuild flags
 
-    /// <summary>Temporary rebuild scaffolding for pre-Drop hue compression; the Fill half has been replaced by the Shape List mask.</summary>
+    /// <summary>Temporary rebuild scaffolding for pre-Drop hue compression; the Fill half has been replaced by Shape List removal and Starball core reveal.</summary>
     private const bool EnablePreDropHueCompression = false;
 
     /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
@@ -141,9 +142,16 @@ public class Angles : EffectBase
     /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space. The 0.12 default follows the dormant pre-Drop/Drop front's authored softness; smaller is crisper and larger blends more of the wall between phases.</summary>
     private const float SyncBeatFrontSoftness = 0.12f;
 
-    /// <summary>Shape List unit removed as the Fill drains inward. Lotusballs are the default because their 489 member Tiles are the only selectable motif set covering most of the current 900-Tile wall.</summary>
+    /// <summary>Shape List unit transformed as the Fill drains inward. Lotusballs are the default because their 489 member Tiles are the only selectable motif set covering most of the current 900-Tile wall.</summary>
     private const AnglesSyncSettings.FillUnitKind SyncFillUnit =
         AnglesSyncSettings.FillUnitKind.Lotusballs;
+
+    /// <summary>
+    /// Palette-cycle rotation applied to every solid Star revealed by the Starball Fill. Zero keeps
+    /// each Star on the colour selected by its cached wall angle, and is deliberately the authored
+    /// default so an existing saved asset that has not serialized this new field remains correct.
+    /// </summary>
+    private const float SyncStarballStarHueOffset = 0f;
 
     /// <summary>Width, in normalized rank space (0..1), of the pre-Drop hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float SyncFrontSoftness = 0.12f;
@@ -196,10 +204,17 @@ public class Angles : EffectBase
     /// <summary>The wire-authored On Beat gate occupies the first quarter of its beat interval; this contract duration places the spatial front without locally rebuilding musical timing.</summary>
     private const float BeatTriggerWindowFraction = 0.25f;
 
-    /// <summary>Fill progress at which the outermost group can first disappear, leaving a short readable onset before subtraction begins.</summary>
+    /// <summary>
+    /// Number of leading packed positions that form the Star inside every ten-Tile Starball. The
+    /// current layout stores all 32 Starballs as five fat Star Tiles followed by five thin border
+    /// Tiles, and each leading subset exactly matches one Stars group.
+    /// </summary>
+    private const int StarballStarTileCount = 5;
+
+    /// <summary>Fill progress at which the outermost group can first transform, leaving a short readable onset before subtraction begins.</summary>
     private const float FillFirstRemovalProgress = 0.05f;
 
-    /// <summary>Fill progress by which the innermost group has disappeared, reserving the final tenth of the Fill as its fully drained peak before the end snap restores the wall.</summary>
+    /// <summary>Fill progress by which the innermost group has transformed, reserving the final tenth of the Fill as its fully developed peak before the end snap restores the wall.</summary>
     private const float FillFullRemovalProgress = 0.9f;
 
     /// <summary>
@@ -211,7 +226,7 @@ public class Angles : EffectBase
     private const float EnergyLadderMid = 0.5f;
 
     /// <summary>
-    /// Advertises that Angles handles Fill through its Shape List mask and suits all three Energy tiers
+    /// Advertises that Angles handles Fill through its Shape List transformations and suits all three Energy tiers
     /// now that they drive its motion and shading, while withholding Drop capability until the dormant
     /// pre-Drop/Drop layers are rebuilt.
     /// </summary>
@@ -240,8 +255,8 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
-    /// conditioning, the Low-gated beat phase front, the Shape List Fill mask, three Energy-tier
-    /// sweep rates, and directional-shading depth.
+    /// conditioning, the Low-gated beat phase front, Shape List Fill behavior and revealed-Star hue
+    /// offset, three Energy-tier sweep rates, and directional-shading depth.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
@@ -252,6 +267,7 @@ public class Angles : EffectBase
         BeatFrontAxisDegrees = SyncBeatFrontAxisDegrees,
         BeatFrontSoftness = SyncBeatFrontSoftness,
         FillUnit = SyncFillUnit,
+        StarballStarHueOffset = SyncStarballStarHueOffset,
         FrontSoftness = SyncFrontSoftness,
         CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
@@ -336,6 +352,13 @@ public class Angles : EffectBase
     /// <summary>Per Tile, its Starball group's outer-to-inner radius rank, or -1 when the Tile belongs to no Starball.</summary>
     private float[] starballFillRingRank;
 
+    /// <summary>
+    /// Per Tile in a Starball's five-Tile Star, the Star center's stable polar angle mapped to one
+    /// palette cycle; -1 marks border and non-Starball Tiles. Geometry alone is cached here so the
+    /// live Sync hue offset remains fully editable in Play Mode.
+    /// </summary>
+    private float[] starballRevealedStarPalettePosition;
+
     /// <summary>Per Tile, its Star group's outer-to-inner radius rank, or -1 when the Tile belongs to no Star.</summary>
     private float[] starFillRingRank;
 
@@ -416,7 +439,8 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Caches the static per-tile geometry used by the beat phase front, Fill, Drop, and directional shading.
+    /// Caches the static per-tile geometry used by the beat phase front, Fill, Drop, and directional
+    /// shading, including one shared palette coordinate for each Starball's revealed Star.
     /// </summary>
     private void PrecomputeTileFields()
     {
@@ -425,6 +449,7 @@ public class Angles : EffectBase
         tileCenters = new Vector2[total];
         lotusballFillRingRank = new float[total];
         starballFillRingRank = new float[total];
+        starballRevealedStarPalettePosition = new float[total];
         starFillRingRank = new float[total];
         hueDelta = new float[total];
         classReveal = new float[total];
@@ -436,6 +461,7 @@ public class Angles : EffectBase
         {
             rawHue[i] = tiles[i].tileangle / 180f;
             tileCenters[i] = tiles[i].center;
+            starballRevealedStarPalettePosition[i] = -1f;
             float radians = rawHue[i] * Mathf.PI * 2f;
             sumX += Mathf.Cos(radians);
             sumY += Mathf.Sin(radians);
@@ -445,12 +471,30 @@ public class Angles : EffectBase
         PrecomputeFillMask(
             penrose.Layout.shapes.Lotusballs,
             lotusballFillRingRank);
-        PrecomputeFillMask(
-            penrose.Layout.shapes.Starballs,
-            starballFillRingRank);
+        LayoutData.ShapeList.Reader starballs = penrose.Layout.shapes.Starballs;
+        PrecomputeFillMask(starballs, starballFillRingRank);
         PrecomputeFillMask(
             penrose.Layout.shapes.Stars,
             starFillRingRank);
+
+        for (int groupIndex = 0; groupIndex < starballs.GroupCount; groupIndex++)
+        {
+            LayoutData.ShapeList.Group group = starballs.GetGroup(groupIndex);
+            Vector2 starCenter = Vector2.zero;
+            for (int tileIndex = 0; tileIndex < StarballStarTileCount; tileIndex++)
+            {
+                starCenter += tileCenters[group[tileIndex]];
+            }
+
+            starCenter /= StarballStarTileCount;
+            float palettePosition = Mathf.Repeat(
+                Mathf.Atan2(starCenter.y, starCenter.x) / (Mathf.PI * 2f),
+                1f);
+            for (int tileIndex = 0; tileIndex < StarballStarTileCount; tileIndex++)
+            {
+                starballRevealedStarPalettePosition[group[tileIndex]] = palettePosition;
+            }
+        }
 
         float[] distance = new float[total];
         int[] order = new int[total];
@@ -478,7 +522,8 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Caches one Shape List's group membership and outer-to-inner radius rank per Tile. Every Tile
-    /// in a group receives the same rank so the Fill can only remove whole motif units.
+    /// in a group receives the same rank so the Fill reaches each motif as one outer-to-inner event;
+    /// rendering decides whether that event removes the whole motif or reveals a retained core.
     /// </summary>
     /// <param name="shapeList">The allocation-free Shape List reader whose motif groups become Fill units.</param>
     /// <param name="ringRank">Destination receiving each member Tile's normalized outer-to-inner group rank, or -1 for nonmembers.</param>
@@ -678,7 +723,8 @@ public class Angles : EffectBase
     /// <summary>
     /// Advances the dormant pre-Drop hue-compression tension, with an active Drop owning the
     /// blackout-to-release timeline exclusively. Fill is intentionally absent because its Shape List
-    /// mask never modulates the colour of a surviving Tile.
+    /// removal and Starball core reveal are resolved directly in <see cref="Draw"/> and own no
+    /// choreography state.
     /// </summary>
     /// <param name="drop">The frame-coherent Drop facts used for both preparation and active release.</param>
     /// <returns>
@@ -871,6 +917,7 @@ public class Angles : EffectBase
 
         float fillProgress = beatManager.Fill.In.Build();
         float[] frameFillRingRank = null;
+        bool revealStarballStars = false;
         if (fillProgress > 0f)
         {
             switch (SyncSettings.FillUnit)
@@ -880,6 +927,7 @@ public class Angles : EffectBase
                     break;
                 case AnglesSyncSettings.FillUnitKind.Starballs:
                     frameFillRingRank = starballFillRingRank;
+                    revealStarballStars = true;
                     break;
                 default:
                     frameFillRingRank = lotusballFillRingRank;
@@ -926,6 +974,7 @@ public class Angles : EffectBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
+            bool renderSolidStar = false;
             if (frameFillRingRank != null && frameFillRingRank[i] >= 0f)
             {
                 float removalThreshold = Mathf.Lerp(
@@ -934,10 +983,20 @@ public class Angles : EffectBase
                     frameFillRingRank[i]);
                 if (fillProgress >= removalThreshold)
                 {
-                    // Fill is a mask: black is literal off, while every survivor continues through
-                    // the unchanged Angles render path below with no tint, dim, or hue modulation.
-                    buffer[i] = Color.black;
-                    continue;
+                    if (revealStarballStars && starballRevealedStarPalettePosition[i] >= 0f)
+                    {
+                        // All five cached Star members take the same palette coordinate and full
+                        // value below, so the revealed core reads as one solid shape while the
+                        // ordinary Angles hue sweep and palette transition continue through it.
+                        renderSolidStar = true;
+                    }
+                    else
+                    {
+                        // Literal off removes the whole Stars/Lotusballs motif and only the thin
+                        // border of a Starball; the first five packed Star Tiles continue below.
+                        buffer[i] = Color.black;
+                        continue;
+                    }
                 }
             }
 
@@ -993,11 +1052,19 @@ public class Angles : EffectBase
                     1f,
                     clamp: true)
                 : 1f;
-            float value = lit.Lerp(SyncSettings.DarkFloor, shade);
+            float value = renderSolidStar
+                ? 1f
+                : lit.Lerp(SyncSettings.DarkFloor, shade);
 
             // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
             // three-second fade while cyclic sampling joins the last entry back to the first.
-            float palettePosition = Mathf.Repeat(angle, 1f);
+            float palettePosition = renderSolidStar
+                ? Mathf.Repeat(
+                    starballRevealedStarPalettePosition[i] +
+                    huePhase +
+                    SyncSettings.StarballStarHueOffset,
+                    1f)
+                : Mathf.Repeat(angle, 1f);
             Color paletteColor = frameCurrentPalette.ReadCyclic(
                 palettePosition,
                 doblend: true);
@@ -1013,7 +1080,7 @@ public class Angles : EffectBase
             }
 
             // Keep shading and the dormant Drop value as their separate post-palette stage; the
-            // temporary pre-Drop and Drop gates remain isolated from the Fill mask.
+            // temporary pre-Drop and Drop gates remain isolated from the Fill transformation.
             buffer[i] = new Color(
                 paletteColor.r * value,
                 paletteColor.g * value,
@@ -1084,13 +1151,13 @@ public sealed class AnglesSyncSettings
     /// </summary>
     public PaletteConditioning PaletteConditioning;
 
-    /// <summary>Selects which allocation-free Shape List supplies the Fill's whole-motif removal units.</summary>
+    /// <summary>Selects which allocation-free Shape List supplies the Fill's outer-to-inner motif events.</summary>
     public enum FillUnitKind
     {
         /// <summary>Lotusball units; the authored default and the only selectable list whose 489 member Tiles cover most of the current wall.</summary>
         Lotusballs,
 
-        /// <summary>Starball units; 32 ten-Tile compound motifs produce a lighter Fill mask.</summary>
+        /// <summary>Starball units; each ten-Tile compound motif sheds its five-Tile border to reveal one solid Star.</summary>
         Starballs,
 
         /// <summary>Star units; 45 five-Tile closed fat-rhomb cycles produce the lightest Fill mask.</summary>
@@ -1128,8 +1195,14 @@ public sealed class AnglesSyncSettings
     /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space.</summary>
     [Range(0.0001f, 1f)] public float BeatFrontSoftness;
 
-    /// <summary>Shape List whose groups are removed as whole units during a Fill.</summary>
+    /// <summary>Shape List whose groups transform as outer-to-inner units during a Fill.</summary>
     public FillUnitKind FillUnit;
+
+    /// <summary>
+    /// Palette-cycle rotation for the solid five-Tile Stars revealed by a Starball Fill. Each Star's
+    /// cached wall angle supplies its stable base colour; this live offset rotates all Stars together.
+    /// </summary>
+    [Range(0f, 1f)] public float StarballStarHueOffset;
 
     /// <summary>Width of the dormant pre-Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
     [Range(0.0001f, 1f)] public float FrontSoftness;
@@ -1172,8 +1245,8 @@ public sealed class AnglesSyncSettings
 
     /// <summary>
     /// Copies every Angles Sync Setting from another value, including independent palette
-    /// conditioning, the Low-gated beat phase front, Shape List Fill mask, three Energy-tier sweep
-    /// rates, and directional-shading depth.
+    /// conditioning, the Low-gated beat phase front, Shape List Fill behavior and revealed-Star hue
+    /// offset, three Energy-tier sweep rates, and directional-shading depth.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -1190,6 +1263,7 @@ public sealed class AnglesSyncSettings
         BeatFrontAxisDegrees = source.BeatFrontAxisDegrees;
         BeatFrontSoftness = source.BeatFrontSoftness;
         FillUnit = source.FillUnit;
+        StarballStarHueOffset = source.StarballStarHueOffset;
         FrontSoftness = source.FrontSoftness;
         CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;

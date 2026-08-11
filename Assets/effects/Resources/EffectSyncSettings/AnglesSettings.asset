@@ -29,17 +29,12 @@ MonoBehaviour:
     BeatFrontAxisDegrees: 0
     BeatFrontSoftness: 0.12
     FillUnit: 1
-    FillEdgeNoise: 0.12
     FrontSoftness: 0.12
     CompressionReleaseRate: 2
     DropBeats: 3
     DarkFloor: 0.04
     BlackHold: 0.12
     ClassSnapWidth: 0.08
-    RoutineEnergyOne: 1
-    RoutineEnergyTwo: 0
-    RoutineEnergyThree: 1
-    RoutineEnergyFour: 0
     EnergyRestingLevel: 0.5
     SweepCyclesPerBeatLow: 0.06
     SweepCyclesPerBeatMid: 0.12
@@ -50,8 +45,3 @@ MonoBehaviour:
       LowRail: 0
       HighRail: 1
     EnergySmoothing: 2
-    RhythmHueOffset:
-      Min: 0.8
-      Max: 1
-      LowRail: 0
-      HighRail: 1
