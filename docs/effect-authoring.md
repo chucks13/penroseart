@@ -127,11 +127,14 @@ Init()       once after reflection creates the catalog instance
 OnStart()   whenever the effect becomes active
 UpdateTime() called by Controller before Draw()
 OnNewGrid() once when this Effect observes the 16-beat Grid return to one
+OnNewPhrase() once when this Effect observes a new Phrase begin
 Draw()      every active frame
 OnEnd()     not currently called
 ```
 
-`OnNewGrid()` is a base hook on `EffectBase`. `UpdateTime()` compares the current `Grid.Beat` with that Effect's prior observation and calls the hook when the count returns to one. Override it to re-roll a look, switch palette, or acquire a new Waveform in step with the music. An effect nested in a mixer only receives it if the mixer calls the child's `UpdateTime()`.
+`OnNewGrid()` and `OnNewPhrase()` are base hooks on `EffectBase`, both raised from `UpdateTime()` by comparing a captured value with that Effect's prior observation. `OnNewGrid()` fires when `Grid.Beat` returns to one. `OnNewPhrase()` fires when `Phrase.BeatsRemaining` returns to `Phrase.LengthBeats`, which is the phrase's first beat; the remaining count is the test rather than `Phrase.Name`, because consecutive phrases may share a name. Override either to re-roll a look, switch palette, or acquire a new Waveform in step with the music. An effect nested in a mixer only receives them if the mixer calls the child's `UpdateTime()`.
+
+The two boundaries are not independent. The Grid is phrase-relative, so a phrase boundary is expected to restart it and an Effect overriding both should expect both on the same frame at a phrase start. Standalone Mode carries no Phrase, so `OnNewPhrase()` never fires there — an Effect that moves work onto the Phrase keeps a Standalone cadence on `OnNewGrid()`. Pairing them lets one Effect run two rates: `Tunnel` changes palette on every Grid and re-rolls its shape only on the Phrase.
 
 Use `Init()` for reusable setup that depends on `Controller.Instance`, `penrose`, or `tiles` existing.
 
@@ -344,7 +347,7 @@ One envelope can drive several visual results (scroll **and** zoom) so the gestu
 
 ### Keep artistic policy in the Performer
 
-BeatManager and Waveforms provide shared musical facts, Edges, Stock Envelopes, and acquisition tools. The concrete Effect or Transition owns how those inputs affect color, motion, timing, fallback, and local state. Do not add automatic acquisition, replacement, or response policy to an authoring base. The existing `EffectBase.UpdateTime()` → `OnNewGrid()` hook is a narrow shared seam for the captured Grid wrap Edge; overriding it remains a concrete Effect decision.
+BeatManager and Waveforms provide shared musical facts, Edges, Stock Envelopes, and acquisition tools. The concrete Effect or Transition owns how those inputs affect color, motion, timing, fallback, and local state. Do not add automatic acquisition, replacement, or response policy to an authoring base. The existing `EffectBase.UpdateTime()` → `OnNewGrid()` and `OnNewPhrase()` hooks are narrow shared seams for the captured Grid wrap and Phrase start Edges; overriding either remains a concrete Effect decision.
 
 A Mixer is still one Effect to the rest of the runtime. It privately owns its child Effects and can directly set their public artistic state, including sharing a held Waveform or assigning `waveforms.None`; it does not publish child policy as a second runtime system.
 

@@ -20,6 +20,7 @@ public abstract class EffectBase
     public float effectTime;
     public float effectDelta;
     private int? previousGridBeat;
+    private int? previousPhraseBeatsRemaining;
     [HideInInspector]
     // public int sortIndex;
 
@@ -106,8 +107,13 @@ public abstract class EffectBase
 
     /// <summary>
     /// Advances the effect's local clock from Unity's current frame delta, slowed for an approaching
-    /// Drop when <see cref="DropSlowdownBeats"/> asks for it.
+    /// Drop when <see cref="DropSlowdownBeats"/> asks for it, then raises the structural boundary
+    /// hooks this effect observed on the way in.
     /// </summary>
+    /// <remarks>
+    /// The Grid is phrase-relative, so a phrase boundary is expected to restart it: an effect that
+    /// overrides both hooks should expect them on the same frame at a phrase start.
+    /// </remarks>
     public void UpdateTime()
     {
         effectDelta = Time.deltaTime;
@@ -129,6 +135,18 @@ public abstract class EffectBase
             OnNewGrid();
         }
         previousGridBeat = gridBeat;
+
+        // A phrase counts down to its own length, so its first beat is the frame the remaining count
+        // returns to the full length. Name is not the test: consecutive phrases may share one.
+        var phraseBeatsRemaining = beatManager.Phrase.BeatsRemaining;
+        if (phraseBeatsRemaining is { } remaining
+            && remaining == beatManager.Phrase.LengthBeats
+            && previousPhraseBeatsRemaining is { } previousRemaining
+            && previousRemaining != remaining)
+        {
+            OnNewPhrase();
+        }
+        previousPhraseBeatsRemaining = phraseBeatsRemaining;
     }
 
     /// <summary>
@@ -152,6 +170,13 @@ public abstract class EffectBase
     /// Called when this effect observes the timing-grid beat return to one after another placed beat.
     /// </summary>
     protected virtual void OnNewGrid() { }
+
+    /// <summary>
+    /// Called when this effect observes a new Phrase begin. Standalone Mode carries no Phrase, so
+    /// this never fires there and an Effect that re-rolls here keeps its Standalone cadence on
+    /// <see cref="OnNewGrid"/>.
+    /// </summary>
+    protected virtual void OnNewPhrase() { }
 
     /// <summary>
     /// Per-activation setup called every time Controller or a mixer turns this effect on. The base

@@ -252,8 +252,8 @@ public class Tunnel : EffectBase
 
     /// <summary>
     /// Re-reads the saved Sync Settings so a live wall edit reaches the next frame. It is separate
-    /// from <see cref="Reroll"/> because Synced Mode keeps one Roll for the whole activation while
-    /// still following every settings change.
+    /// from <see cref="Reroll"/> because the Synced Grid follows every settings change without
+    /// re-rolling anything, and the Synced Phrase re-rolls only the shape.
     /// </summary>
     private void ResolveSyncSettings()
     {
@@ -267,8 +267,9 @@ public class Tunnel : EffectBase
     /// speed. Reusing <see cref="RerollShape"/> draws the scroll speed after the radial mix instead of
     /// between the two shape values. That does not disturb the locked Standalone look — the three are
     /// independent uniform draws from an unseeded stream, so reordering changes no distribution and
-    /// there is no reproducible sequence to preserve. Synced Mode rolls once per activation, so the
-    /// Grid no longer calls this; <see cref="OnNewGrid"/> owns that decision.
+    /// there is no reproducible sequence to preserve. Only Standalone Mode calls this after
+    /// <see cref="OnStart"/>: a Synced tunnel takes its scroll rate from the Energy-selected
+    /// Duration, so it re-rolls the shape alone, on the Phrase.
     /// </summary>
     private void Reroll()
     {
@@ -299,9 +300,9 @@ public class Tunnel : EffectBase
     /// <summary>
     /// Re-resolves Sync Settings on every Grid so live wall tuning keeps taking effect, then turns
     /// the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it always
-    /// has. A Synced tunnel holds one Roll for the whole activation — its cadence already follows the
-    /// music through Energy and Duration, so a Grid re-roll would only interrupt that reading, and
-    /// colour is what turns over on the Grid instead.
+    /// has. Colour is what the Grid turns over in Synced Mode — the shape moves on the slower Phrase
+    /// instead, so a cadence already following the music through Energy and Duration is not
+    /// interrupted every sixteen beats.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -314,6 +315,20 @@ public class Tunnel : EffectBase
         {
             Reroll();
         }
+    }
+
+    /// <summary>
+    /// Turns the tunnel's shape over on each new Phrase, the slowest structural boundary the wire
+    /// carries, so the shape changes where the music changes section. It re-resolves Sync Settings
+    /// first rather than relying on <see cref="OnNewGrid"/> having run this frame: the Grid is
+    /// phrase-relative and is expected to restart here, but the shape Roll should follow live wall
+    /// tuning whether or not it does. Standalone Mode never reaches this hook and keeps its Grid
+    /// re-roll.
+    /// </summary>
+    protected override void OnNewPhrase()
+    {
+        ResolveSyncSettings();
+        RerollShape();
     }
 
     /// <summary>Reserved deactivation hook. Controller does not currently call this.</summary>
