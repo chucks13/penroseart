@@ -96,6 +96,80 @@ public class LayoutData
         public int[] starballs;
         public int[] mirror2;
         public int[] mirror10;
+
+        /// <summary>Creates an allocation-free reader over one packed Shape List array.</summary>
+        /// <param name="packed">The packed group and tile data to read.</param>
+        /// <returns>A value-type reader that decodes groups on demand.</returns>
+        public Reader Read(int[] packed)
+        {
+            return new Reader(packed);
+        }
+
+        /// <summary>Allocation-free access to the groups stored in one packed Shape List array.</summary>
+        public readonly struct Reader
+        {
+            /// <summary>The packed group pointers, tile counts, and tile indexes supplied by the layout.</summary>
+            private readonly int[] packed;
+
+            /// <summary>Creates a reader over one packed Shape List array without copying its contents.</summary>
+            /// <param name="packed">The packed group and tile data to read.</param>
+            public Reader(int[] packed)
+            {
+                this.packed = packed;
+            }
+
+            /// <summary>The number of groups declared at the start of the packed array.</summary>
+            public int GroupCount => packed[0];
+
+            /// <summary>Decodes one group pointer into an allocation-free tile view.</summary>
+            /// <param name="groupIndex">The zero-based group index.</param>
+            /// <returns>The selected group's ordered tile indexes.</returns>
+            public Group GetGroup(int groupIndex)
+            {
+                int pointer = packed[groupIndex + 1];
+                return new Group(packed, pointer + 1, packed[pointer]);
+            }
+        }
+
+        /// <summary>Allocation-free access to one decoded Shape List group's ordered tile indexes.</summary>
+        public readonly struct Group
+        {
+            /// <summary>The packed Shape List array that owns this group.</summary>
+            private readonly int[] packed;
+
+            /// <summary>The absolute packed-array position of this group's first tile index.</summary>
+            private readonly int start;
+
+            /// <summary>Creates a group view over a decoded payload range without copying its tile indexes.</summary>
+            /// <param name="packed">The packed Shape List array that owns the group.</param>
+            /// <param name="start">The absolute packed-array position of the first tile index.</param>
+            /// <param name="tileCount">The number of ordered tile indexes in the group.</param>
+            public Group(int[] packed, int start, int tileCount)
+            {
+                this.packed = packed;
+                this.start = start;
+                TileCount = tileCount;
+            }
+
+            /// <summary>The number of ordered tile indexes in this group.</summary>
+            public int TileCount { get; }
+
+            /// <summary>Reads one direct tile index from this group.</summary>
+            /// <param name="tileIndex">The zero-based position inside the group.</param>
+            /// <value>The tile index stored at the requested group position.</value>
+            public int this[int tileIndex] => packed[start + tileIndex];
+
+            /// <summary>
+            /// Returns a tile's absolute position in the packed source array so legacy hue arithmetic keeps its exact phase
+            /// without making Effects reconstruct group record boundaries.
+            /// </summary>
+            /// <param name="tileIndex">The zero-based position inside the group.</param>
+            /// <returns>The absolute packed-array position occupied by that tile index.</returns>
+            public int PackedIndex(int tileIndex)
+            {
+                return start + tileIndex;
+            }
+        }
     }
 
     /// <summary>

@@ -117,8 +117,8 @@ public class AnimateLoops : EffectBase
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
 
-    /// <summary>The packed loop shape groups supplied by the Penrose layout.</summary>
-    private int[] shape;
+    /// <summary>Allocation-free access to the packed loop groups supplied by the Penrose layout.</summary>
+    private LayoutData.ShapeList.Reader shape;
 
     /// <summary>The active packed-shape name shown in the debug readout.</summary>
     private string shapeName;
@@ -145,7 +145,7 @@ public class AnimateLoops : EffectBase
             typeof(AnimateLoops),
             SyncDefaults);
         waveform = waveforms.Random();
-        shape = penrose.Layout.shapes.loops;
+        shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
         int distortionModeMin = beatManager.IsSynced
             ? SyncSettings.DistortionModeMinInclusive
             : standaloneSettings.DistortionModeMinInclusive;
@@ -154,8 +154,8 @@ public class AnimateLoops : EffectBase
             : standaloneSettings.DistortionModeMaxExclusive;
         distortionMode = Random.Range(distortionModeMin, distortionModeMax);
         shapeName = "loops";
-        colors = new Color[shape[0]];
-        for (int i = 0; i < shape[0]; i++)
+        colors = new Color[shape.GroupCount];
+        for (int i = 0; i < shape.GroupCount; i++)
         {
             colors[i] = Color.HSVToRGB(Random.value, Random.value, 1f);
         }
@@ -198,7 +198,7 @@ public class AnimateLoops : EffectBase
             sampleTime = effectTime + (SyncSettings.TimeWarpSeconds * rhythm);
 
         float beatOffset = sampleTime - effectTime;
-        colors[Random.Range(0, shape[0])] = Color.HSVToRGB(Random.value, Random.value, 1f);
+        colors[Random.Range(0, shape.GroupCount)] = Color.HSVToRGB(Random.value, Random.value, 1f);
         background += effectDelta * backgroundHueRate;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
@@ -212,20 +212,18 @@ public class AnimateLoops : EffectBase
             }
             buffer[i] = color;
         }
-        for (int i = 0; i < shape[0]; i++)
+        for (int i = 0; i < shape.GroupCount; i++)
         {
-            int list = shape[i + 1];
-            int start = list + 1;
-            int end = start + shape[list];
+            LayoutData.ShapeList.Group group = shape.GetGroup(i);
             Color.RGBToHSV(colors[i], out float hue, out float sat, out float bri);
             if (beatManager.Fill.Active)
                 sat = Random.value < fillBlackAndWhiteProbability ? 0f : 1f; // B&W on fills
 
-            for (int j = start; j < end; j++)
+            for (int j = 0; j < group.TileCount; j++)
             {
-                int idx = shape[j];
+                int idx = group[j];
                 buffer[idx] = Color.HSVToRGB(
-                    (hue + loopTileHueStep * j + beatOffset * timeWarpHueScale + hueShift) % 1f,
+                    (hue + loopTileHueStep * group.PackedIndex(j) + beatOffset * timeWarpHueScale + hueShift) % 1f,
                     sat,
                     bri);
             }

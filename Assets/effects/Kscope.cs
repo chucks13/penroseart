@@ -115,7 +115,10 @@ public class Kscope : ScreenEffect
         public string fname;
     };
     string fname = "";
-    private int[] mirrorList;
+
+    /// <summary>The allocation-free reader over the mirror groups rolled for this activation.</summary>
+    private LayoutData.ShapeList.Reader mirrorList;
+
     private int[] centerline;
     List<picture> colorTex = new List<picture>();
     List<picture> monoTex = new List<picture>();
@@ -255,7 +258,7 @@ public class Kscope : ScreenEffect
     }
 
     /// <summary>
-    /// Called once when effect is created
+    /// Builds the eight-tile center patch list before the selected mirror groups are drawn.
     /// </summary>
     private void fixCenterLineInit()
     {
@@ -265,15 +268,14 @@ public class Kscope : ScreenEffect
         {
             if (y == centerline.Length)
                 break;
-            int groupcount = mirrorList[0];     // how many copies
+            int groupcount = mirrorList.GroupCount;     // how many copies
             bool used = false;                                    // Draw the mirrors
             for (int i = 0; i < groupcount; i++)
             {
-                int groupPointer = mirrorList[1 + i];
-                int groupsize = mirrorList[groupPointer];
-                for (int j = 0; j < groupsize; j++)
+                LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
+                for (int j = 0; j < group.TileCount; j++)
                 {
-                    if (mirrorList[groupPointer + 1 + j] == x)
+                    if (group[j] == x)
                     {
                         used = true;
                         break;
@@ -357,7 +359,8 @@ public class Kscope : ScreenEffect
         // Unfiltered acquisition spans the complete curated Waveform Pool, so there is no authored subrange.
         waveform = waveforms.Random();
         // This coin flip spans both available mirror layouts, so its complete selector domain stays inline.
-        mirrorList = Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10;
+        mirrorList = penrose.Layout.shapes.Read(
+            Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10);
         fixCenterLineInit();
 
         int colorCount = colorTex.Count;
@@ -420,6 +423,7 @@ public class Kscope : ScreenEffect
      * x2=cosßx1-sinßy1
      * y2=sinßx1+cosßy1
      */
+    /// <summary>Samples the moving texture into the wall buffer, then mirrors every selected Shape List group.</summary>
     public override void Draw()
     {
         if (Input.GetKeyDown(KeyCode.Return))
@@ -485,16 +489,15 @@ public class Kscope : ScreenEffect
         }
         // convert the 2D Matrix buffer to a tile buffer
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
-        int groupcount = mirrorList[0];     // how many copies
+        int groupcount = mirrorList.GroupCount;     // how many copies
         // fix missing verticle column
         fixCenterLineDraw();
         // Draw the mirrors
         for (int i = 0; i < groupcount; i++)
         {
-            int groupPointer = mirrorList[1 + i];
-            int groupsize = mirrorList[groupPointer];
-            Color tileColor = buffer[mirrorList[groupPointer + 1]];
-            for (int j = 0; j < groupsize; j++)
+            LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
+            Color tileColor = buffer[group[0]];
+            for (int j = 0; j < group.TileCount; j++)
             {
                 if (beatManager.Fill.Active)            // blak and whire on fill
                 {
@@ -505,7 +508,7 @@ public class Kscope : ScreenEffect
                     s = 0f;
                     tileColor = Color.HSVToRGB(h, s, v_col);
                 }
-                buffer[mirrorList[groupPointer + 1 + j]] = tileColor;
+                buffer[group[j]] = tileColor;
             }
         }
     }

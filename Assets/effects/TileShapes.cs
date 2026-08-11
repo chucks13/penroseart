@@ -126,8 +126,8 @@ public class TileShapes : EffectBase
     /// <summary>The fixed hue rolled for this activation when random-color mode is off.</summary>
     private float hue;
 
-    /// <summary>The packed Penrose shape list rolled for this activation.</summary>
-    private int[] shape;
+    /// <summary>The allocation-free Penrose Shape List reader rolled for this activation.</summary>
+    private LayoutData.ShapeList.Reader shape;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -182,31 +182,31 @@ public class TileShapes : EffectBase
         switch (Random.Range(shapeSelectorMin, shapeSelectorMaxExclusive))
         {
             case 0:
-                shape = penrose.Layout.shapes.lines0;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines0);
                 break;
             case 1:
-                shape = penrose.Layout.shapes.lines1;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines1);
                 break;
             case 2:
-                shape = penrose.Layout.shapes.lines2;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines2);
                 break;
             case 3:
-                shape = penrose.Layout.shapes.lines3;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines3);
                 break;
             case 4:
-                shape = penrose.Layout.shapes.lines4;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines4);
                 break;
             case 5:
-                shape = penrose.Layout.shapes.loops;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
                 break;
             case 6:
-                shape = penrose.Layout.shapes.lotusballs;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lotusballs);
                 break;
             case 7:
-                shape = penrose.Layout.shapes.starballs;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.starballs);
                 break;
             case 8:
-                shape = penrose.Layout.shapes.stars;
+                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.stars);
                 break;
         }
 
@@ -259,13 +259,11 @@ public class TileShapes : EffectBase
                 color = Color.HSVToRGB(Mathf.Lerp(randomHueMin, randomHueMax, Random.value), 1f, 1f)* beatBrightness;
 
 
-            int loop = Random.Range(0, shape[0]);
-            int list = shape[1 + loop];
-            int start = list + 1;
-            int end = start + shape[list];
-            for (int j = start; j < end; j++)
+            int loop = Random.Range(0, shape.GroupCount);
+            LayoutData.ShapeList.Group group = shape.GetGroup(loop);
+            for (int j = 0; j < group.TileCount; j++)
             {
-                int idx = shape[j];
+                int idx = group[j];
                 if (idx >= 0)
                     buffer[idx] = color;
             }

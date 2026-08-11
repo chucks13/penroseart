@@ -273,32 +273,33 @@ public class Petals : ScreenEffect
 
         for (int shapeIdx = 0; shapeIdx < 3; shapeIdx++)
         {
-            int[] shape = penrose.Layout.shapes.loops;
+            LayoutData.ShapeList.Reader shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
             switch (shapeIdx)
             {
                 case 0:
-                    shape = penrose.Layout.shapes.loops;
+                    shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
                     break;
                 case 1:
-                    shape = penrose.Layout.shapes.starballs;
+                    shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.starballs);
                     break;
                 case 2:
-                    shape = penrose.Layout.shapes.stars;
+                    shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.stars);
                     break;
             }
-            for (int i = 0; i < shape[0]; i++)
+            for (int i = 0; i < shape.GroupCount; i++)
             {
                 int thisBit = 1 << 1;
-                int list = shape[i + 1];
-                int start = list + 1;
-                int end = start + shape[list];
+                LayoutData.ShapeList.Group group = shape.GetGroup(i);
                 Color.RGBToHSV(colors[shapeIdx], out float hue, out float sat, out float bri);
                 if ((thisBit & bitMask) == 0)
                     hue += hueShift;
-                for (int j = start; j < end; j++)
+                for (int j = 0; j < group.TileCount; j++)
                 {
-                    int idx = shape[j];
-                    Color color = Color.HSVToRGB((hue + tileHueSpread * j) % 1f, sat, bri) * beatBrightness;
+                    int idx = group[j];
+                    Color color = Color.HSVToRGB(
+                        (hue + tileHueSpread * group.PackedIndex(j)) % 1f,
+                        sat,
+                        bri) * beatBrightness;
                     if (beatManager.Fill.Active)
                     {
                         if (Random.value < sparkleChance)
