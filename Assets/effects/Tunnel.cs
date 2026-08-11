@@ -3,14 +3,17 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Renders a direct tile-space tunnel from Tile radius, Tile-index phase, and time, using that cyclic
-/// coordinate to sample an Effect-conditioned copy of the shared animated palette.
+/// Renders a direct tile-space tunnel from Tile radius, Tile-index phase, and mode-specific cycle
+/// phase, using that cyclic coordinate to sample an Effect-conditioned copy of the shared animated
+/// palette.
 /// </summary>
 /// <remarks>
 /// FILL: the tunnel rushes (scroll accelerates) and compresses its radial bands as the Fill builds,
 /// both driven by <see cref="BeatManager.Fill"/> Build.
 /// DROP: <see cref="BeatManager.Drop"/> Decay drives a hard reverse warp plus deep radial-band
 /// compression over two bars.
+/// SYNC: current Energy selects an authored Duration, and the served Duration pulse supplies the
+/// deliberately pumping colour-cycle phase.
 /// </remarks>
 [EffectSyncSettings(typeof(TunnelSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(TunnelStandaloneSettingsAsset))]
@@ -71,11 +74,14 @@ public class Tunnel : EffectBase
     /// <summary>Authored maximum per-Tile index phase step for the current Synced look.</summary>
     private const float SyncTileIndexPhaseStepMax = 0.003f;
 
-    /// <summary>Authored minimum scroll speed for the current Synced look.</summary>
-    private const float SyncScrollSpeedMin = 0.1f;
+    /// <summary>Authored Duration of one full colour cycle at Low Energy.</summary>
+    private const Duration SyncLowCycleDuration = Duration.Whole;
 
-    /// <summary>Authored maximum scroll speed for the current Synced look.</summary>
-    private const float SyncScrollSpeedMax = 1f;
+    /// <summary>Authored Duration of one full colour cycle at Mid Energy.</summary>
+    private const Duration SyncMidCycleDuration = Duration.Half;
+
+    /// <summary>Authored Duration of one full colour cycle at High Energy.</summary>
+    private const Duration SyncHighCycleDuration = Duration.Quarter;
 
     /// <summary>Authored minimum radial mix for the current Synced look.</summary>
     private const float SyncRadialMixMin = 0.01f;
@@ -144,10 +150,16 @@ public class Tunnel : EffectBase
     /// </summary>
     private const float SyncDropRingCompression = 6f;
 
-    /// <summary>The tunnel intensifies its scroll and ring compression for a Fill, and slams a reverse
-    /// warp for a Drop; its driving motion suits Mid/High-energy sections.</summary>
+    /// <summary>
+    /// The tunnel handles Fill and Drop, and its authored whole-, half-, and quarter-note cycle
+    /// cadences make its motion suit Low-, Mid-, and High-energy sections respectively.
+    /// </summary>
     public override Repertoire Repertoire =>
-        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesFill |
+        Repertoire.HandlesDrop |
+        Repertoire.EnergyLow |
+        Repertoire.EnergyMid |
+        Repertoire.EnergyHigh;
 
     /// <summary>
     /// Resolves a fresh copy so saved Standalone Settings can never mutate Tunnel's authored
@@ -168,7 +180,9 @@ public class Tunnel : EffectBase
     public static TunnelSyncSettings SyncDefaults => new()
     {
         TileIndexPhaseStep = new FloatRange(SyncTileIndexPhaseStepMin, SyncTileIndexPhaseStepMax),
-        ScrollSpeed = new FloatRange(SyncScrollSpeedMin, SyncScrollSpeedMax),
+        LowCycleDuration = SyncLowCycleDuration,
+        MidCycleDuration = SyncMidCycleDuration,
+        HighCycleDuration = SyncHighCycleDuration,
         RadialMix = new FloatRange(SyncRadialMixMin, SyncRadialMixMax),
         CenterScale = SyncCenterScale,
         PaletteConditioning = SyncPaletteConditioning,
@@ -197,8 +211,17 @@ public class Tunnel : EffectBase
     /// <summary>Current randomly rolled per-Tile index phase step.</summary>
     private float tileIndexPhaseStep;
 
-    /// <summary>Current randomly rolled base scroll speed.</summary>
+    /// <summary>Current Standalone ScrollSpeed Roll, unused by the Synced colour cycle.</summary>
     private float scrollSpeed;
+
+    /// <summary>Most recently sampled Synced colour-cycle phase.</summary>
+    private float previousSyncedCyclePhase;
+
+    /// <summary>Duration used for the most recently sampled Synced colour-cycle phase.</summary>
+    private Duration previousSyncedCycleDuration;
+
+    /// <summary>Whether a prior phase from the current Synced Duration is available for differencing.</summary>
+    private bool hasPreviousSyncedCyclePhase;
 
     /// <summary>Current randomly rolled radial mix.</summary>
     private float radialMix;
@@ -232,12 +255,15 @@ public class Tunnel : EffectBase
         fillScroll = 0f;
         dropEnv = 0f;
         dropScroll = 0f;
+        hasPreviousSyncedCyclePhase = false;
         buffer.Clear();
     }
 
     /// <summary>
     /// Resolves Sync Settings, selects the active mode's Roll ranges, then re-rolls Tile-index phase,
-    /// scroll speed, radial phase, and Waveform in the original random order.
+    /// the Standalone scroll speed, radial phase, and Waveform in the original random order. Keeping
+    /// the Standalone ScrollSpeed Roll in its original slot preserves the locked Standalone look while
+    /// Synced Mode takes its cycle cadence from a Duration.
     /// </summary>
     private void Reroll()
     {
@@ -249,9 +275,7 @@ public class Tunnel : EffectBase
         FloatRange tileIndexPhaseStepRange = isSynced
             ? SyncSettings.TileIndexPhaseStep
             : standaloneSettings.TileIndexPhaseStep;
-        FloatRange scrollSpeedRange = isSynced
-            ? SyncSettings.ScrollSpeed
-            : standaloneSettings.ScrollSpeed;
+        FloatRange scrollSpeedRange = standaloneSettings.ScrollSpeed;
         FloatRange radialMixRange = isSynced
             ? SyncSettings.RadialMix
             : standaloneSettings.RadialMix;
@@ -271,38 +295,80 @@ public class Tunnel : EffectBase
     /// <summary>Reserved deactivation hook. Controller does not currently call this.</summary>
     public override void OnEnd() { }
 
-    /// <summary>Returns the current rolls and live musical envelopes for the Controller debug display.</summary>
+    /// <summary>Returns the current rolls, cycle cadence, and live musical envelopes for the Controller debug display.</summary>
     public override string DebugText()
     {
         return $"Tile index phase step: {tileIndexPhaseStep}\n" +
-        $"Scroll speed: {scrollSpeed}\n" +
+        (beatManager.IsSynced
+            ? $"Cycle duration: {CurrentCycleDuration()}\n"
+            : $"Scroll speed: {scrollSpeed}\n") +
         $"Radial mix: {radialMix}\n" +
         (fillEnv > 0.01f ? $"FILL {fillEnv:0.00}\n" : "") +
         (dropEnv > 0.01f ? $"DROP {dropEnv:0.00}\n" : "");
     }
 
     /// <summary>
-    /// Reads Fill Build and integrates its configured extra scroll rate. Integrating the rush
-    /// preserves tunnel phase; scaling absolute <c>effectTime</c> would make the bands jump when a
-    /// Fill starts or ends.
+    /// Selects the authored cycle Duration for the Data Surface's current Energy. An unavailable
+    /// Energy uses the Low setting, keeping the Synced tunnel at its calmest authored cadence.
     /// </summary>
-    private void UpdateFillEnvelope()
+    /// <returns>The Sync Setting selected for the current Energy tier.</returns>
+    private Duration CurrentCycleDuration()
+    {
+        return beatManager.Energy.Level switch
+        {
+            Energy.High => SyncSettings.HighCycleDuration,
+            Energy.Mid => SyncSettings.MidCycleDuration,
+            _ => SyncSettings.LowCycleDuration,
+        };
+    }
+
+    /// <summary>
+    /// Samples the served Duration pulse as an increasing colour-cycle phase and reports its forward
+    /// advance. A Duration change starts a fresh sample so the mapping discontinuity is not multiplied
+    /// into the Fill or Drop response.
+    /// </summary>
+    /// <param name="duration">The authored Duration selected for the current Energy tier.</param>
+    /// <param name="cyclePhaseAdvance">Forward phase movement since the previous comparable sample.</param>
+    /// <returns>The increasing zero-to-one phase served by the selected Duration pulse.</returns>
+    private float SampleSyncedCyclePhase(Duration duration, out float cyclePhaseAdvance)
+    {
+        float cyclePhase = 1f - beatManager.Pulses.Every(duration);
+        cyclePhaseAdvance = hasPreviousSyncedCyclePhase && duration == previousSyncedCycleDuration
+            ? Mathf.Repeat(cyclePhase - previousSyncedCyclePhase, 1f)
+            : 0f;
+
+        previousSyncedCyclePhase = cyclePhase;
+        previousSyncedCycleDuration = duration;
+        hasPreviousSyncedCyclePhase = true;
+        return cyclePhase;
+    }
+
+    /// <summary>
+    /// Reads Fill Build and integrates its configured extra multiple of the current colour-cycle
+    /// advance. Integrating the rush preserves tunnel phase; scaling absolute <c>effectTime</c> would
+    /// make the bands jump when a Fill starts or ends. Following the served phase advance keeps the
+    /// Fill proportional through both stalls and surges of the pumping motion.
+    /// </summary>
+    /// <param name="cyclePhaseAdvance">Forward movement of the served colour-cycle phase this frame.</param>
+    private void UpdateFillEnvelope(float cyclePhaseAdvance)
     {
         fillEnv = beatManager.Fill.In.Build();
         fillScroll = Mathf.Repeat(
-            fillScroll + (scrollSpeed * SyncSettings.FillScrollRateMultiplier * fillEnv * effectDelta),
+            fillScroll + (cyclePhaseAdvance * SyncSettings.FillScrollRateMultiplier * fillEnv),
             1f);
     }
 
     /// <summary>
-    /// Reads Drop Decay and integrates reverse scroll. The reverse phase intentionally opposes the
-    /// Fill rush, so the Drop reads as an inward warp instead of a stronger version of the build.
+    /// Reads Drop Decay and integrates a reverse multiple of the current colour-cycle advance. The
+    /// reverse phase intentionally opposes the Fill rush, so the Drop reads as an inward warp instead
+    /// of a stronger version of the build, while retaining the pumping cycle's instantaneous rate.
     /// </summary>
-    private void UpdateDropSlam()
+    /// <param name="cyclePhaseAdvance">Forward movement of the served colour-cycle phase this frame.</param>
+    private void UpdateDropSlam(float cyclePhaseAdvance)
     {
         dropEnv = beatManager.Drop.In.Decay(SyncSettings.DropBars * 4);
         dropScroll = Mathf.Repeat(
-            dropScroll - (scrollSpeed * SyncSettings.DropReverseScrollRateMultiplier * dropEnv * effectDelta),
+            dropScroll - (cyclePhaseAdvance * SyncSettings.DropReverseScrollRateMultiplier * dropEnv),
             1f);
     }
 
@@ -310,11 +376,24 @@ public class Tunnel : EffectBase
     public override void Draw()
     {
         bool isSynced = beatManager.IsSynced;
+        float cyclePhase;
+        float cyclePhaseAdvance;
+        if (isSynced)
+        {
+            Duration cycleDuration = CurrentCycleDuration();
+            cyclePhase = SampleSyncedCyclePhase(cycleDuration, out cyclePhaseAdvance);
+        }
+        else
+        {
+            cyclePhase = effectTime * scrollSpeed;
+            cyclePhaseAdvance = 0f;
+            hasPreviousSyncedCyclePhase = false;
+        }
 
         // The Waveform scales tunnel brightness without changing the tunnel phase.
         float beatBrightness = waveform.Lerp(SyncSettings.BeatBrightnessFloor, 1f);
-        UpdateFillEnvelope();
-        UpdateDropSlam();
+        UpdateFillEnvelope(cyclePhaseAdvance);
+        UpdateDropSlam(cyclePhaseAdvance);
 
         float ringCompression = 1f +
             (SyncSettings.FillRingCompression * fillEnv) +
@@ -333,8 +412,8 @@ public class Tunnel : EffectBase
         for (int i = 0; i < Penrose.Total; i++)
         {
             float radialPhase = tiles[i].radius * radialPhaseScale;
-            float phase = (i * tileIndexPhaseStep + (effectTime * scrollSpeed) + fillScroll +
-                dropScroll + radialPhase) % 1f;
+            float phase = (i * tileIndexPhaseStep + cyclePhase + fillScroll + dropScroll +
+                radialPhase) % 1f;
             buffer[i] = conditionedPalette.ReadCyclic(phase, doblend: true) * beatBrightness;
         }
     }
@@ -403,8 +482,14 @@ public sealed class TunnelSyncSettings
     /// <summary>Per-Roll range for the phase step applied between consecutive Tile indexes.</summary>
     public FloatRange TileIndexPhaseStep;
 
-    /// <summary>Per-Roll base scroll-speed range.</summary>
-    public FloatRange ScrollSpeed;
+    /// <summary>Duration of one full colour cycle at Low Energy.</summary>
+    public Duration LowCycleDuration;
+
+    /// <summary>Duration of one full colour cycle at Mid Energy.</summary>
+    public Duration MidCycleDuration;
+
+    /// <summary>Duration of one full colour cycle at High Energy.</summary>
+    public Duration HighCycleDuration;
 
     /// <summary>Per-Roll range mixing scaled Tile radius into the tunnel phase.</summary>
     public FloatRange RadialMix;
@@ -455,11 +540,9 @@ public sealed class TunnelSyncSettings
             source.TileIndexPhaseStep.Max,
             source.TileIndexPhaseStep.LowRail,
             source.TileIndexPhaseStep.HighRail);
-        ScrollSpeed = new FloatRange(
-            source.ScrollSpeed.Min,
-            source.ScrollSpeed.Max,
-            source.ScrollSpeed.LowRail,
-            source.ScrollSpeed.HighRail);
+        LowCycleDuration = source.LowCycleDuration;
+        MidCycleDuration = source.MidCycleDuration;
+        HighCycleDuration = source.HighCycleDuration;
         RadialMix = new FloatRange(
             source.RadialMix.Min,
             source.RadialMix.Max,

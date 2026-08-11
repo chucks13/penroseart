@@ -196,7 +196,9 @@ public sealed class EffectSyncSettingsTests
             typeof(Tunnel),
             TempAssetFolder);
         asset.Settings.TileIndexPhaseStep = new FloatRange(17f, 18f, 16f, 19f);
-        asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.LowCycleDuration = Duration.Sixteenth;
+        asset.Settings.MidCycleDuration = Duration.Eighth;
+        asset.Settings.HighCycleDuration = Duration.Whole;
         asset.Settings.RadialMix = new FloatRange(23f, 24f, 22f, 25f);
         asset.Settings.CenterScale = 26f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
@@ -226,10 +228,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.TileIndexPhaseStep.Max, Is.EqualTo(defaults.TileIndexPhaseStep.Max));
         Assert.That(asset.Settings.TileIndexPhaseStep.LowRail, Is.EqualTo(defaults.TileIndexPhaseStep.LowRail));
         Assert.That(asset.Settings.TileIndexPhaseStep.HighRail, Is.EqualTo(defaults.TileIndexPhaseStep.HighRail));
-        Assert.That(asset.Settings.ScrollSpeed.Min, Is.EqualTo(defaults.ScrollSpeed.Min));
-        Assert.That(asset.Settings.ScrollSpeed.Max, Is.EqualTo(defaults.ScrollSpeed.Max));
-        Assert.That(asset.Settings.ScrollSpeed.LowRail, Is.EqualTo(defaults.ScrollSpeed.LowRail));
-        Assert.That(asset.Settings.ScrollSpeed.HighRail, Is.EqualTo(defaults.ScrollSpeed.HighRail));
+        Assert.That(asset.Settings.LowCycleDuration, Is.EqualTo(defaults.LowCycleDuration));
+        Assert.That(asset.Settings.MidCycleDuration, Is.EqualTo(defaults.MidCycleDuration));
+        Assert.That(asset.Settings.HighCycleDuration, Is.EqualTo(defaults.HighCycleDuration));
         Assert.That(asset.Settings.RadialMix.Min, Is.EqualTo(defaults.RadialMix.Min));
         Assert.That(asset.Settings.RadialMix.Max, Is.EqualTo(defaults.RadialMix.Max));
         Assert.That(asset.Settings.RadialMix.LowRail, Is.EqualTo(defaults.RadialMix.LowRail));
