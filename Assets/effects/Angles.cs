@@ -30,7 +30,7 @@ using UnityEngine;
 ///
 /// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
-/// Standalone holds the authored baseline depth. In Synced Mode the existing smoothed
+/// Standalone holds the authored baseline depth. In Synced Mode the smoothed
 /// <see cref="BeatManager.Energy"/> ladder deepens that shading and selects one of three independently
 /// authored hue-cycle-per-beat sweep rates, which the measured live beat interval converts to velocity.
 /// A missing nullable Energy rests at Mid; the beat interval itself is always present while the wall reads
@@ -42,7 +42,8 @@ using UnityEngine;
 /// never changes brightness, saturation, palette conditioning, or the continuous hue sweep beneath it.
 /// Below the Low gate the offset is cleared and Angles follows its existing rendering path exactly.
 ///
-/// Standalone's sweep speed re-rolls on every new Grid, preserving the authored no-music motion.
+/// Standalone's sweep speed takes a new random value on every Grid, preserving the authored
+/// no-music motion.
 /// Synced sweep velocity never reads that roll. The shading light direction is seeded once per
 /// activation instead: re-rolling it at a Grid caused a visible flash.
 /// </remarks>
@@ -87,16 +88,16 @@ public class Angles : EffectBase
         HueRedistribution = 1f,
     };
 
-    /// <summary>Minimum sweep speed re-rolled on activation and each new Grid.</summary>
+    /// <summary>Minimum sweep speed randomized on activation and each new Grid.</summary>
     private const float StandaloneSpeedMin = 0.15f;
 
-    /// <summary>Maximum sweep speed re-rolled on activation and each new Grid.</summary>
+    /// <summary>Maximum sweep speed randomized on activation and each new Grid.</summary>
     private const float StandaloneSpeedMax = 0.4f;
 
     /// <summary>
     /// Standing directional-shading depth: the dimmest orientation drops this far below full (so its
     /// floor is 1 - this). This is the depth the wall shows whenever Energy is not driving shading, and
-    /// it doubles as the Low-energy endpoint, so the look tuned here is where the later musical
+    /// it doubles as the Low-energy endpoint, so the look tuned here is where the Synced musical
     /// response starts rather than something Energy overrides. Set on the wall.
     /// </summary>
     private const float StandaloneShadeDepthLow = 0.5f;
@@ -211,7 +212,7 @@ public class Angles : EffectBase
     /// <summary>
     /// Standing directional-shading depth, mirroring Standalone so the two modes carry the same look
     /// until a musical reason parts them: the dimmest orientation drops this far below full, and the
-    /// value doubles as the Low-energy endpoint the later Energy lerp starts from. Set on the wall.
+    /// value doubles as the Low-energy endpoint the Energy lerp starts from. Set on the wall.
     /// </summary>
     private const float SyncShadeDepthLow = 0.5f;
 
@@ -384,10 +385,11 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Standalone sweep speed rolled for this activation or Grid. Synced per-frame velocity never
-    /// reads it; retaining the roll preserves Standalone motion and the shared Random draw order.
+    /// Standalone hue-sweep rate in cycles per second, randomized for this activation or Grid.
+    /// Synced per-frame velocity never reads it; retaining the value preserves Standalone motion
+    /// and the shared Random draw order.
     /// </summary>
-    private float speed;
+    private float standaloneSweepCyclesPerSecond;
 
     /// <summary>Bounded hue-wheel position integrated from the active mode's sweep rate, seeded from the activation's randomized <see cref="EffectBase.effectTime"/> phase so rate, tempo, Energy, and mode changes alter velocity without teleporting position.</summary>
     private float huePhase;
@@ -433,8 +435,11 @@ public class Angles : EffectBase
     /// </remarks>
     private float[][] ribbonPositionByFamily;
 
-    /// <summary>Per tile, its folded orientation in [0,1) (tileangle mod 180° / 180°), cached once. Drives the directional shading; wraps smoothly so same-facing tiles (0° ≡ 180°) shade identically.</summary>
-    private float[] orient01;
+    /// <summary>
+    /// Per Tile, its folded orientation in [0,1) (tileangle mod 180° / 180°), cached once. It drives
+    /// directional shading and wraps smoothly so same-facing Tiles (0° ≡ 180°) shade identically.
+    /// </summary>
+    private float[] normalizedOrientationByTile;
 
     /// <summary>
     /// Bounded palette-cycle phase integrated only while the active Drop response is visible. The
@@ -474,11 +479,14 @@ public class Angles : EffectBase
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
+    /// <returns>The current Energy, sweep, shading, Fill, and Drop response readout.</returns>
     public override string DebugText()
     {
         bool isSynced = beatManager.IsSynced;
         float cyclesPerBeat = isSynced ? ResolveSyncedSweepCyclesPerBeat() : 0f;
-        float cyclesPerSecond = isSynced ? ResolveSyncedSweepCyclesPerSecond() : speed;
+        float cyclesPerSecond = isSynced
+            ? ResolveSyncedSweepCyclesPerSecond()
+            : standaloneSweepCyclesPerSecond;
         float shadeDepth = isSynced
             ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
             : standaloneSettings.ShadeDepth.Min;
@@ -521,7 +529,7 @@ public class Angles : EffectBase
         rawHue = new float[total];
         tileCenters = new Vector2[total];
         ribbonPositionByFamily = new float[RibbonFamilyCount][];
-        orient01 = new float[total];
+        normalizedOrientationByTile = new float[total];
 
         for (int i = 0; i < total; i++)
         {
@@ -549,7 +557,7 @@ public class Angles : EffectBase
             // Folded orientation in [0,1): tileangle mod 180° normalized. Directional shading reads
             // it continuously so same-facing Tiles remain one brightness family.
             float folded = Mathf.Repeat(tiles[i].tileangle, 180f) / 180f;
-            orient01[i] = folded;
+            normalizedOrientationByTile[i] = folded;
         }
     }
 
@@ -787,9 +795,9 @@ public class Angles : EffectBase
         RefreshConditionedPalettes(beatManager.IsSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning);
-        Reroll();
+        RandomizeStandaloneSweepRate();
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
-        huePhase = Mathf.Repeat(effectTime * speed, 1f);
+        huePhase = Mathf.Repeat(effectTime * standaloneSweepCyclesPerSecond, 1f);
         previousBeatGateOpen = false;
         beatFrontActive = false;
         beatPhaseFrom = 0f;
@@ -807,22 +815,24 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Re-rolls the held Standalone sweep speed so the no-music look takes a fresh character every
+    /// Randomizes the held Standalone sweep speed so the no-music look takes a fresh character every
     /// 16 beats. Synced sweep velocity never reads the random speed. The shading light direction is
     /// intentionally seeded only in <see cref="OnStart"/> because changing it on a Grid caused a
     /// visible flash.
     /// </summary>
-    private void Reroll()
+    private void RandomizeStandaloneSweepRate()
     {
-        speed = Random.Range(standaloneSettings.Speed.Min, standaloneSettings.Speed.Max);
+        standaloneSweepCyclesPerSecond = Random.Range(
+            standaloneSettings.Speed.Min,
+            standaloneSettings.Speed.Max);
     }
 
     /// <summary>
-    /// On each new Grid the held Standalone sweep speed takes a fresh roll.
+    /// On each new Grid the held Standalone sweep speed takes a fresh random value.
     /// </summary>
     protected override void OnNewGrid()
     {
-        Reroll();
+        RandomizeStandaloneSweepRate();
     }
 
     /// <summary>
@@ -841,7 +851,7 @@ public class Angles : EffectBase
     /// <param name="previousNext">The previous conditioned next endpoint.</param>
     /// <param name="conditioning">The unchanged live controls used by every reusable endpoint.</param>
     /// <returns>A reusable or newly conditioned Angles-owned palette, or null for a null endpoint.</returns>
-    private static GPalette ReuseOrCondition(
+    private static GPalette ReuseOrConditionPalette(
         GPalette source,
         GPalette previousCurrentSource,
         GPalette previousCurrent,
@@ -889,7 +899,7 @@ public class Angles : EffectBase
 
         GPalette current = settingsChanged
             ? currentSource.Conditioned(conditioning)
-            : ReuseOrCondition(
+            : ReuseOrConditionPalette(
                 currentSource,
                 previousCurrentSource,
                 previousCurrent,
@@ -900,7 +910,7 @@ public class Angles : EffectBase
             ? current
             : settingsChanged
                 ? nextSource?.Conditioned(conditioning)
-                : ReuseOrCondition(
+                : ReuseOrConditionPalette(
                     nextSource,
                     previousCurrentSource,
                     previousCurrent,
@@ -920,6 +930,11 @@ public class Angles : EffectBase
     /// <summary>
     /// Exponentially eases a value toward a target at a frame-rate-independent rate.
     /// </summary>
+    /// <param name="current">The value at the start of the frame.</param>
+    /// <param name="target">The value being approached.</param>
+    /// <param name="rate">The exponential response rate per second.</param>
+    /// <param name="deltaTime">The current frame duration in seconds.</param>
+    /// <returns>The eased value for the current frame.</returns>
     private static float SmoothToward(float current, float target, float rate, float deltaTime) =>
         (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
@@ -965,7 +980,7 @@ public class Angles : EffectBase
     /// follows the live track without reconstructing musical time or affecting Standalone Mode.
     /// </summary>
     /// <param name="fillProgress">The active Fill's zero-to-one build value.</param>
-    private void UpdateFillRotation(float fillProgress)
+    private void UpdateFillRotationPhase(float fillProgress)
     {
         if (fillProgress <= 0f)
         {
@@ -996,7 +1011,7 @@ public class Angles : EffectBase
     /// tuning stays locked to the live track without reconstructing musical time locally.
     /// </summary>
     /// <param name="envelope">The active Drop's zero-to-one decay value.</param>
-    private void UpdateRibbonFlow(float envelope)
+    private void UpdateRibbonFlowPhase(float envelope)
     {
         if (envelope <= 0f)
         {
@@ -1039,6 +1054,7 @@ public class Angles : EffectBase
     /// ladder position. Mid is a real authored value, never an arithmetic midpoint imposed by Low
     /// and High.
     /// </summary>
+    /// <returns>The current Synced hue-sweep rate in palette cycles per beat.</returns>
     private float ResolveSyncedSweepCyclesPerBeat()
     {
         return smoothedEnergy <= EnergyLadderMid
@@ -1056,6 +1072,7 @@ public class Angles : EffectBase
     /// Converts the smoothed hue-cycles-per-beat response to cycles per second with the Data
     /// Surface's measured live beat interval, so a faster track sweeps faster at the same tier.
     /// </summary>
+    /// <returns>The current Synced hue-sweep rate in palette cycles per second.</returns>
     /// <remarks>
     /// The interval is typed nullable, but it cannot be absent here. <c>IsSynced</c> is true only
     /// while the wire reports a real beat-in-bar, which means a live player holds a beat position,
@@ -1094,7 +1111,8 @@ public class Angles : EffectBase
     /// Reads the Low band through the authored Levels form, so the wall can pick whether the gate
     /// tracks the kick instantly, follows it smoothly, or holds on after it fades.
     /// </summary>
-    private float ResolveBeatGateLow() => SyncSettings.BeatLowLevelReading switch
+    /// <returns>The current Low-band strength from the selected Levels form.</returns>
+    private float ReadBeatGateLowLevel() => SyncSettings.BeatLowLevelReading switch
     {
         AnglesSyncSettings.BeatLevelReading.Smoothed => beatManager.Levels.Smoothed.Low,
         AnglesSyncSettings.BeatLevelReading.Peak => beatManager.Levels.Peak.Low,
@@ -1116,7 +1134,7 @@ public class Angles : EffectBase
     {
         int beatInBar = beatManager.Timing.BeatInBar.Value;
         bool beatGateOpen = beatManager.Beats.OnBeat(beatInBar);
-        bool engaged = ResolveBeatGateLow() > SyncSettings.BeatLowThreshold;
+        bool engaged = ReadBeatGateLowLevel() > SyncSettings.BeatLowThreshold;
 
         if (!engaged)
         {
@@ -1174,7 +1192,7 @@ public class Angles : EffectBase
             : standaloneSettings.ShadeDepth.Min;
         float sweepCyclesPerSecond = isSynced
             ? ResolveSyncedSweepCyclesPerSecond()
-            : speed;
+            : standaloneSweepCyclesPerSecond;
         huePhase = Mathf.Repeat(huePhase + (sweepCyclesPerSecond * effectDelta), 1f);
 
         PaletteConditioning paletteConditioning = isSynced
@@ -1187,12 +1205,12 @@ public class Angles : EffectBase
         float paletteTransitionProgress = APalette.TransitionProgress;
 
         float fillProgress = beatManager.Fill.In.Build();
-        FillTileFields[] frameFillFields = null;
+        FillTileFields[] activeFillFields = null;
         float fillUnitEnvelopeWidth = 0f;
         float fillContourStrength = SyncSettings.FillContourStrength;
         if (fillProgress > 0f)
         {
-            frameFillFields = SyncSettings.FillUnit switch
+            activeFillFields = SyncSettings.FillUnit switch
             {
                 AnglesSyncSettings.FillUnitKind.Stars => starFillFields,
                 AnglesSyncSettings.FillUnitKind.Starballs => starballFillFields,
@@ -1200,9 +1218,9 @@ public class Angles : EffectBase
             };
             fillUnitEnvelopeWidth = ResolveFillUnitEnvelopeWidth();
         }
-        UpdateFillRotation(fillProgress);
+        UpdateFillRotationPhase(fillProgress);
         dropResponseEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropBeats);
-        UpdateRibbonFlow(dropResponseEnvelope);
+        UpdateRibbonFlowPhase(dropResponseEnvelope);
         int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropResponseEnvelope);
         // Directional shading is a standing part of both looks. Standalone holds its authored
         // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
@@ -1235,11 +1253,11 @@ public class Angles : EffectBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            float angle = (rawHue[i] * spread) + huePhase;
+            float hueCoordinate = (rawHue[i] * spread) + huePhase;
             float appliedBeatPhase = 0f;
             if (beatMovementEngaged)
             {
-                float beatPhase = beatPhaseTo;
+                float tileBeatPhase = beatPhaseTo;
                 if (beatFrontSweeping)
                 {
                     float projection = Vector2.Dot(tileCenters[i], beatFrontAxis);
@@ -1253,14 +1271,14 @@ public class Angles : EffectBase
                         0f,
                         1f,
                         clamp: true);
-                    beatPhase = beatPhaseFrom + (latchedBeatPhaseStep * phaseMix);
+                    tileBeatPhase = beatPhaseFrom + (latchedBeatPhaseStep * phaseMix);
                 }
 
                 // The soft edge interpolates phase before the one normal palette sample below. It
                 // therefore selects only real Angles colours rather than blending, tinting, or
                 // dimming pixels after palette lookup.
-                angle += beatPhase;
-                appliedBeatPhase = beatPhase;
+                hueCoordinate += tileBeatPhase;
+                appliedBeatPhase = tileBeatPhase;
             }
 
             // Directional shading: same-facing tiles (0° ≡ 180°) shade identically, giving the angle
@@ -1269,23 +1287,25 @@ public class Angles : EffectBase
             // lightPhase is seeded once per activation and then holds, so the lit direction stays put
             // while huePhase sweeps colour through it — a fixed light is what lets the rhombs read as
             // lit solids; a turning one would just add motion competing with the hue drift.
-            float align = 0.5f + (0.5f * Mathf.Cos((orient01[i] * Mathf.PI * 2f) - lightPhase));
-            float shade = align.Lerp(1f - shadeDepth, 1f);
+            float lightAlignment = 0.5f +
+                (0.5f * Mathf.Cos(
+                    (normalizedOrientationByTile[i] * Mathf.PI * 2f) - lightPhase));
+            float directionalShade = lightAlignment.Lerp(1f - shadeDepth, 1f);
 
             // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
             // three-second fade while cyclic sampling joins the last entry back to the first.
-            float palettePosition = Mathf.Repeat(angle, 1f);
+            float palettePosition = Mathf.Repeat(hueCoordinate, 1f);
 
             // How completely this Tile belongs to a lit motif, and therefore how far its value is
             // carried to full below. A motif reads as one shape only when it shares every channel
-            // that varies across the background: align is per-Tile orientation and the Tiles of one
+            // that varies across the background: lightAlignment is per-Tile orientation and the Tiles of one
             // motif sit in several different orientation classes, so a hue-uniform part still renders
-            // at several brightnesses and dissolves into the wall. Sharing value is what made the
-            // earlier Starball reveal read as a solid shape.
+            // at several brightnesses and dissolves into the wall. Sharing value makes each Starball
+            // part read as a solid shape.
             float fillSolidity = 0f;
-            if (frameFillFields != null)
+            if (activeFillFields != null)
             {
-                FillTileFields fillTile = frameFillFields[i];
+                FillTileFields fillTile = activeFillFields[i];
                 bool isMotifMember = fillTile.UnitRank >= 0f;
                 float fillRank = isMotifMember ? fillTile.UnitRank : fillTile.ContourRank;
                 if (fillRank >= 0f && (isMotifMember || fillContourStrength > 0f))
@@ -1368,11 +1388,11 @@ public class Angles : EffectBase
             // palette coordinate's geometric source and never value, so ribbons stay lit solids. The
             // Fill also carries value to full across a lit motif, on the same envelope that mixes its
             // hue, so the shape rises out of the shading rather than popping past it.
-            float litShade = fillSolidity.Lerp(shade, 1f);
+            float tileBrightness = fillSolidity.Lerp(directionalShade, 1f);
             buffer[i] = new Color(
-                paletteColor.r * litShade,
-                paletteColor.g * litShade,
-                paletteColor.b * litShade,
+                paletteColor.r * tileBrightness,
+                paletteColor.g * tileBrightness,
+                paletteColor.b * tileBrightness,
                 paletteColor.a);
         }
     }
