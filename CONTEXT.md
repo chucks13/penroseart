@@ -42,6 +42,18 @@ _Avoid_: a Tile that only touches at a corner; a Tile that is merely nearby in t
 A named collection of Tile groups that traces repeated geometric motifs or symmetry groups across the wall.
 _Avoid_: a Buffer; assuming every Shape List group is a closed path or has the same number of Tiles.
 
+**Motif**:
+One Shape List group considered as a single figure on the wall — a Star, a Starball, a Lotusball, a Line Ribbon. The word names the figure a viewer sees, whether or not anything is currently lighting it.
+_Avoid_: the Shape List itself, which is the whole collection; assuming a Motif is closed, or that every Motif in one Shape List holds the same number of Tiles.
+
+**Part**:
+A subdivision of a Motif whose Tiles an Effect treats as one region — a Starball's five-Tile Star core and its five-Tile surround are two Parts. A Motif with no internal division, such as a Star, is a single Part.
+_Avoid_: a Tile; a Shape List group; assuming every Motif has more than one Part.
+
+**Contour**:
+The Tiles that border a Motif without belonging to it, lit so the Motif reads as a shape with an edge. A Tile that belongs to any Motif is never that Motif's Contour, and where two Motifs compete for a bordering Tile only one may claim it.
+_Avoid_: an outline drawn in darkness — a Contour is a colour against a colour; the Motif's own Tiles.
+
 **Star**:
 A closed cycle of five neighboring fat Tiles.
 _Avoid_: Starball — that is the larger compound motif around a Star.
@@ -201,7 +213,7 @@ The first LiveOrder entry — the deck whose fader went up most recently, and th
 _Avoid_: debouncing, smoothing, or applying hysteresis to Focus so it "settles"; treating a focus change as an error; following any player other than the Focus.
 
 **Standalone Mode / Synced Mode**:
-The two intentional personalities for rhythm-aware behavior. The dividing line is a single authority — whether a usable musical clock (the running 4-count) is present. **Synced Mode** is active whenever that clock is present; the wall syncs to whatever musical timing the signal currently provides. **Standalone Mode** is the self-running art behavior whenever the clock is absent — no OSC connected at all, or OSC connected but no track playing or yet analysed — and it must look fully intentional on its own. One shared flag — spelled `IsSynced`, its only name — decides this for every consumer so they can never disagree. This is a preference, not a fallback: the wall prefers a live clock and works deliberately without one.
+The two intentional personalities for rhythm-aware behavior. The dividing line is a single authority — whether a usable musical clock (the running 4-count) is present. **Synced Mode** is active whenever that clock is present; the wall syncs to whatever musical timing the signal currently provides. **Standalone Mode** is the self-running art behavior whenever the clock is absent — no OSC connected at all, or OSC connected but no track playing or yet analysed — and it must look fully intentional on its own. One shared flag — spelled `IsSynced`, its only name — decides this for every consumer so they can never disagree. This is a preference, not a fallback: the wall prefers a live clock and works deliberately without one. Every musical fact stands or falls with that clock together: no track playing means no beats, which means no Synced Mode, and therefore no Fill, no Drop, no Energy, no Levels, and no measured beat interval. A consumer that has an active Fill or Drop in hand is already in Synced Mode and every beat-derived value it needs is present — reaching one of them behind such a check needs no further guard.
 _Avoid_: deciding mode from transport connectivity or tempo instead of the running 4-count; multiple consumers each re-deriving the mode; `IsActive` (retired alias of `IsSynced`); effects that freeze, glitch, or go dark when the clock is absent; calling Standalone Mode a "fallback" or "default"; treating missing Track Phase (clock still running) as Standalone Mode.
 
 **Span** (the **Before / In** pair):
