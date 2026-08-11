@@ -263,25 +263,36 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Selects the active mode's Roll ranges and re-rolls Tile-index phase, the Standalone scroll
-    /// speed, and radial phase in the original random order. Keeping the Standalone ScrollSpeed Roll
-    /// in its original slot preserves the locked Standalone look while Synced Mode takes its cycle
-    /// cadence from a Duration. Synced Mode rolls once per activation, so the Grid no longer calls
-    /// this; <see cref="OnNewGrid"/> owns that decision.
+    /// Re-rolls everything a fresh activation needs: the tunnel's shape, then the Standalone scroll
+    /// speed. Reusing <see cref="RerollShape"/> draws the scroll speed after the radial mix instead of
+    /// between the two shape values. That does not disturb the locked Standalone look — the three are
+    /// independent uniform draws from an unseeded stream, so reordering changes no distribution and
+    /// there is no reproducible sequence to preserve. Synced Mode rolls once per activation, so the
+    /// Grid no longer calls this; <see cref="OnNewGrid"/> owns that decision.
     /// </summary>
     private void Reroll()
+    {
+        RerollShape();
+        FloatRange scrollSpeedRange = standaloneSettings.ScrollSpeed;
+        scrollSpeed = Random.Range(scrollSpeedRange.Min, scrollSpeedRange.Max);
+    }
+
+    /// <summary>
+    /// Rolls the tunnel's shape: the phase step between consecutive Tile indexes and the radial mix.
+    /// Together they set band spacing and ring spread, which is what reads on the wall as the shape of
+    /// the tunnel.
+    /// </summary>
+    private void RerollShape()
     {
         bool isSynced = beatManager.IsSynced;
         FloatRange tileIndexPhaseStepRange = isSynced
             ? SyncSettings.TileIndexPhaseStep
             : standaloneSettings.TileIndexPhaseStep;
-        FloatRange scrollSpeedRange = standaloneSettings.ScrollSpeed;
         FloatRange radialMixRange = isSynced
             ? SyncSettings.RadialMix
             : standaloneSettings.RadialMix;
 
         tileIndexPhaseStep = Random.Range(tileIndexPhaseStepRange.Min, tileIndexPhaseStepRange.Max);
-        scrollSpeed = Random.Range(scrollSpeedRange.Min, scrollSpeedRange.Max);
         radialMix = Random.Range(radialMixRange.Min, radialMixRange.Max);
     }
 
