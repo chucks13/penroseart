@@ -183,18 +183,68 @@ child.Draw();
 
 `MixerBase.GetRandomEffect()` avoids returning other mixers, preventing recursive mixer trees.
 
-## Packed Penrose shape arrays
+## Wall geometry available to effects
 
-Several effects use packed shape lists from `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, and `kscope`.
+`EffectBase.Init()` gives every Effect the active `penrose` model and caches its `tiles` array. The runtime loads `Assets/StreamingAssets/penrose_layout.txt`; its `Mesh` coordinates are the source for both the Unity preview mesh and the effect-visible center, position, tile angle, radius, and polar angle. Geometry is therefore part of the Effect interface, not preview-only data.
 
-The common format is:
+### Coordinate system and bounds
+
+Tile centers use **effect-layout units**. The origin is the raw mesh's `(0,0)`. Runtime mesh generation flips the JSON y-axis, so JSON `+y` becomes runtime `-y`; x keeps its sign. In the current layout, center x spans `-19.554..19.554` and center y spans `-8.814..9.529`.
+
+Both angular fields use degrees with zero at `+x` and positive angles counter-clockwise in the runtime coordinate plane. `radius` spans `0.803..20.922` effect-layout units.
+
+`penrose.Bounds` is an effect-layout convenience used by `ScreenEffect`. It is computed from iteratively rounded tile centers plus fixed asymmetric padding, then forced to center zero. It is not computed from mesh vertices and must not be interpreted as a Unity world-space bound. The current value is centered at `(0,0,0)` with size `(50,22,0)`.
+
+### `TileData` fields
+
+Each entry in `tiles` has exactly these nine fields:
+
+| Field | Unit / domain | Meaning |
+| --- | --- | --- |
+| `center` | effect-layout units (`Vector2`) | Exact effect-facing tile center derived from the mesh after the y-axis flip. |
+| `position` | coarse integer position units (`Vector2Int`) | Lossy bucket computed component-wise as `(int)(rawCenter / 100 + 0.5)`. It is not a tile identity: 900 tiles occupy 846 distinct values. |
+| `neighbors` | tile indexes plus unitless edge-class labels | Full-edge adjacency entries. Neighbor counts are `{1:6, 2:50, 3:36, 4:808}` tiles. |
+| `section` | integer identifier `0..17` | Physical build section. Every section has 50 tiles, is connected, and the 18 sections form three spatial rows of six rather than radial wedges. |
+| `edgeAndSeamDistance` | Neighbor steps | Shortest adjacency distance from the union of wall-edge tiles and tiles touching another section. Values/counts are `{0:371, 1:295, 2:182, 3:52}`. |
+| `type` | `0` or `1` | Rhomb Type: `0` is fat (angles near 72/108 degrees, 566 tiles); `1` is thin (near 36/144 degrees, 334 tiles). |
+| `tileangle` | degrees | Directed bearing of the tile's short diagonal. It is not a corner or interior angle. |
+| `radius` | effect-layout units | Distance from the raw mesh origin to `center`. |
+| `angle` | degrees | Polar bearing of `center`. |
+
+`edgeAndSeamDistance` is not a concentric ring: its distance-zero set alone spans radius `0.803..20.922`, the full radial range of the current wall.
+
+Every one of the 3,446 directed neighbor entries has a reciprocal entry and corresponds to a shared mesh edge. `neighbor.type` does not identify which perimeter edge is involved and is not the neighboring tile's Rhomb Type. It is a reciprocal edge-class label: fat-fat edges carry `3`, thin-thin edges carry `2`, and mixed edges carry `4` or `5`. No runtime behavior currently interprets this label.
+
+`GetRandomNeighbor()` makes one uniformly random selection from the existing adjacency entries. It does not retry or filter the selected entry.
+
+### Packed Shape Lists
+
+Several Effects use the eleven packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Every list uses the same encoding:
 
 ```text
-shape[0] = number of tile indexes in this shape
-shape[1..shape[0]] = tile indexes or pointers, depending on the source list
+shape[0]                         = group count N
+shape[1..N]                      = N absolute pointers into this array
+shape[pointer]                   = tile count L for that group
+shape[pointer + 1 .. pointer + L] = L direct tile indexes for that group
 ```
 
-Check the consuming effect before reusing a shape list. Some lists are direct tile lists; others are lists of indexes into another shape collection.
+The first value is the number of groups, not the number of tile indexes. The pointer table is indirect; the payload of each pointed-to group is a direct ordered tile list.
+
+| Shape List | Groups | Observed current-layout property |
+| --- | ---: | --- |
+| `loops` | 69 | Layout motif groups; the list name is unrelated to the musical **Loop**. |
+| `stars` | 45 | Every group is exactly five tiles, forms a closed adjacency cycle, and contains only fat rhombs. |
+| `lines0` | 7 | Line Ribbon family. |
+| `lines1` | 15 | Line Ribbon family. |
+| `lines2` | 17 | Line Ribbon family; see the duplicate-data note below. |
+| `lines3` | 17 | Byte-for-byte identical to `lines2`. |
+| `lines4` | 15 | Line Ribbon family. |
+| `lotusballs` | 49 | Lotusball groups. |
+| `starballs` | 32 | Starball groups. |
+| `mirror2` | 446 | Two-tile mirror groups covering 892 tiles. |
+| `mirror10` | 163 | Variable-size mirror groups that collectively cover all 900 tiles. |
+
+The current `lines2` and `lines3` arrays are byte-for-byte identical, so the data contains four distinct Line Ribbon families rather than five. One `lines2` group repeats tile `466` in consecutive positions; the identical `lines3` data carries the same repetition. These are observed properties of the current layout file, not corrections applied by the runtime.
 
 ## Reacting to musical structure (Fill and Drop)
 

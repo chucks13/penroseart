@@ -49,11 +49,17 @@ internal static class WallDataText
 [Serializable]
 public class LayoutData
 {
-    /// <summary>One adjacency entry: which edge of this tile (<see cref="type"/> 2..5) touches which tile.</summary>
+    /// <summary>One reciprocal full-edge adjacency between this tile and another tile.</summary>
     [Serializable]
     public class Neighbor
     {
+        /// <summary>
+        /// Reciprocal edge-class label: 3 for fat-fat, 2 for thin-thin, and 4 or 5 for mixed-rhomb edges.
+        /// No runtime system currently interprets the label.
+        /// </summary>
         public int type;
+
+        /// <summary>Tile index at the other end of this adjacency.</summary>
         public int tileIdx;
     }
 
@@ -61,14 +67,19 @@ public class LayoutData
     [Serializable]
     public class Tile
     {
-        public int type;            // 0 = thin rhombus, 1 = fat rhombus
-        public int section;         // 0..17 physical build segment
+        /// <summary>Rhomb type: 0 is fat (about 72/108 degrees); 1 is thin (about 36/144 degrees).</summary>
+        public int type;
+
+        /// <summary>Connected 50-tile build section, numbered 0..17 and arranged spatially as three rows of six.</summary>
+        public int section;
+
+        /// <summary>Full-edge adjacencies to neighboring tiles.</summary>
         public Neighbor[] neighbors;
     }
 
     /// <summary>
     /// Named decorative index lists over the 900 tiles, each packed as
-    /// [count, pointer×count, then per shape: (length, tileIdx×length)].
+    /// [group count, pointer×group count, then per group: (tile count, tileIdx×tile count)].
     /// Consumed by shape-tracing effects (TileShapes, ShapeGlitch, Petals, Mirror, …).
     /// </summary>
     [Serializable]
@@ -87,7 +98,10 @@ public class LayoutData
         public int[] mirror10;
     }
 
-    /// <summary>10800 floats = 1800 triangles × 3 vertices × (x,y); tile k owns triangles 2k and 2k+1. Preview mesh only.</summary>
+    /// <summary>
+    /// 10800 raw coordinate floats: 1800 triangles × 3 vertices × (x,y), with tile k owning triangles 2k and 2k+1.
+    /// This is the source geometry for both the Unity preview mesh and effect-visible tile geometry derived by <see cref="Penrose"/>.
+    /// </summary>
     public float[] Mesh;
 
     /// <summary>900 tiles in tile-index order.</summary>
