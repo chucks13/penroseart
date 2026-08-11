@@ -86,25 +86,71 @@ public class LayoutData
     [Serializable]
     public class ShapeList
     {
-        public int[] loops;
-        public int[] stars;
-        public int[] lines0;
-        public int[] lines1;
-        public int[] lines2;
-        public int[] lines3;
-        public int[] lines4;
-        public int[] lotusballs;
-        public int[] starballs;
-        public int[] mirror2;
-        public int[] mirror10;
+        /// <summary>Packed loop group data populated from the layout's <c>loops</c> JSON field.</summary>
+        [SerializeField] private int[] loops;
 
-        /// <summary>Creates an allocation-free reader over one packed Shape List array.</summary>
-        /// <param name="packed">The packed group and tile data to read.</param>
-        /// <returns>A value-type reader that decodes groups on demand.</returns>
-        public Reader Read(int[] packed)
-        {
-            return new Reader(packed);
-        }
+        /// <summary>Packed star group data populated from the layout's <c>stars</c> JSON field.</summary>
+        [SerializeField] private int[] stars;
+
+        /// <summary>Packed first Line Ribbon family populated from the layout's <c>lines0</c> JSON field.</summary>
+        [SerializeField] private int[] lines0;
+
+        /// <summary>Packed second Line Ribbon family populated from the layout's <c>lines1</c> JSON field.</summary>
+        [SerializeField] private int[] lines1;
+
+        /// <summary>Packed third Line Ribbon family populated from the layout's <c>lines2</c> JSON field.</summary>
+        [SerializeField] private int[] lines2;
+
+        /// <summary>Packed fourth Line Ribbon slot populated from the layout's <c>lines3</c> JSON field.</summary>
+        [SerializeField] private int[] lines3;
+
+        /// <summary>Packed fifth Line Ribbon slot populated from the layout's <c>lines4</c> JSON field.</summary>
+        [SerializeField] private int[] lines4;
+
+        /// <summary>Packed Lotusball group data populated from the layout's <c>lotusballs</c> JSON field.</summary>
+        [SerializeField] private int[] lotusballs;
+
+        /// <summary>Packed Starball group data populated from the layout's <c>starballs</c> JSON field.</summary>
+        [SerializeField] private int[] starballs;
+
+        /// <summary>Packed two-tile mirror group data populated from the layout's <c>mirror2</c> JSON field.</summary>
+        [SerializeField] private int[] mirror2;
+
+        /// <summary>Packed variable-size mirror group data populated from the layout's <c>mirror10</c> JSON field.</summary>
+        [SerializeField] private int[] mirror10;
+
+        /// <summary>Allocation-free access to the loop Shape List groups.</summary>
+        public Reader Loops => new(loops);
+
+        /// <summary>Allocation-free access to the star Shape List groups.</summary>
+        public Reader Stars => new(stars);
+
+        /// <summary>Allocation-free access to the first Line Ribbon Shape List groups.</summary>
+        public Reader Lines0 => new(lines0);
+
+        /// <summary>Allocation-free access to the second Line Ribbon Shape List groups.</summary>
+        public Reader Lines1 => new(lines1);
+
+        /// <summary>Allocation-free access to the third Line Ribbon Shape List groups.</summary>
+        public Reader Lines2 => new(lines2);
+
+        /// <summary>Allocation-free access to the fourth Line Ribbon Shape List slot.</summary>
+        public Reader Lines3 => new(lines3);
+
+        /// <summary>Allocation-free access to the fifth Line Ribbon Shape List slot.</summary>
+        public Reader Lines4 => new(lines4);
+
+        /// <summary>Allocation-free access to the Lotusball Shape List groups.</summary>
+        public Reader Lotusballs => new(lotusballs);
+
+        /// <summary>Allocation-free access to the Starball Shape List groups.</summary>
+        public Reader Starballs => new(starballs);
+
+        /// <summary>Allocation-free access to the two-tile mirror Shape List groups.</summary>
+        public Reader Mirror2 => new(mirror2);
+
+        /// <summary>Allocation-free access to the variable-size mirror Shape List groups.</summary>
+        public Reader Mirror10 => new(mirror10);
 
         /// <summary>Allocation-free access to the groups stored in one packed Shape List array.</summary>
         public readonly struct Reader

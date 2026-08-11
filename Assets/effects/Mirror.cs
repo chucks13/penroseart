@@ -138,10 +138,9 @@ public class Mirror : MixerBase
         int mirrorLayoutRollMaxExclusive = beatManager.IsSynced
             ? SyncSettings.MirrorLayoutRollMaxExclusive
             : standaloneSettings.MirrorLayoutRollMaxExclusive;
-        mirrorList = penrose.Layout.shapes.Read(
-            Random.Range(mirrorLayoutRollMinInclusive, mirrorLayoutRollMaxExclusive) == 0
-                ? penrose.Layout.shapes.mirror2
-                : penrose.Layout.shapes.mirror10);
+        mirrorList = Random.Range(mirrorLayoutRollMinInclusive, mirrorLayoutRollMaxExclusive) == 0
+            ? penrose.Layout.shapes.Mirror2
+            : penrose.Layout.shapes.Mirror10;
         fixCenterLineInit();
 
         sourceEffect = GetRandomEffect();

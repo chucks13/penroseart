@@ -334,7 +334,7 @@ public class Lightning : EffectBase
     private void GenerateBolt()
     {
         // this selects the center star tiles
-        LayoutData.ShapeList.Reader stars = penrose.Layout.shapes.Read(penrose.Layout.shapes.stars);
+        LayoutData.ShapeList.Reader stars = penrose.Layout.shapes.Stars;
         LayoutData.ShapeList.Group centerStar = stars.GetGroup(0);
         int rayCount = centerStar.TileCount;
         if (heldRays == null || heldRays.Length != rayCount)

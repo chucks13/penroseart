@@ -273,19 +273,13 @@ public class Petals : ScreenEffect
 
         for (int shapeIdx = 0; shapeIdx < 3; shapeIdx++)
         {
-            LayoutData.ShapeList.Reader shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
-            switch (shapeIdx)
+            LayoutData.ShapeList.Reader shape = shapeIdx switch
             {
-                case 0:
-                    shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
-                    break;
-                case 1:
-                    shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.starballs);
-                    break;
-                case 2:
-                    shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.stars);
-                    break;
-            }
+                0 => penrose.Layout.shapes.Loops,
+                1 => penrose.Layout.shapes.Starballs,
+                2 => penrose.Layout.shapes.Stars,
+                _ => default
+            };
             for (int i = 0; i < shape.GroupCount; i++)
             {
                 int thisBit = 1 << 1;

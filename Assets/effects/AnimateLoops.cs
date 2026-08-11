@@ -145,7 +145,7 @@ public class AnimateLoops : EffectBase
             typeof(AnimateLoops),
             SyncDefaults);
         waveform = waveforms.Random();
-        shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
+        shape = penrose.Layout.shapes.Loops;
         int distortionModeMin = beatManager.IsSynced
             ? SyncSettings.DistortionModeMinInclusive
             : standaloneSettings.DistortionModeMinInclusive;

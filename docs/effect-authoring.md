@@ -219,7 +219,7 @@ Every one of the 3,446 directed neighbor entries has a reciprocal entry and corr
 
 ### Packed Shape Lists
 
-Several Effects use the eleven packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Every list uses the same encoding:
+Several Effects use the eleven packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Each named accessor, such as `penrose.Layout.shapes.Loops`, returns an allocation-free `LayoutData.ShapeList.Reader`; the packed arrays are private serialization details. Every list uses the same encoding:
 
 ```text
 shape[0]                         = group count N
@@ -232,19 +232,19 @@ The first value is the number of groups, not the number of tile indexes. The poi
 
 | Shape List | Groups | Observed current-layout property |
 | --- | ---: | --- |
-| `loops` | 69 | Layout motif groups; the list name is unrelated to the musical **Loop**. |
-| `stars` | 45 | Every group is exactly five tiles, forms a closed adjacency cycle, and contains only fat rhombs. |
-| `lines0` | 7 | Line Ribbon family. |
-| `lines1` | 15 | Line Ribbon family. |
-| `lines2` | 17 | Line Ribbon family; see the duplicate-data note below. |
-| `lines3` | 17 | Byte-for-byte identical to `lines2`. |
-| `lines4` | 15 | Line Ribbon family. |
-| `lotusballs` | 49 | Lotusball groups. |
-| `starballs` | 32 | Starball groups. |
-| `mirror2` | 446 | Two-tile mirror groups covering 892 tiles. |
-| `mirror10` | 163 | Variable-size mirror groups that collectively cover all 900 tiles. |
+| `Loops` | 69 | Layout motif groups; the list name is unrelated to the musical **Loop**. |
+| `Stars` | 45 | Every group is exactly five tiles, forms a closed adjacency cycle, and contains only fat rhombs. |
+| `Lines0` | 7 | Line Ribbon family. |
+| `Lines1` | 15 | Line Ribbon family. |
+| `Lines2` | 17 | Line Ribbon family; see the duplicate-data note below. |
+| `Lines3` | 17 | Byte-for-byte identical to `Lines2`. |
+| `Lines4` | 15 | Line Ribbon family. |
+| `Lotusballs` | 49 | Lotusball groups. |
+| `Starballs` | 32 | Starball groups. |
+| `Mirror2` | 446 | Two-tile mirror groups covering 892 tiles. |
+| `Mirror10` | 163 | Variable-size mirror groups that collectively cover all 900 tiles. |
 
-The current `lines2` and `lines3` arrays are byte-for-byte identical, so the data contains four distinct Line Ribbon families rather than five. One `lines2` group repeats tile `466` in consecutive positions; the identical `lines3` data carries the same repetition. These are observed properties of the current layout file, not corrections applied by the runtime.
+The current `Lines2` and `Lines3` Shape Lists are byte-for-byte identical, so the data contains four distinct Line Ribbon families rather than five. One `Lines2` group repeats tile `466` in consecutive positions; the identical `Lines3` data carries the same repetition. These are observed properties of the current layout file, not corrections applied by the runtime.
 
 ## Reacting to musical structure (Fill and Drop)
 

@@ -182,31 +182,31 @@ public class TileShapes : EffectBase
         switch (Random.Range(shapeSelectorMin, shapeSelectorMaxExclusive))
         {
             case 0:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines0);
+                shape = penrose.Layout.shapes.Lines0;
                 break;
             case 1:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines1);
+                shape = penrose.Layout.shapes.Lines1;
                 break;
             case 2:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines2);
+                shape = penrose.Layout.shapes.Lines2;
                 break;
             case 3:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines3);
+                shape = penrose.Layout.shapes.Lines3;
                 break;
             case 4:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lines4);
+                shape = penrose.Layout.shapes.Lines4;
                 break;
             case 5:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.loops);
+                shape = penrose.Layout.shapes.Loops;
                 break;
             case 6:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.lotusballs);
+                shape = penrose.Layout.shapes.Lotusballs;
                 break;
             case 7:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.starballs);
+                shape = penrose.Layout.shapes.Starballs;
                 break;
             case 8:
-                shape = penrose.Layout.shapes.Read(penrose.Layout.shapes.stars);
+                shape = penrose.Layout.shapes.Stars;
                 break;
         }
 

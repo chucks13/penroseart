@@ -257,9 +257,12 @@ public class Kscope : ScreenEffect
         return $"file {fname} ";
     }
 
-    /// <summary>
-    /// Builds the eight-tile center patch list before the selected mirror groups are drawn.
-    /// </summary>
+    /// <summary>Finds the eight center tiles omitted by mirror2 and builds the patch array that copies them from the source buffer.</summary>
+    /// <remarks>
+    /// The display is known to contain 900 tiles and mirror2 omits eight of them. Without this patch those tiles are never
+    /// copied from the unchanged source buffer, leaving a hole. Mirror10 does not need the patch, but drawing only eight
+    /// extra tiles is why no special layout check is made.
+    /// </remarks>
     private void fixCenterLineInit()
     {
         centerline = new int[8];
@@ -359,8 +362,9 @@ public class Kscope : ScreenEffect
         // Unfiltered acquisition spans the complete curated Waveform Pool, so there is no authored subrange.
         waveform = waveforms.Random();
         // This coin flip spans both available mirror layouts, so its complete selector domain stays inline.
-        mirrorList = penrose.Layout.shapes.Read(
-            Random.Range(0, 2) == 0 ? penrose.Layout.shapes.mirror2 : penrose.Layout.shapes.mirror10);
+        mirrorList = Random.Range(0, 2) == 0
+            ? penrose.Layout.shapes.Mirror2
+            : penrose.Layout.shapes.Mirror10;
         fixCenterLineInit();
 
         int colorCount = colorTex.Count;
