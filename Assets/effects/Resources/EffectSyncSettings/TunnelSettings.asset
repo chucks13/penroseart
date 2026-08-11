@@ -37,11 +37,8 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.001
       DuplicateThreshold: 0
       HueRedistribution: 0
-    WaveformEnergyOne: 0
-    WaveformEnergyTwo: 1
     FillScrollRateMultiplier: 5
     FillRingCompression: 3
-    BeatBrightnessFloor: 0.75
     DropBars: 2
     DropReverseScrollRateMultiplier: 10
     DropRingCompression: 6
