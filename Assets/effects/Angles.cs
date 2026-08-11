@@ -1183,6 +1183,14 @@ public class Angles : EffectBase
             // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
             // three-second fade while cyclic sampling joins the last entry back to the first.
             float palettePosition = Mathf.Repeat(angle, 1f);
+
+            // How completely this Tile belongs to a lit motif, and therefore how far its value is
+            // carried to full below. A motif reads as one shape only when it shares every channel
+            // that varies across the background: align is per-Tile orientation and the Tiles of one
+            // motif sit in several different orientation classes, so a hue-uniform part still renders
+            // at several brightnesses and dissolves into the wall. Sharing value is what made the
+            // earlier Starball reveal read as a solid shape.
+            float fillSolidity = 0f;
             if (frameFillFields != null)
             {
                 FillTileFields fillTile = frameFillFields[i];
@@ -1208,6 +1216,7 @@ public class Angles : EffectBase
                     palettePosition = Mathf.Repeat(
                         palettePosition + (shortestHueDelta * fillUnitEnvelope),
                         1f);
+                    fillSolidity = fillUnitEnvelope;
                 }
             }
 
@@ -1244,12 +1253,15 @@ public class Angles : EffectBase
                     paletteTransitionProgress);
             }
 
-            // Directional shading stays in its ordinary post-palette stage during Fill and Drop.
-            // Both responses change only the palette coordinate's geometric source, never value.
+            // Directional shading stays in its ordinary post-palette stage. The Drop changes only the
+            // palette coordinate's geometric source and never value, so ribbons stay lit solids. The
+            // Fill also carries value to full across a lit motif, on the same envelope that mixes its
+            // hue, so the shape rises out of the shading rather than popping past it.
+            float litShade = fillSolidity.Lerp(shade, 1f);
             buffer[i] = new Color(
-                paletteColor.r * shade,
-                paletteColor.g * shade,
-                paletteColor.b * shade,
+                paletteColor.r * litShade,
+                paletteColor.g * litShade,
+                paletteColor.b * litShade,
                 paletteColor.a);
         }
     }
