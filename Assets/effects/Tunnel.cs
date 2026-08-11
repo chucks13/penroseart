@@ -286,15 +286,20 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Re-resolves Sync Settings on every Grid so live wall tuning keeps taking effect, and re-rolls
-    /// only in Standalone Mode. A Synced tunnel holds one Roll for the whole activation: its cadence
-    /// already follows the music through Energy and Duration, so a Grid re-roll would only interrupt
-    /// that reading.
+    /// Re-resolves Sync Settings on every Grid so live wall tuning keeps taking effect, then turns
+    /// the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it always
+    /// has. A Synced tunnel holds one Roll for the whole activation — its cadence already follows the
+    /// music through Energy and Duration, so a Grid re-roll would only interrupt that reading, and
+    /// colour is what turns over on the Grid instead.
     /// </summary>
     protected override void OnNewGrid()
     {
         ResolveSyncSettings();
-        if (!beatManager.IsSynced)
+        if (beatManager.IsSynced)
+        {
+            APalette.Change();
+        }
+        else
         {
             Reroll();
         }
