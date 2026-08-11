@@ -29,7 +29,9 @@ MonoBehaviour:
     BeatFrontAxisDegrees: 0
     BeatFrontSoftness: 0.12
     FillUnit: 1
-    StarballStarHueOffset: 0.5
+    FillRotationCyclesPerBeat: 1
+    FillPartHueSeparation: 0.5
+    FillUnitEnvelopeWidth: 0.5
     DropBeats: 16
     DropFlowCyclesPerBeatAtImpact: 1
     EnergyRestingLevel: 0.5
