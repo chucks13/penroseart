@@ -13,14 +13,14 @@ using UnityEngine;
 /// derived from the Star's cached wall angle. The Fill snaps clear when it ends so no invented
 /// recovery time crosses into a following Drop.
 ///
-/// PRE-DROP / DROP (preserved behind temporary rebuild flags): one soft-edged wavefront, ordered by
-/// each tile's hue distance from the wall's own mean hue (closest first), compresses the wall toward
-/// that charged mean color. <see cref="DropValues.Before"/> advances the front so a Drop receives
-/// preparation. An active Drop has exclusive priority. At its landing the whole wall holds near-black
-/// while fully compressed, then one Drop release timeline both expands the hues and reignites a
-/// staccato cascade through the tiling's ten orientation classes — the multiples-of-18° directional
-/// families of the underlying pentagrid. Because orientation drives hue here, each class is also a
-/// single hue, so the rainbow and its ten hidden families return together out of the darkness.
+/// DROP: the Data Surface's <see cref="InSpan.Decay(int)"/> opens all four distinct Line Ribbon
+/// families on the landing beat, then drops the three ragged families one at a time until only
+/// <c>lines0</c> remains. A member Tile's ordered position along its ribbon temporarily replaces its
+/// geometric angle as the palette coordinate's source. One shared envelope also slows the current
+/// running along those paths and mixes every remaining ribbon Tile continuously back to its own angle.
+/// The window is authored independently of the wire's Drop length; there is no Before response.
+/// Palette conditioning, saturation, directional shading, and brightness stay on the ordinary Angles
+/// path throughout, so the impact reads as flowing colour rather than a blackout or a crash.
 ///
 /// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
@@ -44,14 +44,6 @@ using UnityEngine;
 [EffectStandaloneSettings(typeof(AnglesStandaloneSettingsAsset))]
 public class Angles : EffectBase
 {
-    // Temporary musical-layer rebuild flags
-
-    /// <summary>Temporary rebuild scaffolding for pre-Drop hue compression; the Fill half has been replaced by Shape List removal and Starball core reveal.</summary>
-    private const bool EnablePreDropHueCompression = false;
-
-    /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
-    private const bool EnableDropBlackoutAndReignition = false;
-
     // Standalone Defaults
 
     /// <summary>
@@ -153,23 +145,19 @@ public class Angles : EffectBase
     /// </summary>
     private const float SyncStarballStarHueOffset = 0f;
 
-    /// <summary>Width, in normalized rank space (0..1), of the pre-Drop hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
-    private const float SyncFrontSoftness = 0.12f;
+    /// <summary>
+    /// Authored Drop response window in beats. Sixteen beats gives the landing one complete nominal
+    /// Grid in which to resolve, regardless of how long the wire's Drop Phrase continues. Tune on the
+    /// DROP readout; this is the existing DropBeats slot with its old preparation/blackout meaning cut.
+    /// </summary>
+    private const int SyncDropBeats = 16;
 
-    /// <summary>Per-second smoothing rate used when pre-Drop hue compression loses its approaching Drop, so abandoned preparation relaxes instead of snapping. Tune on the TENSION readout.</summary>
-    private const float SyncCompressionReleaseRate = 2f;
-
-    /// <summary>Drop window in beats: preparation reaches full hue compression across this many beats before landing, then blackout release and orientation reignition share the same length after it. Kept short so the event reads within a 2-4 beat window.</summary>
-    private const int SyncDropBeats = 3;
-
-    /// <summary>Brightness the wall drops to during the blackout — a floor, not literal off, so it reads as intentional impact rather than a crash. Tune on the readout.</summary>
-    private const float SyncDarkFloor = 0.04f;
-
-    /// <summary>Fraction of the active Drop window held fully black and hue-compressed before release begins — the punctuation of the impact. Tune on the readout.</summary>
-    private const float SyncBlackHold = 0.12f;
-
-    /// <summary>Reignition snap width (in cascade-progress units) for each class: smaller = harder staccato pop as each orientation family lights; larger = a softer roll. Tune on the readout.</summary>
-    private const float SyncClassSnapWidth = 0.08f;
+    /// <summary>
+    /// Line Ribbon current at the landing, in palette cycles per beat. One cycle sends the complete
+    /// conditioned palette down every stored ribbon path during the impact beat; the shared Drop
+    /// envelope slows this continuously to rest. Tune on the DROP readout.
+    /// </summary>
+    private const float SyncDropFlowCyclesPerBeatAtImpact = 1f;
 
     /// <summary>Energy ladder position assumed when <see cref="EnergyValues.Level"/> has no value: 0.5 = Mid, a steady moderate sweep rate and shading depth rather than either endpoint. Tune on the EN readout.</summary>
     private const float SyncEnergyRestingLevel = 0.5f;
@@ -198,8 +186,11 @@ public class Angles : EffectBase
 
     // Runtime mechanism constants
 
-    /// <summary>Number of orientation (tileangle) classes the wall reignites through, one per 18° pentagrid direction. Verified against the 900-tile data: exactly 10 classes of 62-119 tiles each.</summary>
-    private const int OrientationClasses = 10;
+    /// <summary>
+    /// Four distinct Line Ribbon directions exist in the layout: lines0, lines4, lines2, and lines1.
+    /// Lines3 is byte-for-byte identical to lines2 and deliberately contributes no fifth family.
+    /// </summary>
+    private const int RibbonFamilyCount = 4;
 
     /// <summary>The wire-authored On Beat gate occupies the first quarter of its beat interval; this contract duration places the spatial front without locally rebuilding musical timing.</summary>
     private const float BeatTriggerWindowFraction = 0.25f;
@@ -226,12 +217,13 @@ public class Angles : EffectBase
     private const float EnergyLadderMid = 0.5f;
 
     /// <summary>
-    /// Advertises that Angles handles Fill through its Shape List transformations and suits all three Energy tiers
-    /// now that they drive its motion and shading, while withholding Drop capability until the dormant
-    /// pre-Drop/Drop layers are rebuilt.
+    /// Advertises that Angles handles Fill through its Shape List transformations, handles Drop through
+    /// its four-family Line Ribbon flow, and suits all three Energy tiers now that they drive its motion
+    /// and shading.
     /// </summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill |
+        Repertoire.HandlesDrop |
         Repertoire.EnergyLow |
         Repertoire.EnergyMid |
         Repertoire.EnergyHigh;
@@ -256,7 +248,8 @@ public class Angles : EffectBase
     /// <summary>
     /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
     /// conditioning, the Low-gated beat phase front, Shape List Fill behavior and revealed-Star hue
-    /// offset, three Energy-tier sweep rates, and directional-shading depth.
+    /// offset, the authored Drop window and Line Ribbon impact speed, three Energy-tier sweep rates,
+    /// and directional-shading depth.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
@@ -268,12 +261,8 @@ public class Angles : EffectBase
         BeatFrontSoftness = SyncBeatFrontSoftness,
         FillUnit = SyncFillUnit,
         StarballStarHueOffset = SyncStarballStarHueOffset,
-        FrontSoftness = SyncFrontSoftness,
-        CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
-        DarkFloor = SyncDarkFloor,
-        BlackHold = SyncBlackHold,
-        ClassSnapWidth = SyncClassSnapWidth,
+        DropFlowCyclesPerBeatAtImpact = SyncDropFlowCyclesPerBeatAtImpact,
         EnergyRestingLevel = SyncEnergyRestingLevel,
         SweepCyclesPerBeatLow = SyncSweepCyclesPerBeatLow,
         SweepCyclesPerBeatMid = SyncSweepCyclesPerBeatMid,
@@ -337,9 +326,6 @@ public class Angles : EffectBase
     /// <summary>The authored beat phase step captured when the current target latched, so live tuning cannot bend an in-flight front.</summary>
     private float latchedBeatPhaseStep;
 
-    /// <summary>Current pre-Drop tension (0..1) expressed as progress of the hue-compression wavefront toward <see cref="meanHue"/>.</summary>
-    private float hueCompression;
-
     /// <summary>Each tile's raw angle-hue (pre-Spread, pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
     private float[] rawHue;
 
@@ -362,26 +348,31 @@ public class Angles : EffectBase
     /// <summary>Per Tile, its Star group's outer-to-inner radius rank, or -1 when the Tile belongs to no Star.</summary>
     private float[] starFillRingRank;
 
-    /// <summary>Per tile, the shortest signed hue delta (in [-0.5, 0.5)) from <see cref="rawHue"/> toward <see cref="meanHue"/>, cached once for the dormant pre-Drop compression.</summary>
-    private float[] hueDelta;
-
-    /// <summary>Per tile, the cascade-progress point (0..~0.9) at which its orientation class reignites during a Drop — its class index / <see cref="OrientationClasses"/>. Cached once.</summary>
-    private float[] classReveal;
-
-    /// <summary>Per tile, its normalized rank (0..1) by ascending hue-distance from <see cref="meanHue"/>, cached once for the dormant pre-Drop compression. The tile with the closest hue ranks 0 and compresses first.</summary>
+    /// <summary>
+    /// Per Line Ribbon family and Tile, the Tile's normalized stored position along its group, or -1
+    /// when it belongs to no ribbon in that family. Families are ordered cleanest-first as lines0,
+    /// lines4, lines2, lines1 so overlap resolution and density decay share one stable priority.
+    /// </summary>
     /// <remarks>
-    /// This holds the rank alone, not the wavefront envelope value at which the tile's collapse begins.
-    /// <see cref="Draw"/> scales it by the live <see cref="AnglesSyncSettings.FrontSoftness"/> each frame to
-    /// reach that start value, so a Play Mode edit of the soft-edge width moves the whole front coherently
-    /// instead of only its trailing edge.
+    /// Geometry alone is cached. The Drop envelope, active-family count, flow phase, and mix remain
+    /// live per-frame values, so no Sync Setting is baked into this <see cref="Init"/>-time cache.
     /// </remarks>
-    private float[] frontRank;
+    private float[][] ribbonPositionByFamily;
 
     /// <summary>Per tile, its folded orientation in [0,1) (tileangle mod 180° / 180°), cached once. Drives the directional shading; wraps smoothly so same-facing tiles (0° ≡ 180°) shade identically.</summary>
     private float[] orient01;
 
-    /// <summary>Circular mean of every tile's raw angle-hue: the charged color the dormant pre-Drop/Drop choreography compresses toward.</summary>
-    private float meanHue;
+    /// <summary>
+    /// Bounded palette-cycle phase integrated only while the active Drop response is visible. The
+    /// phase holds silently after the authored window and resets at the next activation.
+    /// </summary>
+    private float ribbonFlowPhase;
+
+    /// <summary>
+    /// The frame's single <see cref="InSpan.Decay(int)"/> read, retained for the debug display after
+    /// it has driven density, flow speed, and angle-to-ribbon mix in <see cref="Draw"/>.
+    /// </summary>
+    private float dropResponseEnvelope;
 
     /// <summary>Direction (radians) the shading gradient is "lit" from; seeded once per activation so a Grid boundary cannot flash the bright/shadowed sides of the orientation field.</summary>
     /// <remarks>
@@ -423,9 +414,8 @@ public class Angles : EffectBase
             (beatManager.Fill.Active
                 ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}"
                 : "") +
-            (hueCompression > 0.01f ? $"\nTENSION {hueCompression:0.00}" : "") +
-            (beatManager.Drop.Active
-                ? $"\nDROP {beatManager.Drop.In.Build(SyncSettings.DropBeats):0.00}"
+            (dropResponseEnvelope > 0f
+                ? $"\nDROP {dropResponseEnvelope:0.00}  {ResolveActiveRibbonFamilyCount(dropResponseEnvelope)}/{RibbonFamilyCount}  {SyncSettings.DropFlowCyclesPerBeatAtImpact:0.00} cpb"
                 : "");
     }
 
@@ -439,8 +429,8 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Caches the static per-tile geometry used by the beat phase front, Fill, Drop, and directional
-    /// shading, including one shared palette coordinate for each Starball's revealed Star.
+    /// Caches the static per-Tile geometry used by the beat phase front, Fill, Drop Line Ribbons, and
+    /// directional shading, including one shared palette coordinate for each Starball's revealed Star.
     /// </summary>
     private void PrecomputeTileFields()
     {
@@ -451,22 +441,15 @@ public class Angles : EffectBase
         starballFillRingRank = new float[total];
         starballRevealedStarPalettePosition = new float[total];
         starFillRingRank = new float[total];
-        hueDelta = new float[total];
-        classReveal = new float[total];
-        frontRank = new float[total];
+        ribbonPositionByFamily = new float[RibbonFamilyCount][];
         orient01 = new float[total];
 
-        float sumX = 0f, sumY = 0f;
         for (int i = 0; i < total; i++)
         {
             rawHue[i] = tiles[i].tileangle / 180f;
             tileCenters[i] = tiles[i].center;
             starballRevealedStarPalettePosition[i] = -1f;
-            float radians = rawHue[i] * Mathf.PI * 2f;
-            sumX += Mathf.Cos(radians);
-            sumY += Mathf.Sin(radians);
         }
-        meanHue = Mathf.Repeat(Mathf.Atan2(sumY, sumX) / (Mathf.PI * 2f), 1f);
 
         PrecomputeFillMask(
             penrose.Layout.shapes.Lotusballs,
@@ -496,28 +479,68 @@ public class Angles : EffectBase
             }
         }
 
-        float[] distance = new float[total];
-        int[] order = new int[total];
+        PrecomputeRibbonFamily(0, penrose.Layout.shapes.Lines0, total);
+        PrecomputeRibbonFamily(1, penrose.Layout.shapes.Lines4, total);
+        PrecomputeRibbonFamily(2, penrose.Layout.shapes.Lines2, total);
+        PrecomputeRibbonFamily(3, penrose.Layout.shapes.Lines1, total);
+
         for (int i = 0; i < total; i++)
         {
-            hueDelta[i] = Mathf.Repeat(meanHue - rawHue[i] + 0.5f, 1f) - 0.5f;
-            distance[i] = Mathf.Abs(hueDelta[i]);
-            order[i] = i;
-
-            // Folded orientation in [0,1): tileangle mod 180° normalized. Same field feeds both the Drop
-            // cascade order (snapped to the nearest 18° class) and the continuous directional shading.
+            // Folded orientation in [0,1): tileangle mod 180° normalized. Directional shading reads
+            // it continuously so same-facing Tiles remain one brightness family.
             float folded = Mathf.Repeat(tiles[i].tileangle, 180f) / 180f;
             orient01[i] = folded;
-            int cls = Mathf.RoundToInt(folded * OrientationClasses) % OrientationClasses;
-            classReveal[i] = cls / (float)OrientationClasses;
         }
-        Array.Sort(order, (a, b) => distance[a].CompareTo(distance[b]));
+    }
 
-        for (int rank = 0; rank < total; rank++)
+    /// <summary>
+    /// Caches one Line Ribbon family's membership and normalized ordered position without retaining
+    /// its packed Reader. Consecutive duplicate Tile positions count once, so lines2 group 10's
+    /// repeated Tile 466 neither divides by a false path length nor shifts the visible current.
+    /// </summary>
+    /// <param name="familyIndex">Cleanest-first destination family index.</param>
+    /// <param name="shapeList">The allocation-free Line Ribbon Shape List reader.</param>
+    /// <param name="total">Number of Tiles whose membership array is allocated once.</param>
+    private void PrecomputeRibbonFamily(
+        int familyIndex,
+        LayoutData.ShapeList.Reader shapeList,
+        int total)
+    {
+        var positions = new float[total];
+        for (int tileIndex = 0; tileIndex < positions.Length; tileIndex++)
         {
-            float normalizedRank = total > 1 ? rank / (float)(total - 1) : 0f;
-            frontRank[order[rank]] = normalizedRank;
+            positions[tileIndex] = -1f;
         }
+
+        for (int groupIndex = 0; groupIndex < shapeList.GroupCount; groupIndex++)
+        {
+            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
+            int uniqueTileCount = group.TileCount;
+            for (int pathIndex = 1; pathIndex < group.TileCount; pathIndex++)
+            {
+                if (group[pathIndex] == group[pathIndex - 1])
+                {
+                    uniqueTileCount--;
+                }
+            }
+
+            int uniquePathIndex = 0;
+            for (int pathIndex = 0; pathIndex < group.TileCount; pathIndex++)
+            {
+                int tile = group[pathIndex];
+                if (pathIndex > 0 && tile == group[pathIndex - 1])
+                {
+                    continue;
+                }
+
+                positions[tile] = uniqueTileCount > 1
+                    ? uniquePathIndex / (float)(uniqueTileCount - 1)
+                    : 0f;
+                uniquePathIndex++;
+            }
+        }
+
+        ribbonPositionByFamily[familyIndex] = positions;
     }
 
     /// <summary>
@@ -594,7 +617,8 @@ public class Angles : EffectBase
         beatPhaseFrom = 0f;
         beatPhaseTo = 0f;
         latchedBeatPhaseStep = 0f;
-        hueCompression = 0f;
+        ribbonFlowPhase = 0f;
+        dropResponseEnvelope = 0f;
         // Seeded in both modes because BeatManager recomputes IsSynced from the wire every frame: the
         // wall can go Synced mid-activation, and the ladder must already sit at its resting position
         // when the first Synced frame reads it rather than ramping up from a stale or zero value.
@@ -721,46 +745,56 @@ public class Angles : EffectBase
         (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
     /// <summary>
-    /// Advances the dormant pre-Drop hue-compression tension, with an active Drop owning the
-    /// blackout-to-release timeline exclusively. Fill is intentionally absent because its Shape List
-    /// removal and Starball core reveal are resolved directly in <see cref="Draw"/> and own no
-    /// choreography state.
+    /// Maps the shared Drop envelope to density: all four families at impact, then one fewer at each
+    /// quarter of the authored window, with lines0 remaining until the envelope reaches zero.
     /// </summary>
-    /// <param name="drop">The frame-coherent Drop facts used for both preparation and active release.</param>
-    /// <returns>
-    /// Progress from blackout to full reignition during an active Drop, or one outside a Drop so every
-    /// orientation class remains lit.
-    /// </returns>
-    private float UpdateChoreography(DropValues drop)
+    /// <param name="envelope">The active Drop's zero-to-one decay value.</param>
+    /// <returns>The number of cleanest-first Line Ribbon families still flowing.</returns>
+    private static int ResolveActiveRibbonFamilyCount(float envelope) =>
+        Mathf.CeilToInt(envelope * RibbonFamilyCount);
+
+    /// <summary>
+    /// Integrates the Line Ribbon current at the impact speed scaled by the same envelope that drives
+    /// density and mix. The measured beat interval comes from the Data Surface, so cycles-per-beat
+    /// tuning stays locked to the live track without reconstructing musical time locally.
+    /// </summary>
+    /// <param name="envelope">The active Drop's zero-to-one decay value.</param>
+    private void UpdateRibbonFlow(float envelope)
     {
-        if (!beatManager.IsSynced)
+        if (envelope <= 0f)
         {
-            // Standalone owns a fixed no-music look, so no Synced tension carries across loss of the clock.
-            hueCompression = 0f;
-            return 1f;
+            return;
         }
 
-        if (drop.Active)
+        float cyclesPerSecond =
+            SyncSettings.DropFlowCyclesPerBeatAtImpact *
+            1000f /
+            beatManager.Timing.BeatAverageMilliseconds.Value;
+        ribbonFlowPhase = Mathf.Repeat(
+            ribbonFlowPhase + (cyclesPerSecond * envelope * effectDelta),
+            1f);
+    }
+
+    /// <summary>
+    /// Resolves a Tile's position from the cleanest active family that contains it. This stable
+    /// priority prevents multiply-covered Tiles from switching sources until their current family
+    /// drops out, while still allowing every family to contribute where cleaner families do not.
+    /// </summary>
+    /// <param name="tileIndex">The Tile whose active Line Ribbon membership is requested.</param>
+    /// <param name="activeFamilyCount">Number of cleanest-first families still flowing.</param>
+    /// <returns>Normalized position along the selected ribbon, or -1 when no active family contains the Tile.</returns>
+    private float ResolveRibbonPosition(int tileIndex, int activeFamilyCount)
+    {
+        for (int familyIndex = 0; familyIndex < activeFamilyCount; familyIndex++)
         {
-            float release = drop.In.Build(SyncSettings.DropBeats).Remap(
-                SyncSettings.BlackHold,
-                1f,
-                0f,
-                1f,
-                clamp: true);
-            hueCompression = 1f - release;
-            return release;
+            float position = ribbonPositionByFamily[familyIndex][tileIndex];
+            if (position >= 0f)
+            {
+                return position;
+            }
         }
 
-        float target = drop.Before.Build(SyncSettings.DropBeats);
-        hueCompression = target >= hueCompression
-            ? target
-            : SmoothToward(
-                hueCompression,
-                target,
-                SyncSettings.CompressionReleaseRate,
-                effectDelta);
-        return 1f;
+        return -1f;
     }
 
     /// <summary>
@@ -934,10 +968,9 @@ public class Angles : EffectBase
                     break;
             }
         }
-        var drop = beatManager.Drop;
-        bool inDrop = drop.Active;
-        float dropRelease = UpdateChoreography(drop);
-        float frameHueCompression = EnablePreDropHueCompression ? hueCompression : 0f;
+        dropResponseEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropBeats);
+        UpdateRibbonFlow(dropResponseEnvelope);
+        int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropResponseEnvelope);
         // Directional shading is a standing part of both looks. Standalone holds its authored
         // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
         // toward Max, so the approved static look remains the musical response's starting point.
@@ -967,11 +1000,6 @@ public class Angles : EffectBase
             beatFrontPosition = Mathf.Lerp(-beatFrontSoftness, 1f, beatFrontProgress);
         }
 
-        // Hoisted: the front's soft edge is uniform across the wall, so its rank scale is one
-        // frame-wide value rather than 900 identical products.
-        float frontSoftness = SyncSettings.FrontSoftness;
-        float rankScale = 1f - frontSoftness;
-
         for (int i = 0; i < buffer.Length; i++)
         {
             bool renderSolidStar = false;
@@ -1000,14 +1028,8 @@ public class Angles : EffectBase
                 }
             }
 
-            float collapseStart = frontRank[i] * rankScale;
-            float collapse = frameHueCompression.Remap(
-                collapseStart,
-                collapseStart + frontSoftness,
-                0f,
-                1f,
-                clamp: true);
-            float angle = (rawHue[i] * spread) + (hueDelta[i] * collapse) + huePhase;
+            float angle = (rawHue[i] * spread) + huePhase;
+            float appliedBeatPhase = 0f;
             if (beatMovementEngaged)
             {
                 float beatPhase = beatPhaseTo;
@@ -1031,6 +1053,7 @@ public class Angles : EffectBase
                 // therefore selects only real Angles colours rather than blending, tinting, or
                 // dimming pixels after palette lookup.
                 angle += beatPhase;
+                appliedBeatPhase = beatPhase;
             }
 
             // Directional shading: same-facing tiles (0° ≡ 180°) shade identically, giving the angle
@@ -1042,19 +1065,9 @@ public class Angles : EffectBase
             float align = 0.5f + (0.5f * Mathf.Cos((orient01[i] * Mathf.PI * 2f) - lightPhase));
             float shade = align.Lerp(1f - shadeDepth, 1f);
 
-            // Drop reignition: outside a Drop every tile sits at its shaded brightness; during a Drop,
-            // each orientation class snaps up as the shared release reaches its reveal point.
-            float lit = EnableDropBlackoutAndReignition && inDrop
-                ? dropRelease.Remap(
-                    classReveal[i],
-                    classReveal[i] + SyncSettings.ClassSnapWidth,
-                    0f,
-                    1f,
-                    clamp: true)
-                : 1f;
             float value = renderSolidStar
                 ? 1f
-                : lit.Lerp(SyncSettings.DarkFloor, shade);
+                : shade;
 
             // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
             // three-second fade while cyclic sampling joins the last entry back to the first.
@@ -1065,6 +1078,25 @@ public class Angles : EffectBase
                     SyncSettings.StarballStarHueOffset,
                     1f)
                 : Mathf.Repeat(angle, 1f);
+            float ribbonPosition = activeRibbonFamilyCount > 0 && !renderSolidStar
+                ? ResolveRibbonPosition(i, activeRibbonFamilyCount)
+                : -1f;
+            if (ribbonPosition >= 0f)
+            {
+                float ribbonPalettePosition = Mathf.Repeat(
+                    ribbonPosition + huePhase + appliedBeatPhase + ribbonFlowPhase,
+                    1f);
+                float shortestHueDelta = Mathf.Repeat(
+                    ribbonPalettePosition - palettePosition + 0.5f,
+                    1f) - 0.5f;
+
+                // Mix the hue coordinate before the one conditioned-palette lookup. Colour.Lerp
+                // would manufacture intermediate RGB values outside the palette; this keeps every
+                // Drop frame a real Angles colour while the Tile returns continuously to its angle.
+                palettePosition = Mathf.Repeat(
+                    palettePosition + (shortestHueDelta * dropResponseEnvelope),
+                    1f);
+            }
             Color paletteColor = frameCurrentPalette.ReadCyclic(
                 palettePosition,
                 doblend: true);
@@ -1079,8 +1111,8 @@ public class Angles : EffectBase
                     paletteTransitionProgress);
             }
 
-            // Keep shading and the dormant Drop value as their separate post-palette stage; the
-            // temporary pre-Drop and Drop gates remain isolated from the Fill transformation.
+            // Directional shading stays in its ordinary post-palette stage during the Drop. The
+            // response changes only the palette coordinate's geometric source, never value.
             buffer[i] = new Color(
                 paletteColor.r * value,
                 paletteColor.g * value,
@@ -1204,23 +1236,17 @@ public sealed class AnglesSyncSettings
     /// </summary>
     [Range(0f, 1f)] public float StarballStarHueOffset;
 
-    /// <summary>Width of the dormant pre-Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
-    [Range(0.0001f, 1f)] public float FrontSoftness;
-
-    /// <summary>Per-second smoothing rate used when abandoned pre-Drop hue compression releases.</summary>
-    [Min(0.0001f)] public float CompressionReleaseRate;
-
-    /// <summary>Shared length of Drop preparation before landing and blackout release after landing.</summary>
+    /// <summary>
+    /// Authored active Drop response window in beats. It is independent of the wire's Drop length,
+    /// so a long Drop Phrase still receives one finite ribbon-flow response from its landing beat.
+    /// </summary>
     [Min(1)] public int DropBeats;
 
-    /// <summary>Minimum brightness retained during the Drop blackout.</summary>
-    [Range(0f, 1f)] public float DarkFloor;
-
-    /// <summary>Fraction of the active Drop window held at the blackout floor and full hue compression.</summary>
-    [Range(0f, 1f)] public float BlackHold;
-
-    /// <summary>Soft-edge width used as each orientation class reignites.</summary>
-    [Range(0.0001f, 1f)] public float ClassSnapWidth;
+    /// <summary>
+    /// Line Ribbon palette cycles per beat at the Drop landing. The active Drop envelope scales this
+    /// speed continuously to zero across <see cref="DropBeats"/>.
+    /// </summary>
+    [Min(0f)] public float DropFlowCyclesPerBeatAtImpact;
 
     /// <summary>Live Energy ladder position held while the track reports no Energy level, so a nullable read rests at a tunable moderate sweep rate and shading depth.</summary>
     [Range(0f, 1f)] public float EnergyRestingLevel;
@@ -1246,7 +1272,8 @@ public sealed class AnglesSyncSettings
     /// <summary>
     /// Copies every Angles Sync Setting from another value, including independent palette
     /// conditioning, the Low-gated beat phase front, Shape List Fill behavior and revealed-Star hue
-    /// offset, three Energy-tier sweep rates, and directional-shading depth.
+    /// offset, the Drop ribbon window and impact speed, three Energy-tier sweep rates, and
+    /// directional-shading depth.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -1264,12 +1291,8 @@ public sealed class AnglesSyncSettings
         BeatFrontSoftness = source.BeatFrontSoftness;
         FillUnit = source.FillUnit;
         StarballStarHueOffset = source.StarballStarHueOffset;
-        FrontSoftness = source.FrontSoftness;
-        CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;
-        DarkFloor = source.DarkFloor;
-        BlackHold = source.BlackHold;
-        ClassSnapWidth = source.ClassSnapWidth;
+        DropFlowCyclesPerBeatAtImpact = source.DropFlowCyclesPerBeatAtImpact;
         EnergyRestingLevel = source.EnergyRestingLevel;
         SweepCyclesPerBeatLow = source.SweepCyclesPerBeatLow;
         SweepCyclesPerBeatMid = source.SweepCyclesPerBeatMid;
