@@ -1,7 +1,6 @@
 using Random = UnityEngine.Random;
 using System;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 /// <summary>
 /// Renders a palette hue sweep based on each tile's stored geometric angle.
@@ -1382,11 +1381,10 @@ public sealed class AnglesSyncSettings
     [Range(-4f, 4f)] public float FillRotationCyclesPerBeat;
 
     /// <summary>
-    /// Hue-wheel distance between a compound motif's center/core and surrounding part. The former
-    /// Starball-only hue-offset serialization maps here so the saved half-cycle contrast survives
-    /// the hard rename without hand-editing its Unity asset.
+    /// Hue-wheel distance between a compound motif's center/core and surrounding part. This is what
+    /// keeps a Starball or Lotusball reading as two regions rather than one undifferentiated blob;
+    /// a Star has a single part and ignores it.
     /// </summary>
-    [FormerlySerializedAs("StarballStarHueOffset")]
     [Range(0f, 0.5f)] public float FillPartHueSeparation;
 
     /// <summary>
