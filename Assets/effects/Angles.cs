@@ -29,6 +29,12 @@ using UnityEngine;
 /// A missing nullable Energy rests at Mid; the beat interval itself is always present while the wall reads
 /// Synced, because the wire withholds it only when no live player can contribute one.
 ///
+/// BEAT PHASE FRONT: while the authored Low reading clears its gate, each On Beat rising edge
+/// latches one new hue-phase target. The step crosses the wall along an authored axis during the
+/// wire's quarter-beat trigger window. Its soft edge interpolates which phase each tile samples; it
+/// never changes brightness, saturation, palette conditioning, or the continuous hue sweep beneath it.
+/// Below the Low gate the offset is cleared and Angles follows its existing rendering path exactly.
+///
 /// Standalone's sweep speed and the held Waveform re-roll on every new Grid, preserving the authored
 /// no-music motion and Random draw order. Synced sweep velocity never reads that roll. The shading light
 /// direction is seeded once per activation instead: re-rolling it at a Grid caused a visible flash.
@@ -125,6 +131,22 @@ public class Angles : EffectBase
         HueRedistribution = 1f,
     };
 
+    /// <summary>Low-band strength that engages the beat phase front. The 0.35 default matches the established bass-drive threshold used by MazeFlyer; tune it until kicks engage without sustained low-frequency material holding the front on.</summary>
+    private const float SyncBeatLowThreshold = 0.35f;
+
+    /// <summary>Levels form the Low gate reads. Smoothed is the steady default; Peak holds on after a kick fades and Normalized tracks the hit instantly. Flip it live on the wall.</summary>
+    private const AnglesSyncSettings.BeatLevelReading SyncBeatLowLevelReading =
+        AnglesSyncSettings.BeatLevelReading.Smoothed;
+
+    /// <summary>Hue phase added by each engaged beat. The 0.1 default advances one of the tiling's ten orientation classes, permuting their colour assignment without changing the wall's colour set.</summary>
+    private const float SyncBeatPhaseStep = 0.1f;
+
+    /// <summary>Direction the beat front travels in wall coordinates, in degrees: zero sweeps left-to-right and 90 sweeps bottom-to-top. The default is zero.</summary>
+    private const float SyncBeatFrontAxisDegrees = 0f;
+
+    /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space. The 0.12 default follows the existing Fill/Drop front's authored softness; smaller is crisper and larger blends more of the wall between phases.</summary>
+    private const float SyncBeatFrontSoftness = 0.12f;
+
     /// <summary>Width, in normalized rank space (0..1), of the hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float SyncFrontSoftness = 0.12f;
 
@@ -191,6 +213,9 @@ public class Angles : EffectBase
     /// <summary>Number of orientation (tileangle) classes the wall reignites through, one per 18° pentagrid direction. Verified against the 900-tile data: exactly 10 classes of 62-119 tiles each.</summary>
     private const int OrientationClasses = 10;
 
+    /// <summary>The wire-authored On Beat gate occupies the first quarter of its beat interval; this contract duration places the spatial front without locally rebuilding musical timing.</summary>
+    private const float BeatTriggerWindowFraction = 0.25f;
+
     /// <summary>
     /// Mid's position on the normalized Energy ladder, which runs Low 0, Mid 0.5, High 1. This is
     /// the ladder's own geometry, not a tuning value: the tunable resting position a nullable
@@ -226,12 +251,17 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
-    /// conditioning, three Energy-tier sweep rates, directional-shading depth, and Routine
-    /// hue-offset ranges.
+    /// conditioning, the Low-gated beat phase front, three Energy-tier sweep rates, directional-
+    /// shading depth, and Routine hue-offset ranges.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
         PaletteConditioning = SyncPaletteConditioning,
+        BeatLowThreshold = SyncBeatLowThreshold,
+        BeatLowLevelReading = SyncBeatLowLevelReading,
+        BeatPhaseStep = SyncBeatPhaseStep,
+        BeatFrontAxisDegrees = SyncBeatFrontAxisDegrees,
+        BeatFrontSoftness = SyncBeatFrontSoftness,
         FrontSoftness = SyncFrontSoftness,
         CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
@@ -295,6 +325,21 @@ public class Angles : EffectBase
     /// <summary>Bounded hue-wheel position integrated from the active mode's sweep rate, seeded from the activation's randomized <see cref="EffectBase.effectTime"/> phase so rate, tempo, Energy, and mode changes alter velocity without teleporting position.</summary>
     private float huePhase;
 
+    /// <summary>Whether the selected On Beat lane was open on the previous frame, retained locally so its multi-frame window produces one phase latch.</summary>
+    private bool previousBeatGateOpen;
+
+    /// <summary>Whether an engaged beat's old-to-new phase boundary is currently crossing the wall.</summary>
+    private bool beatFrontActive;
+
+    /// <summary>Settled beat-driven hue offset from which the current front starts.</summary>
+    private float beatPhaseFrom;
+
+    /// <summary>Bounded beat-driven hue offset every tile holds after the current front passes.</summary>
+    private float beatPhaseTo;
+
+    /// <summary>The authored beat phase step captured when the current target latched, so live tuning cannot bend an in-flight front.</summary>
+    private float latchedBeatPhaseStep;
+
     /// <summary>Four-bar waveform choreography, one Waveform per bar drawn from the energy pools named by <see cref="AnglesSyncSettings.RoutineEnergyOne"/> through <see cref="AnglesSyncSettings.RoutineEnergyFour"/>.</summary>
     private Routine routine;
 
@@ -303,6 +348,9 @@ public class Angles : EffectBase
 
     /// <summary>Each tile's raw angle-hue (pre-Spread, pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
     private float[] rawHue;
+
+    /// <summary>Each tile's immutable wall-centered position, cached once so the live beat-front axis can project it every frame without reading tile metadata or allocating.</summary>
+    private Vector2[] tileCenters;
 
     /// <summary>Per tile, the shortest signed hue delta (in [-0.5, 0.5)) from <see cref="rawHue"/> toward <see cref="meanHue"/>, cached once.</summary>
     private float[] hueDelta;
@@ -378,12 +426,13 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Caches the static per-tile geometry used by Fill, Drop, and directional shading.
+    /// Caches the static per-tile geometry used by the beat phase front, Fill, Drop, and directional shading.
     /// </summary>
     private void PrecomputeTileFields()
     {
         int total = tiles.Length;
         rawHue = new float[total];
+        tileCenters = new Vector2[total];
         hueDelta = new float[total];
         classReveal = new float[total];
         frontRank = new float[total];
@@ -393,6 +442,7 @@ public class Angles : EffectBase
         for (int i = 0; i < total; i++)
         {
             rawHue[i] = tiles[i].tileangle / 180f;
+            tileCenters[i] = tiles[i].center;
             float radians = rawHue[i] * Mathf.PI * 2f;
             sumX += Mathf.Cos(radians);
             sumY += Mathf.Sin(radians);
@@ -424,7 +474,7 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Resolves Effect Settings and initializes per-activation random state before this effect starts drawing.
+    /// Resolves Effect Settings and initializes per-activation random and beat-front state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
@@ -440,6 +490,11 @@ public class Angles : EffectBase
         Reroll();
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
         huePhase = Mathf.Repeat(effectTime * speed, 1f);
+        previousBeatGateOpen = false;
+        beatFrontActive = false;
+        beatPhaseFrom = 0f;
+        beatPhaseTo = 0f;
+        latchedBeatPhaseStep = 0f;
         hueCompression = 0f;
         // Seeded in both modes because BeatManager recomputes IsSynced from the wire every frame: the
         // wall can go Synced mid-activation, and the ladder must already sit at its resting position
@@ -671,14 +726,83 @@ public class Angles : EffectBase
     }
 
     /// <summary>
+    /// Reads the Low band through the authored Levels form, so the wall can pick whether the gate
+    /// tracks the kick instantly, follows it smoothly, or holds on after it fades.
+    /// </summary>
+    private float ResolveBeatGateLow() => SyncSettings.BeatLowLevelReading switch
+    {
+        AnglesSyncSettings.BeatLevelReading.Smoothed => beatManager.Levels.Smoothed.Low,
+        AnglesSyncSettings.BeatLevelReading.Peak => beatManager.Levels.Peak.Low,
+        _ => beatManager.Levels.Normalized.Low,
+    };
+
+    /// <summary>
+    /// Updates the consumer-local On Beat edge and latches the old and new beat-driven phase offsets
+    /// while the authored Low reading engages the response.
+    /// </summary>
+    /// <param name="frontProgress">Normalized travel through the wire's quarter-beat trigger window, or one while no front is crossing.</param>
+    /// <returns>True while the Low gate is engaged and the settled beat phase should contribute to rendering.</returns>
+    /// <remarks>
+    /// Called only in Synced Mode, where <see cref="TimingValues.BeatInBar"/> and
+    /// <see cref="TimingValues.BeatProgress"/> are present. Reading their values directly preserves
+    /// BeatManager as the sole musical source instead of rebuilding window timing inside Angles.
+    /// </remarks>
+    private bool UpdateBeatPhaseFront(out float frontProgress)
+    {
+        int beatInBar = beatManager.Timing.BeatInBar.Value;
+        bool beatGateOpen = beatManager.Beats.OnBeat(beatInBar);
+        bool engaged = ResolveBeatGateLow() > SyncSettings.BeatLowThreshold;
+
+        if (!engaged)
+        {
+            beatFrontActive = false;
+            beatPhaseFrom = 0f;
+            beatPhaseTo = 0f;
+            latchedBeatPhaseStep = 0f;
+            previousBeatGateOpen = beatGateOpen;
+            frontProgress = 1f;
+            return false;
+        }
+
+        if (beatGateOpen && !previousBeatGateOpen)
+        {
+            beatPhaseFrom = beatPhaseTo;
+            latchedBeatPhaseStep = SyncSettings.BeatPhaseStep;
+            beatPhaseTo = Mathf.Repeat(beatPhaseFrom + latchedBeatPhaseStep, 1f);
+            beatFrontActive = true;
+        }
+        else if (!beatGateOpen)
+        {
+            beatFrontActive = false;
+        }
+
+        previousBeatGateOpen = beatGateOpen;
+        frontProgress = beatFrontActive
+            ? Mathf.Clamp01(beatManager.Timing.BeatProgress.Value / BeatTriggerWindowFraction)
+            : 1f;
+        return true;
+    }
+
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
     public override void Draw()
     {
         bool isSynced = beatManager.IsSynced;
+        float beatFrontProgress = 1f;
+        bool beatMovementEngaged = false;
         if (isSynced)
         {
             UpdateSmoothedEnergy();
+            beatMovementEngaged = UpdateBeatPhaseFront(out beatFrontProgress);
+        }
+        else
+        {
+            previousBeatGateOpen = false;
+            beatFrontActive = false;
+            beatPhaseFrom = 0f;
+            beatPhaseTo = 0f;
+            latchedBeatPhaseStep = 0f;
         }
         float shadeDepth = isSynced
             ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
@@ -714,6 +838,30 @@ public class Angles : EffectBase
         // toward Max, so the approved static look remains the musical response's starting point.
         float spread = standaloneSettings.Spread;
 
+        bool beatFrontSweeping = beatMovementEngaged && beatFrontActive;
+        Vector2 beatFrontAxis = default;
+        float beatFrontMinimum = 0f;
+        float beatFrontMaximum = 0f;
+        float beatFrontPosition = 0f;
+        float beatFrontSoftness = SyncSettings.BeatFrontSoftness;
+        if (beatFrontSweeping)
+        {
+            float axisRadians = SyncSettings.BeatFrontAxisDegrees * Mathf.Deg2Rad;
+            beatFrontAxis = new Vector2(Mathf.Cos(axisRadians), Mathf.Sin(axisRadians));
+            beatFrontMinimum = float.PositiveInfinity;
+            beatFrontMaximum = float.NegativeInfinity;
+            for (int i = 0; i < tileCenters.Length; i++)
+            {
+                float projection = Vector2.Dot(tileCenters[i], beatFrontAxis);
+                beatFrontMinimum = Mathf.Min(beatFrontMinimum, projection);
+                beatFrontMaximum = Mathf.Max(beatFrontMaximum, projection);
+            }
+
+            // Begin one soft-edge width before the first tile and finish on the last tile so the
+            // whole wall reaches the new phase exactly as the trigger window closes.
+            beatFrontPosition = Mathf.Lerp(-beatFrontSoftness, 1f, beatFrontProgress);
+        }
+
         // Hoisted: the front's soft edge is uniform across the wall, so its rank scale is one
         // frame-wide value rather than 900 identical products.
         float frontSoftness = SyncSettings.FrontSoftness;
@@ -729,6 +877,30 @@ public class Angles : EffectBase
                 1f,
                 clamp: true);
             float angle = (rawHue[i] * spread) + (hueDelta[i] * collapse) + huePhase;
+            if (beatMovementEngaged)
+            {
+                float beatPhase = beatPhaseTo;
+                if (beatFrontSweeping)
+                {
+                    float projection = Vector2.Dot(tileCenters[i], beatFrontAxis);
+                    float projection01 = Mathf.InverseLerp(
+                        beatFrontMinimum,
+                        beatFrontMaximum,
+                        projection);
+                    float phaseMix = beatFrontPosition.Remap(
+                        projection01 - beatFrontSoftness,
+                        projection01,
+                        0f,
+                        1f,
+                        clamp: true);
+                    beatPhase = beatPhaseFrom + (latchedBeatPhaseStep * phaseMix);
+                }
+
+                // The soft edge interpolates phase before the one normal palette sample below. It
+                // therefore selects only real Angles colours rather than blending, tinting, or
+                // dimming pixels after palette lookup.
+                angle += beatPhase;
+            }
 
             // Directional shading: same-facing tiles (0° ≡ 180°) shade identically, giving the angle
             // families brightness definition on top of hue. Alignment reads the same orientation the
@@ -844,6 +1016,37 @@ public sealed class AnglesSyncSettings
     /// </summary>
     public PaletteConditioning PaletteConditioning;
 
+    /// <summary>
+    /// Which form of the Levels reading the beat phase front's Low gate consults; renders as an
+    /// Inspector dropdown so the reading can be flipped live on the wall.
+    /// </summary>
+    public enum BeatLevelReading
+    {
+        /// <summary>The instantaneous wire value — high only while the kick is actually sounding.</summary>
+        Normalized,
+
+        /// <summary>The attack/release follower — steadier, but lags the kick.</summary>
+        Smoothed,
+
+        /// <summary>Instant rise with a tempo-based linear fall — holds on after the kick fades.</summary>
+        Peak,
+    }
+
+    /// <summary>Low-band strength that must be exceeded before beat-driven phase movement runs.</summary>
+    [Range(0f, 1f)] public float BeatLowThreshold;
+
+    /// <summary>Levels reading the beat phase front's Low gate reads its value from.</summary>
+    public BeatLevelReading BeatLowLevelReading;
+
+    /// <summary>Forward hue-phase step latched on each engaged beat; 0.1 advances one orientation class.</summary>
+    [Range(0f, 1f)] public float BeatPhaseStep;
+
+    /// <summary>Beat-front travel direction in wall-space degrees: zero is left-to-right and 90 is bottom-to-top.</summary>
+    [Range(0f, 360f)] public float BeatFrontAxisDegrees;
+
+    /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space.</summary>
+    [Range(0.0001f, 1f)] public float BeatFrontSoftness;
+
     /// <summary>Width of the Fill/Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
     [Range(0.0001f, 1f)] public float FrontSoftness;
 
@@ -903,8 +1106,8 @@ public sealed class AnglesSyncSettings
 
     /// <summary>
     /// Copies every Angles Sync Setting from another value, including independent palette
-    /// conditioning, three Energy-tier sweep rates, directional-shading depth, and Routine
-    /// hue-offset endpoints and editor rails.
+    /// conditioning, the Low-gated beat phase front, three Energy-tier sweep rates, directional-
+    /// shading depth, and Routine hue-offset endpoints and editor rails.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -915,6 +1118,11 @@ public sealed class AnglesSyncSettings
         }
 
         PaletteConditioning = source.PaletteConditioning;
+        BeatLowThreshold = source.BeatLowThreshold;
+        BeatLowLevelReading = source.BeatLowLevelReading;
+        BeatPhaseStep = source.BeatPhaseStep;
+        BeatFrontAxisDegrees = source.BeatFrontAxisDegrees;
+        BeatFrontSoftness = source.BeatFrontSoftness;
         FrontSoftness = source.FrontSoftness;
         CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;

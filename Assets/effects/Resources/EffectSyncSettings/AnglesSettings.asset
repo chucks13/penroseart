@@ -23,6 +23,10 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
+    BeatLowThreshold: 0.35
+    BeatPhaseStep: 0.1
+    BeatFrontAxisDegrees: 0
+    BeatFrontSoftness: 0.12
     FrontSoftness: 0.12
     CompressionReleaseRate: 2
     DropBeats: 3
@@ -33,6 +37,7 @@ MonoBehaviour:
     RoutineEnergyTwo: 0
     RoutineEnergyThree: 1
     RoutineEnergyFour: 0
+    EnergyRestingLevel: 0.5
     SweepCyclesPerBeatLow: 0.06
     SweepCyclesPerBeatMid: 0.12
     SweepCyclesPerBeatHigh: 0.25
