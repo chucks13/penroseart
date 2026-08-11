@@ -13,7 +13,10 @@ using UnityEngine;
 /// split into their unique degree-four fat center and the connected region around it. Every Tile in a
 /// part converges to one shared moving palette coordinate, while the live part separation keeps a
 /// compound motif's structure visible. The coordinate is mixed continuously from each Tile's ordinary
-/// angle along the shortest hue-wheel path. No Tile is removed or written black, and the Fill rests at
+/// angle along the shortest hue-wheel path. The Tiles bordering a motif take the same mix half a
+/// palette cycle away, so every shape carries a contour drawn in colour rather than in darkness — the
+/// background occupies the whole hue wheel, so only a local boundary can define a shape against it.
+/// No Tile is removed or written black, and the Fill rests at
 /// zero when inactive so no invented recovery time crosses into a following Drop or Standalone Mode.
 ///
 /// DROP: the Data Surface's <see cref="InSpan.Decay(int)"/> opens all four distinct Line Ribbon
@@ -163,6 +166,15 @@ public class Angles : EffectBase
     private const float SyncFillUnitEnvelopeWidth = 0.5f;
 
     /// <summary>
+    /// How completely the Tiles bordering a lit motif are recruited as its contour. Authored at full
+    /// because a contour is the only edge the shapes have: the background occupies the whole hue wheel,
+    /// so no motif colour contrasts with it globally, and only a local boundary defines the shape. Dial
+    /// down at the wall when a Shape List leaves too little untouched background — Lotusballs borders
+    /// 251 of the 900 Tiles, against 429 Tiles left ordinary under Stars. Zero disables contours.
+    /// </summary>
+    private const float SyncFillContourStrength = 1f;
+
+    /// <summary>
     /// Authored Drop response window in beats. Sixteen beats gives the landing one complete nominal
     /// Grid in which to resolve, regardless of how long the wire's Drop Phrase continues. Tune on the
     /// DROP readout; this is the existing DropBeats slot with its old preparation/blackout meaning cut.
@@ -220,6 +232,13 @@ public class Angles : EffectBase
     private const int StarballStarTileCount = 5;
 
     /// <summary>
+    /// Hue-wheel distance a contour Tile sits from the motif part it borders. Half a cycle is the most
+    /// distant entry in the conditioned palette's cyclic order, so this is the largest step the palette
+    /// can make and needs no tuning — it is a property of the wheel rather than a matter of taste.
+    /// </summary>
+    private const float FillContourHueOffset = 0.5f;
+
+    /// <summary>
     /// Mid's position on the normalized Energy ladder, which runs Low 0, Mid 0.5, High 1. This is
     /// the ladder's own geometry, not a tuning value: the tunable resting position a nullable
     /// <see cref="EnergyValues.Level"/> falls back to is
@@ -274,6 +293,7 @@ public class Angles : EffectBase
         FillRotationCyclesPerBeat = SyncFillRotationCyclesPerBeat,
         FillPartHueSeparation = SyncFillPartHueSeparation,
         FillUnitEnvelopeWidth = SyncFillUnitEnvelopeWidth,
+        FillContourStrength = SyncFillContourStrength,
         DropBeats = SyncDropBeats,
         DropFlowCyclesPerBeatAtImpact = SyncDropFlowCyclesPerBeatAtImpact,
         EnergyRestingLevel = SyncEnergyRestingLevel,
@@ -324,10 +344,18 @@ public class Angles : EffectBase
         /// <summary>Creates one cached Fill membership entry from invariant wall geometry.</summary>
         /// <param name="unitRank">The motif's normalized outer-to-inner rank, or -1 for no membership.</param>
         /// <param name="partIndex">The zero-based motif part shared by Tiles that converge to one hue coordinate.</param>
-        public FillTileFields(float unitRank, int partIndex)
+        /// <param name="contourRank">The rank of the motif this Tile outlines, or -1 when it outlines none.</param>
+        /// <param name="contourPartIndex">The outer part index of the motif this Tile outlines, or -1 when it outlines none.</param>
+        public FillTileFields(
+            float unitRank,
+            int partIndex,
+            float contourRank,
+            int contourPartIndex)
         {
             UnitRank = unitRank;
             PartIndex = partIndex;
+            ContourRank = contourRank;
+            ContourPartIndex = contourPartIndex;
         }
 
         /// <summary>The motif's normalized outer-to-inner rank, shared by every participating Tile in it.</summary>
@@ -335,6 +363,16 @@ public class Angles : EffectBase
 
         /// <summary>The zero-based motif part whose Tiles share one Fill hue coordinate.</summary>
         public int PartIndex { get; }
+
+        /// <summary>
+        /// The rank of the motif this non-member Tile borders, so its contour rides the same envelope
+        /// as the shape it outlines. -1 when the Tile borders no motif. Membership always wins, so two
+        /// touching motifs merge rather than drawing a seam between them.
+        /// </summary>
+        public float ContourRank { get; }
+
+        /// <summary>The outer part index of the bordered motif, whose hue coordinate the contour opposes.</summary>
+        public int ContourPartIndex { get; }
     }
 
     /// <summary>
@@ -448,7 +486,7 @@ public class Angles : EffectBase
             $"\nSWEEP {sweepReadout}" +
             $"\nSHADE {shadeDepth:0.00}" +
             (beatManager.Fill.Active
-                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}  SEP {SyncSettings.FillPartHueSeparation:0.00}  WIDTH {ResolveFillUnitEnvelopeWidth():0.00}  ROT {SyncSettings.FillRotationCyclesPerBeat:0.00} cpb"
+                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}  SEP {SyncSettings.FillPartHueSeparation:0.00}  WIDTH {ResolveFillUnitEnvelopeWidth():0.00}  ROT {SyncSettings.FillRotationCyclesPerBeat:0.00} cpb  EDGE {SyncSettings.FillContourStrength:0.00}"
                 : "") +
             (dropResponseEnvelope > 0f
                 ? $"\nDROP {dropResponseEnvelope:0.00}  {ResolveActiveRibbonFamilyCount(dropResponseEnvelope)}/{RibbonFamilyCount}  {SyncSettings.DropFlowCyclesPerBeatAtImpact:0.00} cpb"
@@ -570,7 +608,9 @@ public class Angles : EffectBase
     /// in-group Neighbors as the center and every other Tile as the connected surround, including the
     /// one clipped nine-Tile group. Packed traversal order and clockwise traversal orientation deliberately
     /// do not enter the cache: those made hue vary per Tile, while Fill motion belongs to whole parts.
-    /// Every array allocation and Lotusball adjacency scan happens here during <see cref="Init"/> so
+    /// A second pass then claims each motif's bordering Tiles as its contour, which is why membership
+    /// has to be complete first: a Tile bordering one motif is very often a member of the next.
+    /// Every array allocation and both adjacency scans happen here during <see cref="Init"/> so
     /// <see cref="Draw"/> reads only cached scalars.
     /// </remarks>
     private FillTileFields[] PrecomputeFillFields(
@@ -580,7 +620,7 @@ public class Angles : EffectBase
         var fields = new FillTileFields[tiles.Length];
         for (int i = 0; i < fields.Length; i++)
         {
-            fields[i] = new FillTileFields(-1f, partIndex: -1);
+            fields[i] = new FillTileFields(-1f, partIndex: -1, -1f, contourPartIndex: -1);
         }
 
         int groupCount = shapeList.GroupCount;
@@ -604,12 +644,14 @@ public class Angles : EffectBase
             maximumRadius = Mathf.Max(maximumRadius, radius);
         }
 
+        var groupRanks = new float[groupCount];
         for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
         {
             float unitRank = Mathf.InverseLerp(
                 maximumRadius,
                 minimumRadius,
                 groupRadii[groupIndex]);
+            groupRanks[groupIndex] = unitRank;
             LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
             int lotusballCenterTile = fillUnit == AnglesSyncSettings.FillUnitKind.Lotusballs
                 ? FindLotusballCenter(group, groupIndex)
@@ -627,7 +669,49 @@ public class Angles : EffectBase
                 };
                 fields[tile] = new FillTileFields(
                     unitRank,
-                    partIndex);
+                    partIndex,
+                    -1f,
+                    contourPartIndex: -1);
+            }
+        }
+
+        // Contours run only after every motif has claimed its Tiles, because a Tile that borders one
+        // motif is frequently a member of the next one and membership always wins. A Tile bordering two
+        // motifs keeps the outermost, so a shared contour lights with the leading edge of the wave —
+        // settling it here costs one cached value instead of a per-frame comparison in Draw.
+        for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
+        {
+            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
+            float unitRank = groupRanks[groupIndex];
+
+            int outerPartIndex = 0;
+            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
+            {
+                outerPartIndex = Mathf.Max(outerPartIndex, fields[group[tileIndex]].PartIndex);
+            }
+
+            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
+            {
+                foreach (var neighbor in tiles[group[tileIndex]].neighbors)
+                {
+                    int candidate = neighbor.tileIdx;
+                    FillTileFields existing = fields[candidate];
+                    if (existing.UnitRank >= 0f)
+                    {
+                        continue;
+                    }
+
+                    if (existing.ContourRank >= 0f && existing.ContourRank <= unitRank)
+                    {
+                        continue;
+                    }
+
+                    fields[candidate] = new FillTileFields(
+                        -1f,
+                        partIndex: -1,
+                        unitRank,
+                        outerPartIndex);
+                }
             }
         }
 
@@ -1097,6 +1181,7 @@ public class Angles : EffectBase
         float fillProgress = beatManager.Fill.In.Build();
         FillTileFields[] frameFillFields = null;
         float fillUnitEnvelopeWidth = 0f;
+        float fillContourStrength = SyncSettings.FillContourStrength;
         if (fillProgress > 0f)
         {
             frameFillFields = SyncSettings.FillUnit switch
@@ -1193,16 +1278,32 @@ public class Angles : EffectBase
             if (frameFillFields != null)
             {
                 FillTileFields fillTile = frameFillFields[i];
-                if (fillTile.UnitRank >= 0f)
+                bool isMotifMember = fillTile.UnitRank >= 0f;
+                float fillRank = isMotifMember ? fillTile.UnitRank : fillTile.ContourRank;
+                if (fillRank >= 0f && (isMotifMember || fillContourStrength > 0f))
                 {
                     float fillUnitEnvelope = ResolveFillUnitEnvelope(
                         fillProgress,
-                        fillTile.UnitRank,
+                        fillRank,
                         fillUnitEnvelopeWidth);
+                    int fillPartIndex = fillTile.PartIndex;
+                    float contourOffset = 0f;
+                    if (!isMotifMember)
+                    {
+                        // A contour Tile rides its motif's own envelope, so the outline appears and
+                        // fades with the shape rather than on a clock of its own. Strength scales hue
+                        // travel and the value lift together, so one live knob dials the whole contour
+                        // in and zero is an honest off.
+                        fillUnitEnvelope *= fillContourStrength;
+                        fillPartIndex = fillTile.ContourPartIndex;
+                        contourOffset = FillContourHueOffset;
+                    }
+
                     float fillPalettePosition = Mathf.Repeat(
-                        (fillTile.PartIndex * SyncSettings.FillPartHueSeparation) +
+                        (fillPartIndex * SyncSettings.FillPartHueSeparation) +
                         huePhase +
-                        fillRotationPhase,
+                        fillRotationPhase +
+                        contourOffset,
                         1f);
                     float shortestHueDelta = Mathf.Repeat(
                         fillPalettePosition - palettePosition + 0.5f,
@@ -1211,7 +1312,10 @@ public class Angles : EffectBase
                     // The complete motif shares one continuous envelope, every Tile in one part aims
                     // at the same hue coordinate, and only the live part separation distinguishes its
                     // internal regions. Mixing before lookup adds the solid shape without switching
-                    // Tiles off or manufacturing RGB colours.
+                    // Tiles off or manufacturing RGB colours. A contour Tile takes the same mix half a
+                    // palette cycle away from the part it borders, so the boundary is the sharpest hue
+                    // step the conditioned palette can make — an edge drawn in colour, taking no light
+                    // off the wall the way a dark outline would.
                     palettePosition = Mathf.Repeat(
                         palettePosition + (shortestHueDelta * fillUnitEnvelope),
                         1f);
@@ -1395,6 +1499,14 @@ public sealed class AnglesSyncSettings
     [Range(0.05f, 1f)] public float FillUnitEnvelopeWidth;
 
     /// <summary>
+    /// How completely the Tiles bordering a lit motif are recruited as its contour, scaling both the
+    /// hue travel and the value lift so zero leaves the surrounding wall untouched. The contour draws
+    /// the motif's edge in colour rather than in darkness: it sits half a palette cycle from the part
+    /// it borders and rises to full value alongside it, so nothing on the wall is dimmed.
+    /// </summary>
+    [Range(0f, 1f)] public float FillContourStrength;
+
+    /// <summary>
     /// Authored active Drop response window in beats. It is independent of the wire's Drop length,
     /// so a long Drop Phrase still receives one finite ribbon-flow response from its landing beat.
     /// </summary>
@@ -1451,6 +1563,7 @@ public sealed class AnglesSyncSettings
         FillRotationCyclesPerBeat = source.FillRotationCyclesPerBeat;
         FillPartHueSeparation = source.FillPartHueSeparation;
         FillUnitEnvelopeWidth = source.FillUnitEnvelopeWidth;
+        FillContourStrength = source.FillContourStrength;
         DropBeats = source.DropBeats;
         DropFlowCyclesPerBeatAtImpact = source.DropFlowCyclesPerBeatAtImpact;
         EnergyRestingLevel = source.EnergyRestingLevel;
