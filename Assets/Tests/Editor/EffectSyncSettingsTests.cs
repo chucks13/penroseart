@@ -64,23 +64,56 @@ public sealed class EffectSyncSettingsTests
         Assert.That(resolved.Amount, Is.EqualTo(9f));
     }
 
-    /// <summary>Standalone Settings resolve as fresh, mutually independent copies of the Standalone
-    /// Defaults. The authored values themselves are deliberately not pinned here: they are the
-    /// Standalone look, which ADR-0012 says is judged on the wall, not asserted in tests.</summary>
+    /// <summary>Standalone Defaults resolve as fresh, mutually independent copies. The authored
+    /// values themselves are deliberately not pinned here: they are the Standalone look, which
+    /// ADR-0013 says is judged on the wall, not asserted in tests.</summary>
     [Test]
-    public void TunnelStandaloneSettingsResolveToStandaloneDefaults()
+    public void TunnelStandaloneDefaultsResolveAsIndependentCopies()
     {
-        var first = Tunnel.StandaloneSettings;
-        var second = Tunnel.StandaloneSettings;
+        var first = Tunnel.StandaloneDefaults;
+        var second = Tunnel.StandaloneDefaults;
 
         Assert.That(first, Is.Not.SameAs(second));
-        Assert.That(first.Density.Min, Is.EqualTo(second.Density.Min));
-        Assert.That(first.Density.Max, Is.EqualTo(second.Density.Max));
-        Assert.That(first.Speed.Min, Is.EqualTo(second.Speed.Min));
-        Assert.That(first.Speed.Max, Is.EqualTo(second.Speed.Max));
-        Assert.That(first.Mix.Min, Is.EqualTo(second.Mix.Min));
-        Assert.That(first.Mix.Max, Is.EqualTo(second.Mix.Max));
-        Assert.That(first.CenterScale, Is.EqualTo(second.CenterScale));
+        Assert.That(first.TileIndexPhaseStep, Is.Not.SameAs(second.TileIndexPhaseStep));
+        Assert.That(first.TileIndexPhaseStep.Min, Is.EqualTo(second.TileIndexPhaseStep.Min));
+        Assert.That(first.TileIndexPhaseStep.Max, Is.EqualTo(second.TileIndexPhaseStep.Max));
+        Assert.That(first.ScrollSpeed, Is.Not.SameAs(second.ScrollSpeed));
+        Assert.That(first.ScrollSpeed.Min, Is.EqualTo(second.ScrollSpeed.Min));
+        Assert.That(first.ScrollSpeed.Max, Is.EqualTo(second.ScrollSpeed.Max));
+        Assert.That(first.RadialPhaseScale, Is.Not.SameAs(second.RadialPhaseScale));
+        Assert.That(first.RadialPhaseScale.Min, Is.EqualTo(second.RadialPhaseScale.Min));
+        Assert.That(first.RadialPhaseScale.Max, Is.EqualTo(second.RadialPhaseScale.Max));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited Tunnel Standalone Setting and Rail with the current file-local
+    /// Standalone Defaults, without pinning the authored tuning values in the test.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryTunnelValue()
+    {
+        var asset = (TunnelStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(Tunnel),
+            TempAssetFolder);
+        asset.Settings.TileIndexPhaseStep = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.RadialPhaseScale = new FloatRange(23f, 24f, 22f, 25f);
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Tunnel), TempAssetFolder);
+
+        var defaults = Tunnel.StandaloneDefaults;
+        Assert.That(asset.Settings.TileIndexPhaseStep.Min, Is.EqualTo(defaults.TileIndexPhaseStep.Min));
+        Assert.That(asset.Settings.TileIndexPhaseStep.Max, Is.EqualTo(defaults.TileIndexPhaseStep.Max));
+        Assert.That(asset.Settings.TileIndexPhaseStep.LowRail, Is.EqualTo(defaults.TileIndexPhaseStep.LowRail));
+        Assert.That(asset.Settings.TileIndexPhaseStep.HighRail, Is.EqualTo(defaults.TileIndexPhaseStep.HighRail));
+        Assert.That(asset.Settings.ScrollSpeed.Min, Is.EqualTo(defaults.ScrollSpeed.Min));
+        Assert.That(asset.Settings.ScrollSpeed.Max, Is.EqualTo(defaults.ScrollSpeed.Max));
+        Assert.That(asset.Settings.ScrollSpeed.LowRail, Is.EqualTo(defaults.ScrollSpeed.LowRail));
+        Assert.That(asset.Settings.ScrollSpeed.HighRail, Is.EqualTo(defaults.ScrollSpeed.HighRail));
+        Assert.That(asset.Settings.RadialPhaseScale.Min, Is.EqualTo(defaults.RadialPhaseScale.Min));
+        Assert.That(asset.Settings.RadialPhaseScale.Max, Is.EqualTo(defaults.RadialPhaseScale.Max));
+        Assert.That(asset.Settings.RadialPhaseScale.LowRail, Is.EqualTo(defaults.RadialPhaseScale.LowRail));
+        Assert.That(asset.Settings.RadialPhaseScale.HighRail, Is.EqualTo(defaults.RadialPhaseScale.HighRail));
     }
 
     /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
@@ -144,26 +177,41 @@ public sealed class EffectSyncSettingsTests
         var asset = (TunnelSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
             typeof(Tunnel),
             TempAssetFolder);
+        asset.Settings.TileIndexPhaseStep = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.RadialPhaseScale = new FloatRange(23f, 24f, 22f, 25f);
         asset.Settings.WaveformEnergyOne = Energy.High;
         asset.Settings.WaveformEnergyTwo = Energy.High;
-        asset.Settings.FillRush = 17f;
-        asset.Settings.FillZoom = 18f;
+        asset.Settings.FillScrollRateMultiplier = 17f;
+        asset.Settings.FillRingCompression = 18f;
         asset.Settings.BeatBrightnessFloor = 0.1f;
         asset.Settings.DropBars = 7;
-        asset.Settings.DropRush = 19f;
-        asset.Settings.DropZoom = 20f;
+        asset.Settings.DropReverseScrollRateMultiplier = 19f;
+        asset.Settings.DropRingCompression = 20f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Tunnel), TempAssetFolder);
 
         var defaults = Tunnel.SyncDefaults;
+        Assert.That(asset.Settings.TileIndexPhaseStep.Min, Is.EqualTo(defaults.TileIndexPhaseStep.Min));
+        Assert.That(asset.Settings.TileIndexPhaseStep.Max, Is.EqualTo(defaults.TileIndexPhaseStep.Max));
+        Assert.That(asset.Settings.TileIndexPhaseStep.LowRail, Is.EqualTo(defaults.TileIndexPhaseStep.LowRail));
+        Assert.That(asset.Settings.TileIndexPhaseStep.HighRail, Is.EqualTo(defaults.TileIndexPhaseStep.HighRail));
+        Assert.That(asset.Settings.ScrollSpeed.Min, Is.EqualTo(defaults.ScrollSpeed.Min));
+        Assert.That(asset.Settings.ScrollSpeed.Max, Is.EqualTo(defaults.ScrollSpeed.Max));
+        Assert.That(asset.Settings.ScrollSpeed.LowRail, Is.EqualTo(defaults.ScrollSpeed.LowRail));
+        Assert.That(asset.Settings.ScrollSpeed.HighRail, Is.EqualTo(defaults.ScrollSpeed.HighRail));
+        Assert.That(asset.Settings.RadialPhaseScale.Min, Is.EqualTo(defaults.RadialPhaseScale.Min));
+        Assert.That(asset.Settings.RadialPhaseScale.Max, Is.EqualTo(defaults.RadialPhaseScale.Max));
+        Assert.That(asset.Settings.RadialPhaseScale.LowRail, Is.EqualTo(defaults.RadialPhaseScale.LowRail));
+        Assert.That(asset.Settings.RadialPhaseScale.HighRail, Is.EqualTo(defaults.RadialPhaseScale.HighRail));
         Assert.That(asset.Settings.WaveformEnergyOne, Is.EqualTo(defaults.WaveformEnergyOne));
         Assert.That(asset.Settings.WaveformEnergyTwo, Is.EqualTo(defaults.WaveformEnergyTwo));
-        Assert.That(asset.Settings.FillRush, Is.EqualTo(defaults.FillRush));
-        Assert.That(asset.Settings.FillZoom, Is.EqualTo(defaults.FillZoom));
+        Assert.That(asset.Settings.FillScrollRateMultiplier, Is.EqualTo(defaults.FillScrollRateMultiplier));
+        Assert.That(asset.Settings.FillRingCompression, Is.EqualTo(defaults.FillRingCompression));
         Assert.That(asset.Settings.BeatBrightnessFloor, Is.EqualTo(defaults.BeatBrightnessFloor));
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
-        Assert.That(asset.Settings.DropRush, Is.EqualTo(defaults.DropRush));
-        Assert.That(asset.Settings.DropZoom, Is.EqualTo(defaults.DropZoom));
+        Assert.That(asset.Settings.DropReverseScrollRateMultiplier, Is.EqualTo(defaults.DropReverseScrollRateMultiplier));
+        Assert.That(asset.Settings.DropRingCompression, Is.EqualTo(defaults.DropRingCompression));
     }
 
     /// <summary>Restore replaces every edited Ripple Sync Setting with the current file-local Sync Defaults.</summary>
