@@ -534,7 +534,7 @@ public class Angles : EffectBase
             $"\nSWEEP {sweepReadout}" +
             $"\nSHADE {shadeDepth:0.00}" +
             (beatManager.Fill.Active
-                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}  SEP {SyncSettings.FillPartHueSeparation:0.00}  WIDTH {ResolveFillUnitEnvelopeWidth():0.00}  ROT {SyncSettings.FillRotationCyclesPerBeat:0.00} cpb  EDGE {SyncSettings.FillContourStrength:0.00}"
+                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}  SEP {SyncSettings.FillPartHueSeparation:0.00}  WIDTH {SyncSettings.FillUnitEnvelopeWidth:0.00}  ROT {SyncSettings.FillRotationCyclesPerBeat:0.00} cpb  EDGE {SyncSettings.FillContourStrength:0.00}"
                 : "") +
             (dropResponseEnvelope > 0f
                 ? $"\nDROP {dropResponseEnvelope:0.00}  {ResolveActiveRibbonFamilyCount(dropResponseEnvelope)}/{RibbonFamilyCount}  {SyncSettings.DropFlowCyclesPerBeatAtImpact:0.00} cpb"
@@ -1023,21 +1023,6 @@ public class Angles : EffectBase
         (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
     /// <summary>
-    /// Resolves the live per-unit envelope width, using the authored Sync Default only while the
-    /// existing saved asset still carries Unity's zero for this newly introduced nonzero field.
-    /// </summary>
-    /// <returns>The positive unit-rank width used by the current frame's Fill envelope.</returns>
-    /// <remarks>
-    /// Zero is outside the setting's authored rail, so it remains an unambiguous not-yet-serialized
-    /// value. Resolution stays per frame rather than entering the <see cref="Init"/> cache, preserving
-    /// live Play Mode tuning.
-    /// </remarks>
-    private float ResolveFillUnitEnvelopeWidth() =>
-        SyncSettings.FillUnitEnvelopeWidth > 0f
-            ? SyncSettings.FillUnitEnvelopeWidth
-            : SyncFillUnitEnvelopeWidth;
-
-    /// <summary>
     /// Shapes one motif's continuous rise and fall as the Fill travels through its retained
     /// outer-to-inner unit rank. Stretching progress by the live envelope width makes the outer
     /// motif start at zero and the inner motif return to zero at the Fill's exact endpoint.
@@ -1286,6 +1271,10 @@ public class Angles : EffectBase
             beatPhaseTo = 0f;
             latchedBeatPhaseStep = 0f;
         }
+
+        // Directional shading is a standing part of both looks. Standalone holds its authored
+        // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
+        // toward Max, so the approved static look remains the musical response's starting point.
         float shadeDepth = isSynced
             ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
             : standaloneSettings.ShadeDepth.Min;
@@ -1315,7 +1304,7 @@ public class Angles : EffectBase
                 AnglesSyncSettings.FillUnitKind.Starballs => starballFillFields,
                 _ => lotusballFillFields,
             };
-            fillUnitEnvelopeWidth = ResolveFillUnitEnvelopeWidth();
+            fillUnitEnvelopeWidth = SyncSettings.FillUnitEnvelopeWidth;
         }
         UpdateFillRotationPhase(fillProgress);
         dropResponseEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropBeats);
@@ -1324,9 +1313,8 @@ public class Angles : EffectBase
         float[] activeRibbonPositions = activeRibbonFamilyCount > 0
             ? ribbonPositionByActiveFamilyCount[activeRibbonFamilyCount]
             : null;
-        // Directional shading is a standing part of both looks. Standalone holds its authored
-        // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
-        // toward Max, so the approved static look remains the musical response's starting point.
+        // One Spread serves both modes, so the angular structure keeps its density whether or not a
+        // track is playing.
         float spread = standaloneSettings.Spread;
 
         bool beatFrontSweeping = beatMovementEngaged && beatFrontActive;
@@ -1492,6 +1480,11 @@ public sealed class AnglesStandaloneSettings
     /// to add colours — the tiling's ten orientation clusters are the ceiling. Integer values alias
     /// (two and four show five colours, five shows two); prefer non-integer settings above one.
     /// </summary>
+    /// <remarks>
+    /// Deliberately single-homed: <c>Draw</c> reads this one value in both modes, so the angular
+    /// structure carries the same density whether or not a track is playing. Nothing has asked the
+    /// two modes to differ here. Give it a Sync home the day one of them should.
+    /// </remarks>
     [Range(0f, 4f)] public float Spread;
 
     /// <summary>
