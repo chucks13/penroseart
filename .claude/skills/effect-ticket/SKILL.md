@@ -68,10 +68,17 @@ after that, and nobody can revert one of them.
    Repertoire classifications are design judgments; work with that vocabulary loaded, not from
    memory of it.
 
-4. Read the ticket (it carries this Effect's harvested findings), `CONTEXT.md` — musicality work
+4. Read the ticket **and every comment on it**, `CONTEXT.md` — musicality work
    spans its Rhythm, Waveform, and Effect-configuration vocabulary — every ADR in `docs/adr/`,
    `docs/effect-authoring.md`, and `docs/osc-client-contract.md`. The ADRs are terse and all of
    them stand.
+
+   The comments are not optional and the body is not a summary of them. A ticket's design is settled
+   incrementally at the wall, so a ruling in the body is routinely withdrawn by a later comment, and
+   a "still open" line is routinely stale the moment the next session lands that work. Reading the
+   body alone, or only the newest comments, produces confident wrong statements about what is left
+   to build. Read every comment oldest to newest, and treat the newest statement on any point as the
+   live one. When the body disagrees with the comments, fix the body in the same session.
 
 5. Seed one worklog for the ticket.
 
