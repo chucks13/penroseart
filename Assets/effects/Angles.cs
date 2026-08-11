@@ -8,10 +8,9 @@ using UnityEngine;
 /// <remarks>
 /// FILL: the Data Surface's own <see cref="InSpan.Build"/> advances an outer-to-inner mask through
 /// one selected Shape List. Every member of a Star, Starball, or Lotusball shares one removal
-/// threshold derived from that group's radius, while a stable geometry-sampled noise value perturbs
-/// nearby thresholds so the ring edge breaks without becoming a scattered dissolve. Removed Tiles are
-/// written black; surviving Tiles follow the ordinary Angles path exactly. The mask snaps clear when
-/// the Fill ends so no invented recovery time crosses into a following Drop.
+/// threshold derived from that group's radius. Removed Tiles are written black; surviving Tiles
+/// follow the ordinary Angles path exactly. The mask snaps clear when the Fill ends so no invented
+/// recovery time crosses into a following Drop.
 ///
 /// PRE-DROP / DROP (preserved behind temporary rebuild flags): one soft-edged wavefront, ordered by
 /// each tile's hue distance from the wall's own mean hue (closest first), compresses the wall toward
@@ -20,9 +19,7 @@ using UnityEngine;
 /// while fully compressed, then one Drop release timeline both expands the hues and reignites a
 /// staccato cascade through the tiling's ten orientation classes — the multiples-of-18° directional
 /// families of the underlying pentagrid. Because orientation drives hue here, each class is also a
-/// single hue, so the rainbow and its ten hidden families return together out of the darkness. The
-/// four-bar Routine keeps its own full-pattern hue rotation and does not drive this choreography; that
-/// Routine hue offset is likewise preserved behind temporary rebuild scaffolding.
+/// single hue, so the rainbow and its ten hidden families return together out of the darkness.
 ///
 /// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
@@ -38,9 +35,9 @@ using UnityEngine;
 /// never changes brightness, saturation, palette conditioning, or the continuous hue sweep beneath it.
 /// Below the Low gate the offset is cleared and Angles follows its existing rendering path exactly.
 ///
-/// Standalone's sweep speed and the held Waveform re-roll on every new Grid, preserving the authored
-/// no-music motion and Random draw order. Synced sweep velocity never reads that roll. The shading light
-/// direction is seeded once per activation instead: re-rolling it at a Grid caused a visible flash.
+/// Standalone's sweep speed re-rolls on every new Grid, preserving the authored no-music motion.
+/// Synced sweep velocity never reads that roll. The shading light direction is seeded once per
+/// activation instead: re-rolling it at a Grid caused a visible flash.
 /// </remarks>
 [EffectSyncSettings(typeof(AnglesSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(AnglesStandaloneSettingsAsset))]
@@ -53,9 +50,6 @@ public class Angles : EffectBase
 
     /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
     private const bool EnableDropBlackoutAndReignition = false;
-
-    /// <summary>Temporary rebuild scaffolding for the Routine rhythm hue offset; this layer returns reshaped or is deleted when its turn comes.</summary>
-    private const bool EnableRoutineRhythmHueOffset = false;
 
     // Standalone Defaults
 
@@ -111,9 +105,6 @@ public class Angles : EffectBase
     /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Set on the wall.</summary>
     private const float StandaloneShadeDepthHigh = 0.8f;
 
-    /// <summary>Fixed full-cycle Routine hue offset returned when no live clock can place the choreography.</summary>
-    private const float StandaloneRhythmHueOffset = 1f;
-
     // Sync Defaults
 
     /// <summary>
@@ -154,9 +145,6 @@ public class Angles : EffectBase
     private const AnglesSyncSettings.FillUnitKind SyncFillUnit =
         AnglesSyncSettings.FillUnitKind.Lotusballs;
 
-    /// <summary>Maximum normalized-radius perturbation applied by the Fill's stable noise field. The 0.12 default can swap neighboring rings while leaving the outer-to-inner order legible; tune it at the ragged boundary.</summary>
-    private const float SyncFillEdgeNoise = 0.12f;
-
     /// <summary>Width, in normalized rank space (0..1), of the pre-Drop hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float SyncFrontSoftness = 0.12f;
 
@@ -174,18 +162,6 @@ public class Angles : EffectBase
 
     /// <summary>Reignition snap width (in cascade-progress units) for each class: smaller = harder staccato pop as each orientation family lights; larger = a softer roll. Tune on the readout.</summary>
     private const float SyncClassSnapWidth = 0.08f;
-
-    /// <summary>First energy pool sampled for the four-bar Routine choreography.</summary>
-    private const Energy SyncRoutineEnergyOne = Energy.Mid;
-
-    /// <summary>Second energy pool sampled for the four-bar Routine choreography.</summary>
-    private const Energy SyncRoutineEnergyTwo = Energy.Low;
-
-    /// <summary>Third energy pool sampled for the four-bar Routine choreography.</summary>
-    private const Energy SyncRoutineEnergyThree = Energy.Mid;
-
-    /// <summary>Fourth energy pool sampled for the four-bar Routine choreography.</summary>
-    private const Energy SyncRoutineEnergyFour = Energy.Low;
 
     /// <summary>Energy ladder position assumed when <see cref="EnergyValues.Level"/> has no value: 0.5 = Mid, a steady moderate sweep rate and shading depth rather than either endpoint. Tune on the EN readout.</summary>
     private const float SyncEnergyRestingLevel = 0.5f;
@@ -212,12 +188,6 @@ public class Angles : EffectBase
     /// <summary>Smoothing rate (per second) easing both sweep velocity and shading depth between Energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the EN and SWEEP readouts.</summary>
     private const float SyncEnergySmoothing = 2f;
 
-    /// <summary>Minimum hue rotation applied at the bottom of the live Routine envelope.</summary>
-    private const float SyncRhythmHueOffsetMin = 0.8f;
-
-    /// <summary>Maximum hue rotation applied at the top of the live Routine envelope.</summary>
-    private const float SyncRhythmHueOffsetMax = 1f;
-
     // Runtime mechanism constants
 
     /// <summary>Number of orientation (tileangle) classes the wall reignites through, one per 18° pentagrid direction. Verified against the 900-tile data: exactly 10 classes of 62-119 tiles each.</summary>
@@ -226,16 +196,10 @@ public class Angles : EffectBase
     /// <summary>The wire-authored On Beat gate occupies the first quarter of its beat interval; this contract duration places the spatial front without locally rebuilding musical timing.</summary>
     private const float BeatTriggerWindowFraction = 0.25f;
 
-    /// <summary>Effect-layout scale of the stable Perlin field sampled once at each Shape List group center; this keeps neighboring groups correlated so noise breaks a ring edge instead of scattering motifs independently.</summary>
-    private const float FillNoiseScale = 0.18f;
-
-    /// <summary>Fixed positive Perlin coordinate offset that keeps the wall center away from the noise function's origin symmetry without consuming Random.</summary>
-    private const float FillNoiseOffset = 19.31f;
-
-    /// <summary>Fill progress at which the outermost roughened group can first disappear, leaving a short readable onset before subtraction begins.</summary>
+    /// <summary>Fill progress at which the outermost group can first disappear, leaving a short readable onset before subtraction begins.</summary>
     private const float FillFirstRemovalProgress = 0.05f;
 
-    /// <summary>Fill progress by which the innermost roughened group has disappeared, reserving the final tenth of the Fill as its fully drained peak before the end snap restores the wall.</summary>
+    /// <summary>Fill progress by which the innermost group has disappeared, reserving the final tenth of the Fill as its fully drained peak before the end snap restores the wall.</summary>
     private const float FillFullRemovalProgress = 0.9f;
 
     /// <summary>
@@ -272,13 +236,12 @@ public class Angles : EffectBase
             StandaloneShadeDepthHigh,
             0f,
             1f),
-        RhythmHueOffset = StandaloneRhythmHueOffset,
     };
 
     /// <summary>
     /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
     /// conditioning, the Low-gated beat phase front, the Shape List Fill mask, three Energy-tier
-    /// sweep rates, directional-shading depth, and Routine hue-offset ranges.
+    /// sweep rates, and directional-shading depth.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
@@ -289,17 +252,12 @@ public class Angles : EffectBase
         BeatFrontAxisDegrees = SyncBeatFrontAxisDegrees,
         BeatFrontSoftness = SyncBeatFrontSoftness,
         FillUnit = SyncFillUnit,
-        FillEdgeNoise = SyncFillEdgeNoise,
         FrontSoftness = SyncFrontSoftness,
         CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
         DarkFloor = SyncDarkFloor,
         BlackHold = SyncBlackHold,
         ClassSnapWidth = SyncClassSnapWidth,
-        RoutineEnergyOne = SyncRoutineEnergyOne,
-        RoutineEnergyTwo = SyncRoutineEnergyTwo,
-        RoutineEnergyThree = SyncRoutineEnergyThree,
-        RoutineEnergyFour = SyncRoutineEnergyFour,
         EnergyRestingLevel = SyncEnergyRestingLevel,
         SweepCyclesPerBeatLow = SyncSweepCyclesPerBeatLow,
         SweepCyclesPerBeatMid = SyncSweepCyclesPerBeatMid,
@@ -310,11 +268,6 @@ public class Angles : EffectBase
             0f,
             1f),
         EnergySmoothing = SyncEnergySmoothing,
-        RhythmHueOffset = new FloatRange(
-            SyncRhythmHueOffsetMin,
-            SyncRhythmHueOffsetMax,
-            0f,
-            1f),
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
@@ -368,9 +321,6 @@ public class Angles : EffectBase
     /// <summary>The authored beat phase step captured when the current target latched, so live tuning cannot bend an in-flight front.</summary>
     private float latchedBeatPhaseStep;
 
-    /// <summary>Four-bar waveform choreography, one Waveform per bar drawn from the energy pools named by <see cref="AnglesSyncSettings.RoutineEnergyOne"/> through <see cref="AnglesSyncSettings.RoutineEnergyFour"/>.</summary>
-    private Routine routine;
-
     /// <summary>Current pre-Drop tension (0..1) expressed as progress of the hue-compression wavefront toward <see cref="meanHue"/>.</summary>
     private float hueCompression;
 
@@ -383,20 +333,11 @@ public class Angles : EffectBase
     /// <summary>Per Tile, its Lotusball group's outer-to-inner radius rank, or -1 when the Tile belongs to no Lotusball.</summary>
     private float[] lotusballFillRingRank;
 
-    /// <summary>Per Tile, the stable group-center noise shared by every member of its Lotusball.</summary>
-    private float[] lotusballFillNoise;
-
     /// <summary>Per Tile, its Starball group's outer-to-inner radius rank, or -1 when the Tile belongs to no Starball.</summary>
     private float[] starballFillRingRank;
 
-    /// <summary>Per Tile, the stable group-center noise shared by every member of its Starball.</summary>
-    private float[] starballFillNoise;
-
     /// <summary>Per Tile, its Star group's outer-to-inner radius rank, or -1 when the Tile belongs to no Star.</summary>
     private float[] starFillRingRank;
-
-    /// <summary>Per Tile, the stable group-center noise shared by every member of its Star.</summary>
-    private float[] starFillNoise;
 
     /// <summary>Per tile, the shortest signed hue delta (in [-0.5, 0.5)) from <see cref="rawHue"/> toward <see cref="meanHue"/>, cached once for the dormant pre-Drop compression.</summary>
     private float[] hueDelta;
@@ -457,7 +398,7 @@ public class Angles : EffectBase
             $"\nSWEEP {sweepReadout}" +
             $"\nSHADE {shadeDepth:0.00}" +
             (beatManager.Fill.Active
-                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}  NOISE {SyncSettings.FillEdgeNoise:0.00}"
+                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}"
                 : "") +
             (hueCompression > 0.01f ? $"\nTENSION {hueCompression:0.00}" : "") +
             (beatManager.Drop.Active
@@ -483,11 +424,8 @@ public class Angles : EffectBase
         rawHue = new float[total];
         tileCenters = new Vector2[total];
         lotusballFillRingRank = new float[total];
-        lotusballFillNoise = new float[total];
         starballFillRingRank = new float[total];
-        starballFillNoise = new float[total];
         starFillRingRank = new float[total];
-        starFillNoise = new float[total];
         hueDelta = new float[total];
         classReveal = new float[total];
         frontRank = new float[total];
@@ -506,16 +444,13 @@ public class Angles : EffectBase
 
         PrecomputeFillMask(
             penrose.Layout.shapes.Lotusballs,
-            lotusballFillRingRank,
-            lotusballFillNoise);
+            lotusballFillRingRank);
         PrecomputeFillMask(
             penrose.Layout.shapes.Starballs,
-            starballFillRingRank,
-            starballFillNoise);
+            starballFillRingRank);
         PrecomputeFillMask(
             penrose.Layout.shapes.Stars,
-            starFillRingRank,
-            starFillNoise);
+            starFillRingRank);
 
         float[] distance = new float[total];
         int[] order = new int[total];
@@ -542,17 +477,14 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Caches one Shape List's group membership, outer-to-inner radius rank, and stable noise sample
-    /// per Tile. Every Tile in a group receives the same values so the Fill can only remove whole
-    /// motif units, while the live noise strength remains outside this invariant cache.
+    /// Caches one Shape List's group membership and outer-to-inner radius rank per Tile. Every Tile
+    /// in a group receives the same rank so the Fill can only remove whole motif units.
     /// </summary>
     /// <param name="shapeList">The allocation-free Shape List reader whose motif groups become Fill units.</param>
     /// <param name="ringRank">Destination receiving each member Tile's normalized outer-to-inner group rank, or -1 for nonmembers.</param>
-    /// <param name="edgeNoise">Destination receiving each member Tile's shared group-center noise in -1..1.</param>
     private void PrecomputeFillMask(
         LayoutData.ShapeList.Reader shapeList,
-        float[] ringRank,
-        float[] edgeNoise)
+        float[] ringRank)
     {
         for (int i = 0; i < ringRank.Length; i++)
         {
@@ -560,7 +492,6 @@ public class Angles : EffectBase
         }
 
         int groupCount = shapeList.GroupCount;
-        var groupCenters = new Vector2[groupCount];
         var groupRadii = new float[groupCount];
         float minimumRadius = float.PositiveInfinity;
         float maximumRadius = float.NegativeInfinity;
@@ -576,7 +507,6 @@ public class Angles : EffectBase
 
             groupCenter /= group.TileCount;
             float radius = groupCenter.magnitude;
-            groupCenters[groupIndex] = groupCenter;
             groupRadii[groupIndex] = radius;
             minimumRadius = Mathf.Min(minimumRadius, radius);
             maximumRadius = Mathf.Max(maximumRadius, radius);
@@ -584,20 +514,15 @@ public class Angles : EffectBase
 
         for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
         {
-            Vector2 groupCenter = groupCenters[groupIndex];
             float groupRingRank = Mathf.InverseLerp(
                 maximumRadius,
                 minimumRadius,
                 groupRadii[groupIndex]);
-            float groupNoise = (Mathf.PerlinNoise(
-                (groupCenter.x * FillNoiseScale) + FillNoiseOffset,
-                (groupCenter.y * FillNoiseScale) + FillNoiseOffset) * 2f) - 1f;
             LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
             for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
             {
                 int tile = group[tileIndex];
                 ringRank[tile] = groupRingRank;
-                edgeNoise[tile] = groupNoise;
             }
         }
     }
@@ -634,23 +559,18 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Re-rolls the held Standalone sweep speed and four-bar Waveform Routine, so Standalone keeps its
-    /// authored motion and Random draw order while the look takes a fresh character every 16 beats.
-    /// Synced sweep velocity never reads the random speed. The shading light direction is intentionally
-    /// seeded only in <see cref="OnStart"/> because changing it on a Grid caused a visible flash.
+    /// Re-rolls the held Standalone sweep speed so the no-music look takes a fresh character every
+    /// 16 beats. Synced sweep velocity never reads the random speed. The shading light direction is
+    /// intentionally seeded only in <see cref="OnStart"/> because changing it on a Grid caused a
+    /// visible flash.
     /// </summary>
     private void Reroll()
     {
         speed = Random.Range(standaloneSettings.Speed.Min, standaloneSettings.Speed.Max);
-        routine = Routine.Of(
-            waveforms.Random(SyncSettings.RoutineEnergyOne),
-            waveforms.Random(SyncSettings.RoutineEnergyTwo),
-            waveforms.Random(SyncSettings.RoutineEnergyThree),
-            waveforms.Random(SyncSettings.RoutineEnergyFour));
     }
 
     /// <summary>
-    /// On each new Grid the held Standalone sweep speed and four-bar Waveform Routine take fresh rolls.
+    /// On each new Grid the held Standalone sweep speed takes a fresh roll.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -951,35 +871,21 @@ public class Angles : EffectBase
 
         float fillProgress = beatManager.Fill.In.Build();
         float[] frameFillRingRank = null;
-        float[] frameFillNoise = null;
         if (fillProgress > 0f)
         {
             switch (SyncSettings.FillUnit)
             {
                 case AnglesSyncSettings.FillUnitKind.Stars:
                     frameFillRingRank = starFillRingRank;
-                    frameFillNoise = starFillNoise;
                     break;
                 case AnglesSyncSettings.FillUnitKind.Starballs:
                     frameFillRingRank = starballFillRingRank;
-                    frameFillNoise = starballFillNoise;
                     break;
                 default:
                     frameFillRingRank = lotusballFillRingRank;
-                    frameFillNoise = lotusballFillNoise;
                     break;
             }
         }
-        float fillEdgeNoise = SyncSettings.FillEdgeNoise;
-
-        // The Routine rotates the full angle-to-hue pattern without changing the tiles' relative hues.
-        float rhythmHueOffset = EnableRoutineRhythmHueOffset
-            ? routine.Lerp(
-                SyncSettings.RhythmHueOffset.Min,
-                beatManager.IsSynced
-                    ? SyncSettings.RhythmHueOffset.Max
-                    : standaloneSettings.RhythmHueOffset)
-            : 0f;
         var drop = beatManager.Drop;
         bool inDrop = drop.Active;
         float dropRelease = UpdateChoreography(drop);
@@ -1022,12 +928,10 @@ public class Angles : EffectBase
         {
             if (frameFillRingRank != null && frameFillRingRank[i] >= 0f)
             {
-                float roughenedRingRank = Mathf.Clamp01(
-                    frameFillRingRank[i] + (frameFillNoise[i] * fillEdgeNoise));
                 float removalThreshold = Mathf.Lerp(
                     FillFirstRemovalProgress,
                     FillFullRemovalProgress,
-                    roughenedRingRank);
+                    frameFillRingRank[i]);
                 if (fillProgress >= removalThreshold)
                 {
                     // Fill is a mask: black is literal off, while every survivor continues through
@@ -1093,7 +997,7 @@ public class Angles : EffectBase
 
             // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
             // three-second fade while cyclic sampling joins the last entry back to the first.
-            float palettePosition = Mathf.Repeat(angle + rhythmHueOffset, 1f);
+            float palettePosition = Mathf.Repeat(angle, 1f);
             Color paletteColor = frameCurrentPalette.ReadCyclic(
                 palettePosition,
                 doblend: true);
@@ -1108,8 +1012,8 @@ public class Angles : EffectBase
                     paletteTransitionProgress);
             }
 
-            // Keep shading and the dormant Drop value as their separate post-palette stage;
-            // the temporary pre-Drop, Drop, and Routine gates remain isolated from the Fill mask.
+            // Keep shading and the dormant Drop value as their separate post-palette stage; the
+            // temporary pre-Drop and Drop gates remain isolated from the Fill mask.
             buffer[i] = new Color(
                 paletteColor.r * value,
                 paletteColor.g * value,
@@ -1147,9 +1051,6 @@ public sealed class AnglesStandaloneSettings
     /// </summary>
     public FloatRange ShadeDepth;
 
-    /// <summary>Fixed Routine hue offset returned without live musical placement.</summary>
-    [Range(0f, 1f)] public float RhythmHueOffset;
-
     /// <summary>
     /// Copies every Angles Standalone Setting from another value, including live angle spread,
     /// effect-local palette conditioning, independent speed, and directional-shading depth endpoints
@@ -1170,7 +1071,6 @@ public sealed class AnglesStandaloneSettings
             source.ShadeDepth.Max,
             source.ShadeDepth.LowRail,
             source.ShadeDepth.HighRail);
-        RhythmHueOffset = source.RhythmHueOffset;
     }
 }
 
@@ -1231,9 +1131,6 @@ public sealed class AnglesSyncSettings
     /// <summary>Shape List whose groups are removed as whole units during a Fill.</summary>
     public FillUnitKind FillUnit;
 
-    /// <summary>Maximum stable noise perturbation applied to each group's normalized radius rank, roughening nearby rings without replacing the inward structure.</summary>
-    [Range(0f, 0.5f)] public float FillEdgeNoise;
-
     /// <summary>Width of the dormant pre-Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
     [Range(0.0001f, 1f)] public float FrontSoftness;
 
@@ -1251,18 +1148,6 @@ public sealed class AnglesSyncSettings
 
     /// <summary>Soft-edge width used as each orientation class reignites.</summary>
     [Range(0.0001f, 1f)] public float ClassSnapWidth;
-
-    /// <summary>First energy pool sampled for the four-bar Routine choreography.</summary>
-    public Energy RoutineEnergyOne;
-
-    /// <summary>Second energy pool sampled for the four-bar Routine choreography.</summary>
-    public Energy RoutineEnergyTwo;
-
-    /// <summary>Third energy pool sampled for the four-bar Routine choreography.</summary>
-    public Energy RoutineEnergyThree;
-
-    /// <summary>Fourth energy pool sampled for the four-bar Routine choreography.</summary>
-    public Energy RoutineEnergyFour;
 
     /// <summary>Live Energy ladder position held while the track reports no Energy level, so a nullable read rests at a tunable moderate sweep rate and shading depth.</summary>
     [Range(0f, 1f)] public float EnergyRestingLevel;
@@ -1286,15 +1171,9 @@ public sealed class AnglesSyncSettings
     [Min(0f)] public float EnergySmoothing;
 
     /// <summary>
-    /// Lower and upper hue rotations applied at the bottom and top of the live Routine envelope,
-    /// with editor rails spanning the full normalized hue cycle.
-    /// </summary>
-    public FloatRange RhythmHueOffset;
-
-    /// <summary>
     /// Copies every Angles Sync Setting from another value, including independent palette
     /// conditioning, the Low-gated beat phase front, Shape List Fill mask, three Energy-tier sweep
-    /// rates, directional-shading depth, and Routine hue-offset endpoints and editor rails.
+    /// rates, and directional-shading depth.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -1311,17 +1190,12 @@ public sealed class AnglesSyncSettings
         BeatFrontAxisDegrees = source.BeatFrontAxisDegrees;
         BeatFrontSoftness = source.BeatFrontSoftness;
         FillUnit = source.FillUnit;
-        FillEdgeNoise = source.FillEdgeNoise;
         FrontSoftness = source.FrontSoftness;
         CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;
         DarkFloor = source.DarkFloor;
         BlackHold = source.BlackHold;
         ClassSnapWidth = source.ClassSnapWidth;
-        RoutineEnergyOne = source.RoutineEnergyOne;
-        RoutineEnergyTwo = source.RoutineEnergyTwo;
-        RoutineEnergyThree = source.RoutineEnergyThree;
-        RoutineEnergyFour = source.RoutineEnergyFour;
         EnergyRestingLevel = source.EnergyRestingLevel;
         SweepCyclesPerBeatLow = source.SweepCyclesPerBeatLow;
         SweepCyclesPerBeatMid = source.SweepCyclesPerBeatMid;
@@ -1332,10 +1206,5 @@ public sealed class AnglesSyncSettings
             source.ShadeDepth.LowRail,
             source.ShadeDepth.HighRail);
         EnergySmoothing = source.EnergySmoothing;
-        RhythmHueOffset = new FloatRange(
-            source.RhythmHueOffset.Min,
-            source.RhythmHueOffset.Max,
-            source.RhythmHueOffset.LowRail,
-            source.RhythmHueOffset.HighRail);
     }
 }
