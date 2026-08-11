@@ -298,9 +298,9 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Re-resolves Sync Settings on every Grid so live wall tuning keeps taking effect, then turns
-    /// the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it always
-    /// has. Colour is what the Grid turns over in Synced Mode — the shape moves on the slower Phrase
+    /// Re-resolves Sync Settings on every Grid Boundary so live wall tuning keeps taking effect, then
+    /// turns the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it
+    /// always has. Colour is what the Grid turns over in Synced Mode — the shape moves on the Phrase
     /// instead, so a cadence already following the music through Energy and Duration is not
     /// interrupted every sixteen beats.
     /// </summary>
@@ -389,7 +389,7 @@ public class Tunnel : EffectBase
     /// Fill proportional through both stalls and surges of the pumping motion.
     /// </summary>
     /// <param name="cyclePhaseAdvance">Forward movement of the served colour-cycle phase this frame.</param>
-    private void UpdateFillEnvelope(float cyclePhaseAdvance)
+    private void UpdateFillRush(float cyclePhaseAdvance)
     {
         fillEnv = beatManager.Fill.In.Build();
         fillScroll = Mathf.Repeat(
@@ -403,7 +403,7 @@ public class Tunnel : EffectBase
     /// of a stronger version of the build, while retaining the pumping cycle's instantaneous rate.
     /// </summary>
     /// <param name="cyclePhaseAdvance">Forward movement of the served colour-cycle phase this frame.</param>
-    private void UpdateDropSlam(float cyclePhaseAdvance)
+    private void UpdateDropWarp(float cyclePhaseAdvance)
     {
         dropEnv = beatManager.Drop.In.Decay(SyncSettings.DropBars * 4);
         dropScroll = Mathf.Repeat(
@@ -426,12 +426,16 @@ public class Tunnel : EffectBase
         {
             cyclePhase = effectTime * scrollSpeed;
             cyclePhaseAdvance = 0f;
+            // Leaving Synced Mode invalidates the held sample: the next Synced frame must start a
+            // fresh one rather than difference against a phase from before the gap.
             hasPreviousSyncedCyclePhase = false;
         }
 
-        UpdateFillEnvelope(cyclePhaseAdvance);
-        UpdateDropSlam(cyclePhaseAdvance);
+        UpdateFillRush(cyclePhaseAdvance);
+        UpdateDropWarp(cyclePhaseAdvance);
 
+        // Fill and Drop are Synced Mode facts, so both envelopes rest at zero in Standalone Mode and
+        // these Sync Settings read through as no compression. That is why the mode is not tested here.
         float ringCompression = 1f +
             (SyncSettings.FillRingCompression * fillEnv) +
             (SyncSettings.DropRingCompression * dropEnv);
