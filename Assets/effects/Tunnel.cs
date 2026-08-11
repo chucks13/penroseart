@@ -30,17 +30,19 @@ public class Tunnel : EffectBase
     private const float StandaloneScrollSpeedMax = 1f;
 
     /// <summary>
-    /// Authored minimum radial phase scale for the unchanged Standalone look. It carries the former
-    /// <c>0.01</c> radial mix through the former <c>0.03</c> Tile-center scale; smaller values spread
-    /// the rings wider.
+    /// Authored minimum radial mix for the unchanged Standalone look; smaller values spread the
+    /// rings wider.
     /// </summary>
-    private const float StandaloneRadialPhaseScaleMin = 0.0003f;
+    private const float StandaloneRadialMixMin = 0.01f;
+
+    /// <summary>Authored maximum radial mix for the unchanged Standalone look.</summary>
+    private const float StandaloneRadialMixMax = 0.2f;
 
     /// <summary>
-    /// Authored maximum radial phase scale for the unchanged Standalone look. It carries the former
-    /// <c>0.2</c> radial mix through the former <c>0.03</c> Tile-center scale.
+    /// Authored Tile-center scale for the unchanged Standalone look. The radial phase term is Tile
+    /// radius times this scale times the radial mix, so both settings tune the ring spacing.
     /// </summary>
-    private const float StandaloneRadialPhaseScaleMax = 0.006f;
+    private const float StandaloneCenterScale = 0.03f;
 
     // Sync Defaults
 
@@ -56,11 +58,14 @@ public class Tunnel : EffectBase
     /// <summary>Authored maximum scroll speed for the current Synced look.</summary>
     private const float SyncScrollSpeedMax = 1f;
 
-    /// <summary>Authored minimum radial phase scale for the current Synced look.</summary>
-    private const float SyncRadialPhaseScaleMin = 0.0003f;
+    /// <summary>Authored minimum radial mix for the current Synced look.</summary>
+    private const float SyncRadialMixMin = 0.01f;
 
-    /// <summary>Authored maximum radial phase scale for the current Synced look.</summary>
-    private const float SyncRadialPhaseScaleMax = 0.006f;
+    /// <summary>Authored maximum radial mix for the current Synced look.</summary>
+    private const float SyncRadialMixMax = 0.2f;
+
+    /// <summary>Authored Tile-center scale for the current Synced look.</summary>
+    private const float SyncCenterScale = 0.03f;
 
     /// <summary>Authored first Waveform energy admitted by Tunnel in Synced Mode.</summary>
     private const Energy SyncWaveformEnergyOne = Energy.Low;
@@ -117,9 +122,8 @@ public class Tunnel : EffectBase
             StandaloneTileIndexPhaseStepMin,
             StandaloneTileIndexPhaseStepMax),
         ScrollSpeed = new FloatRange(StandaloneScrollSpeedMin, StandaloneScrollSpeedMax),
-        RadialPhaseScale = new FloatRange(
-            StandaloneRadialPhaseScaleMin,
-            StandaloneRadialPhaseScaleMax),
+        RadialMix = new FloatRange(StandaloneRadialMixMin, StandaloneRadialMixMax),
+        CenterScale = StandaloneCenterScale,
     };
 
     /// <summary>Resolves a fresh copy of Tunnel's file-local Sync Defaults.</summary>
@@ -127,7 +131,8 @@ public class Tunnel : EffectBase
     {
         TileIndexPhaseStep = new FloatRange(SyncTileIndexPhaseStepMin, SyncTileIndexPhaseStepMax),
         ScrollSpeed = new FloatRange(SyncScrollSpeedMin, SyncScrollSpeedMax),
-        RadialPhaseScale = new FloatRange(SyncRadialPhaseScaleMin, SyncRadialPhaseScaleMax),
+        RadialMix = new FloatRange(SyncRadialMixMin, SyncRadialMixMax),
+        CenterScale = SyncCenterScale,
         WaveformEnergyOne = SyncWaveformEnergyOne,
         WaveformEnergyTwo = SyncWaveformEnergyTwo,
         FillScrollRateMultiplier = SyncFillScrollRateMultiplier,
@@ -150,8 +155,8 @@ public class Tunnel : EffectBase
     /// <summary>Current randomly rolled base scroll speed.</summary>
     private float scrollSpeed;
 
-    /// <summary>Current randomly rolled radial phase scale.</summary>
-    private float radialPhaseScale;
+    /// <summary>Current randomly rolled radial mix.</summary>
+    private float radialMix;
 
     /// <summary>Fill Build amount driving the scroll rush and ring compression.</summary>
     private float fillEnv;
@@ -202,13 +207,13 @@ public class Tunnel : EffectBase
         FloatRange scrollSpeedRange = isSynced
             ? SyncSettings.ScrollSpeed
             : standaloneSettings.ScrollSpeed;
-        FloatRange radialPhaseScaleRange = isSynced
-            ? SyncSettings.RadialPhaseScale
-            : standaloneSettings.RadialPhaseScale;
+        FloatRange radialMixRange = isSynced
+            ? SyncSettings.RadialMix
+            : standaloneSettings.RadialMix;
 
         tileIndexPhaseStep = Random.Range(tileIndexPhaseStepRange.Min, tileIndexPhaseStepRange.Max);
         scrollSpeed = Random.Range(scrollSpeedRange.Min, scrollSpeedRange.Max);
-        radialPhaseScale = Random.Range(radialPhaseScaleRange.Min, radialPhaseScaleRange.Max);
+        radialMix = Random.Range(radialMixRange.Min, radialMixRange.Max);
         waveform = waveforms.Random(SyncSettings.WaveformEnergyOne, SyncSettings.WaveformEnergyTwo);
     }
 
@@ -226,7 +231,7 @@ public class Tunnel : EffectBase
     {
         return $"Tile index phase step: {tileIndexPhaseStep}\n" +
         $"Scroll speed: {scrollSpeed}\n" +
-        $"Radial phase scale: {radialPhaseScale}\n" +
+        $"Radial mix: {radialMix}\n" +
         (fillEnv > 0.01f ? $"FILL {fillEnv:0.00}\n" : "") +
         (dropEnv > 0.01f ? $"DROP {dropEnv:0.00}\n" : "");
     }
@@ -268,9 +273,14 @@ public class Tunnel : EffectBase
             (SyncSettings.FillRingCompression * fillEnv) +
             (SyncSettings.DropRingCompression * dropEnv);
 
+        float centerScale = beatManager.IsSynced
+            ? SyncSettings.CenterScale
+            : standaloneSettings.CenterScale;
+        float radialPhaseScale = centerScale * radialMix * ringCompression;
+
         for (int i = 0; i < Penrose.Total; i++)
         {
-            float radialPhase = tiles[i].radius * radialPhaseScale * ringCompression;
+            float radialPhase = tiles[i].radius * radialPhaseScale;
             float phase = (i * tileIndexPhaseStep + (effectTime * scrollSpeed) + fillScroll +
                 dropScroll + radialPhase) % 1f;
             buffer[i] = Color.HSVToRGB(phase, 1f, 1f) * beatBrightness;
@@ -291,8 +301,11 @@ public sealed class TunnelStandaloneSettings
     /// <summary>Per-activation base scroll-speed range.</summary>
     public FloatRange ScrollSpeed;
 
-    /// <summary>Per-activation range scaling Tile radius into the tunnel phase.</summary>
-    public FloatRange RadialPhaseScale;
+    /// <summary>Per-activation range mixing scaled Tile radius into the tunnel phase.</summary>
+    public FloatRange RadialMix;
+
+    /// <summary>Scale applied to the Tile-center distance that the radial mix reads.</summary>
+    [Min(0f)] public float CenterScale;
 
     /// <summary>Copies every Tunnel Standalone Setting, including range endpoints and Rails.</summary>
     public void CopyFrom(TunnelStandaloneSettings source)
@@ -312,11 +325,12 @@ public sealed class TunnelStandaloneSettings
             source.ScrollSpeed.Max,
             source.ScrollSpeed.LowRail,
             source.ScrollSpeed.HighRail);
-        RadialPhaseScale = new FloatRange(
-            source.RadialPhaseScale.Min,
-            source.RadialPhaseScale.Max,
-            source.RadialPhaseScale.LowRail,
-            source.RadialPhaseScale.HighRail);
+        RadialMix = new FloatRange(
+            source.RadialMix.Min,
+            source.RadialMix.Max,
+            source.RadialMix.LowRail,
+            source.RadialMix.HighRail);
+        CenterScale = source.CenterScale;
     }
 }
 
@@ -330,8 +344,11 @@ public sealed class TunnelSyncSettings
     /// <summary>Per-Roll base scroll-speed range.</summary>
     public FloatRange ScrollSpeed;
 
-    /// <summary>Per-Roll range scaling Tile radius into the tunnel phase.</summary>
-    public FloatRange RadialPhaseScale;
+    /// <summary>Per-Roll range mixing scaled Tile radius into the tunnel phase.</summary>
+    public FloatRange RadialMix;
+
+    /// <summary>Scale applied to the Tile-center distance that the radial mix reads.</summary>
+    [Min(0f)] public float CenterScale;
 
     /// <summary>First Waveform energy admitted when Tunnel rolls its musical response.</summary>
     public Energy WaveformEnergyOne;
@@ -375,11 +392,12 @@ public sealed class TunnelSyncSettings
             source.ScrollSpeed.Max,
             source.ScrollSpeed.LowRail,
             source.ScrollSpeed.HighRail);
-        RadialPhaseScale = new FloatRange(
-            source.RadialPhaseScale.Min,
-            source.RadialPhaseScale.Max,
-            source.RadialPhaseScale.LowRail,
-            source.RadialPhaseScale.HighRail);
+        RadialMix = new FloatRange(
+            source.RadialMix.Min,
+            source.RadialMix.Max,
+            source.RadialMix.LowRail,
+            source.RadialMix.HighRail);
+        CenterScale = source.CenterScale;
         WaveformEnergyOne = source.WaveformEnergyOne;
         WaveformEnergyTwo = source.WaveformEnergyTwo;
         FillScrollRateMultiplier = source.FillScrollRateMultiplier;

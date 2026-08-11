@@ -80,9 +80,10 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.ScrollSpeed, Is.Not.SameAs(second.ScrollSpeed));
         Assert.That(first.ScrollSpeed.Min, Is.EqualTo(second.ScrollSpeed.Min));
         Assert.That(first.ScrollSpeed.Max, Is.EqualTo(second.ScrollSpeed.Max));
-        Assert.That(first.RadialPhaseScale, Is.Not.SameAs(second.RadialPhaseScale));
-        Assert.That(first.RadialPhaseScale.Min, Is.EqualTo(second.RadialPhaseScale.Min));
-        Assert.That(first.RadialPhaseScale.Max, Is.EqualTo(second.RadialPhaseScale.Max));
+        Assert.That(first.RadialMix, Is.Not.SameAs(second.RadialMix));
+        Assert.That(first.RadialMix.Min, Is.EqualTo(second.RadialMix.Min));
+        Assert.That(first.RadialMix.Max, Is.EqualTo(second.RadialMix.Max));
+        Assert.That(first.CenterScale, Is.EqualTo(second.CenterScale));
     }
 
     /// <summary>
@@ -97,7 +98,8 @@ public sealed class EffectSyncSettingsTests
             TempAssetFolder);
         asset.Settings.TileIndexPhaseStep = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.RadialPhaseScale = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.RadialMix = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.CenterScale = 26f;
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Tunnel), TempAssetFolder);
 
@@ -110,10 +112,11 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ScrollSpeed.Max, Is.EqualTo(defaults.ScrollSpeed.Max));
         Assert.That(asset.Settings.ScrollSpeed.LowRail, Is.EqualTo(defaults.ScrollSpeed.LowRail));
         Assert.That(asset.Settings.ScrollSpeed.HighRail, Is.EqualTo(defaults.ScrollSpeed.HighRail));
-        Assert.That(asset.Settings.RadialPhaseScale.Min, Is.EqualTo(defaults.RadialPhaseScale.Min));
-        Assert.That(asset.Settings.RadialPhaseScale.Max, Is.EqualTo(defaults.RadialPhaseScale.Max));
-        Assert.That(asset.Settings.RadialPhaseScale.LowRail, Is.EqualTo(defaults.RadialPhaseScale.LowRail));
-        Assert.That(asset.Settings.RadialPhaseScale.HighRail, Is.EqualTo(defaults.RadialPhaseScale.HighRail));
+        Assert.That(asset.Settings.RadialMix.Min, Is.EqualTo(defaults.RadialMix.Min));
+        Assert.That(asset.Settings.RadialMix.Max, Is.EqualTo(defaults.RadialMix.Max));
+        Assert.That(asset.Settings.RadialMix.LowRail, Is.EqualTo(defaults.RadialMix.LowRail));
+        Assert.That(asset.Settings.RadialMix.HighRail, Is.EqualTo(defaults.RadialMix.HighRail));
+        Assert.That(asset.Settings.CenterScale, Is.EqualTo(defaults.CenterScale));
     }
 
     /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
@@ -179,7 +182,8 @@ public sealed class EffectSyncSettingsTests
             TempAssetFolder);
         asset.Settings.TileIndexPhaseStep = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.RadialPhaseScale = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.RadialMix = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.CenterScale = 26f;
         asset.Settings.WaveformEnergyOne = Energy.High;
         asset.Settings.WaveformEnergyTwo = Energy.High;
         asset.Settings.FillScrollRateMultiplier = 17f;
@@ -200,10 +204,11 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ScrollSpeed.Max, Is.EqualTo(defaults.ScrollSpeed.Max));
         Assert.That(asset.Settings.ScrollSpeed.LowRail, Is.EqualTo(defaults.ScrollSpeed.LowRail));
         Assert.That(asset.Settings.ScrollSpeed.HighRail, Is.EqualTo(defaults.ScrollSpeed.HighRail));
-        Assert.That(asset.Settings.RadialPhaseScale.Min, Is.EqualTo(defaults.RadialPhaseScale.Min));
-        Assert.That(asset.Settings.RadialPhaseScale.Max, Is.EqualTo(defaults.RadialPhaseScale.Max));
-        Assert.That(asset.Settings.RadialPhaseScale.LowRail, Is.EqualTo(defaults.RadialPhaseScale.LowRail));
-        Assert.That(asset.Settings.RadialPhaseScale.HighRail, Is.EqualTo(defaults.RadialPhaseScale.HighRail));
+        Assert.That(asset.Settings.RadialMix.Min, Is.EqualTo(defaults.RadialMix.Min));
+        Assert.That(asset.Settings.RadialMix.Max, Is.EqualTo(defaults.RadialMix.Max));
+        Assert.That(asset.Settings.RadialMix.LowRail, Is.EqualTo(defaults.RadialMix.LowRail));
+        Assert.That(asset.Settings.RadialMix.HighRail, Is.EqualTo(defaults.RadialMix.HighRail));
+        Assert.That(asset.Settings.CenterScale, Is.EqualTo(defaults.CenterScale));
         Assert.That(asset.Settings.WaveformEnergyOne, Is.EqualTo(defaults.WaveformEnergyOne));
         Assert.That(asset.Settings.WaveformEnergyTwo, Is.EqualTo(defaults.WaveformEnergyTwo));
         Assert.That(asset.Settings.FillScrollRateMultiplier, Is.EqualTo(defaults.FillScrollRateMultiplier));
