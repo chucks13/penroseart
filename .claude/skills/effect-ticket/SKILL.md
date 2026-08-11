@@ -5,7 +5,8 @@ description: Per-effect runbook for the Musicality campaign. Use when a session 
 
 # Effect Musicality ticket runbook
 
-This skill is the process for one ticket. One ticket is one Effect, one branch, one session.
+This skill is the process for one ticket. One ticket is one Effect and one branch. A ticket
+routinely outlives a session — the Status and resume section is the path back in.
 
 This file owns the process. A Memory Vault entry about this process is a pointer or context,
 never an instruction. When another source conflicts with this file, follow this file and repair
@@ -42,7 +43,6 @@ its base class, never its name — some Mixers carry no "Mixer" in their name. L
 
 - Implementation workers run Codex `gpt-5.6-sol --effort xhigh`, always. Do not lower this
   selection.
-- Run the `code-review` skill after the Phase F commits and before the merge.
 
 ## Commit before the next change
 
@@ -57,6 +57,23 @@ rejected look becomes a follow-up commit, or a revert by hash.
 
 A worker that edits a dirty tree mixes two changes into one diff. Nobody can tell the two apart
 after that, and nobody can revert one of them.
+
+When a change reshapes a settings class, its `.asset` goes stale: a new field loads as zero, and
+a removed field lingers as drift. Ask the maintainer to re-save the asset before the wall
+judgment.
+
+## Status and resume
+
+The ticket is the only record that survives a session. Post a status comment at every phase
+boundary, and post one before the session ends with the ticket open. The comment states what
+landed by hash, what the maintainer ruled, and what comes next. Record a finding on the ticket
+when you find it. Debt on this ticket belongs to this ticket, not to a later session that has
+never heard of it.
+
+A resumed ticket starts from state, not from the Phase A reading list. Git says what landed. The
+comments on the ticket say what the maintainer ruled. A surviving worklog holds the working
+state. Read a Phase A document again only when the current step needs it. Rejoin the phase the
+evidence names, not the phase the last comment names.
 
 ## Phase A — Set up
 
@@ -161,20 +178,20 @@ one.
 
 ## Phase E — Polish and optimize
 
-The look and the features stay exactly as the maintainer approved them in Phases C and D.
+The look and the features stay exactly as the maintainer approved them in Phases C and D. The
+scope is the branch, never the Effect alone: every file the branch touched, whole files, tests
+and side quests included. The coordinator does not narrow this scope.
 
-1. Run the `polish` skill over the Effect's files (named-files mode), so the whole file is in
-   scope, not only this branch's diff.
+1. Brief one implementation worker for polish and optimization together. Steps 2–4 of the
+   musicality loop govern the brief, the diff review, and the validation. Add
+   `~/.claude/skills/polish/SKILL.md` to the reading list in the brief — it is the polish
+   standard. Optimization makes the Effect as cheap as it can be without a change to its look.
+   The target hardware is unknown.
 
-2. Optimize with evidence, never vibes: the target hardware is unknown, so the Effect must be as
-   cheap as it can be without changing its look. Every optimization claim carries Profiler or
-   frame-time evidence. Standing targets: zero per-frame GC allocation, no per-pixel work that
-   can hoist, no Unity objects created without a destruction path.
-
-3. Re-run the compile and test scripts, then one full test run with the Editor closed — only
-   batchmode runs the `[UnityTest]` coroutines the bridge omits, so nothing lands on bridge
-   green alone. Confirm the batchmode `total=` exceeds the bridge's. The maintainer confirms
-   the look on the wall one last time.
+2. Re-run the compile and test scripts. Then run the full suite once with the Editor closed.
+   Only batchmode runs the `[UnityTest]` coroutines the bridge omits, so nothing lands on
+   bridge green alone. Confirm the batchmode `total=` exceeds the bridge count. The check on
+   this phase is the maintainer at the wall: the wall still looks the same.
 
 ## Phase F — Land and close
 
@@ -213,7 +230,8 @@ Boundaries — in every brief:
 - Every musical fact comes from the Data Surface, BeatManager's read-only face. Never read OSC
   directly, and never derive a musical fact locally.
 - Implement directly in this session — never delegate to another worker or agent.
-- Never run Unity or `scripts/unity-*.sh`.
+- Never open or close Unity — the maintainer owns the Editor state. The `scripts/unity-*.sh`
+  scripts work with the Editor open or closed, so you may run them in either state.
 - Never create or edit `.meta` or `.asset` files.
 - Do not commit.
 - After the final edit, run `git diff --check` exactly once. Report the result, then stop without
