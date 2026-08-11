@@ -212,11 +212,8 @@ public sealed class EffectSyncSettingsTests
             DuplicateThreshold = 0.18f,
             HueRedistribution = 0.19f,
         };
-        asset.Settings.WaveformEnergyOne = Energy.High;
-        asset.Settings.WaveformEnergyTwo = Energy.High;
         asset.Settings.FillScrollRateMultiplier = 17f;
         asset.Settings.FillRingCompression = 18f;
-        asset.Settings.BeatBrightnessFloor = 0.1f;
         asset.Settings.DropBars = 7;
         asset.Settings.DropReverseScrollRateMultiplier = 19f;
         asset.Settings.DropRingCompression = 20f;
@@ -239,11 +236,8 @@ public sealed class EffectSyncSettingsTests
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);
-        Assert.That(asset.Settings.WaveformEnergyOne, Is.EqualTo(defaults.WaveformEnergyOne));
-        Assert.That(asset.Settings.WaveformEnergyTwo, Is.EqualTo(defaults.WaveformEnergyTwo));
         Assert.That(asset.Settings.FillScrollRateMultiplier, Is.EqualTo(defaults.FillScrollRateMultiplier));
         Assert.That(asset.Settings.FillRingCompression, Is.EqualTo(defaults.FillRingCompression));
-        Assert.That(asset.Settings.BeatBrightnessFloor, Is.EqualTo(defaults.BeatBrightnessFloor));
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
         Assert.That(asset.Settings.DropReverseScrollRateMultiplier, Is.EqualTo(defaults.DropReverseScrollRateMultiplier));
         Assert.That(asset.Settings.DropRingCompression, Is.EqualTo(defaults.DropRingCompression));

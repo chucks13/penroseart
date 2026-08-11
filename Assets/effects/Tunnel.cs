@@ -110,12 +110,6 @@ public class Tunnel : EffectBase
         HueRedistribution = 0f,
     };
 
-    /// <summary>Authored first Waveform energy admitted by Tunnel in Synced Mode.</summary>
-    private const Energy SyncWaveformEnergyOne = Energy.Low;
-
-    /// <summary>Authored second Waveform energy admitted by Tunnel in Synced Mode.</summary>
-    private const Energy SyncWaveformEnergyTwo = Energy.Mid;
-
     /// <summary>
     /// Authored extra scroll-rate multiple at full Fill: the color scroll rushes this much faster at
     /// the build's peak. Tune while watching the Fill readout.
@@ -127,12 +121,6 @@ public class Tunnel : EffectBase
     /// the build's peak. Tune while watching the Fill readout.
     /// </summary>
     private const float SyncFillRingCompression = 3f;
-
-    /// <summary>
-    /// Authored floor of the Waveform-driven brightness pulse: higher values make a shallower pulse,
-    /// and one disables the brightness pulse. Tune while watching the live readout.
-    /// </summary>
-    private const float SyncBeatBrightnessFloor = 0.75f;
 
     /// <summary>Authored bars over which the Drop warp falls linearly from full to nothing.</summary>
     private const int SyncDropBars = 2;
@@ -186,11 +174,8 @@ public class Tunnel : EffectBase
         RadialMix = new FloatRange(SyncRadialMixMin, SyncRadialMixMax),
         CenterScale = SyncCenterScale,
         PaletteConditioning = SyncPaletteConditioning,
-        WaveformEnergyOne = SyncWaveformEnergyOne,
-        WaveformEnergyTwo = SyncWaveformEnergyTwo,
         FillScrollRateMultiplier = SyncFillScrollRateMultiplier,
         FillRingCompression = SyncFillRingCompression,
-        BeatBrightnessFloor = SyncBeatBrightnessFloor,
         DropBars = SyncDropBars,
         DropReverseScrollRateMultiplier = SyncDropReverseScrollRateMultiplier,
         DropRingCompression = SyncDropRingCompression,
@@ -244,13 +229,19 @@ public class Tunnel : EffectBase
     /// </summary>
     private float dropScroll;
 
-    /// <summary>Resolves both saved settings surfaces and initializes the per-activation Roll.</summary>
+    /// <summary>
+    /// Resolves both saved settings surfaces, initializes the per-activation Roll, and declares that
+    /// Tunnel drives no Waveform response: its musical reading is the Energy-selected cycle Duration
+    /// alone, so a second envelope on the same frame would only compete with it.
+    /// </summary>
     public override void OnStart()
     {
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
             typeof(Tunnel),
             StandaloneDefaults);
+        ResolveSyncSettings();
         Reroll();
+        waveform = waveforms.None;
         fillEnv = 0f;
         fillScroll = 0f;
         dropEnv = 0f;
@@ -260,17 +251,26 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Resolves Sync Settings, selects the active mode's Roll ranges, then re-rolls Tile-index phase,
-    /// the Standalone scroll speed, radial phase, and Waveform in the original random order. Keeping
-    /// the Standalone ScrollSpeed Roll in its original slot preserves the locked Standalone look while
-    /// Synced Mode takes its cycle cadence from a Duration.
+    /// Re-reads the saved Sync Settings so a live wall edit reaches the next frame. It is separate
+    /// from <see cref="Reroll"/> because Synced Mode keeps one Roll for the whole activation while
+    /// still following every settings change.
     /// </summary>
-    private void Reroll()
+    private void ResolveSyncSettings()
     {
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Tunnel),
             SyncDefaults);
+    }
 
+    /// <summary>
+    /// Selects the active mode's Roll ranges and re-rolls Tile-index phase, the Standalone scroll
+    /// speed, and radial phase in the original random order. Keeping the Standalone ScrollSpeed Roll
+    /// in its original slot preserves the locked Standalone look while Synced Mode takes its cycle
+    /// cadence from a Duration. Synced Mode rolls once per activation, so the Grid no longer calls
+    /// this; <see cref="OnNewGrid"/> owns that decision.
+    /// </summary>
+    private void Reroll()
+    {
         bool isSynced = beatManager.IsSynced;
         FloatRange tileIndexPhaseStepRange = isSynced
             ? SyncSettings.TileIndexPhaseStep
@@ -283,13 +283,21 @@ public class Tunnel : EffectBase
         tileIndexPhaseStep = Random.Range(tileIndexPhaseStepRange.Min, tileIndexPhaseStepRange.Max);
         scrollSpeed = Random.Range(scrollSpeedRange.Min, scrollSpeedRange.Max);
         radialMix = Random.Range(radialMixRange.Min, radialMixRange.Max);
-        waveform = waveforms.Random(SyncSettings.WaveformEnergyOne, SyncSettings.WaveformEnergyTwo);
     }
 
-    /// <summary>Re-rolls the tunnel when the musical Grid returns to one.</summary>
+    /// <summary>
+    /// Re-resolves Sync Settings on every Grid so live wall tuning keeps taking effect, and re-rolls
+    /// only in Standalone Mode. A Synced tunnel holds one Roll for the whole activation: its cadence
+    /// already follows the music through Energy and Duration, so a Grid re-roll would only interrupt
+    /// that reading.
+    /// </summary>
     protected override void OnNewGrid()
     {
-        Reroll();
+        ResolveSyncSettings();
+        if (!beatManager.IsSynced)
+        {
+            Reroll();
+        }
     }
 
     /// <summary>Reserved deactivation hook. Controller does not currently call this.</summary>
@@ -390,8 +398,6 @@ public class Tunnel : EffectBase
             hasPreviousSyncedCyclePhase = false;
         }
 
-        // The Waveform scales tunnel brightness without changing the tunnel phase.
-        float beatBrightness = waveform.Lerp(SyncSettings.BeatBrightnessFloor, 1f);
         UpdateFillEnvelope(cyclePhaseAdvance);
         UpdateDropSlam(cyclePhaseAdvance);
 
@@ -414,7 +420,7 @@ public class Tunnel : EffectBase
             float radialPhase = tiles[i].radius * radialPhaseScale;
             float phase = (i * tileIndexPhaseStep + cyclePhase + fillScroll + dropScroll +
                 radialPhase) % 1f;
-            buffer[i] = conditionedPalette.ReadCyclic(phase, doblend: true) * beatBrightness;
+            buffer[i] = conditionedPalette.ReadCyclic(phase, doblend: true);
         }
     }
 }
@@ -503,20 +509,11 @@ public sealed class TunnelSyncSettings
     /// </summary>
     public PaletteConditioning PaletteConditioning;
 
-    /// <summary>First Waveform energy admitted when Tunnel rolls its musical response.</summary>
-    public Energy WaveformEnergyOne;
-
-    /// <summary>Second Waveform energy admitted when Tunnel rolls its musical response.</summary>
-    public Energy WaveformEnergyTwo;
-
     /// <summary>Extra color-scroll rate multiple at full Fill.</summary>
     [Min(0f)] public float FillScrollRateMultiplier;
 
     /// <summary>Extra ring-compression multiple at full Fill.</summary>
     [Min(0f)] public float FillRingCompression;
-
-    /// <summary>Floor of the Waveform-driven brightness pulse.</summary>
-    [Range(0f, 1f)] public float BeatBrightnessFloor;
 
     /// <summary>Drop decay length in bars.</summary>
     [Min(1)] public int DropBars;
@@ -550,11 +547,8 @@ public sealed class TunnelSyncSettings
             source.RadialMix.HighRail);
         CenterScale = source.CenterScale;
         PaletteConditioning = source.PaletteConditioning;
-        WaveformEnergyOne = source.WaveformEnergyOne;
-        WaveformEnergyTwo = source.WaveformEnergyTwo;
         FillScrollRateMultiplier = source.FillScrollRateMultiplier;
         FillRingCompression = source.FillRingCompression;
-        BeatBrightnessFloor = source.BeatBrightnessFloor;
         DropBars = source.DropBars;
         DropReverseScrollRateMultiplier = source.DropReverseScrollRateMultiplier;
         DropRingCompression = source.DropRingCompression;
