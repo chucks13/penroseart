@@ -19,11 +19,9 @@ MonoBehaviour:
       Max: 0.003
       LowRail: 0.0004
       HighRail: 0.003
-    ScrollSpeed:
-      Min: 0.1
-      Max: 1
-      LowRail: 0.1
-      HighRail: 1
+    LowCycleDuration: 0
+    MidCycleDuration: 1
+    HighCycleDuration: 2
     RadialMix:
       Min: 0.01
       Max: 0.2
