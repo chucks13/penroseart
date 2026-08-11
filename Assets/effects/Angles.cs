@@ -140,9 +140,17 @@ public class Angles : EffectBase
     /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space. The 0.12 default follows the dormant pre-Drop/Drop front's authored softness; smaller is crisper and larger blends more of the wall between phases.</summary>
     private const float SyncBeatFrontSoftness = 0.12f;
 
-    /// <summary>Shape List unit transformed as the Fill drains inward. Lotusballs are the default because their 489 member Tiles are the only selectable motif set covering most of the current 900-Tile wall.</summary>
+    /// <summary>
+    /// Shape List unit transformed as the Fill drains inward. Starballs are the default because
+    /// contours changed what makes a good unit: a shape reads by its edge, and an edge needs
+    /// untouched background to sit against. Starballs' 32 ten-Tile motifs claim 320 Tiles and border
+    /// 304 more, and no two motifs ever contend for the same bordering Tile, so every shape gets a
+    /// private uncontested ring with 276 Tiles left ordinary. Lotusballs covers more wall — 489
+    /// member Tiles — but leaves only 160 ordinary and has 46% of its border contested, so its
+    /// contour stops reading as an outline and becomes a second colour field.
+    /// </summary>
     private const AnglesSyncSettings.FillUnitKind SyncFillUnit =
-        AnglesSyncSettings.FillUnitKind.Lotusballs;
+        AnglesSyncSettings.FillUnitKind.Starballs;
 
     /// <summary>
     /// Additional palette-cycle rotation shared by every part of every lit Fill motif, in cycles per
