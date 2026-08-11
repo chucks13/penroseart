@@ -412,8 +412,17 @@ public class Angles : EffectBase
     /// <summary>Each tile's raw angle-hue (pre-Spread, pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
     private float[] rawHue;
 
-    /// <summary>Each tile's immutable wall-centered position, cached once so the live beat-front axis can project it every frame without reading tile metadata or allocating.</summary>
+    /// <summary>Each tile's immutable wall-centered position, cached once so a changed live beat-front axis can refresh its normalized ranks without reading tile metadata or allocating.</summary>
     private Vector2[] tileCenters;
+
+    /// <summary>Each Tile's normalized projection along the live beat-front axis, refreshed only when <see cref="AnglesSyncSettings.BeatFrontAxisDegrees"/> changes.</summary>
+    private float[] beatFrontRankByTile;
+
+    /// <summary>Whether <see cref="beatFrontRankByTile"/> represents an axis yet.</summary>
+    private bool beatFrontRanksInitialized;
+
+    /// <summary>The live beat-front axis represented by <see cref="beatFrontRankByTile"/>.</summary>
+    private float beatFrontRankAxisDegrees;
 
     /// <summary>Per Tile, its Lotusball Fill membership, existing unit rank, and center-or-surround part.</summary>
     private FillTileFields[] lotusballFillFields;
@@ -430,16 +439,32 @@ public class Angles : EffectBase
     /// lines4, lines2, lines1 so overlap resolution and density decay share one stable priority.
     /// </summary>
     /// <remarks>
-    /// Geometry alone is cached. The Drop envelope, active-family count, flow phase, and mix remain
-    /// live per-frame values, so no Sync Setting is baked into this <see cref="Init"/>-time cache.
+    /// This is initialization-only geometry staging. Its arrays become the resolved active-family
+    /// cache below, then this outer reference is cleared. The Drop envelope, active-family count,
+    /// flow phase, and mix remain live per-frame values, so no Sync Setting is baked into either cache.
     /// </remarks>
     private float[][] ribbonPositionByFamily;
+
+    /// <summary>
+    /// Per active-family count and Tile, the normalized stored position from the cleanest active
+    /// Line Ribbon family that contains it, or -1 when no active family contains it. Multiply-covered
+    /// Tiles keep one stable source until their current family drops out, while every family still
+    /// contributes where cleaner families do not.
+    /// </summary>
+    private float[][] ribbonPositionByActiveFamilyCount;
 
     /// <summary>
     /// Per Tile, its folded orientation in [0,1) (tileangle mod 180° / 180°), cached once. It drives
     /// directional shading and wraps smoothly so same-facing Tiles (0° ≡ 180°) shade identically.
     /// </summary>
     private float[] normalizedOrientationByTile;
+
+    /// <summary>
+    /// Per-Tile alignment with the activation's fixed light direction. The random light direction
+    /// changes only in <see cref="OnStart"/>, so its cosine is cached there while live shading depth
+    /// remains a per-frame value.
+    /// </summary>
+    private float[] lightAlignmentByTile;
 
     /// <summary>
     /// Bounded palette-cycle phase integrated only while the active Drop response is visible. The
@@ -528,13 +553,20 @@ public class Angles : EffectBase
         int total = tiles.Length;
         rawHue = new float[total];
         tileCenters = new Vector2[total];
+        beatFrontRankByTile = new float[total];
         ribbonPositionByFamily = new float[RibbonFamilyCount][];
         normalizedOrientationByTile = new float[total];
+        lightAlignmentByTile = new float[total];
 
         for (int i = 0; i < total; i++)
         {
-            rawHue[i] = tiles[i].tileangle / 180f;
+            float tileAngle = tiles[i].tileangle;
+            rawHue[i] = tileAngle / 180f;
             tileCenters[i] = tiles[i].center;
+
+            // Folded orientation in [0,1): tileangle mod 180° normalized. Directional shading reads
+            // it continuously so same-facing Tiles remain one brightness family.
+            normalizedOrientationByTile[i] = Mathf.Repeat(tileAngle, 180f) / 180f;
         }
 
         lotusballFillFields = PrecomputeFillFields(
@@ -551,14 +583,10 @@ public class Angles : EffectBase
         PrecomputeRibbonFamily(1, penrose.Layout.shapes.Lines4, total);
         PrecomputeRibbonFamily(2, penrose.Layout.shapes.Lines2, total);
         PrecomputeRibbonFamily(3, penrose.Layout.shapes.Lines1, total);
-
-        for (int i = 0; i < total; i++)
-        {
-            // Folded orientation in [0,1): tileangle mod 180° normalized. Directional shading reads
-            // it continuously so same-facing Tiles remain one brightness family.
-            float folded = Mathf.Repeat(tiles[i].tileangle, 180f) / 180f;
-            normalizedOrientationByTile[i] = folded;
-        }
+        ribbonPositionByActiveFamilyCount = PrecomputeRibbonPositionsByActiveFamilyCount(
+            ribbonPositionByFamily,
+            total);
+        ribbonPositionByFamily = null;
     }
 
     /// <summary>
@@ -609,6 +637,40 @@ public class Angles : EffectBase
         }
 
         ribbonPositionByFamily[familyIndex] = positions;
+    }
+
+    /// <summary>
+    /// Resolves every possible Drop density to the cleanest active family containing each Tile.
+    /// Settling the stable priority during <see cref="Init"/> removes the per-Tile family scan from
+    /// <see cref="Draw"/> while still allowing the live Drop envelope to select a density each frame.
+    /// </summary>
+    /// <param name="positionsByFamily">Cleanest-first per-family Line Ribbon positions.</param>
+    /// <param name="total">Number of Tiles represented by every resolved density.</param>
+    /// <returns>Per active-family count and Tile, the selected ribbon position or -1.</returns>
+    private static float[][] PrecomputeRibbonPositionsByActiveFamilyCount(
+        float[][] positionsByFamily,
+        int total)
+    {
+        var positionsByActiveFamilyCount = new float[RibbonFamilyCount + 1][];
+        positionsByActiveFamilyCount[1] = positionsByFamily[0];
+        for (int activeFamilyCount = 2;
+            activeFamilyCount <= RibbonFamilyCount;
+            activeFamilyCount++)
+        {
+            float[] positions = positionsByFamily[activeFamilyCount - 1];
+            float[] cleanerPositions = positionsByActiveFamilyCount[activeFamilyCount - 1];
+            for (int tileIndex = 0; tileIndex < total; tileIndex++)
+            {
+                if (cleanerPositions[tileIndex] >= 0f)
+                {
+                    positions[tileIndex] = cleanerPositions[tileIndex];
+                }
+            }
+
+            positionsByActiveFamilyCount[activeFamilyCount] = positions;
+        }
+
+        return positionsByActiveFamilyCount;
     }
 
     /// <summary>
@@ -797,6 +859,7 @@ public class Angles : EffectBase
             : standaloneSettings.PaletteConditioning);
         RandomizeStandaloneSweepRate();
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
+        RefreshLightAlignmentByTile();
         huePhase = Mathf.Repeat(effectTime * standaloneSweepCyclesPerSecond, 1f);
         previousBeatGateOpen = false;
         beatFrontActive = false;
@@ -812,6 +875,20 @@ public class Angles : EffectBase
         smoothedEnergy = SyncSettings.EnergyRestingLevel;
         controller.debugText.text = DebugText();
         buffer.Clear();
+    }
+
+    /// <summary>
+    /// Refreshes the fixed directional-light alignment after the activation rolls
+    /// <see cref="lightPhase"/>, keeping the per-frame shading path to one cached read per Tile.
+    /// </summary>
+    private void RefreshLightAlignmentByTile()
+    {
+        for (int i = 0; i < lightAlignmentByTile.Length; i++)
+        {
+            lightAlignmentByTile[i] = 0.5f +
+                (0.5f * Mathf.Cos(
+                    (normalizedOrientationByTile[i] * Mathf.PI * 2f) - lightPhase));
+        }
     }
 
     /// <summary>
@@ -1028,28 +1105,6 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Resolves a Tile's position from the cleanest active family that contains it. This stable
-    /// priority prevents multiply-covered Tiles from switching sources until their current family
-    /// drops out, while still allowing every family to contribute where cleaner families do not.
-    /// </summary>
-    /// <param name="tileIndex">The Tile whose active Line Ribbon membership is requested.</param>
-    /// <param name="activeFamilyCount">Number of cleanest-first families still flowing.</param>
-    /// <returns>Normalized position along the selected ribbon, or -1 when no active family contains the Tile.</returns>
-    private float ResolveRibbonPosition(int tileIndex, int activeFamilyCount)
-    {
-        for (int familyIndex = 0; familyIndex < activeFamilyCount; familyIndex++)
-        {
-            float position = ribbonPositionByFamily[familyIndex][tileIndex];
-            if (position >= 0f)
-            {
-                return position;
-            }
-        }
-
-        return -1f;
-    }
-
-    /// <summary>
     /// Interpolates the three independently authored Energy-tier sweep rates through the smoothed
     /// ladder position. Mid is a real authored value, never an arithmetic midpoint imposed by Low
     /// and High.
@@ -1167,6 +1222,43 @@ public class Angles : EffectBase
     }
 
     /// <summary>
+    /// Refreshes normalized Tile ranks only when the live beat-front axis changes. The setting is
+    /// compared on every sweeping frame, so a Play Mode edit reaches the next frame whose rendering
+    /// depends on it instead of becoming an <see cref="Init"/>-baked half-live value.
+    /// </summary>
+    private void RefreshBeatFrontRanks()
+    {
+        float axisDegrees = SyncSettings.BeatFrontAxisDegrees;
+        if (beatFrontRanksInitialized && beatFrontRankAxisDegrees == axisDegrees)
+        {
+            return;
+        }
+
+        float axisRadians = axisDegrees * Mathf.Deg2Rad;
+        var axis = new Vector2(Mathf.Cos(axisRadians), Mathf.Sin(axisRadians));
+        float minimum = float.PositiveInfinity;
+        float maximum = float.NegativeInfinity;
+        for (int i = 0; i < tileCenters.Length; i++)
+        {
+            float projection = Vector2.Dot(tileCenters[i], axis);
+            beatFrontRankByTile[i] = projection;
+            minimum = Mathf.Min(minimum, projection);
+            maximum = Mathf.Max(maximum, projection);
+        }
+
+        for (int i = 0; i < beatFrontRankByTile.Length; i++)
+        {
+            beatFrontRankByTile[i] = Mathf.InverseLerp(
+                minimum,
+                maximum,
+                beatFrontRankByTile[i]);
+        }
+
+        beatFrontRankAxisDegrees = axisDegrees;
+        beatFrontRanksInitialized = true;
+    }
+
+    /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
     public override void Draw()
@@ -1222,29 +1314,20 @@ public class Angles : EffectBase
         dropResponseEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropBeats);
         UpdateRibbonFlowPhase(dropResponseEnvelope);
         int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropResponseEnvelope);
+        float[] activeRibbonPositions = activeRibbonFamilyCount > 0
+            ? ribbonPositionByActiveFamilyCount[activeRibbonFamilyCount]
+            : null;
         // Directional shading is a standing part of both looks. Standalone holds its authored
         // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
         // toward Max, so the approved static look remains the musical response's starting point.
         float spread = standaloneSettings.Spread;
 
         bool beatFrontSweeping = beatMovementEngaged && beatFrontActive;
-        Vector2 beatFrontAxis = default;
-        float beatFrontMinimum = 0f;
-        float beatFrontMaximum = 0f;
         float beatFrontPosition = 0f;
         float beatFrontSoftness = SyncSettings.BeatFrontSoftness;
         if (beatFrontSweeping)
         {
-            float axisRadians = SyncSettings.BeatFrontAxisDegrees * Mathf.Deg2Rad;
-            beatFrontAxis = new Vector2(Mathf.Cos(axisRadians), Mathf.Sin(axisRadians));
-            beatFrontMinimum = float.PositiveInfinity;
-            beatFrontMaximum = float.NegativeInfinity;
-            for (int i = 0; i < tileCenters.Length; i++)
-            {
-                float projection = Vector2.Dot(tileCenters[i], beatFrontAxis);
-                beatFrontMinimum = Mathf.Min(beatFrontMinimum, projection);
-                beatFrontMaximum = Mathf.Max(beatFrontMaximum, projection);
-            }
+            RefreshBeatFrontRanks();
 
             // Begin one soft-edge width before the first tile and finish on the last tile so the
             // whole wall reaches the new phase exactly as the trigger window closes.
@@ -1260,11 +1343,7 @@ public class Angles : EffectBase
                 float tileBeatPhase = beatPhaseTo;
                 if (beatFrontSweeping)
                 {
-                    float projection = Vector2.Dot(tileCenters[i], beatFrontAxis);
-                    float projection01 = Mathf.InverseLerp(
-                        beatFrontMinimum,
-                        beatFrontMaximum,
-                        projection);
+                    float projection01 = beatFrontRankByTile[i];
                     float phaseMix = beatFrontPosition.Remap(
                         projection01 - beatFrontSoftness,
                         projection01,
@@ -1287,9 +1366,7 @@ public class Angles : EffectBase
             // lightPhase is seeded once per activation and then holds, so the lit direction stays put
             // while huePhase sweeps colour through it — a fixed light is what lets the rhombs read as
             // lit solids; a turning one would just add motion competing with the hue drift.
-            float lightAlignment = 0.5f +
-                (0.5f * Mathf.Cos(
-                    (normalizedOrientationByTile[i] * Mathf.PI * 2f) - lightPhase));
+            float lightAlignment = lightAlignmentByTile[i];
             float directionalShade = lightAlignment.Lerp(1f - shadeDepth, 1f);
 
             // Sample Angles' current and next conditioned copies separately, mirroring AnimPalette's
@@ -1351,8 +1428,8 @@ public class Angles : EffectBase
                 }
             }
 
-            float ribbonPosition = activeRibbonFamilyCount > 0
-                ? ResolveRibbonPosition(i, activeRibbonFamilyCount)
+            float ribbonPosition = activeRibbonPositions != null
+                ? activeRibbonPositions[i]
                 : -1f;
             if (ribbonPosition >= 0f)
             {
