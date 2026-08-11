@@ -24,6 +24,7 @@ MonoBehaviour:
       DuplicateThreshold: 0.08
       HueRedistribution: 1
     BeatLowThreshold: 0.35
+    BeatLowLevelReading: 1
     BeatPhaseStep: 0.1
     BeatFrontAxisDegrees: 0
     BeatFrontSoftness: 0.12
