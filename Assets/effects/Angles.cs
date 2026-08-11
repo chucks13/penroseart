@@ -21,15 +21,17 @@ using UnityEngine;
 /// its own full-pattern hue rotation and does not drive this choreography; that Routine hue offset is
 /// likewise preserved behind temporary rebuild scaffolding.
 ///
-/// SHADING (preserved behind temporary rebuild scaffolding): a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
+/// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
-/// Its depth scales with musical <see cref="BeatManager.Energy"/> — subtle in low-energy sections, more
-/// pronounced in high-energy ones. This is pure geometry plus a nullable Energy read, so it renders steady
-/// at a fixed mid depth in Standalone (no beat clock) rather than going flat.
+/// Standalone holds the authored baseline depth. In Synced Mode the existing smoothed
+/// <see cref="BeatManager.Energy"/> ladder deepens that shading and selects one of three independently
+/// authored hue-cycle-per-beat sweep rates, which the measured live beat interval converts to velocity.
+/// A missing nullable Energy rests at Mid; the beat interval itself is always present while the wall reads
+/// Synced, because the wire withholds it only when no live player can contribute one.
 ///
-/// On every new Grid the sweep speed and held Waveform re-roll, so the look changes character every 16
-/// beats even outside a Fill/Drop. The shading light direction is seeded once per activation instead:
-/// re-rolling it at a Grid caused a visible flash, and it drives no pixels while shading is disabled.
+/// Standalone's sweep speed and the held Waveform re-roll on every new Grid, preserving the authored
+/// no-music motion and Random draw order. Synced sweep velocity never reads that roll. The shading light
+/// direction is seeded once per activation instead: re-rolling it at a Grid caused a visible flash.
 /// </remarks>
 [EffectSyncSettings(typeof(AnglesSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(AnglesStandaloneSettingsAsset))]
@@ -42,14 +44,6 @@ public class Angles : EffectBase
 
     /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
     private const bool EnableDropBlackoutAndReignition = false;
-
-    /// <summary>
-    /// Temporary rebuild scaffolding for letting Energy drive the directional shading depth; this
-    /// layer returns reshaped or is deleted when its turn comes. Directional shading itself is no
-    /// longer gated: it runs at the authored depth, and the flag only decides whether Energy takes
-    /// that depth over.
-    /// </summary>
-    private const bool EnableEnergyDrivenDirectionalShading = false;
 
     /// <summary>Temporary rebuild scaffolding for the Routine rhythm hue offset; this layer returns reshaped or is deleted when its turn comes.</summary>
     private const bool EnableRoutineRhythmHueOffset = false;
@@ -108,12 +102,6 @@ public class Angles : EffectBase
     /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Set on the wall.</summary>
     private const float StandaloneShadeDepthHigh = 0.8f;
 
-    /// <summary>Energy level assumed when <see cref="EnergyValues.Level"/> has no value: 0.5 = Mid, a steady moderate shading depth. Tune on the readout.</summary>
-    private const float StandaloneEnergy = 0.5f;
-
-    /// <summary>Smoothing rate (per second) easing the shading depth between energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the readout.</summary>
-    private const float StandaloneEnergySmoothing = 2f;
-
     /// <summary>Fixed full-cycle Routine hue offset returned when no live clock can place the choreography.</summary>
     private const float StandaloneRhythmHueOffset = 1f;
 
@@ -167,6 +155,18 @@ public class Angles : EffectBase
     /// <summary>Fourth energy pool sampled for the four-bar Routine choreography.</summary>
     private const Energy SyncRoutineEnergyFour = Energy.Low;
 
+    /// <summary>Energy ladder position assumed when <see cref="EnergyValues.Level"/> has no value: 0.5 = Mid, a steady moderate sweep rate and shading depth rather than either endpoint. Tune on the EN readout.</summary>
+    private const float SyncEnergyRestingLevel = 0.5f;
+
+    /// <summary>Low-Energy sweep rate in hue cycles per beat: one full hue cycle in about 16 beats. Tune on the SWEEP readout.</summary>
+    private const float SyncSweepCyclesPerBeatLow = 0.06f;
+
+    /// <summary>Mid-Energy sweep rate in hue cycles per beat: one full hue cycle in about 8 beats, authored independently so Mid can keep its own decent pace. Tune on the SWEEP readout.</summary>
+    private const float SyncSweepCyclesPerBeatMid = 0.12f;
+
+    /// <summary>High-Energy sweep rate in hue cycles per beat: one full hue cycle every 4 beats. Tune on the SWEEP readout.</summary>
+    private const float SyncSweepCyclesPerBeatHigh = 0.25f;
+
     /// <summary>
     /// Standing directional-shading depth, mirroring Standalone so the two modes carry the same look
     /// until a musical reason parts them: the dimmest orientation drops this far below full, and the
@@ -177,7 +177,7 @@ public class Angles : EffectBase
     /// <summary>Directional-shading depth at High energy: deeper contrast so intense sections read the ten families more strongly, without ever going as dark as the Drop. Set on the wall.</summary>
     private const float SyncShadeDepthHigh = 0.8f;
 
-    /// <summary>Smoothing rate (per second) easing the shading depth between energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the readout.</summary>
+    /// <summary>Smoothing rate (per second) easing both sweep velocity and shading depth between Energy tiers, so a Low/Mid/High change ramps over ~0.5s instead of snapping. Tune on the EN and SWEEP readouts.</summary>
     private const float SyncEnergySmoothing = 2f;
 
     /// <summary>Minimum hue rotation applied at the bottom of the live Routine envelope.</summary>
@@ -192,10 +192,19 @@ public class Angles : EffectBase
     private const int OrientationClasses = 10;
 
     /// <summary>
-    /// Advertises no Fill/Drop capability or Energy character while Angles returns to its bare base effect,
-    /// preventing the Director from casting it to musical Anchors until those layers are rebuilt.
+    /// Mid's position on the normalized Energy ladder, which runs Low 0, Mid 0.5, High 1. This is
+    /// the ladder's own geometry, not a tuning value: the tunable resting position a nullable
+    /// <see cref="EnergyValues.Level"/> falls back to is
+    /// <see cref="AnglesSyncSettings.EnergyRestingLevel"/>.
     /// </summary>
-    public override Repertoire Repertoire => Repertoire.None;
+    private const float EnergyLadderMid = 0.5f;
+
+    /// <summary>
+    /// Advertises that Angles suits all three Energy tiers now that they drive its motion and shading,
+    /// while withholding Fill/Drop capability until those disabled layers are rebuilt.
+    /// </summary>
+    public override Repertoire Repertoire =>
+        Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>
     /// Resolves a fresh immutable-by-convention copy of Angles' Standalone Defaults, including
@@ -212,14 +221,13 @@ public class Angles : EffectBase
             StandaloneShadeDepthHigh,
             0f,
             1f),
-        Energy = StandaloneEnergy,
-        EnergySmoothing = StandaloneEnergySmoothing,
         RhythmHueOffset = StandaloneRhythmHueOffset,
     };
 
     /// <summary>
     /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
-    /// conditioning, directional-shading depth, and Routine hue-offset ranges.
+    /// conditioning, three Energy-tier sweep rates, directional-shading depth, and Routine
+    /// hue-offset ranges.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
@@ -234,6 +242,10 @@ public class Angles : EffectBase
         RoutineEnergyTwo = SyncRoutineEnergyTwo,
         RoutineEnergyThree = SyncRoutineEnergyThree,
         RoutineEnergyFour = SyncRoutineEnergyFour,
+        EnergyRestingLevel = SyncEnergyRestingLevel,
+        SweepCyclesPerBeatLow = SyncSweepCyclesPerBeatLow,
+        SweepCyclesPerBeatMid = SyncSweepCyclesPerBeatMid,
+        SweepCyclesPerBeatHigh = SyncSweepCyclesPerBeatHigh,
         ShadeDepth = new FloatRange(
             SyncShadeDepthLow,
             SyncShadeDepthHigh,
@@ -274,10 +286,13 @@ public class Angles : EffectBase
     /// <summary>Angles' conditioned copy of the shared next palette endpoint.</summary>
     private GPalette conditionedNextPalette;
 
-    /// <summary>Current sweep speed rolled for this activation or Grid.</summary>
+    /// <summary>
+    /// Standalone sweep speed rolled for this activation or Grid. Synced per-frame velocity never
+    /// reads it; retaining the roll preserves Standalone motion and the shared Random draw order.
+    /// </summary>
     private float speed;
 
-    /// <summary>Bounded hue-wheel position integrated from sweep speed, seeded from the activation's randomized <see cref="EffectBase.effectTime"/> phase so speed changes alter velocity without teleporting position.</summary>
+    /// <summary>Bounded hue-wheel position integrated from the active mode's sweep rate, seeded from the activation's randomized <see cref="EffectBase.effectTime"/> phase so rate, tempo, Energy, and mode changes alter velocity without teleporting position.</summary>
     private float huePhase;
 
     /// <summary>Four-bar waveform choreography, one Waveform per bar drawn from the energy pools named by <see cref="AnglesSyncSettings.RoutineEnergyOne"/> through <see cref="AnglesSyncSettings.RoutineEnergyFour"/>.</summary>
@@ -318,19 +333,40 @@ public class Angles : EffectBase
     /// </remarks>
     private float lightPhase;
 
-    /// <summary>Energy level (0..1) smoothed frame-to-frame, driving shading depth. Seeded to <see cref="StandaloneEnergy"/> so the first frame and all of Standalone render at a steady mid depth.</summary>
+    /// <summary>
+    /// Energy ladder position (Low 0, Mid 0.5, High 1) smoothed frame-to-frame in Synced Mode,
+    /// driving sweep velocity and shading depth together. It starts at Mid so a nullable Energy read
+    /// has a steady moderate resting value; Standalone rendering does not read it.
+    /// </summary>
     private float smoothedEnergy;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-    public override string DebugText() =>
-        "Angles" +
-        $"\nEN {smoothedEnergy:0.00}" +
-        (hueCompression > 0.01f ? $"\nTENSION {hueCompression:0.00}" : "") +
-        (beatManager.Drop.Active
-            ? $"\nDROP {beatManager.Drop.In.Build(SyncSettings.DropBeats):0.00}"
-            : "");
+    public override string DebugText()
+    {
+        bool isSynced = beatManager.IsSynced;
+        float cyclesPerBeat = isSynced ? ResolveSyncedSweepCyclesPerBeat() : 0f;
+        float cyclesPerSecond = isSynced ? ResolveSyncedSweepCyclesPerSecond() : speed;
+        float shadeDepth = isSynced
+            ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
+            : standaloneSettings.ShadeDepth.Min;
+        string energyReadout = isSynced
+            ? $"{beatManager.Energy.Level?.ToString() ?? "—"}  {smoothedEnergy:0.00}"
+            : "Standalone";
+        string sweepReadout = isSynced
+            ? $"{cyclesPerBeat:0.000} cpb  {cyclesPerSecond:0.000} cps  {beatManager.Timing.BeatAverageMilliseconds?.ToString() ?? "—"} ms"
+            : $"{cyclesPerSecond:0.000} cps";
+
+        return "Angles" +
+            $"\nEN {energyReadout}" +
+            $"\nSWEEP {sweepReadout}" +
+            $"\nSHADE {shadeDepth:0.00}" +
+            (hueCompression > 0.01f ? $"\nTENSION {hueCompression:0.00}" : "") +
+            (beatManager.Drop.Active
+                ? $"\nDROP {beatManager.Drop.In.Build(SyncSettings.DropBeats):0.00}"
+                : "");
+    }
 
     /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
@@ -405,15 +441,19 @@ public class Angles : EffectBase
         lightPhase = Random.Range(0f, Mathf.PI * 2f);
         huePhase = Mathf.Repeat(effectTime * speed, 1f);
         hueCompression = 0f;
-        smoothedEnergy = standaloneSettings.Energy;
+        // Seeded in both modes because BeatManager recomputes IsSynced from the wire every frame: the
+        // wall can go Synced mid-activation, and the ladder must already sit at its resting position
+        // when the first Synced frame reads it rather than ramping up from a stale or zero value.
+        smoothedEnergy = SyncSettings.EnergyRestingLevel;
         controller.debugText.text = DebugText();
         buffer.Clear();
     }
 
     /// <summary>
-    /// Re-rolls the per-activation or per-Grid sweep speed and four-bar Waveform Routine, so the look takes a
-    /// fresh character every 16 beats. The shading light direction is intentionally seeded only in
-    /// <see cref="OnStart"/> because changing it on a Grid caused a visible flash.
+    /// Re-rolls the held Standalone sweep speed and four-bar Waveform Routine, so Standalone keeps its
+    /// authored motion and Random draw order while the look takes a fresh character every 16 beats.
+    /// Synced sweep velocity never reads the random speed. The shading light direction is intentionally
+    /// seeded only in <see cref="OnStart"/> because changing it on a Grid caused a visible flash.
     /// </summary>
     private void Reroll()
     {
@@ -426,7 +466,7 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// On each new Grid the sweep takes a fresh speed and four-bar Waveform routine.
+    /// On each new Grid the held Standalone sweep speed and four-bar Waveform Routine take fresh rolls.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -575,26 +615,59 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Updates musical-energy smoothing and interpolates the active mode's directional-shading
-    /// depth endpoints.
+    /// Interpolates the three independently authored Energy-tier sweep rates through the smoothed
+    /// ladder position. Mid is a real authored value, never an arithmetic midpoint imposed by Low
+    /// and High.
     /// </summary>
-    private float UpdateShadeDepth()
+    private float ResolveSyncedSweepCyclesPerBeat()
+    {
+        return smoothedEnergy <= EnergyLadderMid
+            ? Mathf.Lerp(
+                SyncSettings.SweepCyclesPerBeatLow,
+                SyncSettings.SweepCyclesPerBeatMid,
+                Mathf.InverseLerp(0f, EnergyLadderMid, smoothedEnergy))
+            : Mathf.Lerp(
+                SyncSettings.SweepCyclesPerBeatMid,
+                SyncSettings.SweepCyclesPerBeatHigh,
+                Mathf.InverseLerp(EnergyLadderMid, 1f, smoothedEnergy));
+    }
+
+    /// <summary>
+    /// Converts the smoothed hue-cycles-per-beat response to cycles per second with the Data
+    /// Surface's measured live beat interval, so a faster track sweeps faster at the same tier.
+    /// </summary>
+    /// <remarks>
+    /// The interval is typed nullable, but it cannot be absent here. <c>IsSynced</c> is true only
+    /// while the wire reports a real beat-in-bar, which means a live player holds a beat position,
+    /// and the wire reports no beat average only when no live player can contribute one. The null
+    /// arm therefore exists to unwrap the <see cref="int"/>? and never renders.
+    /// </remarks>
+    private float ResolveSyncedSweepCyclesPerSecond()
+    {
+        return beatManager.Timing.BeatAverageMilliseconds is { } beatAverageMilliseconds
+            ? ResolveSyncedSweepCyclesPerBeat() * 1000f / beatAverageMilliseconds
+            : 0f;
+    }
+
+    /// <summary>
+    /// Updates the shared Synced Energy ladder position that eases both sweep velocity and
+    /// directional-shading depth. A missing nullable Energy rests at Mid rather than snapping either
+    /// response to an endpoint.
+    /// </summary>
+    private void UpdateSmoothedEnergy()
     {
         float energyTarget = beatManager.Energy.Level switch
         {
             Energy.Low => 0f,
-            Energy.Mid => 0.5f,
+            Energy.Mid => EnergyLadderMid,
             Energy.High => 1f,
-            _ => standaloneSettings.Energy,
+            _ => SyncSettings.EnergyRestingLevel,
         };
-        float energySmoothing = beatManager.IsSynced
-            ? SyncSettings.EnergySmoothing
-            : standaloneSettings.EnergySmoothing;
-        smoothedEnergy = SmoothToward(smoothedEnergy, energyTarget, energySmoothing, effectDelta);
-        FloatRange shadeDepth = beatManager.IsSynced
-            ? SyncSettings.ShadeDepth
-            : standaloneSettings.ShadeDepth;
-        return smoothedEnergy.Lerp(shadeDepth.Min, shadeDepth.Max);
+        smoothedEnergy = SmoothToward(
+            smoothedEnergy,
+            energyTarget,
+            SyncSettings.EnergySmoothing,
+            effectDelta);
     }
 
     /// <summary>
@@ -602,9 +675,20 @@ public class Angles : EffectBase
     /// </summary>
     public override void Draw()
     {
-        huePhase = Mathf.Repeat(huePhase + (speed * effectDelta), 1f);
+        bool isSynced = beatManager.IsSynced;
+        if (isSynced)
+        {
+            UpdateSmoothedEnergy();
+        }
+        float shadeDepth = isSynced
+            ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
+            : standaloneSettings.ShadeDepth.Min;
+        float sweepCyclesPerSecond = isSynced
+            ? ResolveSyncedSweepCyclesPerSecond()
+            : speed;
+        huePhase = Mathf.Repeat(huePhase + (sweepCyclesPerSecond * effectDelta), 1f);
 
-        PaletteConditioning paletteConditioning = beatManager.IsSynced
+        PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
         RefreshConditionedPalettes(paletteConditioning);
@@ -625,16 +709,9 @@ public class Angles : EffectBase
         bool inDrop = drop.Active;
         float dropRelease = UpdateChoreography(drop);
         float frameHueCompression = EnableFillAndPreDropHueCompression ? hueCompression : 0f;
-        // Directional shading is a standing part of the look, not a musical layer: it holds the
-        // authored depth until Energy's turn comes to drive it. ShadeDepth.Min is that authored
-        // baseline and stays the Low-energy endpoint the later Energy lerp starts from, so tuning the
-        // static look on the wall also sets where the musical response will begin.
-        FloatRange shadeDepthRange = beatManager.IsSynced
-            ? SyncSettings.ShadeDepth
-            : standaloneSettings.ShadeDepth;
-        float shadeDepth = EnableEnergyDrivenDirectionalShading
-            ? UpdateShadeDepth()
-            : shadeDepthRange.Min;
+        // Directional shading is a standing part of both looks. Standalone holds its authored
+        // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
+        // toward Max, so the approved static look remains the musical response's starting point.
         float spread = standaloneSettings.Spread;
 
         // Hoisted: the front's soft edge is uniform across the wall, so its rank scale is one
@@ -691,8 +768,8 @@ public class Angles : EffectBase
                     paletteTransitionProgress);
             }
 
-            // Keep the existing dormant shading/Drop value as its separate post-palette stage; all four
-            // temporary musical-layer flags remain disabled and unchanged in this pass.
+            // Keep shading and the existing dormant Drop value as their separate post-palette stage;
+            // the three remaining temporary musical-layer flags stay unchanged in this pass.
             buffer[i] = new Color(
                 paletteColor.r * value,
                 paletteColor.g * value,
@@ -724,16 +801,11 @@ public sealed class AnglesStandaloneSettings
     public FloatRange Speed;
 
     /// <summary>
-    /// Low- and High-energy directional-shading depth endpoints used by the Standalone fallback
-    /// interpolation, with editor rails spanning the full normalized depth.
+    /// Directional-shading depth authored for Standalone. Min is the standing depth the renderer
+    /// reads; Max remains paired with it so the two Effect Settings surfaces retain the same tuned
+    /// depth range and rails.
     /// </summary>
     public FloatRange ShadeDepth;
-
-    /// <summary>Normalized fallback energy used when no track Energy value exists.</summary>
-    [Range(0f, 1f)] public float Energy;
-
-    /// <summary>Per-second shading-depth smoothing rate outside live musical placement.</summary>
-    [Min(0f)] public float EnergySmoothing;
 
     /// <summary>Fixed Routine hue offset returned without live musical placement.</summary>
     [Range(0f, 1f)] public float RhythmHueOffset;
@@ -758,8 +830,6 @@ public sealed class AnglesStandaloneSettings
             source.ShadeDepth.Max,
             source.ShadeDepth.LowRail,
             source.ShadeDepth.HighRail);
-        Energy = source.Energy;
-        EnergySmoothing = source.EnergySmoothing;
         RhythmHueOffset = source.RhythmHueOffset;
     }
 }
@@ -804,13 +874,25 @@ public sealed class AnglesSyncSettings
     /// <summary>Fourth energy pool sampled for the four-bar Routine choreography.</summary>
     public Energy RoutineEnergyFour;
 
+    /// <summary>Live Energy ladder position held while the track reports no Energy level, so a nullable read rests at a tunable moderate sweep rate and shading depth.</summary>
+    [Range(0f, 1f)] public float EnergyRestingLevel;
+
+    /// <summary>Low-Energy hue sweep rate in cycles per beat, authored independently of Mid and High.</summary>
+    [Min(0f)] public float SweepCyclesPerBeatLow;
+
+    /// <summary>Mid-Energy hue sweep rate in cycles per beat, authored independently so it can keep its own decent pace.</summary>
+    [Min(0f)] public float SweepCyclesPerBeatMid;
+
+    /// <summary>High-Energy hue sweep rate in cycles per beat, authored independently of Low and Mid.</summary>
+    [Min(0f)] public float SweepCyclesPerBeatHigh;
+
     /// <summary>
     /// Directional-shading depth endpoints at Low and High track Energy, with editor rails
     /// spanning the full normalized depth.
     /// </summary>
     public FloatRange ShadeDepth;
 
-    /// <summary>Per-second smoothing rate between track Energy shading targets.</summary>
+    /// <summary>Per-second smoothing rate between track Energy sweep and shading targets.</summary>
     [Min(0f)] public float EnergySmoothing;
 
     /// <summary>
@@ -821,7 +903,8 @@ public sealed class AnglesSyncSettings
 
     /// <summary>
     /// Copies every Angles Sync Setting from another value, including independent palette
-    /// conditioning, directional-shading depth, and Routine hue-offset endpoints and editor rails.
+    /// conditioning, three Energy-tier sweep rates, directional-shading depth, and Routine
+    /// hue-offset endpoints and editor rails.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -842,6 +925,10 @@ public sealed class AnglesSyncSettings
         RoutineEnergyTwo = source.RoutineEnergyTwo;
         RoutineEnergyThree = source.RoutineEnergyThree;
         RoutineEnergyFour = source.RoutineEnergyFour;
+        EnergyRestingLevel = source.EnergyRestingLevel;
+        SweepCyclesPerBeatLow = source.SweepCyclesPerBeatLow;
+        SweepCyclesPerBeatMid = source.SweepCyclesPerBeatMid;
+        SweepCyclesPerBeatHigh = source.SweepCyclesPerBeatHigh;
         ShadeDepth = new FloatRange(
             source.ShadeDepth.Min,
             source.ShadeDepth.Max,

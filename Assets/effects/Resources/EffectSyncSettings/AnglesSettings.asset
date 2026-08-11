@@ -33,6 +33,9 @@ MonoBehaviour:
     RoutineEnergyTwo: 0
     RoutineEnergyThree: 1
     RoutineEnergyFour: 0
+    SweepCyclesPerBeatLow: 0.06
+    SweepCyclesPerBeatMid: 0.12
+    SweepCyclesPerBeatHigh: 0.25
     ShadeDepth:
       Min: 0.5
       Max: 0.8

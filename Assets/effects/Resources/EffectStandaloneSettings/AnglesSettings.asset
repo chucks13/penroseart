@@ -34,6 +34,4 @@ MonoBehaviour:
       Max: 0.8
       LowRail: 0
       HighRail: 1
-    Energy: 0.5
-    EnergySmoothing: 2
     RhythmHueOffset: 1
