@@ -51,7 +51,10 @@ public class Mirror : MixerBase
     private MirrorSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
     private EffectBase sourceEffect;
-    private int[] mirrorList;
+
+    /// <summary>The allocation-free reader over the mirror groups rolled for this activation.</summary>
+    private LayoutData.ShapeList.Reader mirrorList;
+
     private int[] centerline;
 
     /// <summary>
@@ -64,14 +67,12 @@ public class Mirror : MixerBase
 
         return debugText;
     }
-    /*
-     * The original mirror data for mirror 2 was missing tiles in the very center.  This caused a hole
-     * in the effect, because even though the data is unchanged, it never gets copied from the
-     * original buffer.  This code finds those tiles and makes a patch array.
-     * it is know ahead of time that there are 900 tiles in the display
-     * and 8 are missing.  It is true that this patch doesnt need to be drawn
-     * on mirror 10, but its only 8 tiles, so no special check it made.
-     */
+    /// <summary>Finds the eight center tiles omitted by mirror2 and builds the patch array that copies them from the source buffer.</summary>
+    /// <remarks>
+    /// The display is known to contain 900 tiles and mirror2 omits eight of them. Without this patch those tiles are never
+    /// copied from the unchanged source buffer, leaving a hole. Mirror10 does not need the patch, but drawing only eight
+    /// extra tiles is why no special layout check is made.
+    /// </remarks>
     private void fixCenterLineInit()
     {
         centerline = new int[8];
@@ -80,15 +81,14 @@ public class Mirror : MixerBase
         {
             if (y == centerline.Length)
                 break;
-            int groupcount = mirrorList[0];     // how many copies
+            int groupcount = mirrorList.GroupCount;     // how many copies
             bool used = false;                                    // Draw the mirrors
             for (int i = 0; i < groupcount; i++)
             {
-                int groupPointer = mirrorList[1 + i];
-                int groupsize = mirrorList[groupPointer];
-                for (int j = 0; j < groupsize; j++)
+                LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
+                for (int j = 0; j < group.TileCount; j++)
                 {
-                    if (mirrorList[groupPointer + 1 + j] == x)
+                    if (group[j] == x)
                     {
                         used = true;
                         break;
@@ -139,8 +139,8 @@ public class Mirror : MixerBase
             ? SyncSettings.MirrorLayoutRollMaxExclusive
             : standaloneSettings.MirrorLayoutRollMaxExclusive;
         mirrorList = Random.Range(mirrorLayoutRollMinInclusive, mirrorLayoutRollMaxExclusive) == 0
-            ? penrose.Layout.shapes.mirror2
-            : penrose.Layout.shapes.mirror10;
+            ? penrose.Layout.shapes.Mirror2
+            : penrose.Layout.shapes.Mirror10;
         fixCenterLineInit();
 
         sourceEffect = GetRandomEffect();
@@ -170,18 +170,17 @@ public class Mirror : MixerBase
         sourceEffect.waveform = waveform;
         sourceEffect.Draw();
 
-        int groupcount = mirrorList[0];     // how many copies
+        int groupcount = mirrorList.GroupCount;     // how many copies
         // fix missing verticle column
         fixCenterLineDraw();
         // Draw the mirrors
         for (int i = 0; i < groupcount; i++)
         {
-            int groupPointer = mirrorList[1 + i];
-            int groupsize = mirrorList[groupPointer];
-            Color tileColor = sourceEffect.buffer[mirrorList[groupPointer + 1]];
-            for (int j = 0; j < groupsize; j++)
+            LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
+            Color tileColor = sourceEffect.buffer[group[0]];
+            for (int j = 0; j < group.TileCount; j++)
             {
-                buffer[mirrorList[groupPointer + 1 + j]] = tileColor;
+                buffer[group[j]] = tileColor;
             }
         }
     }

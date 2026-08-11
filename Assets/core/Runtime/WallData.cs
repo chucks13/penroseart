@@ -49,11 +49,18 @@ internal static class WallDataText
 [Serializable]
 public class LayoutData
 {
-    /// <summary>One adjacency entry: which edge of this tile (<see cref="type"/> 2..5) touches which tile.</summary>
+    /// <summary>One reciprocal full-edge adjacency between this tile and another tile.</summary>
     [Serializable]
     public class Neighbor
     {
+        /// <summary>
+        /// Reciprocal edge-class label, the Penrose matching rules' "edge color": 3 for fat-fat,
+        /// 2 for thin-thin, and 4 or 5 for mixed-rhomb edges.
+        /// No runtime system currently interprets the label.
+        /// </summary>
         public int type;
+
+        /// <summary>Tile index at the other end of this adjacency.</summary>
         public int tileIdx;
     }
 
@@ -61,33 +68,161 @@ public class LayoutData
     [Serializable]
     public class Tile
     {
-        public int type;            // 0 = thin rhombus, 1 = fat rhombus
-        public int section;         // 0..17 physical build segment
+        /// <summary>Rhomb type: 0 is fat (about 72/108 degrees); 1 is thin (about 36/144 degrees).</summary>
+        public int type;
+
+        /// <summary>Connected 50-tile build section, numbered 0..17 and arranged spatially as three rows of six.</summary>
+        public int section;
+
+        /// <summary>Full-edge adjacencies to neighboring tiles.</summary>
         public Neighbor[] neighbors;
     }
 
     /// <summary>
     /// Named decorative index lists over the 900 tiles, each packed as
-    /// [count, pointer×count, then per shape: (length, tileIdx×length)].
+    /// [group count, pointer×group count, then per group: (tile count, tileIdx×tile count)].
     /// Consumed by shape-tracing effects (TileShapes, ShapeGlitch, Petals, Mirror, …).
     /// </summary>
     [Serializable]
     public class ShapeList
     {
-        public int[] loops;
-        public int[] stars;
-        public int[] lines0;
-        public int[] lines1;
-        public int[] lines2;
-        public int[] lines3;
-        public int[] lines4;
-        public int[] lotusballs;
-        public int[] starballs;
-        public int[] mirror2;
-        public int[] mirror10;
+        /// <summary>Packed loop group data populated from the layout's <c>loops</c> JSON field.</summary>
+        [SerializeField] private int[] loops;
+
+        /// <summary>Packed star group data populated from the layout's <c>stars</c> JSON field.</summary>
+        [SerializeField] private int[] stars;
+
+        /// <summary>Packed first Line Ribbon family populated from the layout's <c>lines0</c> JSON field.</summary>
+        [SerializeField] private int[] lines0;
+
+        /// <summary>Packed second Line Ribbon family populated from the layout's <c>lines1</c> JSON field.</summary>
+        [SerializeField] private int[] lines1;
+
+        /// <summary>Packed third Line Ribbon family populated from the layout's <c>lines2</c> JSON field.</summary>
+        [SerializeField] private int[] lines2;
+
+        /// <summary>Packed fourth Line Ribbon slot populated from the layout's <c>lines3</c> JSON field.</summary>
+        [SerializeField] private int[] lines3;
+
+        /// <summary>Packed fifth Line Ribbon slot populated from the layout's <c>lines4</c> JSON field.</summary>
+        [SerializeField] private int[] lines4;
+
+        /// <summary>Packed Lotusball group data populated from the layout's <c>lotusballs</c> JSON field.</summary>
+        [SerializeField] private int[] lotusballs;
+
+        /// <summary>Packed Starball group data populated from the layout's <c>starballs</c> JSON field.</summary>
+        [SerializeField] private int[] starballs;
+
+        /// <summary>Packed two-tile mirror group data populated from the layout's <c>mirror2</c> JSON field.</summary>
+        [SerializeField] private int[] mirror2;
+
+        /// <summary>Packed variable-size mirror group data populated from the layout's <c>mirror10</c> JSON field.</summary>
+        [SerializeField] private int[] mirror10;
+
+        /// <summary>Allocation-free access to the loop Shape List groups.</summary>
+        public Reader Loops => new(loops);
+
+        /// <summary>Allocation-free access to the star Shape List groups.</summary>
+        public Reader Stars => new(stars);
+
+        /// <summary>Allocation-free access to the first Line Ribbon Shape List groups.</summary>
+        public Reader Lines0 => new(lines0);
+
+        /// <summary>Allocation-free access to the second Line Ribbon Shape List groups.</summary>
+        public Reader Lines1 => new(lines1);
+
+        /// <summary>Allocation-free access to the third Line Ribbon Shape List groups.</summary>
+        public Reader Lines2 => new(lines2);
+
+        /// <summary>Allocation-free access to the fourth Line Ribbon Shape List slot.</summary>
+        public Reader Lines3 => new(lines3);
+
+        /// <summary>Allocation-free access to the fifth Line Ribbon Shape List slot.</summary>
+        public Reader Lines4 => new(lines4);
+
+        /// <summary>Allocation-free access to the Lotusball Shape List groups.</summary>
+        public Reader Lotusballs => new(lotusballs);
+
+        /// <summary>Allocation-free access to the Starball Shape List groups.</summary>
+        public Reader Starballs => new(starballs);
+
+        /// <summary>Allocation-free access to the two-tile mirror Shape List groups.</summary>
+        public Reader Mirror2 => new(mirror2);
+
+        /// <summary>Allocation-free access to the variable-size mirror Shape List groups.</summary>
+        public Reader Mirror10 => new(mirror10);
+
+        /// <summary>Allocation-free access to the groups stored in one packed Shape List array.</summary>
+        public readonly struct Reader
+        {
+            /// <summary>The packed group pointers, tile counts, and tile indexes supplied by the layout.</summary>
+            private readonly int[] packed;
+
+            /// <summary>Creates a reader over one packed Shape List array without copying its contents.</summary>
+            /// <param name="packed">The packed group and tile data to read.</param>
+            public Reader(int[] packed)
+            {
+                this.packed = packed;
+            }
+
+            /// <summary>The number of groups declared at the start of the packed array.</summary>
+            public int GroupCount => packed[0];
+
+            /// <summary>Decodes one group pointer into an allocation-free tile view.</summary>
+            /// <param name="groupIndex">The zero-based group index.</param>
+            /// <returns>The selected group's ordered tile indexes.</returns>
+            public Group GetGroup(int groupIndex)
+            {
+                int pointer = packed[groupIndex + 1];
+                return new Group(packed, pointer + 1, packed[pointer]);
+            }
+        }
+
+        /// <summary>Allocation-free access to one decoded Shape List group's ordered tile indexes.</summary>
+        public readonly struct Group
+        {
+            /// <summary>The packed Shape List array that owns this group.</summary>
+            private readonly int[] packed;
+
+            /// <summary>The absolute packed-array position of this group's first tile index.</summary>
+            private readonly int start;
+
+            /// <summary>Creates a group view over a decoded payload range without copying its tile indexes.</summary>
+            /// <param name="packed">The packed Shape List array that owns the group.</param>
+            /// <param name="start">The absolute packed-array position of the first tile index.</param>
+            /// <param name="tileCount">The number of ordered tile indexes in the group.</param>
+            public Group(int[] packed, int start, int tileCount)
+            {
+                this.packed = packed;
+                this.start = start;
+                TileCount = tileCount;
+            }
+
+            /// <summary>The number of ordered tile indexes in this group.</summary>
+            public int TileCount { get; }
+
+            /// <summary>Reads one direct tile index from this group.</summary>
+            /// <param name="tileIndex">The zero-based position inside the group.</param>
+            /// <value>The tile index stored at the requested group position.</value>
+            public int this[int tileIndex] => packed[start + tileIndex];
+
+            /// <summary>
+            /// Returns a tile's absolute position in the packed source array so legacy hue arithmetic keeps its exact phase
+            /// without making Effects reconstruct group record boundaries.
+            /// </summary>
+            /// <param name="tileIndex">The zero-based position inside the group.</param>
+            /// <returns>The absolute packed-array position occupied by that tile index.</returns>
+            public int PackedIndex(int tileIndex)
+            {
+                return start + tileIndex;
+            }
+        }
     }
 
-    /// <summary>10800 floats = 1800 triangles × 3 vertices × (x,y); tile k owns triangles 2k and 2k+1. Preview mesh only.</summary>
+    /// <summary>
+    /// 10800 raw coordinate floats: 1800 triangles × 3 vertices × (x,y), with tile k owning triangles 2k and 2k+1.
+    /// This is the source geometry for both the Unity preview mesh and effect-visible tile geometry derived by <see cref="Penrose"/>.
+    /// </summary>
     public float[] Mesh;
 
     /// <summary>900 tiles in tile-index order.</summary>

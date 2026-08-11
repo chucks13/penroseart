@@ -10,21 +10,36 @@
 // Sections:
 //   Mesh   - 10800 floats = 1800 triangles x 3 vertices x (x,y).
 //            Two consecutive triangles form one rhombus tile (tile k owns
-//            triangles 2k and 2k+1). Used only by Penrose.GenerateMesh to build
-//            the Unity preview mesh; the hardware never sees these values.
+//            triangles 2k and 2k+1). Penrose uses this geometry both for the
+//            Unity preview mesh and to derive effect-visible TileData center,
+//            position, tileangle, radius, and angle. The hardware never sees
+//            these values directly.
 //            One line below = one triangle (6 floats).
 //   tiles  - 900 entries, one line each, in tile-index order:
-//            type      0 = thin rhombus, 1 = fat rhombus
-//            section   0..17, the physical build segment the tile belongs to
+//            type      0 = fat rhombus (~72/108 degrees),
+//                      1 = thin rhombus (~36/144 degrees)
+//            section   0..17, connected 50-tile build sections arranged as
+//                      three spatial rows of six
 //            neighbors adjacency list; each entry is
-//                      { type: 2..5 = which edge of this tile, tileIdx: 0..899 }
+//                      { type: reciprocal edge-class label, tileIdx: 0..899 }
+//                      Fat-fat edges carry 3, thin-thin carry 2, and mixed
+//                      edges carry 4 or 5. No runtime behavior interprets it.
 //            Consumed by Penrose.GenerateTiles to build runtime TileData; effects
 //            walk tiles/neighbors for propagation (ripples, growth, flood fills).
 //   shapes - named index lists over the 900 tiles, packed as
-//            [count, pointer x count, then per shape: (length, tileIdx x length)].
+//            [group count, pointer x group count, then per group:
+//            (tile count, tileIdx x tile count)].
 //            Pointers are indexes back into the same array. Decorative only:
 //            used by effects (TileShapes, ShapeGlitch, Petals, Mirror, Kscope,
 //            AnimateLoops, Lightning) to trace loops/stars/lines on the wall.
+//
+// Derived runtime geometry (not stored as fields in this JSON):
+//   TileData.position is a lossy integer bucket: 900 tiles occupy 846 distinct
+//   values in the current layout. TileData.edgeAndSeamDistance is the shortest
+//   neighbor-step distance from any wall-edge tile or section-seam tile; it is
+//   not a concentric ring. Penrose.Bounds is centered at zero with size
+//   (50,22,0), derived from rounded tile centers plus fixed padding rather than
+//   from Unity world-space mesh vertices.
 // =============================================================================
 {
 "Mesh":[

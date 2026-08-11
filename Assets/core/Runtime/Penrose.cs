@@ -46,7 +46,10 @@ public class Penrose : MonoBehaviour
     private Vector2Int min;
     private Vector2Int max;
 
-    /// <summary>Bounds of the generated Penrose tile layout in Unity/world coordinates.</summary>
+    /// <summary>
+    /// Effect-layout bounds centered at zero, sized from rounded tile centers plus fixed padding.
+    /// The current layout is (50,22,0); these are not Unity world-space mesh-vertex bounds.
+    /// </summary>
     public Bounds Bounds => bounds;
 
     /// <summary>Runtime metadata for all logical Penrose tiles.</summary>
@@ -65,37 +68,38 @@ public class Penrose : MonoBehaviour
     }
 
     /// <summary>
-    /// Derives ring numbers for each tile from integer tile positions.
+    /// Assigns each tile's shortest adjacency distance from the union of wall-edge tiles and section-seam tiles.
+    /// The seed union is distance zero so Effects can address inward bands without treating them as concentric rings.
     /// </summary>
-    private void GenerateRings()
+    private void GenerateEdgeAndSeamDistances()
     {
-        for (int ring = 0; ring < 10; ring++)
+        for (int distance = 0; distance < 10; distance++)
         {
             bool found = false;
             for (int i = 0; i < Tiles.Length; i++)
             {
                 TileData t = Tiles[i];
-                if (t.ring >= 0)            // already marked
+                if (t.edgeAndSeamDistance >= 0) // already assigned
                     continue;
                 int neighborCount = t.neighbors.Length;
-                if (neighborCount < 4)         // outside edge, automatic
+                if (neighborCount < 4) // wall-edge seed
                 {
-                    t.ring = ring;
+                    t.edgeAndSeamDistance = distance;
                     found = true;
                     continue;
                 }
                 for (int y = 0; y < neighborCount; y++)
                 {
                     TileData t2 = Tiles[t.neighbors[y].tileIdx];
-                    if (t2.section != t.section)        // borders another section, automatic
+                    if (t2.section != t.section) // section-seam seed
                     {
-                        t.ring = ring;
+                        t.edgeAndSeamDistance = distance;
                         found = true;
                         break;
                     }
-                    if (t2.ring == ring - 1)    // touches previous ring
+                    if (t2.edgeAndSeamDistance == distance - 1) // one step inward
                     {
-                        t.ring = ring;
+                        t.edgeAndSeamDistance = distance;
                         found = true;
                         break;
                     }
@@ -199,7 +203,7 @@ public class Penrose : MonoBehaviour
                 center = { x = cent.x * FullScale, y = cent.y * FullScale },
                 section = Layout.tiles[i].section,
                 tileangle = segangle,
-                ring = -3,                   // undefined
+                edgeAndSeamDistance = -3, // undefined until GenerateEdgeAndSeamDistances
                 radius = (float)rad,
                 angle = (float)Math.Atan2(cent.y, cent.x) * Mathf.Rad2Deg
             };
@@ -218,7 +222,8 @@ public class Penrose : MonoBehaviour
     }
 
     /// <summary>
-    /// Computes the aggregate Bounds that enclose all generated tile mesh vertices.
+    /// Computes effect-layout bounds from iteratively rounded tile centers, applies fixed asymmetric padding,
+    /// then centers the resulting size at zero instead of preserving the computed minimum and maximum.
     /// </summary>
     private void GenerateBounds()
     {
@@ -256,7 +261,7 @@ public class Penrose : MonoBehaviour
     }
 
     /// <summary>
-    /// Adopts the parsed layout, then generates mesh, tile metadata, bounds, rings, and background brightness.
+    /// Adopts the parsed layout, then generates mesh, tile metadata, bounds, edge-and-seam distances, and background brightness.
     /// </summary>
     public void Init(LayoutData layout)
     {
@@ -264,7 +269,7 @@ public class Penrose : MonoBehaviour
         GenerateMesh();
         GenerateTiles();
         GenerateBounds();
-        GenerateRings();
+        GenerateEdgeAndSeamDistances();
         bgBrightness = bgColor.grayscale;
     }
 
@@ -330,33 +335,61 @@ public class Penrose : MonoBehaviour
         return Color.Lerp(bgColor, color, color.grayscale).MinBrightness(bgBrightness);
     }
 
-    [System.Serializable]
     /// <summary>
-    /// JSON shape-neighbor entry describing a neighboring tile and edge color.
+    /// Runtime copy of one reciprocal full-edge adjacency from the layout data.
     /// </summary>
+    [System.Serializable]
     public class neighbor
     {
+        /// <summary>
+        /// Reciprocal edge-class label, the Penrose matching rules' "edge color": 3 for fat-fat,
+        /// 2 for thin-thin, and 4 or 5 for mixed-rhomb edges.
+        /// No runtime system currently interprets the label.
+        /// </summary>
         public int type;
+
+        /// <summary>Tile index at the other end of this adjacency.</summary>
         public int tileIdx;
     }
-    [Serializable]
+
     /// <summary>
     /// Runtime tile metadata derived from JSON and used by effects for geometry, topology, and grouping.
     /// </summary>
+    [Serializable]
     public class TileData
     {
+        /// <summary>Tile center in effect-layout units, with origin at raw mesh (0,0) and the layout JSON y-axis flipped.</summary>
         public Vector2 center;
+
+        /// <summary>
+        /// Lossy integer position computed component-wise as <c>(int)(rawCenter / 100 + 0.5)</c>.
+        /// The current 900 tiles occupy 846 distinct position values; this field is not a unique tile key.
+        /// </summary>
         public Vector2Int position;
+
+        /// <summary>Reciprocal full-edge adjacencies in layout order.</summary>
         public neighbor[] neighbors;
+
+        /// <summary>Connected 50-tile build section, numbered 0..17 and arranged spatially as three rows of six.</summary>
         public int section;
-        public int ring;
+
+        /// <summary>Shortest tile-adjacency distance from any wall-edge tile or tile touching a section seam.</summary>
+        public int edgeAndSeamDistance;
+
+        /// <summary>Rhomb type: 0 is fat (about 72/108 degrees); 1 is thin (about 36/144 degrees).</summary>
         public int type;
+
+        /// <summary>Directed short-diagonal bearing in degrees, with zero at +x and positive rotation counter-clockwise.</summary>
         public float tileangle;
+
+        /// <summary>Distance from the raw mesh origin to <see cref="center"/>, in effect-layout units.</summary>
         public float radius;
+
+        /// <summary>Polar bearing of <see cref="center"/> in degrees, with zero at +x and positive rotation counter-clockwise.</summary>
         public float angle;
 
         /// <summary>
-        /// Returns a random valid neighbor tile index, retrying until a non-negative neighbor is found.
+        /// Returns the tile index from one uniformly selected adjacency entry.
         /// </summary>
         public int GetRandomNeighbor()
         {

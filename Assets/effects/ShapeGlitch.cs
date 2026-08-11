@@ -162,7 +162,10 @@ public class ShapeGlitch : MixerBase
     private ShapeGlitchSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
     private EffectBase effect;
-    private int[] shape;
+
+    /// <summary>The allocation-free Penrose Shape List reader rolled for this activation.</summary>
+    private LayoutData.ShapeList.Reader shape;
+
     private Color color;
     private Mode mode;
     private Highlight[] highlights;
@@ -224,31 +227,31 @@ public class ShapeGlitch : MixerBase
         switch (Random.Range(shapeRollMin, shapeRollMaxExclusive))
         {
             case 0:
-                shape = penrose.Layout.shapes.lines0;
+                shape = penrose.Layout.shapes.Lines0;
                 break;
             case 1:
-                shape = penrose.Layout.shapes.lines1;
+                shape = penrose.Layout.shapes.Lines1;
                 break;
             case 2:
-                shape = penrose.Layout.shapes.lines2;
+                shape = penrose.Layout.shapes.Lines2;
                 break;
             case 3:
-                shape = penrose.Layout.shapes.lines3;
+                shape = penrose.Layout.shapes.Lines3;
                 break;
             case 4:
-                shape = penrose.Layout.shapes.lines4;
+                shape = penrose.Layout.shapes.Lines4;
                 break;
             case 5:
-                shape = penrose.Layout.shapes.loops;
+                shape = penrose.Layout.shapes.Loops;
                 break;
             case 6:
-                shape = penrose.Layout.shapes.lotusballs;
+                shape = penrose.Layout.shapes.Lotusballs;
                 break;
             case 7:
-                shape = penrose.Layout.shapes.starballs;
+                shape = penrose.Layout.shapes.Starballs;
                 break;
             case 8:
-                shape = penrose.Layout.shapes.stars;
+                shape = penrose.Layout.shapes.Stars;
                 break;
         }
         color = Color.HSVToRGB(Random.value, Random.value, highlightColorValue);
@@ -301,20 +304,18 @@ public class ShapeGlitch : MixerBase
         {
             Highlight newlyCreated = highlights[Random.Range(0, highlights.Length)];
             newlyCreated.intensity = highlightInitialIntensity;
-            newlyCreated.index = Random.Range(0, shape[0]);
+            newlyCreated.index = Random.Range(0, shape.GroupCount);
         }
-        for (int i = 0; i < shape[0]; i++)
+        for (int i = 0; i < shape.GroupCount; i++)
         {
             for (int h = 0; h < highlights.Length; h++)
             {
                 if (highlights[h].index == i)
                 {
-                    int list = shape[i + 1];
-                    int start = list + 1;
-                    int end = start + shape[list];
-                    for (int j = start; j < end; j++)
+                    LayoutData.ShapeList.Group group = shape.GetGroup(i);
+                    for (int j = 0; j < group.TileCount; j++)
                     {
-                        int idx = shape[j];
+                        int idx = group[j];
                         float intensity = highlights[h].intensity;
                         if (intensity > 1f) { intensity = 1f; }
                         buffer[idx] = color * intensity + buffer[idx] * (1f - intensity);

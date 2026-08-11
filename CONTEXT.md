@@ -18,6 +18,46 @@ _Avoid_: reading "on the wall" as a Transition's destination; the questions that
 One frame of the wall as color values, one per logical tile. Every Effect, Transition, Mixer, and overlay reads and writes buffers; the buffer is the only thing the runtime hands to hardware.
 _Avoid_: treating a buffer as a screen or an image — the tile layout is irregular; bypassing the buffer to drive tiles directly.
 
+**Tile**:
+One logical Penrose rhomb and the wall's smallest distinct visual area.
+_Avoid_: treating either of the two triangles inside a rhomb as a separate Tile; treating a nearby Tile as interchangeable with it.
+
+**Section**:
+One connected physical build panel containing 50 Tiles. The wall's 18 Sections form three spatial rows of six; a Section is wall geometry, never a musical Phrase.
+_Avoid_: a radial wedge; using "section" for song structure — that is a Phrase.
+
+**Edge-and-Seam Distance**:
+The number of Neighbor steps from a Tile to the nearest outer wall edge or boundary between Sections. Tiles on either seed boundary have distance zero.
+_Avoid_: Ring — the values are not concentric; Radius — that is geometric distance from the wall's origin.
+
+**Rhomb Type**:
+The wall's two Penrose Tile geometries: fat rhombs with angles near 72/108 degrees and thin rhombs with angles near 36/144 degrees.
+_Avoid_: reversing fat and thin; treating Rhomb Type as a color or Section.
+
+**Neighbor**:
+A Tile that shares one complete edge with another Tile. Touching only at a corner does not make two Tiles Neighbors.
+_Avoid_: a Tile that only touches at a corner; a Tile that is merely nearby in the layout.
+
+**Shape List**:
+A named collection of Tile groups that traces repeated geometric motifs or symmetry groups across the wall.
+_Avoid_: a Buffer; assuming every Shape List group is a closed path or has the same number of Tiles.
+
+**Star**:
+A closed cycle of five neighboring fat Tiles.
+_Avoid_: Starball — that is the larger compound motif around a Star.
+
+**Starball**:
+A ten-Tile compound motif in which five fat Tiles form a Star and five thin Tiles surround it.
+_Avoid_: Star; Lotusball — it uses a different fat/thin adjacency pattern.
+
+**Lotusball**:
+A connected ten-Tile motif of five fat and five thin Tiles built around one fat Tile that touches four of the others. Its fat Tiles never form a Star, which is what separates it from a Starball.
+_Avoid_: Starball; assuming its groups must have the Star's closed-cycle topology.
+
+**Line Ribbon**:
+An ordered open chain of neighboring Tiles that runs across the wall, possibly shortened where it meets the wall edge.
+_Avoid_: Loop — that term is musical; a closed Star or other Shape List motif.
+
 **Performer**:
 The umbrella for anything that can be put on the wall — an Effect, Transition, or Mixer — seen as something called on stage rather than as a class. The Director casts Performers; the Switcher moves them on and off. **Everything else in the system exists to serve Performers**: modules inform them, and never restrict or command them.
 _Avoid_: "dancer" (the early metaphor); using "Performer" when you specifically mean an Effect vs a Transition vs a Mixer; a module that decides artistic response on a Performer's behalf.
@@ -96,7 +136,7 @@ _Avoid_: treating the on-air drop/fill lanes as a separate musical source from t
 
 **Phrase**:
 A named section of the Song Structure — intro, up, down, verse, bridge, chorus, outro, or drop. It starts and ends at phrase boundaries, contains one or more Grids, and is usually at least 8 bars / 32 beats while often doubling or extending from there; Track Phase is the on-air description of the current one. The track's Song Structure is what the Cue Sheet lays its marks against.
-_Avoid_: treating a Phrase as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase; "section" as a separate term.
+_Avoid_: treating a Phrase as a transition, a visual effect, or a clock source; choosing Cue Marks without reference to the current Phrase; "section" as a separate musical term — Section belongs to wall geometry.
 
 **Phrase Ordinal**:
 A structure phrase's identity: its one-based position in the assembled phrase list. Repeated and immediately adjacent identical phrase types are distinct phrases, and the structure cursor names its current phrase by ordinal.

@@ -334,20 +334,18 @@ public class Lightning : EffectBase
     private void GenerateBolt()
     {
         // this selects the center star tiles
-        int[] shape = penrose.Layout.shapes.stars;
-        int list = shape[1];
-        int start = list + 1;
-        int end = start + shape[list];
-        int rayCount = end - start;
+        LayoutData.ShapeList.Reader stars = penrose.Layout.shapes.Stars;
+        LayoutData.ShapeList.Group centerStar = stars.GetGroup(0);
+        int rayCount = centerStar.TileCount;
         if (heldRays == null || heldRays.Length != rayCount)
             heldRays = new List<int>[rayCount];
 
         int[] possible = { 0, 0, 0, 0 };        // holds possible step positions
-        for (int j = start; j < end; j++)
+        for (int j = 0; j < centerStar.TileCount; j++)
         {
-            List<int> ray = heldRays[j - start] ??= new List<int>();
+            List<int> ray = heldRays[j] ??= new List<int>();
             ray.Clear();
-            int currentIdx = shape[j];
+            int currentIdx = centerStar[j];
             // walk the line till it stops
             while (true)
             {
