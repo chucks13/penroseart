@@ -6,20 +6,23 @@ using UnityEngine;
 /// Renders a palette hue sweep based on each tile's stored geometric angle.
 /// </summary>
 /// <remarks>
-/// FILL / DROP (preserved behind temporary rebuild flags): one soft-edged wavefront, ordered by each tile's hue distance from the wall's own mean
-/// hue (closest first), compresses the wall toward that charged mean color. An active Fill advances the
-/// front through its <see cref="InSpan.Build"/>. Independently, <see cref="DropValues.Before"/> advances
-/// the same front so a Drop receives preparation even when no Fill precedes it. A Fill that ends without
-/// a Drop eases its compression away instead of snapping back or inventing a relationship the wire does
-/// not carry.
+/// FILL: the Data Surface's own <see cref="InSpan.Build"/> advances an outer-to-inner mask through
+/// one selected Shape List. Every member of a Star, Starball, or Lotusball shares one removal
+/// threshold derived from that group's radius, while a stable geometry-sampled noise value perturbs
+/// nearby thresholds so the ring edge breaks without becoming a scattered dissolve. Removed Tiles are
+/// written black; surviving Tiles follow the ordinary Angles path exactly. The mask snaps clear when
+/// the Fill ends so no invented recovery time crosses into a following Drop.
 ///
-/// An active Drop has exclusive priority. At its landing the whole wall holds near-black while fully
-/// compressed, then one Drop release timeline both expands the hues and reignites a staccato cascade
-/// through the tiling's ten orientation classes — the multiples-of-18° directional families of the
-/// underlying pentagrid. Because orientation drives hue here, each class is also a single hue, so the
-/// rainbow and its ten hidden families return together out of the darkness. The four-bar Routine keeps
-/// its own full-pattern hue rotation and does not drive this choreography; that Routine hue offset is
-/// likewise preserved behind temporary rebuild scaffolding.
+/// PRE-DROP / DROP (preserved behind temporary rebuild flags): one soft-edged wavefront, ordered by
+/// each tile's hue distance from the wall's own mean hue (closest first), compresses the wall toward
+/// that charged mean color. <see cref="DropValues.Before"/> advances the front so a Drop receives
+/// preparation. An active Drop has exclusive priority. At its landing the whole wall holds near-black
+/// while fully compressed, then one Drop release timeline both expands the hues and reignites a
+/// staccato cascade through the tiling's ten orientation classes — the multiples-of-18° directional
+/// families of the underlying pentagrid. Because orientation drives hue here, each class is also a
+/// single hue, so the rainbow and its ten hidden families return together out of the darkness. The
+/// four-bar Routine keeps its own full-pattern hue rotation and does not drive this choreography; that
+/// Routine hue offset is likewise preserved behind temporary rebuild scaffolding.
 ///
 /// SHADING: a gentle directional brightness gradient keyed to each tile's orientation (as if the faceted
 /// quasicrystal were lit from one direction) gives the ten families brightness definition, not just hue.
@@ -45,8 +48,8 @@ public class Angles : EffectBase
 {
     // Temporary musical-layer rebuild flags
 
-    /// <summary>Temporary rebuild scaffolding for Fill/pre-Drop hue compression; this layer returns reshaped or is deleted when its turn comes.</summary>
-    private const bool EnableFillAndPreDropHueCompression = false;
+    /// <summary>Temporary rebuild scaffolding for pre-Drop hue compression; the Fill half has been replaced by the Shape List mask.</summary>
+    private const bool EnablePreDropHueCompression = false;
 
     /// <summary>Temporary rebuild scaffolding for Drop blackout and orientation-class reignition; this layer returns reshaped or is deleted when its turn comes.</summary>
     private const bool EnableDropBlackoutAndReignition = false;
@@ -134,9 +137,9 @@ public class Angles : EffectBase
     /// <summary>Low-band strength that engages the beat phase front. The 0.35 default matches the established bass-drive threshold used by MazeFlyer; tune it until kicks engage without sustained low-frequency material holding the front on.</summary>
     private const float SyncBeatLowThreshold = 0.35f;
 
-    /// <summary>Levels form the Low gate reads. Smoothed is the steady default; Peak holds on after a kick fades and Normalized tracks the hit instantly. Flip it live on the wall.</summary>
+    /// <summary>Levels form the Low gate reads. Normalized is the default because the gate's job is to report what is happening on the beat: it tracks the hit instantly, where Smoothed averages across the beat boundary and blurs the moment, and Peak holds on after a kick fades. Flip it live on the wall.</summary>
     private const AnglesSyncSettings.BeatLevelReading SyncBeatLowLevelReading =
-        AnglesSyncSettings.BeatLevelReading.Smoothed;
+        AnglesSyncSettings.BeatLevelReading.Normalized;
 
     /// <summary>Hue phase added by each engaged beat. The 0.1 default advances one of the tiling's ten orientation classes, permuting their colour assignment without changing the wall's colour set.</summary>
     private const float SyncBeatPhaseStep = 0.1f;
@@ -144,13 +147,20 @@ public class Angles : EffectBase
     /// <summary>Direction the beat front travels in wall coordinates, in degrees: zero sweeps left-to-right and 90 sweeps bottom-to-top. The default is zero.</summary>
     private const float SyncBeatFrontAxisDegrees = 0f;
 
-    /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space. The 0.12 default follows the existing Fill/Drop front's authored softness; smaller is crisper and larger blends more of the wall between phases.</summary>
+    /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space. The 0.12 default follows the dormant pre-Drop/Drop front's authored softness; smaller is crisper and larger blends more of the wall between phases.</summary>
     private const float SyncBeatFrontSoftness = 0.12f;
 
-    /// <summary>Width, in normalized rank space (0..1), of the hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
+    /// <summary>Shape List unit removed as the Fill drains inward. Lotusballs are the default because their 489 member Tiles are the only selectable motif set covering most of the current 900-Tile wall.</summary>
+    private const AnglesSyncSettings.FillUnitKind SyncFillUnit =
+        AnglesSyncSettings.FillUnitKind.Lotusballs;
+
+    /// <summary>Maximum normalized-radius perturbation applied by the Fill's stable noise field. The 0.12 default can swap neighboring rings while leaving the outer-to-inner order legible; tune it at the ragged boundary.</summary>
+    private const float SyncFillEdgeNoise = 0.12f;
+
+    /// <summary>Width, in normalized rank space (0..1), of the pre-Drop hue-compression wavefront's soft edge. Smaller = a crisper traveling edge; larger = a blurrier gradient.</summary>
     private const float SyncFrontSoftness = 0.12f;
 
-    /// <summary>Per-second smoothing rate used only when hue compression has no active Fill or approaching Drop to sustain it, so an unpaired Fill relaxes instead of snapping. Tune on the TENSION readout.</summary>
+    /// <summary>Per-second smoothing rate used when pre-Drop hue compression loses its approaching Drop, so abandoned preparation relaxes instead of snapping. Tune on the TENSION readout.</summary>
     private const float SyncCompressionReleaseRate = 2f;
 
     /// <summary>Drop window in beats: preparation reaches full hue compression across this many beats before landing, then blackout release and orientation reignition share the same length after it. Kept short so the event reads within a 2-4 beat window.</summary>
@@ -216,6 +226,18 @@ public class Angles : EffectBase
     /// <summary>The wire-authored On Beat gate occupies the first quarter of its beat interval; this contract duration places the spatial front without locally rebuilding musical timing.</summary>
     private const float BeatTriggerWindowFraction = 0.25f;
 
+    /// <summary>Effect-layout scale of the stable Perlin field sampled once at each Shape List group center; this keeps neighboring groups correlated so noise breaks a ring edge instead of scattering motifs independently.</summary>
+    private const float FillNoiseScale = 0.18f;
+
+    /// <summary>Fixed positive Perlin coordinate offset that keeps the wall center away from the noise function's origin symmetry without consuming Random.</summary>
+    private const float FillNoiseOffset = 19.31f;
+
+    /// <summary>Fill progress at which the outermost roughened group can first disappear, leaving a short readable onset before subtraction begins.</summary>
+    private const float FillFirstRemovalProgress = 0.05f;
+
+    /// <summary>Fill progress by which the innermost roughened group has disappeared, reserving the final tenth of the Fill as its fully drained peak before the end snap restores the wall.</summary>
+    private const float FillFullRemovalProgress = 0.9f;
+
     /// <summary>
     /// Mid's position on the normalized Energy ladder, which runs Low 0, Mid 0.5, High 1. This is
     /// the ladder's own geometry, not a tuning value: the tunable resting position a nullable
@@ -225,11 +247,15 @@ public class Angles : EffectBase
     private const float EnergyLadderMid = 0.5f;
 
     /// <summary>
-    /// Advertises that Angles suits all three Energy tiers now that they drive its motion and shading,
-    /// while withholding Fill/Drop capability until those disabled layers are rebuilt.
+    /// Advertises that Angles handles Fill through its Shape List mask and suits all three Energy tiers
+    /// now that they drive its motion and shading, while withholding Drop capability until the dormant
+    /// pre-Drop/Drop layers are rebuilt.
     /// </summary>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesFill |
+        Repertoire.EnergyLow |
+        Repertoire.EnergyMid |
+        Repertoire.EnergyHigh;
 
     /// <summary>
     /// Resolves a fresh immutable-by-convention copy of Angles' Standalone Defaults, including
@@ -251,8 +277,8 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Resolves a fresh copy of Angles' file-local Sync Defaults, including independent palette
-    /// conditioning, the Low-gated beat phase front, three Energy-tier sweep rates, directional-
-    /// shading depth, and Routine hue-offset ranges.
+    /// conditioning, the Low-gated beat phase front, the Shape List Fill mask, three Energy-tier
+    /// sweep rates, directional-shading depth, and Routine hue-offset ranges.
     /// </summary>
     public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
     {
@@ -262,6 +288,8 @@ public class Angles : EffectBase
         BeatPhaseStep = SyncBeatPhaseStep,
         BeatFrontAxisDegrees = SyncBeatFrontAxisDegrees,
         BeatFrontSoftness = SyncBeatFrontSoftness,
+        FillUnit = SyncFillUnit,
+        FillEdgeNoise = SyncFillEdgeNoise,
         FrontSoftness = SyncFrontSoftness,
         CompressionReleaseRate = SyncCompressionReleaseRate,
         DropBeats = SyncDropBeats,
@@ -343,7 +371,7 @@ public class Angles : EffectBase
     /// <summary>Four-bar waveform choreography, one Waveform per bar drawn from the energy pools named by <see cref="AnglesSyncSettings.RoutineEnergyOne"/> through <see cref="AnglesSyncSettings.RoutineEnergyFour"/>.</summary>
     private Routine routine;
 
-    /// <summary>Current tension (0..1) expressed as progress of the hue-compression wavefront toward <see cref="meanHue"/>.</summary>
+    /// <summary>Current pre-Drop tension (0..1) expressed as progress of the hue-compression wavefront toward <see cref="meanHue"/>.</summary>
     private float hueCompression;
 
     /// <summary>Each tile's raw angle-hue (pre-Spread, pre-sweep, pre-beat), cached once since <see cref="Penrose.TileData.tileangle"/> never changes.</summary>
@@ -352,13 +380,31 @@ public class Angles : EffectBase
     /// <summary>Each tile's immutable wall-centered position, cached once so the live beat-front axis can project it every frame without reading tile metadata or allocating.</summary>
     private Vector2[] tileCenters;
 
-    /// <summary>Per tile, the shortest signed hue delta (in [-0.5, 0.5)) from <see cref="rawHue"/> toward <see cref="meanHue"/>, cached once.</summary>
+    /// <summary>Per Tile, its Lotusball group's outer-to-inner radius rank, or -1 when the Tile belongs to no Lotusball.</summary>
+    private float[] lotusballFillRingRank;
+
+    /// <summary>Per Tile, the stable group-center noise shared by every member of its Lotusball.</summary>
+    private float[] lotusballFillNoise;
+
+    /// <summary>Per Tile, its Starball group's outer-to-inner radius rank, or -1 when the Tile belongs to no Starball.</summary>
+    private float[] starballFillRingRank;
+
+    /// <summary>Per Tile, the stable group-center noise shared by every member of its Starball.</summary>
+    private float[] starballFillNoise;
+
+    /// <summary>Per Tile, its Star group's outer-to-inner radius rank, or -1 when the Tile belongs to no Star.</summary>
+    private float[] starFillRingRank;
+
+    /// <summary>Per Tile, the stable group-center noise shared by every member of its Star.</summary>
+    private float[] starFillNoise;
+
+    /// <summary>Per tile, the shortest signed hue delta (in [-0.5, 0.5)) from <see cref="rawHue"/> toward <see cref="meanHue"/>, cached once for the dormant pre-Drop compression.</summary>
     private float[] hueDelta;
 
     /// <summary>Per tile, the cascade-progress point (0..~0.9) at which its orientation class reignites during a Drop — its class index / <see cref="OrientationClasses"/>. Cached once.</summary>
     private float[] classReveal;
 
-    /// <summary>Per tile, its normalized rank (0..1) by ascending hue-distance from <see cref="meanHue"/>, cached once. The tile with the closest hue ranks 0 and compresses first.</summary>
+    /// <summary>Per tile, its normalized rank (0..1) by ascending hue-distance from <see cref="meanHue"/>, cached once for the dormant pre-Drop compression. The tile with the closest hue ranks 0 and compresses first.</summary>
     /// <remarks>
     /// This holds the rank alone, not the wavefront envelope value at which the tile's collapse begins.
     /// <see cref="Draw"/> scales it by the live <see cref="AnglesSyncSettings.FrontSoftness"/> each frame to
@@ -370,7 +416,7 @@ public class Angles : EffectBase
     /// <summary>Per tile, its folded orientation in [0,1) (tileangle mod 180° / 180°), cached once. Drives the directional shading; wraps smoothly so same-facing tiles (0° ≡ 180°) shade identically.</summary>
     private float[] orient01;
 
-    /// <summary>Circular mean of every tile's raw angle-hue: the charged color the Fill/Drop choreography compresses toward.</summary>
+    /// <summary>Circular mean of every tile's raw angle-hue: the charged color the dormant pre-Drop/Drop choreography compresses toward.</summary>
     private float meanHue;
 
     /// <summary>Direction (radians) the shading gradient is "lit" from; seeded once per activation so a Grid boundary cannot flash the bright/shadowed sides of the orientation field.</summary>
@@ -410,6 +456,9 @@ public class Angles : EffectBase
             $"\nEN {energyReadout}" +
             $"\nSWEEP {sweepReadout}" +
             $"\nSHADE {shadeDepth:0.00}" +
+            (beatManager.Fill.Active
+                ? $"\nFILL {beatManager.Fill.In.Build():0.00}  {SyncSettings.FillUnit}  NOISE {SyncSettings.FillEdgeNoise:0.00}"
+                : "") +
             (hueCompression > 0.01f ? $"\nTENSION {hueCompression:0.00}" : "") +
             (beatManager.Drop.Active
                 ? $"\nDROP {beatManager.Drop.In.Build(SyncSettings.DropBeats):0.00}"
@@ -433,6 +482,12 @@ public class Angles : EffectBase
         int total = tiles.Length;
         rawHue = new float[total];
         tileCenters = new Vector2[total];
+        lotusballFillRingRank = new float[total];
+        lotusballFillNoise = new float[total];
+        starballFillRingRank = new float[total];
+        starballFillNoise = new float[total];
+        starFillRingRank = new float[total];
+        starFillNoise = new float[total];
         hueDelta = new float[total];
         classReveal = new float[total];
         frontRank = new float[total];
@@ -448,6 +503,19 @@ public class Angles : EffectBase
             sumY += Mathf.Sin(radians);
         }
         meanHue = Mathf.Repeat(Mathf.Atan2(sumY, sumX) / (Mathf.PI * 2f), 1f);
+
+        PrecomputeFillMask(
+            penrose.Layout.shapes.Lotusballs,
+            lotusballFillRingRank,
+            lotusballFillNoise);
+        PrecomputeFillMask(
+            penrose.Layout.shapes.Starballs,
+            starballFillRingRank,
+            starballFillNoise);
+        PrecomputeFillMask(
+            penrose.Layout.shapes.Stars,
+            starFillRingRank,
+            starFillNoise);
 
         float[] distance = new float[total];
         int[] order = new int[total];
@@ -470,6 +538,67 @@ public class Angles : EffectBase
         {
             float normalizedRank = total > 1 ? rank / (float)(total - 1) : 0f;
             frontRank[order[rank]] = normalizedRank;
+        }
+    }
+
+    /// <summary>
+    /// Caches one Shape List's group membership, outer-to-inner radius rank, and stable noise sample
+    /// per Tile. Every Tile in a group receives the same values so the Fill can only remove whole
+    /// motif units, while the live noise strength remains outside this invariant cache.
+    /// </summary>
+    /// <param name="shapeList">The allocation-free Shape List reader whose motif groups become Fill units.</param>
+    /// <param name="ringRank">Destination receiving each member Tile's normalized outer-to-inner group rank, or -1 for nonmembers.</param>
+    /// <param name="edgeNoise">Destination receiving each member Tile's shared group-center noise in -1..1.</param>
+    private void PrecomputeFillMask(
+        LayoutData.ShapeList.Reader shapeList,
+        float[] ringRank,
+        float[] edgeNoise)
+    {
+        for (int i = 0; i < ringRank.Length; i++)
+        {
+            ringRank[i] = -1f;
+        }
+
+        int groupCount = shapeList.GroupCount;
+        var groupCenters = new Vector2[groupCount];
+        var groupRadii = new float[groupCount];
+        float minimumRadius = float.PositiveInfinity;
+        float maximumRadius = float.NegativeInfinity;
+
+        for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
+        {
+            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
+            Vector2 groupCenter = Vector2.zero;
+            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
+            {
+                groupCenter += tileCenters[group[tileIndex]];
+            }
+
+            groupCenter /= group.TileCount;
+            float radius = groupCenter.magnitude;
+            groupCenters[groupIndex] = groupCenter;
+            groupRadii[groupIndex] = radius;
+            minimumRadius = Mathf.Min(minimumRadius, radius);
+            maximumRadius = Mathf.Max(maximumRadius, radius);
+        }
+
+        for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
+        {
+            Vector2 groupCenter = groupCenters[groupIndex];
+            float groupRingRank = Mathf.InverseLerp(
+                maximumRadius,
+                minimumRadius,
+                groupRadii[groupIndex]);
+            float groupNoise = (Mathf.PerlinNoise(
+                (groupCenter.x * FillNoiseScale) + FillNoiseOffset,
+                (groupCenter.y * FillNoiseScale) + FillNoiseOffset) * 2f) - 1f;
+            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
+            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
+            {
+                int tile = group[tileIndex];
+                ringRank[tile] = groupRingRank;
+                edgeNoise[tile] = groupNoise;
+            }
         }
     }
 
@@ -627,8 +756,9 @@ public class Angles : EffectBase
         (1f - Mathf.Exp(-rate * deltaTime)).Lerp(current, target);
 
     /// <summary>
-    /// Composes independent Fill and Drop facts into one hue-compression tension, with an active Drop owning
-    /// the blackout-to-release timeline exclusively.
+    /// Advances the dormant pre-Drop hue-compression tension, with an active Drop owning the
+    /// blackout-to-release timeline exclusively. Fill is intentionally absent because its Shape List
+    /// mask never modulates the colour of a surviving Tile.
     /// </summary>
     /// <param name="drop">The frame-coherent Drop facts used for both preparation and active release.</param>
     /// <returns>
@@ -656,9 +786,7 @@ public class Angles : EffectBase
             return release;
         }
 
-        float target = Mathf.Max(
-            beatManager.Fill.In.Build(),
-            drop.Before.Build(SyncSettings.DropBeats));
+        float target = drop.Before.Build(SyncSettings.DropBeats);
         hueCompression = target >= hueCompression
             ? target
             : SmoothToward(
@@ -821,6 +949,29 @@ public class Angles : EffectBase
         bool paletteIsTransitioning = APalette.IsTransitioning;
         float paletteTransitionProgress = APalette.TransitionProgress;
 
+        float fillProgress = beatManager.Fill.In.Build();
+        float[] frameFillRingRank = null;
+        float[] frameFillNoise = null;
+        if (fillProgress > 0f)
+        {
+            switch (SyncSettings.FillUnit)
+            {
+                case AnglesSyncSettings.FillUnitKind.Stars:
+                    frameFillRingRank = starFillRingRank;
+                    frameFillNoise = starFillNoise;
+                    break;
+                case AnglesSyncSettings.FillUnitKind.Starballs:
+                    frameFillRingRank = starballFillRingRank;
+                    frameFillNoise = starballFillNoise;
+                    break;
+                default:
+                    frameFillRingRank = lotusballFillRingRank;
+                    frameFillNoise = lotusballFillNoise;
+                    break;
+            }
+        }
+        float fillEdgeNoise = SyncSettings.FillEdgeNoise;
+
         // The Routine rotates the full angle-to-hue pattern without changing the tiles' relative hues.
         float rhythmHueOffset = EnableRoutineRhythmHueOffset
             ? routine.Lerp(
@@ -832,7 +983,7 @@ public class Angles : EffectBase
         var drop = beatManager.Drop;
         bool inDrop = drop.Active;
         float dropRelease = UpdateChoreography(drop);
-        float frameHueCompression = EnableFillAndPreDropHueCompression ? hueCompression : 0f;
+        float frameHueCompression = EnablePreDropHueCompression ? hueCompression : 0f;
         // Directional shading is a standing part of both looks. Standalone holds its authored
         // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
         // toward Max, so the approved static look remains the musical response's starting point.
@@ -869,6 +1020,23 @@ public class Angles : EffectBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
+            if (frameFillRingRank != null && frameFillRingRank[i] >= 0f)
+            {
+                float roughenedRingRank = Mathf.Clamp01(
+                    frameFillRingRank[i] + (frameFillNoise[i] * fillEdgeNoise));
+                float removalThreshold = Mathf.Lerp(
+                    FillFirstRemovalProgress,
+                    FillFullRemovalProgress,
+                    roughenedRingRank);
+                if (fillProgress >= removalThreshold)
+                {
+                    // Fill is a mask: black is literal off, while every survivor continues through
+                    // the unchanged Angles render path below with no tint, dim, or hue modulation.
+                    buffer[i] = Color.black;
+                    continue;
+                }
+            }
+
             float collapseStart = frontRank[i] * rankScale;
             float collapse = frameHueCompression.Remap(
                 collapseStart,
@@ -940,8 +1108,8 @@ public class Angles : EffectBase
                     paletteTransitionProgress);
             }
 
-            // Keep shading and the existing dormant Drop value as their separate post-palette stage;
-            // the three remaining temporary musical-layer flags stay unchanged in this pass.
+            // Keep shading and the dormant Drop value as their separate post-palette stage;
+            // the temporary pre-Drop, Drop, and Routine gates remain isolated from the Fill mask.
             buffer[i] = new Color(
                 paletteColor.r * value,
                 paletteColor.g * value,
@@ -1016,6 +1184,19 @@ public sealed class AnglesSyncSettings
     /// </summary>
     public PaletteConditioning PaletteConditioning;
 
+    /// <summary>Selects which allocation-free Shape List supplies the Fill's whole-motif removal units.</summary>
+    public enum FillUnitKind
+    {
+        /// <summary>Lotusball units; the authored default and the only selectable list whose 489 member Tiles cover most of the current wall.</summary>
+        Lotusballs,
+
+        /// <summary>Starball units; 32 ten-Tile compound motifs produce a lighter Fill mask.</summary>
+        Starballs,
+
+        /// <summary>Star units; 45 five-Tile closed fat-rhomb cycles produce the lightest Fill mask.</summary>
+        Stars,
+    }
+
     /// <summary>
     /// Which form of the Levels reading the beat phase front's Low gate consults; renders as an
     /// Inspector dropdown so the reading can be flipped live on the wall.
@@ -1047,10 +1228,16 @@ public sealed class AnglesSyncSettings
     /// <summary>Width of the beat phase front's soft edge in normalized wall-projection space.</summary>
     [Range(0.0001f, 1f)] public float BeatFrontSoftness;
 
-    /// <summary>Width of the Fill/Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
+    /// <summary>Shape List whose groups are removed as whole units during a Fill.</summary>
+    public FillUnitKind FillUnit;
+
+    /// <summary>Maximum stable noise perturbation applied to each group's normalized radius rank, roughening nearby rings without replacing the inward structure.</summary>
+    [Range(0f, 0.5f)] public float FillEdgeNoise;
+
+    /// <summary>Width of the dormant pre-Drop hue-compression wavefront's soft edge in normalized rank space.</summary>
     [Range(0.0001f, 1f)] public float FrontSoftness;
 
-    /// <summary>Per-second smoothing rate used when an unpaired Fill's hue compression releases.</summary>
+    /// <summary>Per-second smoothing rate used when abandoned pre-Drop hue compression releases.</summary>
     [Min(0.0001f)] public float CompressionReleaseRate;
 
     /// <summary>Shared length of Drop preparation before landing and blackout release after landing.</summary>
@@ -1106,8 +1293,8 @@ public sealed class AnglesSyncSettings
 
     /// <summary>
     /// Copies every Angles Sync Setting from another value, including independent palette
-    /// conditioning, the Low-gated beat phase front, three Energy-tier sweep rates, directional-
-    /// shading depth, and Routine hue-offset endpoints and editor rails.
+    /// conditioning, the Low-gated beat phase front, Shape List Fill mask, three Energy-tier sweep
+    /// rates, directional-shading depth, and Routine hue-offset endpoints and editor rails.
     /// </summary>
     /// <param name="source">The Sync Settings whose values become this value.</param>
     public void CopyFrom(AnglesSyncSettings source)
@@ -1123,6 +1310,8 @@ public sealed class AnglesSyncSettings
         BeatPhaseStep = source.BeatPhaseStep;
         BeatFrontAxisDegrees = source.BeatFrontAxisDegrees;
         BeatFrontSoftness = source.BeatFrontSoftness;
+        FillUnit = source.FillUnit;
+        FillEdgeNoise = source.FillEdgeNoise;
         FrontSoftness = source.FrontSoftness;
         CompressionReleaseRate = source.CompressionReleaseRate;
         DropBeats = source.DropBeats;
