@@ -32,6 +32,7 @@ MonoBehaviour:
     FillRotationCyclesPerBeat: 1
     FillPartHueSeparation: 0.5
     FillUnitEnvelopeWidth: 0.5
+    FillContourStrength: 1
     DropBeats: 16
     DropFlowCyclesPerBeatAtImpact: 1
     EnergyRestingLevel: 0.5
