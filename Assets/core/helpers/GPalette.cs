@@ -871,3 +871,153 @@ public class AnimPalette
 
 
 }
+
+/// <summary>
+/// Holds one Effect's conditioned copies of the shared animated palette endpoints and samples their
+/// live cross-fade without allocating on steady frames.
+/// </summary>
+/// <remarks>
+/// The cache is deliberately per Effect because each Effect owns independently live Standalone and
+/// Sync conditioning controls. Immutable shared endpoints are reused across revision changes, so a
+/// landed next endpoint rotates into current without being conditioned again. Endpoint copies are
+/// re-derived only when the shared owner, its endpoint revision, or the live conditioning controls
+/// change; the shared three-second fade remains a per-frame value rather than entering the cache key.
+/// </remarks>
+public sealed class ConditionedPaletteCache
+{
+    /// <summary>The shared animated palette instance from which the conditioned copies derive.</summary>
+    private AnimPalette owner;
+
+    /// <summary>The shared palette endpoint revision represented by the conditioned copies.</summary>
+    private int revision = -1;
+
+    /// <summary>The live conditioning controls represented by the conditioned copies.</summary>
+    private PaletteConditioning settings;
+
+    /// <summary>The immutable shared source represented by <see cref="currentPalette"/>.</summary>
+    private GPalette currentSource;
+
+    /// <summary>The immutable shared source represented by <see cref="nextPalette"/>.</summary>
+    private GPalette nextSource;
+
+    /// <summary>The conditioned copy of the shared current palette endpoint.</summary>
+    private GPalette currentPalette;
+
+    /// <summary>The conditioned copy of the shared next palette endpoint.</summary>
+    private GPalette nextPalette;
+
+    /// <summary>Whether the refreshed frame is inside the shared palette's three-second cross-fade.</summary>
+    private bool isTransitioning;
+
+    /// <summary>The refreshed frame's normalized progress from current to next palette.</summary>
+    private float transitionProgress;
+
+    /// <summary>
+    /// Refreshes conditioned endpoint copies only when the shared owner, endpoint revision, or live
+    /// conditioning controls change, while capturing the current fade position on every frame.
+    /// </summary>
+    /// <param name="paletteOwner">The shared animated palette whose immutable endpoints are conditioned.</param>
+    /// <param name="conditioning">The Effect-owned live controls applied to both endpoints.</param>
+    public void Refresh(AnimPalette paletteOwner, PaletteConditioning conditioning)
+    {
+        isTransitioning = paletteOwner.IsTransitioning;
+        transitionProgress = paletteOwner.TransitionProgress;
+
+        bool ownerChanged = !ReferenceEquals(paletteOwner, owner);
+        bool settingsChanged = ownerChanged || !settings.Matches(conditioning);
+        bool revisionChanged = ownerChanged || paletteOwner.Revision != revision;
+        if (!settingsChanged && !revisionChanged)
+        {
+            return;
+        }
+
+        GPalette refreshedCurrentSource = paletteOwner.CurrentPalette;
+        GPalette refreshedNextSource = paletteOwner.NextPalette;
+        GPalette previousCurrentSource = currentSource;
+        GPalette previousCurrent = currentPalette;
+        GPalette previousNextSource = nextSource;
+        GPalette previousNext = nextPalette;
+
+        GPalette refreshedCurrent = settingsChanged
+            ? refreshedCurrentSource.Conditioned(conditioning)
+            : ReuseOrConditionPalette(
+                refreshedCurrentSource,
+                previousCurrentSource,
+                previousCurrent,
+                previousNextSource,
+                previousNext,
+                conditioning);
+        GPalette refreshedNext = ReferenceEquals(refreshedNextSource, refreshedCurrentSource)
+            ? refreshedCurrent
+            : settingsChanged
+                ? refreshedNextSource?.Conditioned(conditioning)
+                : ReuseOrConditionPalette(
+                    refreshedNextSource,
+                    previousCurrentSource,
+                    previousCurrent,
+                    previousNextSource,
+                    previousNext,
+                    conditioning);
+
+        owner = paletteOwner;
+        revision = paletteOwner.Revision;
+        settings = conditioning;
+        currentSource = refreshedCurrentSource;
+        nextSource = refreshedNextSource;
+        currentPalette = refreshedCurrent;
+        nextPalette = refreshedNext;
+    }
+
+    /// <summary>
+    /// Samples the conditioned current endpoint cyclically and, during a shared palette transition,
+    /// samples the conditioned next endpoint at the same coordinate and blends by live progress.
+    /// </summary>
+    /// <param name="i">The cyclic palette coordinate, wrapped into the normalized domain.</param>
+    /// <param name="doblend">Whether to interpolate between adjacent entries within each endpoint.</param>
+    /// <returns>The conditioned, cyclic, and cross-faded palette colour.</returns>
+    public Color ReadCyclic(float i, bool doblend = false)
+    {
+        Color color = currentPalette.ReadCyclic(i, doblend);
+        if (!isTransitioning)
+        {
+            return color;
+        }
+
+        Color nextColor = nextPalette.ReadCyclic(i, doblend);
+        return Color.Lerp(color, nextColor, transitionProgress);
+    }
+
+    /// <summary>
+    /// Reuses a conditioned endpoint when its immutable source is already cached, otherwise derives
+    /// one new Effect-local palette with the unchanged live controls.
+    /// </summary>
+    /// <param name="source">The shared immutable palette endpoint to represent.</param>
+    /// <param name="previousCurrentSource">The source of the previous conditioned current endpoint.</param>
+    /// <param name="previousCurrent">The previous conditioned current endpoint.</param>
+    /// <param name="previousNextSource">The source of the previous conditioned next endpoint.</param>
+    /// <param name="previousNext">The previous conditioned next endpoint.</param>
+    /// <param name="conditioning">The unchanged live controls used by every reusable endpoint.</param>
+    /// <returns>A reusable or newly conditioned Effect-owned palette, or null for a null endpoint.</returns>
+    private static GPalette ReuseOrConditionPalette(
+        GPalette source,
+        GPalette previousCurrentSource,
+        GPalette previousCurrent,
+        GPalette previousNextSource,
+        GPalette previousNext,
+        PaletteConditioning conditioning)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+        if (ReferenceEquals(source, previousCurrentSource))
+        {
+            return previousCurrent;
+        }
+        if (ReferenceEquals(source, previousNextSource))
+        {
+            return previousNext;
+        }
+        return source.Conditioned(conditioning);
+    }
+}

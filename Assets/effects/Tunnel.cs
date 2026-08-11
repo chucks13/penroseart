@@ -3,7 +3,8 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Renders a direct tile-space tunnel from Tile radius, Tile-index phase, and time.
+/// Renders a direct tile-space tunnel from Tile radius, Tile-index phase, and time, using that cyclic
+/// coordinate to sample an Effect-conditioned copy of the shared animated palette.
 /// </summary>
 /// <remarks>
 /// FILL: the tunnel rushes (scroll accelerates) and compresses its radial bands as the Fill builds,
@@ -44,6 +45,24 @@ public class Tunnel : EffectBase
     /// </summary>
     private const float StandaloneCenterScale = 0.03f;
 
+    /// <summary>
+    /// Authored Standalone palette conditioning, calibrated to pass the classic six-stop rainbow
+    /// through unchanged. Its mean relative luminance is 0.5, so that target produces unit lift;
+    /// equalization and redistribution stay neutral; the 0.001 dark-repair threshold remains below
+    /// pure blue's approximately 0.072 luminance ceiling. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning StandalonePaletteConditioning => new()
+    {
+        TargetLuminance = 0.5f,
+        MinimumLuminance = 0f,
+        LuminanceEqualization = 0f,
+        HueSpreadReference = 1f,
+        MaximumLuminanceScale = 1f,
+        DarkLuminanceThreshold = 0.001f,
+        DuplicateThreshold = 0f,
+        HueRedistribution = 0f,
+    };
+
     // Sync Defaults
 
     /// <summary>Authored minimum per-Tile index phase step for the current Synced look.</summary>
@@ -66,6 +85,24 @@ public class Tunnel : EffectBase
 
     /// <summary>Authored Tile-center scale for the current Synced look.</summary>
     private const float SyncCenterScale = 0.03f;
+
+    /// <summary>
+    /// Authored Sync palette conditioning, independently authored from Standalone so live tuning in
+    /// either mode cannot drift the other. It begins at the same rainbow pass-through calibration:
+    /// unit lift at mean luminance 0.5, neutral equalization and redistribution, and dark repair below
+    /// pure blue's approximately 0.072 luminance ceiling. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning SyncPaletteConditioning => new()
+    {
+        TargetLuminance = 0.5f,
+        MinimumLuminance = 0f,
+        LuminanceEqualization = 0f,
+        HueSpreadReference = 1f,
+        MaximumLuminanceScale = 1f,
+        DarkLuminanceThreshold = 0.001f,
+        DuplicateThreshold = 0f,
+        HueRedistribution = 0f,
+    };
 
     /// <summary>Authored first Waveform energy admitted by Tunnel in Synced Mode.</summary>
     private const Energy SyncWaveformEnergyOne = Energy.Low;
@@ -124,6 +161,7 @@ public class Tunnel : EffectBase
         ScrollSpeed = new FloatRange(StandaloneScrollSpeedMin, StandaloneScrollSpeedMax),
         RadialMix = new FloatRange(StandaloneRadialMixMin, StandaloneRadialMixMax),
         CenterScale = StandaloneCenterScale,
+        PaletteConditioning = StandalonePaletteConditioning,
     };
 
     /// <summary>Resolves a fresh copy of Tunnel's file-local Sync Defaults.</summary>
@@ -133,6 +171,7 @@ public class Tunnel : EffectBase
         ScrollSpeed = new FloatRange(SyncScrollSpeedMin, SyncScrollSpeedMax),
         RadialMix = new FloatRange(SyncRadialMixMin, SyncRadialMixMax),
         CenterScale = SyncCenterScale,
+        PaletteConditioning = SyncPaletteConditioning,
         WaveformEnergyOne = SyncWaveformEnergyOne,
         WaveformEnergyTwo = SyncWaveformEnergyTwo,
         FillScrollRateMultiplier = SyncFillScrollRateMultiplier,
@@ -148,6 +187,12 @@ public class Tunnel : EffectBase
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private TunnelSyncSettings SyncSettings { get; set; } = SyncDefaults;
+
+    /// <summary>
+    /// Tunnel's Effect-local conditioned endpoint cache. It follows shared palette revisions and live
+    /// conditioning controls while preserving the animated cross-fade without steady-frame allocation.
+    /// </summary>
+    private readonly ConditionedPaletteCache conditionedPalette = new();
 
     /// <summary>Current randomly rolled per-Tile index phase step.</summary>
     private float tileIndexPhaseStep;
@@ -264,6 +309,8 @@ public class Tunnel : EffectBase
     /// <summary>Renders one frame of radial tunnel bands directly into the Buffer.</summary>
     public override void Draw()
     {
+        bool isSynced = beatManager.IsSynced;
+
         // The Waveform scales tunnel brightness without changing the tunnel phase.
         float beatBrightness = waveform.Lerp(SyncSettings.BeatBrightnessFloor, 1f);
         UpdateFillEnvelope();
@@ -273,17 +320,22 @@ public class Tunnel : EffectBase
             (SyncSettings.FillRingCompression * fillEnv) +
             (SyncSettings.DropRingCompression * dropEnv);
 
-        float centerScale = beatManager.IsSynced
+        float centerScale = isSynced
             ? SyncSettings.CenterScale
             : standaloneSettings.CenterScale;
         float radialPhaseScale = centerScale * radialMix * ringCompression;
+
+        PaletteConditioning paletteConditioning = isSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning;
+        conditionedPalette.Refresh(APalette, paletteConditioning);
 
         for (int i = 0; i < Penrose.Total; i++)
         {
             float radialPhase = tiles[i].radius * radialPhaseScale;
             float phase = (i * tileIndexPhaseStep + (effectTime * scrollSpeed) + fillScroll +
                 dropScroll + radialPhase) % 1f;
-            buffer[i] = Color.HSVToRGB(phase, 1f, 1f) * beatBrightness;
+            buffer[i] = conditionedPalette.ReadCyclic(phase, doblend: true) * beatBrightness;
         }
     }
 }
@@ -307,7 +359,16 @@ public sealed class TunnelStandaloneSettings
     /// <summary>Scale applied to the Tile-center distance that the radial mix reads.</summary>
     [Min(0f)] public float CenterScale;
 
-    /// <summary>Copies every Tunnel Standalone Setting, including range endpoints and Rails.</summary>
+    /// <summary>
+    /// Live effect-local palette conditioning for Standalone Mode, independently saved so tuning it
+    /// cannot drift the Synced look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
+
+    /// <summary>
+    /// Copies every Tunnel Standalone Setting, including palette conditioning, range endpoints, and
+    /// Rails.
+    /// </summary>
     public void CopyFrom(TunnelStandaloneSettings source)
     {
         if (source == null)
@@ -331,6 +392,7 @@ public sealed class TunnelStandaloneSettings
             source.RadialMix.LowRail,
             source.RadialMix.HighRail);
         CenterScale = source.CenterScale;
+        PaletteConditioning = source.PaletteConditioning;
     }
 }
 
@@ -349,6 +411,12 @@ public sealed class TunnelSyncSettings
 
     /// <summary>Scale applied to the Tile-center distance that the radial mix reads.</summary>
     [Min(0f)] public float CenterScale;
+
+    /// <summary>
+    /// Live effect-local palette conditioning for Synced Mode, independently saved so tuning it
+    /// cannot drift the Standalone look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
 
     /// <summary>First Waveform energy admitted when Tunnel rolls its musical response.</summary>
     public Energy WaveformEnergyOne;
@@ -398,6 +466,7 @@ public sealed class TunnelSyncSettings
             source.RadialMix.LowRail,
             source.RadialMix.HighRail);
         CenterScale = source.CenterScale;
+        PaletteConditioning = source.PaletteConditioning;
         WaveformEnergyOne = source.WaveformEnergyOne;
         WaveformEnergyTwo = source.WaveformEnergyTwo;
         FillScrollRateMultiplier = source.FillScrollRateMultiplier;

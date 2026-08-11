@@ -330,26 +330,11 @@ public class Angles : EffectBase
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private AnglesSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>The shared animated palette instance from which the current Angles-owned copies derive.</summary>
-    private AnimPalette conditionedPaletteOwner;
-
-    /// <summary>The shared palette endpoint revision represented by the current conditioned copies.</summary>
-    private int conditionedPaletteRevision = -1;
-
-    /// <summary>The live Angles conditioning controls represented by the current conditioned copies.</summary>
-    private PaletteConditioning conditionedPaletteSettings;
-
-    /// <summary>The immutable shared source represented by <see cref="conditionedCurrentPalette"/>.</summary>
-    private GPalette conditionedCurrentSource;
-
-    /// <summary>The immutable shared source represented by <see cref="conditionedNextPalette"/>.</summary>
-    private GPalette conditionedNextSource;
-
-    /// <summary>Angles' conditioned copy of the shared current palette endpoint.</summary>
-    private GPalette conditionedCurrentPalette;
-
-    /// <summary>Angles' conditioned copy of the shared next palette endpoint.</summary>
-    private GPalette conditionedNextPalette;
+    /// <summary>
+    /// Angles' Effect-local conditioned endpoint cache. It follows shared palette revisions and live
+    /// conditioning controls while preserving the animated cross-fade without steady-frame allocation.
+    /// </summary>
+    private readonly ConditionedPaletteCache conditionedPalette = new();
 
     /// <summary>
     /// Static per-Tile Fill geometry: the unit's existing outer-to-inner rank and this Tile's explicit
@@ -861,7 +846,7 @@ public class Angles : EffectBase
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Angles),
             SyncDefaults);
-        RefreshConditionedPalettes(beatManager.IsSynced
+        conditionedPalette.Refresh(APalette, beatManager.IsSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning);
         RandomizeStandaloneSweepRate();
@@ -923,93 +908,6 @@ public class Angles : EffectBase
     /// Reserved deactivation hook. Controller does not currently call this.
     /// </summary>
     public override void OnEnd() { }
-
-    /// <summary>
-    /// Reuses a conditioned endpoint when its immutable source is already cached, otherwise derives
-    /// one new effect-local palette with the current Angles controls.
-    /// </summary>
-    /// <param name="source">The shared immutable palette endpoint to represent.</param>
-    /// <param name="previousCurrentSource">The source of the previous conditioned current endpoint.</param>
-    /// <param name="previousCurrent">The previous conditioned current endpoint.</param>
-    /// <param name="previousNextSource">The source of the previous conditioned next endpoint.</param>
-    /// <param name="previousNext">The previous conditioned next endpoint.</param>
-    /// <param name="conditioning">The unchanged live controls used by every reusable endpoint.</param>
-    /// <returns>A reusable or newly conditioned Angles-owned palette, or null for a null endpoint.</returns>
-    private static GPalette ReuseOrConditionPalette(
-        GPalette source,
-        GPalette previousCurrentSource,
-        GPalette previousCurrent,
-        GPalette previousNextSource,
-        GPalette previousNext,
-        PaletteConditioning conditioning)
-    {
-        if (source == null)
-        {
-            return null;
-        }
-        if (ReferenceEquals(source, previousCurrentSource))
-        {
-            return previousCurrent;
-        }
-        if (ReferenceEquals(source, previousNextSource))
-        {
-            return previousNext;
-        }
-        return source.Conditioned(conditioning);
-    }
-
-    /// <summary>
-    /// Refreshes Angles' current and next conditioned copies only when the shared palette endpoints
-    /// or live conditioning controls change. A landed next endpoint rotates into current without
-    /// reconditioning, preserving the shared three-second fade with no steady-frame allocation.
-    /// </summary>
-    private void RefreshConditionedPalettes(PaletteConditioning conditioning)
-    {
-        AnimPalette owner = APalette;
-        bool ownerChanged = !ReferenceEquals(owner, conditionedPaletteOwner);
-        bool settingsChanged = ownerChanged || !conditionedPaletteSettings.Matches(conditioning);
-        bool revisionChanged = ownerChanged || owner.Revision != conditionedPaletteRevision;
-        if (!settingsChanged && !revisionChanged)
-        {
-            return;
-        }
-
-        GPalette currentSource = owner.CurrentPalette;
-        GPalette nextSource = owner.NextPalette;
-        GPalette previousCurrentSource = conditionedCurrentSource;
-        GPalette previousCurrent = conditionedCurrentPalette;
-        GPalette previousNextSource = conditionedNextSource;
-        GPalette previousNext = conditionedNextPalette;
-
-        GPalette current = settingsChanged
-            ? currentSource.Conditioned(conditioning)
-            : ReuseOrConditionPalette(
-                currentSource,
-                previousCurrentSource,
-                previousCurrent,
-                previousNextSource,
-                previousNext,
-                conditioning);
-        GPalette next = ReferenceEquals(nextSource, currentSource)
-            ? current
-            : settingsChanged
-                ? nextSource?.Conditioned(conditioning)
-                : ReuseOrConditionPalette(
-                    nextSource,
-                    previousCurrentSource,
-                    previousCurrent,
-                    previousNextSource,
-                    previousNext,
-                    conditioning);
-
-        conditionedPaletteOwner = owner;
-        conditionedPaletteRevision = owner.Revision;
-        conditionedPaletteSettings = conditioning;
-        conditionedCurrentSource = currentSource;
-        conditionedNextSource = nextSource;
-        conditionedCurrentPalette = current;
-        conditionedNextPalette = next;
-    }
 
     /// <summary>
     /// Exponentially eases a value toward a target at a frame-rate-independent rate.
@@ -1286,11 +1184,7 @@ public class Angles : EffectBase
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
-        RefreshConditionedPalettes(paletteConditioning);
-        GPalette frameCurrentPalette = conditionedCurrentPalette;
-        GPalette frameNextPalette = conditionedNextPalette;
-        bool paletteIsTransitioning = APalette.IsTransitioning;
-        float paletteTransitionProgress = APalette.TransitionProgress;
+        conditionedPalette.Refresh(APalette, paletteConditioning);
 
         float fillProgress = beatManager.Fill.In.Build();
         FillTileFields[] activeFillFields = null;
@@ -1442,19 +1336,9 @@ public class Angles : EffectBase
                     palettePosition + (shortestHueDelta * dropResponseEnvelope),
                     1f);
             }
-            Color paletteColor = frameCurrentPalette.ReadCyclic(
+            Color paletteColor = conditionedPalette.ReadCyclic(
                 palettePosition,
                 doblend: true);
-            if (paletteIsTransitioning)
-            {
-                Color nextPaletteColor = frameNextPalette.ReadCyclic(
-                    palettePosition,
-                    doblend: true);
-                paletteColor = Color.Lerp(
-                    paletteColor,
-                    nextPaletteColor,
-                    paletteTransitionProgress);
-            }
 
             // Directional shading stays in its ordinary post-palette stage. The Drop changes only the
             // palette coordinate's geometric source and never value, so ribbons stay lit solids. The

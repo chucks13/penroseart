@@ -84,6 +84,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.RadialMix.Min, Is.EqualTo(second.RadialMix.Min));
         Assert.That(first.RadialMix.Max, Is.EqualTo(second.RadialMix.Max));
         Assert.That(first.CenterScale, Is.EqualTo(second.CenterScale));
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
     }
 
     /// <summary>
@@ -100,6 +101,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.RadialMix = new FloatRange(23f, 24f, 22f, 25f);
         asset.Settings.CenterScale = 26f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.11f,
+            MinimumLuminance = 0.12f,
+            LuminanceEqualization = 0.13f,
+            HueSpreadReference = 0.14f,
+            MaximumLuminanceScale = 2f,
+            DarkLuminanceThreshold = 0.15f,
+            DuplicateThreshold = 0.16f,
+            HueRedistribution = 0.17f,
+        };
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Tunnel), TempAssetFolder);
 
@@ -117,6 +129,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.RadialMix.LowRail, Is.EqualTo(defaults.RadialMix.LowRail));
         Assert.That(asset.Settings.RadialMix.HighRail, Is.EqualTo(defaults.RadialMix.HighRail));
         Assert.That(asset.Settings.CenterScale, Is.EqualTo(defaults.CenterScale));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
     }
 
     /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
@@ -184,6 +199,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ScrollSpeed = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.RadialMix = new FloatRange(23f, 24f, 22f, 25f);
         asset.Settings.CenterScale = 26f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.21f,
+            MinimumLuminance = 0.22f,
+            LuminanceEqualization = 0.23f,
+            HueSpreadReference = 0.24f,
+            MaximumLuminanceScale = 3f,
+            DarkLuminanceThreshold = 0.2f,
+            DuplicateThreshold = 0.18f,
+            HueRedistribution = 0.19f,
+        };
         asset.Settings.WaveformEnergyOne = Energy.High;
         asset.Settings.WaveformEnergyTwo = Energy.High;
         asset.Settings.FillScrollRateMultiplier = 17f;
@@ -209,6 +235,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.RadialMix.LowRail, Is.EqualTo(defaults.RadialMix.LowRail));
         Assert.That(asset.Settings.RadialMix.HighRail, Is.EqualTo(defaults.RadialMix.HighRail));
         Assert.That(asset.Settings.CenterScale, Is.EqualTo(defaults.CenterScale));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         Assert.That(asset.Settings.WaveformEnergyOne, Is.EqualTo(defaults.WaveformEnergyOne));
         Assert.That(asset.Settings.WaveformEnergyTwo, Is.EqualTo(defaults.WaveformEnergyTwo));
         Assert.That(asset.Settings.FillScrollRateMultiplier, Is.EqualTo(defaults.FillScrollRateMultiplier));
@@ -283,6 +312,26 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.KickBurstMin, Is.EqualTo(defaults.KickBurstMin));
         Assert.That(asset.Settings.KickBurstMax, Is.EqualTo(defaults.KickBurstMax));
         Assert.That(asset.Settings.DownbeatSeedBonus, Is.EqualTo(defaults.DownbeatSeedBonus));
+    }
+
+    /// <summary>
+    /// Asserts that every Palette Conditioning control was copied without pinning any Effect's
+    /// authored tuning value.
+    /// </summary>
+    /// <param name="actual">The restored or independently resolved live settings value.</param>
+    /// <param name="expected">The current file-local defaults value.</param>
+    private static void AssertPaletteConditioningEqual(
+        PaletteConditioning actual,
+        PaletteConditioning expected)
+    {
+        Assert.That(actual.TargetLuminance, Is.EqualTo(expected.TargetLuminance));
+        Assert.That(actual.MinimumLuminance, Is.EqualTo(expected.MinimumLuminance));
+        Assert.That(actual.LuminanceEqualization, Is.EqualTo(expected.LuminanceEqualization));
+        Assert.That(actual.HueSpreadReference, Is.EqualTo(expected.HueSpreadReference));
+        Assert.That(actual.MaximumLuminanceScale, Is.EqualTo(expected.MaximumLuminanceScale));
+        Assert.That(actual.DarkLuminanceThreshold, Is.EqualTo(expected.DarkLuminanceThreshold));
+        Assert.That(actual.DuplicateThreshold, Is.EqualTo(expected.DuplicateThreshold));
+        Assert.That(actual.HueRedistribution, Is.EqualTo(expected.HueRedistribution));
     }
 
     /// <summary>Deletes the temporary test roots through Unity so generated assets and metadata stay paired.</summary>
