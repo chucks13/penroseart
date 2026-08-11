@@ -213,7 +213,7 @@ Each entry in `tiles` has exactly these nine fields:
 
 `edgeAndSeamDistance` is not a concentric ring: its distance-zero set alone spans radius `0.803..20.922`, the full radial range of the current wall.
 
-Every one of the 3,446 directed neighbor entries has a reciprocal entry and corresponds to a shared mesh edge. `neighbor.type` does not identify which perimeter edge is involved and is not the neighboring tile's Rhomb Type. It is a reciprocal edge-class label: fat-fat edges carry `3`, thin-thin edges carry `2`, and mixed edges carry `4` or `5`. No runtime behavior currently interprets this label.
+Every one of the 3,446 directed neighbor entries has a reciprocal entry and corresponds to a shared mesh edge. `neighbor.type` does not identify which perimeter edge is involved and is not the neighboring tile's Rhomb Type. It is a reciprocal edge-class label — the Penrose matching rules' "edge color" — where fat-fat edges carry `3`, thin-thin edges carry `2`, and mixed edges carry `4` or `5`. No runtime behavior currently interprets this label.
 
 `GetRandomNeighbor()` makes one uniformly random selection from the existing adjacency entries. It does not retry or filter the selected entry.
 

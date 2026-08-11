@@ -342,7 +342,8 @@ public class Penrose : MonoBehaviour
     public class neighbor
     {
         /// <summary>
-        /// Reciprocal edge-class label: 3 for fat-fat, 2 for thin-thin, and 4 or 5 for mixed-rhomb edges.
+        /// Reciprocal edge-class label, the Penrose matching rules' "edge color": 3 for fat-fat,
+        /// 2 for thin-thin, and 4 or 5 for mixed-rhomb edges.
         /// No runtime system currently interprets the label.
         /// </summary>
         public int type;
