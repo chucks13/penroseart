@@ -44,6 +44,20 @@ its base class, never its name — some Mixers carry no "Mixer" in their name. L
   selection.
 - Run the `code-review` skill after the Phase F commits and before the merge.
 
+## Commit before the next change
+
+This rule holds in every phase, and it has no exception.
+
+1. When a worker returns, validate the work. Compile to zero warnings and run the tests to green.
+2. Commit the validated work before you make the next change.
+3. Start no worker while the tree is dirty.
+
+Wall approval is not part of this gate. The maintainer judges the look after the commit. A
+rejected look becomes a follow-up commit, or a revert by hash.
+
+A worker that edits a dirty tree mixes two changes into one diff. Nobody can tell the two apart
+after that, and nobody can revert one of them.
+
 ## Phase A — Set up
 
 1. If this session already ran a ticket, stop and tell the maintainer.
