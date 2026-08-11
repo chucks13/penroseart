@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f9c85820fbc345a7aa737b8abdecee8, type: 3}
+  m_Name: TunnelSettings
+  m_EditorClassIdentifier: Assembly-CSharp::TunnelStandaloneSettingsAsset
+  effectTypeName: Tunnel
+  settings:
+    TileIndexPhaseStep:
+      Min: 0.0004
+      Max: 0.003
+      LowRail: 0.0004
+      HighRail: 0.003
+    ScrollSpeed:
+      Min: 0.1
+      Max: 1
+      LowRail: 0.1
+      HighRail: 1
+    RadialPhaseScale:
+      Min: 0.0003
+      Max: 0.006
+      LowRail: 0.0003
+      HighRail: 0.006
