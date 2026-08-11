@@ -30,7 +30,7 @@ MonoBehaviour:
     BeatFrontSoftness: 0.12
     FillUnit: 1
     FillRotationCyclesPerBeat: 1
-    FillPartHueSeparation: 0.5
+    FillPartHueSeparation: 0.25
     FillUnitEnvelopeWidth: 0.5
     FillContourStrength: 1
     DropBeats: 16

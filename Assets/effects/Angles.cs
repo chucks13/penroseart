@@ -162,10 +162,17 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Hue-wheel distance between the center/core and surrounding part of a compound Fill motif.
-    /// One half places the two parts opposite each other for maximum visible colour separation; Stars
-    /// have one part and therefore ignore this value. Tune live on the FILL readout.
+    /// Stars have one part and therefore ignore this value. Tune live on the FILL readout.
     /// </summary>
-    private const float SyncFillPartHueSeparation = 0.5f;
+    /// <remarks>
+    /// A quarter cycle, set on the wall, because a compound motif shows four regions rather than two:
+    /// its two parts, and each part's contour sitting <see cref="FillContourHueOffset"/> away. A
+    /// quarter spaces all four evenly around the wheel — core 0, ball 0.25, core's contour 0.5,
+    /// ball's contour 0.75. One half looks like maximum separation and is not: it collides the ball
+    /// with the core's contour and the ball's contour with the core, leaving two colours where the
+    /// motif has four regions.
+    /// </remarks>
+    private const float SyncFillPartHueSeparation = 0.25f;
 
     /// <summary>
     /// Width of one motif's smooth rise-and-fall envelope in outer-to-inner unit-rank space. One half
@@ -1591,8 +1598,9 @@ public sealed class AnglesSyncSettings
 
     /// <summary>
     /// Hue-wheel distance between a compound motif's center/core and surrounding part. This is what
-    /// keeps a Starball or Lotusball reading as two regions rather than one undifferentiated blob;
-    /// a Star has a single part and ignores it.
+    /// keeps a Starball or Lotusball reading as separate regions rather than one undifferentiated
+    /// blob; a Star has a single part and ignores it. Each part's contour sits half a cycle from the
+    /// part it borders, so this value spaces four regions on a compound motif, not two.
     /// </summary>
     [Range(0f, 0.5f)] public float FillPartHueSeparation;
 
