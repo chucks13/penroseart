@@ -133,6 +133,16 @@ Start with these before adding new structures:
 - To compile: `scripts/unity-compile.sh`. To test: `scripts/unity-tests.sh` (uses the
   open-Editor test bridge when Unity is running). Read diagnostics from the log paths
   the scripts print, not from stdout.
+- **The bridge runs a subset; only batchmode runs everything.** `scripts/unity-tests.sh` picks
+  its path from whether the Editor holds the project — the open-Editor bridge when it does,
+  batchmode when it does not — and prints which one ran. The bridge omits tests: measured on
+  this project, the bridge ran `total=346` where batchmode ran `total=355`, dropping every
+  EditMode `[UnityTest]` coroutine and the whole `PerformerAccessPathTests` fixture. It
+  reports `skipped=0` while doing so, because the omitted tests are never selected rather than
+  skipped. **`skipped=` is therefore not coverage evidence — `total=` is.** Bridge green is the
+  fast inner loop; before work lands, run once with the Editor closed and confirm the full
+  total. Comparing two runs is only meaningful when you know which path each one took, so read
+  the printed path before drawing any conclusion from a count.
 - **Delegated workers must never run the Unity scripts or launch Unity.** Read-only and
   workspace-write sandboxes block Unity Licensing Client state and local IPC outside
   the repo, causing a 75-second licensing failure and misleading package/compiler errors.

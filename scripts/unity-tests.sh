@@ -110,13 +110,24 @@ run_batchmode() {
 
 rm -f "$results_file" "$log_file" "$status_file"
 
+# The two paths do NOT run the same set. The bridge omits [UnityTest] coroutines and reports
+# skipped=0 while doing so, because the omitted tests are never selected rather than skipped.
+# The path is printed because a total= count means nothing until you know which path produced
+# it — comparing a bridge run against a batchmode run is the mistake this line exists to stop.
 status=0
 if unity_editor_has_project_open "$repo_root"; then
+  test_path="open-editor-bridge"
   run_in_open_editor || status=$?
 else
+  test_path="batchmode"
   run_batchmode || status=$?
 fi
 
+printf 'Unity test path: %s (platform %s)\n' "$test_path" "$platform"
+if [ "$test_path" = "open-editor-bridge" ]; then
+  printf 'NOTE: the bridge omits [UnityTest] coroutines and still reports skipped=0.\n'
+  printf '      Judge coverage by total=, not skipped=, and close the Editor for a full run.\n'
+fi
 printf 'Unity test log: %s\n' "$log_file"
 printf 'Unity test results: %s\n' "$results_file"
 
