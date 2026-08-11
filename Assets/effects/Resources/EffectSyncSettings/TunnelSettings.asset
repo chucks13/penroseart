@@ -14,11 +14,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TunnelSyncSettingsAsset
   effectTypeName: Tunnel
   settings:
+    TileIndexPhaseStep:
+      Min: 0.0004
+      Max: 0.003
+      LowRail: 0.0004
+      HighRail: 0.003
+    ScrollSpeed:
+      Min: 0.1
+      Max: 1
+      LowRail: 0.1
+      HighRail: 1
+    RadialMix:
+      Min: 0.01
+      Max: 0.2
+      LowRail: 0.01
+      HighRail: 0.2
+    CenterScale: 0.03
     WaveformEnergyOne: 0
     WaveformEnergyTwo: 1
-    FillRush: 5
-    FillZoom: 3
+    FillScrollRateMultiplier: 5
+    FillRingCompression: 3
     BeatBrightnessFloor: 0.75
     DropBars: 2
-    DropRush: 10
-    DropZoom: 6
+    DropReverseScrollRateMultiplier: 10
+    DropRingCompression: 6

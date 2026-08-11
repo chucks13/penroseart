@@ -24,8 +24,9 @@ MonoBehaviour:
       Max: 1
       LowRail: 0.1
       HighRail: 1
-    RadialPhaseScale:
-      Min: 0.0003
-      Max: 0.006
-      LowRail: 0.0003
-      HighRail: 0.006
+    RadialMix:
+      Min: 0.01
+      Max: 0.2
+      LowRail: 0.01
+      HighRail: 0.2
+    CenterScale: 0.03
