@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 // Chuck Sommerville
 
@@ -7,6 +8,7 @@ using UnityEngine;
 /// </summary>
 [System.Serializable]
 [EffectSyncSettings(typeof(LightningSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(LightningStandaloneSettingsAsset))]
 public class Lightning : EffectBase
 {
     // Standalone Defaults
@@ -21,18 +23,27 @@ public class Lightning : EffectBase
     private const float StandaloneTileHueDelta = 0.02f;
 
     /// <summary>Fixed bolt-brightness multiplier returned when no live clock can place the held Waveform.</summary>
-    private const float StandaloneBeatBrightness = 0.75f;
+    private const float StandaloneBoltBrightness = 0.75f;
 
     // Sync Defaults
 
-    /// <summary>Bolt-brightness multiplier at the held Waveform's trough.</summary>
-    private const float SyncBeatBrightnessAtTrough = 1f;
+    /// <summary>Bolt brightness at the held Waveform's peak; the range minimum, preserving the authored inverse pulse.</summary>
+    private const float SyncWaveformBrightnessMin = 0.75f;
 
-    /// <summary>Bolt-brightness multiplier at the held Waveform's peak.</summary>
-    private const float SyncBeatBrightnessAtPeak = 0.75f;
+    /// <summary>Bolt brightness at the held Waveform's trough; the range maximum, preserving the authored inverse pulse.</summary>
+    private const float SyncWaveformBrightnessMax = 1f;
+
+    /// <summary>Starting-hue drift magnitude used by the Synced look when its coin flip enables that animation.</summary>
+    private const float SyncStartHueDelta = 0.02f;
+
+    /// <summary>Per-ray hue drift magnitude used by the Synced look when its coin flip enables that animation.</summary>
+    private const float SyncRayHueDelta = 0.2f;
+
+    /// <summary>Per-tile hue drift magnitude used by the Synced look when its coin flip enables that animation.</summary>
+    private const float SyncTileHueDelta = 0.02f;
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
-    private const float SyncBeatHueOffset = 0.5f;
+    private const float SyncWaveformHueOffset = 0.5f;
 
     /// <summary>Drop decay length in bars: the slam falls linearly from full to nothing over this many bars.</summary>
     private const int SyncDropBars = 2;
@@ -53,13 +64,13 @@ public class Lightning : EffectBase
 
     /// <summary>Extra brightness flashed into the flooded field at the Drop's peak (lerped toward white), fading out
     /// with the envelope so it is a brief over-bright impact rather than a sustained white wash. Tune on the readout.</summary>
-    private const float SyncDropFieldBright = 0.25f;
+    private const float SyncDropFieldWhiteFlash = 0.25f;
 
     /// <summary>Trail-fade amount held during the Drop slam (near 1 = slow fade): the bolt trails linger under the flood. Tune on the readout.</summary>
-    private const float SyncDropFadeHold = 0.97f;
+    private const float SyncDropTrailFade = 0.97f;
 
     /// <summary>Pulse duration whose rising edge re-walks the held Fill bolt.</summary>
-    private const Duration SyncFillJerkDuration = Duration.Sixteenth;
+    private const Duration SyncFillRewalkDuration = Duration.Sixteenth;
 
     /// <summary>Pulse duration that drives the held Fill bolt's strobe gate.</summary>
     private const Duration SyncFillStrobeDuration = Duration.Sixteenth;
@@ -77,44 +88,48 @@ public class Lightning : EffectBase
     private const int BeatsPerBar = 4;
 
     /// <summary>Lightning is a sharp beat-scaled burst. On a Fill it HOLDS a frozen bolt that hard-snaps to entirely
-    /// new positions on every jerk pulse (sixteenth notes by default) while strobing on the strobe pulses
+    /// new positions on every rewalk pulse (sixteenth notes by default) while strobing on the strobe pulses
     /// (sixteenths by default) (see <see cref="Draw"/>) — held, but
-    /// jerking. On a Drop it inverts: an intensity swell, electric flicker, and a figure/ground flip where the wall
+    /// rewalking. On a Drop it inverts: an intensity swell, electric flicker, and a figure/ground flip where the wall
     /// floods with the rolled colors and the bolts cut through as dark negative space (see <see cref="OnNewGrid"/>);
     /// its electric energy suits Mid/High-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Lightning's Standalone Defaults.</summary>
-    public static LightningStandaloneSettings StandaloneSettings => new LightningStandaloneSettings
+    /// <summary>Resolves a fresh copy of Lightning's file-local Standalone Defaults.</summary>
+    public static LightningStandaloneSettings StandaloneDefaults => new()
     {
         StartHueDelta = StandaloneStartHueDelta,
         RayHueDelta = StandaloneRayHueDelta,
         TileHueDelta = StandaloneTileHueDelta,
-        BeatBrightness = StandaloneBeatBrightness,
+        BoltBrightness = StandaloneBoltBrightness,
     };
 
     /// <summary>Resolves a fresh copy of Lightning's file-local Sync Defaults.</summary>
-    public static LightningSyncSettings SyncDefaults => new LightningSyncSettings
+    public static LightningSyncSettings SyncDefaults => new()
     {
-        BeatBrightnessAtTrough = SyncBeatBrightnessAtTrough,
-        BeatBrightnessAtPeak = SyncBeatBrightnessAtPeak,
-        BeatHueOffset = SyncBeatHueOffset,
+        StartHueDelta = SyncStartHueDelta,
+        RayHueDelta = SyncRayHueDelta,
+        TileHueDelta = SyncTileHueDelta,
+        WaveformBrightness = new FloatRange(
+            SyncWaveformBrightnessMin,
+            SyncWaveformBrightnessMax),
+        WaveformHueOffset = SyncWaveformHueOffset,
         DropBars = SyncDropBars,
         DropValueLift = SyncDropValueLift,
         DropFlickerDepth = SyncDropFlickerDepth,
         DropFlickerHz = SyncDropFlickerHz,
         DropFieldFlood = SyncDropFieldFlood,
-        DropFieldBright = SyncDropFieldBright,
-        DropFadeHold = SyncDropFadeHold,
-        FillJerkDuration = SyncFillJerkDuration,
+        DropFieldWhiteFlash = SyncDropFieldWhiteFlash,
+        DropTrailFade = SyncDropTrailFade,
+        FillRewalkDuration = SyncFillRewalkDuration,
         FillStrobeDuration = SyncFillStrobeDuration,
         FillStrobeFloor = SyncFillStrobeFloor,
         FillStrobeDuty = SyncFillStrobeDuty,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private LightningStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private LightningStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private LightningSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -125,13 +140,13 @@ public class Lightning : EffectBase
     /// <summary>Current starting hue rolled across the complete 0..1 hue domain; the full hue wheel is structural rather than an authored subrange.</summary>
     private float starthue;
 
-    /// <summary>Current signed starting-hue drift; its inline rolls span the complete off/on and direction domains while the enabled drift magnitude comes from Standalone Settings.</summary>
+    /// <summary>Current signed starting-hue drift; its inline rolls span the complete off/on and direction domains while the enabled drift magnitude comes from the mode-selected settings surface.</summary>
     private float deltastart = 0f;
 
-    /// <summary>Current signed per-ray hue drift; its inline rolls span the complete off/on and direction domains while the enabled drift magnitude comes from Standalone Settings.</summary>
+    /// <summary>Current signed per-ray hue drift; its inline rolls span the complete off/on and direction domains while the enabled drift magnitude comes from the mode-selected settings surface.</summary>
     private float deltaray = 0f;
 
-    /// <summary>Current signed per-tile hue drift; its inline rolls span the complete off/on and direction domains while the enabled drift magnitude comes from Standalone Settings.</summary>
+    /// <summary>Current signed per-tile hue drift; its inline rolls span the complete off/on and direction domains while the enabled drift magnitude comes from the mode-selected settings surface.</summary>
     private float deltatile = 0f;
 
     /// <summary>Current beat-response mode; the inline [0, 3) roll spans all three algorithm modes and is not an authored subrange.</summary>
@@ -140,12 +155,13 @@ public class Lightning : EffectBase
     /// <summary>Current color-mode slot; the inline [0, 4) roll spans the complete one-HSV/three-palette weighting and is not an authored subrange.</summary>
     private int mode = 0;
 
-    /// <summary>During a Fill the walked bolt freezes here and is only re-walked on the jerk pulse; one cached tile path per center-star ray.</summary>
+    /// <summary>During a Fill the walked bolt freezes here and is only re-walked on the rewalk pulse; one cached tile path per center-star ray.</summary>
     private List<int>[] heldRays;
 
-    /// <summary>True while the Fill hold/jerk/strobe mode is driving the bolt (surfaced on the readout).</summary>
+    /// <summary>True while the Fill hold/rewalk/strobe mode is driving the bolt (surfaced on the readout).</summary>
     private bool heldActive;
-    private bool previousJerkOn;
+    /// <summary>Previous frame's rewalk-gate state; the rising edge triggers the Fill re-walk.</summary>
+    private bool previousRewalkOn;
 
     /// <summary>Drop slam amount (1 at the downbeat, then falling linearly to 0 over <see cref="LightningSyncSettings.DropBars"/>); drives the value lift, flicker, field inversion, and trail hold.</summary>
     private float dropEnv;
@@ -156,7 +172,7 @@ public class Lightning : EffectBase
     public override string DebugText()
     {
         return $"fade: {fadeValue}\n starthue:{starthue}\n deltastart:{deltastart}\n deltaray:{deltaray}\n deltatile:{deltatile}\n mode:{mode}" +
-            (heldActive ? $"\n FILL hold/jerk {SyncSettings.FillJerkDuration}, strobe {SyncSettings.FillStrobeDuration}" : "") +
+            (heldActive ? $"\n FILL hold/rewalk {SyncSettings.FillRewalkDuration}, strobe {SyncSettings.FillStrobeDuration}" : "") +
             (dropEnv > 0.01f ? $"\n DROP {dropEnv:0.00}" : "");
     }
 
@@ -165,7 +181,9 @@ public class Lightning : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Lightning),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Lightning),
             SyncDefaults);
@@ -178,7 +196,7 @@ public class Lightning : EffectBase
 
         heldRays = null;
         heldActive = false;
-        previousJerkOn = false;
+        previousRewalkOn = false;
 
         dropEnv = 0f;
     }
@@ -195,9 +213,13 @@ public class Lightning : EffectBase
         //  selectively modify animation
         // The inline 0f is the structural "animation off" endpoint of each coin flip, not an authored
         // subrange bound; only the enabled drift magnitude is an authored value.
-        deltastart = Random.Range(0, 2) == 0 ? 0f : standaloneSettings.StartHueDelta;
-        deltaray = Random.Range(0, 2) == 0 ? 0f : standaloneSettings.RayHueDelta;
-        deltatile = Random.Range(0, 2) == 0 ? 0f : standaloneSettings.TileHueDelta;
+        bool isSynced = beatManager.IsSynced;
+        float startHueDelta = isSynced ? SyncSettings.StartHueDelta : standaloneSettings.StartHueDelta;
+        float rayHueDelta = isSynced ? SyncSettings.RayHueDelta : standaloneSettings.RayHueDelta;
+        float tileHueDelta = isSynced ? SyncSettings.TileHueDelta : standaloneSettings.TileHueDelta;
+        deltastart = Random.Range(0, 2) == 0 ? 0f : startHueDelta;
+        deltaray = Random.Range(0, 2) == 0 ? 0f : rayHueDelta;
+        deltatile = Random.Range(0, 2) == 0 ? 0f : tileHueDelta;
         // set random directions
         deltastart *= Random.Range(0, 2) == 0 ? 1f : -1f;
         deltaray *= Random.Range(0, 2) == 0 ? 1f : -1f;
@@ -252,7 +274,7 @@ public class Lightning : EffectBase
         Color fieldColor = RolledColor(starthue);
         // Flash the field a touch brighter (toward white) at the peak, fading out with the envelope so the impact
         // hits bright and then settles back into the pure inverted color.
-        Color floodColor = Color.Lerp(fieldColor * flicker, Color.white, SyncSettings.DropFieldBright * dropEnv);
+        Color floodColor = Color.Lerp(fieldColor * flicker, Color.white, SyncSettings.DropFieldWhiteFlash * dropEnv);
         float flood = dropEnv * SyncSettings.DropFieldFlood;
         for (int i = 0; i < buffer.Length; i++)
         {
@@ -261,17 +283,17 @@ public class Lightning : EffectBase
     }
 
     /// <summary>
-    /// Updates the Fill hold/jerk path. Outside a Fill the bolt re-walks every frame; inside a Fill it freezes
-    /// and only re-walks on the rising edge of the configured jerk gate (sixteenth notes by default), so the whole
+    /// Updates the Fill hold/rewalk path. Outside a Fill the bolt re-walks every frame; inside a Fill it freezes
+    /// and only re-walks on the rising edge of the configured rewalk gate (sixteenth notes by default), so the whole
     /// branch hard-snaps to new positions in step with that pulse instead of flowing continuously. If the beat gate is unavailable, it holds.
     /// </summary>
     private void UpdateHeldBolt()
     {
         heldActive = beatManager.Fill.Active;
-        var jerkOn = beatManager.Pulses.On(SyncSettings.FillJerkDuration);
+        var rewalkOn = beatManager.Pulses.On(SyncSettings.FillRewalkDuration);
         if (heldActive)
         {
-            if ((jerkOn && !previousJerkOn) || heldRays == null)
+            if ((rewalkOn && !previousRewalkOn) || heldRays == null)
             {
                 GenerateBolt();
             }
@@ -280,7 +302,7 @@ public class Lightning : EffectBase
         {
             GenerateBolt();
         }
-        previousJerkOn = jerkOn;
+        previousRewalkOn = rewalkOn;
     }
 
     /// <summary>
@@ -306,29 +328,29 @@ public class Lightning : EffectBase
     {
         // This Effect owns its brightness, hue, and clockless fallback mappings.
         float rhythm = waveform.Envelope;
-        float beatBrightness = waveform.Lerp(
-            SyncSettings.BeatBrightnessAtTrough,
+        float waveformBrightness = waveform.Lerp(
+            SyncSettings.WaveformBrightness.Max,
             beatManager.IsSynced
-                ? SyncSettings.BeatBrightnessAtPeak
-                : standaloneSettings.BeatBrightness);
-        float beatHue = SyncSettings.BeatHueOffset * rhythm;
+                ? SyncSettings.WaveformBrightness.Min
+                : standaloneSettings.BoltBrightness);
+        float waveformHueOffset = SyncSettings.WaveformHueOffset * rhythm;
 
         dropEnv = beatManager.Drop.In.Decay(SyncSettings.DropBars * BeatsPerBar);
         float flicker = DropFlicker();
 
-        buffer.Fade(dropEnv.Lerp(fadeValue, SyncSettings.DropFadeHold));
+        buffer.Fade(dropEnv.Lerp(fadeValue, SyncSettings.DropTrailFade));
         FloodDropField(flicker);
 
         UpdateHeldBolt();
         float strobe = FillStrobe();
 
-        RenderBolt(beatBrightness, beatHue, flicker, strobe);
+        RenderBolt(waveformBrightness, waveformHueOffset, flicker, strobe);
     }
 
     /// <summary>
     /// Walks the stochastic branch path outward from each center-star tile and caches the visited tile indices in
     /// <see cref="heldRays"/>. Splitting the walk (here) from the coloring (<see cref="RenderBolt"/>) is what lets a
-    /// Fill hold one bolt and re-walk it only on the jerk; outside a Fill it is simply called every frame, preserving
+    /// Fill hold one bolt and re-walk it only on the rewalk; outside a Fill it is simply called every frame, preserving
     /// the original per-frame stochastic redraw.
     /// </summary>
     private void GenerateBolt()
@@ -376,7 +398,7 @@ public class Lightning : EffectBase
     /// Fill <paramref name="strobe"/> is 1 and the Drop terms collapse at dropEnv 0, so the output is the ordinary
     /// bright-bolts-on-black look.
     /// </summary>
-    private void RenderBolt(float beatBrightness, float beatHue, float flicker, float strobe)
+    private void RenderBolt(float waveformBrightness, float waveformHueOffset, float flicker, float strobe)
     {
         if (heldRays == null)
             return;
@@ -396,11 +418,11 @@ public class Lightning : EffectBase
                 Color strokeColor = RolledColor(tilehue);
 
                 if (beatMode < 2)
-                    strokeColor *= beatBrightness;
+                    strokeColor *= waveformBrightness;
                 if (beatMode > 0)
                 {
                     Color.RGBToHSV(strokeColor, out float h, out float s, out float v);
-                    strokeColor = Color.HSVToRGB((h + beatHue) % 1f, s, v);
+                    strokeColor = Color.HSVToRGB((h + waveformHueOffset) % 1f, s, v);
                 }
 
                 if (dropEnv > 0f)
@@ -410,7 +432,7 @@ public class Lightning : EffectBase
                     Color.RGBToHSV(strokeColor, out float dh, out float ds, out float dv);
                     strokeColor = Color.HSVToRGB(dh, ds, (SyncSettings.DropValueLift * dropEnv).Lerp(dv, 1f));
                 }
-                Color boltColor = strokeColor * beatBrightness * flicker * strobe;
+                Color boltColor = strokeColor * waveformBrightness * flicker * strobe;
                 // Invert the bolt toward black so it reads as a dark cut through the flooded field at the Drop's peak,
                 // returning to a bright bolt as the Drop decays. At dropEnv 0 this is just the bright bolt.
                 buffer[currentIdx] = Color.Lerp(boltColor, Color.black, dropEnv);
@@ -432,7 +454,8 @@ public class Lightning : EffectBase
     }
 }
 
-/// <summary>The fixed Standalone Settings resolved from Lightning's file-local Standalone Defaults.</summary>
+/// <summary>The serializable value shape shared by Lightning's Standalone Defaults and Standalone Settings.</summary>
+[Serializable]
 public sealed class LightningStandaloneSettings
 {
     /// <summary>Drift magnitude applied to the starting hue when its coin flip enables that animation.</summary>
@@ -445,21 +468,41 @@ public sealed class LightningStandaloneSettings
     public float TileHueDelta;
 
     /// <summary>Fixed bolt-brightness multiplier used without live musical placement.</summary>
-    public float BeatBrightness;
+    public float BoltBrightness;
+
+    /// <summary>Copies every Lightning Standalone Setting from another value.</summary>
+    public void CopyFrom(LightningStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        StartHueDelta = source.StartHueDelta;
+        RayHueDelta = source.RayHueDelta;
+        TileHueDelta = source.TileHueDelta;
+        BoltBrightness = source.BoltBrightness;
+    }
 }
 
 /// <summary>The saved musical-response settings used by Lightning in Synced Mode.</summary>
 [System.Serializable]
 public sealed class LightningSyncSettings
 {
-    /// <summary>Bolt-brightness multiplier at the held Waveform's trough.</summary>
-    [Range(0f, 1f)] public float BeatBrightnessAtTrough;
+    /// <summary>Drift magnitude applied to the starting hue when its coin flip enables that animation.</summary>
+    [Min(0f)] public float StartHueDelta;
 
-    /// <summary>Bolt-brightness multiplier at the held Waveform's peak.</summary>
-    [Range(0f, 1f)] public float BeatBrightnessAtPeak;
+    /// <summary>Drift magnitude applied per ray when its coin flip enables that animation.</summary>
+    [Min(0f)] public float RayHueDelta;
+
+    /// <summary>Drift magnitude applied per tile when its coin flip enables that animation.</summary>
+    [Min(0f)] public float TileHueDelta;
+
+    /// <summary>Bolt-brightness range whose maximum is the held Waveform's trough and whose minimum is the peak and no-placement fallback, preserving the authored inverse pulse.</summary>
+    public FloatRange WaveformBrightness;
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
-    [Range(0f, 1f)] public float BeatHueOffset;
+    [Range(0f, 1f)] public float WaveformHueOffset;
 
     /// <summary>Drop decay length in bars.</summary>
     [Min(1)] public int DropBars;
@@ -477,13 +520,13 @@ public sealed class LightningSyncSettings
     [Range(0f, 1f)] public float DropFieldFlood;
 
     /// <summary>White-flash amount added to the flooded field at the Drop's peak.</summary>
-    [Range(0f, 1f)] public float DropFieldBright;
+    [Range(0f, 1f)] public float DropFieldWhiteFlash;
 
     /// <summary>Trail-fade amount held during the Drop slam.</summary>
-    [Range(0f, 1f)] public float DropFadeHold;
+    [Range(0f, 1f)] public float DropTrailFade;
 
     /// <summary>Pulse duration whose rising edge re-walks the held Fill bolt.</summary>
-    public Duration FillJerkDuration;
+    public Duration FillRewalkDuration;
 
     /// <summary>Pulse duration that drives the held Fill bolt's strobe gate.</summary>
     public Duration FillStrobeDuration;
@@ -502,17 +545,23 @@ public sealed class LightningSyncSettings
             throw new System.ArgumentNullException(nameof(source));
         }
 
-        BeatBrightnessAtTrough = source.BeatBrightnessAtTrough;
-        BeatBrightnessAtPeak = source.BeatBrightnessAtPeak;
-        BeatHueOffset = source.BeatHueOffset;
+        StartHueDelta = source.StartHueDelta;
+        RayHueDelta = source.RayHueDelta;
+        TileHueDelta = source.TileHueDelta;
+        WaveformBrightness = new FloatRange(
+            source.WaveformBrightness.Min,
+            source.WaveformBrightness.Max,
+            source.WaveformBrightness.LowRail,
+            source.WaveformBrightness.HighRail);
+        WaveformHueOffset = source.WaveformHueOffset;
         DropBars = source.DropBars;
         DropValueLift = source.DropValueLift;
         DropFlickerDepth = source.DropFlickerDepth;
         DropFlickerHz = source.DropFlickerHz;
         DropFieldFlood = source.DropFieldFlood;
-        DropFieldBright = source.DropFieldBright;
-        DropFadeHold = source.DropFadeHold;
-        FillJerkDuration = source.FillJerkDuration;
+        DropFieldWhiteFlash = source.DropFieldWhiteFlash;
+        DropTrailFade = source.DropTrailFade;
+        FillRewalkDuration = source.FillRewalkDuration;
         FillStrobeDuration = source.FillStrobeDuration;
         FillStrobeFloor = source.FillStrobeFloor;
         FillStrobeDuty = source.FillStrobeDuty;
