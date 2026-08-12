@@ -6,62 +6,66 @@ using Random = UnityEngine.Random;
 /// Renders palette-colored Perlin noise over tile positions with optional beat-driven brightness, color, or time distortion.
 /// </summary>
 [EffectSyncSettings(typeof(NoiseSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(NoiseStandaloneSettingsAsset))]
 public class Noise : EffectBase
 {
     // Standalone Defaults
 
     /// <summary>Authored minimum tile-center scale for the unchanged Standalone noise field.</summary>
-    private const float StandaloneScaleMin = 0.05f;
+    private const float StandaloneTileCenterScaleMin = 0.05f;
 
     /// <summary>Authored maximum tile-center scale for the unchanged Standalone noise field.</summary>
-    private const float StandaloneScaleMax = 0.2f;
+    private const float StandaloneTileCenterScaleMax = 0.2f;
 
     /// <summary>Authored minimum drift speed for the unchanged Standalone noise field.</summary>
-    private const float StandaloneSpeedMin = 0.1f;
+    private const float StandaloneNoiseFieldDriftSpeedMin = 0.1f;
 
     /// <summary>Authored maximum drift speed for the unchanged Standalone noise field.</summary>
-    private const float StandaloneSpeedMax = 1.5f;
+    private const float StandaloneNoiseFieldDriftSpeedMax = 1.5f;
 
     /// <summary>Authored minimum Perlin amplitude for the unchanged Standalone contrast.</summary>
-    private const float StandaloneAmplifierMin = 1f;
+    private const float StandalonePerlinAmplitudeMin = 1f;
 
     /// <summary>Authored maximum Perlin amplitude for the unchanged Standalone contrast.</summary>
-    private const float StandaloneAmplifierMax = 5f;
+    private const float StandalonePerlinAmplitudeMax = 5f;
+
+    /// <summary>Authored brightness multiplier reached at the Waveform trough.</summary>
+    private const float StandaloneBrightnessAtWaveformTrough = 0.85f;
 
     /// <summary>Authored neutral brightness for the unchanged Standalone look when no Waveform sample is available.</summary>
     private const float StandaloneBrightnessAtRest = 1f;
 
-    /// <summary>Authored inclusive lower endpoint of the Standalone distortion-mode roll.</summary>
-    private const int StandaloneDistortionModeMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Standalone Waveform-response-mode roll.</summary>
+    private const int StandaloneWaveformResponseModeMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete three-mode Standalone distortion roll.</summary>
-    private const int StandaloneDistortionModeMaxExclusive = 3;
+    /// <summary>Authored exclusive upper endpoint of the complete three-mode Standalone Waveform-response roll.</summary>
+    private const int StandaloneWaveformResponseModeMaxExclusive = 3;
 
     // Sync Defaults
 
     /// <summary>Authored minimum tile-center scale for a Synced Mode noise-field roll.</summary>
-    private const float SyncScaleMin = 0.05f;
+    private const float SyncTileCenterScaleMin = 0.05f;
 
     /// <summary>Authored maximum tile-center scale for a Synced Mode noise-field roll.</summary>
-    private const float SyncScaleMax = 0.2f;
+    private const float SyncTileCenterScaleMax = 0.2f;
 
     /// <summary>Authored minimum drift speed for a Synced Mode noise-field roll.</summary>
-    private const float SyncSpeedMin = 0.1f;
+    private const float SyncNoiseFieldDriftSpeedMin = 0.1f;
 
     /// <summary>Authored maximum drift speed for a Synced Mode noise-field roll.</summary>
-    private const float SyncSpeedMax = 1.5f;
+    private const float SyncNoiseFieldDriftSpeedMax = 1.5f;
 
     /// <summary>Authored minimum Perlin amplitude for a Synced Mode contrast roll.</summary>
-    private const float SyncAmplifierMin = 1f;
+    private const float SyncPerlinAmplitudeMin = 1f;
 
     /// <summary>Authored maximum Perlin amplitude for a Synced Mode contrast roll.</summary>
-    private const float SyncAmplifierMax = 5f;
+    private const float SyncPerlinAmplitudeMax = 5f;
 
-    /// <summary>Authored inclusive minimum response mode supplied to the distortion roll.</summary>
-    private const int SyncDistortionModeMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Synced Waveform-response-mode roll.</summary>
+    private const int SyncWaveformResponseModeMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper bound supplied to the complete three-mode distortion roll.</summary>
-    private const int SyncDistortionModeMaxExclusive = 3;
+    /// <summary>Authored exclusive upper endpoint of the complete three-mode Synced Waveform-response roll.</summary>
+    private const int SyncWaveformResponseModeMaxExclusive = 3;
 
     /// <summary>Authored brightness multiplier reached at the Waveform trough in Synced Mode.</summary>
     private const float SyncBrightnessAtWaveformTrough = 0.85f;
@@ -85,36 +89,46 @@ public class Noise : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill |  Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Noise's Standalone Defaults.</summary>
-    public static NoiseStandaloneSettings StandaloneSettings => new NoiseStandaloneSettings(
-        new FloatRange(StandaloneScaleMin, StandaloneScaleMax),
-        new FloatRange(StandaloneSpeedMin, StandaloneSpeedMax),
-        new FloatRange(StandaloneAmplifierMin, StandaloneAmplifierMax),
-        StandaloneBrightnessAtRest,
-        StandaloneDistortionModeMinInclusive,
-        StandaloneDistortionModeMaxExclusive);
+    /// <summary>Resolves a fresh copy of Noise's file-local Standalone Defaults.</summary>
+    public static NoiseStandaloneSettings StandaloneDefaults => new()
+    {
+        TileCenterScale = new FloatRange(
+            StandaloneTileCenterScaleMin,
+            StandaloneTileCenterScaleMax),
+        NoiseFieldDriftSpeed = new FloatRange(
+            StandaloneNoiseFieldDriftSpeedMin,
+            StandaloneNoiseFieldDriftSpeedMax),
+        PerlinAmplitude = new FloatRange(
+            StandalonePerlinAmplitudeMin,
+            StandalonePerlinAmplitudeMax),
+        WaveformResponseMode = new IntRange(
+            StandaloneWaveformResponseModeMinInclusive,
+            StandaloneWaveformResponseModeMaxExclusive),
+        Brightness = new FloatRange(
+            StandaloneBrightnessAtWaveformTrough,
+            StandaloneBrightnessAtRest),
+    };
 
     /// <summary>Resolves a fresh copy of Noise's file-local Sync Defaults.</summary>
-    public static NoiseSyncSettings SyncDefaults => new NoiseSyncSettings
+    public static NoiseSyncSettings SyncDefaults => new()
     {
-        ScaleMin = SyncScaleMin,
-        ScaleMax = SyncScaleMax,
-        SpeedMin = SyncSpeedMin,
-        SpeedMax = SyncSpeedMax,
-        AmplifierMin = SyncAmplifierMin,
-        AmplifierMax = SyncAmplifierMax,
-        DistortionModeMinInclusive = SyncDistortionModeMinInclusive,
-        DistortionModeMaxExclusive = SyncDistortionModeMaxExclusive,
-        BrightnessAtWaveformTrough = SyncBrightnessAtWaveformTrough,
-        BrightnessAtRest = SyncBrightnessAtRest,
+        TileCenterScale = new FloatRange(SyncTileCenterScaleMin, SyncTileCenterScaleMax),
+        NoiseFieldDriftSpeed = new FloatRange(
+            SyncNoiseFieldDriftSpeedMin,
+            SyncNoiseFieldDriftSpeedMax),
+        PerlinAmplitude = new FloatRange(SyncPerlinAmplitudeMin, SyncPerlinAmplitudeMax),
+        WaveformResponseMode = new IntRange(
+            SyncWaveformResponseModeMinInclusive,
+            SyncWaveformResponseModeMaxExclusive),
+        Brightness = new FloatRange(SyncBrightnessAtWaveformTrough, SyncBrightnessAtRest),
         HueShiftAtWaveformPeak = SyncHueShiftAtWaveformPeak,
         TimeOffsetAtWaveformPeak = SyncTimeOffsetAtWaveformPeak,
         FillSaturation = SyncFillSaturation,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private NoiseStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private NoiseStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private NoiseSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -137,8 +151,8 @@ public class Noise : EffectBase
     /// <summary>The palette phase offset rolled across the complete normalized color cycle.</summary>
     private float colorDelta;
 
-    /// <summary>Current response mode: zero changes brightness, one changes color, and two warps time.</summary>
-    private int distortionMode;
+    /// <summary>Current Waveform response: zero changes brightness, one changes color, and two warps time.</summary>
+    private int waveformResponseMode;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -146,7 +160,7 @@ public class Noise : EffectBase
     public override string DebugText()
     {
         string[] modeNames = { "Brightness", "Color", "Time Warp" };
-        return $"Noise: {n}\nSpeed: {speed}\nBeat Mode: {modeNames[distortionMode]}";
+        return $"Noise: {n}\nSpeed: {speed}\nWaveform Response: {modeNames[waveformResponseMode]}";
     }
 
     /// <summary>
@@ -163,30 +177,34 @@ public class Noise : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Noise),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Noise),
             SyncDefaults);
 
         waveform = waveforms.Random();
         bool isSynced = beatManager.IsSynced;
-        float scaleMin = isSynced ? SyncSettings.ScaleMin : standaloneSettings.Scale.Min;
-        float scaleMax = isSynced ? SyncSettings.ScaleMax : standaloneSettings.Scale.Max;
-        float speedMin = isSynced ? SyncSettings.SpeedMin : standaloneSettings.Speed.Min;
-        float speedMax = isSynced ? SyncSettings.SpeedMax : standaloneSettings.Speed.Max;
-        float amplifierMin = isSynced ? SyncSettings.AmplifierMin : standaloneSettings.Amplifier.Min;
-        float amplifierMax = isSynced ? SyncSettings.AmplifierMax : standaloneSettings.Amplifier.Max;
-        scale = Random.Range(scaleMin, scaleMax);
-        speed = Random.Range(speedMin, speedMax);
-        amplifier = Random.Range(amplifierMin, amplifierMax);
+        FloatRange tileCenterScaleRange = isSynced
+            ? SyncSettings.TileCenterScale
+            : standaloneSettings.TileCenterScale;
+        FloatRange noiseFieldDriftSpeedRange = isSynced
+            ? SyncSettings.NoiseFieldDriftSpeed
+            : standaloneSettings.NoiseFieldDriftSpeed;
+        FloatRange perlinAmplitudeRange = isSynced
+            ? SyncSettings.PerlinAmplitude
+            : standaloneSettings.PerlinAmplitude;
+        IntRange waveformResponseModeRange = isSynced
+            ? SyncSettings.WaveformResponseMode
+            : standaloneSettings.WaveformResponseMode;
+        scale = Random.Range(tileCenterScaleRange.Min, tileCenterScaleRange.Max);
+        speed = Random.Range(noiseFieldDriftSpeedRange.Min, noiseFieldDriftSpeedRange.Max);
+        amplifier = Random.Range(perlinAmplitudeRange.Min, perlinAmplitudeRange.Max);
         colorDelta = Random.value;
-        int distortionModeMin = isSynced
-            ? SyncSettings.DistortionModeMinInclusive
-            : standaloneSettings.DistortionModeMinInclusive;
-        int distortionModeMax = isSynced
-            ? SyncSettings.DistortionModeMaxExclusive
-            : standaloneSettings.DistortionModeMaxExclusive;
-        distortionMode = Random.Range(distortionModeMin, distortionModeMax);
+        waveformResponseMode = Random.Range(
+            waveformResponseModeRange.MinInclusive,
+            waveformResponseModeRange.MaxExclusive);
         buffer.Clear();
     }
 
@@ -200,9 +218,10 @@ public class Noise : EffectBase
     /// </summary>
     public override void Draw()
     {
-        float brightnessAtRest = beatManager.IsSynced
-            ? SyncSettings.BrightnessAtRest
-            : standaloneSettings.BrightnessAtRest;
+        FloatRange brightnessRange = beatManager.IsSynced
+            ? SyncSettings.Brightness
+            : standaloneSettings.Brightness;
+        float brightnessAtRest = brightnessRange.Max;
         float beatBrightness = brightnessAtRest;
         float hueShift = 0.0f;
         float sampleTime = effectTime;
@@ -210,11 +229,11 @@ public class Noise : EffectBase
         // This Effect owns all three response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;
         hueShift = 0f;
-        if (distortionMode == 0)
-            beatBrightness = waveform.Lerp(SyncSettings.BrightnessAtWaveformTrough, brightnessAtRest);
-        else if (distortionMode == 1)
+        if (waveformResponseMode == 0)
+            beatBrightness = waveform.Lerp(brightnessRange.Min, brightnessAtRest);
+        else if (waveformResponseMode == 1)
             hueShift = SyncSettings.HueShiftAtWaveformPeak * rhythm;
-        else if (distortionMode == 2)
+        else if (waveformResponseMode == 2)
             sampleTime = effectTime + (SyncSettings.TimeOffsetAtWaveformPeak * rhythm);
 
         float fillSaturation = SyncSettings.FillSaturation;
@@ -252,81 +271,73 @@ public class Noise : EffectBase
     }
 }
 
-/// <summary>The resolved Standalone Settings that preserve Noise's authored no-music look.</summary>
+/// <summary>The serializable value shape shared by Noise's Standalone Defaults and saved Standalone Settings.</summary>
+[Serializable]
 public sealed class NoiseStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from Noise's file-local defaults.</summary>
-    public NoiseStandaloneSettings(
-        FloatRange scale,
-        FloatRange speed,
-        FloatRange amplifier,
-        float brightnessAtRest,
-        int distortionModeMinInclusive,
-        int distortionModeMaxExclusive)
-    {
-        Scale = scale;
-        Speed = speed;
-        Amplifier = amplifier;
-        BrightnessAtRest = brightnessAtRest;
-        DistortionModeMinInclusive = distortionModeMinInclusive;
-        DistortionModeMaxExclusive = distortionModeMaxExclusive;
-    }
-
     /// <summary>Per-activation tile-center scale range.</summary>
-    public FloatRange Scale;
+    public FloatRange TileCenterScale;
 
     /// <summary>Per-activation noise-field drift-speed range.</summary>
-    public FloatRange Speed;
+    public FloatRange NoiseFieldDriftSpeed;
 
     /// <summary>Per-activation Perlin-amplitude range.</summary>
-    public FloatRange Amplifier;
+    public FloatRange PerlinAmplitude;
 
-    /// <summary>Neutral brightness used without a live Waveform sample and by non-brightness response modes.</summary>
-    public float BrightnessAtRest;
+    /// <summary>Brightness range from the Waveform trough to the peak and no-placement fallback; the peak endpoint is also the flat brightness applied by the non-brightness response modes.</summary>
+    public FloatRange Brightness;
 
-    /// <summary>Inclusive lower endpoint of the per-activation distortion-mode roll.</summary>
-    public int DistortionModeMinInclusive;
+    /// <summary>Per-activation range selecting brightness, hue, or time as the Waveform response.</summary>
+    public IntRange WaveformResponseMode;
 
-    /// <summary>Exclusive upper endpoint of the per-activation distortion-mode roll.</summary>
-    public int DistortionModeMaxExclusive;
+    /// <summary>Copies every Noise Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(NoiseStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        TileCenterScale = Copy(source.TileCenterScale);
+        NoiseFieldDriftSpeed = Copy(source.NoiseFieldDriftSpeed);
+        PerlinAmplitude = Copy(source.PerlinAmplitude);
+        Brightness = Copy(source.Brightness);
+        WaveformResponseMode = Copy(source.WaveformResponseMode);
+    }
+
+    /// <summary>Copies a float range without sharing mutable saved settings state.</summary>
+    private static FloatRange Copy(FloatRange source) => new(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Copies an integer range without sharing mutable saved settings state.</summary>
+    private static IntRange Copy(IntRange source) => new(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
 }
 
 /// <summary>The saved-or-default musical-response settings used by Noise in Synced Mode.</summary>
 [Serializable]
 public sealed class NoiseSyncSettings
 {
-    /// <summary>Minimum tile-center scale rolled per activation.</summary>
-    [Min(0f)] public float ScaleMin;
+    /// <summary>Per-activation tile-center scale range.</summary>
+    public FloatRange TileCenterScale;
 
-    /// <summary>Maximum tile-center scale rolled per activation.</summary>
-    [Min(0f)] public float ScaleMax;
+    /// <summary>Per-activation noise-field drift-speed range.</summary>
+    public FloatRange NoiseFieldDriftSpeed;
 
-    /// <summary>Minimum noise-field drift speed rolled per activation.</summary>
-    [Min(0f)] public float SpeedMin;
+    /// <summary>Per-activation Perlin-amplitude range.</summary>
+    public FloatRange PerlinAmplitude;
 
-    /// <summary>Maximum noise-field drift speed rolled per activation.</summary>
-    [Min(0f)] public float SpeedMax;
+    /// <summary>Per-activation range selecting brightness, hue, or time as the Waveform response.</summary>
+    public IntRange WaveformResponseMode;
 
-    /// <summary>Minimum Perlin amplitude rolled per activation.</summary>
-    [Min(0f)] public float AmplifierMin;
-
-    /// <summary>Maximum Perlin amplitude rolled per activation.</summary>
-    [Min(0f)] public float AmplifierMax;
-
-    /// <summary>Inclusive lower endpoint supplied to the distortion-mode roll.</summary>
-    [Range(0, 2)] public int DistortionModeMinInclusive;
-
-    /// <summary>
-    /// Exclusive upper endpoint supplied to the complete three-mode distortion roll. Keep it above
-    /// <see cref="DistortionModeMinInclusive"/>; the two <c>[Range]</c> attributes cannot enforce the pair jointly.
-    /// </summary>
-    [Range(1, 3)] public int DistortionModeMaxExclusive;
-
-    /// <summary>Brightness multiplier reached at the Waveform trough.</summary>
-    [Range(0f, 1f)] public float BrightnessAtWaveformTrough;
-
-    /// <summary>Neutral brightness multiplier used at the Waveform peak, at rest, and by non-brightness response modes.</summary>
-    [Range(0f, 1f)] public float BrightnessAtRest;
+    /// <summary>Brightness range from the Waveform trough to the peak and no-placement fallback; the peak endpoint is also the flat brightness applied by the non-brightness response modes.</summary>
+    public FloatRange Brightness;
 
     /// <summary>Palette hue offset reached at the Waveform peak.</summary>
     [Range(0f, 1f)] public float HueShiftAtWaveformPeak;
@@ -348,19 +359,28 @@ public sealed class NoiseSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        ScaleMin = source.ScaleMin;
-        ScaleMax = source.ScaleMax;
-        SpeedMin = source.SpeedMin;
-        SpeedMax = source.SpeedMax;
-        AmplifierMin = source.AmplifierMin;
-        AmplifierMax = source.AmplifierMax;
-        DistortionModeMinInclusive = source.DistortionModeMinInclusive;
-        DistortionModeMaxExclusive = source.DistortionModeMaxExclusive;
-        BrightnessAtWaveformTrough = source.BrightnessAtWaveformTrough;
-        BrightnessAtRest = source.BrightnessAtRest;
+        TileCenterScale = Copy(source.TileCenterScale);
+        NoiseFieldDriftSpeed = Copy(source.NoiseFieldDriftSpeed);
+        PerlinAmplitude = Copy(source.PerlinAmplitude);
+        WaveformResponseMode = Copy(source.WaveformResponseMode);
+        Brightness = Copy(source.Brightness);
         HueShiftAtWaveformPeak = source.HueShiftAtWaveformPeak;
         TimeOffsetAtWaveformPeak = source.TimeOffsetAtWaveformPeak;
         FillSaturation = source.FillSaturation;
         DropSlowdownBeats = source.DropSlowdownBeats;
     }
+
+    /// <summary>Copies a float range without sharing mutable saved settings state.</summary>
+    private static FloatRange Copy(FloatRange source) => new(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Copies an integer range without sharing mutable saved settings state.</summary>
+    private static IntRange Copy(IntRange source) => new(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
 }
