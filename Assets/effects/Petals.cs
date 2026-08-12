@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Colors packed loop, starball, and star shape groups with layered petal-style palettes.
 /// </summary>
 [EffectSyncSettings(typeof(PetalsSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(PetalsStandaloneSettingsAsset))]
 public class Petals : ScreenEffect
 {
     // Standalone Defaults
@@ -35,7 +36,7 @@ public class Petals : ScreenEffect
     /// Authored Waveform to-slot brightness for the unchanged Standalone look; the to-slot is both
     /// the Waveform peak and the fallback returned without a live Bar Phase.
     /// </summary>
-    private const float StandaloneBeatBrightnessAtPeak = 1f;
+    private const float StandaloneWaveformBrightnessAtPeak = 1f;
 
     /// <summary>Authored hue spread between packed-list tile positions in the unchanged Standalone look.</summary>
     private const float StandaloneTileHueSpread = 0.002f;
@@ -73,10 +74,10 @@ public class Petals : ScreenEffect
     private const float SyncBackgroundHueAdvance = 0.1f;
 
     /// <summary>Authored brightness at the Waveform trough in Synced Mode.</summary>
-    private const float SyncBeatBrightnessAtTrough = 0.85f;
+    private const float SyncWaveformBrightnessAtTrough = 0.85f;
 
     /// <summary>Authored brightness at the Waveform peak in Synced Mode.</summary>
-    private const float SyncBeatBrightnessAtPeak = 1f;
+    private const float SyncWaveformBrightnessAtPeak = 1f;
 
     /// <summary>Authored layer hue shift at the Waveform peak in Synced Mode.</summary>
     private const float SyncWaveformHueShiftAtPeak = 0.001f;
@@ -94,10 +95,10 @@ public class Petals : ScreenEffect
     private const float SyncSparkleChance = 0.25f;
 
     /// <summary>
-    /// Authored fixed density used by the Drop and Fill sparkle phase. The intended alternative roll
+    /// Authored fixed per-Tile index step used by the Drop and Fill sparkle phase. The intended alternative roll
     /// remains unfinished: <c>Random.Range(SyncDropDensityMin, SyncDropDensityMax)</c>.
     /// </summary>
-    private const float SyncDropDensity = 0.001f;
+    private const float SyncSparklePhaseTileIndexStep = 0.001f;
 
     /// <summary>Authored minimum for the unfinished per-activation Drop/Fill sparkle-density roll.</summary>
     private const float SyncDropDensityMin = 0.0004f;
@@ -109,7 +110,7 @@ public class Petals : ScreenEffect
     /// Authored fixed speed used by the Drop and Fill sparkle phase. The intended alternative roll
     /// remains unfinished: <c>Random.Range(SyncDropSpeedMin, SyncDropSpeedMax)</c>.
     /// </summary>
-    private const float SyncDropSpeed = 0.5f;
+    private const float SyncSparklePhaseSpeed = 0.5f;
 
     /// <summary>Authored minimum for the unfinished per-activation Drop/Fill sparkle-speed roll.</summary>
     private const float SyncDropSpeedMin = 0.1f;
@@ -130,43 +131,40 @@ public class Petals : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Petals' Standalone Defaults.</summary>
-    public static PetalsStandaloneSettings StandaloneSettings => new PetalsStandaloneSettings(
-        new FloatRange(StandaloneLayerHueMin, StandaloneLayerHueMax),
-        new FloatRange(StandaloneLayerSaturationMin, StandaloneLayerSaturationMax),
-        new FloatRange(StandaloneBackgroundHueMin, StandaloneBackgroundHueMax),
-        StandaloneBackgroundHueAdvance,
-        StandaloneBeatBrightnessAtPeak,
-        StandaloneTileHueSpread,
-        StandaloneLayerHueAdvance,
-        StandaloneLayerMaskMinInclusive,
-        StandaloneLayerMaskMaxExclusive);
+    /// <summary>Resolves a fresh copy of Petals' file-local Standalone Defaults.</summary>
+    public static PetalsStandaloneSettings StandaloneDefaults => new()
+    {
+        LayerHue = new FloatRange(StandaloneLayerHueMin, StandaloneLayerHueMax),
+        LayerSaturation = new FloatRange(StandaloneLayerSaturationMin, StandaloneLayerSaturationMax),
+        BackgroundHue = new FloatRange(StandaloneBackgroundHueMin, StandaloneBackgroundHueMax),
+        BackgroundHueAdvance = StandaloneBackgroundHueAdvance,
+        WaveformBrightnessAtPeak = StandaloneWaveformBrightnessAtPeak,
+        TileHueSpread = StandaloneTileHueSpread,
+        LayerHueAdvance = StandaloneLayerHueAdvance,
+        LayerMask = new IntRange(StandaloneLayerMaskMinInclusive, StandaloneLayerMaskMaxExclusive),
+    };
 
     /// <summary>Resolves a fresh copy of Petals' file-local Sync Defaults.</summary>
-    public static PetalsSyncSettings SyncDefaults => new PetalsSyncSettings
+    public static PetalsSyncSettings SyncDefaults => new()
     {
-        LayerHueMin = SyncLayerHueMin,
-        LayerHueMax = SyncLayerHueMax,
-        LayerSaturationMin = SyncLayerSaturationMin,
-        LayerSaturationMax = SyncLayerSaturationMax,
-        BackgroundHueMin = SyncBackgroundHueMin,
-        BackgroundHueMax = SyncBackgroundHueMax,
+        LayerHue = new FloatRange(SyncLayerHueMin, SyncLayerHueMax),
+        LayerSaturation = new FloatRange(SyncLayerSaturationMin, SyncLayerSaturationMax),
+        BackgroundHue = new FloatRange(SyncBackgroundHueMin, SyncBackgroundHueMax),
         BackgroundHueAdvance = SyncBackgroundHueAdvance,
-        BeatBrightnessAtTrough = SyncBeatBrightnessAtTrough,
-        BeatBrightnessAtPeak = SyncBeatBrightnessAtPeak,
+        WaveformBrightnessAtTrough = SyncWaveformBrightnessAtTrough,
+        WaveformBrightnessAtPeak = SyncWaveformBrightnessAtPeak,
         WaveformHueShiftAtPeak = SyncWaveformHueShiftAtPeak,
-        LayerMaskMinInclusive = SyncLayerMaskMinInclusive,
-        LayerMaskMaxExclusive = SyncLayerMaskMaxExclusive,
+        LayerMask = new IntRange(SyncLayerMaskMinInclusive, SyncLayerMaskMaxExclusive),
         SparkleChance = SyncSparkleChance,
-        DropDensity = SyncDropDensity,
-        DropSpeed = SyncDropSpeed,
+        SparklePhaseTileIndexStep = SyncSparklePhaseTileIndexStep,
+        SparklePhaseSpeed = SyncSparklePhaseSpeed,
         SparkleValue = SyncSparkleValue,
         TileHueSpread = SyncTileHueSpread,
         LayerHueAdvance = SyncLayerHueAdvance,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private PetalsStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private PetalsStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private PetalsSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -187,37 +185,30 @@ public class Petals : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Petals),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Petals),
             SyncDefaults);
         waveform = waveforms.Random();
 
         bool isSynced = beatManager.IsSynced;
-        float layerHueMin = isSynced ? SyncSettings.LayerHueMin : standaloneSettings.LayerHue.Min;
-        float layerHueMax = isSynced ? SyncSettings.LayerHueMax : standaloneSettings.LayerHue.Max;
-        float layerSaturationMin = isSynced
-            ? SyncSettings.LayerSaturationMin
-            : standaloneSettings.LayerSaturation.Min;
-        float layerSaturationMax = isSynced
-            ? SyncSettings.LayerSaturationMax
-            : standaloneSettings.LayerSaturation.Max;
+        FloatRange layerHue = isSynced ? SyncSettings.LayerHue : standaloneSettings.LayerHue;
+        FloatRange layerSaturation = isSynced
+            ? SyncSettings.LayerSaturation
+            : standaloneSettings.LayerSaturation;
         colors = new Color[4];
         for (int i = 0; i < 4; i++)
         {
             colors[i] = Color.HSVToRGB(
-                Mathf.Lerp(layerHueMin, layerHueMax, Random.value),
-                Mathf.Lerp(layerSaturationMin, layerSaturationMax, Random.value),
+                Mathf.Lerp(layerHue.Min, layerHue.Max, Random.value),
+                Mathf.Lerp(layerSaturation.Min, layerSaturation.Max, Random.value),
                 1f);
         }
 
-        float backgroundHueMin = isSynced
-            ? SyncSettings.BackgroundHueMin
-            : standaloneSettings.BackgroundHue.Min;
-        float backgroundHueMax = isSynced
-            ? SyncSettings.BackgroundHueMax
-            : standaloneSettings.BackgroundHue.Max;
-        background = Mathf.Lerp(backgroundHueMin, backgroundHueMax, Random.value);
+        FloatRange backgroundHue = isSynced ? SyncSettings.BackgroundHue : standaloneSettings.BackgroundHue;
+        background = Mathf.Lerp(backgroundHue.Min, backgroundHue.Max, Random.value);
     }
 
     /// <summary>
@@ -233,10 +224,12 @@ public class Petals : ScreenEffect
         // This Effect owns its brightness, hue, and clockless fallback mappings.
         bool isSynced = beatManager.IsSynced;
         float rhythm = waveform.Envelope;
-        float beatBrightnessAtPeak = isSynced
-            ? SyncSettings.BeatBrightnessAtPeak
-            : standaloneSettings.BeatBrightnessAtPeak;
-        float beatBrightness = waveform.Lerp(SyncSettings.BeatBrightnessAtTrough, beatBrightnessAtPeak);
+        float waveformBrightnessAtPeak = isSynced
+            ? SyncSettings.WaveformBrightnessAtPeak
+            : standaloneSettings.WaveformBrightnessAtPeak;
+        float beatBrightness = waveform.Lerp(
+            SyncSettings.WaveformBrightnessAtTrough,
+            waveformBrightnessAtPeak);
         float hueShift = SyncSettings.WaveformHueShiftAtPeak * rhythm;
         float backgroundHueAdvance = isSynced
             ? SyncSettings.BackgroundHueAdvance
@@ -244,16 +237,11 @@ public class Petals : ScreenEffect
         float tileHueSpread = isSynced ? SyncSettings.TileHueSpread : standaloneSettings.TileHueSpread;
         float layerHueAdvance = isSynced ? SyncSettings.LayerHueAdvance : standaloneSettings.LayerHueAdvance;
         float sparkleChance = SyncSettings.SparkleChance;
-        float dropDensity = SyncSettings.DropDensity;
-        float dropSpeed = SyncSettings.DropSpeed;
+        float sparklePhaseTileIndexStep = SyncSettings.SparklePhaseTileIndexStep;
+        float sparklePhaseSpeed = SyncSettings.SparklePhaseSpeed;
         float sparkleValue = SyncSettings.SparkleValue;
-        int layerMaskMin = isSynced
-            ? SyncSettings.LayerMaskMinInclusive
-            : standaloneSettings.LayerMaskMinInclusive;
-        int layerMaskMax = isSynced
-            ? SyncSettings.LayerMaskMaxExclusive
-            : standaloneSettings.LayerMaskMaxExclusive;
-        int bitMask = Random.Range(layerMaskMin, layerMaskMax);       // randomly select shape layers with bit masks
+        IntRange layerMask = isSynced ? SyncSettings.LayerMask : standaloneSettings.LayerMask;
+        int bitMask = Random.Range(layerMask.MinInclusive, layerMask.MaxExclusive);       // randomly select shape layers with bit masks
         background += effectDelta * backgroundHueAdvance;
         background %= 1f;
         for (int i = 0; i < buffer.Length; i++)
@@ -264,7 +252,7 @@ public class Petals : ScreenEffect
             {
                 if (Random.value < sparkleChance)
                 {
-                    float phase = (i * dropDensity + (effectTime * dropSpeed)) % 1f;
+                    float phase = (i * sparklePhaseTileIndexStep + (effectTime * sparklePhaseSpeed)) % 1f;
                     color = Color.HSVToRGB(phase, 1f, sparkleValue);
                 }
             }
@@ -298,7 +286,7 @@ public class Petals : ScreenEffect
                     {
                         if (Random.value < sparkleChance)
                         {
-                            float phase = (idx * dropDensity + (effectTime * dropSpeed)) % 1f;
+                            float phase = (idx * sparklePhaseTileIndexStep + (effectTime * sparklePhaseSpeed)) % 1f;
                             color = Color.HSVToRGB(phase, 1f, sparkleValue);
 
                         }
@@ -312,32 +300,12 @@ public class Petals : ScreenEffect
 
 }
 
-/// <summary>The resolved Standalone Settings that preserve Petals' authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by Petals' Standalone Defaults and saved Standalone Settings.
+/// </summary>
+[Serializable]
 public sealed class PetalsStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from Petals' file-local defaults.</summary>
-    public PetalsStandaloneSettings(
-        FloatRange layerHue,
-        FloatRange layerSaturation,
-        FloatRange backgroundHue,
-        float backgroundHueAdvance,
-        float beatBrightnessAtPeak,
-        float tileHueSpread,
-        float layerHueAdvance,
-        int layerMaskMinInclusive,
-        int layerMaskMaxExclusive)
-    {
-        LayerHue = layerHue;
-        LayerSaturation = layerSaturation;
-        BackgroundHue = backgroundHue;
-        BackgroundHueAdvance = backgroundHueAdvance;
-        BeatBrightnessAtPeak = beatBrightnessAtPeak;
-        TileHueSpread = tileHueSpread;
-        LayerHueAdvance = layerHueAdvance;
-        LayerMaskMinInclusive = layerMaskMinInclusive;
-        LayerMaskMaxExclusive = layerMaskMaxExclusive;
-    }
-
     /// <summary>Per-activation hue range for each randomly rolled layer color.</summary>
     public FloatRange LayerHue;
 
@@ -351,7 +319,7 @@ public sealed class PetalsStandaloneSettings
     public float BackgroundHueAdvance;
 
     /// <summary>Waveform peak and no-Bar-Phase fallback brightness.</summary>
-    public float BeatBrightnessAtPeak;
+    public float WaveformBrightnessAtPeak;
 
     /// <summary>Hue spread between packed-list tile positions.</summary>
     public float TileHueSpread;
@@ -359,64 +327,75 @@ public sealed class PetalsStandaloneSettings
     /// <summary>Hue advance applied to a layer color after each packed shape list.</summary>
     public float LayerHueAdvance;
 
-    /// <summary>Inclusive minimum for the per-frame shape-layer mask draw.</summary>
-    public int LayerMaskMinInclusive;
+    /// <summary>Per-frame range for the random shape-layer mask draw.</summary>
+    public IntRange LayerMask;
 
-    /// <summary>Exclusive maximum for the per-frame shape-layer mask draw.</summary>
-    public int LayerMaskMaxExclusive;
+    /// <summary>Copies every Petals Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(PetalsStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        LayerHue = Copy(source.LayerHue);
+        LayerSaturation = Copy(source.LayerSaturation);
+        BackgroundHue = Copy(source.BackgroundHue);
+        BackgroundHueAdvance = source.BackgroundHueAdvance;
+        WaveformBrightnessAtPeak = source.WaveformBrightnessAtPeak;
+        TileHueSpread = source.TileHueSpread;
+        LayerHueAdvance = source.LayerHueAdvance;
+        LayerMask = Copy(source.LayerMask);
+    }
+
+    /// <summary>Copies a floating-point range without sharing its mutable serialized instance.</summary>
+    private static FloatRange Copy(FloatRange source) =>
+        new(source.Min, source.Max, source.LowRail, source.HighRail);
+
+    /// <summary>Copies an integer range without sharing its mutable serialized instance.</summary>
+    private static IntRange Copy(IntRange source) =>
+        new(source.MinInclusive, source.MaxExclusive, source.LowRail, source.HighRail);
 }
 
 /// <summary>The saved-or-default musical-response settings used by Petals in Synced Mode.</summary>
 [Serializable]
 public sealed class PetalsSyncSettings
 {
-    /// <summary>Minimum hue rolled for each layer color on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float LayerHueMin;
+    /// <summary>Range rolled for each layer color's hue on the next Synced activation.</summary>
+    public FloatRange LayerHue;
 
-    /// <summary>Maximum hue rolled for each layer color on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float LayerHueMax;
+    /// <summary>Range rolled for each layer color's saturation on the next Synced activation.</summary>
+    public FloatRange LayerSaturation;
 
-    /// <summary>Minimum saturation rolled for each layer color on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float LayerSaturationMin;
-
-    /// <summary>Maximum saturation rolled for each layer color on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float LayerSaturationMax;
-
-    /// <summary>Minimum starting background hue rolled on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float BackgroundHueMin;
-
-    /// <summary>Maximum starting background hue rolled on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float BackgroundHueMax;
+    /// <summary>Starting background-hue range rolled on the next Synced activation.</summary>
+    public FloatRange BackgroundHue;
 
     /// <summary>Background hue advance per second in Synced Mode.</summary>
     public float BackgroundHueAdvance;
 
     /// <summary>Brightness at the Waveform trough in Synced Mode.</summary>
-    [Min(0f)] public float BeatBrightnessAtTrough;
+    [Min(0f)] public float WaveformBrightnessAtTrough;
 
     /// <summary>Brightness at the Waveform peak in Synced Mode.</summary>
-    [Min(0f)] public float BeatBrightnessAtPeak;
+    [Min(0f)] public float WaveformBrightnessAtPeak;
 
     /// <summary>Layer hue shift at the Waveform peak in Synced Mode.</summary>
     public float WaveformHueShiftAtPeak;
 
-    /// <summary>Inclusive minimum for the per-frame shape-layer mask draw.</summary>
-    [Min(0)] public int LayerMaskMinInclusive;
-
     /// <summary>
-    /// Exclusive maximum for the per-frame shape-layer mask draw; the current consumer tests only
+    /// Range for the per-frame shape-layer mask draw; the current consumer tests only
     /// <c>1 &lt;&lt; 1</c>, so the full numeric domain is not a layer-selector domain.
     /// </summary>
-    [Min(0)] public int LayerMaskMaxExclusive;
+    public IntRange LayerMask;
 
     /// <summary>Probability that each tile sparkles during an active Drop or Fill.</summary>
     [Range(0f, 1f)] public float SparkleChance;
 
-    /// <summary>Fixed density currently used by the Drop and Fill sparkle phase.</summary>
-    [Min(0f)] public float DropDensity;
+    /// <summary>Per-Tile index step used by the Drop and Fill sparkle phase.</summary>
+    [Min(0f)] public float SparklePhaseTileIndexStep;
 
-    /// <summary>Fixed speed currently used by the Drop and Fill sparkle phase.</summary>
-    [Min(0f)] public float DropSpeed;
+    /// <summary>Speed used by the Drop and Fill sparkle phase.</summary>
+    [Min(0f)] public float SparklePhaseSpeed;
 
     /// <summary>HDR value of a Drop or Fill sparkle.</summary>
     [Min(0f)] public float SparkleValue;
@@ -435,23 +414,27 @@ public sealed class PetalsSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        LayerHueMin = source.LayerHueMin;
-        LayerHueMax = source.LayerHueMax;
-        LayerSaturationMin = source.LayerSaturationMin;
-        LayerSaturationMax = source.LayerSaturationMax;
-        BackgroundHueMin = source.BackgroundHueMin;
-        BackgroundHueMax = source.BackgroundHueMax;
+        LayerHue = Copy(source.LayerHue);
+        LayerSaturation = Copy(source.LayerSaturation);
+        BackgroundHue = Copy(source.BackgroundHue);
         BackgroundHueAdvance = source.BackgroundHueAdvance;
-        BeatBrightnessAtTrough = source.BeatBrightnessAtTrough;
-        BeatBrightnessAtPeak = source.BeatBrightnessAtPeak;
+        WaveformBrightnessAtTrough = source.WaveformBrightnessAtTrough;
+        WaveformBrightnessAtPeak = source.WaveformBrightnessAtPeak;
         WaveformHueShiftAtPeak = source.WaveformHueShiftAtPeak;
-        LayerMaskMinInclusive = source.LayerMaskMinInclusive;
-        LayerMaskMaxExclusive = source.LayerMaskMaxExclusive;
+        LayerMask = Copy(source.LayerMask);
         SparkleChance = source.SparkleChance;
-        DropDensity = source.DropDensity;
-        DropSpeed = source.DropSpeed;
+        SparklePhaseTileIndexStep = source.SparklePhaseTileIndexStep;
+        SparklePhaseSpeed = source.SparklePhaseSpeed;
         SparkleValue = source.SparkleValue;
         TileHueSpread = source.TileHueSpread;
         LayerHueAdvance = source.LayerHueAdvance;
     }
+
+    /// <summary>Copies a floating-point range without sharing its mutable serialized instance.</summary>
+    private static FloatRange Copy(FloatRange source) =>
+        new(source.Min, source.Max, source.LowRail, source.HighRail);
+
+    /// <summary>Copies an integer range without sharing its mutable serialized instance.</summary>
+    private static IntRange Copy(IntRange source) =>
+        new(source.MinInclusive, source.MaxExclusive, source.LowRail, source.HighRail);
 }
