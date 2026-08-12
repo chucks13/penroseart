@@ -160,6 +160,14 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private const float StandaloneSharedPaletteMinValue = 0.8f;
 
+    /// <summary>
+    /// Authored brightness the darkest traced surface maps to, lifting the whole picture without
+    /// touching the fog curve that produced the darkness. The traced brightness is remapped into
+    /// the band from this floor up to 1 rather than clamped against it, so the dark field keeps
+    /// its gradient instead of collapsing to one flat tone. 0 is the exact identity.
+    /// </summary>
+    private const float StandaloneMinBrightness = 0f;
+
     // Sync Defaults
 
     /// <summary>Authored inclusive minimum for the Synced per-activation flight-speed roll.</summary>
@@ -251,6 +259,9 @@ public class MazeFlyer : EffectBase
 
     /// <summary>Authored Synced minimum HSV value for colors rolled from the shared palette.</summary>
     private const float SyncSharedPaletteMinValue = 0.8f;
+
+    /// <summary>Authored Synced brightness the darkest traced surface maps to. 0 is the exact identity.</summary>
+    private const float SyncMinBrightness = 0f;
 
     /// <summary>
     /// Authored low-band strength that arms the On Beat brightness pulse. Lows are read from
@@ -386,6 +397,7 @@ public class MazeFlyer : EffectBase
         EdgeLineShade = StandaloneEdgeLineShade,
         RaySampleSpread = StandaloneRaySampleSpread,
         SharedPaletteMinValue = StandaloneSharedPaletteMinValue,
+        MinBrightness = StandaloneMinBrightness,
     };
 
     /// <summary>Resolves a fresh copy of MazeFlyer's file-local Sync Defaults.</summary>
@@ -419,6 +431,7 @@ public class MazeFlyer : EffectBase
         EdgeLineShade = SyncEdgeLineShade,
         RaySampleSpread = SyncRaySampleSpread,
         SharedPaletteMinValue = SyncSharedPaletteMinValue,
+        MinBrightness = SyncMinBrightness,
         OnBeatLowThreshold = SyncOnBeatLowThreshold,
         OnBeatBrightnessPulse = SyncOnBeatBrightnessPulse,
         LowEnergyFlightSpeed = SyncLowEnergyFlightSpeed,
@@ -703,6 +716,9 @@ public class MazeFlyer : EffectBase
         /// <summary>Shade floor of the camera headlight at full grazing incidence.</summary>
         public float HeadlightMinShade;
 
+        /// <summary>Brightness the darkest traced surface maps to, for the frame.</summary>
+        public float MinBrightness;
+
         /// <summary>Edge-line band width per unit of hit distance: thickness in tiles over focal length.</summary>
         public float EdgeBandScale;
 
@@ -759,6 +775,7 @@ public class MazeFlyer : EffectBase
             YAxisFaceShade = ActiveSetting(standaloneSettings.YAxisFaceShade, SyncSettings.YAxisFaceShade),
             ZAxisFaceShade = ActiveSetting(standaloneSettings.ZAxisFaceShade, SyncSettings.ZAxisFaceShade),
             HeadlightMinShade = ActiveSetting(standaloneSettings.HeadlightMinShade, SyncSettings.HeadlightMinShade),
+            MinBrightness = ActiveSetting(standaloneSettings.MinBrightness, SyncSettings.MinBrightness),
             EdgeBandScale = ActiveSetting(
                 standaloneSettings.EdgeLineThicknessTiles,
                 SyncSettings.EdgeLineThicknessTiles) / ActiveSetting(
@@ -1336,7 +1353,14 @@ public class MazeFlyer : EffectBase
 
                 float edge = EdgeLineFactor(
                     rayOrigin + (rayDir * distanceTraveled), hitAxis, distanceTraveled, in frame);
-                float brightness = shade * fog * edge * frame.BrightnessPulse;
+                // Remap the traced brightness into the band from the authored floor up to 1, so a
+                // lift of the dark end keeps the fog's gradient rather than clipping it flat. The
+                // unclamped Lerp preserves the above-1 headroom the On Beat pulse writes, leaving
+                // that response exactly as loud as it was before the floor existed.
+                float brightness = Mathf.LerpUnclamped(
+                    frame.MinBrightness,
+                    1.0f,
+                    shade * fog * edge * frame.BrightnessPulse);
 
                 return new Color(
                     Mathf.Clamp01(voxelColor.r * brightness),
@@ -1550,6 +1574,14 @@ public sealed class MazeFlyerStandaloneSettings
     public float SharedPaletteMinValue;
 
     /// <summary>
+    /// Brightness the darkest traced surface maps to. Lifts the whole picture out of the dark
+    /// without changing the fog curve; 0 leaves the trace exactly as it was.
+    /// </summary>
+    [Tooltip("Brightness the darkest traced surface maps to. Lifts the whole effect out of the dark without touching the fog. 0 disables it.")]
+    [Range(0f, 1f)]
+    public float MinBrightness;
+
+    /// <summary>
     /// Copies every MazeFlyer Standalone Setting, cloning mutable ranges and palette storage so
     /// saved assets cannot mutate the in-file Standalone Defaults.
     /// </summary>
@@ -1595,6 +1627,7 @@ public sealed class MazeFlyerStandaloneSettings
         EdgeLineShade = source.EdgeLineShade;
         RaySampleSpread = source.RaySampleSpread;
         SharedPaletteMinValue = source.SharedPaletteMinValue;
+        MinBrightness = source.MinBrightness;
     }
 }
 
@@ -1679,6 +1712,14 @@ public sealed class MazeFlyerSyncSettings
 
     /// <summary>Minimum HSV value for colors rolled from the shared palette.</summary>
     public float SharedPaletteMinValue;
+
+    /// <summary>
+    /// Brightness the darkest traced surface maps to. Lifts the whole picture out of the dark
+    /// without changing the fog curve; 0 leaves the trace exactly as it was.
+    /// </summary>
+    [Tooltip("Brightness the darkest traced surface maps to. Lifts the whole effect out of the dark without touching the fog. 0 disables it.")]
+    [Range(0f, 1f)]
+    public float MinBrightness;
 
     /// <summary>
     /// Low-band strength that arms the On Beat brightness pulse, read from BeatManager's
@@ -1815,6 +1856,7 @@ public sealed class MazeFlyerSyncSettings
         EdgeLineShade = source.EdgeLineShade;
         RaySampleSpread = source.RaySampleSpread;
         SharedPaletteMinValue = source.SharedPaletteMinValue;
+        MinBrightness = source.MinBrightness;
         OnBeatLowThreshold = source.OnBeatLowThreshold;
         OnBeatBrightnessPulse = source.OnBeatBrightnessPulse;
         LowEnergyFlightSpeed = source.LowEnergyFlightSpeed;

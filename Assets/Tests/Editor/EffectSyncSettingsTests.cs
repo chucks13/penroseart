@@ -2465,6 +2465,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.EdgeLineShade, Is.EqualTo(second.EdgeLineShade));
         Assert.That(first.RaySampleSpread, Is.EqualTo(second.RaySampleSpread));
         Assert.That(first.SharedPaletteMinValue, Is.EqualTo(second.SharedPaletteMinValue));
+        Assert.That(first.MinBrightness, Is.EqualTo(second.MinBrightness));
     }
 
     /// <summary>
@@ -2516,6 +2517,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.EdgeLineShade, Is.EqualTo(defaults.EdgeLineShade));
         Assert.That(asset.Settings.RaySampleSpread, Is.EqualTo(defaults.RaySampleSpread));
         Assert.That(asset.Settings.SharedPaletteMinValue, Is.EqualTo(defaults.SharedPaletteMinValue));
+        Assert.That(asset.Settings.MinBrightness, Is.EqualTo(defaults.MinBrightness));
     }
 
     /// <summary>
@@ -2577,6 +2579,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.EdgeLineShade, Is.EqualTo(defaults.EdgeLineShade));
         Assert.That(asset.Settings.RaySampleSpread, Is.EqualTo(defaults.RaySampleSpread));
         Assert.That(asset.Settings.SharedPaletteMinValue, Is.EqualTo(defaults.SharedPaletteMinValue));
+        Assert.That(asset.Settings.MinBrightness, Is.EqualTo(defaults.MinBrightness));
         Assert.That(asset.Settings.OnBeatLowThreshold, Is.EqualTo(defaults.OnBeatLowThreshold));
         Assert.That(asset.Settings.OnBeatBrightnessPulse, Is.EqualTo(defaults.OnBeatBrightnessPulse));
         Assert.That(asset.Settings.LowEnergyFlightSpeed, Is.EqualTo(defaults.LowEnergyFlightSpeed));
@@ -2622,6 +2625,7 @@ public sealed class EffectSyncSettingsTests
         settings.EdgeLineShade = 43f;
         settings.RaySampleSpread = 44f;
         settings.SharedPaletteMinValue = 45f;
+        settings.MinBrightness = 46f;
     }
 
     /// <summary>Changes every picture-setting field shared by MazeFlyer's two settings surfaces.</summary>
@@ -2653,6 +2657,7 @@ public sealed class EffectSyncSettingsTests
         settings.EdgeLineShade = 43f;
         settings.RaySampleSpread = 44f;
         settings.SharedPaletteMinValue = 45f;
+        settings.MinBrightness = 46f;
     }
 
     /// <summary>Asserts that a float range's endpoints and editor Rails match.</summary>
