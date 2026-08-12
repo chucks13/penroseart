@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Alternates two colors across tile types with a ping-pong time curve and a radial Waveform history.
 /// </summary>
 [EffectSyncSettings(typeof(PulseSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(PulseStandaloneSettingsAsset))]
 public class Pulse : EffectBase
 {
     // Standalone Defaults
@@ -50,7 +51,7 @@ public class Pulse : EffectBase
     /// Authored inert radial-pulse height passed to the <c>Waveform.Lerp</c> <c>to</c> slot and returned
     /// without a live Bar Phase.
     /// </summary>
-    private const float StandalonePulseHeightAtRest = 0f;
+    private const float StandalonePulseHeightAtWaveformPeak = 0f;
 
     /// <summary>Authored multiplier preserving retained saturation pulses in Standalone Mode.</summary>
     private const float StandaloneSaturationPulseMultiplier = 2f;
@@ -123,32 +124,35 @@ public class Pulse : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Pulse's Standalone Defaults.</summary>
-    public static PulseStandaloneSettings StandaloneSettings => new PulseStandaloneSettings(
-        new FloatRange(StandaloneBaseHueMin, StandaloneBaseHueMax),
-        new FloatRange(StandaloneColorPingPongSecondsMin, StandaloneColorPingPongSecondsMax),
-        new FloatRange(StandaloneColorHueDeltaMin, StandaloneColorHueDeltaMax),
-        StandaloneBeatModeMinInclusive,
-        StandaloneBeatModeMaxExclusive,
-        new FloatRange(StandalonePulseMultiplierMin, StandalonePulseMultiplierMax),
-        StandalonePulseScaleDivisorMilliseconds,
-        StandalonePulseHeightAtRest,
-        StandaloneSaturationPulseMultiplier,
-        StandaloneValuePulseBase);
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate Pulse's authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static PulseStandaloneSettings StandaloneDefaults => new()
+    {
+        BaseHue = new FloatRange(StandaloneBaseHueMin, StandaloneBaseHueMax),
+        ColorPingPongSeconds = new FloatRange(
+            StandaloneColorPingPongSecondsMin,
+            StandaloneColorPingPongSecondsMax),
+        ColorHueDelta = new FloatRange(StandaloneColorHueDeltaMin, StandaloneColorHueDeltaMax),
+        BeatMode = new IntRange(StandaloneBeatModeMinInclusive, StandaloneBeatModeMaxExclusive),
+        PulseMultiplier = new FloatRange(StandalonePulseMultiplierMin, StandalonePulseMultiplierMax),
+        PulseScaleDivisorMilliseconds = StandalonePulseScaleDivisorMilliseconds,
+        PulseHeightAtWaveformPeak = StandalonePulseHeightAtWaveformPeak,
+        SaturationPulseMultiplier = StandaloneSaturationPulseMultiplier,
+        ValuePulseBase = StandaloneValuePulseBase,
+    };
 
     /// <summary>Resolves a fresh copy of Pulse's file-local Sync Defaults.</summary>
-    public static PulseSyncSettings SyncDefaults => new PulseSyncSettings
+    public static PulseSyncSettings SyncDefaults => new()
     {
-        BaseHueMin = SyncBaseHueMin,
-        BaseHueMax = SyncBaseHueMax,
-        ColorPingPongSecondsMin = SyncColorPingPongSecondsMin,
-        ColorPingPongSecondsMax = SyncColorPingPongSecondsMax,
-        ColorHueDeltaMin = SyncColorHueDeltaMin,
-        ColorHueDeltaMax = SyncColorHueDeltaMax,
-        BeatModeMinInclusive = SyncBeatModeMinInclusive,
-        BeatModeMaxExclusive = SyncBeatModeMaxExclusive,
-        PulseMultiplierMin = SyncPulseMultiplierMin,
-        PulseMultiplierMax = SyncPulseMultiplierMax,
+        BaseHue = new FloatRange(SyncBaseHueMin, SyncBaseHueMax),
+        ColorPingPongSeconds = new FloatRange(
+            SyncColorPingPongSecondsMin,
+            SyncColorPingPongSecondsMax),
+        ColorHueDelta = new FloatRange(SyncColorHueDeltaMin, SyncColorHueDeltaMax),
+        BeatMode = new IntRange(SyncBeatModeMinInclusive, SyncBeatModeMaxExclusive),
+        PulseMultiplier = new FloatRange(SyncPulseMultiplierMin, SyncPulseMultiplierMax),
         PulseScaleDivisorMilliseconds = SyncPulseScaleDivisorMilliseconds,
         PulseHeightAtWaveformTrough = SyncPulseHeightAtWaveformTrough,
         PulseHeightAtWaveformPeak = SyncPulseHeightAtWaveformPeak,
@@ -159,7 +163,7 @@ public class Pulse : EffectBase
     };
 
     /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private PulseStandaloneSettings standaloneSettings = StandaloneSettings;
+    private PulseStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private PulseSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -219,7 +223,9 @@ public class Pulse : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Pulse),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Pulse),
             SyncDefaults);
@@ -227,45 +233,30 @@ public class Pulse : EffectBase
         waveform = waveforms.Random();
         wave = new float[400];      // clear array
 
-        float baseHueMin = beatManager.IsSynced ? SyncSettings.BaseHueMin : standaloneSettings.BaseHue.Min;
-        float baseHueMax = beatManager.IsSynced ? SyncSettings.BaseHueMax : standaloneSettings.BaseHue.Max;
-        color = Color.HSVToRGB(Mathf.Lerp(baseHueMin, baseHueMax, Random.value), 1f, 1f);
+        FloatRange baseHue = beatManager.IsSynced ? SyncSettings.BaseHue : standaloneSettings.BaseHue;
+        color = Color.HSVToRGB(Mathf.Lerp(baseHue.Min, baseHue.Max, Random.value), 1f, 1f);
 
-        float colorPingPongSecondsMin = beatManager.IsSynced
-            ? SyncSettings.ColorPingPongSecondsMin
-            : standaloneSettings.ColorPingPongSeconds.Min;
-        float colorPingPongSecondsMax = beatManager.IsSynced
-            ? SyncSettings.ColorPingPongSecondsMax
-            : standaloneSettings.ColorPingPongSeconds.Max;
-        seconds = Random.Range(colorPingPongSecondsMin, colorPingPongSecondsMax);
+        FloatRange colorPingPongSeconds = beatManager.IsSynced
+            ? SyncSettings.ColorPingPongSeconds
+            : standaloneSettings.ColorPingPongSeconds;
+        seconds = Random.Range(colorPingPongSeconds.Min, colorPingPongSeconds.Max);
 
-        float colorHueDeltaMin = beatManager.IsSynced
-            ? SyncSettings.ColorHueDeltaMin
-            : standaloneSettings.ColorHueDelta.Min;
-        float colorHueDeltaMax = beatManager.IsSynced
-            ? SyncSettings.ColorHueDeltaMax
-            : standaloneSettings.ColorHueDelta.Max;
-        colorDelta = Random.Range(colorHueDeltaMin, colorHueDeltaMax);
+        FloatRange colorHueDelta = beatManager.IsSynced
+            ? SyncSettings.ColorHueDelta
+            : standaloneSettings.ColorHueDelta;
+        colorDelta = Random.Range(colorHueDelta.Min, colorHueDelta.Max);
         startColor = color;
         endColor = startColor.Delta(colorDelta);
 
-        int beatModeMinInclusive = beatManager.IsSynced
-            ? SyncSettings.BeatModeMinInclusive
-            : standaloneSettings.BeatModeMinInclusive;
-        int beatModeMaxExclusive = beatManager.IsSynced
-            ? SyncSettings.BeatModeMaxExclusive
-            : standaloneSettings.BeatModeMaxExclusive;
-        beatMode = Random.Range(beatModeMinInclusive, beatModeMaxExclusive);
+        IntRange beatModeRange = beatManager.IsSynced ? SyncSettings.BeatMode : standaloneSettings.BeatMode;
+        beatMode = Random.Range(beatModeRange.MinInclusive, beatModeRange.MaxExclusive);
 
-        float pulseMultiplierMin = beatManager.IsSynced
-            ? SyncSettings.PulseMultiplierMin
-            : standaloneSettings.PulseMultiplier.Min;
-        float pulseMultiplierMax = beatManager.IsSynced
-            ? SyncSettings.PulseMultiplierMax
-            : standaloneSettings.PulseMultiplier.Max;
+        FloatRange pulseMultiplier = beatManager.IsSynced
+            ? SyncSettings.PulseMultiplier
+            : standaloneSettings.PulseMultiplier;
         pulseMultipler = Mathf.Lerp(
-            pulseMultiplierMin,
-            pulseMultiplierMax,
+            pulseMultiplier.Min,
+            pulseMultiplier.Max,
             Random.value);
         pulsePeakSpacingMilliseconds = waveform.ShortestPeakSpacingMs;
 
@@ -300,7 +291,7 @@ public class Pulse : EffectBase
         var t = Mathf.PingPong(localTime, seconds).Remap(0f, seconds, 0f, 1f, clamp: true);
         float pulseHeightAtWaveformPeak = beatManager.IsSynced
             ? SyncSettings.PulseHeightAtWaveformPeak
-            : standaloneSettings.PulseHeightAtRest;
+            : standaloneSettings.PulseHeightAtWaveformPeak;
         float waveHeight = waveform.Lerp(
             SyncSettings.PulseHeightAtWaveformTrough,
             pulseHeightAtWaveformPeak);
@@ -354,34 +345,13 @@ public class Pulse : EffectBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce Pulse's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by Pulse's fully populated Standalone Defaults and saved
+/// Standalone Settings; Unity may create an empty instance before serialized values are applied.
+/// </summary>
+[Serializable]
 public sealed class PulseStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from Pulse's file-local defaults.</summary>
-    public PulseStandaloneSettings(
-        FloatRange baseHue,
-        FloatRange colorPingPongSeconds,
-        FloatRange colorHueDelta,
-        int beatModeMinInclusive,
-        int beatModeMaxExclusive,
-        FloatRange pulseMultiplier,
-        float pulseScaleDivisorMilliseconds,
-        float pulseHeightAtRest,
-        float saturationPulseMultiplier,
-        float valuePulseBase)
-    {
-        BaseHue = baseHue;
-        ColorPingPongSeconds = colorPingPongSeconds;
-        ColorHueDelta = colorHueDelta;
-        BeatModeMinInclusive = beatModeMinInclusive;
-        BeatModeMaxExclusive = beatModeMaxExclusive;
-        PulseMultiplier = pulseMultiplier;
-        PulseScaleDivisorMilliseconds = pulseScaleDivisorMilliseconds;
-        PulseHeightAtRest = pulseHeightAtRest;
-        SaturationPulseMultiplier = saturationPulseMultiplier;
-        ValuePulseBase = valuePulseBase;
-    }
-
     /// <summary>Per-activation base-hue Roll range.</summary>
     public FloatRange BaseHue;
 
@@ -391,11 +361,8 @@ public sealed class PulseStandaloneSettings
     /// <summary>Per-activation hue-delta Roll range for the two colors.</summary>
     public FloatRange ColorHueDelta;
 
-    /// <summary>Inclusive minimum supplied to the activation's beat-mode Roll.</summary>
-    public int BeatModeMinInclusive;
-
-    /// <summary>Exclusive maximum supplied to the activation's beat-mode Roll.</summary>
-    public int BeatModeMaxExclusive;
+    /// <summary>Per-activation range for the HSV pulse-mode Roll.</summary>
+    public IntRange BeatMode;
 
     /// <summary>Per-activation HSV pulse-multiplier Roll range.</summary>
     public FloatRange PulseMultiplier;
@@ -403,49 +370,76 @@ public sealed class PulseStandaloneSettings
     /// <summary>Millisecond divisor preserving the radial history scale in Standalone Mode.</summary>
     public float PulseScaleDivisorMilliseconds;
 
-    /// <summary>Inert <c>Waveform.Lerp</c> <c>to</c>-slot height returned without a live Bar Phase.</summary>
-    public float PulseHeightAtRest;
+    /// <summary>
+    /// Radial-pulse height passed to the <c>Waveform.Lerp</c> <c>to</c> slot and returned without a
+    /// live Bar Phase.
+    /// </summary>
+    public float PulseHeightAtWaveformPeak;
 
     /// <summary>Multiplier applied to retained saturation pulses in Standalone Mode.</summary>
     public float SaturationPulseMultiplier;
 
     /// <summary>Base from which the rolled multiplier is subtracted by the intended retained value pulse.</summary>
     public float ValuePulseBase;
+
+    /// <summary>Copies every Pulse Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(PulseStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        BaseHue = new FloatRange(
+            source.BaseHue.Min,
+            source.BaseHue.Max,
+            source.BaseHue.LowRail,
+            source.BaseHue.HighRail);
+        ColorPingPongSeconds = new FloatRange(
+            source.ColorPingPongSeconds.Min,
+            source.ColorPingPongSeconds.Max,
+            source.ColorPingPongSeconds.LowRail,
+            source.ColorPingPongSeconds.HighRail);
+        ColorHueDelta = new FloatRange(
+            source.ColorHueDelta.Min,
+            source.ColorHueDelta.Max,
+            source.ColorHueDelta.LowRail,
+            source.ColorHueDelta.HighRail);
+        BeatMode = new IntRange(
+            source.BeatMode.MinInclusive,
+            source.BeatMode.MaxExclusive,
+            source.BeatMode.LowRail,
+            source.BeatMode.HighRail);
+        PulseMultiplier = new FloatRange(
+            source.PulseMultiplier.Min,
+            source.PulseMultiplier.Max,
+            source.PulseMultiplier.LowRail,
+            source.PulseMultiplier.HighRail);
+        PulseScaleDivisorMilliseconds = source.PulseScaleDivisorMilliseconds;
+        PulseHeightAtWaveformPeak = source.PulseHeightAtWaveformPeak;
+        SaturationPulseMultiplier = source.SaturationPulseMultiplier;
+        ValuePulseBase = source.ValuePulseBase;
+    }
 }
 
-/// <summary>Editable music-response values saved as Pulse's Sync Settings.</summary>
+/// <summary>The serializable value shape shared by Pulse's Sync Defaults and Sync Settings.</summary>
 [Serializable]
 public sealed class PulseSyncSettings
 {
-    /// <summary>Minimum base hue rolled on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float BaseHueMin;
+    /// <summary>Per-Roll range for the base hue of the current color pair.</summary>
+    public FloatRange BaseHue;
 
-    /// <summary>Maximum base hue rolled on the next Synced activation.</summary>
-    [Range(0f, 1f)] public float BaseHueMax;
+    /// <summary>Per-Roll range for seconds in one leg of the color ping-pong.</summary>
+    public FloatRange ColorPingPongSeconds;
 
-    /// <summary>Minimum seconds rolled for one leg of the Synced color ping-pong.</summary>
-    [Min(0.0001f)] public float ColorPingPongSecondsMin;
+    /// <summary>Per-Roll range for the hue delta between the two colors.</summary>
+    public FloatRange ColorHueDelta;
 
-    /// <summary>Maximum seconds rolled for one leg of the Synced color ping-pong.</summary>
-    [Min(0.0001f)] public float ColorPingPongSecondsMax;
+    /// <summary>Per-Roll range for the HSV pulse mode; its upper endpoint is exclusive.</summary>
+    public IntRange BeatMode;
 
-    /// <summary>Minimum hue delta rolled between the two Synced colors.</summary>
-    [Range(0f, 1f)] public float ColorHueDeltaMin;
-
-    /// <summary>Maximum hue delta rolled between the two Synced colors.</summary>
-    [Range(0f, 1f)] public float ColorHueDeltaMax;
-
-    /// <summary>Inclusive minimum supplied to the next Synced beat-mode Roll.</summary>
-    [Range(0, 2)] public int BeatModeMinInclusive;
-
-    /// <summary>Exclusive maximum supplied to the next Synced beat-mode Roll; raising it to 3 reaches the intended value mode.</summary>
-    [Range(1, 3)] public int BeatModeMaxExclusive;
-
-    /// <summary>Minimum HSV pulse multiplier rolled on the next Synced activation.</summary>
-    [Min(0f)] public float PulseMultiplierMin;
-
-    /// <summary>Maximum HSV pulse multiplier rolled on the next Synced activation.</summary>
-    [Min(0f)] public float PulseMultiplierMax;
+    /// <summary>Per-Roll range for the HSV pulse multiplier.</summary>
+    public FloatRange PulseMultiplier;
 
     /// <summary>Millisecond divisor mapping shortest Waveform peak spacing into radial history scale.</summary>
     [Min(0.0001f)] public float PulseScaleDivisorMilliseconds;
@@ -476,16 +470,31 @@ public sealed class PulseSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        BaseHueMin = source.BaseHueMin;
-        BaseHueMax = source.BaseHueMax;
-        ColorPingPongSecondsMin = source.ColorPingPongSecondsMin;
-        ColorPingPongSecondsMax = source.ColorPingPongSecondsMax;
-        ColorHueDeltaMin = source.ColorHueDeltaMin;
-        ColorHueDeltaMax = source.ColorHueDeltaMax;
-        BeatModeMinInclusive = source.BeatModeMinInclusive;
-        BeatModeMaxExclusive = source.BeatModeMaxExclusive;
-        PulseMultiplierMin = source.PulseMultiplierMin;
-        PulseMultiplierMax = source.PulseMultiplierMax;
+        BaseHue = new FloatRange(
+            source.BaseHue.Min,
+            source.BaseHue.Max,
+            source.BaseHue.LowRail,
+            source.BaseHue.HighRail);
+        ColorPingPongSeconds = new FloatRange(
+            source.ColorPingPongSeconds.Min,
+            source.ColorPingPongSeconds.Max,
+            source.ColorPingPongSeconds.LowRail,
+            source.ColorPingPongSeconds.HighRail);
+        ColorHueDelta = new FloatRange(
+            source.ColorHueDelta.Min,
+            source.ColorHueDelta.Max,
+            source.ColorHueDelta.LowRail,
+            source.ColorHueDelta.HighRail);
+        BeatMode = new IntRange(
+            source.BeatMode.MinInclusive,
+            source.BeatMode.MaxExclusive,
+            source.BeatMode.LowRail,
+            source.BeatMode.HighRail);
+        PulseMultiplier = new FloatRange(
+            source.PulseMultiplier.Min,
+            source.PulseMultiplier.Max,
+            source.PulseMultiplier.LowRail,
+            source.PulseMultiplier.HighRail);
         PulseScaleDivisorMilliseconds = source.PulseScaleDivisorMilliseconds;
         PulseHeightAtWaveformTrough = source.PulseHeightAtWaveformTrough;
         PulseHeightAtWaveformPeak = source.PulseHeightAtWaveformPeak;
