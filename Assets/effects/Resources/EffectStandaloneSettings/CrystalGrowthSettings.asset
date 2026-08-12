@@ -52,6 +52,12 @@ MonoBehaviour:
       Max: 2.2
       LowRail: 1.2
       HighRail: 2.2
+    SelfPulsePeak:
+      Min: 0.55
+      Max: 1
+      LowRail: 0.55
+      HighRail: 1
+    SelfPulseNoiseSpeed: 0.2
     SelfPulseDecayPerSec: 2.5
     TipThreshold: 0.8
     TipWhitenAmount: 0.5
