@@ -29,20 +29,25 @@ using Random = UnityEngine.Random;
 /// Sync (the headliner) vs. Standalone (a sensible default) ride one mechanic — the front always advances
 /// off <see cref="EffectBase.effectDelta"/> so the wall never freezes. The beat only modulates:
 /// <list type="bullet">
-/// <item><description>WHEN seeds spawn — Synced with band energy: the bass kick drives the blooms; synced
-///   without energy: a bloom on each beat, bigger on the bar's one. Standalone: a self-driven metronome (a
-///   steady trickle plus a synthetic downbeat bloom) so several fronts always crawl at once.</description></item>
-/// <item><description>THE DROP — beat one of a Drop fires a one-shot flash: a fresh single-color layer is surged
-///   across the whole wall as a bright colored wavefront (the luminance lift rides the sweeping leading edge, in
-///   palette color, never white), then falling linearly over a couple of bars so the drop lands as one dramatic sweep that
-///   resolves into a new crystal field.</description></item>
-/// <item><description>HOW FAST the front lunges — <see cref="PulsesValues.Beat"/> surges the spread rate on
-///   each hit; Standalone falls back to a self-driven surge so its fronts still lunge on the synthetic downbeats.</description></item>
-/// <item><description>OVERALL brightness — this Effect evaluates its held Waveform and maps the envelope locally;
-///   clockless rendering holds steady.</description></item>
-/// <item><description>ENERGY gating — live smoothed <see cref="BeatManager.Levels"/> ease all three off as the
-///   track quietens, so a quiet break stops chasing an inaudible beat instead of seeding/surging/strobing to it.</description></item>
-/// <item><description>PALETTE — a fresh wall palette is selected at the start of every 16-beat Grid.</description></item>
+/// <item><description>WHEN seeds spawn — Synced combines the wire-authored On Beat window with a selectable
+///   <see cref="BeatManager.Levels"/> Low form used as this Effect's bass-presence proxy. Each window can launch
+///   at most one continuously sized burst, with two extra seeds on The One. Standalone keeps its self-driven
+///   metronome (a steady trickle plus a synthetic downbeat bloom) so several fronts always crawl at once.</description></item>
+/// <item><description>THE DROP — the Drop Active rising edge fires a one-shot flash: a fresh single-color layer is
+///   surged across the whole wall as a bright colored wavefront (the luminance lift rides the sweeping leading
+///   edge, in palette color, never white). Its response follows the current Grid's Decay and disarms at the next
+///   observed Grid boundary, so the Drop lands as one dramatic sweep that resolves into normal growth.</description></item>
+/// <item><description>HOW FAST the front moves — selected-form Average Levels and current Energy scale the
+///   continuous Synced pace, while <see cref="PulsesValues.Beat"/> supplies an independent accent multiplied only
+///   by remapped Low presence. Standalone keeps its Perlin-varied self-driven surge exactly.</description></item>
+/// <item><description>OVERALL brightness — selected-form Average Levels retains its brightness-depth role while
+///   this Effect evaluates its held Waveform and maps the envelope locally; clockless rendering holds steady.</description></item>
+/// <item><description>ACTIVITY — the selected Average form scales Synced continuous growth and its idle-seed
+///   clock from the authored low-activity pace to the full-activity baseline. It never decides whether an On Beat
+///   exists, and Levels remains a live-set aggregate rather than an absolute loudness meter.</description></item>
+/// <item><description>ENERGY — the current Low/Mid/High run scales continuous Synced pace across its authored
+///   range; unavailable Energy is neutral and does not multiply the independent beat accent.</description></item>
+/// <item><description>PALETTE — a fresh wall palette is selected at every phrase-relative Grid boundary.</description></item>
 /// </list>
 /// </remarks>
 [EffectSyncSettings(typeof(CrystalGrowthSyncSettingsAsset))]
@@ -72,10 +77,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Maximum hue relaxation applied during one frame, so a long frame hitch can't over-relax in one step.</summary>
     private const float StandaloneHueRelaxMaxPerFrame = 0.5f;
 
-    /// <summary>Smoothed average Levels value treated as fully quiet by the self-driven spread machinery (a third minus a soft band).</summary>
+    /// <summary>Smoothed Average Levels value mapped to minimum activity by the self-driven spread machinery (a third minus a soft band).</summary>
     private const float StandaloneActivityLevelMin = 0.233f;
 
-    /// <summary>Smoothed average Levels value treated as fully active by the self-driven spread machinery (a third plus a soft band).</summary>
+    /// <summary>Smoothed Average Levels value mapped to full activity by the self-driven spread machinery (a third plus a soft band).</summary>
     private const float StandaloneActivityLevelMax = 0.433f;
 
     /// <summary>Golden-ratio conjugate: the step that spaces successive seed colors evenly across the palette.</summary>
@@ -140,19 +145,33 @@ public class CrystalGrowth : EffectBase
 
     // Sync Defaults
 
-    /// <summary>Low-band level above which the four-on-the-floor bass kick is considered present (a third).</summary>
-    private const float SyncKickThreshold = 1f / 3f;
+    /// <summary>The selected-form Low consumer reads Normalized Levels by default.</summary>
+    private const CrystalGrowthSyncSettings.LevelsForm SyncLowLevelsForm =
+        CrystalGrowthSyncSettings.LevelsForm.Normalized;
 
-    /// <summary>Smoothed average Levels value treated as fully quiet — beat coupling gates off here (a third minus a soft band).</summary>
+    /// <summary>The selected-form Average consumer reads Normalized Levels by default.</summary>
+    private const CrystalGrowthSyncSettings.LevelsForm SyncActivityLevelsForm =
+        CrystalGrowthSyncSettings.LevelsForm.Normalized;
+
+    /// <summary>Selected-form Low value above which Crystal Growth's bass-presence proxy qualifies an open On Beat window (a third).</summary>
+    private const float SyncLowPresenceThreshold = 1f / 3f;
+
+    /// <summary>Selected-form Average Levels value mapped to minimum broad-spectrum activity (a third minus a soft band).</summary>
     private const float SyncActivityLevelMin = 0.233f;
 
-    /// <summary>Smoothed average Levels value treated as fully active — beat coupling reaches full strength here (a third plus a soft band).</summary>
+    /// <summary>Selected-form Average Levels value mapped to full broad-spectrum activity (a third plus a soft band).</summary>
     private const float SyncActivityLevelMax = 0.433f;
 
-    /// <summary>Bars the Drop sparkle is drawn out over: full machine-gun at the hit, fading back to normal growth across this many bars.</summary>
-    private const int SyncDropFadeBars = 2;
+    /// <summary>Continuous Synced growth pace at minimum selected-form Average activity.</summary>
+    private const float SyncQuietGrowthMultiplier = 0.5f;
 
-    /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP FLASH readout.</summary>
+    /// <summary>Continuous Synced growth pace for a Low Energy run.</summary>
+    private const float SyncEnergyPaceLow = 0.75f;
+
+    /// <summary>Continuous Synced growth pace for a High Energy run; Mid uses the range midpoint.</summary>
+    private const float SyncEnergyPaceHigh = 1.25f;
+
+    /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP RESPONSE readout.</summary>
     private const float SyncDropFlashBrightness = 1.2f;
 
     /// <summary>Extra spread multiplier at the peak of the Drop flash, so the fresh layer sweeps briskly across the wall. Tune on the DROP FLASH readout.</summary>
@@ -161,10 +180,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Seeds of the fresh Drop layer planted at the flash onset, sharing one hue so they read as a single colored wave.</summary>
     private const int SyncDropFlashSeeds = 3;
 
-    /// <summary>Minimum seconds between idle "heartbeat" seeds when synced — slower than Standalone, because the bass kick does the heavy seeding.</summary>
+    /// <summary>Minimum seconds between Synced idle seeds; Low-qualified On Beat bursts provide the primary origins.</summary>
     private const float SyncIdleSeedIntervalMin = 0.5f;
 
-    /// <summary>Maximum seconds between idle "heartbeat" seeds when synced — slower than Standalone, because the bass kick does the heavy seeding.</summary>
+    /// <summary>Maximum seconds between Synced idle seeds; Low-qualified On Beat bursts provide the primary origins.</summary>
     private const float SyncIdleSeedIntervalMax = 0.9f;
 
     /// <summary>Extra spread multiplier added on each sixteenth's on-phase during a Drop — the front lunges in stutters.</summary>
@@ -173,11 +192,8 @@ public class CrystalGrowth : EffectBase
     /// <summary>How far the whole field is knocked toward black on a Drop sixteenth's off-phase — the hard strobe depth.</summary>
     private const float SyncDropStrobeDepth = 0.9f;
 
-    /// <summary>Seeds planted on each sixteenth onset during a Drop, so the wall machine-guns for the whole drop window.</summary>
+    /// <summary>Maximum seeds planted on each sixteenth onset, fading across the complete Grid-bound Drop response.</summary>
     private const int SyncDropSeedBurst = 12;
-
-    /// <summary>Authored Drop envelope threshold above which sixteenth seed bursts fire.</summary>
-    private const float SyncDropSeedBurstThreshold = 0.5f;
 
     /// <summary>How far the base spread is reined in at full Fill — the crystal visibly tenses and compresses going into the phrase change. 0.65 means growth drops to 35% of normal speed at the fill's peak.</summary>
     private const float SyncFillHoldback = 0.65f;
@@ -185,14 +201,14 @@ public class CrystalGrowth : EffectBase
     /// <summary>Luminance swell across the whole grown crystal at full Fill, so the hold-back reads as charging up rather than stalling. Tune on the FILL readout.</summary>
     private const float SyncFillSwell = 0.35f;
 
-    /// <summary>Authored brightness floor while Synced smoothed average Levels are fully active.</summary>
+    /// <summary>Authored brightness floor while selected-form Average Levels are at full activity.</summary>
     private const float SyncDrivingBrightnessFloor = 0.8f;
 
-    /// <summary>Authored minimum seed burst produced by a detected bass kick.</summary>
-    private const float SyncKickSeedBurstMin = 2f;
+    /// <summary>Authored minimum seed burst produced by qualifying Low presence in an On Beat window.</summary>
+    private const float SyncLowSeedBurstMin = 2f;
 
-    /// <summary>Authored maximum seed burst produced by a detected bass kick.</summary>
-    private const float SyncKickSeedBurstMax = 6f;
+    /// <summary>Authored maximum seed burst produced by qualifying Low presence in an On Beat window.</summary>
+    private const float SyncLowSeedBurstMax = 6f;
 
     /// <summary>Authored extra seed count added on beat one of a bar.</summary>
     private const int SyncDownbeatSeedBonus = 2;
@@ -245,18 +261,6 @@ public class CrystalGrowth : EffectBase
     /// <summary>Authored maximum beat-surge multiple rolled for a Synced activation.</summary>
     private const float SyncBeatSurgeMax = 3.5f;
 
-    /// <summary>
-    /// Authored minimum initial seed interval for Synced Mode. This matches Standalone so choosing
-    /// the active settings surface does not move the existing look.
-    /// </summary>
-    private const float SyncSeedIntervalMin = 0.18f;
-
-    /// <summary>
-    /// Authored maximum initial seed interval for Synced Mode. Later idle intervals use the slower
-    /// Synced-only idle-heartbeat range.
-    /// </summary>
-    private const float SyncSeedIntervalMax = 0.35f;
-
     /// <summary>Front heat at which the Synced crystal tip begins whitening.</summary>
     private const float SyncTipThreshold = 0.8f;
 
@@ -274,13 +278,13 @@ public class CrystalGrowth : EffectBase
 
     // Runtime mechanism constants
 
-    /// <summary>Common-time beats per bar, matching BeatManager's beat-slot model.</summary>
-    private const int BeatsPerBar = 4;
+    /// <summary>Drop amount at which normal coverage-based generation advance begins overlapping the release.</summary>
+    private const float DropGenerationOverlapAmount = 0.5f;
 
-    /// <summary>Crystal Growth expresses both phrase cues: the fill ratchet builds the strobe/lunge into the change,
+    /// <summary>Crystal Growth expresses both phrase cues: the Fill hold-back and swell build into the change,
     /// and the Drop downbeat fires its one-shot whole-wall surge. Advertise both so the Director can deliberately
     /// cast it into Fill and Drop moments, not only react when it happens to be on-air. Its growth stays calm and
-    /// eases off as the track quietens, so it advertises as a Low/Mid-energy Performer.</summary>
+    /// eases off as selected-form Average activity falls, so it advertises as a Low/Mid-energy Performer.</summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
@@ -318,9 +322,12 @@ public class CrystalGrowth : EffectBase
     /// <summary>Resolves a fresh copy of Crystal Growth's file-local Sync Defaults.</summary>
     public static CrystalGrowthSyncSettings SyncDefaults => new()
     {
-        KickThreshold = SyncKickThreshold,
+        LowLevelsForm = SyncLowLevelsForm,
+        ActivityLevelsForm = SyncActivityLevelsForm,
+        LowPresenceThreshold = SyncLowPresenceThreshold,
         ActivityLevel = new FloatRange(SyncActivityLevelMin, SyncActivityLevelMax),
-        DropFadeBars = SyncDropFadeBars,
+        QuietGrowthMultiplier = SyncQuietGrowthMultiplier,
+        EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         DropFlashBrightness = SyncDropFlashBrightness,
         DropFlashSpread = SyncDropFlashSpread,
         DropFlashSeeds = SyncDropFlashSeeds,
@@ -328,11 +335,10 @@ public class CrystalGrowth : EffectBase
         DropRatchetSpread = SyncDropRatchetSpread,
         DropStrobeDepth = SyncDropStrobeDepth,
         DropSeedBurst = SyncDropSeedBurst,
-        DropSeedBurstThreshold = SyncDropSeedBurstThreshold,
         FillHoldback = SyncFillHoldback,
         FillSwell = SyncFillSwell,
         DrivingBrightnessFloor = SyncDrivingBrightnessFloor,
-        KickSeedBurst = new FloatRange(SyncKickSeedBurstMin, SyncKickSeedBurstMax),
+        LowSeedBurst = new FloatRange(SyncLowSeedBurstMin, SyncLowSeedBurstMax),
         DownbeatSeedBonus = SyncDownbeatSeedBonus,
         HeatEpsilon = SyncHeatEpsilon,
         FrontPush = SyncFrontPush,
@@ -345,7 +351,6 @@ public class CrystalGrowth : EffectBase
         SpreadPerSec = new FloatRange(SyncSpreadPerSecMin, SyncSpreadPerSecMax),
         LeakPerSec = new FloatRange(SyncLeakPerSecMin, SyncLeakPerSecMax),
         BeatSurge = new FloatRange(SyncBeatSurgeMin, SyncBeatSurgeMax),
-        SeedInterval = new FloatRange(SyncSeedIntervalMin, SyncSeedIntervalMax),
         TipThreshold = SyncTipThreshold,
         TipWhitenAmount = SyncTipWhitenAmount,
         BloomCountBase = SyncBloomCountBase,
@@ -383,7 +388,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Extra spread multiplier applied at the peak of <see cref="PulsesValues.Beat"/>.</summary>
     private float beatSurge;
 
-    /// <summary>Accumulated fractional front passes carried between frames (framerate-independent spread).</summary>
+    /// <summary>
+    /// Accumulated fractional front passes carried between frames for framerate-independent spread;
+    /// Synced Mode discards stale whole-pass debt after reaching its per-frame cap.
+    /// </summary>
     private float spreadBudget;
 
     /// <summary>The current (newest) generation index. Each new layer increments this.</summary>
@@ -395,10 +403,10 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private float hueCursor;
 
-    /// <summary>Standalone-only seed clock: seconds since the last free-running seed.</summary>
+    /// <summary>Seconds accumulated toward the next mode-specific idle seed.</summary>
     private float seedTimer;
 
-    /// <summary>Standalone-only seed clock: target seconds between free-running seeds.</summary>
+    /// <summary>Target seconds between mode-specific idle seeds.</summary>
     private float seedInterval;
 
     /// <summary>Standalone-only self-driven metronome phase [0..1); wraps to a synthetic "downbeat" bloom.</summary>
@@ -413,20 +421,29 @@ public class CrystalGrowth : EffectBase
     /// <summary>Standalone-only spread surge envelope, reset to a Perlin-mapped peak on each synthetic downbeat and decayed linearly to zero.</summary>
     private float selfPulse;
 
-    /// <summary>Drop Decay sampled this frame; drives the wavefront luminance lift and spread surge.</summary>
-    private float dropFlash;
+    /// <summary>Whether the Grid-bound Drop response remains armed until the next observed Grid boundary.</summary>
+    private bool dropResponseActive;
 
+    /// <summary>Current Grid Decay while the Drop response is armed; drives its release-shaped consequences.</summary>
+    private float dropResponseAmount;
+
+    /// <summary>Previous Drop Active value retained to detect only its rising edge.</summary>
     private bool previousDropActive;
+
+    /// <summary>Previous sixteenth-gate value retained to detect each sixteenth onset.</summary>
     private bool previousSixteenthOn;
 
-    /// <summary>This frame's smoothed low-band (bass kick) level in [0..1]; zero when wire levels are missing.</summary>
-    private float kickLow;
+    /// <summary>This frame's selected-form Low Levels value used as Crystal Growth's bass-presence proxy.</summary>
+    private float lowLevel;
 
-    /// <summary>This frame's average-band energy in [0..1]; missing wire levels read as zero.</summary>
-    private float energyNow;
+    /// <summary>This frame's selected-form Average Levels value used for broad-spectrum activity.</summary>
+    private float averageLevel;
 
-    /// <summary>Last frame's "kick present" state, so each bass hit is edge-detected into one bloom.</summary>
-    private bool lastKick;
+    /// <summary>Selected-form Low remapped from the authored threshold to full bass presence.</summary>
+    private float lowPresence;
+
+    /// <summary>Whether the current wire-authored On Beat window already launched its Low-qualified seed burst.</summary>
+    private bool seededThisOnBeatWindow;
 
     /// <summary>Whether this frame is inside a fill, kept for the debug readout.</summary>
     private bool fillActive;
@@ -472,7 +489,9 @@ public class CrystalGrowth : EffectBase
         FloatRange spreadPerSecRange = isSynced ? SyncSettings.SpreadPerSec : standaloneSettings.SpreadPerSec;
         FloatRange leakPerSecRange = isSynced ? SyncSettings.LeakPerSec : standaloneSettings.LeakPerSec;
         FloatRange beatSurgeRange = isSynced ? SyncSettings.BeatSurge : standaloneSettings.BeatSurge;
-        FloatRange seedIntervalRange = isSynced ? SyncSettings.SeedInterval : standaloneSettings.SeedInterval;
+        FloatRange seedIntervalRange = isSynced
+            ? SyncSettings.IdleSeedInterval
+            : standaloneSettings.SeedInterval;
         spreadPerSec = Random.Range(spreadPerSecRange.Min, spreadPerSecRange.Max);
         leakPerSec = Random.Range(leakPerSecRange.Min, leakPerSecRange.Max);
         beatSurge = Random.Range(beatSurgeRange.Min, beatSurgeRange.Max);
@@ -486,11 +505,14 @@ public class CrystalGrowth : EffectBase
         selfBeatPeriod = Random.Range(standaloneSettings.SelfBeatPeriod.Min, standaloneSettings.SelfBeatPeriod.Max);
         selfPulseNoisePosition = effectTime;
         selfPulse = 0f;
-        lastKick = false;
-        energyNow = 0f;
+        lowLevel = 0f;
+        averageLevel = 0f;
+        lowPresence = 0f;
+        seededThisOnBeatWindow = false;
         fillActive = false;
         fillLevel = 0f;
-        dropFlash = 0f;
+        dropResponseActive = false;
+        dropResponseAmount = 0f;
         previousDropActive = beatManager.Drop.Active;
         previousSixteenthOn = beatManager.Pulses.On(Duration.Sixteenth);
 
@@ -506,10 +528,17 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     public override string DebugText()
     {
-        string mode = beatManager.IsSynced ? "Synced" : "Standalone (self-driven)";
-        string levels = $"Energy: {energyNow:0.00}{(energyNow < SyncSettings.KickThreshold ? " (quiet)" : "")}  Kick: {(kickLow > SyncSettings.KickThreshold ? "ON" : "--")}";
+        bool isSynced = beatManager.IsSynced;
+        string mode = isSynced ? "Synced" : "Standalone (self-driven)";
+        string levels = isSynced
+            ? $"Low ({SyncSettings.LowLevelsForm}): {lowLevel:0.00}  " +
+                $"Bass presence: {lowPresence:0.00}\n" +
+                $"Average ({SyncSettings.ActivityLevelsForm}): {averageLevel:0.00}"
+            : $"Average (Standalone Smoothed): {averageLevel:0.00}";
         string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (hold-back + swell)" : "";
-        string dropReadout = dropFlash > 0f ? $"\nDROP SPARKLE {dropFlash:0.00}" : "";
+        string dropReadout = dropResponseAmount > 0f
+            ? $"\nDROP RESPONSE {dropResponseAmount:0.00}"
+            : "";
         return $"Crystal Growth\nMode: {mode}\nLayer: {generation}\n{levels}{fillReadout}{dropReadout}";
     }
 
@@ -523,16 +552,20 @@ public class CrystalGrowth : EffectBase
         float deltaTime = effectDelta;
         bool isSynced = beatManager.IsSynced;
 
-        // Read the live band energy first: it gates how much the wall couples to the beat. The crucial case is
-        // a quiet break — when the average energy falls below a third, the audible beat is gone, so seeding, the
-        // spread surge, and the brightness pulse all gate off and the crystal just keeps growing calmly instead
-        // of chasing a beat nobody can hear. Missing wire levels are zero and therefore quiet.
+        // Read both consumer-selected Levels forms first. Low is this Effect's bass-presence proxy for an
+        // already-open On Beat window and its Beat Pulse accent. Average is independent broad-spectrum activity:
+        // it scales continuous growth, the idle-seed clock, and Waveform brightness depth without deciding whether
+        // the beat exists. Levels is a live-set aggregate, not an absolute loudness meter.
         float activity = ReadLevels();
+        float energyPace = isSynced ? ReadEnergyPace() : 1f;
+        float continuousPace = isSynced
+            ? activity.Lerp(SyncSettings.QuietGrowthMultiplier, 1f) * energyPace
+            : 1f;
 
-        // The fill is the short transition that leads into the next phrase — and it does not always land on a
-        // drop, so its gesture must build tension AND resolve cleanly on its own. The hold-back reins the base
-        // spread in as the fill builds while the swell charges the crystal's glow, then both snap back the
-        // moment the fill ends — into the Drop sparkle when one lands, or back to normal growth when not.
+        // The Fill is the tail of the current Phrase, and it does not always lead to a Drop, so its gesture must
+        // build tension AND resolve cleanly on its own. The hold-back reins the base spread in as the Fill builds
+        // while the swell charges the crystal's glow, then both snap back at the Phrase boundary — into the Drop
+        // response when one lands, or back to normal growth when not.
         // Because the stock Fill Build is normalized to the fill's length, the arc scales with it — short fills snap,
         // long fills lean in.
         var fill = beatManager.Fill;
@@ -543,36 +576,40 @@ public class CrystalGrowth : EffectBase
         fillActive = inFill;
         fillLevel = fillAmount;
 
-        var drop = beatManager.Drop;
-        var dropActive = drop.Active;
+        bool dropActive = beatManager.Drop.Active;
         if (dropActive && !previousDropActive)
         {
+            dropResponseActive = true;
             generation++;
             PlantUnisonSeeds(SyncSettings.DropFlashSeeds);
         }
         previousDropActive = dropActive;
-        dropFlash = drop.In.Decay(SyncSettings.DropFadeBars * BeatsPerBar);
+        dropResponseAmount = dropResponseActive ? beatManager.Grid.Decay() : 0f;
 
-        if (sixteenthOn && !previousSixteenthOn && dropFlash > SyncSettings.DropSeedBurstThreshold)
+        if (sixteenthOn && !previousSixteenthOn && dropResponseActive)
         {
-            PlantSeeds(SyncSettings.DropSeedBurst);
+            PlantSeeds(Mathf.CeilToInt(SyncSettings.DropSeedBurst * dropResponseAmount));
         }
         previousSixteenthOn = sixteenthOn;
 
-        SeedThisFrame(deltaTime);
+        SeedThisFrame(deltaTime, continuousPace);
 
-        // The beat surges how far the front lunges this frame. Synced scales the live Pulse by Levels activity
-        // so the front stops lunging to an inaudible beat during a quiet break. Standalone has no Levels and
-        // reads its self-driven surge directly. A fill reins the whole thing in (tension); a Drop washes the
-        // fresh layer across the wall and machine-gun lunges on every sixteenth for the drop's whole window.
+        // Synced composes two independent terms: Average × Energy scales continuous pace, while the wire Beat
+        // Pulse is accented only by remapped Low presence. Keeping the terms additive prevents Average or Energy
+        // from multiplying the beat accent. Standalone retains its approved self-driven surge arithmetic. A Fill
+        // reins the whole result in (tension); the Grid-bound Drop response washes the fresh layer across the wall
+        // and adds release-shaped sixteenth lunges.
         float pulse = isSynced
-            ? beatManager.Pulses.Beat * activity
+            ? beatManager.Pulses.Beat * lowPresence
             : selfPulse;
+        float paceAndAccent = isSynced
+            ? continuousPace + (beatSurge * pulse)
+            : 1f + (beatSurge * pulse);
         float spread = spreadPerSec
-            * (1f + (beatSurge * pulse))
+            * paceAndAccent
             * fillAmount.Lerp(1f, 1f - SyncSettings.FillHoldback)
-            * (1f + (SyncSettings.DropRatchetSpread * dropFlash * ratchet))
-            * (1f + (SyncSettings.DropFlashSpread * dropFlash));
+            * (1f + (SyncSettings.DropRatchetSpread * dropResponseAmount * ratchet))
+            * (1f + (SyncSettings.DropFlashSpread * dropResponseAmount));
 
         // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
         spreadBudget += spread * deltaTime;
@@ -586,6 +623,10 @@ public class CrystalGrowth : EffectBase
             passes++;
             PropagateFrontOnce();
         }
+        if (isSynced && passes == maxFrontPassesPerFrame)
+        {
+            spreadBudget = Mathf.Repeat(spreadBudget, 1f);
+        }
 
         // Fade the trailing heat so the bright band trails off behind the front; grown tiles still render at the
         // CrystalFloor (keyed on gen), so they never go black.
@@ -595,25 +636,26 @@ public class CrystalGrowth : EffectBase
             charge[i] *= keep;
         }
 
-        // Hold the drop layer while its flash falls: don't let coverage auto-advance to a new (multicolor)
-        // generation mid-flash, so the single drop color owns the wall until the wavefront settles.
-        if (dropFlash <= 0f)
+        // The single-color Drop layer owns the first half of the response. Normal coverage-based generation
+        // advance resumes through the second half so ordinary multicolor growth overlaps the release instead
+        // of snapping back only after the Grid-bound response reaches zero.
+        if (!dropResponseActive || dropResponseAmount <= DropGenerationOverlapAmount)
         {
             CheckGenerationAdvance();
         }
 
         RelaxHue(deltaTime);
 
-        // Brightness pulses with the music; the configured floor keeps lit tiles bright, and it lifts toward
-        // steady as the track quietens so a quiet break never strobes to an inaudible beat.
+        // Brightness keeps the selected Average Levels form's existing depth role: the configured floor keeps
+        // active tiles bright, and minimum broad-spectrum activity lifts the result toward steady.
         float minimumBrightness = activity.Lerp(1f, SyncSettings.DrivingBrightnessFloor);
         float rhythmBrightness = waveform.Lerp(minimumBrightness, 1f);
 
-        // Hard Drop strobe: during a Drop, every sixteenth's off-phase knocks the whole field toward black, so
-        // the wall flashes on each 16th for the drop's whole window (falling linearly with the release). Applied to
+        // Hard Drop strobe: during the Grid-bound response, every sixteenth's off-phase knocks the whole field
+        // toward black, so the wall flashes on each 16th while the response falls linearly. Applied to
         // the final color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to
         // 1 (no strobe) outside a Drop. The Fill instead swells the glow while the hold-back compresses growth.
-        float strobe = 1f - (dropFlash * (1f - ratchet) * SyncSettings.DropStrobeDepth);
+        float strobe = 1f - (dropResponseAmount * (1f - ratchet) * SyncSettings.DropStrobeDepth);
         float swell = 1f + (SyncSettings.FillSwell * fillAmount);
         float tipThreshold = isSynced ? SyncSettings.TipThreshold : standaloneSettings.TipThreshold;
         float tipWhitenAmount = isSynced
@@ -644,7 +686,7 @@ public class CrystalGrowth : EffectBase
             // rides the sweeping leading edge — a bright colored wavefront crossing the wall — and trails back to
             // normal behind it, all in the tile's own palette color (never toward white). Collapses to ×1 off a flash.
             float factor = Mathf.Max(Mathf.Sqrt(c) * rhythmBrightness, crystalFloor) *
-                (1f + (SyncSettings.DropFlashBrightness * dropFlash * c));
+                (1f + (SyncSettings.DropFlashBrightness * dropResponseAmount * c));
             buffer[i] = col * (factor * strobe * swell);
         }
     }
@@ -711,15 +753,18 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Decides and plants this frame's seeds from levels while synced, or a self-driven clock in Standalone.
+    /// Plants this frame's seeds from an On Beat window plus Low presence while Synced, or from the
+    /// self-driven Standalone clock.
     /// </summary>
-    private void SeedThisFrame(float dt)
+    /// <param name="dt">Current effect delta in seconds.</param>
+    /// <param name="continuousPace">Average- and Energy-scaled Synced pace for the idle-seed clock.</param>
+    private void SeedThisFrame(float dt, float continuousPace)
     {
         int? beatInBar = beatManager.Timing.BeatInBar;
 
         if (beatManager.IsSynced && beatInBar is { } bib)
         {
-            SeedFromEnergy(dt, bib);
+            SeedSynced(dt, bib, continuousPace);
             return;
         }
 
@@ -729,7 +774,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>
     /// Standalone seeding (no beat clock): a self-driven metronome that mimics the synced liveliness — a steady
     /// trickle of seeds keeps several fronts crawling at once, and a synthetic downbeat periodically blooms a
-    /// burst and kicks the spread surge so the wall pulses in waves.
+    /// burst and resets the spread surge so the wall pulses in waves.
     /// </summary>
     private void SeedSelfDriven(float dt)
     {
@@ -766,56 +811,106 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>
-    /// Samples the live smoothed <see cref="BeatManager.Levels"/> into this frame's <see cref="kickLow"/> /
-    /// <see cref="energyNow"/> and returns the beat-coupling "activity" in [0..1]:
-    /// 0 in a fully quiet break and 1 while the track drives. Standalone reads its own saved-or-default
-    /// Standalone Settings so a saved Sync Settings edit cannot move the self-driven spread. Missing wire levels read as zero.
+    /// Samples the two independently selected <see cref="BeatManager.Levels"/> forms, remaps Low into
+    /// Crystal Growth's bass-presence proxy, and returns remapped broad-spectrum Average activity.
+    /// Standalone retains its former Smoothed reads and saved-or-default activity range so a Sync Settings
+    /// edit cannot move the approved self-driven look. Missing wire Levels read as zero.
     /// </summary>
     private float ReadLevels()
     {
-        var levels = beatManager.Levels;
-        kickLow = levels.Smoothed.Low;
-        energyNow = levels.Smoothed.Average;
-        FloatRange activityLevel = beatManager.IsSynced
+        bool isSynced = beatManager.IsSynced;
+        LevelBands lowBands = isSynced
+            ? ReadLevelsForm(SyncSettings.LowLevelsForm)
+            : beatManager.Levels.Smoothed;
+        LevelBands activityBands = isSynced
+            ? ReadLevelsForm(SyncSettings.ActivityLevelsForm)
+            : beatManager.Levels.Smoothed;
+        lowLevel = lowBands.Low;
+        averageLevel = activityBands.Average;
+        lowPresence = isSynced
+            ? lowLevel.Remap(SyncSettings.LowPresenceThreshold, 1f, 0f, 1f, clamp: true)
+            : 0f;
+        FloatRange activityRange = isSynced
             ? SyncSettings.ActivityLevel
             : standaloneSettings.ActivityLevel;
-        return energyNow.Remap(activityLevel.Min, activityLevel.Max, 0f, 1f, clamp: true);
+        return averageLevel.Remap(activityRange.Min, activityRange.Max, 0f, 1f, clamp: true);
     }
 
     /// <summary>
-    /// Selects a fresh wall palette at the start of every 16-beat Grid (the base <see cref="EffectBase.OnNewGrid"/>
-    /// edge — Count wraps to 1 on a Locked grid). The palette cross-fades, so the crystals recolor smoothly.
+    /// Reads one selected Levels form directly from BeatManager's read-only Data Surface.
     /// </summary>
-    protected override void OnNewGrid() => APalette.Change();
+    /// <param name="form">The Normalized, Smoothed, or Peak form chosen by this consumer.</param>
+    /// <returns>The selected immutable low/mid/high band set.</returns>
+    private LevelBands ReadLevelsForm(CrystalGrowthSyncSettings.LevelsForm form) => form switch
+    {
+        CrystalGrowthSyncSettings.LevelsForm.Smoothed => beatManager.Levels.Smoothed,
+        CrystalGrowthSyncSettings.LevelsForm.Peak => beatManager.Levels.Peak,
+        _ => beatManager.Levels.Normalized,
+    };
 
     /// <summary>
-    /// Energy-aware seeding: each rising edge of the bass kick blooms a burst sized
-    /// by how hard it hits, while a gentle idle heartbeat keeps the wall growing at all times. In a quiet break
-    /// the kick never crosses its threshold, so only the calm heartbeat runs — the crystal stops chasing the beat.
+    /// Maps the current phrase/run-scale Energy to the authored Low/High pace endpoints, with Mid at
+    /// their midpoint and unavailable Energy neutral at one.
     /// </summary>
-    private void SeedFromEnergy(float dt, int bib)
+    private float ReadEnergyPace()
     {
-        bool kickNow = kickLow > SyncSettings.KickThreshold;
-        if (kickNow && !lastKick)
+        FloatRange pace = SyncSettings.EnergyPace;
+        return beatManager.Energy.Level switch
         {
-            float kickAmount = kickLow.Remap(SyncSettings.KickThreshold, 1f, 0f, 1f, clamp: true);
-            int burst = Mathf.RoundToInt(kickAmount.Lerp(
-                SyncSettings.KickSeedBurst.Min,
-                SyncSettings.KickSeedBurst.Max));
-            if (bib == 1)
+            Energy.Low => pace.Min,
+            Energy.Mid => (pace.Min + pace.Max) * 0.5f,
+            Energy.High => pace.Max,
+            _ => 1f,
+        };
+    }
+
+    /// <summary>
+    /// Selects a fresh wall palette and disarms any prior Drop response at each observed phrase-relative
+    /// Grid boundary. On a Drop's opening boundary this hook runs before Draw, where the Drop Active rising
+    /// edge arms the new response; the following boundary ends it. The palette cross-fades, so the crystals
+    /// recolor smoothly.
+    /// </summary>
+    protected override void OnNewGrid()
+    {
+        dropResponseActive = false;
+        APalette.Change();
+    }
+
+    /// <summary>
+    /// Synced seeding combines the current wire-authored On Beat window with selected-form Low presence.
+    /// Each open window can launch at most one continuously sized burst, and a Low value arriving after the
+    /// window opens can still qualify it. The idle heartbeat keeps the wall growing and follows the same
+    /// Average- and Energy-scaled continuous pace as the front.
+    /// </summary>
+    /// <param name="dt">Current effect delta in seconds.</param>
+    /// <param name="beatInBar">Current one-based beat label.</param>
+    /// <param name="continuousPace">Average- and Energy-scaled Synced pace.</param>
+    private void SeedSynced(float dt, int beatInBar, float continuousPace)
+    {
+        bool onBeatWindowOpen = beatManager.Beats.OnBeat(beatInBar);
+        if (!onBeatWindowOpen)
+        {
+            seededThisOnBeatWindow = false;
+        }
+        else if (!seededThisOnBeatWindow && lowLevel > SyncSettings.LowPresenceThreshold)
+        {
+            int burst = Mathf.RoundToInt(lowPresence.Lerp(
+                SyncSettings.LowSeedBurst.Min,
+                SyncSettings.LowSeedBurst.Max));
+            if (beatInBar == 1)
             {
                 burst += SyncSettings.DownbeatSeedBonus;
             }
 
-            // The fill is NOT seeded here — it gets its own drastic sixteenth ratchet in SeedFillRatchet, and the
-            // Drop gets its own one-shot flash in TriggerDropFlash, so neither scatters extra seeds here.
+            // Fill does not create a second seed path here. Drop owns its one-shot unison layer and its
+            // Grid-bound sixteenth bursts, so this branch remains only the Low-qualified On Beat response.
             PlantSeeds(burst);
+            seededThisOnBeatWindow = true;
         }
 
-        lastKick = kickNow;
-
-        // Idle heartbeat: the only thing seeding during a quiet break, so the wall keeps growing calmly.
-        seedTimer += dt;
+        // Idle heartbeat follows the continuous pace, so low Average activity or Low Energy cannot accumulate
+        // ordinary-rate origins that all arrive after the musical envelope has moved on.
+        seedTimer += dt * continuousPace;
         if (seedTimer >= seedInterval)
         {
             PlantSeed();
@@ -957,7 +1052,7 @@ public class CrystalGrowth : EffectBase
         PlantSeeds(BloomCount());
     }
 
-    /// <summary>A bloom is 3–5 seeds — used for the bar's-one bloom, a new generation, and the Standalone downbeat.</summary>
+    /// <summary>A bloom is 3–5 seeds — used for a new generation and the Standalone downbeat.</summary>
     private int BloomCount()
     {
         int bloomCountBase = beatManager.IsSynced
@@ -1001,7 +1096,7 @@ public sealed class CrystalGrowthStandaloneSettings
     public float HueRelaxMaxPerFrame;
 
     /// <summary>
-    /// Smoothed average Levels range mapped from fully quiet to fully active by the Standalone spread
+    /// Smoothed Average Levels range mapped from minimum to full activity by the Standalone spread
     /// machinery.
     /// </summary>
     public FloatRange ActivityLevel;
@@ -1118,14 +1213,36 @@ public sealed class CrystalGrowthStandaloneSettings
 [Serializable]
 public sealed class CrystalGrowthSyncSettings
 {
-    /// <summary>Low-band threshold for detecting a bass-kick edge.</summary>
-    [Range(0f, 1f)] public float KickThreshold;
+    /// <summary>The three BeatManager Levels forms independently selectable by Crystal Growth consumers.</summary>
+    public enum LevelsForm
+    {
+        /// <summary>The instantaneous wire-authored live-set aggregate.</summary>
+        Normalized,
 
-    /// <summary>Smoothed average Levels range mapped from fully quiet to fully active.</summary>
+        /// <summary>The attack/release follower.</summary>
+        Smoothed,
+
+        /// <summary>Instant rise with a tempo-based linear fall.</summary>
+        Peak,
+    }
+
+    /// <summary>Levels form used by the Low bass-presence consumer.</summary>
+    public LevelsForm LowLevelsForm;
+
+    /// <summary>Levels form used by the broad-spectrum Average activity consumer.</summary>
+    public LevelsForm ActivityLevelsForm;
+
+    /// <summary>Selected-form Low threshold for qualifying an open On Beat window.</summary>
+    [Range(0f, 1f)] public float LowPresenceThreshold;
+
+    /// <summary>Selected-form Average Levels range mapped from minimum to full broad-spectrum activity.</summary>
     public FloatRange ActivityLevel;
 
-    /// <summary>Drop-flash decay length in bars.</summary>
-    [Min(1)] public int DropFadeBars;
+    /// <summary>Continuous growth multiplier at minimum selected-form Average activity.</summary>
+    [Min(0f)] public float QuietGrowthMultiplier;
+
+    /// <summary>Continuous pace at Low and High Energy; Mid uses the range midpoint.</summary>
+    public FloatRange EnergyPace;
 
     /// <summary>Peak luminance gain on the Drop wavefront.</summary>
     [Min(0f)] public float DropFlashBrightness;
@@ -1145,11 +1262,8 @@ public sealed class CrystalGrowthSyncSettings
     /// <summary>Depth of the Drop sixteenth strobe.</summary>
     [Range(0f, 1f)] public float DropStrobeDepth;
 
-    /// <summary>Seed count planted on a qualifying Drop sixteenth.</summary>
+    /// <summary>Maximum seed count planted on a Drop sixteenth, scaled by the Grid-bound Drop amount.</summary>
     [Min(0)] public int DropSeedBurst;
-
-    /// <summary>Drop envelope threshold above which sixteenth seed bursts fire.</summary>
-    [Range(0f, 1f)] public float DropSeedBurstThreshold;
 
     /// <summary>Fraction of base spread held back at a full Fill.</summary>
     [Range(0f, 1f)] public float FillHoldback;
@@ -1157,11 +1271,11 @@ public sealed class CrystalGrowthSyncSettings
     /// <summary>Whole-field luminance swell at a full Fill.</summary>
     [Min(0f)] public float FillSwell;
 
-    /// <summary>Brightness floor while smoothed average Levels are fully active.</summary>
+    /// <summary>Brightness floor while selected-form Average Levels are at full activity.</summary>
     [Range(0f, 1f)] public float DrivingBrightnessFloor;
 
-    /// <summary>Seed-count range interpolated from the strength of a detected bass kick.</summary>
-    public FloatRange KickSeedBurst;
+    /// <summary>Seed-count range interpolated from Crystal Growth's remapped Low presence.</summary>
+    public FloatRange LowSeedBurst;
 
     /// <summary>Extra seed count added on beat one of a bar.</summary>
     [Min(0)] public int DownbeatSeedBonus;
@@ -1199,12 +1313,6 @@ public sealed class CrystalGrowthSyncSettings
     /// <summary>Per-activation range for the beat-driven spread-surge multiplier.</summary>
     public FloatRange BeatSurge;
 
-    /// <summary>
-    /// Initial seed-interval range for a Synced activation; subsequent idle seeds use
-    /// <see cref="IdleSeedInterval"/>.
-    /// </summary>
-    public FloatRange SeedInterval;
-
     /// <summary>Front heat at which the crystal tip begins whitening.</summary>
     public float TipThreshold;
 
@@ -1228,13 +1336,20 @@ public sealed class CrystalGrowthSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        KickThreshold = source.KickThreshold;
+        LowLevelsForm = source.LowLevelsForm;
+        ActivityLevelsForm = source.ActivityLevelsForm;
+        LowPresenceThreshold = source.LowPresenceThreshold;
         ActivityLevel = new FloatRange(
             source.ActivityLevel.Min,
             source.ActivityLevel.Max,
             source.ActivityLevel.LowRail,
             source.ActivityLevel.HighRail);
-        DropFadeBars = source.DropFadeBars;
+        QuietGrowthMultiplier = source.QuietGrowthMultiplier;
+        EnergyPace = new FloatRange(
+            source.EnergyPace.Min,
+            source.EnergyPace.Max,
+            source.EnergyPace.LowRail,
+            source.EnergyPace.HighRail);
         DropFlashBrightness = source.DropFlashBrightness;
         DropFlashSpread = source.DropFlashSpread;
         DropFlashSeeds = source.DropFlashSeeds;
@@ -1246,15 +1361,14 @@ public sealed class CrystalGrowthSyncSettings
         DropRatchetSpread = source.DropRatchetSpread;
         DropStrobeDepth = source.DropStrobeDepth;
         DropSeedBurst = source.DropSeedBurst;
-        DropSeedBurstThreshold = source.DropSeedBurstThreshold;
         FillHoldback = source.FillHoldback;
         FillSwell = source.FillSwell;
         DrivingBrightnessFloor = source.DrivingBrightnessFloor;
-        KickSeedBurst = new FloatRange(
-            source.KickSeedBurst.Min,
-            source.KickSeedBurst.Max,
-            source.KickSeedBurst.LowRail,
-            source.KickSeedBurst.HighRail);
+        LowSeedBurst = new FloatRange(
+            source.LowSeedBurst.Min,
+            source.LowSeedBurst.Max,
+            source.LowSeedBurst.LowRail,
+            source.LowSeedBurst.HighRail);
         DownbeatSeedBonus = source.DownbeatSeedBonus;
         HeatEpsilon = source.HeatEpsilon;
         FrontPush = source.FrontPush;
@@ -1279,11 +1393,6 @@ public sealed class CrystalGrowthSyncSettings
             source.BeatSurge.Max,
             source.BeatSurge.LowRail,
             source.BeatSurge.HighRail);
-        SeedInterval = new FloatRange(
-            source.SeedInterval.Min,
-            source.SeedInterval.Max,
-            source.SeedInterval.LowRail,
-            source.SeedInterval.HighRail);
         TipThreshold = source.TipThreshold;
         TipWhitenAmount = source.TipWhitenAmount;
         BloomCountBase = source.BloomCountBase;

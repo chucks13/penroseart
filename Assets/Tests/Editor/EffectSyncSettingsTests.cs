@@ -1368,9 +1368,12 @@ public sealed class EffectSyncSettingsTests
         var asset = (CrystalGrowthSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
             typeof(CrystalGrowth),
             TempAssetFolder);
-        asset.Settings.KickThreshold = 0.9f;
+        asset.Settings.LowLevelsForm = CrystalGrowthSyncSettings.LevelsForm.Peak;
+        asset.Settings.ActivityLevelsForm = CrystalGrowthSyncSettings.LevelsForm.Smoothed;
+        asset.Settings.LowPresenceThreshold = 0.9f;
         asset.Settings.ActivityLevel = new FloatRange(0.1f, 0.8f, 0.05f, 0.9f);
-        asset.Settings.DropFadeBars = 7;
+        asset.Settings.QuietGrowthMultiplier = 0.6f;
+        asset.Settings.EnergyPace = new FloatRange(0.2f, 1.8f, 0.1f, 1.9f);
         asset.Settings.DropFlashBrightness = 4f;
         asset.Settings.DropFlashSpread = 5f;
         asset.Settings.DropFlashSeeds = 6;
@@ -1378,11 +1381,10 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropRatchetSpread = 8f;
         asset.Settings.DropStrobeDepth = 0.2f;
         asset.Settings.DropSeedBurst = 9;
-        asset.Settings.DropSeedBurstThreshold = 0.7f;
         asset.Settings.FillHoldback = 0.3f;
         asset.Settings.FillSwell = 1.4f;
         asset.Settings.DrivingBrightnessFloor = 0.4f;
-        asset.Settings.KickSeedBurst = new FloatRange(4f, 10f, 3f, 11f);
+        asset.Settings.LowSeedBurst = new FloatRange(4f, 10f, 3f, 11f);
         asset.Settings.DownbeatSeedBonus = 5;
         asset.Settings.HeatEpsilon = 0.21f;
         asset.Settings.FrontPush = 0.22f;
@@ -1395,7 +1397,6 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.SpreadPerSec = new FloatRange(29f, 30f, 28f, 31f);
         asset.Settings.LeakPerSec = new FloatRange(0.32f, 0.33f, 0.31f, 0.34f);
         asset.Settings.BeatSurge = new FloatRange(35f, 36f, 34f, 37f);
-        asset.Settings.SeedInterval = new FloatRange(0.38f, 0.39f, 0.37f, 0.4f);
         asset.Settings.TipThreshold = 0.41f;
         asset.Settings.TipWhitenAmount = 0.42f;
         asset.Settings.BloomCountBase = 43;
@@ -1404,9 +1405,12 @@ public sealed class EffectSyncSettingsTests
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(CrystalGrowth), TempAssetFolder);
 
         var defaults = CrystalGrowth.SyncDefaults;
-        Assert.That(asset.Settings.KickThreshold, Is.EqualTo(defaults.KickThreshold));
+        Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
+        Assert.That(asset.Settings.ActivityLevelsForm, Is.EqualTo(defaults.ActivityLevelsForm));
+        Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
         AssertFloatRangeEqual(asset.Settings.ActivityLevel, defaults.ActivityLevel);
-        Assert.That(asset.Settings.DropFadeBars, Is.EqualTo(defaults.DropFadeBars));
+        Assert.That(asset.Settings.QuietGrowthMultiplier, Is.EqualTo(defaults.QuietGrowthMultiplier));
+        AssertFloatRangeEqual(asset.Settings.EnergyPace, defaults.EnergyPace);
         Assert.That(asset.Settings.DropFlashBrightness, Is.EqualTo(defaults.DropFlashBrightness));
         Assert.That(asset.Settings.DropFlashSpread, Is.EqualTo(defaults.DropFlashSpread));
         Assert.That(asset.Settings.DropFlashSeeds, Is.EqualTo(defaults.DropFlashSeeds));
@@ -1414,11 +1418,10 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropRatchetSpread, Is.EqualTo(defaults.DropRatchetSpread));
         Assert.That(asset.Settings.DropStrobeDepth, Is.EqualTo(defaults.DropStrobeDepth));
         Assert.That(asset.Settings.DropSeedBurst, Is.EqualTo(defaults.DropSeedBurst));
-        Assert.That(asset.Settings.DropSeedBurstThreshold, Is.EqualTo(defaults.DropSeedBurstThreshold));
         Assert.That(asset.Settings.FillHoldback, Is.EqualTo(defaults.FillHoldback));
         Assert.That(asset.Settings.FillSwell, Is.EqualTo(defaults.FillSwell));
         Assert.That(asset.Settings.DrivingBrightnessFloor, Is.EqualTo(defaults.DrivingBrightnessFloor));
-        AssertFloatRangeEqual(asset.Settings.KickSeedBurst, defaults.KickSeedBurst);
+        AssertFloatRangeEqual(asset.Settings.LowSeedBurst, defaults.LowSeedBurst);
         Assert.That(asset.Settings.DownbeatSeedBonus, Is.EqualTo(defaults.DownbeatSeedBonus));
         Assert.That(asset.Settings.HeatEpsilon, Is.EqualTo(defaults.HeatEpsilon));
         Assert.That(asset.Settings.FrontPush, Is.EqualTo(defaults.FrontPush));
@@ -1431,7 +1434,6 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.SpreadPerSec, defaults.SpreadPerSec);
         AssertFloatRangeEqual(asset.Settings.LeakPerSec, defaults.LeakPerSec);
         AssertFloatRangeEqual(asset.Settings.BeatSurge, defaults.BeatSurge);
-        AssertFloatRangeEqual(asset.Settings.SeedInterval, defaults.SeedInterval);
         Assert.That(asset.Settings.TipThreshold, Is.EqualTo(defaults.TipThreshold));
         Assert.That(asset.Settings.TipWhitenAmount, Is.EqualTo(defaults.TipWhitenAmount));
         Assert.That(asset.Settings.BloomCountBase, Is.EqualTo(defaults.BloomCountBase));
