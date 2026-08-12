@@ -15,14 +15,20 @@ MonoBehaviour:
   effectTypeName: CrystalGrowth
   settings:
     KickThreshold: 0.33333334
-    QuietEnergy: 0.233
-    ActiveEnergy: 0.433
+    ActivityLevel:
+      Min: 0.233
+      Max: 0.433
+      LowRail: 0.233
+      HighRail: 0.433
     DropFadeBars: 2
     DropFlashBrightness: 1.2
     DropFlashSpread: 1.5
     DropFlashSeeds: 3
-    IdleSeedIntervalMin: 0.5
-    IdleSeedIntervalMax: 0.9
+    IdleSeedInterval:
+      Min: 0.5
+      Max: 0.9
+      LowRail: 0.5
+      HighRail: 0.9
     DropRatchetSpread: 4
     DropStrobeDepth: 0.9
     DropSeedBurst: 12
@@ -30,6 +36,45 @@ MonoBehaviour:
     FillHoldback: 0.65
     FillSwell: 0.35
     DrivingBrightnessFloor: 0.8
-    KickBurstMin: 2
-    KickBurstMax: 6
+    KickSeedBurst:
+      Min: 2
+      Max: 6
+      LowRail: 2
+      HighRail: 6
     DownbeatSeedBonus: 2
+    HeatEpsilon: 0.01
+    FrontPush: 0.95
+    CoverageToAdvance: 0.85
+    MaxFrontPassesPerFrame: 6
+    CrystalFloor: 0.5
+    HueRelaxPerSec: 0.6
+    HueRelaxMaxPerFrame: 0.5
+    GoldenStep: 0.618034
+    SpreadPerSec:
+      Min: 12
+      Max: 20
+      LowRail: 12
+      HighRail: 20
+    LeakPerSec:
+      Min: 0.22
+      Max: 0.5
+      LowRail: 0.22
+      HighRail: 0.5
+    BeatSurge:
+      Min: 1.5
+      Max: 3.5
+      LowRail: 1.5
+      HighRail: 3.5
+    SeedInterval:
+      Min: 0.18
+      Max: 0.35
+      LowRail: 0.18
+      HighRail: 0.35
+    TipThreshold: 0.8
+    TipWhitenAmount: 0.5
+    BloomCountBase: 3
+    BloomCountOffset:
+      MinInclusive: 0
+      MaxExclusive: 3
+      LowRail: 0
+      HighRail: 3
