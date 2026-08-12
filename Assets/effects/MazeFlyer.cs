@@ -114,16 +114,14 @@ public class MazeFlyer : EffectBase
     /// Authored shade floor of the camera headlight at full grazing incidence. Faces struck
     /// square-on keep their full axis shade; faces seen edge-on dim toward this floor, so a long
     /// corridor wall picks up a smooth bright-to-dark ramp instead of one flat tone. The headlight
-    /// is purely angular — distance falloff is the fog's job. First-audition value pending wall
-    /// judgment.
+    /// is purely angular — distance falloff is the fog's job.
     /// </summary>
     private const float StandaloneHeadlightMinShade = 0.5f;
 
     /// <summary>
     /// Authored density of the squared-exponential fog curve over the normalized ray distance.
     /// The squared curve keeps near walls bright and crushes the sub-tile far field toward black,
-    /// unlike the linear fade it replaced, which compressed midrange contrast. First-audition
-    /// value pending wall judgment.
+    /// unlike the linear fade it replaced, which compressed midrange contrast.
     /// </summary>
     private const float StandaloneFogDensity = 2.5f;
 
@@ -133,14 +131,13 @@ public class MazeFlyer : EffectBase
     /// constant thickness at every depth: near faces get crisp lines instead of swollen bands,
     /// and far faces keep a band wide enough to register on a point-sampled tile. Edge lines
     /// draw the voxel lattice onto wall faces so corridor geometry reads at the wall's 900-tile
-    /// resolution. First-audition value pending wall judgment.
+    /// resolution.
     /// </summary>
     private const float StandaloneEdgeLineThicknessTiles = 0.7f;
 
     /// <summary>
     /// Authored shade multiplier at the very edge of a voxel face, ramping linearly back to 1
-    /// across <see cref="StandaloneEdgeLineThicknessTiles"/>. First-audition value pending wall
-    /// judgment.
+    /// across <see cref="StandaloneEdgeLineThicknessTiles"/>.
     /// </summary>
     private const float StandaloneEdgeLineShade = 0.25f;
 
@@ -148,7 +145,6 @@ public class MazeFlyer : EffectBase
     /// Authored scale of the rotated-grid supersample pattern, in tile-center units; 0.7 spans
     /// roughly one tile pitch, so the four rays cover the tile's footprint rather than its center
     /// point. Smaller sharpens toward point sampling; larger blurs across neighboring tiles.
-    /// First-audition value pending wall judgment.
     /// </summary>
     private const float StandaloneRaySampleSpread = 0.7f;
 
@@ -156,7 +152,7 @@ public class MazeFlyer : EffectBase
     /// Authored minimum HSV value for colors rolled from the shared palette. Palettes may carry
     /// dark entries, and face shading and fog only multiply downward from the rolled color, so a
     /// dark roll reads as an unlit wall. The floor lifts value while keeping the entry's hue and
-    /// saturation. First-audition value pending wall judgment.
+    /// saturation.
     /// </summary>
     private const float StandaloneSharedPaletteMinValue = 0.8f;
 
@@ -281,26 +277,23 @@ public class MazeFlyer : EffectBase
     /// <summary>
     /// Authored flight speed while the phrase-scoped energy state reads Low. The energy-state
     /// speeds replace the Standalone speed roll in Synced Mode; the real-time Levels play no
-    /// part in speed. First-audition value pending wall judgment.
+    /// part in speed.
     /// </summary>
     private const float SyncLowEnergyFlightSpeed = 1.0f;
 
     /// <summary>
-    /// Authored flight speed while the phrase-scoped energy state reads Mid. First-audition
-    /// value pending wall judgment.
+    /// Authored flight speed while the phrase-scoped energy state reads Mid.
     /// </summary>
     private const float SyncMidEnergyFlightSpeed = 1.6f;
 
     /// <summary>
-    /// Authored flight speed while the phrase-scoped energy state reads High. First-audition
-    /// value pending wall judgment.
+    /// Authored flight speed while the phrase-scoped energy state reads High.
     /// </summary>
     private const float SyncHighEnergyFlightSpeed = 2.25f;
 
     /// <summary>
     /// Authored SmoothDamp time constant, in seconds, easing the flight speed between energy
-    /// tier plateaus so a phrase change never jerks the flight. First-audition value pending
-    /// wall judgment.
+    /// tier plateaus so a phrase change never jerks the flight.
     /// </summary>
     private const float SyncFlightSpeedSmoothTime = 2.0f;
 
@@ -308,7 +301,6 @@ public class MazeFlyer : EffectBase
     /// Authored ramp window, in beats, for the beat-locked speed glide. Once the announced next
     /// energy state is this close, the speed target slides from the current tier's speed toward
     /// the next tier's, arriving as the phrase boundary lands instead of trailing it.
-    /// First-audition value pending wall judgment.
     /// </summary>
     private const int SyncEnergyFlightSpeedRampBeats = 8;
 
@@ -316,22 +308,20 @@ public class MazeFlyer : EffectBase
     /// Authored wind-down, in beats, over which the flight falls to a dead stop ahead of an
     /// announced Drop landing. The stop completes <see cref="SyncDropSitBeats"/> before the
     /// landing, and the wind-down is intra-beat smooth via BeatManager's continuous Drop
-    /// approach envelope. First-audition value pending wall judgment.
+    /// approach envelope.
     /// </summary>
     private const int SyncDropStopBeats = 4;
 
     /// <summary>
     /// Authored hold, in beats, that the flight sits parked at the dead stop before the Drop
-    /// lands — the held breath between the wind-down and the launch. First-audition value
-    /// pending wall judgment.
+    /// lands — the held breath between the wind-down and the launch.
     /// </summary>
     private const int SyncDropSitBeats = 2;
 
     /// <summary>
     /// Authored speed multiplier at the instant a Drop lands. The launch decays back to 1 across
     /// the phrase-relative 16-beat timing-grid cycle, so the drop hits at full boost and glides
-    /// back to the energy-tier cruise over the full grid. First-audition value pending wall
-    /// judgment.
+    /// back to the energy-tier cruise over the full grid.
     /// </summary>
     private const float SyncDropLaunchMultiplier = 2.5f;
 
@@ -339,7 +329,6 @@ public class MazeFlyer : EffectBase
     /// Authored strength of the Fill edge inversion: each eighth-note pulse pumps the voxel
     /// lattice from dark lines on lit faces toward glowing lines on darkened faces while a
     /// synced Fill runs. One is a full flip at each pulse peak; zero disables the response.
-    /// First-audition value pending wall judgment.
     /// </summary>
     private const float SyncFillEdgeInversion = 1.0f;
 
@@ -347,7 +336,7 @@ public class MazeFlyer : EffectBase
     /// Authored brightness multiplier of the lattice lines at full Fill inversion. Above 1 the
     /// inverted wireframe overdrives brighter than any normal face, so the flip adds light to
     /// the wall instead of only removing it — a plain endpoint swap dims the whole picture and
-    /// reads as a fade, not an event. First-audition value pending wall judgment.
+    /// reads as a fade, not an event.
     /// </summary>
     private const float SyncFillLineGlow = 2.0f;
 
@@ -356,7 +345,7 @@ public class MazeFlyer : EffectBase
     /// rides the launch envelope — fastest at the hit, settling with the speed across the
     /// 16-beat grid — and the look-ahead turning levels the camera naturally as it fades. It
     /// replaces the retired Fill camera roll, whose per-frame accumulation spun uncontrolled
-    /// whenever the flight froze. First-audition value pending wall judgment.
+    /// whenever the flight froze.
     /// </summary>
     private const float SyncDropCameraSpinSpeed = 90f;
 
@@ -646,7 +635,7 @@ public class MazeFlyer : EffectBase
         // Tile centers are copied out of the tile metadata objects into one contiguous array so
         // the per-tile loop reads sequential memory instead of chasing 900 heap references every
         // frame. Only invariant geometry is cached; live settings stay at their frame consumers.
-        if (tileCenters == null || tileCenters.Length != tiles.Length)
+        if (tileCenters == null)
         {
             tileCenters = new Vector2[tiles.Length];
             for (int i = 0; i < tiles.Length; i++)
@@ -678,7 +667,16 @@ public class MazeFlyer : EffectBase
     };
 
     /// <summary>
-    /// Tile centers copied from <see cref="EffectBase.tiles"/> into one contiguous array per
+    /// <see cref="RaySampleOffsets"/> scaled by the live sample spread once per frame. The array
+    /// is allocated with the Effect so rebuilding it in <see cref="Draw"/> creates no garbage.
+    /// </summary>
+    private readonly Vector2[] scaledSampleOffsets = new Vector2[RaySampleOffsets.Length];
+
+    /// <summary>Equal contribution of each rotated-grid ray to its tile's final color.</summary>
+    private static readonly float RaySampleWeight = 1.0f / RaySampleOffsets.Length;
+
+    /// <summary>
+    /// Tile centers copied from <see cref="EffectBase.tiles"/> into one contiguous array on first
     /// activation. Tile geometry is static, but the metadata objects live scattered on the heap;
     /// the copy keeps the hot per-tile loop on sequential memory.
     /// </summary>
@@ -737,7 +735,6 @@ public class MazeFlyer : EffectBase
     {
         UpdateCameraNavigation(effectDelta);
 
-        // Check if beat tracking is active via the boolean flag
         bool isBeatSynced = beatManager.IsSynced;
 
         // On Beat low pulse: while any musical count's quarter-beat gate is open and the smoothed
@@ -763,6 +760,9 @@ public class MazeFlyer : EffectBase
 
         // Everything invariant across the frame's rays is computed exactly once here, and the
         // camera basis is pre-scaled so each ray assembles its direction from component math alone.
+        float focalLength = ActiveSetting(
+            standaloneSettings.CameraFocalLength,
+            SyncSettings.CameraFocalLength);
         TraceFrame frame = new TraceFrame
         {
             MaxRayDistance = ActiveSetting(
@@ -778,23 +778,23 @@ public class MazeFlyer : EffectBase
             MinBrightness = ActiveSetting(standaloneSettings.MinBrightness, SyncSettings.MinBrightness),
             EdgeBandScale = ActiveSetting(
                 standaloneSettings.EdgeLineThicknessTiles,
-                SyncSettings.EdgeLineThicknessTiles) / ActiveSetting(
-                standaloneSettings.CameraFocalLength,
-                SyncSettings.CameraFocalLength),
+                SyncSettings.EdgeLineThicknessTiles) / focalLength,
             EdgeLineShade = ActiveSetting(standaloneSettings.EdgeLineShade, SyncSettings.EdgeLineShade),
             FillLineGlow = SyncSettings.FillLineGlow,
         };
 
-        Vector3 forwardScaled = cameraRot * Vector3.forward * ActiveSetting(
-            standaloneSettings.CameraFocalLength,
-            SyncSettings.CameraFocalLength);
+        Vector3 forwardScaled = cameraRot * Vector3.forward * focalLength;
         Vector3 cameraRight = cameraRot * Vector3.right;
         Vector3 cameraUp = cameraRot * Vector3.up;
 
-        float sampleWeight = 1.0f / RaySampleOffsets.Length;
         float raySampleSpread = ActiveSetting(
             standaloneSettings.RaySampleSpread,
             SyncSettings.RaySampleSpread);
+        for (int i = 0; i < RaySampleOffsets.Length; i++)
+        {
+            scaledSampleOffsets[i] = RaySampleOffsets[i] * raySampleSpread;
+        }
+
         Vector3 rayOrigin = cameraPos;
 
         for (int i = 0; i < buffer.Length; i++)
@@ -802,9 +802,8 @@ public class MazeFlyer : EffectBase
             Vector2 center = tileCenters[i];
 
             float r = 0f, g = 0f, b = 0f;
-            foreach (Vector2 sampleOffset in RaySampleOffsets)
+            foreach (Vector2 offset in scaledSampleOffsets)
             {
-                Vector2 offset = sampleOffset * raySampleSpread;
                 float sx = center.x + offset.x;
                 float sy = center.y + offset.y;
 
@@ -823,7 +822,11 @@ public class MazeFlyer : EffectBase
                 b += sample.b;
             }
 
-            buffer[i] = new Color(r * sampleWeight, g * sampleWeight, b * sampleWeight, 1.0f);
+            buffer[i] = new Color(
+                r * RaySampleWeight,
+                g * RaySampleWeight,
+                b * RaySampleWeight,
+                1.0f);
         }
     }
 
@@ -832,6 +835,10 @@ public class MazeFlyer : EffectBase
     /// <summary>Populates the voxel grid, coloring filled cells by the rolled color mode.</summary>
     private void GenerateVoxelGrid()
     {
+        float occupancyProbability = ActiveSetting(
+            standaloneSettings.RandomCellOccupancyProbability,
+            SyncSettings.RandomCellOccupancyProbability);
+
         // The column-unit modes roll their colors up front, one per vertical (x, z) column.
         if (activeColorMode is ColorMode.PureRandom or ColorMode.CuratedPalette or ColorMode.SharedPalette)
         {
@@ -858,9 +865,7 @@ public class MazeFlyer : EffectBase
                     // threshold. Guaranteed even-lattice cells short-circuit before that roll, so they
                     // consume no Random.value and retain the original mode-specific roll order.
                     int index = VoxelIndex(x, y, z);
-                    if (onEvenLattice || Random.value < ActiveSetting(
-                        standaloneSettings.RandomCellOccupancyProbability,
-                        SyncSettings.RandomCellOccupancyProbability))
+                    if (onEvenLattice || Random.value < occupancyProbability)
                     {
                         voxelSolid[index] = true;
                         voxelColors[index] = GetVoxelColor(x, y, z);
@@ -900,6 +905,9 @@ public class MazeFlyer : EffectBase
                 int blockSize = ActiveSetting(
                     standaloneSettings.BlockRegionsSize,
                     SyncSettings.BlockRegionsSize);
+                FloatRange hueJitter = ActiveSetting(
+                    standaloneSettings.BlockRegionsHueJitter,
+                    SyncSettings.BlockRegionsHueJitter);
                 int blockX = x / blockSize;
                 int blockY = y / blockSize;
                 int blockZ = z / blockSize;
@@ -911,8 +919,8 @@ public class MazeFlyer : EffectBase
                 float blockHue = (
                     baseHue +
                     Random.Range(
-                        ActiveSetting(standaloneSettings.BlockRegionsHueJitter, SyncSettings.BlockRegionsHueJitter).Min,
-                        ActiveSetting(standaloneSettings.BlockRegionsHueJitter, SyncSettings.BlockRegionsHueJitter).Max) +
+                        hueJitter.Min,
+                        hueJitter.Max) +
                     1.0f) % 1.0f;
                 return Color.HSVToRGB(
                     blockHue,
@@ -1136,6 +1144,7 @@ public class MazeFlyer : EffectBase
         // itself skips the wrap check, because the landing restarts the grid and that restart
         // would otherwise read as the wrap that ends the launch it just began.
         bool dropActive = beatManager.Drop.Active;
+        int? gridBeat = beatManager.Grid.Beat;
         bool justLanded = dropActive && !wasDropActive;
         wasDropActive = dropActive;
         if (justLanded)
@@ -1144,12 +1153,12 @@ public class MazeFlyer : EffectBase
         }
         else if (dropLaunchArmed
             && previousGridBeat is { } previous
-            && beatManager.Grid.Beat is { } current
+            && gridBeat is { } current
             && current < previous)
         {
             dropLaunchArmed = false;
         }
-        previousGridBeat = beatManager.Grid.Beat;
+        previousGridBeat = gridBeat;
 
         // The stop profile spans the wind-down plus the sit before the landing: the flight
         // falls continuously to a dead stop across DropStopBeats, sits parked through the
@@ -1279,7 +1288,7 @@ public class MazeFlyer : EffectBase
     }
 
     /// <summary>
-    /// Executes 3D DDA voxel ray stepping with audio-driven spatial recoil, returning the color of
+    /// Executes 3D DDA voxel ray stepping, returning the color of
     /// the first filled voxel — face-shaded, headlight-dimmed by grazing incidence, edge-lined at
     /// the frame's Fill inversion weight, squared-exponentially fogged, and scaled by the frame's
     /// On Beat brightness pulse — or black past the fog range. Runs 3,600 times per frame; every
@@ -1309,8 +1318,8 @@ public class MazeFlyer : EffectBase
 
         float distanceTraveled = 0f;
 
-        // A ray that starts inside a filled voxel (possible when the pulse displaces the origin)
-        // shades as an X-axis face.
+        // The camera moves only through empty cells, so the first DDA step replaces this initial
+        // value before a filled cell can be hit.
         Axis hitAxis = Axis.X;
 
         while (distanceTraveled < frame.MaxRayDistance)
@@ -1323,7 +1332,7 @@ public class MazeFlyer : EffectBase
             {
                 Color voxelColor = voxelColors[index];
 
-                // Shading calculations with audio peak boost
+                // Resolve the base shade from the axis of the face the ray entered.
                 float baseShade = hitAxis switch
                 {
                     Axis.X => frame.XAxisFaceShade,
@@ -1573,11 +1582,8 @@ public sealed class MazeFlyerStandaloneSettings
     /// <summary>Minimum HSV value for colors rolled from the shared palette.</summary>
     public float SharedPaletteMinValue;
 
-    /// <summary>
-    /// Brightness the darkest traced surface maps to. Lifts the whole picture out of the dark
-    /// without changing the fog curve; 0 leaves the trace exactly as it was.
-    /// </summary>
-    [Tooltip("Brightness the darkest traced surface maps to. Lifts the whole effect out of the dark without touching the fog. 0 disables it.")]
+    /// <summary>Minimum traced-surface brightness; zero leaves the rendering unchanged.</summary>
+    [Tooltip("Minimum traced-surface brightness. 0 leaves the rendering unchanged.")]
     [Range(0f, 1f)]
     public float MinBrightness;
 
@@ -1713,11 +1719,8 @@ public sealed class MazeFlyerSyncSettings
     /// <summary>Minimum HSV value for colors rolled from the shared palette.</summary>
     public float SharedPaletteMinValue;
 
-    /// <summary>
-    /// Brightness the darkest traced surface maps to. Lifts the whole picture out of the dark
-    /// without changing the fog curve; 0 leaves the trace exactly as it was.
-    /// </summary>
-    [Tooltip("Brightness the darkest traced surface maps to. Lifts the whole effect out of the dark without touching the fog. 0 disables it.")]
+    /// <summary>Minimum traced-surface brightness; zero leaves the rendering unchanged.</summary>
+    [Tooltip("Minimum traced-surface brightness. 0 leaves the rendering unchanged.")]
     [Range(0f, 1f)]
     public float MinBrightness;
 
@@ -1738,10 +1741,7 @@ public sealed class MazeFlyerSyncSettings
     [Range(0f, 2f)]
     public float OnBeatBrightnessPulse;
 
-    /// <summary>
-    /// Flight speed while the phrase-scoped energy state reads Low. The energy-state speeds
-    /// replace the Standalone speed roll in Synced Mode; the real-time Levels play no part.
-    /// </summary>
+    /// <summary>Flight speed while the phrase-scoped Energy state reads Low.</summary>
     [Tooltip("Flight speed (voxels/sec) while the phrase-scoped energy state is Low.")]
     [Min(0f)]
     public float LowEnergyFlightSpeed;
@@ -1756,27 +1756,18 @@ public sealed class MazeFlyerSyncSettings
     [Min(0f)]
     public float HighEnergyFlightSpeed;
 
-    /// <summary>
-    /// SmoothDamp time constant, in seconds, easing the flight speed between energy tier
-    /// plateaus so a phrase change never jerks the flight.
-    /// </summary>
-    [Tooltip("Seconds of SmoothDamp easing between energy tier speeds. Higher = gentler ramps.")]
+    /// <summary>SmoothDamp time constant, in seconds, for flight-speed changes between Energy tiers.</summary>
+    [Tooltip("Flight-speed SmoothDamp time, in seconds.")]
     [Range(0.1f, 5f)]
     public float FlightSpeedSmoothTime;
 
-    /// <summary>
-    /// Ramp window, in beats, for the beat-locked speed glide toward the announced next energy
-    /// state's tier speed.
-    /// </summary>
-    [Tooltip("Beats before an announced energy-state change over which speed glides to the next tier's speed.")]
+    /// <summary>Ramp window, in beats, for the glide toward the announced next Energy tier.</summary>
+    [Tooltip("Energy-tier flight-speed ramp window, in beats.")]
     [Range(1, 32)]
     public int EnergyFlightSpeedRampBeats;
 
-    /// <summary>
-    /// Wind-down, in beats, over which the flight falls to a dead stop; the stop completes
-    /// <see cref="DropSitBeats"/> before the announced Drop landing.
-    /// </summary>
-    [Tooltip("Beats of wind-down to a dead stop, completing DropSitBeats before the Drop lands.")]
+    /// <summary>Wind-down duration, in beats, before the pre-Drop sit.</summary>
+    [Tooltip("Drop wind-down duration, in beats.")]
     [Range(1, 16)]
     public int DropStopBeats;
 
@@ -1785,19 +1776,13 @@ public sealed class MazeFlyerSyncSettings
     [Range(0, 8)]
     public int DropSitBeats;
 
-    /// <summary>
-    /// Speed multiplier at the instant a Drop lands, decaying back to 1 across the 16-beat
-    /// timing-grid cycle.
-    /// </summary>
-    [Tooltip("Speed multiplier at the Drop landing, decaying back to 1 over the 16-beat grid. 1 disables the launch.")]
+    /// <summary>Flight-speed multiplier at the Drop landing; one disables the launch.</summary>
+    [Tooltip("Flight-speed multiplier at the Drop landing. 1 disables the launch.")]
     [Min(1f)]
     public float DropLaunchMultiplier;
 
-    /// <summary>
-    /// Strength of the Fill edge inversion: each eighth-note pulse pumps the voxel lattice from
-    /// dark lines on lit faces toward glowing lines on darkened faces. Zero disables the response.
-    /// </summary>
-    [Tooltip("Eighth-note edge inversion strength during a synced Fill. 1 fully flips the lattice at each pulse peak; 0 disables.")]
+    /// <summary>Strength of the eighth-note Fill edge inversion; zero disables the response.</summary>
+    [Tooltip("Eighth-note Fill edge-inversion strength. 0 disables the response.")]
     [Range(0f, 1f)]
     public float FillEdgeInversion;
 
@@ -1806,11 +1791,8 @@ public sealed class MazeFlyerSyncSettings
     [Min(1f)]
     public float FillLineGlow;
 
-    /// <summary>
-    /// Camera spin rate, in degrees per second, at the instant a Drop lands, settling with the
-    /// launch across the 16-beat grid. Zero disables the spin.
-    /// </summary>
-    [Tooltip("Camera spin rate at the Drop landing, in degrees per second, settling with the launch over the 16-beat grid. 0 disables.")]
+    /// <summary>Camera spin rate at the Drop landing, in degrees per second; zero disables the spin.</summary>
+    [Tooltip("Drop-landing camera spin rate, in degrees per second. 0 disables the spin.")]
     [Min(0f)]
     public float DropCameraSpinSpeed;
 
