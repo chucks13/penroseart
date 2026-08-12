@@ -8,23 +8,24 @@ using Random = UnityEngine.Random;
 /// Wraps one child effect and mirrors its buffer through Penrose mirror shape groups.
 /// </summary>
 [EffectSyncSettings(typeof(MirrorSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(MirrorStandaloneSettingsAsset))]
 public class Mirror : MixerBase
 {
     // Standalone Defaults
 
     /// <summary>Authored inclusive minimum for Mirror's layout Roll in Standalone Mode.</summary>
-    private const int StandaloneMirrorLayoutRollMinInclusive = 0;
+    private const int StandaloneMirrorLayoutMinInclusive = 0;
 
     /// <summary>Authored exclusive maximum for Mirror's layout Roll in Standalone Mode.</summary>
-    private const int StandaloneMirrorLayoutRollMaxExclusive = 2;
+    private const int StandaloneMirrorLayoutMaxExclusive = 2;
 
     // Sync Defaults
 
     /// <summary>Authored inclusive minimum for Mirror's layout Roll in Synced Mode.</summary>
-    private const int SyncMirrorLayoutRollMinInclusive = 0;
+    private const int SyncMirrorLayoutMinInclusive = 0;
 
     /// <summary>Authored exclusive maximum for Mirror's layout Roll in Synced Mode.</summary>
-    private const int SyncMirrorLayoutRollMaxExclusive = 2;
+    private const int SyncMirrorLayoutMaxExclusive = 2;
 
     /// <summary>
     /// Mirror hands all meta effects to its child, so it reports every Fill, Drop, and Energy capability.
@@ -32,20 +33,27 @@ public class Mirror : MixerBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Mirror's Standalone Defaults.</summary>
-    public static MirrorStandaloneSettings StandaloneSettings => new MirrorStandaloneSettings(
-        StandaloneMirrorLayoutRollMinInclusive,
-        StandaloneMirrorLayoutRollMaxExclusive);
-
-    /// <summary>Resolves a fresh copy of Mirror's file-local Sync Defaults.</summary>
-    public static MirrorSyncSettings SyncDefaults => new MirrorSyncSettings
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate Mirror's authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static MirrorStandaloneSettings StandaloneDefaults => new()
     {
-        MirrorLayoutRollMinInclusive = SyncMirrorLayoutRollMinInclusive,
-        MirrorLayoutRollMaxExclusive = SyncMirrorLayoutRollMaxExclusive,
+        MirrorLayout = new IntRange(
+            StandaloneMirrorLayoutMinInclusive,
+            StandaloneMirrorLayoutMaxExclusive),
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private MirrorStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>Resolves a fresh copy of Mirror's file-local Sync Defaults.</summary>
+    public static MirrorSyncSettings SyncDefaults => new()
+    {
+        MirrorLayout = new IntRange(
+            SyncMirrorLayoutMinInclusive,
+            SyncMirrorLayoutMaxExclusive),
+    };
+
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private MirrorStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private MirrorSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -126,19 +134,18 @@ public class Mirror : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Mirror),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Mirror),
             SyncDefaults);
 
         waveform = waveforms.Random();
-        int mirrorLayoutRollMinInclusive = beatManager.IsSynced
-            ? SyncSettings.MirrorLayoutRollMinInclusive
-            : standaloneSettings.MirrorLayoutRollMinInclusive;
-        int mirrorLayoutRollMaxExclusive = beatManager.IsSynced
-            ? SyncSettings.MirrorLayoutRollMaxExclusive
-            : standaloneSettings.MirrorLayoutRollMaxExclusive;
-        mirrorList = Random.Range(mirrorLayoutRollMinInclusive, mirrorLayoutRollMaxExclusive) == 0
+        IntRange mirrorLayout = beatManager.IsSynced
+            ? SyncSettings.MirrorLayout
+            : standaloneSettings.MirrorLayout;
+        mirrorList = Random.Range(mirrorLayout.MinInclusive, mirrorLayout.MaxExclusive) == 0
             ? penrose.Layout.shapes.Mirror2
             : penrose.Layout.shapes.Mirror10;
         fixCenterLineInit();
@@ -187,32 +194,35 @@ public class Mirror : MixerBase
 
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce Mirror's authored no-music look.</summary>
+/// <summary>The serializable value shape shared by Mirror's Standalone Defaults and saved Standalone Settings.</summary>
+[Serializable]
 public sealed class MirrorStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from Mirror's file-local defaults.</summary>
-    public MirrorStandaloneSettings(int mirrorLayoutRollMinInclusive, int mirrorLayoutRollMaxExclusive)
+    /// <summary>Per-activation range selecting the Mirror2 or Mirror10 layout.</summary>
+    public IntRange MirrorLayout;
+
+    /// <summary>Copies every Mirror Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(MirrorStandaloneSettings source)
     {
-        MirrorLayoutRollMinInclusive = mirrorLayoutRollMinInclusive;
-        MirrorLayoutRollMaxExclusive = mirrorLayoutRollMaxExclusive;
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        MirrorLayout = new IntRange(
+            source.MirrorLayout.MinInclusive,
+            source.MirrorLayout.MaxExclusive,
+            source.MirrorLayout.LowRail,
+            source.MirrorLayout.HighRail);
     }
-
-    /// <summary>Inclusive minimum supplied to the per-activation mirror-layout Roll.</summary>
-    public int MirrorLayoutRollMinInclusive;
-
-    /// <summary>Exclusive maximum supplied to the per-activation mirror-layout Roll.</summary>
-    public int MirrorLayoutRollMaxExclusive;
 }
 
 /// <summary>Editable Synced Mode values saved as Mirror's Sync Settings.</summary>
 [Serializable]
 public sealed class MirrorSyncSettings
 {
-    /// <summary>Inclusive minimum supplied to the per-activation mirror-layout Roll.</summary>
-    [Min(0)] public int MirrorLayoutRollMinInclusive;
-
-    /// <summary>Exclusive maximum supplied to the per-activation mirror-layout Roll.</summary>
-    [Min(1)] public int MirrorLayoutRollMaxExclusive;
+    /// <summary>Per-activation range selecting the Mirror2 or Mirror10 layout.</summary>
+    public IntRange MirrorLayout;
 
     /// <summary>Copies every Mirror Sync Setting from another value.</summary>
     public void CopyFrom(MirrorSyncSettings source)
@@ -222,7 +232,10 @@ public sealed class MirrorSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        MirrorLayoutRollMinInclusive = source.MirrorLayoutRollMinInclusive;
-        MirrorLayoutRollMaxExclusive = source.MirrorLayoutRollMaxExclusive;
+        MirrorLayout = new IntRange(
+            source.MirrorLayout.MinInclusive,
+            source.MirrorLayout.MaxExclusive,
+            source.MirrorLayout.LowRail,
+            source.MirrorLayout.HighRail);
     }
 }
