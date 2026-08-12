@@ -1186,7 +1186,7 @@ public class Angles : EffectBase
             : standaloneSettings.PaletteConditioning;
         conditionedPalette.Refresh(APalette, paletteConditioning);
 
-        float fillProgress = isSynced ? beatManager.Fill.In.Build() : 0f;
+        float fillProgress = beatManager.Fill.In.Build();
         FillTileFields[] activeFillFields = null;
         float fillUnitEnvelopeWidth = 0f;
         float fillContourStrength = 0f;
@@ -1204,12 +1204,9 @@ public class Angles : EffectBase
             fillPartHueSeparation = SyncSettings.FillPartHueSeparation;
         }
         UpdateFillRotationPhase(fillProgress);
-        float dropEnvelope = isSynced
-            ? beatManager.Drop.In.Decay(SyncSettings.DropBeats)
-            : 0f;
-        dropResponseEnvelope = dropEnvelope;
-        UpdateRibbonFlowPhase(dropEnvelope);
-        int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropEnvelope);
+        dropResponseEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropBeats);
+        UpdateRibbonFlowPhase(dropResponseEnvelope);
+        int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropResponseEnvelope);
         float[] activeRibbonPositions = activeRibbonFamilyCount > 0
             ? ribbonPositionByActiveFamilyCount[activeRibbonFamilyCount]
             : null;
@@ -1340,7 +1337,7 @@ public class Angles : EffectBase
                 // would manufacture intermediate RGB values outside the palette; this keeps every
                 // Drop frame a real Angles colour while the Tile returns continuously to its angle.
                 palettePosition = Mathf.Repeat(
-                    palettePosition + (shortestHueDelta * dropEnvelope),
+                    palettePosition + (shortestHueDelta * dropResponseEnvelope),
                     1f);
             }
             Color paletteColor = conditionedPalette.ReadCyclic(

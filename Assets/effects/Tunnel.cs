@@ -251,9 +251,10 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Re-reads the saved Sync Settings so a live wall edit reaches the next frame. It is separate
-    /// from <see cref="Reroll"/> because the Synced Grid follows every settings change without
-    /// re-rolling anything, and the Synced Phrase re-rolls only the shape.
+    /// Resolves the saved Sync Settings once at activation. The provider returns the asset's own
+    /// serialized settings object — a stable reference for the whole run — and live wall edits and
+    /// Restore both copy into that same object, so <see cref="Draw"/> sees every change with no
+    /// re-read. That is why no boundary hook resolves again.
     /// </summary>
     private void ResolveSyncSettings()
     {
@@ -298,15 +299,13 @@ public class Tunnel : EffectBase
     }
 
     /// <summary>
-    /// Re-resolves Sync Settings on every Grid Boundary so live wall tuning keeps taking effect, then
-    /// turns the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it
+    /// Turns the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it
     /// always has. Colour is what the Grid turns over in Synced Mode — the shape moves on the Phrase
     /// instead, so a cadence already following the music through Energy and Duration is not
     /// interrupted every Grid.
     /// </summary>
     protected override void OnNewGrid()
     {
-        ResolveSyncSettings();
         if (beatManager.IsSynced)
         {
             APalette.Change();
@@ -319,15 +318,11 @@ public class Tunnel : EffectBase
 
     /// <summary>
     /// Turns the tunnel's shape over on each new Phrase, the slowest structural boundary the wire
-    /// carries, so the shape changes where the music changes section. It re-resolves Sync Settings
-    /// first rather than relying on <see cref="OnNewGrid"/> having run this frame: the Grid is
-    /// phrase-relative and is expected to restart here, but the shape Roll should follow live wall
-    /// tuning whether or not it does. Standalone Mode never reaches this hook and keeps its Grid
-    /// re-roll.
+    /// carries, so the shape changes where the music changes section. Standalone Mode never reaches
+    /// this hook and keeps its Grid re-roll.
     /// </summary>
     protected override void OnNewPhrase()
     {
-        ResolveSyncSettings();
         RerollShape();
     }
 
@@ -416,30 +411,29 @@ public class Tunnel : EffectBase
     {
         bool isSynced = beatManager.IsSynced;
         float cyclePhase;
+        float cyclePhaseAdvance;
         if (isSynced)
         {
             Duration cycleDuration = CurrentCycleDuration();
-            cyclePhase = SampleSyncedCyclePhase(cycleDuration, out float cyclePhaseAdvance);
-            UpdateFillRush(cyclePhaseAdvance);
-            UpdateDropWarp(cyclePhaseAdvance);
+            cyclePhase = SampleSyncedCyclePhase(cycleDuration, out cyclePhaseAdvance);
         }
         else
         {
             cyclePhase = effectTime * scrollSpeed;
+            cyclePhaseAdvance = 0f;
             // Leaving Synced Mode invalidates the held sample: the next Synced frame must start a
             // fresh one rather than difference against a phase from before the gap.
             hasPreviousSyncedCyclePhase = false;
-            fillEnv = 0f;
-            dropEnv = 0f;
         }
 
+        UpdateFillRush(cyclePhaseAdvance);
+        UpdateDropWarp(cyclePhaseAdvance);
+
         // Fill and Drop are Synced Mode facts, so both envelopes rest at zero in Standalone Mode and
-        // their Sync Settings do not enter the Standalone frame.
-        float ringCompression = isSynced
-            ? 1f +
-                (SyncSettings.FillRingCompression * fillEnv) +
-                (SyncSettings.DropRingCompression * dropEnv)
-            : 1f;
+        // these Sync Settings read through as no compression. That is why the mode is not tested here.
+        float ringCompression = 1f +
+            (SyncSettings.FillRingCompression * fillEnv) +
+            (SyncSettings.DropRingCompression * dropEnv);
 
         float centerScale = isSynced
             ? SyncSettings.CenterScale

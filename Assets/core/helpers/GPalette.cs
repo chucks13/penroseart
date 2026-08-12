@@ -594,8 +594,6 @@ public class AnimPalette
         "000000,330000,660000,990000,CC0000,FF0000,FF3300,FF6600,FF9900,FFCC00,FFFF00,FFFF33,FFFF66,FFFF99,FFFFCC,FFFFFF",
     };
 
-    public static string customSource = "5a2d81,5a2d81,5a2d81,c0c0c0,c0c0c0,63727A,63727A,000000,000000,5a2d81,5a2d81,5a2d81";
-
     /// <summary>Loads the built-in fallback palettes.</summary>
     public AnimPalette()
         : this(string.Empty)
