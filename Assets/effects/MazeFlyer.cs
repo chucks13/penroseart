@@ -253,27 +253,6 @@ public class MazeFlyer : EffectBase
     private const float SyncSharedPaletteMinValue = 0.8f;
 
     /// <summary>
-    /// Authored maximum ray displacement on heavy beat hits. High values produce bigger wall recoil.
-    /// This audio-reactivity control is a beat-feel tuning point. The response is temporarily disabled
-    /// at 0f; the commented suggestion was 0.20f, with a recommended range of 0.05f to 0.40f.
-    /// </summary>
-    private const float SyncWaveformRayRecoilDistance = 0f;
-
-    /// <summary>
-    /// Authored extra brightness boost added to voxel faces on audio peaks. This audio-reactivity control
-    /// is a beat-feel tuning point. The response is temporarily disabled at 0f; the commented suggestion
-    /// was 0.25f, with a recommended range of 0.00f to 0.50f.
-    /// </summary>
-    private const float SyncWaveformFaceBrightnessBoost = 0f;
-
-    /// <summary>
-    /// Authored amount by which fog distance contracts or expands with the rhythm, where 0 means off.
-    /// This audio-reactivity control is a beat-feel tuning point. The response is temporarily disabled
-    /// at 0f; the commented suggestion was 3.0f, with a recommended range of 0.0f to 6.0f.
-    /// </summary>
-    private const float SyncWaveformRayDistanceBoost = 0f;
-
-    /// <summary>
     /// Authored low-band strength that arms the On Beat brightness pulse. Lows are read from
     /// BeatManager's smoothed levels (20 ms attack, 150 ms release), so the gate reacts to a
     /// bass hit within a frame or two without flickering at the threshold.
@@ -440,9 +419,6 @@ public class MazeFlyer : EffectBase
         EdgeLineShade = SyncEdgeLineShade,
         RaySampleSpread = SyncRaySampleSpread,
         SharedPaletteMinValue = SyncSharedPaletteMinValue,
-        WaveformRayRecoilDistance = SyncWaveformRayRecoilDistance,
-        WaveformFaceBrightnessBoost = SyncWaveformFaceBrightnessBoost,
-        WaveformRayDistanceBoost = SyncWaveformRayDistanceBoost,
         OnBeatLowThreshold = SyncOnBeatLowThreshold,
         OnBeatBrightnessPulse = SyncOnBeatBrightnessPulse,
         LowEnergyFlightSpeed = SyncLowEnergyFlightSpeed,
@@ -472,7 +448,8 @@ public class MazeFlyer : EffectBase
 
     /// <summary>The musical capabilities and energy range advertised by MazeFlyer.</summary>
     public override Repertoire Repertoire =>
-     Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow;
+        Repertoire.HandlesFill | Repertoire.HandlesDrop
+        | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>Names the effect and the color mode the current activation rolled.</summary>
     public override string DebugText() => $"Maze Flyer [{activeColorMode}]";
@@ -625,9 +602,9 @@ public class MazeFlyer : EffectBase
         nextMoveDir = Vector3Int.forward;
         moveProgress = 0.0f;
 
-        // Unfiltered acquisition spans the complete curated Waveform Pool, so MazeFlyer has no
-        // authored Waveform-selection subrange to expose as Effect Settings.
-        waveform = waveforms.Random();
+        // MazeFlyer carries its rhythm in Fill, Drop, Energy, and the On Beat low pulse, so it
+        // suppresses the Waveform response outright rather than holding a Pool value it never reads.
+        waveform = waveforms.None;
 
         FloatRange flightSpeedRange = ActiveSetting(
             standaloneSettings.FlightSpeed,
@@ -702,17 +679,11 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private struct TraceFrame
     {
-        /// <summary>Ray-origin displacement along the ray, in cells: the rhythm-scaled pulse recoil.</summary>
-        public float PulseDistance;
-
-        /// <summary>Maximum ray distance for the frame, including the rhythm-scaled dynamic fog term.</summary>
+        /// <summary>Maximum ray distance for the frame.</summary>
         public float MaxRayDistance;
 
         /// <summary>Density of the squared-exponential fog curve.</summary>
         public float FogDensity;
-
-        /// <summary>Additive face-brightness boost for the frame: the rhythm-scaled audio peak term.</summary>
-        public float PeakBoost;
 
         /// <summary>Multiplicative wall-brightness factor for the frame: the On Beat low pulse.</summary>
         public float BrightnessPulse;
@@ -753,13 +724,6 @@ public class MazeFlyer : EffectBase
         // Check if beat tracking is active via the boolean flag
         bool isBeatSynced = beatManager.IsSynced;
 
-        // Sample waveform envelope only when synced. The hard 0f is what keeps the
-        // rhythm-scaled Sync Settings (WaveformRayRecoilDistance,
-        // WaveformFaceBrightnessBoost, WaveformRayDistanceBoost)
-        // classified sync-only: Standalone frames reach those slots, but scaled by this 0f a
-        // live tweak cannot change the Standalone look.
-        float rhythm = isBeatSynced ? waveform.Envelope : 0.0f;
-
         // On Beat low pulse: while any musical count's quarter-beat gate is open and the smoothed
         // low band exceeds the threshold, every traced wall brightens by the authored boost. Both
         // reads go through BeatManager, the single musical source; OnBeat reads false when the
@@ -781,17 +745,14 @@ public class MazeFlyer : EffectBase
             ? SyncSettings.FillEdgeInversion * beatManager.Pulses.Every(Duration.Eighth)
             : 0.0f;
 
-        // Everything invariant across the frame's rays is computed exactly once here: the
-        // rhythm-scaled sync terms fold into per-frame constants, and the camera basis is
-        // pre-scaled so each ray assembles its direction from component math alone.
+        // Everything invariant across the frame's rays is computed exactly once here, and the
+        // camera basis is pre-scaled so each ray assembles its direction from component math alone.
         TraceFrame frame = new TraceFrame
         {
-            PulseDistance = rhythm * SyncSettings.WaveformRayRecoilDistance,
             MaxRayDistance = ActiveSetting(
                 standaloneSettings.MaxRayDistance,
-                SyncSettings.MaxRayDistance) + (rhythm * SyncSettings.WaveformRayDistanceBoost),
+                SyncSettings.MaxRayDistance),
             FogDensity = ActiveSetting(standaloneSettings.FogDensity, SyncSettings.FogDensity),
-            PeakBoost = rhythm * SyncSettings.WaveformFaceBrightnessBoost,
             BrightnessPulse = brightnessPulse,
             EdgeInversion = edgeInversion,
             XAxisFaceShade = ActiveSetting(standaloneSettings.XAxisFaceShade, SyncSettings.XAxisFaceShade),
@@ -1309,16 +1270,13 @@ public class MazeFlyer : EffectBase
     /// </summary>
     private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir, in TraceFrame frame)
     {
-        // Apply spatial pulse along ray direction when audio is present and synced
-        Vector3 pulsedOrigin = rayOrigin + (rayDir * frame.PulseDistance);
-
         float rx = ClampAwayFromZero(rayDir.x);
         float ry = ClampAwayFromZero(rayDir.y);
         float rz = ClampAwayFromZero(rayDir.z);
 
-        int mapX = FloorToInt(pulsedOrigin.x);
-        int mapY = FloorToInt(pulsedOrigin.y);
-        int mapZ = FloorToInt(pulsedOrigin.z);
+        int mapX = FloorToInt(rayOrigin.x);
+        int mapY = FloorToInt(rayOrigin.y);
+        int mapZ = FloorToInt(rayOrigin.z);
 
         int stepX = rx > 0 ? 1 : -1;
         int stepY = ry > 0 ? 1 : -1;
@@ -1328,9 +1286,9 @@ public class MazeFlyer : EffectBase
         float deltaDistY = Mathf.Abs(1.0f / ry);
         float deltaDistZ = Mathf.Abs(1.0f / rz);
 
-        float sideDistX = (stepX > 0) ? (mapX + 1.0f - pulsedOrigin.x) * deltaDistX : (pulsedOrigin.x - mapX) * deltaDistX;
-        float sideDistY = (stepY > 0) ? (mapY + 1.0f - pulsedOrigin.y) * deltaDistY : (pulsedOrigin.y - mapY) * deltaDistY;
-        float sideDistZ = (stepZ > 0) ? (mapZ + 1.0f - pulsedOrigin.z) * deltaDistZ : (pulsedOrigin.z - mapZ) * deltaDistZ;
+        float sideDistX = (stepX > 0) ? (mapX + 1.0f - rayOrigin.x) * deltaDistX : (rayOrigin.x - mapX) * deltaDistX;
+        float sideDistY = (stepY > 0) ? (mapY + 1.0f - rayOrigin.y) * deltaDistY : (rayOrigin.y - mapY) * deltaDistY;
+        float sideDistZ = (stepZ > 0) ? (mapZ + 1.0f - rayOrigin.z) * deltaDistZ : (rayOrigin.z - mapZ) * deltaDistZ;
 
         float distanceTraveled = 0f;
 
@@ -1367,7 +1325,7 @@ public class MazeFlyer : EffectBase
                     _ => Mathf.Abs(rayDir.z),
                 };
                 float headlight = Mathf.Lerp(frame.HeadlightMinShade, 1.0f, incidence);
-                float shade = (baseShade * headlight) + frame.PeakBoost;
+                float shade = baseShade * headlight;
 
                 // Squared-exponential fog over the normalized ray distance: near walls stay
                 // bright, the sub-tile far field crushes toward black. At the range cutoff the
@@ -1377,7 +1335,7 @@ public class MazeFlyer : EffectBase
                 float fog = MathF.Exp(-fogExponent * fogExponent);
 
                 float edge = EdgeLineFactor(
-                    pulsedOrigin + (rayDir * distanceTraveled), hitAxis, distanceTraveled, in frame);
+                    rayOrigin + (rayDir * distanceTraveled), hitAxis, distanceTraveled, in frame);
                 float brightness = shade * fog * edge * frame.BrightnessPulse;
 
                 return new Color(
@@ -1723,36 +1681,10 @@ public sealed class MazeFlyerSyncSettings
     public float SharedPaletteMinValue;
 
     /// <summary>
-    /// Maximum ray displacement on heavy beat hits. High values produce bigger wall recoil. Zero
-    /// temporarily disables the response. This is a beat-feel tuning control; 0.20 was suggested,
-    /// with 0.05 to 0.40 recommended.
-    /// </summary>
-    [Header("Audio Reactivity Settings")]
-    [Tooltip("Maximum ray displacement on heavy beat hits. High values = bigger wall recoil. 0 disables it; recommended: 0.05 to 0.40.")]
-    [Range(0f, 0.40f)]
-    public float WaveformRayRecoilDistance;
-
-    /// <summary>
-    /// Extra brightness boost added to voxel faces on audio peaks. Zero temporarily disables the
-    /// response. This is a beat-feel tuning control; 0.25 was suggested, with 0.00 to 0.50 recommended.
-    /// </summary>
-    [Tooltip("Extra brightness boost added to voxel faces on audio peaks. 0 disables it; recommended: 0.00 to 0.50.")]
-    [Range(0f, 0.50f)]
-    public float WaveformFaceBrightnessBoost;
-
-    /// <summary>
-    /// Amount by which fog distance contracts or expands with the rhythm. Zero means off and
-    /// temporarily disables the response. This is a beat-feel tuning control; 3.0 was suggested,
-    /// with 0.0 to 6.0 recommended.
-    /// </summary>
-    [Tooltip("How much fog distance contracts or expands with the rhythm. 0 disables it; recommended: 0.0 to 6.0.")]
-    [Range(0f, 6.0f)]
-    public float WaveformRayDistanceBoost;
-
-    /// <summary>
     /// Low-band strength that arms the On Beat brightness pulse, read from BeatManager's
     /// smoothed levels.
     /// </summary>
+    [Header("Audio Reactivity Settings")]
     [Tooltip("Low-band strength (0-1) the smoothed lows must exceed for the On Beat brightness pulse to fire.")]
     [Range(0f, 1f)]
     public float OnBeatLowThreshold;
@@ -1883,9 +1815,6 @@ public sealed class MazeFlyerSyncSettings
         EdgeLineShade = source.EdgeLineShade;
         RaySampleSpread = source.RaySampleSpread;
         SharedPaletteMinValue = source.SharedPaletteMinValue;
-        WaveformRayRecoilDistance = source.WaveformRayRecoilDistance;
-        WaveformFaceBrightnessBoost = source.WaveformFaceBrightnessBoost;
-        WaveformRayDistanceBoost = source.WaveformRayDistanceBoost;
         OnBeatLowThreshold = source.OnBeatLowThreshold;
         OnBeatBrightnessPulse = source.OnBeatBrightnessPulse;
         LowEnergyFlightSpeed = source.LowEnergyFlightSpeed;

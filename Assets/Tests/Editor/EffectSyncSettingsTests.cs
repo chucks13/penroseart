@@ -2529,9 +2529,6 @@ public sealed class EffectSyncSettingsTests
             typeof(MazeFlyer),
             TempAssetFolder);
         MutateEveryMazeFlyerPictureSetting(asset.Settings);
-        asset.Settings.WaveformRayRecoilDistance = 46f;
-        asset.Settings.WaveformFaceBrightnessBoost = 47f;
-        asset.Settings.WaveformRayDistanceBoost = 48f;
         asset.Settings.OnBeatLowThreshold = 49f;
         asset.Settings.OnBeatBrightnessPulse = 50f;
         asset.Settings.LowEnergyFlightSpeed = 51f;
@@ -2580,9 +2577,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.EdgeLineShade, Is.EqualTo(defaults.EdgeLineShade));
         Assert.That(asset.Settings.RaySampleSpread, Is.EqualTo(defaults.RaySampleSpread));
         Assert.That(asset.Settings.SharedPaletteMinValue, Is.EqualTo(defaults.SharedPaletteMinValue));
-        Assert.That(asset.Settings.WaveformRayRecoilDistance, Is.EqualTo(defaults.WaveformRayRecoilDistance));
-        Assert.That(asset.Settings.WaveformFaceBrightnessBoost, Is.EqualTo(defaults.WaveformFaceBrightnessBoost));
-        Assert.That(asset.Settings.WaveformRayDistanceBoost, Is.EqualTo(defaults.WaveformRayDistanceBoost));
         Assert.That(asset.Settings.OnBeatLowThreshold, Is.EqualTo(defaults.OnBeatLowThreshold));
         Assert.That(asset.Settings.OnBeatBrightnessPulse, Is.EqualTo(defaults.OnBeatBrightnessPulse));
         Assert.That(asset.Settings.LowEnergyFlightSpeed, Is.EqualTo(defaults.LowEnergyFlightSpeed));
