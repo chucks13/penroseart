@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4be1431984f4e4c3e81a710321221b0d, type: 3}
+  m_Name: NoiseTunnelSettings
+  m_EditorClassIdentifier: Assembly-CSharp::NoiseTunnelStandaloneSettingsAsset
+  effectTypeName: NoiseTunnel
+  settings:
+    TileCenterScale:
+      Min: 0.05
+      Max: 0.2
+      LowRail: 0.05
+      HighRail: 0.2
+    TunnelFlowSpeed:
+      Min: 0.1
+      Max: 1.5
+      LowRail: 0.1
+      HighRail: 1.5
+    PerlinAmplitude:
+      Min: 1
+      Max: 5
+      LowRail: 1
+      HighRail: 5
+    DistanceStyle:
+      MinInclusive: 0
+      MaxExclusive: 3
+      LowRail: 0
+      HighRail: 3
+    DistanceDirection:
+      MinInclusive: 0
+      MaxExclusive: 2
+      LowRail: 0
+      HighRail: 2
+    WaveformResponseMode:
+      MinInclusive: 0
+      MaxExclusive: 3
+      LowRail: 0
+      HighRail: 3
+    Brightness:
+      Min: 0.75
+      Max: 1
+      LowRail: 0.75
+      HighRail: 1

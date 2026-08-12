@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3635e667cb9034e7bb93832656d2ec26, type: 3}
+  m_Name: MazeFlyerSettings
+  m_EditorClassIdentifier: Assembly-CSharp::MazeFlyerStandaloneSettingsAsset
+  effectTypeName: MazeFlyer
+  settings:
+    FlightSpeed:
+      Min: 1
+      Max: 2.25
+      LowRail: 1
+      HighRail: 2.25
+    TurnSpeedMultiplier: 2.5
+    FlightSpeedSmoothTime: 2
+    RandomCellOccupancyProbability: 0.25
+    SpatialWavesHueScale: 0.15
+    BlockRegionsSize: 4
+    PureRandomSaturation: 0.9
+    PureRandomValue: 0.95
+    SpatialWavesSaturation: 0.85
+    SpatialWavesValue: 0.95
+    BlockRegionsHueJitter:
+      Min: -0.05
+      Max: 0.05
+      LowRail: -0.05
+      HighRail: 0.05
+    BlockRegionsSaturation: 0.88
+    BlockRegionsValue: 0.95
+    CuratedPalette:
+    - {r: 0.6763998, g: 0.09500002, b: 0.95, a: 1}
+    - {r: 0.09500002, g: 0.6934999, b: 0.95, a: 1}
+    - {r: 0.88159996, g: 0.95, b: 0.09500002, a: 1}
+    - {r: 0.09500002, g: 0.95, b: 0.3344, a: 1}
+    CameraFocalLength: 18
+    TurnBlendStart: 0.2
+    ForwardContinuationThreshold: 0.35
+    MaxRayDistance: 14
+    XAxisFaceShade: 0.75
+    YAxisFaceShade: 0.95
+    ZAxisFaceShade: 0.6
+    HeadlightMinShade: 0.5
+    FogDensity: 2.5
+    EdgeLineThicknessTiles: 0.7
+    EdgeLineShade: 0.25
+    RaySampleSpread: 0.7
+    SharedPaletteMinValue: 0.8

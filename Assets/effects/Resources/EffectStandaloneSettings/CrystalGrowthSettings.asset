@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc3109244a00d4391947bab665587e50, type: 3}
+  m_Name: CrystalGrowthSettings
+  m_EditorClassIdentifier: Assembly-CSharp::CrystalGrowthStandaloneSettingsAsset
+  effectTypeName: CrystalGrowth
+  settings:
+    HeatEpsilon: 0.01
+    FrontPush: 0.95
+    CoverageToAdvance: 0.85
+    MaxFrontPassesPerFrame: 6
+    CrystalFloor: 0.5
+    HueRelaxPerSec: 0.6
+    HueRelaxMaxPerFrame: 0.5
+    ActivityLevel:
+      Min: 0.233
+      Max: 0.433
+      LowRail: 0.233
+      HighRail: 0.433
+    GoldenStep: 0.618034
+    SpreadPerSec:
+      Min: 12
+      Max: 20
+      LowRail: 12
+      HighRail: 20
+    LeakPerSec:
+      Min: 0.22
+      Max: 0.5
+      LowRail: 0.22
+      HighRail: 0.5
+    BeatSurge:
+      Min: 1.5
+      Max: 3.5
+      LowRail: 1.5
+      HighRail: 3.5
+    SeedInterval:
+      Min: 0.18
+      Max: 0.35
+      LowRail: 0.18
+      HighRail: 0.35
+    SelfBeatPeriod:
+      Min: 1.2
+      Max: 2.2
+      LowRail: 1.2
+      HighRail: 2.2
+    SelfPulseDecayPerSec: 2.5
+    TipThreshold: 0.8
+    TipWhitenAmount: 0.5
+    BloomCountBase: 3
+    BloomCountOffset:
+      MinInclusive: 0
+      MaxExclusive: 3
+      LowRail: 0
+      HighRail: 3

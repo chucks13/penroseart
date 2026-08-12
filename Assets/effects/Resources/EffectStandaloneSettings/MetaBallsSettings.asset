@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 779927a31a6b543bfab52bbcad854170, type: 3}
+  m_Name: MetaBallsSettings
+  m_EditorClassIdentifier: Assembly-CSharp::MetaBallsStandaloneSettingsAsset
+  effectTypeName: MetaBalls
+  settings:
+    Radius: 1
+    BallVelocity:
+      Min: -1
+      Max: 1
+      LowRail: -1
+      HighRail: 1
+    BallVelocityDivisor: 60
+    WaveformResponseMode:
+      MinInclusive: 0
+      MaxExclusive: 3
+      LowRail: 0
+      HighRail: 3
+    HorizontalBounceMargin: 5
+    VerticalBounceMargin: 2
+    WaveformBrightnessAtPeak: 0.75

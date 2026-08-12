@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80c0c9509108143d99dbfaa2a2a8a34d, type: 3}
+  m_Name: YinYangMixerSettings
+  m_EditorClassIdentifier: Assembly-CSharp::YinYangMixerStandaloneSettingsAsset
+  effectTypeName: YinYangMixer
+  settings:
+    SpinRate:
+      Min: -6
+      Max: 6
+      LowRail: -6
+      HighRail: 6
+    RadialAngleScale:
+      Min: -6
+      Max: 6
+      LowRail: -6
+      HighRail: 6
+    RibbonHalfWidth: 20
+    RibbonPalettePosition: 0.5
+    WaveformBrightnessPeak: 1

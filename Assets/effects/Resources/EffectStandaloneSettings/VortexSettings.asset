@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9734570e71ae8447dafef3007b6bf45b, type: 3}
+  m_Name: VortexSettings
+  m_EditorClassIdentifier: Assembly-CSharp::VortexStandaloneSettingsAsset
+  effectTypeName: Vortex
+  settings:
+    SpinnerCount:
+      MinInclusive: 1
+      MaxExclusive: 5
+      LowRail: 1
+      HighRail: 5
+    AngularSpeedDegreesPerSecond:
+      MinInclusive: 50
+      MaxExclusive: 100
+      LowRail: 50
+      HighRail: 100
+    ReverseDirectionRoll:
+      MinInclusive: 0
+      MaxExclusive: 2
+      LowRail: 0
+      HighRail: 2
+    SpinnerTwist:
+      Min: -0.02
+      Max: 0.02
+      LowRail: -0.02
+      HighRail: 0.02
+    DistortionModeRoll:
+      MinInclusive: 0
+      MaxExclusive: 2
+      LowRail: 0
+      HighRail: 2
+    RingScaleAtRest: 1
+    HorizontalRadius: 16
+    VerticalRadius: 8
+    SpinnerArms: 1
+    BrightnessAtRest: 1
+    TimeScale: 0.15

@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4345262ad9d8143eda352fb04a8ba6e5, type: 3}
+  m_Name: RippleSettings
+  m_EditorClassIdentifier: Assembly-CSharp::RippleStandaloneSettingsAsset
+  effectTypeName: Ripple
+  settings:
+    DropSpawnChance:
+      Min: 0.01
+      Max: 0.02
+      LowRail: 0.01
+      HighRail: 0.02
+    Velocity:
+      Min: 0.01
+      Max: 0.9
+      LowRail: 0.01
+      HighRail: 0.9
+    VelocityDivisor: 2000
+    DistanceDivisor: 20
+    PaletteOffset: 0.5
+    HueShift: 0.2

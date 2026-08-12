@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff2833fb05d604dd086b7b38db837a2e, type: 3}
+  m_Name: RainbowBarsSettings
+  m_EditorClassIdentifier: Assembly-CSharp::RainbowBarsStandaloneSettingsAsset
+  effectTypeName: RainbowBars
+  settings:
+    Direction:
+      MinInclusive: 0
+      MaxExclusive: 8
+      LowRail: 0
+      HighRail: 8
+    Brightness:
+      Min: 0.85
+      Max: 1
+      LowRail: 0.85
+      HighRail: 1
+    DirectionSkew: 0.1

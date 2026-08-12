@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2219482c1990249c9b14d6ff3f02234f, type: 3}
+  m_Name: PulseSettings
+  m_EditorClassIdentifier: Assembly-CSharp::PulseStandaloneSettingsAsset
+  effectTypeName: Pulse
+  settings:
+    BaseHue:
+      Min: 0
+      Max: 1
+      LowRail: 0
+      HighRail: 1
+    ColorPingPongSeconds:
+      Min: 1
+      Max: 5
+      LowRail: 1
+      HighRail: 5
+    ColorHueDelta:
+      Min: 0.25
+      Max: 0.75
+      LowRail: 0.25
+      HighRail: 0.75
+    BeatMode:
+      MinInclusive: 0
+      MaxExclusive: 2
+      LowRail: 0
+      HighRail: 2
+    PulseMultiplier:
+      Min: 0.125
+      Max: 0.25
+      LowRail: 0.125
+      HighRail: 0.25
+    PulseScaleDivisorMilliseconds: 200
+    PulseHeightAtWaveformPeak: 0
+    SaturationPulseMultiplier: 2
+    ValuePulseBase: 1
