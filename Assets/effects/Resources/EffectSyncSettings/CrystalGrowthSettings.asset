@@ -28,8 +28,8 @@ MonoBehaviour:
       Max: 2
       LowRail: 1
       HighRail: 2
-    DropFlashBrightness: 1.2
-    DropFlashSpread: 1.5
+    DropFlashBrightness: 0.75
+    DropFlashSpread: 2
     DropFlashSeeds: 3
     IdleSeedInterval:
       Min: 0.5
@@ -39,7 +39,6 @@ MonoBehaviour:
     DropRatchetSpread: 4
     DropStrobeDepth: 0.9
     DropSeedBurst: 12
-    FillHoldback: 0.65
     FillSwell: 0.35
     DrivingBrightnessFloor: 0.8
     LowSeedBurst:
