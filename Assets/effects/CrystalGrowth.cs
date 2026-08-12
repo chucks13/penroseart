@@ -166,10 +166,10 @@ public class CrystalGrowth : EffectBase
     private const float SyncQuietGrowthMultiplier = 0.5f;
 
     /// <summary>Continuous Synced growth pace for a Low Energy run.</summary>
-    private const float SyncEnergyPaceLow = 0.75f;
+    private const float SyncEnergyPaceLow = 1f;
 
     /// <summary>Continuous Synced growth pace for a High Energy run; Mid uses the range midpoint.</summary>
-    private const float SyncEnergyPaceHigh = 1.25f;
+    private const float SyncEnergyPaceHigh = 2f;
 
     /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP RESPONSE readout.</summary>
     private const float SyncDropFlashBrightness = 1.2f;
