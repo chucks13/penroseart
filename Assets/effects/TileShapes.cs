@@ -8,6 +8,7 @@ using Random = UnityEngine.Random;
 /// Flashes randomly selected packed Penrose shape lists.
 /// </summary>
 [EffectSyncSettings(typeof(TileShapesSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(TileShapesStandaloneSettingsAsset))]
 public class TileShapes : EffectBase
 {
     // Standalone Defaults
@@ -85,14 +86,13 @@ public class TileShapes : EffectBase
         Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of TileShapes' Standalone Defaults.</summary>
-    public static TileShapesStandaloneSettings StandaloneSettings => new TileShapesStandaloneSettings
+    public static TileShapesStandaloneSettings StandaloneDefaults => new TileShapesStandaloneSettings
     {
         RandomColorThreshold = StandaloneRandomColorThreshold,
         FixedHue = new FloatRange(StandaloneFixedHueMin, StandaloneFixedHueMax),
-        ShapeSelectorMin = StandaloneShapeSelectorMin,
-        ShapeSelectorMaxExclusive = StandaloneShapeSelectorMaxExclusive,
-        RandomColorBrightness = StandaloneRandomColorBrightness,
-        FixedHueShift = StandaloneFixedHueShift,
+        ShapeSelector = new IntRange(StandaloneShapeSelectorMin, StandaloneShapeSelectorMaxExclusive),
+        RandomColorBrightnessAtPeak = StandaloneRandomColorBrightness,
+        FixedHueShiftAtPeak = StandaloneFixedHueShift,
         FlashCountDivisor = StandaloneFlashCountDivisor,
         RandomHue = new FloatRange(StandaloneRandomHueMin, StandaloneRandomHueMax),
     };
@@ -101,21 +101,18 @@ public class TileShapes : EffectBase
     public static TileShapesSyncSettings SyncDefaults => new TileShapesSyncSettings
     {
         RandomColorThreshold = SyncRandomColorThreshold,
-        FixedHueMin = SyncFixedHueMin,
-        FixedHueMax = SyncFixedHueMax,
-        ShapeSelectorMin = SyncShapeSelectorMin,
-        ShapeSelectorMaxExclusive = SyncShapeSelectorMaxExclusive,
-        RandomColorBrightnessAtTrough = SyncRandomColorBrightnessAtTrough,
-        RandomColorBrightnessAtPeak = SyncRandomColorBrightnessAtPeak,
-        FixedHueShiftAtTrough = SyncFixedHueShiftAtTrough,
-        FixedHueShiftAtPeak = SyncFixedHueShiftAtPeak,
+        FixedHue = new FloatRange(SyncFixedHueMin, SyncFixedHueMax),
+        ShapeSelector = new IntRange(SyncShapeSelectorMin, SyncShapeSelectorMaxExclusive),
+        RandomColorBrightness = new FloatRange(
+            SyncRandomColorBrightnessAtTrough,
+            SyncRandomColorBrightnessAtPeak),
+        FixedHueShift = new FloatRange(SyncFixedHueShiftAtTrough, SyncFixedHueShiftAtPeak),
         FlashCountDivisor = SyncFlashCountDivisor,
-        RandomHueMin = SyncRandomHueMin,
-        RandomHueMax = SyncRandomHueMax,
+        RandomHue = new FloatRange(SyncRandomHueMin, SyncRandomHueMax),
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private TileShapesStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private TileShapesStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private TileShapesSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -148,7 +145,9 @@ public class TileShapes : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(TileShapes),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(TileShapes),
             SyncDefaults);
@@ -164,22 +163,16 @@ public class TileShapes : EffectBase
         else
         {
             randomColor = false;
-            float fixedHueMin = beatManager.IsSynced
-                ? SyncSettings.FixedHueMin
-                : standaloneSettings.FixedHue.Min;
-            float fixedHueMax = beatManager.IsSynced
-                ? SyncSettings.FixedHueMax
-                : standaloneSettings.FixedHue.Max;
-            hue = Mathf.Lerp(fixedHueMin, fixedHueMax, Random.value);
+            FloatRange fixedHue = beatManager.IsSynced
+                ? SyncSettings.FixedHue
+                : standaloneSettings.FixedHue;
+            hue = Mathf.Lerp(fixedHue.Min, fixedHue.Max, Random.value);
         }
 
-        int shapeSelectorMin = beatManager.IsSynced
-            ? SyncSettings.ShapeSelectorMin
-            : standaloneSettings.ShapeSelectorMin;
-        int shapeSelectorMaxExclusive = beatManager.IsSynced
-            ? SyncSettings.ShapeSelectorMaxExclusive
-            : standaloneSettings.ShapeSelectorMaxExclusive;
-        switch (Random.Range(shapeSelectorMin, shapeSelectorMaxExclusive))
+        IntRange shapeSelector = beatManager.IsSynced
+            ? SyncSettings.ShapeSelector
+            : standaloneSettings.ShapeSelector;
+        switch (Random.Range(shapeSelector.MinInclusive, shapeSelector.MaxExclusive))
         {
             case 0:
                 shape = penrose.Layout.shapes.Lines0;
@@ -228,26 +221,23 @@ public class TileShapes : EffectBase
     {
         // Beat pulse scales randomly selected shape flashes.
         float randomColorBrightnessAtPeak = beatManager.IsSynced
-            ? SyncSettings.RandomColorBrightnessAtPeak
-            : standaloneSettings.RandomColorBrightness;
+            ? SyncSettings.RandomColorBrightness.Max
+            : standaloneSettings.RandomColorBrightnessAtPeak;
         float beatBrightness = waveform.Lerp(
-            SyncSettings.RandomColorBrightnessAtTrough,
+            SyncSettings.RandomColorBrightness.Min,
             randomColorBrightnessAtPeak);
         float fixedHueShiftAtPeak = beatManager.IsSynced
-            ? SyncSettings.FixedHueShiftAtPeak
-            : standaloneSettings.FixedHueShift;
+            ? SyncSettings.FixedHueShift.Max
+            : standaloneSettings.FixedHueShiftAtPeak;
         float hueShift = waveform.Lerp(
-            SyncSettings.FixedHueShiftAtTrough,
+            SyncSettings.FixedHueShift.Min,
             fixedHueShiftAtPeak);
         int flashCountDivisor = beatManager.IsSynced
             ? SyncSettings.FlashCountDivisor
             : standaloneSettings.FlashCountDivisor;
-        float randomHueMin = beatManager.IsSynced
-            ? SyncSettings.RandomHueMin
-            : standaloneSettings.RandomHue.Min;
-        float randomHueMax = beatManager.IsSynced
-            ? SyncSettings.RandomHueMax
-            : standaloneSettings.RandomHue.Max;
+        FloatRange randomHue = beatManager.IsSynced
+            ? SyncSettings.RandomHue
+            : standaloneSettings.RandomHue;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
         count = count / flashCountDivisor;
@@ -256,7 +246,7 @@ public class TileShapes : EffectBase
             Color color = Color.HSVToRGB(hue+hueShift, 1f, 1f);
 
             if (randomColor)
-                color = Color.HSVToRGB(Mathf.Lerp(randomHueMin, randomHueMax, Random.value), 1f, 1f)* beatBrightness;
+                color = Color.HSVToRGB(Mathf.Lerp(randomHue.Min, randomHue.Max, Random.value), 1f, 1f)* beatBrightness;
 
 
             int loop = Random.Range(0, shape.GroupCount);
@@ -271,7 +261,8 @@ public class TileShapes : EffectBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce TileShapes' authored no-music look.</summary>
+/// <summary>The serializable value shape shared by TileShapes' Standalone Defaults and Settings.</summary>
+[Serializable]
 public sealed class TileShapesStandaloneSettings
 {
     /// <summary>Threshold above which the activation Roll selects random-color mode.</summary>
@@ -280,23 +271,51 @@ public sealed class TileShapesStandaloneSettings
     /// <summary>Per-activation fixed-hue Roll range used when random-color mode is off.</summary>
     public FloatRange FixedHue;
 
-    /// <summary>Inclusive lower bound of the packed-shape selector Roll.</summary>
-    public int ShapeSelectorMin;
+    /// <summary>Roll range selecting one packed Shape List switch arm.</summary>
+    public IntRange ShapeSelector;
 
-    /// <summary>Exclusive upper bound of the packed-shape selector Roll.</summary>
-    public int ShapeSelectorMaxExclusive;
+    /// <summary>Random-color brightness used as the Waveform peak endpoint in Standalone Mode.</summary>
+    public float RandomColorBrightnessAtPeak;
 
-    /// <summary>Random-color brightness returned when no live Bar Phase is available.</summary>
-    public float RandomColorBrightness;
-
-    /// <summary>Fixed-color hue shift returned when no live Bar Phase is available.</summary>
-    public float FixedHueShift;
+    /// <summary>Fixed-color hue shift used as the Waveform peak endpoint in Standalone Mode.</summary>
+    public float FixedHueShiftAtPeak;
 
     /// <summary>Divisor that turns delta-scaled buffer length into the per-frame flash count.</summary>
-    public int FlashCountDivisor;
+    [Min(1)] public int FlashCountDivisor;
 
     /// <summary>Per-flash hue Roll range used in random-color mode.</summary>
     public FloatRange RandomHue;
+
+    /// <summary>Copies every TileShapes Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(TileShapesStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        RandomColorThreshold = source.RandomColorThreshold;
+        FixedHue = CopyRange(source.FixedHue);
+        ShapeSelector = CopyRange(source.ShapeSelector);
+        RandomColorBrightnessAtPeak = source.RandomColorBrightnessAtPeak;
+        FixedHueShiftAtPeak = source.FixedHueShiftAtPeak;
+        FlashCountDivisor = source.FlashCountDivisor;
+        RandomHue = CopyRange(source.RandomHue);
+    }
+
+    /// <summary>Creates an asset-owned copy of a floating-point range and its tuning Rails.</summary>
+    private static FloatRange CopyRange(FloatRange source) => new FloatRange(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Creates an asset-owned copy of an integer range and its tuning Rails.</summary>
+    private static IntRange CopyRange(IntRange source) => new IntRange(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
 }
 
 /// <summary>Editable music-response values saved as TileShapes' Sync Settings.</summary>
@@ -306,38 +325,23 @@ public sealed class TileShapesSyncSettings
     /// <summary>Threshold above which the activation Roll selects random-color mode.</summary>
     [Range(0f, 1f)] public float RandomColorThreshold;
 
-    /// <summary>Minimum fixed hue rolled when random-color mode is off.</summary>
-    [Range(0f, 1f)] public float FixedHueMin;
+    /// <summary>Per-activation fixed-hue Roll range used when random-color mode is off.</summary>
+    public FloatRange FixedHue;
 
-    /// <summary>Maximum fixed hue rolled when random-color mode is off.</summary>
-    [Range(0f, 1f)] public float FixedHueMax;
+    /// <summary>Roll range selecting one packed Shape List switch arm.</summary>
+    public IntRange ShapeSelector;
 
-    /// <summary>Inclusive lower bound of the packed-shape selector Roll.</summary>
-    [Range(0, 8)] public int ShapeSelectorMin;
+    /// <summary>Random-color brightness range mapped from Waveform trough to peak.</summary>
+    public FloatRange RandomColorBrightness;
 
-    /// <summary>Exclusive upper bound of the packed-shape selector Roll.</summary>
-    [Range(1, 9)] public int ShapeSelectorMaxExclusive;
-
-    /// <summary>Random-color brightness at the Waveform trough.</summary>
-    [Range(0f, 1f)] public float RandomColorBrightnessAtTrough;
-
-    /// <summary>Random-color brightness at the Waveform peak.</summary>
-    [Range(0f, 1f)] public float RandomColorBrightnessAtPeak;
-
-    /// <summary>Fixed-color hue shift at the Waveform trough.</summary>
-    [Range(0f, 1f)] public float FixedHueShiftAtTrough;
-
-    /// <summary>Fixed-color hue shift at the Waveform peak.</summary>
-    [Range(0f, 1f)] public float FixedHueShiftAtPeak;
+    /// <summary>Fixed-color hue-shift range mapped from Waveform trough to peak.</summary>
+    public FloatRange FixedHueShift;
 
     /// <summary>Divisor that turns delta-scaled buffer length into the per-frame flash count.</summary>
     [Min(1)] public int FlashCountDivisor;
 
-    /// <summary>Minimum per-flash hue rolled in random-color mode.</summary>
-    [Range(0f, 1f)] public float RandomHueMin;
-
-    /// <summary>Maximum per-flash hue rolled in random-color mode.</summary>
-    [Range(0f, 1f)] public float RandomHueMax;
+    /// <summary>Per-flash hue Roll range used in random-color mode.</summary>
+    public FloatRange RandomHue;
 
     /// <summary>Copies every TileShapes Sync Setting from another value.</summary>
     public void CopyFrom(TileShapesSyncSettings source)
@@ -348,16 +352,25 @@ public sealed class TileShapesSyncSettings
         }
 
         RandomColorThreshold = source.RandomColorThreshold;
-        FixedHueMin = source.FixedHueMin;
-        FixedHueMax = source.FixedHueMax;
-        ShapeSelectorMin = source.ShapeSelectorMin;
-        ShapeSelectorMaxExclusive = source.ShapeSelectorMaxExclusive;
-        RandomColorBrightnessAtTrough = source.RandomColorBrightnessAtTrough;
-        RandomColorBrightnessAtPeak = source.RandomColorBrightnessAtPeak;
-        FixedHueShiftAtTrough = source.FixedHueShiftAtTrough;
-        FixedHueShiftAtPeak = source.FixedHueShiftAtPeak;
+        FixedHue = CopyRange(source.FixedHue);
+        ShapeSelector = CopyRange(source.ShapeSelector);
+        RandomColorBrightness = CopyRange(source.RandomColorBrightness);
+        FixedHueShift = CopyRange(source.FixedHueShift);
         FlashCountDivisor = source.FlashCountDivisor;
-        RandomHueMin = source.RandomHueMin;
-        RandomHueMax = source.RandomHueMax;
+        RandomHue = CopyRange(source.RandomHue);
     }
+
+    /// <summary>Creates an asset-owned copy of a floating-point range and its tuning Rails.</summary>
+    private static FloatRange CopyRange(FloatRange source) => new FloatRange(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Creates an asset-owned copy of an integer range and its tuning Rails.</summary>
+    private static IntRange CopyRange(IntRange source) => new IntRange(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
 }
