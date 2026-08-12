@@ -1381,7 +1381,6 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropRatchetSpread = 8f;
         asset.Settings.DropStrobeDepth = 0.2f;
         asset.Settings.DropSeedBurst = 9;
-        asset.Settings.FillHoldback = 0.3f;
         asset.Settings.FillSwell = 1.4f;
         asset.Settings.DrivingBrightnessFloor = 0.4f;
         asset.Settings.LowSeedBurst = new FloatRange(4f, 10f, 3f, 11f);
@@ -1418,7 +1417,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropRatchetSpread, Is.EqualTo(defaults.DropRatchetSpread));
         Assert.That(asset.Settings.DropStrobeDepth, Is.EqualTo(defaults.DropStrobeDepth));
         Assert.That(asset.Settings.DropSeedBurst, Is.EqualTo(defaults.DropSeedBurst));
-        Assert.That(asset.Settings.FillHoldback, Is.EqualTo(defaults.FillHoldback));
         Assert.That(asset.Settings.FillSwell, Is.EqualTo(defaults.FillSwell));
         Assert.That(asset.Settings.DrivingBrightnessFloor, Is.EqualTo(defaults.DrivingBrightnessFloor));
         AssertFloatRangeEqual(asset.Settings.LowSeedBurst, defaults.LowSeedBurst);

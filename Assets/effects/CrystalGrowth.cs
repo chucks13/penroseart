@@ -37,6 +37,9 @@ using Random = UnityEngine.Random;
 ///   surged across the whole wall as a bright colored wavefront (the luminance lift rides the sweeping leading
 ///   edge, in palette color, never white). Its response follows the current Grid's Decay and disarms at the next
 ///   observed Grid boundary, so the Drop lands as one dramatic sweep that resolves into normal growth.</description></item>
+/// <item><description>THE FILL — ordinary seeding and propagation pause while the visible current generation
+///   retracts newest claim first, revealing the prior generation and hue beneath each Tile. The restored state
+///   remains after the Fill while the existing whole-field brightness swell accents the peel-back.</description></item>
 /// <item><description>HOW FAST the front moves — selected-form Average Levels and current Energy scale the
 ///   continuous Synced pace, while <see cref="PulsesValues.Beat"/> supplies an independent accent multiplied only
 ///   by remapped Low presence. Standalone keeps its Perlin-varied self-driven surge exactly.</description></item>
@@ -195,10 +198,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Maximum seeds planted on each sixteenth onset, fading across the complete Grid-bound Drop response.</summary>
     private const int SyncDropSeedBurst = 12;
 
-    /// <summary>How far the base spread is reined in at full Fill — the crystal visibly tenses and compresses going into the phrase change. 0.65 means growth drops to 35% of normal speed at the fill's peak.</summary>
-    private const float SyncFillHoldback = 0.65f;
-
-    /// <summary>Luminance swell across the whole grown crystal at full Fill, so the hold-back reads as charging up rather than stalling. Tune on the FILL readout.</summary>
+    /// <summary>Luminance swell across the whole grown crystal at full Fill, accenting the current generation's retraction. Tune on the FILL readout.</summary>
     private const float SyncFillSwell = 0.35f;
 
     /// <summary>Authored brightness floor while selected-form Average Levels are at full activity.</summary>
@@ -281,7 +281,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Drop amount at which normal coverage-based generation advance begins overlapping the release.</summary>
     private const float DropGenerationOverlapAmount = 0.5f;
 
-    /// <summary>Crystal Growth expresses both phrase cues: the Fill hold-back and swell build into the change,
+    /// <summary>Crystal Growth expresses both phrase cues: the Fill retraction and swell build into the change,
     /// and the Drop downbeat fires its one-shot whole-wall surge. Advertise both so the Director can deliberately
     /// cast it into Fill and Drop moments, not only react when it happens to be on-air. Its growth stays calm and
     /// eases off as selected-form Average activity falls, so it advertises as a Low/Mid-energy Performer.</summary>
@@ -335,7 +335,6 @@ public class CrystalGrowth : EffectBase
         DropRatchetSpread = SyncDropRatchetSpread,
         DropStrobeDepth = SyncDropStrobeDepth,
         DropSeedBurst = SyncDropSeedBurst,
-        FillHoldback = SyncFillHoldback,
         FillSwell = SyncFillSwell,
         DrivingBrightnessFloor = SyncDrivingBrightnessFloor,
         LowSeedBurst = new FloatRange(SyncLowSeedBurstMin, SyncLowSeedBurstMax),
@@ -378,6 +377,21 @@ public class CrystalGrowth : EffectBase
     private float[] nextCharge;
     private float[] nextHue;
     private int[] nextGen;
+
+    /// <summary>Tile indexes in the order the current generation first claimed them.</summary>
+    private int[] currentGenerationClaimOrder;
+
+    /// <summary>Generation revealed when the matching current-generation claim is retracted.</summary>
+    private int[] priorGenerationByClaim;
+
+    /// <summary>Hue revealed when the matching current-generation claim is retracted.</summary>
+    private float[] priorHueByClaim;
+
+    /// <summary>Number of retained claims in the current generation's bounded history.</summary>
+    private int currentGenerationClaimCount;
+
+    /// <summary>Current-generation claim count captured at the Fill's rising edge.</summary>
+    private int fillStartClaimCount;
 
     /// <summary>Rings-per-second the front advances; how fast a crystal sweeps across the wall.</summary>
     private float spreadPerSec;
@@ -463,6 +477,9 @@ public class CrystalGrowth : EffectBase
         nextCharge = new float[Penrose.Total];
         nextHue = new float[Penrose.Total];
         nextGen = new int[Penrose.Total];
+        currentGenerationClaimOrder = new int[Penrose.Total];
+        priorGenerationByClaim = new int[Penrose.Total];
+        priorHueByClaim = new float[Penrose.Total];
     }
 
     /// <summary>
@@ -499,6 +516,8 @@ public class CrystalGrowth : EffectBase
 
         spreadBudget = 0f;
         generation = 1;
+        currentGenerationClaimCount = 0;
+        fillStartClaimCount = 0;
         hueCursor = Random.value;
         seedTimer = 0f;
         selfBeatPhase = 0f;
@@ -535,7 +554,7 @@ public class CrystalGrowth : EffectBase
                 $"Bass presence: {lowPresence:0.00}\n" +
                 $"Average ({SyncSettings.ActivityLevelsForm}): {averageLevel:0.00}"
             : $"Average (Standalone Smoothed): {averageLevel:0.00}";
-        string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (hold-back + swell)" : "";
+        string fillReadout = fillActive ? $"\nFILL {fillLevel:0.00} (retract + swell)" : "";
         string dropReadout = dropResponseAmount > 0f
             ? $"\nDROP RESPONSE {dropResponseAmount:0.00}"
             : "";
@@ -563,16 +582,19 @@ public class CrystalGrowth : EffectBase
             : 1f;
 
         // The Fill is the tail of the current Phrase, and it does not always lead to a Drop, so its gesture must
-        // build tension AND resolve cleanly on its own. The hold-back reins the base spread in as the Fill builds
-        // while the swell charges the crystal's glow, then both snap back at the Phrase boundary — into the Drop
-        // response when one lands, or back to normal growth when not.
-        // Because the stock Fill Build is normalized to the fill's length, the arc scales with it — short fills snap,
-        // long fills lean in.
+        // build tension AND resolve cleanly on its own. Its stock Build retracts the current generation along the
+        // exact order of its claims while the swell charges the remaining crystal glow. The restored prior layers
+        // stay revealed after the Phrase boundary instead of snapping back. Because Build is normalized to the
+        // Fill's length, short Fills peel quickly and long Fills expose the layer gradually.
         var fill = beatManager.Fill;
         bool inFill = fill.Active;
         float fillAmount = fill.In.Build();
         var sixteenthOn = beatManager.Pulses.On(Duration.Sixteenth);
         float ratchet = sixteenthOn ? 1f : 0f;
+        if (inFill && !fillActive)
+        {
+            fillStartClaimCount = currentGenerationClaimCount;
+        }
         fillActive = inFill;
         fillLevel = fillAmount;
 
@@ -580,52 +602,59 @@ public class CrystalGrowth : EffectBase
         if (dropActive && !previousDropActive)
         {
             dropResponseActive = true;
-            generation++;
+            BeginNextGeneration();
             PlantUnisonSeeds(SyncSettings.DropFlashSeeds);
         }
         previousDropActive = dropActive;
         dropResponseAmount = dropResponseActive ? beatManager.Grid.Decay() : 0f;
 
-        if (sixteenthOn && !previousSixteenthOn && dropResponseActive)
+        if (!inFill && sixteenthOn && !previousSixteenthOn && dropResponseActive)
         {
             PlantSeeds(Mathf.CeilToInt(SyncSettings.DropSeedBurst * dropResponseAmount));
         }
         previousSixteenthOn = sixteenthOn;
 
-        SeedThisFrame(deltaTime, continuousPace);
-
-        // Synced composes two independent terms: Average × Energy scales continuous pace, while the wire Beat
-        // Pulse is accented only by remapped Low presence. Keeping the terms additive prevents Average or Energy
-        // from multiplying the beat accent. Standalone retains its approved self-driven surge arithmetic. A Fill
-        // reins the whole result in (tension); the Grid-bound Drop response washes the fresh layer across the wall
-        // and adds release-shaped sixteenth lunges.
-        float pulse = isSynced
-            ? beatManager.Pulses.Beat * lowPresence
-            : selfPulse;
-        float paceAndAccent = isSynced
-            ? continuousPace + (beatSurge * pulse)
-            : 1f + (beatSurge * pulse);
-        float spread = spreadPerSec
-            * paceAndAccent
-            * fillAmount.Lerp(1f, 1f - SyncSettings.FillHoldback)
-            * (1f + (SyncSettings.DropRatchetSpread * dropResponseAmount * ratchet))
-            * (1f + (SyncSettings.DropFlashSpread * dropResponseAmount));
-
-        // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
-        spreadBudget += spread * deltaTime;
-        int passes = 0;
-        int maxFrontPassesPerFrame = isSynced
-            ? SyncSettings.MaxFrontPassesPerFrame
-            : standaloneSettings.MaxFrontPassesPerFrame;
-        while (spreadBudget >= 1f && passes < maxFrontPassesPerFrame)
+        if (inFill)
         {
-            spreadBudget -= 1f;
-            passes++;
-            PropagateFrontOnce();
+            seededThisOnBeatWindow = false;
+            RetractCurrentGeneration(fillAmount);
         }
-        if (isSynced && passes == maxFrontPassesPerFrame)
+        else
         {
-            spreadBudget = Mathf.Repeat(spreadBudget, 1f);
+            SeedThisFrame(deltaTime, continuousPace);
+
+            // Synced composes two independent terms: Average × Energy scales continuous pace, while the wire Beat
+            // Pulse is accented only by remapped Low presence. Keeping the terms additive prevents Average or
+            // Energy from multiplying the beat accent. Standalone retains its approved self-driven surge
+            // arithmetic. The Grid-bound Drop response washes the fresh layer across the wall and adds
+            // release-shaped sixteenth lunges.
+            float pulse = isSynced
+                ? beatManager.Pulses.Beat * lowPresence
+                : selfPulse;
+            float paceAndAccent = isSynced
+                ? continuousPace + (beatSurge * pulse)
+                : 1f + (beatSurge * pulse);
+            float spread = spreadPerSec
+                * paceAndAccent
+                * (1f + (SyncSettings.DropRatchetSpread * dropResponseAmount * ratchet))
+                * (1f + (SyncSettings.DropFlashSpread * dropResponseAmount));
+
+            // Advance the front by whole rings, accumulating fractional passes so the rate is FPS-independent.
+            spreadBudget += spread * deltaTime;
+            int passes = 0;
+            int maxFrontPassesPerFrame = isSynced
+                ? SyncSettings.MaxFrontPassesPerFrame
+                : standaloneSettings.MaxFrontPassesPerFrame;
+            while (spreadBudget >= 1f && passes < maxFrontPassesPerFrame)
+            {
+                spreadBudget -= 1f;
+                passes++;
+                PropagateFrontOnce();
+            }
+            if (isSynced && passes == maxFrontPassesPerFrame)
+            {
+                spreadBudget = Mathf.Repeat(spreadBudget, 1f);
+            }
         }
 
         // Fade the trailing heat so the bright band trails off behind the front; grown tiles still render at the
@@ -639,7 +668,7 @@ public class CrystalGrowth : EffectBase
         // The single-color Drop layer owns the first half of the response. Normal coverage-based generation
         // advance resumes through the second half so ordinary multicolor growth overlaps the release instead
         // of snapping back only after the Grid-bound response reaches zero.
-        if (!dropResponseActive || dropResponseAmount <= DropGenerationOverlapAmount)
+        if (!inFill && (!dropResponseActive || dropResponseAmount <= DropGenerationOverlapAmount))
         {
             CheckGenerationAdvance();
         }
@@ -654,7 +683,7 @@ public class CrystalGrowth : EffectBase
         // Hard Drop strobe: during the Grid-bound response, every sixteenth's off-phase knocks the whole field
         // toward black, so the wall flashes on each 16th while the response falls linearly. Applied to
         // the final color below — past the CrystalFloor — so the dark phase actually reads dark. Collapses to
-        // 1 (no strobe) outside a Drop. The Fill instead swells the glow while the hold-back compresses growth.
+        // 1 (no strobe) outside a Drop. The Fill instead swells the glow while the current layer retracts.
         float strobe = 1f - (dropResponseAmount * (1f - ratchet) * SyncSettings.DropStrobeDepth);
         float swell = 1f + (SyncSettings.FillSwell * fillAmount);
         float tipThreshold = isSynced ? SyncSettings.TipThreshold : standaloneSettings.TipThreshold;
@@ -932,6 +961,10 @@ public class CrystalGrowth : EffectBase
         hueCursor = Mathf.Repeat(hueCursor + goldenStep, 1f);
 
         int t = Random.Range(0, charge.Length);
+        if (gen[t] != generation)
+        {
+            RecordCurrentGenerationClaim(t, gen[t], hue[t]);
+        }
         charge[t] = 1f;
         gen[t] = generation;
         hue[t] = hueCursor;
@@ -958,6 +991,10 @@ public class CrystalGrowth : EffectBase
         for (int s = 0; s < count; s++)
         {
             int t = Random.Range(0, charge.Length);
+            if (gen[t] != generation)
+            {
+                RecordCurrentGenerationClaim(t, gen[t], hue[t]);
+            }
             charge[t] = 1f;
             gen[t] = generation;
             hue[t] = hueCursor;
@@ -998,6 +1035,10 @@ public class CrystalGrowth : EffectBase
                 if (gi > nextGen[idx])
                 {
                     // Claim/repaint the neighbor for this newer generation and light its front.
+                    if (gi == generation)
+                    {
+                        RecordCurrentGenerationClaim(idx, nextGen[idx], nextHue[idx]);
+                    }
                     nextGen[idx] = gi;
                     nextHue[idx] = hi;
                     if (push > nextCharge[idx])
@@ -1048,8 +1089,52 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void StartNextGeneration()
     {
-        generation++;
+        BeginNextGeneration();
         PlantSeeds(BloomCount());
+    }
+
+    /// <summary>
+    /// Advances the generation index and discards the prior generation's claim history, keeping retained
+    /// restoration state bounded to the one generation Fill can retract.
+    /// </summary>
+    private void BeginNextGeneration()
+    {
+        generation++;
+        currentGenerationClaimCount = 0;
+    }
+
+    /// <summary>
+    /// Appends one first-time current-generation claim and the prior layer it replaced to the fixed wall-sized
+    /// history buffers.
+    /// </summary>
+    /// <param name="tileIndex">Tile newly claimed by the current generation.</param>
+    /// <param name="priorGeneration">Generation visible immediately before the claim.</param>
+    /// <param name="priorHue">Hue visible immediately before the claim.</param>
+    private void RecordCurrentGenerationClaim(int tileIndex, int priorGeneration, float priorHue)
+    {
+        currentGenerationClaimOrder[currentGenerationClaimCount] = tileIndex;
+        priorGenerationByClaim[currentGenerationClaimCount] = priorGeneration;
+        priorHueByClaim[currentGenerationClaimCount] = priorHue;
+        currentGenerationClaimCount++;
+    }
+
+    /// <summary>
+    /// Restores current-generation claims newest first according to the Fill Build captured from BeatManager.
+    /// Restored charge is zero so the revealed prior layer returns at its crystal floor without reviving an old
+    /// moving front; each restoration mutates the live field, so no end-of-Fill snap-back exists.
+    /// </summary>
+    /// <param name="fillAmount">Current linear Fill Build in the range zero to one.</param>
+    private void RetractCurrentGeneration(float fillAmount)
+    {
+        int targetClaimCount = Mathf.FloorToInt((1f - fillAmount) * fillStartClaimCount);
+        while (currentGenerationClaimCount > targetClaimCount)
+        {
+            currentGenerationClaimCount--;
+            int tileIndex = currentGenerationClaimOrder[currentGenerationClaimCount];
+            charge[tileIndex] = 0f;
+            gen[tileIndex] = priorGenerationByClaim[currentGenerationClaimCount];
+            hue[tileIndex] = priorHueByClaim[currentGenerationClaimCount];
+        }
     }
 
     /// <summary>A bloom is 3–5 seeds — used for a new generation and the Standalone downbeat.</summary>
@@ -1265,9 +1350,6 @@ public sealed class CrystalGrowthSyncSettings
     /// <summary>Maximum seed count planted on a Drop sixteenth, scaled by the Grid-bound Drop amount.</summary>
     [Min(0)] public int DropSeedBurst;
 
-    /// <summary>Fraction of base spread held back at a full Fill.</summary>
-    [Range(0f, 1f)] public float FillHoldback;
-
     /// <summary>Whole-field luminance swell at a full Fill.</summary>
     [Min(0f)] public float FillSwell;
 
@@ -1361,7 +1443,6 @@ public sealed class CrystalGrowthSyncSettings
         DropRatchetSpread = source.DropRatchetSpread;
         DropStrobeDepth = source.DropStrobeDepth;
         DropSeedBurst = source.DropSeedBurst;
-        FillHoldback = source.FillHoldback;
         FillSwell = source.FillSwell;
         DrivingBrightnessFloor = source.DrivingBrightnessFloor;
         LowSeedBurst = new FloatRange(
