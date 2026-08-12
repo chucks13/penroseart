@@ -14,19 +14,57 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MazeFlyerSyncSettingsAsset
   effectTypeName: MazeFlyer
   settings:
-    PulseStrength: 0
-    PeakBrightnessBoost: 0
-    DynamicFogAmount: 0
+    FlightSpeed:
+      Min: 1
+      Max: 2.25
+      LowRail: 1
+      HighRail: 2.25
+    TurnSpeedMultiplier: 2.5
+    RandomCellOccupancyProbability: 0.25
+    SpatialWavesHueScale: 0.15
+    BlockRegionsSize: 4
+    PureRandomSaturation: 0.9
+    PureRandomValue: 0.95
+    SpatialWavesSaturation: 0.85
+    SpatialWavesValue: 0.95
+    BlockRegionsHueJitter:
+      Min: -0.05
+      Max: 0.05
+      LowRail: -0.05
+      HighRail: 0.05
+    BlockRegionsSaturation: 0.88
+    BlockRegionsValue: 0.95
+    CuratedPalette:
+    - {r: 0.6763998, g: 0.09500002, b: 0.95, a: 1}
+    - {r: 0.09500002, g: 0.6934999, b: 0.95, a: 1}
+    - {r: 0.88159996, g: 0.95, b: 0.09500002, a: 1}
+    - {r: 0.09500002, g: 0.95, b: 0.3344, a: 1}
+    CameraFocalLength: 18
+    TurnBlendStart: 0.2
+    ForwardContinuationThreshold: 0.35
+    MaxRayDistance: 14
+    XAxisFaceShade: 0.75
+    YAxisFaceShade: 0.95
+    ZAxisFaceShade: 0.6
+    HeadlightMinShade: 0.5
+    FogDensity: 2.5
+    EdgeLineThicknessTiles: 0.7
+    EdgeLineShade: 0.25
+    RaySampleSpread: 0.7
+    SharedPaletteMinValue: 0.8
+    WaveformRayRecoilDistance: 0
+    WaveformFaceBrightnessBoost: 0
+    WaveformRayDistanceBoost: 0
     OnBeatLowThreshold: 0.35
     OnBeatBrightnessPulse: 0.5
-    LowEnergySpeed: 1
-    MidEnergySpeed: 1.6
-    HighEnergySpeed: 2.25
-    SpeedSmoothTime: 2
-    SpeedRampBeats: 8
+    LowEnergyFlightSpeed: 1
+    MidEnergyFlightSpeed: 1.6
+    HighEnergyFlightSpeed: 2.25
+    FlightSpeedSmoothTime: 2
+    EnergyFlightSpeedRampBeats: 8
     DropStopBeats: 4
     DropSitBeats: 2
     DropLaunchMultiplier: 2.5
-    DropSpinSpeed: 90
     FillEdgeInversion: 1
     FillLineGlow: 2
+    DropCameraSpinSpeed: 90
