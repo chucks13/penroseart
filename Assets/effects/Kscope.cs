@@ -14,6 +14,7 @@ using Random = UnityEngine.Random;
 /// Loads StreamingAssets textures and maps them through kaleidoscope/mirror patterns.
 /// </summary>
 [EffectSyncSettings(typeof(KscopeSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(KscopeStandaloneSettingsAsset))]
 public class Kscope : ScreenEffect
 {
     // Standalone Defaults
@@ -60,6 +61,36 @@ public class Kscope : ScreenEffect
 
     // Sync Defaults
 
+    /// <summary>Minimum number of texture-catalog slots advanced on each Synced activation.</summary>
+    private const int SyncTextureMinimumAdvance = 1;
+
+    /// <summary>Divisor forming the discrete random-advance upper bound in Synced Mode.</summary>
+    private const int SyncTextureAdvanceRangeDivisor = 3;
+
+    /// <summary>Exclusive upper bound of the discrete color-swap roll in Synced Mode.</summary>
+    private const int SyncColorSwapRollMaxExclusive = 3;
+
+    /// <summary>Exclusive upper bound of the channel-swap selector roll in Synced Mode.</summary>
+    private const int SyncChannelSwapSelectorMaxExclusive = 2;
+
+    /// <summary>Inclusive minimum texture-motion step in Synced Mode.</summary>
+    private const int SyncMotionStepMin = 1;
+
+    /// <summary>Exclusive maximum texture-motion step in Synced Mode.</summary>
+    private const int SyncMotionStepMaxExclusive = 3;
+
+    /// <summary>Divisor converting a Synced motion step into texture-motion rate.</summary>
+    private const float SyncMotionStepDivisor = 4f;
+
+    /// <summary>Inclusive minimum kaleidoscope angular-speed step in Synced Mode.</summary>
+    private const int SyncAngularSpeedStepMin = -1;
+
+    /// <summary>Exclusive maximum kaleidoscope angular-speed step in Synced Mode.</summary>
+    private const int SyncAngularSpeedStepMaxExclusive = 2;
+
+    /// <summary>Divisor converting a Synced angular-speed step into rotation rate.</summary>
+    private const float SyncAngularSpeedStepDivisor = 100f;
+
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     private const float SyncBeatHueOffset = 0.5f;
 
@@ -77,30 +108,36 @@ public class Kscope : ScreenEffect
     private const float ReferenceFrameRate = 60f;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Kscope's Standalone Defaults.</summary>
-    public static KscopeStandaloneSettings StandaloneSettings => new KscopeStandaloneSettings
+    public static KscopeStandaloneSettings StandaloneDefaults => new KscopeStandaloneSettings
     {
         TextureMinimumAdvance = StandaloneTextureMinimumAdvance,
         TextureAdvanceRangeDivisor = StandaloneTextureAdvanceRangeDivisor,
         ColorSwapRollMaxExclusive = StandaloneColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = StandaloneChannelSwapSelectorMaxExclusive,
-        MotionStepMin = StandaloneMotionStepMin,
-        MotionStepMaxExclusive = StandaloneMotionStepMaxExclusive,
+        MotionStep = new IntRange(StandaloneMotionStepMin, StandaloneMotionStepMaxExclusive),
         MotionStepDivisor = StandaloneMotionStepDivisor,
-        AngularSpeedStepMin = StandaloneAngularSpeedStepMin,
-        AngularSpeedStepMaxExclusive = StandaloneAngularSpeedStepMaxExclusive,
+        AngularSpeedStep = new IntRange(StandaloneAngularSpeedStepMin, StandaloneAngularSpeedStepMaxExclusive),
         AngularSpeedStepDivisor = StandaloneAngularSpeedStepDivisor,
     };
 
     /// <summary>Resolves a fresh copy of Kscope's file-local Sync Defaults.</summary>
     public static KscopeSyncSettings SyncDefaults => new KscopeSyncSettings
     {
+        TextureMinimumAdvance = SyncTextureMinimumAdvance,
+        TextureAdvanceRangeDivisor = SyncTextureAdvanceRangeDivisor,
+        ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
+        ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
+        MotionStep = new IntRange(SyncMotionStepMin, SyncMotionStepMaxExclusive),
+        MotionStepDivisor = SyncMotionStepDivisor,
+        AngularSpeedStep = new IntRange(SyncAngularSpeedStepMin, SyncAngularSpeedStepMaxExclusive),
+        AngularSpeedStepDivisor = SyncAngularSpeedStepDivisor,
         BeatHueOffset = SyncBeatHueOffset,
         RhythmDeltaBoost = SyncRhythmDeltaBoost,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
     /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private KscopeStandaloneSettings standaloneSettings = StandaloneSettings;
+    private KscopeStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private KscopeSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -314,12 +351,16 @@ public class Kscope : ScreenEffect
     /// <summary>
     /// Returns a copy of a color texture with one randomly chosen pair of color channels swapped.
     /// </summary>
-    Texture2D messTexture(Texture2D oldtex)
+    /// <param name="oldtex">The source texture whose pixels are copied.</param>
+    /// <param name="channelSwapSelectorMaxExclusive">The exclusive selector bound for channel-pair choice.</param>
+    /// <returns>A new texture containing the selected channel swap.</returns>
+    Texture2D messTexture(Texture2D oldtex, int channelSwapSelectorMaxExclusive)
     {
         Texture2D newTex = new Texture2D(oldtex.width, oldtex.height);
         // The inline zero is the structural start of the selector domain. The authored bound reaches
-        // only two of the switch's three swap arms; see StandaloneChannelSwapSelectorMaxExclusive.
-        int swap = Random.Range(0, standaloneSettings.ChannelSwapSelectorMaxExclusive);
+        // only two of the switch's three swap arms; see StandaloneChannelSwapSelectorMaxExclusive and
+        // SyncChannelSwapSelectorMaxExclusive.
+        int swap = Random.Range(0, channelSwapSelectorMaxExclusive);
         float a;
         for (int x = 0; x < oldtex.width; x++)
         {
@@ -354,7 +395,9 @@ public class Kscope : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Kscope),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Kscope),
             SyncDefaults);
@@ -370,17 +413,40 @@ public class Kscope : ScreenEffect
         int colorCount = colorTex.Count;
         int monoCount = monoTex.Count;
         int total = colorCount + monoCount;
+        bool isSynced = beatManager.IsSynced;
+        int textureMinimumAdvance = isSynced
+            ? SyncSettings.TextureMinimumAdvance
+            : standaloneSettings.TextureMinimumAdvance;
+        int textureAdvanceRangeDivisor = isSynced
+            ? SyncSettings.TextureAdvanceRangeDivisor
+            : standaloneSettings.TextureAdvanceRangeDivisor;
+        int colorSwapRollMaxExclusive = isSynced
+            ? SyncSettings.ColorSwapRollMaxExclusive
+            : standaloneSettings.ColorSwapRollMaxExclusive;
+        int channelSwapSelectorMaxExclusive = isSynced
+            ? SyncSettings.ChannelSwapSelectorMaxExclusive
+            : standaloneSettings.ChannelSwapSelectorMaxExclusive;
+        IntRange motionStep = isSynced ? SyncSettings.MotionStep : standaloneSettings.MotionStep;
+        float motionStepDivisor = isSynced
+            ? SyncSettings.MotionStepDivisor
+            : standaloneSettings.MotionStepDivisor;
+        IntRange angularSpeedStep = isSynced
+            ? SyncSettings.AngularSpeedStep
+            : standaloneSettings.AngularSpeedStep;
+        float angularSpeedStepDivisor = isSynced
+            ? SyncSettings.AngularSpeedStepDivisor
+            : standaloneSettings.AngularSpeedStepDivisor;
         // The inline zero is the structural no-bonus endpoint of this discrete advance roll.
-        which = (which + standaloneSettings.TextureMinimumAdvance +
-            Random.Range(0, total / standaloneSettings.TextureAdvanceRangeDivisor)) % total;// Random.Range(0, total);
+        which = (which + textureMinimumAdvance +
+            Random.Range(0, total / textureAdvanceRangeDivisor)) % total;// Random.Range(0, total);
         if (which < colorCount)
         {
             currentTex = colorTex[which].tex;
             fname = colorTex[which].fname;
             // sometime swap 2 colors
             // Zero is the designated success slot; the authored slot count controls the one-in-N chance.
-            if (Random.Range(0, standaloneSettings.ColorSwapRollMaxExclusive) == 0)
-                currentTex = messTexture(currentTex);
+            if (Random.Range(0, colorSwapRollMaxExclusive) == 0)
+                currentTex = messTexture(currentTex, channelSwapSelectorMaxExclusive);
             mode = 0;
         }
         else
@@ -391,10 +457,8 @@ public class Kscope : ScreenEffect
         }
         texWidth = currentTex.width;
         texHeight = currentTex.height;
-        motionX = Random.Range(standaloneSettings.MotionStepMin, standaloneSettings.MotionStepMaxExclusive) /
-            standaloneSettings.MotionStepDivisor;
-        motionY = Random.Range(standaloneSettings.MotionStepMin, standaloneSettings.MotionStepMaxExclusive) /
-            standaloneSettings.MotionStepDivisor;
+        motionX = Random.Range(motionStep.MinInclusive, motionStep.MaxExclusive) / motionStepDivisor;
+        motionY = Random.Range(motionStep.MinInclusive, motionStep.MaxExclusive) / motionStepDivisor;
         // Each sign flip spans the complete two-direction domain, so its selector stays inline.
         motionX *= Random.Range(0, 2) == 0 ? 1f : -1f;
         motionY *= Random.Range(0, 2) == 0 ? 1f : -1f;
@@ -406,8 +470,8 @@ public class Kscope : ScreenEffect
         centerY = texHeight / 2;
         angle = 0;
         aspeed = Random.Range(
-            standaloneSettings.AngularSpeedStepMin,
-            standaloneSettings.AngularSpeedStepMaxExclusive) / standaloneSettings.AngularSpeedStepDivisor;
+            angularSpeedStep.MinInclusive,
+            angularSpeedStep.MaxExclusive) / angularSpeedStepDivisor;
         // The discrete [0, 3) roll spans all three algorithm modes, so its complete domain stays inline.
         beatMode = Random.Range(0, 3);
     }
@@ -520,7 +584,8 @@ public class Kscope : ScreenEffect
 
 }
 
-/// <summary>Fixed Standalone Settings resolved from Kscope's file-local Standalone Defaults.</summary>
+/// <summary>Serializable Standalone Settings saved for Kscope and edited live through the Effects tab.</summary>
+[Serializable]
 public sealed class KscopeStandaloneSettings
 {
     /// <summary>Minimum number of texture-catalog slots advanced on each activation.</summary>
@@ -535,29 +600,73 @@ public sealed class KscopeStandaloneSettings
     /// <summary>Exclusive upper bound of the discrete channel-swap selector roll.</summary>
     public int ChannelSwapSelectorMaxExclusive;
 
-    /// <summary>Inclusive minimum integer step used to roll texture motion.</summary>
-    public int MotionStepMin;
-
-    /// <summary>Exclusive maximum integer step used to roll texture motion.</summary>
-    public int MotionStepMaxExclusive;
+    /// <summary>Integer step endpoints used to roll texture motion.</summary>
+    public IntRange MotionStep = new IntRange();
 
     /// <summary>Divisor converting a rolled motion step into texture-motion rate.</summary>
     public float MotionStepDivisor;
 
-    /// <summary>Inclusive minimum integer step used to roll kaleidoscope rotation speed.</summary>
-    public int AngularSpeedStepMin;
-
-    /// <summary>Exclusive maximum integer step used to roll kaleidoscope rotation speed.</summary>
-    public int AngularSpeedStepMaxExclusive;
+    /// <summary>Integer step endpoints used to roll kaleidoscope rotation speed.</summary>
+    public IntRange AngularSpeedStep = new IntRange();
 
     /// <summary>Divisor converting a rolled angular step into rotation rate.</summary>
     public float AngularSpeedStepDivisor;
+
+    /// <summary>Copies every Kscope Standalone Setting and Rail from another value.</summary>
+    public void CopyFrom(KscopeStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        TextureMinimumAdvance = source.TextureMinimumAdvance;
+        TextureAdvanceRangeDivisor = source.TextureAdvanceRangeDivisor;
+        ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
+        ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
+        MotionStep = new IntRange(
+            source.MotionStep.MinInclusive,
+            source.MotionStep.MaxExclusive,
+            source.MotionStep.LowRail,
+            source.MotionStep.HighRail);
+        MotionStepDivisor = source.MotionStepDivisor;
+        AngularSpeedStep = new IntRange(
+            source.AngularSpeedStep.MinInclusive,
+            source.AngularSpeedStep.MaxExclusive,
+            source.AngularSpeedStep.LowRail,
+            source.AngularSpeedStep.HighRail);
+        AngularSpeedStepDivisor = source.AngularSpeedStepDivisor;
+    }
 }
 
 /// <summary>Serializable Sync Settings saved for Kscope and edited live through the Effects tab.</summary>
 [Serializable]
 public sealed class KscopeSyncSettings
 {
+    /// <summary>Minimum number of texture-catalog slots advanced on each activation.</summary>
+    public int TextureMinimumAdvance;
+
+    /// <summary>Divisor used to form the discrete random texture-advance upper bound.</summary>
+    public int TextureAdvanceRangeDivisor;
+
+    /// <summary>Exclusive upper bound of the discrete color-swap chance roll.</summary>
+    public int ColorSwapRollMaxExclusive;
+
+    /// <summary>Exclusive upper bound of the discrete channel-swap selector roll.</summary>
+    public int ChannelSwapSelectorMaxExclusive;
+
+    /// <summary>Integer step endpoints used to roll texture motion.</summary>
+    public IntRange MotionStep = new IntRange();
+
+    /// <summary>Divisor converting a rolled motion step into texture-motion rate.</summary>
+    public float MotionStepDivisor;
+
+    /// <summary>Integer step endpoints used to roll kaleidoscope rotation speed.</summary>
+    public IntRange AngularSpeedStep = new IntRange();
+
+    /// <summary>Divisor converting a rolled angular step into rotation rate.</summary>
+    public float AngularSpeedStepDivisor;
+
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float BeatHueOffset;
 
@@ -575,6 +684,22 @@ public sealed class KscopeSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
+        TextureMinimumAdvance = source.TextureMinimumAdvance;
+        TextureAdvanceRangeDivisor = source.TextureAdvanceRangeDivisor;
+        ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
+        ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
+        MotionStep = new IntRange(
+            source.MotionStep.MinInclusive,
+            source.MotionStep.MaxExclusive,
+            source.MotionStep.LowRail,
+            source.MotionStep.HighRail);
+        MotionStepDivisor = source.MotionStepDivisor;
+        AngularSpeedStep = new IntRange(
+            source.AngularSpeedStep.MinInclusive,
+            source.AngularSpeedStep.MaxExclusive,
+            source.AngularSpeedStep.LowRail,
+            source.AngularSpeedStep.HighRail);
+        AngularSpeedStepDivisor = source.AngularSpeedStepDivisor;
         BeatHueOffset = source.BeatHueOffset;
         RhythmDeltaBoost = source.RhythmDeltaBoost;
         DropSlowdownBeats = source.DropSlowdownBeats;
