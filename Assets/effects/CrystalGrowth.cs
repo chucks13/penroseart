@@ -175,10 +175,10 @@ public class CrystalGrowth : EffectBase
     private const float SyncEnergyPaceHigh = 2f;
 
     /// <summary>Peak luminance gain on the Drop wavefront — weighted by front heat so only the sweeping leading edge brightens, in the tile's own palette color (never toward white). Tune on the DROP RESPONSE readout.</summary>
-    private const float SyncDropFlashBrightness = 1.2f;
+    private const float SyncDropFlashBrightness = 0.75f;
 
     /// <summary>Extra spread multiplier at the peak of the Drop flash, so the fresh layer sweeps briskly across the wall. Tune on the DROP FLASH readout.</summary>
-    private const float SyncDropFlashSpread = 1.5f;
+    private const float SyncDropFlashSpread = 2f;
 
     /// <summary>Seeds of the fresh Drop layer planted at the flash onset, sharing one hue so they read as a single colored wave.</summary>
     private const int SyncDropFlashSeeds = 3;
