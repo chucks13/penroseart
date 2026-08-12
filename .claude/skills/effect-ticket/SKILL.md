@@ -62,6 +62,22 @@ When a change reshapes a settings class, its `.asset` goes stale: a new field lo
 a removed field lingers as drift. Ask the maintainer to re-save the asset before the wall
 judgment.
 
+## Musical claims
+
+This rule holds in every phase, and it has no exception. A musical claim states what a musical
+fact means, does, or can do. Findings, diff reviews, and answers to the maintainer all carry
+musical claims. `CONTEXT.md` and `docs/osc-client-contract.md` settle every musical claim. Code
+alone cannot settle one, because the runtime only shows what it does with the values that
+arrive. The sender lives in RaveSystem, so no code in this repo says what the wire sends.
+
+1. Before you state a musical claim, read the `CONTEXT.md` entry for every musical term in it.
+2. Read the _Avoid_ list of each entry.
+3. If the claim depends on what the wire sends, read that lane in `docs/osc-client-contract.md`.
+4. Cite the entries and the lanes where you state the claim.
+5. If an _Avoid_ item names the scenario in the claim, discard the claim as that named error.
+6. If code appears to contradict either document, report the mismatch as the finding and stop
+   for a maintainer ruling.
+
 ## Status and resume
 
 The ticket is the only record that survives a session. Post a status comment at every phase
@@ -70,10 +86,14 @@ landed by hash, what the maintainer ruled, and what comes next. Record a finding
 when you find it. Debt on this ticket belongs to this ticket, not to a later session that has
 never heard of it.
 
-A resumed ticket starts from state, not from the Phase A reading list. Git says what landed. The
-comments on the ticket say what the maintainer ruled. A surviving worklog holds the working
-state. Read a Phase A document again only when the current step needs it. Rejoin the phase the
-evidence names, not the phase the last comment names.
+A resumed ticket starts from state, not from the Phase A reading list. The reading list is
+ticket-scoped. Phase A steps 2 and 3 are session-scoped, so complete them again in every
+session.
+
+Git says what landed. The comments on the ticket say what the maintainer ruled. A surviving
+worklog holds the working state. Read a Phase A document again only when the current step needs
+it. The Musical claims rule names one such need. Rejoin the phase the evidence names, not the
+phase the last comment names.
 
 ## Phase A — Set up
 
@@ -245,6 +265,7 @@ Boundaries — in every brief:
 ## Diff review checklist
 
 - The vocabulary matches `CONTEXT.md` exactly.
+- Every musical claim cites its `CONTEXT.md` entries and its `docs/osc-client-contract.md` lanes.
 - Every musical read traces to the Data Surface; no OSC access, no locally computed musical
   fact.
 - Settings resolution consumes no Random.
