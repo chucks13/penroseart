@@ -126,7 +126,7 @@ public override void OnEnd()
 Init()       once after reflection creates the catalog instance
 OnStart()   whenever the effect becomes active
 UpdateTime() called by Controller before Draw()
-OnNewGrid() once when this Effect observes the 16-beat Grid return to one
+OnNewGrid() once when this Effect observes the Grid return to one
 OnNewPhrase() once when this Effect observes a new Phrase begin
 Draw()      every active frame
 OnEnd()     not currently called

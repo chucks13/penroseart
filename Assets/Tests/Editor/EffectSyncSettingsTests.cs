@@ -1,10 +1,9 @@
-// Verifies the agreed Effect Sync Settings seam: saved-or-default resolution and restoring Sync Defaults.
+// Verifies the Effect Settings seam: independent defaults, saved resolution, and restore behavior.
 using System;
 using NUnit.Framework;
 using UnityEditor;
-using UnityEngine;
 
-/// <summary>Resolution and restore tests for typed per-Effect Sync Settings.</summary>
+/// <summary>Resolution, independence, and restore tests for typed per-Effect settings.</summary>
 public sealed class EffectSyncSettingsTests
 {
     /// <summary>Temporary asset folder kept outside Resources for restore tests.</summary>
@@ -37,7 +36,7 @@ public sealed class EffectSyncSettingsTests
     {
         var syncDefaults = TestSettingsEffect.SyncDefaults;
 
-        var resolved = EffectSyncSettingsProvider.Resolve<TestEffectSyncSettings>(
+        var resolved = EffectSyncSettingsProvider.Resolve(
             typeof(TestSettingsEffect),
             syncDefaults);
 
@@ -56,7 +55,7 @@ public sealed class EffectSyncSettingsTests
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
-        var resolved = EffectSyncSettingsProvider.Resolve<TestEffectSyncSettings>(
+        var resolved = EffectSyncSettingsProvider.Resolve(
             typeof(TestSettingsEffect),
             TestSettingsEffect.SyncDefaults);
 
@@ -363,7 +362,7 @@ public sealed class TestEffectSyncSettings
 public sealed class TestSettingsEffect : EffectBase
 {
     /// <summary>Returns a fresh test Sync Defaults object.</summary>
-    public static TestEffectSyncSettings SyncDefaults => new TestEffectSyncSettings { Amount = 2f };
+    public static TestEffectSyncSettings SyncDefaults => new() { Amount = 2f };
 
     /// <summary>Returns no runtime debug text because this test Effect never renders.</summary>
     public override string DebugText() => string.Empty;

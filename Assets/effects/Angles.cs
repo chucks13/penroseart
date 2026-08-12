@@ -76,7 +76,7 @@ public class Angles : EffectBase
     /// tiles off while retaining authored dark colour above it; duplicate collapse and full
     /// redistribution give the ten orientation classes distinct colour positions. Tune on the wall.
     /// </summary>
-    private static PaletteConditioning StandalonePaletteConditioning => new PaletteConditioning
+    private static PaletteConditioning StandalonePaletteConditioning => new()
     {
         TargetLuminance = 0.4f,
         MinimumLuminance = 0.12f,
@@ -113,7 +113,7 @@ public class Angles : EffectBase
     /// hue-spread-aware equalization, bounded lift, no black stops, collapsed duplicates, and full
     /// colour-distance redistribution. Tune on the wall.
     /// </summary>
-    private static PaletteConditioning SyncPaletteConditioning => new PaletteConditioning
+    private static PaletteConditioning SyncPaletteConditioning => new()
     {
         TargetLuminance = 0.4f,
         MinimumLuminance = 0.12f,
@@ -279,7 +279,7 @@ public class Angles : EffectBase
     /// live angle spread, effect-local palette conditioning, and independent speed and directional-
     /// shading depth ranges.
     /// </summary>
-    public static AnglesStandaloneSettings StandaloneDefaults => new AnglesStandaloneSettings
+    public static AnglesStandaloneSettings StandaloneDefaults => new()
     {
         Spread = StandaloneSpread,
         PaletteConditioning = StandalonePaletteConditioning,
@@ -297,7 +297,7 @@ public class Angles : EffectBase
     /// envelope width, and shared rotation rate, the authored Drop window and Line Ribbon impact
     /// speed, three Energy-tier sweep rates, and directional-shading depth.
     /// </summary>
-    public static AnglesSyncSettings SyncDefaults => new AnglesSyncSettings
+    public static AnglesSyncSettings SyncDefaults => new()
     {
         PaletteConditioning = SyncPaletteConditioning,
         BeatLowThreshold = SyncBeatLowThreshold,
@@ -885,7 +885,7 @@ public class Angles : EffectBase
 
     /// <summary>
     /// Randomizes the held Standalone sweep speed so the no-music look takes a fresh character every
-    /// 16 beats. Synced sweep velocity never reads the random speed. The shading light direction is
+    /// Grid. Synced sweep velocity never reads the random speed. The shading light direction is
     /// intentionally seeded only in <see cref="OnStart"/> because changing it on a Grid caused a
     /// visible flash.
     /// </summary>
@@ -1186,10 +1186,11 @@ public class Angles : EffectBase
             : standaloneSettings.PaletteConditioning;
         conditionedPalette.Refresh(APalette, paletteConditioning);
 
-        float fillProgress = beatManager.Fill.In.Build();
+        float fillProgress = isSynced ? beatManager.Fill.In.Build() : 0f;
         FillTileFields[] activeFillFields = null;
         float fillUnitEnvelopeWidth = 0f;
-        float fillContourStrength = SyncSettings.FillContourStrength;
+        float fillContourStrength = 0f;
+        float fillPartHueSeparation = 0f;
         if (fillProgress > 0f)
         {
             activeFillFields = SyncSettings.FillUnit switch
@@ -1199,11 +1200,16 @@ public class Angles : EffectBase
                 _ => lotusballFillFields,
             };
             fillUnitEnvelopeWidth = SyncSettings.FillUnitEnvelopeWidth;
+            fillContourStrength = SyncSettings.FillContourStrength;
+            fillPartHueSeparation = SyncSettings.FillPartHueSeparation;
         }
         UpdateFillRotationPhase(fillProgress);
-        dropResponseEnvelope = beatManager.Drop.In.Decay(SyncSettings.DropBeats);
-        UpdateRibbonFlowPhase(dropResponseEnvelope);
-        int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropResponseEnvelope);
+        float dropEnvelope = isSynced
+            ? beatManager.Drop.In.Decay(SyncSettings.DropBeats)
+            : 0f;
+        dropResponseEnvelope = dropEnvelope;
+        UpdateRibbonFlowPhase(dropEnvelope);
+        int activeRibbonFamilyCount = ResolveActiveRibbonFamilyCount(dropEnvelope);
         float[] activeRibbonPositions = activeRibbonFamilyCount > 0
             ? ribbonPositionByActiveFamilyCount[activeRibbonFamilyCount]
             : null;
@@ -1213,9 +1219,10 @@ public class Angles : EffectBase
 
         bool beatFrontSweeping = beatMovementEngaged && beatFrontActive;
         float beatFrontPosition = 0f;
-        float beatFrontSoftness = SyncSettings.BeatFrontSoftness;
+        float beatFrontSoftness = 0f;
         if (beatFrontSweeping)
         {
+            beatFrontSoftness = SyncSettings.BeatFrontSoftness;
             RefreshBeatFrontRanks();
 
             // Begin one soft-edge width before the first tile and finish on the last tile so the
@@ -1294,7 +1301,7 @@ public class Angles : EffectBase
                     }
 
                     float fillPalettePosition = Mathf.Repeat(
-                        (fillPartIndex * SyncSettings.FillPartHueSeparation) +
+                        (fillPartIndex * fillPartHueSeparation) +
                         huePhase +
                         fillRotationPhase +
                         contourOffset,
@@ -1333,7 +1340,7 @@ public class Angles : EffectBase
                 // would manufacture intermediate RGB values outside the palette; this keeps every
                 // Drop frame a real Angles colour while the Tile returns continuously to its angle.
                 palettePosition = Mathf.Repeat(
-                    palettePosition + (shortestHueDelta * dropResponseEnvelope),
+                    palettePosition + (shortestHueDelta * dropEnvelope),
                     1f);
             }
             Color paletteColor = conditionedPalette.ReadCyclic(

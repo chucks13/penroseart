@@ -302,7 +302,7 @@ public class Tunnel : EffectBase
     /// turns the Grid over: Synced Mode changes the shared palette, Standalone Mode re-rolls as it
     /// always has. Colour is what the Grid turns over in Synced Mode — the shape moves on the Phrase
     /// instead, so a cadence already following the music through Energy and Duration is not
-    /// interrupted every sixteen beats.
+    /// interrupted every Grid.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -416,29 +416,30 @@ public class Tunnel : EffectBase
     {
         bool isSynced = beatManager.IsSynced;
         float cyclePhase;
-        float cyclePhaseAdvance;
         if (isSynced)
         {
             Duration cycleDuration = CurrentCycleDuration();
-            cyclePhase = SampleSyncedCyclePhase(cycleDuration, out cyclePhaseAdvance);
+            cyclePhase = SampleSyncedCyclePhase(cycleDuration, out float cyclePhaseAdvance);
+            UpdateFillRush(cyclePhaseAdvance);
+            UpdateDropWarp(cyclePhaseAdvance);
         }
         else
         {
             cyclePhase = effectTime * scrollSpeed;
-            cyclePhaseAdvance = 0f;
             // Leaving Synced Mode invalidates the held sample: the next Synced frame must start a
             // fresh one rather than difference against a phase from before the gap.
             hasPreviousSyncedCyclePhase = false;
+            fillEnv = 0f;
+            dropEnv = 0f;
         }
 
-        UpdateFillRush(cyclePhaseAdvance);
-        UpdateDropWarp(cyclePhaseAdvance);
-
         // Fill and Drop are Synced Mode facts, so both envelopes rest at zero in Standalone Mode and
-        // these Sync Settings read through as no compression. That is why the mode is not tested here.
-        float ringCompression = 1f +
-            (SyncSettings.FillRingCompression * fillEnv) +
-            (SyncSettings.DropRingCompression * dropEnv);
+        // their Sync Settings do not enter the Standalone frame.
+        float ringCompression = isSynced
+            ? 1f +
+                (SyncSettings.FillRingCompression * fillEnv) +
+                (SyncSettings.DropRingCompression * dropEnv)
+            : 1f;
 
         float centerScale = isSynced
             ? SyncSettings.CenterScale
@@ -450,10 +451,17 @@ public class Tunnel : EffectBase
             : standaloneSettings.PaletteConditioning;
         conditionedPalette.Refresh(APalette, paletteConditioning);
 
+        float frameTileIndexPhaseStep = tileIndexPhaseStep;
+        float frameFillScroll = fillScroll;
+        float frameDropScroll = dropScroll;
+
         for (int i = 0; i < Penrose.Total; i++)
         {
             float radialPhase = tiles[i].radius * radialPhaseScale;
-            float phase = (i * tileIndexPhaseStep + cyclePhase + fillScroll + dropScroll +
+            float phase = (i * frameTileIndexPhaseStep +
+                cyclePhase +
+                frameFillScroll +
+                frameDropScroll +
                 radialPhase) % 1f;
             buffer[i] = conditionedPalette.ReadCyclic(phase, doblend: true);
         }

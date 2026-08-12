@@ -138,9 +138,10 @@ public abstract class EffectBase
 
         // A phrase counts down to its own length, so its first beat is the frame the remaining count
         // returns to the full length. Name is not the test: consecutive phrases may share one.
-        var phraseBeatsRemaining = beatManager.Phrase.BeatsRemaining;
+        var phrase = beatManager.Phrase;
+        var phraseBeatsRemaining = phrase.BeatsRemaining;
         if (phraseBeatsRemaining is { } remaining
-            && remaining == beatManager.Phrase.LengthBeats
+            && remaining == phrase.LengthBeats
             && previousPhraseBeatsRemaining is { } previousRemaining
             && previousRemaining != remaining)
         {

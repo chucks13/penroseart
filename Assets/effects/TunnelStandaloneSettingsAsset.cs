@@ -16,7 +16,7 @@ public sealed class TunnelStandaloneSettingsAsset :
     public override Type EffectType => typeof(Tunnel);
 
     /// <summary>The saved Tunnel Standalone Settings.</summary>
-    public TunnelStandaloneSettings Settings => settings ?? (settings = CreateDefaultSettings());
+    public TunnelStandaloneSettings Settings => settings ??= CreateDefaultSettings();
 
     /// <summary>
     /// Copies Tunnel's current file-local Standalone Defaults, including every range's Rails, over

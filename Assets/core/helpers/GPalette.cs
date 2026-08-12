@@ -102,10 +102,8 @@ public class GPalette
     /// </summary>
     private void Populate(Color[] initialvalues, bool blendtype = false)
     {
-        Color[] list = initialvalues;
-        length = list.Length;
         blend = blendtype;
-        values = list;
+        values = initialvalues;
         length = values.Length;
 
         float luminanceTotal = 0f;
@@ -146,7 +144,6 @@ public class GPalette
         Color[] values = new Color[length];
         for (int i = 0; i < length; i++)
         {
-            string color = colors[i];
             uint raw = uint.Parse(colors[i], System.Globalization.NumberStyles.AllowHexSpecifier);
             values[i] = new Color32((byte)(raw >> 16), (byte)(raw >> 8), (byte)(raw), 0);
         }
@@ -534,7 +531,10 @@ public class GPalette
         // the rest of the run, so a new entry point does not get to spread it further.
         bool useBlend = doblend || blend;
 
-        i = Mathf.Repeat(i, 1f);
+        if (i < 0f || i >= 1f)
+        {
+            i = Mathf.Repeat(i, 1f);
+        }
         if (i <= 0f || length == 1)
             return values[0];
 
@@ -596,8 +596,6 @@ public class AnimPalette
 
     public static string customSource = "5a2d81,5a2d81,5a2d81,c0c0c0,c0c0c0,63727A,63727A,000000,000000,5a2d81,5a2d81,5a2d81";
 
-    GPalette customPalette;
-
     /// <summary>Loads the built-in fallback palettes.</summary>
     public AnimPalette()
         : this(string.Empty)
@@ -638,7 +636,6 @@ public class AnimPalette
         //        LoadFromFile("palettedata.txt");
         //        LoadFromFile("jenpalettes.txt");
         current = palettes[0];
-        customPalette = new GPalette(customSource);
     }
     /// <summary>
     /// Starts a transition toward a randomly selected loaded palette and advances the shared revision
