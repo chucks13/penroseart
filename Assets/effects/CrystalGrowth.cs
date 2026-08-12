@@ -114,6 +114,15 @@ public class CrystalGrowth : EffectBase
     /// <summary>Per-second decay of the Standalone spread surge, so each synthetic downbeat is a lunge, not a sustained sprint.</summary>
     private const float StandaloneSelfPulseDecayPerSec = 2.5f;
 
+    /// <summary>Weakest Perlin-mapped Standalone spread-surge peak, so even a soft synthetic downbeat still advances the front.</summary>
+    private const float StandaloneSelfPulsePeakMin = 0.55f;
+
+    /// <summary>Strongest Perlin-mapped Standalone spread-surge peak, preserving the full existing synthetic downbeat lunge.</summary>
+    private const float StandaloneSelfPulsePeakMax = 1f;
+
+    /// <summary>Per-second speed through activation-local Perlin space, so adjacent synthetic downbeats vary smoothly instead of jumping independently.</summary>
+    private const float StandaloneSelfPulseNoiseSpeed = 0.2f;
+
     /// <summary>Authored heat threshold at which the crystal tip begins whitening.</summary>
     private const float StandaloneTipThreshold = 0.8f;
 
@@ -295,6 +304,8 @@ public class CrystalGrowth : EffectBase
         BeatSurge = new FloatRange(StandaloneBeatSurgeMin, StandaloneBeatSurgeMax),
         SeedInterval = new FloatRange(StandaloneSeedIntervalMin, StandaloneSeedIntervalMax),
         SelfBeatPeriod = new FloatRange(StandaloneSelfBeatPeriodMin, StandaloneSelfBeatPeriodMax),
+        SelfPulsePeak = new FloatRange(StandaloneSelfPulsePeakMin, StandaloneSelfPulsePeakMax),
+        SelfPulseNoiseSpeed = StandaloneSelfPulseNoiseSpeed,
         SelfPulseDecayPerSec = StandaloneSelfPulseDecayPerSec,
         TipThreshold = StandaloneTipThreshold,
         TipWhitenAmount = StandaloneTipWhitenAmount,
@@ -396,7 +407,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Standalone-only seconds per synthetic downbeat (re-jittered each tick so it never feels mechanical).</summary>
     private float selfBeatPeriod;
 
-    /// <summary>Standalone-only spread surge envelope (1 at a synthetic downbeat, decaying to 0).</summary>
+    /// <summary>Standalone-only Perlin coordinate initialized from the Roll-randomized effect time and advanced from effect delta.</summary>
+    private float selfPulseNoisePosition;
+
+    /// <summary>Standalone-only spread surge envelope, reset to a Perlin-mapped peak on each synthetic downbeat and decayed linearly to zero.</summary>
     private float selfPulse;
 
     /// <summary>Drop Decay sampled this frame; drives the wavefront luminance lift and spread surge.</summary>
@@ -470,6 +484,7 @@ public class CrystalGrowth : EffectBase
         seedTimer = 0f;
         selfBeatPhase = 0f;
         selfBeatPeriod = Random.Range(standaloneSettings.SelfBeatPeriod.Min, standaloneSettings.SelfBeatPeriod.Max);
+        selfPulseNoisePosition = effectTime;
         selfPulse = 0f;
         lastKick = false;
         energyNow = 0f;
@@ -546,11 +561,13 @@ public class CrystalGrowth : EffectBase
 
         SeedThisFrame(deltaTime);
 
-        // The beat surges how far the front lunges this frame. Synced rides the live Pulse; Standalone falls
-        // back to the self-driven surge. The surge is scaled by 'activity' so the front stops lunging to an
-        // inaudible beat during a quiet break. A fill reins the whole thing in (tension); a Drop washes the
+        // The beat surges how far the front lunges this frame. Synced scales the live Pulse by Levels activity
+        // so the front stops lunging to an inaudible beat during a quiet break. Standalone has no Levels and
+        // reads its self-driven surge directly. A fill reins the whole thing in (tension); a Drop washes the
         // fresh layer across the wall and machine-gun lunges on every sixteenth for the drop's whole window.
-        float pulse = (isSynced ? beatManager.Pulses.Beat : selfPulse) * activity;
+        float pulse = isSynced
+            ? beatManager.Pulses.Beat * activity
+            : selfPulse;
         float spread = spreadPerSec
             * (1f + (beatSurge * pulse))
             * fillAmount.Lerp(1f, 1f - SyncSettings.FillHoldback)
@@ -716,6 +733,7 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     private void SeedSelfDriven(float dt)
     {
+        selfPulseNoisePosition += dt * standaloneSettings.SelfPulseNoiseSpeed;
         selfBeatPhase += dt / selfBeatPeriod;
         if (selfBeatPhase >= 1f)
         {
@@ -723,7 +741,11 @@ public class CrystalGrowth : EffectBase
             selfBeatPeriod = Random.Range(
                 standaloneSettings.SelfBeatPeriod.Min,
                 standaloneSettings.SelfBeatPeriod.Max);
-            selfPulse = 1f; // peak surge, decays below
+            float accent = Mathf.PerlinNoise(selfPulseNoisePosition, 0f);
+            selfPulse = Mathf.Lerp(
+                standaloneSettings.SelfPulsePeak.Min,
+                standaloneSettings.SelfPulsePeak.Max,
+                accent);
 
             PlantSeeds(BloomCount());
         }
@@ -1002,6 +1024,12 @@ public sealed class CrystalGrowthStandaloneSettings
     /// <summary>Range in seconds between synthetic Standalone downbeats.</summary>
     public FloatRange SelfBeatPeriod;
 
+    /// <summary>Weakest and strongest Perlin-mapped peak of the synthetic Standalone spread surge.</summary>
+    public FloatRange SelfPulsePeak;
+
+    /// <summary>Per-second speed through the activation-local Perlin coordinate sampled on synthetic downbeats.</summary>
+    public float SelfPulseNoiseSpeed;
+
     /// <summary>Per-second decay of the synthetic Standalone spread surge.</summary>
     public float SelfPulseDecayPerSec;
 
@@ -1068,6 +1096,12 @@ public sealed class CrystalGrowthStandaloneSettings
             source.SelfBeatPeriod.Max,
             source.SelfBeatPeriod.LowRail,
             source.SelfBeatPeriod.HighRail);
+        SelfPulsePeak = new FloatRange(
+            source.SelfPulsePeak.Min,
+            source.SelfPulsePeak.Max,
+            source.SelfPulsePeak.LowRail,
+            source.SelfPulsePeak.HighRail);
+        SelfPulseNoiseSpeed = source.SelfPulseNoiseSpeed;
         SelfPulseDecayPerSec = source.SelfPulseDecayPerSec;
         TipThreshold = source.TipThreshold;
         TipWhitenAmount = source.TipWhitenAmount;

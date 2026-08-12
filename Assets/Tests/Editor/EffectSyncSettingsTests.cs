@@ -878,6 +878,9 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(first.SeedInterval, second.SeedInterval);
         Assert.That(first.SelfBeatPeriod, Is.Not.SameAs(second.SelfBeatPeriod));
         AssertFloatRangeEqual(first.SelfBeatPeriod, second.SelfBeatPeriod);
+        Assert.That(first.SelfPulsePeak, Is.Not.SameAs(second.SelfPulsePeak));
+        AssertFloatRangeEqual(first.SelfPulsePeak, second.SelfPulsePeak);
+        Assert.That(first.SelfPulseNoiseSpeed, Is.EqualTo(second.SelfPulseNoiseSpeed));
         Assert.That(first.SelfPulseDecayPerSec, Is.EqualTo(second.SelfPulseDecayPerSec));
         Assert.That(first.TipThreshold, Is.EqualTo(second.TipThreshold));
         Assert.That(first.TipWhitenAmount, Is.EqualTo(second.TipWhitenAmount));
@@ -910,6 +913,8 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.BeatSurge = new FloatRange(28f, 29f, 27f, 30f);
         asset.Settings.SeedInterval = new FloatRange(0.31f, 0.32f, 0.3f, 0.33f);
         asset.Settings.SelfBeatPeriod = new FloatRange(34f, 35f, 33f, 36f);
+        asset.Settings.SelfPulsePeak = new FloatRange(0.81f, 0.82f, 0.8f, 0.83f);
+        asset.Settings.SelfPulseNoiseSpeed = 84f;
         asset.Settings.SelfPulseDecayPerSec = 37f;
         asset.Settings.TipThreshold = 0.38f;
         asset.Settings.TipWhitenAmount = 0.39f;
@@ -935,6 +940,8 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.BeatSurge, defaults.BeatSurge);
         AssertFloatRangeEqual(asset.Settings.SeedInterval, defaults.SeedInterval);
         AssertFloatRangeEqual(asset.Settings.SelfBeatPeriod, defaults.SelfBeatPeriod);
+        AssertFloatRangeEqual(asset.Settings.SelfPulsePeak, defaults.SelfPulsePeak);
+        Assert.That(asset.Settings.SelfPulseNoiseSpeed, Is.EqualTo(defaults.SelfPulseNoiseSpeed));
         Assert.That(asset.Settings.SelfPulseDecayPerSec, Is.EqualTo(defaults.SelfPulseDecayPerSec));
         Assert.That(asset.Settings.TipThreshold, Is.EqualTo(defaults.TipThreshold));
         Assert.That(asset.Settings.TipWhitenAmount, Is.EqualTo(defaults.TipWhitenAmount));
