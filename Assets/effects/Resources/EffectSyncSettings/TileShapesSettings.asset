@@ -18,7 +18,7 @@ MonoBehaviour:
     FixedHueMin: 0
     FixedHueMax: 1
     ShapeSelectorMin: 0
-    ShapeSelectorMaxExclusive: 9
+    ShapeSelectorMaxExclusive: 8
     RandomColorBrightnessAtTrough: 0.75
     RandomColorBrightnessAtPeak: 1
     FixedHueShiftAtTrough: 0

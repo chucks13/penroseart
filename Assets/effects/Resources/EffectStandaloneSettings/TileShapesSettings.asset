@@ -22,9 +22,9 @@ MonoBehaviour:
       HighRail: 1
     ShapeSelector:
       MinInclusive: 0
-      MaxExclusive: 9
+      MaxExclusive: 8
       LowRail: 0
-      HighRail: 9
+      HighRail: 8
     RandomColorBrightnessAtPeak: 1
     FixedHueShiftAtPeak: 0.25
     FlashCountDivisor: 5

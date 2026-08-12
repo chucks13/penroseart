@@ -26,9 +26,9 @@ MonoBehaviour:
       HighRail: 50
     ShapeRoll:
       MinInclusive: 0
-      MaxExclusive: 9
+      MaxExclusive: 8
       LowRail: 0
-      HighRail: 9
+      HighRail: 8
     HighlightColorValue: 1
     SpawnRoll:
       MinInclusive: 0

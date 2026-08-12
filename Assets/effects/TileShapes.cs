@@ -25,8 +25,8 @@ public class TileShapes : EffectBase
     /// <summary>Authored inclusive lower bound of the packed-shape selector Roll for the unchanged Standalone look.</summary>
     private const int StandaloneShapeSelectorMin = 0;
 
-    /// <summary>Authored exclusive upper bound covering all nine packed-shape selector arms, zero through eight.</summary>
-    private const int StandaloneShapeSelectorMaxExclusive = 9;
+    /// <summary>Authored exclusive upper bound covering all eight packed-shape selector arms, zero through seven.</summary>
+    private const int StandaloneShapeSelectorMaxExclusive = 8;
 
     /// <summary>Authored random-color brightness returned without a live Bar Phase, preserving the unchanged Standalone look.</summary>
     private const float StandaloneRandomColorBrightness = 1f;
@@ -57,8 +57,8 @@ public class TileShapes : EffectBase
     /// <summary>Authored inclusive lower bound of the packed-shape selector Roll in Synced Mode.</summary>
     private const int SyncShapeSelectorMin = 0;
 
-    /// <summary>Authored exclusive upper bound covering all nine packed-shape selector arms, zero through eight, in Synced Mode.</summary>
-    private const int SyncShapeSelectorMaxExclusive = 9;
+    /// <summary>Authored exclusive upper bound covering all eight packed-shape selector arms, zero through seven, in Synced Mode.</summary>
+    private const int SyncShapeSelectorMaxExclusive = 8;
 
     /// <summary>Authored random-color brightness at the Waveform trough in Synced Mode.</summary>
     private const float SyncRandomColorBrightnessAtTrough = 0.75f;
@@ -187,18 +187,15 @@ public class TileShapes : EffectBase
                 shape = penrose.Layout.shapes.Lines3;
                 break;
             case 4:
-                shape = penrose.Layout.shapes.Lines4;
-                break;
-            case 5:
                 shape = penrose.Layout.shapes.Loops;
                 break;
-            case 6:
+            case 5:
                 shape = penrose.Layout.shapes.Lotusballs;
                 break;
-            case 7:
+            case 6:
                 shape = penrose.Layout.shapes.Starballs;
                 break;
-            case 8:
+            case 7:
                 shape = penrose.Layout.shapes.Stars;
                 break;
         }

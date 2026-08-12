@@ -232,8 +232,7 @@ public class Angles : EffectBase
     // Runtime mechanism constants
 
     /// <summary>
-    /// Four distinct Line Ribbon directions exist in the layout: lines0, lines4, lines2, and lines1.
-    /// Lines3 is byte-for-byte identical to lines2 and deliberately contributes no fifth family.
+    /// Four distinct Line Ribbon directions exist in the layout: lines0, lines3, lines2, and lines1.
     /// </summary>
     private const int RibbonFamilyCount = 4;
 
@@ -428,7 +427,7 @@ public class Angles : EffectBase
     /// <summary>
     /// Per Line Ribbon family and Tile, the Tile's normalized stored position along its group, or -1
     /// when it belongs to no ribbon in that family. Families are ordered cleanest-first as lines0,
-    /// lines4, lines2, lines1 so overlap resolution and density decay share one stable priority.
+    /// lines3, lines2, lines1 so overlap resolution and density decay share one stable priority.
     /// </summary>
     /// <remarks>
     /// This is initialization-only geometry staging. Its arrays become the resolved active-family
@@ -572,7 +571,7 @@ public class Angles : EffectBase
             AnglesSyncSettings.FillUnitKind.Stars);
 
         PrecomputeRibbonFamily(0, penrose.Layout.shapes.Lines0, total);
-        PrecomputeRibbonFamily(1, penrose.Layout.shapes.Lines4, total);
+        PrecomputeRibbonFamily(1, penrose.Layout.shapes.Lines3, total);
         PrecomputeRibbonFamily(2, penrose.Layout.shapes.Lines2, total);
         PrecomputeRibbonFamily(3, penrose.Layout.shapes.Lines1, total);
         ribbonPositionByActiveFamilyCount = PrecomputeRibbonPositionsByActiveFamilyCount(

@@ -101,11 +101,8 @@ public class LayoutData
         /// <summary>Packed third Line Ribbon family populated from the layout's <c>lines2</c> JSON field.</summary>
         [SerializeField] private int[] lines2;
 
-        /// <summary>Packed fourth Line Ribbon slot populated from the layout's <c>lines3</c> JSON field.</summary>
+        /// <summary>Packed fourth Line Ribbon family populated from the layout's <c>lines3</c> JSON field.</summary>
         [SerializeField] private int[] lines3;
-
-        /// <summary>Packed fifth Line Ribbon slot populated from the layout's <c>lines4</c> JSON field.</summary>
-        [SerializeField] private int[] lines4;
 
         /// <summary>Packed Lotusball group data populated from the layout's <c>lotusballs</c> JSON field.</summary>
         [SerializeField] private int[] lotusballs;
@@ -134,11 +131,8 @@ public class LayoutData
         /// <summary>Allocation-free access to the third Line Ribbon Shape List groups.</summary>
         public Reader Lines2 => new(lines2);
 
-        /// <summary>Allocation-free access to the fourth Line Ribbon Shape List slot.</summary>
+        /// <summary>Allocation-free access to the fourth Line Ribbon Shape List groups.</summary>
         public Reader Lines3 => new(lines3);
-
-        /// <summary>Allocation-free access to the fifth Line Ribbon Shape List slot.</summary>
-        public Reader Lines4 => new(lines4);
 
         /// <summary>Allocation-free access to the Lotusball Shape List groups.</summary>
         public Reader Lotusballs => new(lotusballs);

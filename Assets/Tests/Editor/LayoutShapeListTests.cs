@@ -36,8 +36,7 @@ public class LayoutShapeListTests
         Assert.AreEqual(7, shapes.Lines0.GroupCount, "Lines0");
         Assert.AreEqual(15, shapes.Lines1.GroupCount, "Lines1");
         Assert.AreEqual(17, shapes.Lines2.GroupCount, "Lines2");
-        Assert.AreEqual(17, shapes.Lines3.GroupCount, "Lines3");
-        Assert.AreEqual(15, shapes.Lines4.GroupCount, "Lines4");
+        Assert.AreEqual(15, shapes.Lines3.GroupCount, "Lines3");
         Assert.AreEqual(49, shapes.Lotusballs.GroupCount, "Lotusballs");
         Assert.AreEqual(32, shapes.Starballs.GroupCount, "Starballs");
         Assert.AreEqual(446, shapes.Mirror2.GroupCount, "Mirror2");

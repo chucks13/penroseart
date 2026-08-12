@@ -27,7 +27,7 @@ public class ShapeGlitch : MixerBase
     private const int StandaloneShapeRollMin = 0;
 
     /// <summary>Authored exclusive maximum outcome for the per-activation packed-shape Roll.</summary>
-    private const int StandaloneShapeRollMaxExclusive = 9;
+    private const int StandaloneShapeRollMaxExclusive = 8;
 
     /// <summary>Authored HSV value used for the randomly rolled highlight color.</summary>
     private const float StandaloneHighlightColorValue = 1f;
@@ -71,7 +71,7 @@ public class ShapeGlitch : MixerBase
     private const int SyncShapeRollMin = 0;
 
     /// <summary>Authored Synced Mode exclusive maximum outcome for the per-activation packed-shape Roll.</summary>
-    private const int SyncShapeRollMaxExclusive = 9;
+    private const int SyncShapeRollMaxExclusive = 8;
 
     /// <summary>Authored Synced Mode HSV value used for the randomly rolled highlight color.</summary>
     private const float SyncHighlightColorValue = 1f;
@@ -238,18 +238,15 @@ public class ShapeGlitch : MixerBase
                 shape = penrose.Layout.shapes.Lines3;
                 break;
             case 4:
-                shape = penrose.Layout.shapes.Lines4;
-                break;
-            case 5:
                 shape = penrose.Layout.shapes.Loops;
                 break;
-            case 6:
+            case 5:
                 shape = penrose.Layout.shapes.Lotusballs;
                 break;
-            case 7:
+            case 6:
                 shape = penrose.Layout.shapes.Starballs;
                 break;
-            case 8:
+            case 7:
                 shape = penrose.Layout.shapes.Stars;
                 break;
         }

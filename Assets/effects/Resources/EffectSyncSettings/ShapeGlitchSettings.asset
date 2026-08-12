@@ -19,7 +19,7 @@ MonoBehaviour:
     HighlightCountMin: 10
     HighlightCountMaxExclusive: 50
     ShapeRollMin: 0
-    ShapeRollMaxExclusive: 9
+    ShapeRollMaxExclusive: 8
     HighlightColorValue: 1
     SpawnRollMin: 0
     SpawnRollCeilingExclusive: 50
