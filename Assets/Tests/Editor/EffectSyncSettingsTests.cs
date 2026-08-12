@@ -133,6 +133,65 @@ public sealed class EffectSyncSettingsTests
             defaults.PaletteConditioning);
     }
 
+    /// <summary>
+    /// NoiseTunnel Standalone Defaults resolve as fresh, mutually independent copies without
+    /// pinning the authored look in the test.
+    /// </summary>
+    [Test]
+    public void NoiseTunnelStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = NoiseTunnel.StandaloneDefaults;
+        var second = NoiseTunnel.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.TileCenterScale, Is.Not.SameAs(second.TileCenterScale));
+        AssertFloatRangeEqual(first.TileCenterScale, second.TileCenterScale);
+        Assert.That(first.TunnelFlowSpeed, Is.Not.SameAs(second.TunnelFlowSpeed));
+        AssertFloatRangeEqual(first.TunnelFlowSpeed, second.TunnelFlowSpeed);
+        Assert.That(first.PerlinAmplitude, Is.Not.SameAs(second.PerlinAmplitude));
+        AssertFloatRangeEqual(first.PerlinAmplitude, second.PerlinAmplitude);
+        Assert.That(first.DistanceStyle, Is.Not.SameAs(second.DistanceStyle));
+        AssertIntRangeEqual(first.DistanceStyle, second.DistanceStyle);
+        Assert.That(first.DistanceDirection, Is.Not.SameAs(second.DistanceDirection));
+        AssertIntRangeEqual(first.DistanceDirection, second.DistanceDirection);
+        Assert.That(first.WaveformResponseMode, Is.Not.SameAs(second.WaveformResponseMode));
+        AssertIntRangeEqual(first.WaveformResponseMode, second.WaveformResponseMode);
+        Assert.That(first.Brightness, Is.Not.SameAs(second.Brightness));
+        AssertFloatRangeEqual(first.Brightness, second.Brightness);
+    }
+
+    /// <summary>
+    /// Restore replaces every edited NoiseTunnel Standalone Setting and Rail with its current
+    /// file-local Standalone Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryNoiseTunnelValue()
+    {
+        var asset = (NoiseTunnelStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(NoiseTunnel),
+            TempAssetFolder);
+        asset.Settings.TileCenterScale = new FloatRange(10f, 11f, 9f, 12f);
+        asset.Settings.TunnelFlowSpeed = new FloatRange(13f, 14f, 12f, 15f);
+        asset.Settings.PerlinAmplitude = new FloatRange(16f, 17f, 15f, 18f);
+        asset.Settings.DistanceStyle = new IntRange(19, 20, 18, 21);
+        asset.Settings.DistanceDirection = new IntRange(22, 23, 21, 24);
+        asset.Settings.WaveformResponseMode = new IntRange(25, 26, 24, 27);
+        asset.Settings.Brightness = new FloatRange(28f, 29f, 27f, 30f);
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
+            typeof(NoiseTunnel),
+            TempAssetFolder);
+
+        var defaults = NoiseTunnel.StandaloneDefaults;
+        AssertFloatRangeEqual(asset.Settings.TileCenterScale, defaults.TileCenterScale);
+        AssertFloatRangeEqual(asset.Settings.TunnelFlowSpeed, defaults.TunnelFlowSpeed);
+        AssertFloatRangeEqual(asset.Settings.PerlinAmplitude, defaults.PerlinAmplitude);
+        AssertIntRangeEqual(asset.Settings.DistanceStyle, defaults.DistanceStyle);
+        AssertIntRangeEqual(asset.Settings.DistanceDirection, defaults.DistanceDirection);
+        AssertIntRangeEqual(asset.Settings.WaveformResponseMode, defaults.WaveformResponseMode);
+        AssertFloatRangeEqual(asset.Settings.Brightness, defaults.Brightness);
+    }
+
     /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
     [Test]
     public void RippleStandaloneSettingsResolveToStandaloneDefaults()
@@ -242,6 +301,48 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropRingCompression, Is.EqualTo(defaults.DropRingCompression));
     }
 
+    /// <summary>
+    /// Restore replaces every edited NoiseTunnel Sync Setting and Rail with its current file-local
+    /// Sync Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryNoiseTunnelValue()
+    {
+        var asset = (NoiseTunnelSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(NoiseTunnel),
+            TempAssetFolder);
+        asset.Settings.WaveformEnergyOne = Energy.High;
+        asset.Settings.WaveformEnergyTwo = Energy.High;
+        asset.Settings.TileCenterScale = new FloatRange(10f, 11f, 9f, 12f);
+        asset.Settings.TunnelFlowSpeed = new FloatRange(13f, 14f, 12f, 15f);
+        asset.Settings.PerlinAmplitude = new FloatRange(16f, 17f, 15f, 18f);
+        asset.Settings.DistanceStyle = new IntRange(19, 20, 18, 21);
+        asset.Settings.DistanceDirection = new IntRange(22, 23, 21, 24);
+        asset.Settings.WaveformResponseMode = new IntRange(25, 26, 24, 27);
+        asset.Settings.Brightness = new FloatRange(28f, 29f, 27f, 30f);
+        asset.Settings.HueShiftAtWaveformPeak = 31f;
+        asset.Settings.TimeOffsetAtWaveformPeak = 32f;
+        asset.Settings.FillSaturation = 0.33f;
+        asset.Settings.DropSlowdownBeats = 34;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(NoiseTunnel), TempAssetFolder);
+
+        var defaults = NoiseTunnel.SyncDefaults;
+        Assert.That(asset.Settings.WaveformEnergyOne, Is.EqualTo(defaults.WaveformEnergyOne));
+        Assert.That(asset.Settings.WaveformEnergyTwo, Is.EqualTo(defaults.WaveformEnergyTwo));
+        AssertFloatRangeEqual(asset.Settings.TileCenterScale, defaults.TileCenterScale);
+        AssertFloatRangeEqual(asset.Settings.TunnelFlowSpeed, defaults.TunnelFlowSpeed);
+        AssertFloatRangeEqual(asset.Settings.PerlinAmplitude, defaults.PerlinAmplitude);
+        AssertIntRangeEqual(asset.Settings.DistanceStyle, defaults.DistanceStyle);
+        AssertIntRangeEqual(asset.Settings.DistanceDirection, defaults.DistanceDirection);
+        AssertIntRangeEqual(asset.Settings.WaveformResponseMode, defaults.WaveformResponseMode);
+        AssertFloatRangeEqual(asset.Settings.Brightness, defaults.Brightness);
+        Assert.That(asset.Settings.HueShiftAtWaveformPeak, Is.EqualTo(defaults.HueShiftAtWaveformPeak));
+        Assert.That(asset.Settings.TimeOffsetAtWaveformPeak, Is.EqualTo(defaults.TimeOffsetAtWaveformPeak));
+        Assert.That(asset.Settings.FillSaturation, Is.EqualTo(defaults.FillSaturation));
+        Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
+    }
+
     /// <summary>Restore replaces every edited Ripple Sync Setting with the current file-local Sync Defaults.</summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
@@ -306,6 +407,28 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.KickBurstMin, Is.EqualTo(defaults.KickBurstMin));
         Assert.That(asset.Settings.KickBurstMax, Is.EqualTo(defaults.KickBurstMax));
         Assert.That(asset.Settings.DownbeatSeedBonus, Is.EqualTo(defaults.DownbeatSeedBonus));
+    }
+
+    /// <summary>Asserts that a float range's endpoints and editor Rails match.</summary>
+    /// <param name="actual">The restored or independently resolved settings range.</param>
+    /// <param name="expected">The current file-local defaults range.</param>
+    private static void AssertFloatRangeEqual(FloatRange actual, FloatRange expected)
+    {
+        Assert.That(actual.Min, Is.EqualTo(expected.Min));
+        Assert.That(actual.Max, Is.EqualTo(expected.Max));
+        Assert.That(actual.LowRail, Is.EqualTo(expected.LowRail));
+        Assert.That(actual.HighRail, Is.EqualTo(expected.HighRail));
+    }
+
+    /// <summary>Asserts that an integer range's endpoints and editor Rails match.</summary>
+    /// <param name="actual">The restored or independently resolved settings range.</param>
+    /// <param name="expected">The current file-local defaults range.</param>
+    private static void AssertIntRangeEqual(IntRange actual, IntRange expected)
+    {
+        Assert.That(actual.MinInclusive, Is.EqualTo(expected.MinInclusive));
+        Assert.That(actual.MaxExclusive, Is.EqualTo(expected.MaxExclusive));
+        Assert.That(actual.LowRail, Is.EqualTo(expected.LowRail));
+        Assert.That(actual.HighRail, Is.EqualTo(expected.HighRail));
     }
 
     /// <summary>

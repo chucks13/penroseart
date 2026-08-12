@@ -7,48 +7,52 @@ using Random = UnityEngine.Random;
 /// Renders radial and diagonal tunnel bands directly from tile positions.
 /// </summary>
 [EffectSyncSettings(typeof(NoiseTunnelSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(NoiseTunnelStandaloneSettingsAsset))]
 public class NoiseTunnel : EffectBase
 {
     // Standalone Defaults
 
     /// <summary>Authored minimum tile-center scale for the unchanged Standalone tunnel field.</summary>
-    private const float StandaloneScaleMin = 0.05f;
+    private const float StandaloneTileCenterScaleMin = 0.05f;
 
     /// <summary>Authored maximum tile-center scale for the unchanged Standalone tunnel field.</summary>
-    private const float StandaloneScaleMax = 0.2f;
+    private const float StandaloneTileCenterScaleMax = 0.2f;
 
     /// <summary>Authored minimum tunnel-flow speed for the unchanged Standalone look.</summary>
-    private const float StandaloneSpeedMin = 0.1f;
+    private const float StandaloneTunnelFlowSpeedMin = 0.1f;
 
     /// <summary>Authored maximum tunnel-flow speed for the unchanged Standalone look.</summary>
-    private const float StandaloneSpeedMax = 1.5f;
+    private const float StandaloneTunnelFlowSpeedMax = 1.5f;
 
     /// <summary>Authored minimum Perlin amplitude for the unchanged Standalone contrast.</summary>
-    private const float StandaloneAmplifierMin = 1f;
+    private const float StandalonePerlinAmplitudeMin = 1f;
 
     /// <summary>Authored maximum Perlin amplitude for the unchanged Standalone contrast.</summary>
-    private const float StandaloneAmplifierMax = 5f;
+    private const float StandalonePerlinAmplitudeMax = 5f;
 
-    /// <summary>Authored inclusive lower endpoint of the Standalone style roll.</summary>
-    private const int StandaloneStyleMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Standalone distance-style roll.</summary>
+    private const int StandaloneDistanceStyleMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete three-style Standalone roll.</summary>
-    private const int StandaloneStyleMaxExclusive = 3;
+    /// <summary>Authored exclusive upper endpoint of the complete three-style Standalone distance roll.</summary>
+    private const int StandaloneDistanceStyleMaxExclusive = 3;
 
-    /// <summary>Authored inclusive lower endpoint of the Standalone direction roll.</summary>
-    private const int StandaloneDirectionMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Standalone distance-direction roll.</summary>
+    private const int StandaloneDistanceDirectionMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete two-direction Standalone roll.</summary>
-    private const int StandaloneDirectionMaxExclusive = 2;
+    /// <summary>Authored exclusive upper endpoint of the complete two-direction Standalone distance roll.</summary>
+    private const int StandaloneDistanceDirectionMaxExclusive = 2;
 
-    /// <summary>Authored inclusive lower endpoint of the Standalone beat-response-mode roll.</summary>
-    private const int StandaloneBeatModeMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Standalone Waveform-response-mode roll.</summary>
+    private const int StandaloneWaveformResponseModeMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete three-mode Standalone beat-response roll.</summary>
-    private const int StandaloneBeatModeMaxExclusive = 3;
+    /// <summary>Authored exclusive upper endpoint of the complete three-mode Standalone Waveform-response roll.</summary>
+    private const int StandaloneWaveformResponseModeMaxExclusive = 3;
 
     /// <summary>Authored brightness multiplier returned by Waveform.Lerp without live placement.</summary>
-    private const float StandaloneBrightnessFallback = 0.75f;
+    private const float StandaloneBrightnessAtRest = 0.75f;
+
+    /// <summary>Authored brightness multiplier corresponding to the Waveform trough endpoint.</summary>
+    private const float StandaloneBrightnessAtWaveformTrough = 1f;
 
     // Sync Defaults
 
@@ -59,46 +63,46 @@ public class NoiseTunnel : EffectBase
     private const Energy SyncWaveformEnergyTwo = Energy.Mid;
 
     /// <summary>Authored minimum tile-center scale for a Synced Mode tunnel-field roll.</summary>
-    private const float SyncScaleMin = 0.05f;
+    private const float SyncTileCenterScaleMin = 0.05f;
 
     /// <summary>Authored maximum tile-center scale for a Synced Mode tunnel-field roll.</summary>
-    private const float SyncScaleMax = 0.2f;
+    private const float SyncTileCenterScaleMax = 0.2f;
 
     /// <summary>Authored minimum tunnel-flow speed for a Synced Mode roll.</summary>
-    private const float SyncSpeedMin = 0.1f;
+    private const float SyncTunnelFlowSpeedMin = 0.1f;
 
     /// <summary>Authored maximum tunnel-flow speed for a Synced Mode roll.</summary>
-    private const float SyncSpeedMax = 1.5f;
+    private const float SyncTunnelFlowSpeedMax = 1.5f;
 
     /// <summary>Authored minimum Perlin amplitude for a Synced Mode contrast roll.</summary>
-    private const float SyncAmplifierMin = 1f;
+    private const float SyncPerlinAmplitudeMin = 1f;
 
     /// <summary>Authored maximum Perlin amplitude for a Synced Mode contrast roll.</summary>
-    private const float SyncAmplifierMax = 5f;
+    private const float SyncPerlinAmplitudeMax = 5f;
 
-    /// <summary>Authored inclusive lower endpoint of the Synced Mode style roll.</summary>
-    private const int SyncStyleMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Synced Mode distance-style roll.</summary>
+    private const int SyncDistanceStyleMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete three-style Synced Mode roll.</summary>
-    private const int SyncStyleMaxExclusive = 3;
+    /// <summary>Authored exclusive upper endpoint of the complete three-style Synced Mode distance roll.</summary>
+    private const int SyncDistanceStyleMaxExclusive = 3;
 
-    /// <summary>Authored inclusive lower endpoint of the Synced Mode direction roll.</summary>
-    private const int SyncDirectionMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Synced Mode distance-direction roll.</summary>
+    private const int SyncDistanceDirectionMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete two-direction Synced Mode roll.</summary>
-    private const int SyncDirectionMaxExclusive = 2;
+    /// <summary>Authored exclusive upper endpoint of the complete two-direction Synced Mode distance roll.</summary>
+    private const int SyncDistanceDirectionMaxExclusive = 2;
 
-    /// <summary>Authored inclusive lower endpoint of the Synced Mode beat-response-mode roll.</summary>
-    private const int SyncBeatModeMinInclusive = 0;
+    /// <summary>Authored inclusive lower endpoint of the Synced Mode Waveform-response-mode roll.</summary>
+    private const int SyncWaveformResponseModeMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper endpoint of the complete three-mode Synced Mode beat-response roll.</summary>
-    private const int SyncBeatModeMaxExclusive = 3;
+    /// <summary>Authored exclusive upper endpoint of the complete three-mode Synced Mode Waveform-response roll.</summary>
+    private const int SyncWaveformResponseModeMaxExclusive = 3;
 
     /// <summary>Authored brightness multiplier reached at the Waveform trough in Synced Mode.</summary>
     private const float SyncBrightnessAtWaveformTrough = 1f;
 
-    /// <summary>Authored brightness multiplier reached at the Waveform peak in Synced Mode.</summary>
-    private const float SyncBrightnessAtWaveformPeak = 0.75f;
+    /// <summary>Authored brightness multiplier reached at the Waveform peak and at rest in Synced Mode.</summary>
+    private const float SyncBrightnessAtRest = 0.75f;
 
     /// <summary>Authored hue offset reached at the Waveform peak in Synced Mode.</summary>
     private const float SyncHueShiftAtWaveformPeak = 0.5f;
@@ -116,46 +120,58 @@ public class NoiseTunnel : EffectBase
     public override Repertoire Repertoire =>
          Repertoire.HandlesFill |  Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of NoiseTunnel's Standalone Defaults.</summary>
-    public static NoiseTunnelStandaloneSettings StandaloneSettings => new NoiseTunnelStandaloneSettings(
-        new FloatRange(StandaloneScaleMin, StandaloneScaleMax),
-        new FloatRange(StandaloneSpeedMin, StandaloneSpeedMax),
-        new FloatRange(StandaloneAmplifierMin, StandaloneAmplifierMax),
-        StandaloneStyleMinInclusive,
-        StandaloneStyleMaxExclusive,
-        StandaloneDirectionMinInclusive,
-        StandaloneDirectionMaxExclusive,
-        StandaloneBeatModeMinInclusive,
-        StandaloneBeatModeMaxExclusive,
-        StandaloneBrightnessFallback);
+    /// <summary>Resolves a fresh copy of NoiseTunnel's file-local Standalone Defaults.</summary>
+    public static NoiseTunnelStandaloneSettings StandaloneDefaults => new()
+    {
+        TileCenterScale = new FloatRange(
+            StandaloneTileCenterScaleMin,
+            StandaloneTileCenterScaleMax),
+        TunnelFlowSpeed = new FloatRange(
+            StandaloneTunnelFlowSpeedMin,
+            StandaloneTunnelFlowSpeedMax),
+        PerlinAmplitude = new FloatRange(
+            StandalonePerlinAmplitudeMin,
+            StandalonePerlinAmplitudeMax),
+        DistanceStyle = new IntRange(
+            StandaloneDistanceStyleMinInclusive,
+            StandaloneDistanceStyleMaxExclusive),
+        DistanceDirection = new IntRange(
+            StandaloneDistanceDirectionMinInclusive,
+            StandaloneDistanceDirectionMaxExclusive),
+        WaveformResponseMode = new IntRange(
+            StandaloneWaveformResponseModeMinInclusive,
+            StandaloneWaveformResponseModeMaxExclusive),
+        Brightness = new FloatRange(
+            StandaloneBrightnessAtRest,
+            StandaloneBrightnessAtWaveformTrough),
+    };
 
     /// <summary>Resolves a fresh copy of NoiseTunnel's file-local Sync Defaults.</summary>
-    public static NoiseTunnelSyncSettings SyncDefaults => new NoiseTunnelSyncSettings
+    public static NoiseTunnelSyncSettings SyncDefaults => new()
     {
         WaveformEnergyOne = SyncWaveformEnergyOne,
         WaveformEnergyTwo = SyncWaveformEnergyTwo,
-        ScaleMin = SyncScaleMin,
-        ScaleMax = SyncScaleMax,
-        SpeedMin = SyncSpeedMin,
-        SpeedMax = SyncSpeedMax,
-        AmplifierMin = SyncAmplifierMin,
-        AmplifierMax = SyncAmplifierMax,
-        StyleMinInclusive = SyncStyleMinInclusive,
-        StyleMaxExclusive = SyncStyleMaxExclusive,
-        DirectionMinInclusive = SyncDirectionMinInclusive,
-        DirectionMaxExclusive = SyncDirectionMaxExclusive,
-        BeatModeMinInclusive = SyncBeatModeMinInclusive,
-        BeatModeMaxExclusive = SyncBeatModeMaxExclusive,
-        BrightnessAtWaveformTrough = SyncBrightnessAtWaveformTrough,
-        BrightnessAtWaveformPeak = SyncBrightnessAtWaveformPeak,
+        TileCenterScale = new FloatRange(SyncTileCenterScaleMin, SyncTileCenterScaleMax),
+        TunnelFlowSpeed = new FloatRange(SyncTunnelFlowSpeedMin, SyncTunnelFlowSpeedMax),
+        PerlinAmplitude = new FloatRange(SyncPerlinAmplitudeMin, SyncPerlinAmplitudeMax),
+        DistanceStyle = new IntRange(
+            SyncDistanceStyleMinInclusive,
+            SyncDistanceStyleMaxExclusive),
+        DistanceDirection = new IntRange(
+            SyncDistanceDirectionMinInclusive,
+            SyncDistanceDirectionMaxExclusive),
+        WaveformResponseMode = new IntRange(
+            SyncWaveformResponseModeMinInclusive,
+            SyncWaveformResponseModeMaxExclusive),
+        Brightness = new FloatRange(SyncBrightnessAtRest, SyncBrightnessAtWaveformTrough),
         HueShiftAtWaveformPeak = SyncHueShiftAtWaveformPeak,
         TimeOffsetAtWaveformPeak = SyncTimeOffsetAtWaveformPeak,
         FillSaturation = SyncFillSaturation,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private NoiseTunnelStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private NoiseTunnelStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private NoiseTunnelSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -209,33 +225,45 @@ public class NoiseTunnel : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(NoiseTunnel),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(NoiseTunnel),
             SyncDefaults);
 
         waveform = waveforms.Random(SyncSettings.WaveformEnergyOne, SyncSettings.WaveformEnergyTwo);
         bool isSynced = beatManager.IsSynced;
-        float scaleMin = isSynced ? SyncSettings.ScaleMin : standaloneSettings.Scale.Min;
-        float scaleMax = isSynced ? SyncSettings.ScaleMax : standaloneSettings.Scale.Max;
-        float speedMin = isSynced ? SyncSettings.SpeedMin : standaloneSettings.Speed.Min;
-        float speedMax = isSynced ? SyncSettings.SpeedMax : standaloneSettings.Speed.Max;
-        float amplifierMin = isSynced ? SyncSettings.AmplifierMin : standaloneSettings.Amplifier.Min;
-        float amplifierMax = isSynced ? SyncSettings.AmplifierMax : standaloneSettings.Amplifier.Max;
-        int styleMin = isSynced ? SyncSettings.StyleMinInclusive : standaloneSettings.StyleMinInclusive;
-        int styleMax = isSynced ? SyncSettings.StyleMaxExclusive : standaloneSettings.StyleMaxExclusive;
-        int directionMin = isSynced ? SyncSettings.DirectionMinInclusive : standaloneSettings.DirectionMinInclusive;
-        int directionMax = isSynced ? SyncSettings.DirectionMaxExclusive : standaloneSettings.DirectionMaxExclusive;
-        int beatModeMin = isSynced ? SyncSettings.BeatModeMinInclusive : standaloneSettings.BeatModeMinInclusive;
-        int beatModeMax = isSynced ? SyncSettings.BeatModeMaxExclusive : standaloneSettings.BeatModeMaxExclusive;
-        scale = Random.Range(scaleMin, scaleMax);
-        speed = Random.Range(speedMin, speedMax);
-        amplifier = Random.Range(amplifierMin, amplifierMax);
+        FloatRange tileCenterScaleRange = isSynced
+            ? SyncSettings.TileCenterScale
+            : standaloneSettings.TileCenterScale;
+        FloatRange tunnelFlowSpeedRange = isSynced
+            ? SyncSettings.TunnelFlowSpeed
+            : standaloneSettings.TunnelFlowSpeed;
+        FloatRange perlinAmplitudeRange = isSynced
+            ? SyncSettings.PerlinAmplitude
+            : standaloneSettings.PerlinAmplitude;
+        IntRange distanceStyleRange = isSynced
+            ? SyncSettings.DistanceStyle
+            : standaloneSettings.DistanceStyle;
+        IntRange distanceDirectionRange = isSynced
+            ? SyncSettings.DistanceDirection
+            : standaloneSettings.DistanceDirection;
+        IntRange waveformResponseModeRange = isSynced
+            ? SyncSettings.WaveformResponseMode
+            : standaloneSettings.WaveformResponseMode;
+        scale = Random.Range(tileCenterScaleRange.Min, tileCenterScaleRange.Max);
+        speed = Random.Range(tunnelFlowSpeedRange.Min, tunnelFlowSpeedRange.Max);
+        amplifier = Random.Range(perlinAmplitudeRange.Min, perlinAmplitudeRange.Max);
         colorDelta = Random.value;
-        style = Random.Range(styleMin, styleMax);
-        direction = Random.Range(directionMin, directionMax);
+        style = Random.Range(distanceStyleRange.MinInclusive, distanceStyleRange.MaxExclusive);
+        direction = Random.Range(
+            distanceDirectionRange.MinInclusive,
+            distanceDirectionRange.MaxExclusive);
         buffer.Clear();
-        beatMode = Random.Range(beatModeMin, beatModeMax);
+        beatMode = Random.Range(
+            waveformResponseModeRange.MinInclusive,
+            waveformResponseModeRange.MaxExclusive);
     }
 
     /// <summary>
@@ -250,12 +278,12 @@ public class NoiseTunnel : EffectBase
     {
         // This Effect owns its brightness, hue, time-warp, and clockless fallback mappings.
         float rhythm = waveform.Envelope;
-        float brightnessAtWaveformPeakOrFallback = beatManager.IsSynced
-            ? SyncSettings.BrightnessAtWaveformPeak
-            : standaloneSettings.BrightnessFallback;
+        FloatRange brightnessRange = beatManager.IsSynced
+            ? SyncSettings.Brightness
+            : standaloneSettings.Brightness;
         float beatBrightness = waveform.Lerp(
-            SyncSettings.BrightnessAtWaveformTrough,
-            brightnessAtWaveformPeakOrFallback);
+            brightnessRange.Max,
+            brightnessRange.Min);
         float beatHue = SyncSettings.HueShiftAtWaveformPeak * rhythm;
         float beatTime = effectTime + (SyncSettings.TimeOffsetAtWaveformPeak * rhythm);
         float localTime = effectTime;
@@ -320,66 +348,69 @@ public class NoiseTunnel : EffectBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce NoiseTunnel's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by NoiseTunnel's Standalone Defaults and saved Standalone Settings.
+/// </summary>
+[Serializable]
 public sealed class NoiseTunnelStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from NoiseTunnel's file-local defaults.</summary>
-    public NoiseTunnelStandaloneSettings(
-        FloatRange scale,
-        FloatRange speed,
-        FloatRange amplifier,
-        int styleMinInclusive,
-        int styleMaxExclusive,
-        int directionMinInclusive,
-        int directionMaxExclusive,
-        int beatModeMinInclusive,
-        int beatModeMaxExclusive,
-        float brightnessFallback)
-    {
-        Scale = scale;
-        Speed = speed;
-        Amplifier = amplifier;
-        StyleMinInclusive = styleMinInclusive;
-        StyleMaxExclusive = styleMaxExclusive;
-        DirectionMinInclusive = directionMinInclusive;
-        DirectionMaxExclusive = directionMaxExclusive;
-        BeatModeMinInclusive = beatModeMinInclusive;
-        BeatModeMaxExclusive = beatModeMaxExclusive;
-        BrightnessFallback = brightnessFallback;
-    }
-
     /// <summary>Per-activation tile-center scale range.</summary>
-    public FloatRange Scale;
+    public FloatRange TileCenterScale;
 
     /// <summary>Per-activation tunnel-flow-speed range.</summary>
-    public FloatRange Speed;
+    public FloatRange TunnelFlowSpeed;
 
     /// <summary>Per-activation Perlin-amplitude range.</summary>
-    public FloatRange Amplifier;
+    public FloatRange PerlinAmplitude;
 
-    /// <summary>Inclusive lower endpoint of the per-activation style roll.</summary>
-    public int StyleMinInclusive;
+    /// <summary>Per-activation range selecting the radial or diagonal distance formula.</summary>
+    public IntRange DistanceStyle;
 
-    /// <summary>Exclusive upper endpoint of the per-activation style roll.</summary>
-    public int StyleMaxExclusive;
+    /// <summary>Per-activation range selecting normal or inverted distance.</summary>
+    public IntRange DistanceDirection;
 
-    /// <summary>Inclusive lower endpoint of the per-activation direction roll.</summary>
-    public int DirectionMinInclusive;
+    /// <summary>Per-activation range selecting the Waveform response combination.</summary>
+    public IntRange WaveformResponseMode;
 
-    /// <summary>Exclusive upper endpoint of the per-activation direction roll.</summary>
-    public int DirectionMaxExclusive;
+    /// <summary>
+    /// Brightness range whose maximum is the Waveform trough and whose minimum is the peak and
+    /// Standalone fallback, preserving the authored inverse pulse.
+    /// </summary>
+    public FloatRange Brightness;
 
-    /// <summary>Inclusive lower endpoint of the per-activation beat-response-mode roll.</summary>
-    public int BeatModeMinInclusive;
+    /// <summary>Copies every NoiseTunnel Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(NoiseTunnelStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
 
-    /// <summary>Exclusive upper endpoint of the per-activation beat-response-mode roll.</summary>
-    public int BeatModeMaxExclusive;
+        TileCenterScale = Copy(source.TileCenterScale);
+        TunnelFlowSpeed = Copy(source.TunnelFlowSpeed);
+        PerlinAmplitude = Copy(source.PerlinAmplitude);
+        DistanceStyle = Copy(source.DistanceStyle);
+        DistanceDirection = Copy(source.DistanceDirection);
+        WaveformResponseMode = Copy(source.WaveformResponseMode);
+        Brightness = Copy(source.Brightness);
+    }
 
-    /// <summary>Brightness multiplier returned by Waveform.Lerp without live placement.</summary>
-    public float BrightnessFallback;
+    /// <summary>Copies a float range without sharing mutable saved settings state.</summary>
+    private static FloatRange Copy(FloatRange source) => new(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Copies an integer range without sharing mutable saved settings state.</summary>
+    private static IntRange Copy(IntRange source) => new(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
 }
 
-/// <summary>Editable music-response values saved as NoiseTunnel's Sync Settings.</summary>
+/// <summary>The serializable value shape shared by NoiseTunnel's Sync Defaults and Sync Settings.</summary>
 [Serializable]
 public sealed class NoiseTunnelSyncSettings
 {
@@ -389,56 +420,29 @@ public sealed class NoiseTunnelSyncSettings
     /// <summary>Second Waveform energy admitted when NoiseTunnel rolls its musical response.</summary>
     public Energy WaveformEnergyTwo;
 
-    /// <summary>Minimum tile-center scale rolled per activation.</summary>
-    [Min(0f)] public float ScaleMin;
+    /// <summary>Per-activation tile-center scale range.</summary>
+    public FloatRange TileCenterScale;
 
-    /// <summary>Maximum tile-center scale rolled per activation.</summary>
-    [Min(0f)] public float ScaleMax;
+    /// <summary>Per-activation tunnel-flow-speed range.</summary>
+    public FloatRange TunnelFlowSpeed;
 
-    /// <summary>Minimum tunnel-flow speed rolled per activation.</summary>
-    [Min(0f)] public float SpeedMin;
+    /// <summary>Per-activation Perlin-amplitude range.</summary>
+    public FloatRange PerlinAmplitude;
 
-    /// <summary>Maximum tunnel-flow speed rolled per activation.</summary>
-    [Min(0f)] public float SpeedMax;
+    /// <summary>Per-activation range selecting the radial or diagonal distance formula.</summary>
+    public IntRange DistanceStyle;
 
-    /// <summary>Minimum Perlin amplitude rolled per activation.</summary>
-    [Min(0f)] public float AmplifierMin;
+    /// <summary>Per-activation range selecting normal or inverted distance.</summary>
+    public IntRange DistanceDirection;
 
-    /// <summary>Maximum Perlin amplitude rolled per activation.</summary>
-    [Min(0f)] public float AmplifierMax;
-
-    /// <summary>Inclusive lower endpoint supplied to the style roll.</summary>
-    [Range(0, 2)] public int StyleMinInclusive;
+    /// <summary>Per-activation range selecting the Waveform response combination.</summary>
+    public IntRange WaveformResponseMode;
 
     /// <summary>
-    /// Exclusive upper endpoint supplied to the complete three-style roll. Keep it above
-    /// <see cref="StyleMinInclusive"/>; the two <c>[Range]</c> attributes cannot enforce the pair jointly.
+    /// Brightness range whose maximum is the Waveform trough and whose minimum is the peak and
+    /// no-placement fallback, preserving the authored inverse pulse.
     /// </summary>
-    [Range(1, 3)] public int StyleMaxExclusive;
-
-    /// <summary>Inclusive lower endpoint supplied to the direction roll.</summary>
-    [Range(0, 1)] public int DirectionMinInclusive;
-
-    /// <summary>
-    /// Exclusive upper endpoint supplied to the complete two-direction roll. Keep it above
-    /// <see cref="DirectionMinInclusive"/>; the two <c>[Range]</c> attributes cannot enforce the pair jointly.
-    /// </summary>
-    [Range(1, 2)] public int DirectionMaxExclusive;
-
-    /// <summary>Inclusive lower endpoint supplied to the beat-response-mode roll.</summary>
-    [Range(0, 2)] public int BeatModeMinInclusive;
-
-    /// <summary>
-    /// Exclusive upper endpoint supplied to the complete three-mode beat-response roll. Keep it above
-    /// <see cref="BeatModeMinInclusive"/>; the two <c>[Range]</c> attributes cannot enforce the pair jointly.
-    /// </summary>
-    [Range(1, 3)] public int BeatModeMaxExclusive;
-
-    /// <summary>Brightness multiplier reached at the Waveform trough.</summary>
-    [Range(0f, 1f)] public float BrightnessAtWaveformTrough;
-
-    /// <summary>Brightness multiplier reached at the Waveform peak.</summary>
-    [Range(0f, 1f)] public float BrightnessAtWaveformPeak;
+    public FloatRange Brightness;
 
     /// <summary>Hue offset reached at the Waveform peak.</summary>
     [Range(0f, 1f)] public float HueShiftAtWaveformPeak;
@@ -462,23 +466,30 @@ public sealed class NoiseTunnelSyncSettings
 
         WaveformEnergyOne = source.WaveformEnergyOne;
         WaveformEnergyTwo = source.WaveformEnergyTwo;
-        ScaleMin = source.ScaleMin;
-        ScaleMax = source.ScaleMax;
-        SpeedMin = source.SpeedMin;
-        SpeedMax = source.SpeedMax;
-        AmplifierMin = source.AmplifierMin;
-        AmplifierMax = source.AmplifierMax;
-        StyleMinInclusive = source.StyleMinInclusive;
-        StyleMaxExclusive = source.StyleMaxExclusive;
-        DirectionMinInclusive = source.DirectionMinInclusive;
-        DirectionMaxExclusive = source.DirectionMaxExclusive;
-        BeatModeMinInclusive = source.BeatModeMinInclusive;
-        BeatModeMaxExclusive = source.BeatModeMaxExclusive;
-        BrightnessAtWaveformTrough = source.BrightnessAtWaveformTrough;
-        BrightnessAtWaveformPeak = source.BrightnessAtWaveformPeak;
+        TileCenterScale = Copy(source.TileCenterScale);
+        TunnelFlowSpeed = Copy(source.TunnelFlowSpeed);
+        PerlinAmplitude = Copy(source.PerlinAmplitude);
+        DistanceStyle = Copy(source.DistanceStyle);
+        DistanceDirection = Copy(source.DistanceDirection);
+        WaveformResponseMode = Copy(source.WaveformResponseMode);
+        Brightness = Copy(source.Brightness);
         HueShiftAtWaveformPeak = source.HueShiftAtWaveformPeak;
         TimeOffsetAtWaveformPeak = source.TimeOffsetAtWaveformPeak;
         FillSaturation = source.FillSaturation;
         DropSlowdownBeats = source.DropSlowdownBeats;
     }
+
+    /// <summary>Copies a float range without sharing mutable saved settings state.</summary>
+    private static FloatRange Copy(FloatRange source) => new(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Copies an integer range without sharing mutable saved settings state.</summary>
+    private static IntRange Copy(IntRange source) => new(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
 }
