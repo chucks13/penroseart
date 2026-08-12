@@ -265,12 +265,12 @@ Transitions advertise the same capabilities through `TransitionRepertoire`. The 
 
 ### 2. Find the motion term, and never scale `effectTime`
 
-Identify the one accumulator that drives the look (for `Tunnel`: `phase = i*density + effectTime*speed + distance*mix`). `effectTime` is seeded with a large random offset (0–14400s), so multiplying `effectTime*speed` to "speed up" teleports the phase. Instead, keep a **separate bounded accumulator** per response and integrate a rate into it each frame:
+Identify the one accumulator that drives the look (for `Tunnel`: `phase = (i * tileIndexPhaseStep + cyclePhase + fillScroll + dropScroll + radialPhase) % 1f`). `effectTime` is seeded with a large random offset (0–14400s), so multiplying `effectTime*speed` to "speed up" teleports the phase. Instead, keep a **separate bounded accumulator** per response and integrate the served cycle-phase advance into it each frame:
 
 ```csharp
-fillScroll = Mathf.Repeat(fillScroll + speed * FillRush * fillEnv * effectDelta, 1f);
-dropScroll = Mathf.Repeat(dropScroll - speed * DropRush * dropEnv * effectDelta, 1f);
-// phase = (... + fillScroll + dropScroll + ...) % 1f
+fillScroll = Mathf.Repeat(fillScroll + (cyclePhaseAdvance * SyncSettings.FillScrollRateMultiplier * fillEnv), 1f);
+dropScroll = Mathf.Repeat(dropScroll - (cyclePhaseAdvance * SyncSettings.DropReverseScrollRateMultiplier * dropEnv), 1f);
+// phase = (i * tileIndexPhaseStep + cyclePhase + fillScroll + dropScroll + radialPhase) % 1f
 ```
 
 `Mathf.Repeat(…, 1f)` keeps each accumulator in `[0,1)` so it never drifts. Fill adds (`+`), Drop subtracts (`-`) — make the two motions **opposite** so the Drop reads as an inversion of the Fill, not just "more of it."
@@ -281,7 +281,7 @@ Fill and Drop each keep their raw countdown fields beside readable interpretatio
 
 ```csharp
 fillEnv = beatManager.Fill.In.Build();
-dropEnv = beatManager.Drop.In.Decay(DropBars * 4);
+dropEnv = beatManager.Drop.In.Decay(SyncSettings.DropBars * 4);
 ```
 
 Use `Before` for anticipation. It is total — resting as if the event were infinitely far, so `Before.Decay` reads 1 and `Before.Build` reads 0 whenever nothing is coming, including Standalone Mode. That makes `Before.Decay` safe to multiply straight into a delta with no null handling:
@@ -336,14 +336,14 @@ protected override void OnNewGrid()
 }
 
 // In Draw():
-float brightness = waveform.Lerp(BeatBrightnessFloor, 1f);
+float brightness = waveform.Lerp(SyncSettings.BrightnessFloor, standaloneSettings.Brightness);
 ```
 
 Transitions follow the same ownership rule: expose their own public artistic configuration when it should be tunable, acquire explicitly in their concrete lifecycle, and choose their own `Envelope`/`Lerp` mapping.
 
 ### 5. Fold envelopes into every consequence, and expose them
 
-One envelope can drive several visual results (scroll **and** zoom) so the gesture feels coherent: `zoom = 1 + FillZoom*fillEnv + DropZoom*dropEnv`. Make every magnitude a named, documented `const`, and surface the live envelopes on `DebugText()` (`FILL 0.83`, `DROP 0.41`) so they can be tuned on the wall instead of by guessing.
+One envelope can drive several visual results (scroll **and** ring compression) so the gesture feels coherent: `ringCompression = 1f + FillRingCompression*fillEnv + DropRingCompression*dropEnv`. Make every magnitude a named, documented Sync Setting, and surface the live envelopes on `DebugText()` (`FILL 0.83`, `DROP 0.41`) so they can be tuned on the wall instead of by guessing.
 
 ### Keep artistic policy in the Performer
 
