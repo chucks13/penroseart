@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Maintains a fading sparkle field by randomly lighting tiles over the previous frame.
 /// </summary>
 [EffectSyncSettings(typeof(ColorSparkleSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(ColorSparkleStandaloneSettingsAsset))]
 public class ColorSparkle : EffectBase
 {
     // Standalone Defaults
@@ -14,10 +15,10 @@ public class ColorSparkle : EffectBase
     private const float StandaloneRandomColorThreshold = 0.5f;
 
     /// <summary>Authored minimum activation hue for the unchanged Standalone look.</summary>
-    private const float StandaloneHueMin = 0f;
+    private const float StandaloneActivationHueMin = 0f;
 
     /// <summary>Authored maximum activation hue for the unchanged Standalone look.</summary>
-    private const float StandaloneHueMax = 1f;
+    private const float StandaloneActivationHueMax = 1f;
 
     /// <summary>Authored minimum fresh hue chosen by each randomly colored Standalone sparkle.</summary>
     private const float StandalonePerSparkleHueMin = 0f;
@@ -25,19 +26,26 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored maximum fresh hue chosen by each randomly colored Standalone sparkle.</summary>
     private const float StandalonePerSparkleHueMax = 1f;
 
-    /// <summary>Authored clockless hue offset returned by the Waveform's fallback endpoint.</summary>
-    private const float StandaloneWaveformHueOffset = 1f;
+    /// <summary>
+    /// Authored hue offset at the Waveform trough for Standalone Mode. A clockless Waveform returns
+    /// the peak endpoint, but keeping the complete range here lets both saved surfaces tune the same
+    /// picture-shaping slot independently.
+    /// </summary>
+    private const float StandaloneWaveformHueOffsetAtTrough = 0.5f;
 
-    /// <summary>Authored hue span that keeps clockless generated sparkles inside the original narrow color band.</summary>
-    private const float StandaloneHueSpan = 0.15f;
+    /// <summary>Authored clockless hue offset returned by the Waveform's fallback endpoint.</summary>
+    private const float StandaloneWaveformHueOffsetAtPeak = 1f;
+
+    /// <summary>Authored modulo period that keeps clockless sparkles inside the original hue band.</summary>
+    private const float StandaloneHueWrapPeriod = 0.15f;
 
     // Sync Defaults
 
     /// <summary>Authored minimum activation hue in Synced Mode.</summary>
-    private const float SyncHueMin = 0f;
+    private const float SyncActivationHueMin = 0f;
 
     /// <summary>Authored maximum activation hue in Synced Mode.</summary>
-    private const float SyncHueMax = 1f;
+    private const float SyncActivationHueMax = 1f;
 
     /// <summary>Authored minimum for the activation-wide solid hue used by every Drop sparkle.</summary>
     private const float SyncDropHueMin = 0f;
@@ -51,8 +59,8 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored hue offset at the Waveform peak in Synced Mode.</summary>
     private const float SyncWaveformHueOffsetAtPeak = 1f;
 
-    /// <summary>Authored hue span that wraps generated sparkles in Synced Mode.</summary>
-    private const float SyncHueSpan = 0.15f;
+    /// <summary>Authored modulo period that wraps generated sparkles in Synced Mode.</summary>
+    private const float SyncHueWrapPeriod = 0.15f;
 
     /// <summary>Authored divisor that halves the number of generated sparkles during a Drop.</summary>
     private const int SyncDropSparkleDivisor = 2;
@@ -60,30 +68,40 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored 50% chance that a newly generated Fill sparkle is white.</summary>
     private const float SyncFillWhiteChance = 0.5f;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of ColorSparkle's Standalone Defaults.</summary>
-    public static ColorSparkleStandaloneSettings StandaloneSettings => new ColorSparkleStandaloneSettings(
-        StandaloneRandomColorThreshold,
-        new FloatRange(StandaloneHueMin, StandaloneHueMax),
-        new FloatRange(StandalonePerSparkleHueMin, StandalonePerSparkleHueMax),
-        StandaloneWaveformHueOffset,
-        StandaloneHueSpan);
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate ColorSparkle's authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static ColorSparkleStandaloneSettings StandaloneDefaults => new()
+    {
+        RandomColorThreshold = StandaloneRandomColorThreshold,
+        ActivationHue = new FloatRange(
+            StandaloneActivationHueMin,
+            StandaloneActivationHueMax),
+        PerSparkleHue = new FloatRange(
+            StandalonePerSparkleHueMin,
+            StandalonePerSparkleHueMax),
+        WaveformHueOffset = new FloatRange(
+            StandaloneWaveformHueOffsetAtTrough,
+            StandaloneWaveformHueOffsetAtPeak),
+        HueWrapPeriod = StandaloneHueWrapPeriod,
+    };
 
     /// <summary>Resolves a fresh copy of ColorSparkle's file-local Sync Defaults.</summary>
-    public static ColorSparkleSyncSettings SyncDefaults => new ColorSparkleSyncSettings
+    public static ColorSparkleSyncSettings SyncDefaults => new()
     {
-        HueMin = SyncHueMin,
-        HueMax = SyncHueMax,
-        DropHueMin = SyncDropHueMin,
-        DropHueMax = SyncDropHueMax,
-        WaveformHueOffsetAtTrough = SyncWaveformHueOffsetAtTrough,
-        WaveformHueOffsetAtPeak = SyncWaveformHueOffsetAtPeak,
-        HueSpan = SyncHueSpan,
+        ActivationHue = new FloatRange(SyncActivationHueMin, SyncActivationHueMax),
+        DropHue = new FloatRange(SyncDropHueMin, SyncDropHueMax),
+        WaveformHueOffset = new FloatRange(
+            SyncWaveformHueOffsetAtTrough,
+            SyncWaveformHueOffsetAtPeak),
+        HueWrapPeriod = SyncHueWrapPeriod,
         DropSparkleDivisor = SyncDropSparkleDivisor,
         FillWhiteChance = SyncFillWhiteChance,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private ColorSparkleStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private ColorSparkleStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private ColorSparkleSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -113,7 +131,9 @@ public class ColorSparkle : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(ColorSparkle),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(ColorSparkle),
             SyncDefaults);
@@ -121,10 +141,11 @@ public class ColorSparkle : EffectBase
         waveform = waveforms.Random();
         randomColor = Random.value > standaloneSettings.RandomColorThreshold;
 
-        float hueMin = beatManager.IsSynced ? SyncSettings.HueMin : standaloneSettings.Hue.Min;
-        float hueMax = beatManager.IsSynced ? SyncSettings.HueMax : standaloneSettings.Hue.Max;
-        hue = Mathf.Lerp(hueMin, hueMax, Random.value);
-        dropHue = Mathf.Lerp(SyncSettings.DropHueMin, SyncSettings.DropHueMax, Random.value);
+        FloatRange activationHue = beatManager.IsSynced
+            ? SyncSettings.ActivationHue
+            : standaloneSettings.ActivationHue;
+        hue = Mathf.Lerp(activationHue.Min, activationHue.Max, Random.value);
+        dropHue = Mathf.Lerp(SyncSettings.DropHue.Min, SyncSettings.DropHue.Max, Random.value);
 
         var text = randomColor ? "random " : hue.ToString();
         controller.debugText.text = $"Color: {text}";
@@ -141,14 +162,19 @@ public class ColorSparkle : EffectBase
     /// </summary>
     public override void Draw()
     {
-        // The Waveform offsets newly generated sparkle hues; clockless rendering stays steady.
+        bool isSynced = beatManager.IsSynced;
+        // The Waveform offsets newly generated sparkle hues; clockless rendering stays steady at
+        // the active Standalone range's fallback endpoint.
+        FloatRange waveformHueOffsetRange = isSynced
+            ? SyncSettings.WaveformHueOffset
+            : standaloneSettings.WaveformHueOffset;
         float waveformHueOffset = waveform.Lerp(
-            SyncSettings.WaveformHueOffsetAtTrough,
-            beatManager.IsSynced
-                ? SyncSettings.WaveformHueOffsetAtPeak
-                : standaloneSettings.WaveformHueOffset);
-        float hueSpan = beatManager.IsSynced ? SyncSettings.HueSpan : standaloneSettings.HueSpan;
-        float hueOffset = (hue + waveformHueOffset) % hueSpan;
+            waveformHueOffsetRange.Min,
+            waveformHueOffsetRange.Max);
+        float hueWrapPeriod = isSynced
+            ? SyncSettings.HueWrapPeriod
+            : standaloneSettings.HueWrapPeriod;
+        float hueOffset = (hue + waveformHueOffset) % hueWrapPeriod;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
         if (beatManager.Drop.Active)
@@ -158,7 +184,7 @@ public class ColorSparkle : EffectBase
             float drawHue = hueOffset;
             float drawSaturation = 1f;
             // Without a beat clock, preserve this activation's original per-sparkle color variation.
-            if (randomColor && !beatManager.IsSynced)
+            if (randomColor && !isSynced)
                 drawHue = Mathf.Lerp(
                     standaloneSettings.PerSparkleHue.Min,
                     standaloneSettings.PerSparkleHue.Max,
@@ -173,64 +199,77 @@ public class ColorSparkle : EffectBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce ColorSparkle's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by ColorSparkle's fully populated Standalone Defaults and
+/// saved Standalone Settings that reproduce its authored no-music look.
+/// </summary>
+[Serializable]
 public sealed class ColorSparkleStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from ColorSparkle's file-local defaults.</summary>
-    public ColorSparkleStandaloneSettings(
-        float randomColorThreshold,
-        FloatRange hue,
-        FloatRange perSparkleHue,
-        float waveformHueOffset,
-        float hueSpan)
-    {
-        RandomColorThreshold = randomColorThreshold;
-        Hue = hue;
-        PerSparkleHue = perSparkleHue;
-        WaveformHueOffset = waveformHueOffset;
-        HueSpan = hueSpan;
-    }
-
     /// <summary>Threshold for the activation roll that enables fresh per-sparkle hues.</summary>
-    public float RandomColorThreshold;
+    [Range(0f, 1f)] public float RandomColorThreshold;
 
     /// <summary>Per-activation base-hue range.</summary>
-    public FloatRange Hue;
+    public FloatRange ActivationHue;
 
     /// <summary>Per-sparkle hue range used when the activation enables fresh Standalone colors.</summary>
     public FloatRange PerSparkleHue;
 
-    /// <summary>Clockless fallback endpoint for the Waveform hue offset.</summary>
-    public float WaveformHueOffset;
+    /// <summary>Waveform hue-offset range; clockless rendering rests at its maximum endpoint.</summary>
+    public FloatRange WaveformHueOffset;
 
-    /// <summary>Hue span used to wrap generated sparkles into the Standalone color band.</summary>
-    public float HueSpan;
+    /// <summary>
+    /// Positive modulo period that wraps generated sparkles into the Standalone hue band. Zero
+    /// would divide the hue wrap by nothing, so the floor keeps it positive.
+    /// </summary>
+    [Min(0.001f)] public float HueWrapPeriod;
+
+    /// <summary>Copies every ColorSparkle Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(ColorSparkleStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        RandomColorThreshold = source.RandomColorThreshold;
+        ActivationHue = new FloatRange(
+            source.ActivationHue.Min,
+            source.ActivationHue.Max,
+            source.ActivationHue.LowRail,
+            source.ActivationHue.HighRail);
+        PerSparkleHue = new FloatRange(
+            source.PerSparkleHue.Min,
+            source.PerSparkleHue.Max,
+            source.PerSparkleHue.LowRail,
+            source.PerSparkleHue.HighRail);
+        WaveformHueOffset = new FloatRange(
+            source.WaveformHueOffset.Min,
+            source.WaveformHueOffset.Max,
+            source.WaveformHueOffset.LowRail,
+            source.WaveformHueOffset.HighRail);
+        HueWrapPeriod = source.HueWrapPeriod;
+    }
 }
 
-/// <summary>Editable music-response values saved as ColorSparkle's Sync Settings.</summary>
+/// <summary>The serializable value shape shared by ColorSparkle's Sync Defaults and Sync Settings.</summary>
 [Serializable]
 public sealed class ColorSparkleSyncSettings
 {
-    /// <summary>Minimum activation hue in Synced Mode.</summary>
-    [Range(0f, 1f)] public float HueMin;
+    /// <summary>Per-activation base-hue range in Synced Mode.</summary>
+    public FloatRange ActivationHue;
 
-    /// <summary>Maximum activation hue in Synced Mode.</summary>
-    [Range(0f, 1f)] public float HueMax;
+    /// <summary>Per-activation range for the solid hue used by every Drop sparkle.</summary>
+    public FloatRange DropHue;
 
-    /// <summary>Minimum activation-wide solid hue used during a Drop.</summary>
-    [Range(0f, 1f)] public float DropHueMin;
+    /// <summary>Waveform hue offsets interpolated from trough to peak in Synced Mode.</summary>
+    public FloatRange WaveformHueOffset;
 
-    /// <summary>Maximum activation-wide solid hue used during a Drop.</summary>
-    [Range(0f, 1f)] public float DropHueMax;
-
-    /// <summary>Waveform hue offset at the trough in Synced Mode.</summary>
-    [Range(0f, 1f)] public float WaveformHueOffsetAtTrough;
-
-    /// <summary>Waveform hue offset at the peak in Synced Mode.</summary>
-    [Range(0f, 1f)] public float WaveformHueOffsetAtPeak;
-
-    /// <summary>Hue span used to wrap generated sparkles in Synced Mode. Zero would divide the hue wrap by nothing, so the floor keeps it positive.</summary>
-    [Min(0.001f)] public float HueSpan;
+    /// <summary>
+    /// Positive modulo period that wraps generated sparkles in Synced Mode. Zero would divide the
+    /// hue wrap by nothing, so the floor keeps it positive.
+    /// </summary>
+    [Min(0.001f)] public float HueWrapPeriod;
 
     /// <summary>Divisor applied to the generated sparkle count during a Drop.</summary>
     [Min(1)] public int DropSparkleDivisor;
@@ -246,13 +285,22 @@ public sealed class ColorSparkleSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        HueMin = source.HueMin;
-        HueMax = source.HueMax;
-        DropHueMin = source.DropHueMin;
-        DropHueMax = source.DropHueMax;
-        WaveformHueOffsetAtTrough = source.WaveformHueOffsetAtTrough;
-        WaveformHueOffsetAtPeak = source.WaveformHueOffsetAtPeak;
-        HueSpan = source.HueSpan;
+        ActivationHue = new FloatRange(
+            source.ActivationHue.Min,
+            source.ActivationHue.Max,
+            source.ActivationHue.LowRail,
+            source.ActivationHue.HighRail);
+        DropHue = new FloatRange(
+            source.DropHue.Min,
+            source.DropHue.Max,
+            source.DropHue.LowRail,
+            source.DropHue.HighRail);
+        WaveformHueOffset = new FloatRange(
+            source.WaveformHueOffset.Min,
+            source.WaveformHueOffset.Max,
+            source.WaveformHueOffset.LowRail,
+            source.WaveformHueOffset.HighRail);
+        HueWrapPeriod = source.HueWrapPeriod;
         DropSparkleDivisor = source.DropSparkleDivisor;
         FillWhiteChance = source.FillWhiteChance;
     }
