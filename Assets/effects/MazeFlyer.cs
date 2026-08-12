@@ -1583,7 +1583,7 @@ public sealed class MazeFlyerStandaloneSettings
     public float SharedPaletteMinValue;
 
     /// <summary>Minimum traced-surface brightness; zero leaves the rendering unchanged.</summary>
-    [Tooltip("Minimum traced-surface brightness. 0 leaves the rendering unchanged.")]
+    [Tooltip("Brightness the darkest traced surface maps to. Lifts the whole effect out of the dark without touching the fog. 0 disables it.")]
     [Range(0f, 1f)]
     public float MinBrightness;
 
@@ -1720,7 +1720,7 @@ public sealed class MazeFlyerSyncSettings
     public float SharedPaletteMinValue;
 
     /// <summary>Minimum traced-surface brightness; zero leaves the rendering unchanged.</summary>
-    [Tooltip("Minimum traced-surface brightness. 0 leaves the rendering unchanged.")]
+    [Tooltip("Brightness the darkest traced surface maps to. Lifts the whole effect out of the dark without touching the fog. 0 disables it.")]
     [Range(0f, 1f)]
     public float MinBrightness;
 
@@ -1757,17 +1757,17 @@ public sealed class MazeFlyerSyncSettings
     public float HighEnergyFlightSpeed;
 
     /// <summary>SmoothDamp time constant, in seconds, for flight-speed changes between Energy tiers.</summary>
-    [Tooltip("Flight-speed SmoothDamp time, in seconds.")]
+    [Tooltip("Seconds of SmoothDamp easing between energy tier speeds. Higher = gentler ramps.")]
     [Range(0.1f, 5f)]
     public float FlightSpeedSmoothTime;
 
     /// <summary>Ramp window, in beats, for the glide toward the announced next Energy tier.</summary>
-    [Tooltip("Energy-tier flight-speed ramp window, in beats.")]
+    [Tooltip("Beats before an announced energy-state change over which speed glides to the next tier's speed.")]
     [Range(1, 32)]
     public int EnergyFlightSpeedRampBeats;
 
     /// <summary>Wind-down duration, in beats, before the pre-Drop sit.</summary>
-    [Tooltip("Drop wind-down duration, in beats.")]
+    [Tooltip("Beats of wind-down to a dead stop, completing DropSitBeats before the Drop lands.")]
     [Range(1, 16)]
     public int DropStopBeats;
 
@@ -1777,12 +1777,12 @@ public sealed class MazeFlyerSyncSettings
     public int DropSitBeats;
 
     /// <summary>Flight-speed multiplier at the Drop landing; one disables the launch.</summary>
-    [Tooltip("Flight-speed multiplier at the Drop landing. 1 disables the launch.")]
+    [Tooltip("Speed multiplier at the Drop landing, decaying back to 1 over the 16-beat grid. 1 disables the launch.")]
     [Min(1f)]
     public float DropLaunchMultiplier;
 
     /// <summary>Strength of the eighth-note Fill edge inversion; zero disables the response.</summary>
-    [Tooltip("Eighth-note Fill edge-inversion strength. 0 disables the response.")]
+    [Tooltip("Eighth-note edge inversion strength during a synced Fill. 1 fully flips the lattice at each pulse peak; 0 disables.")]
     [Range(0f, 1f)]
     public float FillEdgeInversion;
 
@@ -1792,7 +1792,7 @@ public sealed class MazeFlyerSyncSettings
     public float FillLineGlow;
 
     /// <summary>Camera spin rate at the Drop landing, in degrees per second; zero disables the spin.</summary>
-    [Tooltip("Drop-landing camera spin rate, in degrees per second. 0 disables the spin.")]
+    [Tooltip("Camera spin rate at the Drop landing, in degrees per second, settling with the launch over the 16-beat grid. 0 disables.")]
     [Min(0f)]
     public float DropCameraSpinSpeed;
 
