@@ -24,10 +24,10 @@ MonoBehaviour:
       HighRail: 0.433
     QuietGrowthMultiplier: 0.5
     EnergyPace:
-      Min: 0.75
-      Max: 1.25
-      LowRail: 0.75
-      HighRail: 1.25
+      Min: 1
+      Max: 2
+      LowRail: 1
+      HighRail: 2
     DropFlashBrightness: 1.2
     DropFlashSpread: 1.5
     DropFlashSeeds: 3
