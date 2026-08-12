@@ -2,6 +2,7 @@
 using System;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 
 /// <summary>Resolution, independence, and restore tests for typed per-Effect settings.</summary>
 public sealed class EffectSyncSettingsTests
@@ -273,6 +274,65 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ValuePulseBase, Is.EqualTo(defaults.ValuePulseBase));
     }
 
+    /// <summary>
+    /// Julia Standalone Defaults resolve as independent values, including their range and preset
+    /// objects, without pinning the authored tuning values in the test.
+    /// </summary>
+    [Test]
+    public void JuliaStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = Julia.StandaloneDefaults;
+        var second = Julia.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.BreathingZoomSpeed, Is.Not.SameAs(second.BreathingZoomSpeed));
+        AssertFloatRangeEqual(first.BreathingZoomSpeed, second.BreathingZoomSpeed);
+        Assert.That(first.WindowWidth, Is.Not.SameAs(second.WindowWidth));
+        AssertFloatRangeEqual(first.WindowWidth, second.WindowWidth);
+        Assert.That(first.PaletteChance, Is.EqualTo(second.PaletteChance));
+        Assert.That(first.HueBaseRate, Is.EqualTo(second.HueBaseRate));
+        Assert.That(first.HueBeatRate, Is.EqualTo(second.HueBeatRate));
+        Assert.That(first.HueCycleDrive, Is.EqualTo(second.HueCycleDrive));
+        Assert.That(first.JuliaConstants, Is.Not.SameAs(second.JuliaConstants));
+        Assert.That(first.JuliaConstants, Is.EqualTo(second.JuliaConstants));
+        Assert.That(first.PresetViewCenters, Is.Not.SameAs(second.PresetViewCenters));
+        Assert.That(first.PresetViewCenters, Is.EqualTo(second.PresetViewCenters));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited Julia Standalone Setting, range Rail, and preset-table value
+    /// with the current file-local Standalone Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryJuliaValue()
+    {
+        var asset = (JuliaStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(Julia),
+            TempAssetFolder);
+        asset.Settings.BreathingZoomSpeed = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.PaletteChance = 0.11f;
+        asset.Settings.HueBaseRate = 23f;
+        asset.Settings.HueBeatRate = 24f;
+        asset.Settings.HueCycleDrive = 0.12f;
+        asset.Settings.JuliaConstants = new[] { new Vector2(25f, 26f) };
+        asset.Settings.PresetViewCenters = new[] { new Vector2(27f, 28f) };
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Julia), TempAssetFolder);
+
+        var defaults = Julia.StandaloneDefaults;
+        AssertFloatRangeEqual(asset.Settings.BreathingZoomSpeed, defaults.BreathingZoomSpeed);
+        AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
+        Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
+        Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
+        Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
+        Assert.That(asset.Settings.HueCycleDrive, Is.EqualTo(defaults.HueCycleDrive));
+        Assert.That(asset.Settings.JuliaConstants, Is.Not.SameAs(defaults.JuliaConstants));
+        Assert.That(asset.Settings.JuliaConstants, Is.EqualTo(defaults.JuliaConstants));
+        Assert.That(asset.Settings.PresetViewCenters, Is.Not.SameAs(defaults.PresetViewCenters));
+        Assert.That(asset.Settings.PresetViewCenters, Is.EqualTo(defaults.PresetViewCenters));
+    }
+
     /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
     [Test]
     public void RippleStandaloneSettingsResolveToStandaloneDefaults()
@@ -474,6 +534,52 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.SaturationPulseMultiplier, Is.EqualTo(defaults.SaturationPulseMultiplier));
         Assert.That(asset.Settings.ValuePulseBase, Is.EqualTo(defaults.ValuePulseBase));
         Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited Julia Sync Setting, range Rail, and preset-table value with
+    /// the current file-local Sync Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryJuliaValue()
+    {
+        var asset = (JuliaSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(Julia),
+            TempAssetFolder);
+        asset.Settings.BreathingZoomSpeed = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.PaletteChance = 0.11f;
+        asset.Settings.HueBaseRate = 23f;
+        asset.Settings.FillDiveDepth = 24f;
+        asset.Settings.DropDecayBeats = 25;
+        asset.Settings.DropSpinRate = 26f;
+        asset.Settings.DropBlowout = 27f;
+        asset.Settings.DropHueKick = 0.12f;
+        asset.Settings.NegativeDropSpinChance = 0.13f;
+        asset.Settings.HueCycleDrive = new FloatRange(0.14f, 0.15f, 0.13f, 0.16f);
+        asset.Settings.HueBeatRate = 28f;
+        asset.Settings.JuliaConstants = new[] { new Vector2(29f, 30f) };
+        asset.Settings.PresetViewCenters = new[] { new Vector2(31f, 32f) };
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Julia), TempAssetFolder);
+
+        var defaults = Julia.SyncDefaults;
+        AssertFloatRangeEqual(asset.Settings.BreathingZoomSpeed, defaults.BreathingZoomSpeed);
+        AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
+        Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
+        Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
+        Assert.That(asset.Settings.FillDiveDepth, Is.EqualTo(defaults.FillDiveDepth));
+        Assert.That(asset.Settings.DropDecayBeats, Is.EqualTo(defaults.DropDecayBeats));
+        Assert.That(asset.Settings.DropSpinRate, Is.EqualTo(defaults.DropSpinRate));
+        Assert.That(asset.Settings.DropBlowout, Is.EqualTo(defaults.DropBlowout));
+        Assert.That(asset.Settings.DropHueKick, Is.EqualTo(defaults.DropHueKick));
+        Assert.That(asset.Settings.NegativeDropSpinChance, Is.EqualTo(defaults.NegativeDropSpinChance));
+        AssertFloatRangeEqual(asset.Settings.HueCycleDrive, defaults.HueCycleDrive);
+        Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
+        Assert.That(asset.Settings.JuliaConstants, Is.Not.SameAs(defaults.JuliaConstants));
+        Assert.That(asset.Settings.JuliaConstants, Is.EqualTo(defaults.JuliaConstants));
+        Assert.That(asset.Settings.PresetViewCenters, Is.Not.SameAs(defaults.PresetViewCenters));
+        Assert.That(asset.Settings.PresetViewCenters, Is.EqualTo(defaults.PresetViewCenters));
     }
 
     /// <summary>Restore replaces every edited Ripple Sync Setting with the current file-local Sync Defaults.</summary>
