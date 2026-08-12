@@ -4,9 +4,10 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// Creates a mode-authored random count of child Effects and additively mixes their buffers.
-/// In Standalone Mode, the fixed range preserves the original two-or-three-child roll.
+/// In Standalone Mode, the saved-or-default range preserves the original two-or-three-child roll until tuned.
 /// </summary>
 [EffectSyncSettings(typeof(RandomEffectsMixerSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(RandomEffectsMixerStandaloneSettingsAsset))]
 public class RandomEffectsMixer : MixerBase
 {
     // Standalone Defaults
@@ -37,23 +38,25 @@ public class RandomEffectsMixer : MixerBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of RandomEffectsMixer's Standalone Defaults.</summary>
-    public static RandomEffectsMixerStandaloneSettings StandaloneSettings =>
-        new RandomEffectsMixerStandaloneSettings(
-            StandaloneChildCountMin,
-            StandaloneChildCountMaxExclusive,
-            StandaloneMixGain);
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate RandomEffectsMixer's
+    /// authored Standalone Defaults.
+    /// </summary>
+    public static RandomEffectsMixerStandaloneSettings StandaloneDefaults => new()
+    {
+        ChildCount = new IntRange(StandaloneChildCountMin, StandaloneChildCountMaxExclusive),
+        MixGain = StandaloneMixGain,
+    };
 
     /// <summary>Resolves a fresh copy of RandomEffectsMixer's file-local Sync Defaults.</summary>
-    public static RandomEffectsMixerSyncSettings SyncDefaults => new RandomEffectsMixerSyncSettings
+    public static RandomEffectsMixerSyncSettings SyncDefaults => new()
     {
-        ChildCountMin = SyncChildCountMin,
-        ChildCountMaxExclusive = SyncChildCountMaxExclusive,
+        ChildCount = new IntRange(SyncChildCountMin, SyncChildCountMaxExclusive),
         MixGain = SyncMixGain,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private RandomEffectsMixerStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private RandomEffectsMixerStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private RandomEffectsMixerSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -93,19 +96,18 @@ public class RandomEffectsMixer : MixerBase
     /// </remarks>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(RandomEffectsMixer),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(RandomEffectsMixer),
             SyncDefaults);
 
-        int childCountMin = beatManager.IsSynced
-            ? SyncSettings.ChildCountMin
-            : standaloneSettings.ChildCountMin;
-        int childCountMaxExclusive = beatManager.IsSynced
-            ? SyncSettings.ChildCountMaxExclusive
-            : standaloneSettings.ChildCountMaxExclusive;
+        IntRange childCount = beatManager.IsSynced
+            ? SyncSettings.ChildCount
+            : standaloneSettings.ChildCount;
 
-        effects = new EffectBase[Random.Range(childCountMin, childCountMaxExclusive)];
+        effects = new EffectBase[Random.Range(childCount.MinInclusive, childCount.MaxExclusive)];
         total = effects.Length;
 
         var debugText = string.Empty;
@@ -158,36 +160,43 @@ public class RandomEffectsMixer : MixerBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce RandomEffectsMixer's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by RandomEffectsMixer's fully populated Standalone Defaults
+/// and saved Standalone Settings; Unity may create an empty instance before serialized values apply.
+/// </summary>
+[Serializable]
 public sealed class RandomEffectsMixerStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from RandomEffectsMixer's file-local defaults.</summary>
-    public RandomEffectsMixerStandaloneSettings(int childCountMin, int childCountMaxExclusive, float mixGain)
-    {
-        ChildCountMin = childCountMin;
-        ChildCountMaxExclusive = childCountMaxExclusive;
-        MixGain = mixGain;
-    }
-
-    /// <summary>Minimum child-count argument used by the activation roll.</summary>
-    public int ChildCountMin;
-
-    /// <summary>Exclusive maximum child-count argument used by the activation roll; the roll never deals this count itself.</summary>
-    public int ChildCountMaxExclusive;
+    /// <summary>Per-activation range used to roll the number of child Effects.</summary>
+    public IntRange ChildCount;
 
     /// <summary>Additive gain applied after normalizing the mixed child buffers.</summary>
+    [Min(0f)]
     public float MixGain;
+
+    /// <summary>Copies every RandomEffectsMixer Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(RandomEffectsMixerStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        ChildCount = new IntRange(
+            source.ChildCount.MinInclusive,
+            source.ChildCount.MaxExclusive,
+            source.ChildCount.LowRail,
+            source.ChildCount.HighRail);
+        MixGain = source.MixGain;
+    }
 }
 
 /// <summary>Serializable musical-response settings used by RandomEffectsMixer in Synced Mode.</summary>
 [Serializable]
 public sealed class RandomEffectsMixerSyncSettings
 {
-    /// <summary>Minimum child-count argument used by the activation roll.</summary>
-    [Min(1)] public int ChildCountMin;
-
-    /// <summary>Exclusive maximum child-count argument used by the activation roll; the roll never deals this count itself.</summary>
-    [Min(1)] public int ChildCountMaxExclusive;
+    /// <summary>Per-activation range used to roll the number of child Effects.</summary>
+    public IntRange ChildCount;
 
     /// <summary>Additive gain applied after normalizing the mixed child buffers.</summary>
     [Min(0f)] public float MixGain;
@@ -200,8 +209,11 @@ public sealed class RandomEffectsMixerSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        ChildCountMin = source.ChildCountMin;
-        ChildCountMaxExclusive = source.ChildCountMaxExclusive;
+        ChildCount = new IntRange(
+            source.ChildCount.MinInclusive,
+            source.ChildCount.MaxExclusive,
+            source.ChildCount.LowRail,
+            source.ChildCount.HighRail);
         MixGain = source.MixGain;
     }
 }
