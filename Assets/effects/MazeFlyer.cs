@@ -139,7 +139,7 @@ public class MazeFlyer : EffectBase
     /// Authored shade multiplier at the very edge of a voxel face, ramping linearly back to 1
     /// across <see cref="StandaloneEdgeLineThicknessTiles"/>.
     /// </summary>
-    private const float StandaloneEdgeLineShade = 0.25f;
+    private const float StandaloneEdgeLineShade = 0.1f;
 
     /// <summary>
     /// Authored scale of the rotated-grid supersample pattern, in tile-center units; 0.7 spans
@@ -248,7 +248,7 @@ public class MazeFlyer : EffectBase
     private const float SyncEdgeLineThicknessTiles = 0.7f;
 
     /// <summary>Authored Synced shade multiplier at the edge of a voxel face.</summary>
-    private const float SyncEdgeLineShade = 0.25f;
+    private const float SyncEdgeLineShade = 0.1f;
 
     /// <summary>Authored Synced scale of the rotated-grid supersample pattern.</summary>
     private const float SyncRaySampleSpread = 0.7f;

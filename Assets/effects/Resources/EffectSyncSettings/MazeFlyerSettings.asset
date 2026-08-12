@@ -49,7 +49,7 @@ MonoBehaviour:
     HeadlightMinShade: 0.5
     FogDensity: 2.5
     EdgeLineThicknessTiles: 0.7
-    EdgeLineShade: 0.25
+    EdgeLineShade: 0.1
     RaySampleSpread: 0.7
     SharedPaletteMinValue: 0.8
     MinBrightness: 0.4
