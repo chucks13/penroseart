@@ -135,6 +135,56 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
+    /// ColorSparkle Standalone Defaults resolve as fresh, mutually independent copies without
+    /// pinning the authored look in the test.
+    /// </summary>
+    [Test]
+    public void ColorSparkleStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = ColorSparkle.StandaloneDefaults;
+        var second = ColorSparkle.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.RandomColorThreshold, Is.EqualTo(second.RandomColorThreshold));
+        Assert.That(first.ActivationHue, Is.Not.SameAs(second.ActivationHue));
+        AssertFloatRangeEqual(first.ActivationHue, second.ActivationHue);
+        Assert.That(first.PerSparkleHue, Is.Not.SameAs(second.PerSparkleHue));
+        AssertFloatRangeEqual(first.PerSparkleHue, second.PerSparkleHue);
+        Assert.That(first.WaveformHueOffset, Is.Not.SameAs(second.WaveformHueOffset));
+        AssertFloatRangeEqual(first.WaveformHueOffset, second.WaveformHueOffset);
+        Assert.That(first.HueWrapPeriod, Is.EqualTo(second.HueWrapPeriod));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited ColorSparkle Standalone Setting and Rail with the current
+    /// file-local Standalone Defaults, without pinning authored tuning values in the test.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryColorSparkleValue()
+    {
+        var asset = (ColorSparkleStandaloneSettingsAsset)
+            EffectStandaloneSettingsAssetUtility.EnsureAsset(
+                typeof(ColorSparkle),
+                TempAssetFolder);
+        asset.Settings.RandomColorThreshold = 0.17f;
+        asset.Settings.ActivationHue = new FloatRange(0.18f, 0.19f, 0.17f, 0.2f);
+        asset.Settings.PerSparkleHue = new FloatRange(0.21f, 0.22f, 0.2f, 0.23f);
+        asset.Settings.WaveformHueOffset = new FloatRange(0.24f, 0.25f, 0.23f, 0.26f);
+        asset.Settings.HueWrapPeriod = 0.27f;
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
+            typeof(ColorSparkle),
+            TempAssetFolder);
+
+        var defaults = ColorSparkle.StandaloneDefaults;
+        Assert.That(asset.Settings.RandomColorThreshold, Is.EqualTo(defaults.RandomColorThreshold));
+        AssertFloatRangeEqual(asset.Settings.ActivationHue, defaults.ActivationHue);
+        AssertFloatRangeEqual(asset.Settings.PerSparkleHue, defaults.PerSparkleHue);
+        AssertFloatRangeEqual(asset.Settings.WaveformHueOffset, defaults.WaveformHueOffset);
+        Assert.That(asset.Settings.HueWrapPeriod, Is.EqualTo(defaults.HueWrapPeriod));
+    }
+
+    /// <summary>
     /// NoiseTunnel Standalone Defaults resolve as fresh, mutually independent copies without
     /// pinning the authored look in the test.
     /// </summary>
@@ -333,22 +383,95 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.PresetViewCenters, Is.EqualTo(defaults.PresetViewCenters));
     }
 
-    /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
+    /// <summary>
+    /// RainbowBars Standalone Defaults resolve as fresh, deeply independent copies without pinning
+    /// the authored look that ADR-0013 leaves to judgment on the wall.
+    /// </summary>
     [Test]
-    public void RippleStandaloneSettingsResolveToStandaloneDefaults()
+    public void RainbowBarsStandaloneDefaultsResolveAsIndependentCopies()
     {
-        var first = Ripple.StandaloneSettings;
-        var second = Ripple.StandaloneSettings;
+        var first = RainbowBars.StandaloneDefaults;
+        var second = RainbowBars.StandaloneDefaults;
 
         Assert.That(first, Is.Not.SameAs(second));
-        Assert.That(first.Intensity.Min, Is.EqualTo(second.Intensity.Min));
-        Assert.That(first.Intensity.Max, Is.EqualTo(second.Intensity.Max));
-        Assert.That(first.Velocity.Min, Is.EqualTo(second.Velocity.Min));
-        Assert.That(first.Velocity.Max, Is.EqualTo(second.Velocity.Max));
+        Assert.That(first.Direction, Is.Not.SameAs(second.Direction));
+        AssertIntRangeEqual(first.Direction, second.Direction);
+        Assert.That(first.Brightness, Is.Not.SameAs(second.Brightness));
+        AssertFloatRangeEqual(first.Brightness, second.Brightness);
+        Assert.That(first.DirectionSkew, Is.EqualTo(second.DirectionSkew));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited RainbowBars Standalone Setting and Rail with the current
+    /// file-local Standalone Defaults, without pinning their authored tuning values in the test.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryRainbowBarsValue()
+    {
+        var asset = (RainbowBarsStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(RainbowBars),
+            TempAssetFolder);
+        asset.Settings.Direction = new IntRange(10, 11, 9, 12);
+        asset.Settings.Brightness = new FloatRange(0.1f, 0.2f, 0f, 0.3f);
+        asset.Settings.DirectionSkew = 0.4f;
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
+            typeof(RainbowBars),
+            TempAssetFolder);
+
+        var defaults = RainbowBars.StandaloneDefaults;
+        AssertIntRangeEqual(asset.Settings.Direction, defaults.Direction);
+        AssertFloatRangeEqual(asset.Settings.Brightness, defaults.Brightness);
+        Assert.That(asset.Settings.DirectionSkew, Is.EqualTo(defaults.DirectionSkew));
+    }
+
+    /// <summary>
+    /// Ripple Standalone Defaults resolve as fresh, independent copies without pinning authored
+    /// tuning values that are judged on the wall.
+    /// </summary>
+    [Test]
+    public void RippleStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = Ripple.StandaloneDefaults;
+        var second = Ripple.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.DropSpawnChance, Is.Not.SameAs(second.DropSpawnChance));
+        AssertFloatRangeEqual(first.DropSpawnChance, second.DropSpawnChance);
+        Assert.That(first.Velocity, Is.Not.SameAs(second.Velocity));
+        AssertFloatRangeEqual(first.Velocity, second.Velocity);
         Assert.That(first.VelocityDivisor, Is.EqualTo(second.VelocityDivisor));
         Assert.That(first.DistanceDivisor, Is.EqualTo(second.DistanceDivisor));
         Assert.That(first.PaletteOffset, Is.EqualTo(second.PaletteOffset));
         Assert.That(first.HueShift, Is.EqualTo(second.HueShift));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited Ripple Standalone Setting and Rail with the current file-local
+    /// Standalone Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryRippleValue()
+    {
+        var asset = (RippleStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(Ripple),
+            TempAssetFolder);
+        asset.Settings.DropSpawnChance = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.VelocityDivisor = 23f;
+        asset.Settings.DistanceDivisor = 24f;
+        asset.Settings.PaletteOffset = 0.11f;
+        asset.Settings.HueShift = 0.12f;
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Ripple), TempAssetFolder);
+
+        var defaults = Ripple.StandaloneDefaults;
+        AssertFloatRangeEqual(asset.Settings.DropSpawnChance, defaults.DropSpawnChance);
+        AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
+        Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
+        Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
+        Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
+        Assert.That(asset.Settings.HueShift, Is.EqualTo(defaults.HueShift));
     }
 
     /// <summary>Crystal Growth Standalone Settings resolve as fresh copies of its scalar and machinery defaults.</summary>
@@ -440,6 +563,34 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
         Assert.That(asset.Settings.DropReverseScrollRateMultiplier, Is.EqualTo(defaults.DropReverseScrollRateMultiplier));
         Assert.That(asset.Settings.DropRingCompression, Is.EqualTo(defaults.DropRingCompression));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited ColorSparkle Sync Setting and Rail with its current file-local
+    /// Sync Defaults, without pinning authored tuning values in the test.
+    /// </summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryColorSparkleValue()
+    {
+        var asset = (ColorSparkleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(ColorSparkle),
+            TempAssetFolder);
+        asset.Settings.ActivationHue = new FloatRange(0.31f, 0.32f, 0.3f, 0.33f);
+        asset.Settings.DropHue = new FloatRange(0.34f, 0.35f, 0.33f, 0.36f);
+        asset.Settings.WaveformHueOffset = new FloatRange(0.37f, 0.38f, 0.36f, 0.39f);
+        asset.Settings.HueWrapPeriod = 0.4f;
+        asset.Settings.DropSparkleDivisor = 7;
+        asset.Settings.FillWhiteChance = 0.41f;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(ColorSparkle), TempAssetFolder);
+
+        var defaults = ColorSparkle.SyncDefaults;
+        AssertFloatRangeEqual(asset.Settings.ActivationHue, defaults.ActivationHue);
+        AssertFloatRangeEqual(asset.Settings.DropHue, defaults.DropHue);
+        AssertFloatRangeEqual(asset.Settings.WaveformHueOffset, defaults.WaveformHueOffset);
+        Assert.That(asset.Settings.HueWrapPeriod, Is.EqualTo(defaults.HueWrapPeriod));
+        Assert.That(asset.Settings.DropSparkleDivisor, Is.EqualTo(defaults.DropSparkleDivisor));
+        Assert.That(asset.Settings.FillWhiteChance, Is.EqualTo(defaults.FillWhiteChance));
     }
 
     /// <summary>
@@ -582,18 +733,63 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.PresetViewCenters, Is.EqualTo(defaults.PresetViewCenters));
     }
 
-    /// <summary>Restore replaces every edited Ripple Sync Setting with the current file-local Sync Defaults.</summary>
+    /// <summary>
+    /// Restore replaces every edited RainbowBars Sync Setting and Rail with the current file-local
+    /// Sync Defaults, proving the saved surface covers every production-consumed value.
+    /// </summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryRainbowBarsValue()
+    {
+        var asset = (RainbowBarsSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(RainbowBars),
+            TempAssetFolder);
+        asset.Settings.Direction = new IntRange(10, 11, 9, 12);
+        asset.Settings.WaveformResponseMode = new IntRange(13, 14, 12, 15);
+        asset.Settings.Brightness = new FloatRange(0.1f, 0.2f, 0f, 0.3f);
+        asset.Settings.HueShiftAtWaveformPeak = 0.4f;
+        asset.Settings.TimeOffsetAtWaveformPeak = 5f;
+        asset.Settings.DirectionSkew = 6f;
+        asset.Settings.FillSaturation = 0.7f;
+        asset.Settings.DropSlowdownBeats = 8;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(RainbowBars), TempAssetFolder);
+
+        var defaults = RainbowBars.SyncDefaults;
+        AssertIntRangeEqual(asset.Settings.Direction, defaults.Direction);
+        AssertIntRangeEqual(asset.Settings.WaveformResponseMode, defaults.WaveformResponseMode);
+        AssertFloatRangeEqual(asset.Settings.Brightness, defaults.Brightness);
+        Assert.That(asset.Settings.HueShiftAtWaveformPeak, Is.EqualTo(defaults.HueShiftAtWaveformPeak));
+        Assert.That(asset.Settings.TimeOffsetAtWaveformPeak, Is.EqualTo(defaults.TimeOffsetAtWaveformPeak));
+        Assert.That(asset.Settings.DirectionSkew, Is.EqualTo(defaults.DirectionSkew));
+        Assert.That(asset.Settings.FillSaturation, Is.EqualTo(defaults.FillSaturation));
+        Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited Ripple Sync Setting and Rail with the current file-local Sync
+    /// Defaults.
+    /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
     {
         var asset = (RippleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
             typeof(Ripple),
             TempAssetFolder);
+        asset.Settings.DropSpawnChance = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.VelocityDivisor = 23f;
+        asset.Settings.DistanceDivisor = 24f;
+        asset.Settings.PaletteOffset = 0.11f;
         asset.Settings.HueShiftMax = 0.9f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
 
         var defaults = Ripple.SyncDefaults;
+        AssertFloatRangeEqual(asset.Settings.DropSpawnChance, defaults.DropSpawnChance);
+        AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
+        Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
+        Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
+        Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
         Assert.That(asset.Settings.HueShiftMax, Is.EqualTo(defaults.HueShiftMax));
     }
 
@@ -646,6 +842,90 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.KickBurstMin, Is.EqualTo(defaults.KickBurstMin));
         Assert.That(asset.Settings.KickBurstMax, Is.EqualTo(defaults.KickBurstMax));
         Assert.That(asset.Settings.DownbeatSeedBonus, Is.EqualTo(defaults.DownbeatSeedBonus));
+    }
+
+    /// <summary>
+    /// AnimateLoops Standalone Defaults resolve as fresh, mutually independent copies without
+    /// pinning authored tuning values that are judged on the wall.
+    /// </summary>
+    [Test]
+    public void AnimateLoopsStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = AnimateLoops.StandaloneDefaults;
+        var second = AnimateLoops.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
+        Assert.That(first.LoopTileHueStep, Is.EqualTo(second.LoopTileHueStep));
+        Assert.That(first.LoopHueAdvance, Is.EqualTo(second.LoopHueAdvance));
+        Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
+        AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
+    }
+
+    /// <summary>
+    /// Restore replaces every edited AnimateLoops Standalone Setting and distortion-mode Rail with
+    /// the current file-local Standalone Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryAnimateLoopsValue()
+    {
+        var asset = (AnimateLoopsStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(AnimateLoops),
+            TempAssetFolder);
+        asset.Settings.BackgroundHueRate = 17f;
+        asset.Settings.LoopTileHueStep = 18f;
+        asset.Settings.LoopHueAdvance = 19f;
+        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
+            typeof(AnimateLoops),
+            TempAssetFolder);
+
+        var defaults = AnimateLoops.StandaloneDefaults;
+        Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
+        Assert.That(asset.Settings.LoopTileHueStep, Is.EqualTo(defaults.LoopTileHueStep));
+        Assert.That(asset.Settings.LoopHueAdvance, Is.EqualTo(defaults.LoopHueAdvance));
+        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
+    }
+
+    /// <summary>
+    /// Restore replaces every edited AnimateLoops Sync Setting and distortion-mode Rail with the
+    /// current file-local Sync Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryAnimateLoopsValue()
+    {
+        var asset = (AnimateLoopsSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(AnimateLoops),
+            TempAssetFolder);
+        asset.Settings.BackgroundHueRate = 17f;
+        asset.Settings.LoopTileHueStep = 18f;
+        asset.Settings.LoopHueAdvance = 19f;
+        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
+        asset.Settings.HueResponseMagnitude = 23f;
+        asset.Settings.TimeWarpSeconds = 24f;
+        asset.Settings.TimeWarpHueScale = 25f;
+        asset.Settings.DropTileHueStep = 26f;
+        asset.Settings.DropHueRate = 27f;
+        asset.Settings.DropBrightness = 28f;
+        asset.Settings.FillBlackAndWhiteProbability = 0.29f;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateLoops), TempAssetFolder);
+
+        var defaults = AnimateLoops.SyncDefaults;
+        Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
+        Assert.That(asset.Settings.LoopTileHueStep, Is.EqualTo(defaults.LoopTileHueStep));
+        Assert.That(asset.Settings.LoopHueAdvance, Is.EqualTo(defaults.LoopHueAdvance));
+        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
+        Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
+        Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));
+        Assert.That(asset.Settings.TimeWarpHueScale, Is.EqualTo(defaults.TimeWarpHueScale));
+        Assert.That(asset.Settings.DropTileHueStep, Is.EqualTo(defaults.DropTileHueStep));
+        Assert.That(asset.Settings.DropHueRate, Is.EqualTo(defaults.DropHueRate));
+        Assert.That(asset.Settings.DropBrightness, Is.EqualTo(defaults.DropBrightness));
+        Assert.That(
+            asset.Settings.FillBlackAndWhiteProbability,
+            Is.EqualTo(defaults.FillBlackAndWhiteProbability));
     }
 
     /// <summary>Asserts that a float range's endpoints and editor Rails match.</summary>

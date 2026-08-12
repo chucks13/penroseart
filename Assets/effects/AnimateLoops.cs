@@ -7,6 +7,7 @@ using Random = UnityEngine.Random;
 /// Animates packed Penrose loop shape groups over a background color.
 /// </summary>
 [EffectSyncSettings(typeof(AnimateLoopsSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(AnimateLoopsStandaloneSettingsAsset))]
 public class AnimateLoops : EffectBase
 {
     // Standalone Defaults
@@ -52,8 +53,8 @@ public class AnimateLoops : EffectBase
     /// <summary>Scale that maps the Time distortion's sampled-time offset into hue.</summary>
     private const float SyncTimeWarpHueScale = 0.1f;
 
-    /// <summary>Current fixed Drop background density; the intended randomization remains unfinished.</summary>
-    private const float SyncDropDensity = 0.001f;
+    /// <summary>Current fixed hue step between consecutive Tile indexes in the Drop background; the intended randomization remains unfinished.</summary>
+    private const float SyncDropTileHueStep = 0.001f;
 
     /// <summary>Authored minimum of the unfinished Drop background-density randomization range.</summary>
     private const float SyncDropDensityRollMin = 0.0004f;
@@ -61,8 +62,8 @@ public class AnimateLoops : EffectBase
     /// <summary>Authored maximum of the unfinished Drop background-density randomization range.</summary>
     private const float SyncDropDensityRollMax = 0.003f;
 
-    /// <summary>Current fixed Drop background speed; the intended randomization remains unfinished.</summary>
-    private const float SyncDropSpeed = 0.5f;
+    /// <summary>Current fixed Drop background hue rate in cycles per second; the intended randomization remains unfinished.</summary>
+    private const float SyncDropHueRate = 0.5f;
 
     /// <summary>Authored minimum of the unfinished Drop background-speed randomization range.</summary>
     private const float SyncDropSpeedRollMin = 0.1f;
@@ -80,33 +81,40 @@ public class AnimateLoops : EffectBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of AnimateLoops' Standalone Defaults.</summary>
-    public static AnimateLoopsStandaloneSettings StandaloneSettings => new AnimateLoopsStandaloneSettings(
-        StandaloneBackgroundHueRate,
-        StandaloneLoopTileHueStep,
-        StandaloneLoopHueAdvance,
-        StandaloneDistortionModeMinInclusive,
-        StandaloneDistortionModeMaxExclusive);
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings cannot mutate AnimateLoops' authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static AnimateLoopsStandaloneSettings StandaloneDefaults => new()
+    {
+        BackgroundHueRate = StandaloneBackgroundHueRate,
+        LoopTileHueStep = StandaloneLoopTileHueStep,
+        LoopHueAdvance = StandaloneLoopHueAdvance,
+        DistortionMode = new IntRange(
+            StandaloneDistortionModeMinInclusive,
+            StandaloneDistortionModeMaxExclusive),
+    };
 
     /// <summary>Resolves a fresh copy of AnimateLoops' file-local Sync Defaults.</summary>
-    public static AnimateLoopsSyncSettings SyncDefaults => new AnimateLoopsSyncSettings
+    public static AnimateLoopsSyncSettings SyncDefaults => new()
     {
         BackgroundHueRate = SyncBackgroundHueRate,
         LoopTileHueStep = SyncLoopTileHueStep,
         LoopHueAdvance = SyncLoopHueAdvance,
-        DistortionModeMinInclusive = SyncDistortionModeMinInclusive,
-        DistortionModeMaxExclusive = SyncDistortionModeMaxExclusive,
+        DistortionMode = new IntRange(
+            SyncDistortionModeMinInclusive,
+            SyncDistortionModeMaxExclusive),
         HueResponseMagnitude = SyncHueResponseMagnitude,
         TimeWarpSeconds = SyncTimeWarpSeconds,
         TimeWarpHueScale = SyncTimeWarpHueScale,
-        DropDensity = SyncDropDensity,
-        DropSpeed = SyncDropSpeed,
+        DropTileHueStep = SyncDropTileHueStep,
+        DropHueRate = SyncDropHueRate,
         DropBrightness = SyncDropBrightness,
         FillBlackAndWhiteProbability = SyncFillBlackAndWhiteProbability,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private AnimateLoopsStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private AnimateLoopsStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private AnimateLoopsSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -140,19 +148,20 @@ public class AnimateLoops : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(AnimateLoops),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(AnimateLoops),
             SyncDefaults);
         waveform = waveforms.Random();
         shape = penrose.Layout.shapes.Loops;
-        int distortionModeMin = beatManager.IsSynced
-            ? SyncSettings.DistortionModeMinInclusive
-            : standaloneSettings.DistortionModeMinInclusive;
-        int distortionModeMax = beatManager.IsSynced
-            ? SyncSettings.DistortionModeMaxExclusive
-            : standaloneSettings.DistortionModeMaxExclusive;
-        distortionMode = Random.Range(distortionModeMin, distortionModeMax);
+        IntRange distortionModeRange = beatManager.IsSynced
+            ? SyncSettings.DistortionMode
+            : standaloneSettings.DistortionMode;
+        distortionMode = Random.Range(
+            distortionModeRange.MinInclusive,
+            distortionModeRange.MaxExclusive);
         shapeName = "loops";
         colors = new Color[shape.GroupCount];
         for (int i = 0; i < shape.GroupCount; i++)
@@ -183,8 +192,8 @@ public class AnimateLoops : EffectBase
             ? SyncSettings.LoopHueAdvance
             : standaloneSettings.LoopHueAdvance;
         float timeWarpHueScale = SyncSettings.TimeWarpHueScale;
-        float dropDensity = SyncSettings.DropDensity;
-        float dropSpeed = SyncSettings.DropSpeed;
+        float dropTileHueStep = SyncSettings.DropTileHueStep;
+        float dropHueRate = SyncSettings.DropHueRate;
         float dropBrightness = SyncSettings.DropBrightness;
         float fillBlackAndWhiteProbability = SyncSettings.FillBlackAndWhiteProbability;
         float hueShift = 0f;
@@ -207,7 +216,7 @@ public class AnimateLoops : EffectBase
             // drop mode stole part of tunnel for the backbround color
             if (beatManager.Drop.Active)
             {
-                float phase = (i * dropDensity + (effectTime * dropSpeed)) % 1f;
+                float phase = (i * dropTileHueStep + (effectTime * dropHueRate)) % 1f;
                 color = Color.HSVToRGB(phase, 1f, dropBrightness);
             }
             buffer[i] = color;
@@ -233,24 +242,13 @@ public class AnimateLoops : EffectBase
 
 }
 
-/// <summary>The resolved Standalone Settings that preserve AnimateLoops' authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by AnimateLoops' fully populated Standalone Defaults and
+/// saved Standalone Settings; Unity may create an empty instance before serialized values apply.
+/// </summary>
+[Serializable]
 public sealed class AnimateLoopsStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from AnimateLoops' file-local defaults.</summary>
-    public AnimateLoopsStandaloneSettings(
-        float backgroundHueRate,
-        float loopTileHueStep,
-        float loopHueAdvance,
-        int distortionModeMinInclusive,
-        int distortionModeMaxExclusive)
-    {
-        BackgroundHueRate = backgroundHueRate;
-        LoopTileHueStep = loopTileHueStep;
-        LoopHueAdvance = loopHueAdvance;
-        DistortionModeMinInclusive = distortionModeMinInclusive;
-        DistortionModeMaxExclusive = distortionModeMaxExclusive;
-    }
-
     /// <summary>Background hue advance per second.</summary>
     public float BackgroundHueRate;
 
@@ -260,11 +258,26 @@ public sealed class AnimateLoopsStandaloneSettings
     /// <summary>Per-frame hue advance for each packed loop's stored color.</summary>
     public float LoopHueAdvance;
 
-    /// <summary>Inclusive lower bound of the per-activation distortion-mode roll.</summary>
-    public int DistortionModeMinInclusive;
+    /// <summary>Per-activation range selecting Color or Time distortion.</summary>
+    public IntRange DistortionMode;
 
-    /// <summary>Exclusive upper bound of the per-activation distortion-mode roll.</summary>
-    public int DistortionModeMaxExclusive;
+    /// <summary>Copies every AnimateLoops Standalone Setting, including distortion-mode Rails.</summary>
+    public void CopyFrom(AnimateLoopsStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        BackgroundHueRate = source.BackgroundHueRate;
+        LoopTileHueStep = source.LoopTileHueStep;
+        LoopHueAdvance = source.LoopHueAdvance;
+        DistortionMode = new IntRange(
+            source.DistortionMode.MinInclusive,
+            source.DistortionMode.MaxExclusive,
+            source.DistortionMode.LowRail,
+            source.DistortionMode.HighRail);
+    }
 }
 
 /// <summary>The saved-or-default musical-response settings used by AnimateLoops in Synced Mode.</summary>
@@ -280,11 +293,8 @@ public sealed class AnimateLoopsSyncSettings
     /// <summary>Live Synced Mode per-frame hue advance for each packed loop's stored color.</summary>
     public float LoopHueAdvance;
 
-    /// <summary>Inclusive minimum of the distortion-mode roll; 1 selects Color.</summary>
-    [Range(1, 2)] public int DistortionModeMinInclusive;
-
-    /// <summary>Exclusive maximum of the distortion-mode roll; 3 admits Color and Time.</summary>
-    [Range(2, 3)] public int DistortionModeMaxExclusive;
+    /// <summary>Per-activation range selecting Color or Time distortion.</summary>
+    public IntRange DistortionMode;
 
     /// <summary>Maximum hue response applied by Color distortion.</summary>
     [Min(0f)] public float HueResponseMagnitude;
@@ -295,11 +305,11 @@ public sealed class AnimateLoopsSyncSettings
     /// <summary>Scale from the Time distortion's sampled-time offset into hue.</summary>
     [Min(0f)] public float TimeWarpHueScale;
 
-    /// <summary>Current fixed Drop background density.</summary>
-    [Min(0f)] public float DropDensity;
+    /// <summary>Hue step between consecutive Tile indexes in the active Drop background.</summary>
+    [Min(0f)] public float DropTileHueStep;
 
-    /// <summary>Current fixed Drop background speed.</summary>
-    [Min(0f)] public float DropSpeed;
+    /// <summary>Drop background hue cycles advanced per second.</summary>
+    [Min(0f)] public float DropHueRate;
 
     /// <summary>Value supplied to the Drop background's HSV brightness slot.</summary>
     [Min(0f)] public float DropBrightness;
@@ -318,13 +328,16 @@ public sealed class AnimateLoopsSyncSettings
         BackgroundHueRate = source.BackgroundHueRate;
         LoopTileHueStep = source.LoopTileHueStep;
         LoopHueAdvance = source.LoopHueAdvance;
-        DistortionModeMinInclusive = source.DistortionModeMinInclusive;
-        DistortionModeMaxExclusive = source.DistortionModeMaxExclusive;
+        DistortionMode = new IntRange(
+            source.DistortionMode.MinInclusive,
+            source.DistortionMode.MaxExclusive,
+            source.DistortionMode.LowRail,
+            source.DistortionMode.HighRail);
         HueResponseMagnitude = source.HueResponseMagnitude;
         TimeWarpSeconds = source.TimeWarpSeconds;
         TimeWarpHueScale = source.TimeWarpHueScale;
-        DropDensity = source.DropDensity;
-        DropSpeed = source.DropSpeed;
+        DropTileHueStep = source.DropTileHueStep;
+        DropHueRate = source.DropHueRate;
         DropBrightness = source.DropBrightness;
         FillBlackAndWhiteProbability = source.FillBlackAndWhiteProbability;
     }
