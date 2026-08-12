@@ -250,7 +250,7 @@ One `Lines2` group repeats tile `466` in consecutive positions. This is an obser
 
 ## Reacting to musical structure (Fill and Drop)
 
-A **Fill** is the build that leads up to a change; a **Drop** is the impact at the change. An effect can express both. The pattern below is the one used by `Tunnel`, and it generalizes to any effect with a continuous phase/motion term.
+A **Fill** is a short musical moment inside a Phrase. A **Drop** is the climactic Phrase of a track. An Effect can use direct state and Stock Envelopes from the BeatManager Data Surface for both. The following pattern comes from `Tunnel` and applies to an Effect with a value that moves continuously.
 
 ### 1. Advertise the capability
 
@@ -260,7 +260,7 @@ Override `Repertoire` so `TrackCueSheet.Build(...)` can assign this effect to ri
 public override Repertoire Repertoire => Repertoire.HandlesFill | Repertoire.HandlesDrop;
 ```
 
-Transitions advertise the same capabilities through `TransitionRepertoire`. The sheet builder chooses per Anchor between a capable Effect riding through the protected window and a capable Transition performing the boundary; runtime casting does not reselect either performer. An override can still replace an Anchor's baked performer at runtime, so the baked cast is a plan, not a guarantee.
+Only an Effect advertises `HandlesFill` and `HandlesDrop` through its Repertoire. The Director uses these flags to put a capable Effect on the wall before an Anchor. The Effect then rides through the Anchor. An Anchor excludes the Runway and Tail of every `Transition`. `TransitionRepertoire` does not include Fill or Drop tags. An override can replace the baked Effect at runtime, so the baked Cast is a plan, not a guarantee.
 
 ### 2. Find the motion term, and never scale `effectTime`
 
