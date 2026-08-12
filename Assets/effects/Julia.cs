@@ -9,24 +9,25 @@ using Random = UnityEngine.Random;
 /// sample coordinates rather than raster operations.
 /// </summary>
 [EffectSyncSettings(typeof(JuliaSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(JuliaStandaloneSettingsAsset))]
 public class Julia : EffectBase
 {
     // Standalone Defaults
 
     /// <summary>Minimum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
-    private const float StandaloneSpeedMin = 0.1f;
+    private const float StandaloneBreathingZoomSpeedMin = 0.1f;
 
     /// <summary>Maximum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
-    private const float StandaloneSpeedMax = 0.3f;
+    private const float StandaloneBreathingZoomSpeedMax = 0.3f;
 
     /// <summary>Width of the complex-plane window, in complex units, at full zoom-out.</summary>
-    private const float StandaloneWindowWidth = 5f;
+    private const float StandaloneWindowWidthMax = 5f;
 
     /// <summary>
     /// Floor for the complex-plane window width. Keeps the dive above float precision and
     /// stops the breathing zoom from collapsing to a single flat point at sin = 1.
     /// </summary>
-    private const float StandaloneMinWindow = 0.002f;
+    private const float StandaloneWindowWidthMin = 0.002f;
 
     /// <summary>Chance that an activation colors from the shared palette instead of the HSV rainbow.</summary>
     private const float StandalonePaletteChance = 0.5f;
@@ -40,15 +41,15 @@ public class Julia : EffectBase
     /// </summary>
     private const float StandaloneHueBeatRate = 0.25f;
 
-    /// <summary>Fixed beat envelope returned when no live clock can place the held Waveform.</summary>
-    private const float StandaloneBeatEnvelope = 1f;
+    /// <summary>Fixed drive applied to hue cycling when no live clock can place the held Waveform.</summary>
+    private const float StandaloneHueCycleDrive = 1f;
 
     /// <summary>
     /// Julia constants (c = x + yi) known to produce interesting sets. An authored table rather
     /// than scalar constants: each entry is one curated look, and its pairing with the matching
     /// entry of <see cref="StandalonePresetViewCenters"/> is what the table exists to express.
     /// </summary>
-    private static readonly Vector2[] StandalonePresetValues = {
+    private static readonly Vector2[] StandaloneJuliaConstants = {
       new(0.285f, 0.01f),
       new(-0.70176f, -0.3842f),
       new(-0.835f, -0.2321f),
@@ -56,7 +57,7 @@ public class Julia : EffectBase
       new(-0.7269f, 0.1889f)
     };
 
-    /// <summary>Per-constant view centers in the complex plane, paired by index with <see cref="StandalonePresetValues"/>.</summary>
+    /// <summary>Per-constant view centers in the complex plane, paired by index with <see cref="StandaloneJuliaConstants"/>.</summary>
     private static readonly Vector2[] StandalonePresetViewCenters = {
       new(0.2f, 0.04f),
       new(-0.125f, -0.04f),
@@ -66,6 +67,27 @@ public class Julia : EffectBase
     };
 
     // Sync Defaults
+
+    /// <summary>Minimum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
+    private const float SyncBreathingZoomSpeedMin = 0.1f;
+
+    /// <summary>Maximum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
+    private const float SyncBreathingZoomSpeedMax = 0.3f;
+
+    /// <summary>Width of the complex-plane window, in complex units, at full zoom-out.</summary>
+    private const float SyncWindowWidthMax = 5f;
+
+    /// <summary>
+    /// Floor for the complex-plane window width. Keeps the dive above float precision and
+    /// stops the breathing zoom from collapsing to a single flat point at sin = 1.
+    /// </summary>
+    private const float SyncWindowWidthMin = 0.002f;
+
+    /// <summary>Chance that a Roll colors from the shared palette instead of the HSV rainbow.</summary>
+    private const float SyncPaletteChance = 0.5f;
+
+    /// <summary>Baseline hue cycling speed in wheel revolutions per second; the colors never stop marching.</summary>
+    private const float SyncHueBaseRate = 0.05f;
 
     /// <summary>
     /// Fill dive depth: at full Fill the zoom is e^FillDiveDepth (~7×) deeper than the
@@ -92,10 +114,10 @@ public class Julia : EffectBase
     private const float SyncNegativeDropSpinChance = 0.5f;
 
     /// <summary>Hue-cycle drive at the held Waveform's trough.</summary>
-    private const float SyncBeatEnvelopeAtTrough = 0f;
+    private const float SyncHueCycleDriveMin = 0f;
 
     /// <summary>Hue-cycle drive at the held Waveform's peak.</summary>
-    private const float SyncBeatEnvelopeAtPeak = 1f;
+    private const float SyncHueCycleDriveMax = 1f;
 
     /// <summary>
     /// Extra hue cycling speed, in wheel revolutions per second, added at the beat envelope's
@@ -103,6 +125,27 @@ public class Julia : EffectBase
     /// surges on those hits and settles back to the base rate between them.
     /// </summary>
     private const float SyncHueBeatRate = 0.25f;
+
+    /// <summary>
+    /// Julia constants (c = x + yi) known to produce interesting sets. This Synced copy keeps its
+    /// live tuning independent from Standalone while starting from the identical authored look.
+    /// </summary>
+    private static readonly Vector2[] SyncJuliaConstants = {
+      new(0.285f, 0.01f),
+      new(-0.70176f, -0.3842f),
+      new(-0.835f, -0.2321f),
+      new(-0.8f, 0.156f),
+      new(-0.7269f, 0.1889f)
+    };
+
+    /// <summary>Synced per-constant view centers paired by index with <see cref="SyncJuliaConstants"/>.</summary>
+    private static readonly Vector2[] SyncPresetViewCenters = {
+      new(0.2f, 0.04f),
+      new(-0.125f, -0.04f),
+      new(-0.0375f, 0f),
+      new(0.175f, 0.05f),
+      new(0.0875f, 0.225f)
+    };
 
     // Runtime mechanism constants
 
@@ -137,39 +180,44 @@ public class Julia : EffectBase
         Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     /// <summary>
-    /// Resolves a fresh immutable-by-convention copy of Julia's Standalone Defaults. The preset
-    /// tables alias the shared authored arrays rather than copying them, so the convention is
-    /// load-bearing there: a write through one activation's settings would reach every activation.
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate Julia's authored
+    /// Standalone Defaults, including the paired preset tables.
     /// </summary>
-    public static JuliaStandaloneSettings StandaloneSettings => new JuliaStandaloneSettings
+    public static JuliaStandaloneSettings StandaloneDefaults => new()
     {
-        Speed = new FloatRange(StandaloneSpeedMin, StandaloneSpeedMax),
-        WindowWidth = StandaloneWindowWidth,
-        MinWindow = StandaloneMinWindow,
+        BreathingZoomSpeed = new FloatRange(
+            StandaloneBreathingZoomSpeedMin,
+            StandaloneBreathingZoomSpeedMax),
+        WindowWidth = new FloatRange(StandaloneWindowWidthMin, StandaloneWindowWidthMax),
         PaletteChance = StandalonePaletteChance,
         HueBaseRate = StandaloneHueBaseRate,
         HueBeatRate = StandaloneHueBeatRate,
-        BeatEnvelope = StandaloneBeatEnvelope,
-        PresetValues = StandalonePresetValues,
-        PresetViewCenters = StandalonePresetViewCenters,
+        HueCycleDrive = StandaloneHueCycleDrive,
+        JuliaConstants = (Vector2[])StandaloneJuliaConstants.Clone(),
+        PresetViewCenters = (Vector2[])StandalonePresetViewCenters.Clone(),
     };
 
     /// <summary>Resolves a fresh copy of Julia's file-local Sync Defaults.</summary>
-    public static JuliaSyncSettings SyncDefaults => new JuliaSyncSettings
+    public static JuliaSyncSettings SyncDefaults => new()
     {
+        BreathingZoomSpeed = new FloatRange(SyncBreathingZoomSpeedMin, SyncBreathingZoomSpeedMax),
+        WindowWidth = new FloatRange(SyncWindowWidthMin, SyncWindowWidthMax),
+        PaletteChance = SyncPaletteChance,
+        HueBaseRate = SyncHueBaseRate,
         FillDiveDepth = SyncFillDiveDepth,
         DropDecayBeats = SyncDropDecayBeats,
         DropSpinRate = SyncDropSpinRate,
         DropBlowout = SyncDropBlowout,
         DropHueKick = SyncDropHueKick,
         NegativeDropSpinChance = SyncNegativeDropSpinChance,
-        BeatEnvelopeAtTrough = SyncBeatEnvelopeAtTrough,
-        BeatEnvelopeAtPeak = SyncBeatEnvelopeAtPeak,
+        HueCycleDrive = new FloatRange(SyncHueCycleDriveMin, SyncHueCycleDriveMax),
         HueBeatRate = SyncHueBeatRate,
+        JuliaConstants = (Vector2[])SyncJuliaConstants.Clone(),
+        PresetViewCenters = (Vector2[])SyncPresetViewCenters.Clone(),
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private JuliaStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private JuliaStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private JuliaSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -204,7 +252,7 @@ public class Julia : EffectBase
 
     /// <summary>The curated Julia preset selected for this activation.</summary>
     /// <remarks>
-    /// Its <c>0..PresetValues.Length</c> roll covers the complete preset catalog, not an
+    /// Its <c>0..JuliaConstants.Length</c> roll covers the complete preset catalog, not an
     /// authored subrange, so the bounds remain part of the selection mechanism.
     /// </remarks>
     private int presetIndex;
@@ -239,14 +287,23 @@ public class Julia : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Julia),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Julia),
             SyncDefaults);
 
-        presetIndex = Random.Range(0, standaloneSettings.PresetValues.Length);
-        c = standaloneSettings.PresetValues[presetIndex];
-        viewCenter = standaloneSettings.PresetViewCenters[presetIndex];
+        var isSynced = beatManager.IsSynced;
+        var juliaConstants = isSynced
+            ? SyncSettings.JuliaConstants
+            : standaloneSettings.JuliaConstants;
+        var presetViewCenters = isSynced
+            ? SyncSettings.PresetViewCenters
+            : standaloneSettings.PresetViewCenters;
+        presetIndex = Random.Range(0, juliaConstants.Length);
+        c = juliaConstants[presetIndex];
+        viewCenter = presetViewCenters[presetIndex];
         Reroll();
         hueScroll = 0f;
         fillEnv = 0f;
@@ -263,8 +320,15 @@ public class Julia : EffectBase
     /// </summary>
     private void Reroll()
     {
-        speed = Random.Range(standaloneSettings.Speed.Min, standaloneSettings.Speed.Max);
-        usePalette = Random.value < standaloneSettings.PaletteChance;
+        var isSynced = beatManager.IsSynced;
+        var breathingZoomSpeed = isSynced
+            ? SyncSettings.BreathingZoomSpeed
+            : standaloneSettings.BreathingZoomSpeed;
+        var paletteChance = isSynced
+            ? SyncSettings.PaletteChance
+            : standaloneSettings.PaletteChance;
+        speed = Random.Range(breathingZoomSpeed.Min, breathingZoomSpeed.Max);
+        usePalette = Random.value < paletteChance;
         if (usePalette) APalette.Change();
 
         // Unfiltered acquisition spans the complete curated Waveform Pool, so Julia has no
@@ -317,32 +381,40 @@ public class Julia : EffectBase
     /// </summary>
     public override void Draw()
     {
+        var isSynced = beatManager.IsSynced;
+
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
         // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
-        var beatEnvelope = waveform.Lerp(
-            SyncSettings.BeatEnvelopeAtTrough,
-            beatManager.IsSynced
-                ? SyncSettings.BeatEnvelopeAtPeak
-                : standaloneSettings.BeatEnvelope);
-        var hueBeatRate = beatManager.IsSynced
+        var hueCycleDrive = waveform.Lerp(
+            SyncSettings.HueCycleDrive.Min,
+            isSynced
+                ? SyncSettings.HueCycleDrive.Max
+                : standaloneSettings.HueCycleDrive);
+        var hueBaseRate = isSynced
+            ? SyncSettings.HueBaseRate
+            : standaloneSettings.HueBaseRate;
+        var hueBeatRate = isSynced
             ? SyncSettings.HueBeatRate
             : standaloneSettings.HueBeatRate;
         hueScroll = Mathf.Repeat(
-            hueScroll + ((standaloneSettings.HueBaseRate + (beatEnvelope * hueBeatRate)) * effectDelta),
+            hueScroll + ((hueBaseRate + (hueCycleDrive * hueBeatRate)) * effectDelta),
             1f);
 
         // Fill Build becomes extra zoom depth below.
         fillEnv = beatManager.Fill.In.Build();
         UpdateDropSlam();
 
-        // Breathing zoom (window width oscillates between WindowWidth and MinWindow), deepened
+        // Breathing zoom (window width oscillates between the range endpoints), deepened
         // exponentially by the Fill dive and blasted back out by the Drop slam.
+        var windowWidth = isSynced
+            ? SyncSettings.WindowWidth
+            : standaloneSettings.WindowWidth;
         var sa = Mathf.Sin(angle).Remap(1f, -1f, 0f, 1f);
         var window = Mathf.Clamp(
-            standaloneSettings.WindowWidth * sa * Mathf.Exp(
+            windowWidth.Max * sa * Mathf.Exp(
                 (SyncSettings.DropBlowout * dropEnv) - (SyncSettings.FillDiveDepth * fillEnv)),
-            standaloneSettings.MinWindow,
-            standaloneSettings.WindowWidth);
+            windowWidth.Min,
+            windowWidth.Max);
         var scale = window / penrose.Bounds.size.x;
         angle += speed * effectDelta;
 
@@ -413,41 +485,78 @@ public class Julia : EffectBase
     }
 }
 
-/// <summary>The resolved Standalone Settings that preserve Julia's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by Julia's fully populated Standalone Defaults and saved
+/// Standalone Settings; Unity may create an empty instance before serialized values are applied.
+/// </summary>
+[Serializable]
 public sealed class JuliaStandaloneSettings
 {
     /// <summary>Per-activation and per-Grid breathing-zoom speed range.</summary>
-    public FloatRange Speed;
+    public FloatRange BreathingZoomSpeed;
 
-    /// <summary>Complex-plane window width at full zoom-out.</summary>
-    public float WindowWidth;
-
-    /// <summary>Minimum complex-plane window width retained by the breathing zoom.</summary>
-    public float MinWindow;
+    /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
+    public FloatRange WindowWidth;
 
     /// <summary>Chance that a color-mode roll selects the shared palette instead of the HSV rainbow.</summary>
-    public float PaletteChance;
+    [Range(0f, 1f)] public float PaletteChance;
 
     /// <summary>Baseline hue cycling speed in wheel revolutions per second.</summary>
-    public float HueBaseRate;
+    [Min(0f)] public float HueBaseRate;
 
-    /// <summary>Extra hue cycling speed applied by the fixed Standalone beat envelope.</summary>
-    public float HueBeatRate;
+    /// <summary>Extra hue cycling speed applied by the fixed Standalone hue-cycle drive.</summary>
+    [Min(0f)] public float HueBeatRate;
 
-    /// <summary>Fixed beat envelope used when no live clock can place the held Waveform.</summary>
-    public float BeatEnvelope;
+    /// <summary>Fixed drive applied to the extra hue-cycle rate in Standalone Mode.</summary>
+    [Range(0f, 1f)] public float HueCycleDrive;
 
     /// <summary>Julia constants (c = x + yi) known to produce interesting sets.</summary>
-    public Vector2[] PresetValues;
+    public Vector2[] JuliaConstants;
 
-    /// <summary>Per-constant view centers in the complex plane, paired by index with <see cref="PresetValues"/>.</summary>
+    /// <summary>Per-constant view centers in the complex plane, paired by index with <see cref="JuliaConstants"/>.</summary>
     public Vector2[] PresetViewCenters;
+
+    /// <summary>Copies every Julia Standalone Setting, including range Rails and preset tables.</summary>
+    public void CopyFrom(JuliaStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        BreathingZoomSpeed = CopyRange(source.BreathingZoomSpeed);
+        WindowWidth = CopyRange(source.WindowWidth);
+        PaletteChance = source.PaletteChance;
+        HueBaseRate = source.HueBaseRate;
+        HueBeatRate = source.HueBeatRate;
+        HueCycleDrive = source.HueCycleDrive;
+        JuliaConstants = (Vector2[])source.JuliaConstants.Clone();
+        PresetViewCenters = (Vector2[])source.PresetViewCenters.Clone();
+    }
+
+    /// <summary>Copies one Float Range with its endpoints and live-tuned Rails.</summary>
+    private static FloatRange CopyRange(FloatRange source)
+    {
+        return new FloatRange(source.Min, source.Max, source.LowRail, source.HighRail);
+    }
 }
 
 /// <summary>The saved-or-default musical-response settings used by Julia in Synced Mode.</summary>
 [Serializable]
 public sealed class JuliaSyncSettings
 {
+    /// <summary>Per-activation and per-Grid breathing-zoom speed range.</summary>
+    public FloatRange BreathingZoomSpeed;
+
+    /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
+    public FloatRange WindowWidth;
+
+    /// <summary>Chance that a color-mode Roll selects the shared palette instead of the HSV rainbow.</summary>
+    [Range(0f, 1f)] public float PaletteChance;
+
+    /// <summary>Baseline hue cycling speed in wheel revolutions per second.</summary>
+    [Min(0f)] public float HueBaseRate;
+
     /// <summary>Exponential zoom depth added at full Fill.</summary>
     [Min(0f)] public float FillDiveDepth;
 
@@ -466,14 +575,17 @@ public sealed class JuliaSyncSettings
     /// <summary>Chance that a Drop hit chooses the negative direction for its spin.</summary>
     [Range(0f, 1f)] public float NegativeDropSpinChance;
 
-    /// <summary>Hue-cycle drive at the held Waveform's trough.</summary>
-    [Range(0f, 1f)] public float BeatEnvelopeAtTrough;
-
-    /// <summary>Hue-cycle drive at the held Waveform's peak.</summary>
-    [Range(0f, 1f)] public float BeatEnvelopeAtPeak;
+    /// <summary>Hue-cycle drive range interpolated by the held Waveform.</summary>
+    public FloatRange HueCycleDrive;
 
     /// <summary>Extra hue cycling speed applied at the top of the live beat envelope.</summary>
     [Min(0f)] public float HueBeatRate;
+
+    /// <summary>Julia constants (c = x + yi) known to produce interesting sets.</summary>
+    public Vector2[] JuliaConstants;
+
+    /// <summary>Per-constant view centers in the complex plane, paired by index with <see cref="JuliaConstants"/>.</summary>
+    public Vector2[] PresetViewCenters;
 
     /// <summary>Copies every Julia Sync Setting from another value.</summary>
     public void CopyFrom(JuliaSyncSettings source)
@@ -483,14 +595,25 @@ public sealed class JuliaSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
+        BreathingZoomSpeed = CopyRange(source.BreathingZoomSpeed);
+        WindowWidth = CopyRange(source.WindowWidth);
+        PaletteChance = source.PaletteChance;
+        HueBaseRate = source.HueBaseRate;
         FillDiveDepth = source.FillDiveDepth;
         DropDecayBeats = source.DropDecayBeats;
         DropSpinRate = source.DropSpinRate;
         DropBlowout = source.DropBlowout;
         DropHueKick = source.DropHueKick;
         NegativeDropSpinChance = source.NegativeDropSpinChance;
-        BeatEnvelopeAtTrough = source.BeatEnvelopeAtTrough;
-        BeatEnvelopeAtPeak = source.BeatEnvelopeAtPeak;
+        HueCycleDrive = CopyRange(source.HueCycleDrive);
         HueBeatRate = source.HueBeatRate;
+        JuliaConstants = (Vector2[])source.JuliaConstants.Clone();
+        PresetViewCenters = (Vector2[])source.PresetViewCenters.Clone();
+    }
+
+    /// <summary>Copies one Float Range with its endpoints and live-tuned Rails.</summary>
+    private static FloatRange CopyRange(FloatRange source)
+    {
+        return new FloatRange(source.Min, source.Max, source.LowRail, source.HighRail);
     }
 }
