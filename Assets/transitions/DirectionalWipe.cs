@@ -45,7 +45,9 @@ public class DirectionalWipe : TransitionBase
     }
 
     float angle;
-    float diagonalsize;
+
+    /// <summary>Half the Penrose bounds diagonal used to normalize every directional projection.</summary>
+    float halfDiagonal;
 
     /// <summary>
     /// Performs one-time transition setup after reflection creates this instance.
@@ -79,18 +81,7 @@ public class DirectionalWipe : TransitionBase
         var width = (int)controller.penrose.Bounds.size.x.Round();
         var height = (int)controller.penrose.Bounds.size.y.Round();
         Vector2 diagonal = new(width, height);
-        diagonalsize = diagonal.magnitude;
-    }
-
-    /// <summary>
-    /// Rotates a 2D point by delta radians for directional wipe projection.
-    /// </summary>
-    public static Vector2 Rotate(Vector2 v, float delta)
-    {
-        return new Vector2(
-            v.x * Mathf.Cos(delta) - v.y * Mathf.Sin(delta),
-            v.x * Mathf.Sin(delta) + v.y * Mathf.Cos(delta)
-        );
+        halfDiagonal = diagonal.magnitude / 2f;
     }
 
     /// <summary>
@@ -116,12 +107,14 @@ public class DirectionalWipe : TransitionBase
     private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, float Angle2, TransitionSettings transitionSettings)
     {
         float lowBandLevel = CurrentLowBandLevel();
+        float cosine = Mathf.Cos(Angle2);
+        float sine = Mathf.Sin(Angle2);
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            Vector2 point = Rotate(controller.penrose.tiles[i].coarsePosition, Angle2);
-            float halfDiagonal = diagonalsize / 2f;
-            float projectedProgress = point.x.Remap(-halfDiagonal, halfDiagonal, 0f, 1f);
+            Vector2Int position = controller.penrose.tiles[i].coarsePosition;
+            float projectedPosition = position.x * cosine - position.y * sine;
+            float projectedProgress = projectedPosition.Remap(-halfDiagonal, halfDiagonal, 0f, 1f);
             Color baseColor = projectedProgress >= V2 ? src1[i] : src2[i];
             float edgePresence = EdgePresence(projectedProgress, V2, transitionSettings.DirectionalReactiveEdgeWidth);
             dest[i] = ApplyLowBandEdgeBrightness(baseColor, edgePresence, lowBandLevel, transitionSettings);
