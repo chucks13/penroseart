@@ -75,7 +75,7 @@ public sealed class FlockBeatIntegrationTests
     /// <summary>Creates a deterministic boid state for caller-visible steering tests.</summary>
     private static Flock.Boid CreateBoid(Vector2 position, Vector2 velocity)
     {
-        return new Flock.Boid(Vector2.one * -10f, Vector2.one * 10f, new Flock())
+        return new Flock.Boid(Vector2.one * -10f, Vector2.one * 10f, new Flock(), Flock.StandaloneDefaults.WanderFrequency)
         {
             position = position,
             velocity = velocity,

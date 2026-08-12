@@ -597,9 +597,12 @@ public class Flock : EffectBase
     private void CreateBoids(Vector2 min, Vector2 max)
     {
         flock = new Boid[BoidCount];
+        FloatRange wanderFrequencyRange = IsSynced
+            ? SyncSettings.WanderFrequency
+            : standaloneSettings.WanderFrequency;
         for (int i = 0; i < BoidCount; i++)
         {
-            flock[i] = new Boid(min, max, this)
+            flock[i] = new Boid(min, max, this, wanderFrequencyRange)
             {
                 boids = flock,
             };
@@ -999,7 +1002,9 @@ public class Flock : EffectBase
         /// <param name="min">Minimum wrapped wall-space bounds.</param>
         /// <param name="max">Maximum wrapped wall-space bounds.</param>
         /// <param name="parent">Owning Flock effect.</param>
-        public Boid(Vector2 min, Vector2 max, Flock parent)
+        /// <param name="wanderFrequencyRange">Endpoints for this boid's one-time wander-frequency roll,
+        /// resolved by the caller from the mode-selected settings surface.</param>
+        public Boid(Vector2 min, Vector2 max, Flock parent, FloatRange wanderFrequencyRange)
         {
             this.min = min;
             this.max = max;
@@ -1007,9 +1012,6 @@ public class Flock : EffectBase
             velocity = new Vector2(Random.Range(-maxSpeed, maxSpeed), Random.Range(-maxSpeed, maxSpeed));
             position = new Vector2(Random.Range(min.x, max.x), Random.Range(min.y, max.y));
             wanderPhase = Random.Range(0f, Mathf.PI * 2f);
-            FloatRange wanderFrequencyRange = parent.IsSynced
-                ? parent.SyncSettings.WanderFrequency
-                : parent.standaloneSettings.WanderFrequency;
             wanderFrequency = Random.Range(wanderFrequencyRange.Min, wanderFrequencyRange.Max);
         }
 
