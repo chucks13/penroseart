@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Overlays blinking or fading Penrose shape highlights on top of one child effect.
 /// </summary>
 [EffectSyncSettings(typeof(ShapeGlitchSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(ShapeGlitchStandaloneSettingsAsset))]
 public class ShapeGlitch : MixerBase
 {
     // Standalone Defaults
@@ -40,11 +41,11 @@ public class ShapeGlitch : MixerBase
     /// <summary>Authored intensity assigned when a packed-shape highlight spawns.</summary>
     private const float StandaloneHighlightInitialIntensity = 1f;
 
-    /// <summary>Authored intensity removed from a fading highlight on each packed-shape step.</summary>
-    private const float StandaloneFadeIntensityStep = 0.005f;
+    /// <summary>Authored intensity removed from each active fading highlight per rendered frame.</summary>
+    private const float StandaloneFadeIntensityPerFrame = 0.005f;
 
-    /// <summary>Authored intensity added to a blinking highlight on each packed-shape step.</summary>
-    private const float StandaloneBlinkIntensityStep = 1f;
+    /// <summary>Authored intensity added to each active blinking highlight per rendered frame.</summary>
+    private const float StandaloneBlinkIntensityPerFrame = 1f;
 
     /// <summary>Authored intensity limit after which a blinking highlight turns off.</summary>
     private const float StandaloneBlinkIntensityLimit = 15f;
@@ -84,11 +85,15 @@ public class ShapeGlitch : MixerBase
     /// <summary>Authored Synced Mode intensity assigned when a packed-shape highlight spawns.</summary>
     private const float SyncHighlightInitialIntensity = 1f;
 
-    /// <summary>Authored Synced Mode intensity removed from a fading highlight on each packed-shape step.</summary>
-    private const float SyncFadeIntensityStep = 0.005f;
+    /// <summary>
+    /// Authored Synced Mode intensity removed from each active fading highlight per rendered frame.
+    /// </summary>
+    private const float SyncFadeIntensityPerFrame = 0.005f;
 
-    /// <summary>Authored Synced Mode intensity added to a blinking highlight on each packed-shape step.</summary>
-    private const float SyncBlinkIntensityStep = 1f;
+    /// <summary>
+    /// Authored Synced Mode intensity added to each active blinking highlight per rendered frame.
+    /// </summary>
+    private const float SyncBlinkIntensityPerFrame = 1f;
 
     /// <summary>Authored Synced Mode intensity limit after which a blinking highlight turns off.</summary>
     private const float SyncBlinkIntensityLimit = 15f;
@@ -96,21 +101,20 @@ public class ShapeGlitch : MixerBase
     /// <summary>Authored Synced Mode hue drift applied on each packed-shape step.</summary>
     private const float SyncHueDriftPerShape = 0.00004f;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of ShapeGlitch's Standalone Defaults.</summary>
-    public static ShapeGlitchStandaloneSettings StandaloneSettings => new ShapeGlitchStandaloneSettings
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate ShapeGlitch's authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static ShapeGlitchStandaloneSettings StandaloneDefaults => new ShapeGlitchStandaloneSettings
     {
-        ModeRollMin = StandaloneModeRollMin,
-        ModeRollMaxExclusive = StandaloneModeRollMaxExclusive,
-        HighlightCountMin = StandaloneHighlightCountMin,
-        HighlightCountMaxExclusive = StandaloneHighlightCountMaxExclusive,
-        ShapeRollMin = StandaloneShapeRollMin,
-        ShapeRollMaxExclusive = StandaloneShapeRollMaxExclusive,
+        ModeRoll = new IntRange(StandaloneModeRollMin, StandaloneModeRollMaxExclusive),
+        HighlightCount = new IntRange(StandaloneHighlightCountMin, StandaloneHighlightCountMaxExclusive),
+        ShapeRoll = new IntRange(StandaloneShapeRollMin, StandaloneShapeRollMaxExclusive),
         HighlightColorValue = StandaloneHighlightColorValue,
-        SpawnRollMin = StandaloneSpawnRollMin,
-        SpawnRollCeilingExclusive = StandaloneSpawnRollCeilingExclusive,
+        SpawnRoll = new IntRange(StandaloneSpawnRollMin, StandaloneSpawnRollCeilingExclusive),
         HighlightInitialIntensity = StandaloneHighlightInitialIntensity,
-        FadeIntensityStep = StandaloneFadeIntensityStep,
-        BlinkIntensityStep = StandaloneBlinkIntensityStep,
+        FadeIntensityPerFrame = StandaloneFadeIntensityPerFrame,
+        BlinkIntensityPerFrame = StandaloneBlinkIntensityPerFrame,
         BlinkIntensityLimit = StandaloneBlinkIntensityLimit,
         HueDriftPerShape = StandaloneHueDriftPerShape,
     };
@@ -118,18 +122,14 @@ public class ShapeGlitch : MixerBase
     /// <summary>Resolves a fresh copy of ShapeGlitch's file-local Sync Defaults.</summary>
     public static ShapeGlitchSyncSettings SyncDefaults => new ShapeGlitchSyncSettings
     {
-        ModeRollMin = SyncModeRollMin,
-        ModeRollMaxExclusive = SyncModeRollMaxExclusive,
-        HighlightCountMin = SyncHighlightCountMin,
-        HighlightCountMaxExclusive = SyncHighlightCountMaxExclusive,
-        ShapeRollMin = SyncShapeRollMin,
-        ShapeRollMaxExclusive = SyncShapeRollMaxExclusive,
+        ModeRoll = new IntRange(SyncModeRollMin, SyncModeRollMaxExclusive),
+        HighlightCount = new IntRange(SyncHighlightCountMin, SyncHighlightCountMaxExclusive),
+        ShapeRoll = new IntRange(SyncShapeRollMin, SyncShapeRollMaxExclusive),
         HighlightColorValue = SyncHighlightColorValue,
-        SpawnRollMin = SyncSpawnRollMin,
-        SpawnRollCeilingExclusive = SyncSpawnRollCeilingExclusive,
+        SpawnRoll = new IntRange(SyncSpawnRollMin, SyncSpawnRollCeilingExclusive),
         HighlightInitialIntensity = SyncHighlightInitialIntensity,
-        FadeIntensityStep = SyncFadeIntensityStep,
-        BlinkIntensityStep = SyncBlinkIntensityStep,
+        FadeIntensityPerFrame = SyncFadeIntensityPerFrame,
+        BlinkIntensityPerFrame = SyncBlinkIntensityPerFrame,
         BlinkIntensityLimit = SyncBlinkIntensityLimit,
         HueDriftPerShape = SyncHueDriftPerShape,
     };
@@ -155,8 +155,8 @@ public class ShapeGlitch : MixerBase
         public int index;
     }
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private ShapeGlitchStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private ShapeGlitchStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private ShapeGlitchSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -194,21 +194,20 @@ public class ShapeGlitch : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(ShapeGlitch),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(ShapeGlitch),
             SyncDefaults);
 
         bool isSynced = beatManager.IsSynced;
-        int modeRollMin = isSynced ? SyncSettings.ModeRollMin : standaloneSettings.ModeRollMin;
-        int modeRollMaxExclusive = isSynced ? SyncSettings.ModeRollMaxExclusive : standaloneSettings.ModeRollMaxExclusive;
-        int highlightCountMin = isSynced ? SyncSettings.HighlightCountMin : standaloneSettings.HighlightCountMin;
-        int highlightCountMaxExclusive = isSynced ? SyncSettings.HighlightCountMaxExclusive : standaloneSettings.HighlightCountMaxExclusive;
-        int shapeRollMin = isSynced ? SyncSettings.ShapeRollMin : standaloneSettings.ShapeRollMin;
-        int shapeRollMaxExclusive = isSynced ? SyncSettings.ShapeRollMaxExclusive : standaloneSettings.ShapeRollMaxExclusive;
+        IntRange modeRoll = isSynced ? SyncSettings.ModeRoll : standaloneSettings.ModeRoll;
+        IntRange highlightCount = isSynced ? SyncSettings.HighlightCount : standaloneSettings.HighlightCount;
+        IntRange shapeRoll = isSynced ? SyncSettings.ShapeRoll : standaloneSettings.ShapeRoll;
         float highlightColorValue = isSynced ? SyncSettings.HighlightColorValue : standaloneSettings.HighlightColorValue;
 
-        switch (Random.Range(modeRollMin, modeRollMaxExclusive))
+        switch (Random.Range(modeRoll.MinInclusive, modeRoll.MaxExclusive))
         {
             case 0:
                 mode = Mode.Blink;
@@ -218,13 +217,13 @@ public class ShapeGlitch : MixerBase
                 break;
         }
         highlights = new Highlight[Random.Range(
-            highlightCountMin,
-            highlightCountMaxExclusive)];
+            highlightCount.MinInclusive,
+            highlightCount.MaxExclusive)];
         for (int i = 0; i < highlights.Length; i++)
         {
             highlights[i] = new Highlight();
         }
-        switch (Random.Range(shapeRollMin, shapeRollMaxExclusive))
+        switch (Random.Range(shapeRoll.MinInclusive, shapeRoll.MaxExclusive))
         {
             case 0:
                 shape = penrose.Layout.shapes.Lines0;
@@ -290,17 +289,16 @@ public class ShapeGlitch : MixerBase
         }
 
         bool isSynced = beatManager.IsSynced;
-        int spawnRollMin = isSynced ? SyncSettings.SpawnRollMin : standaloneSettings.SpawnRollMin;
-        int spawnRollCeilingExclusive = isSynced ? SyncSettings.SpawnRollCeilingExclusive : standaloneSettings.SpawnRollCeilingExclusive;
+        IntRange spawnRoll = isSynced ? SyncSettings.SpawnRoll : standaloneSettings.SpawnRoll;
         float highlightInitialIntensity = isSynced ? SyncSettings.HighlightInitialIntensity : standaloneSettings.HighlightInitialIntensity;
-        float fadeIntensityStep = isSynced ? SyncSettings.FadeIntensityStep : standaloneSettings.FadeIntensityStep;
-        float blinkIntensityStep = isSynced ? SyncSettings.BlinkIntensityStep : standaloneSettings.BlinkIntensityStep;
+        float fadeIntensityPerFrame = isSynced ? SyncSettings.FadeIntensityPerFrame : standaloneSettings.FadeIntensityPerFrame;
+        float blinkIntensityPerFrame = isSynced ? SyncSettings.BlinkIntensityPerFrame : standaloneSettings.BlinkIntensityPerFrame;
         float blinkIntensityLimit = isSynced ? SyncSettings.BlinkIntensityLimit : standaloneSettings.BlinkIntensityLimit;
         float hueDriftPerShape = isSynced ? SyncSettings.HueDriftPerShape : standaloneSettings.HueDriftPerShape;
 
         if (Random.Range(
-            spawnRollMin,
-            spawnRollCeilingExclusive - highlights.Length) == spawnRollMin)
+            spawnRoll.MinInclusive,
+            spawnRoll.MaxExclusive - highlights.Length) == spawnRoll.MinInclusive)
         {
             Highlight newlyCreated = highlights[Random.Range(0, highlights.Length)];
             newlyCreated.intensity = highlightInitialIntensity;
@@ -322,7 +320,7 @@ public class ShapeGlitch : MixerBase
                     }
                     if (mode == Mode.Fade && highlights[h].intensity > 0f)
                     {
-                        highlights[h].intensity -= fadeIntensityStep;
+                        highlights[h].intensity -= fadeIntensityPerFrame;
                         if (highlights[h].intensity < 0f)
                         {
                             highlights[h].intensity = 0f;
@@ -330,7 +328,7 @@ public class ShapeGlitch : MixerBase
                     }
                     if (mode == Mode.Blink && highlights[h].intensity > 0f)
                     {
-                        highlights[h].intensity += blinkIntensityStep;
+                        highlights[h].intensity += blinkIntensityPerFrame;
                         if (highlights[h].intensity > blinkIntensityLimit)
                         {
                             highlights[h].intensity = 0f;
@@ -346,50 +344,72 @@ public class ShapeGlitch : MixerBase
 
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce ShapeGlitch's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by ShapeGlitch's Standalone Defaults and saved Standalone
+/// Settings.
+/// </summary>
+[Serializable]
 public sealed class ShapeGlitchStandaloneSettings
 {
-    /// <summary>Inclusive minimum for the per-activation Blink/Fade Roll.</summary>
-    public int ModeRollMin;
+    /// <summary>Per-activation range selecting the Blink or Fade mode.</summary>
+    public IntRange ModeRoll;
 
-    /// <summary>Exclusive maximum for the per-activation Blink/Fade Roll.</summary>
-    public int ModeRollMaxExclusive;
+    /// <summary>Per-activation range for the number of packed-shape highlights.</summary>
+    public IntRange HighlightCount;
 
-    /// <summary>Inclusive minimum number of packed-shape highlights per activation.</summary>
-    public int HighlightCountMin;
-
-    /// <summary>Exclusive maximum number of packed-shape highlights per activation.</summary>
-    public int HighlightCountMaxExclusive;
-
-    /// <summary>Inclusive minimum for the per-activation packed-shape Roll.</summary>
-    public int ShapeRollMin;
-
-    /// <summary>Exclusive maximum for the per-activation packed-shape Roll.</summary>
-    public int ShapeRollMaxExclusive;
+    /// <summary>Per-activation range selecting the packed Shape List.</summary>
+    public IntRange ShapeRoll;
 
     /// <summary>HSV value used for the randomly rolled highlight color.</summary>
     public float HighlightColorValue;
 
-    /// <summary>Inclusive minimum for the per-frame highlight spawn Roll.</summary>
-    public int SpawnRollMin;
-
-    /// <summary>Exclusive spawn-roll ceiling before the current highlight count is subtracted.</summary>
-    public int SpawnRollCeilingExclusive;
+    /// <summary>Per-frame spawn-roll range whose maximum is reduced by the live highlight count.</summary>
+    public IntRange SpawnRoll;
 
     /// <summary>Intensity assigned when a packed-shape highlight spawns.</summary>
     public float HighlightInitialIntensity;
 
-    /// <summary>Intensity removed from a fading highlight on each packed-shape step.</summary>
-    public float FadeIntensityStep;
+    /// <summary>Intensity removed from each active fading highlight per rendered frame.</summary>
+    public float FadeIntensityPerFrame;
 
-    /// <summary>Intensity added to a blinking highlight on each packed-shape step.</summary>
-    public float BlinkIntensityStep;
+    /// <summary>Intensity added to each active blinking highlight per rendered frame.</summary>
+    public float BlinkIntensityPerFrame;
 
     /// <summary>Intensity limit after which a blinking highlight turns off.</summary>
     public float BlinkIntensityLimit;
 
     /// <summary>Hue drift applied on each packed-shape step.</summary>
     public float HueDriftPerShape;
+
+    /// <summary>Copies every ShapeGlitch Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(ShapeGlitchStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        ModeRoll = CopyRange(source.ModeRoll);
+        HighlightCount = CopyRange(source.HighlightCount);
+        ShapeRoll = CopyRange(source.ShapeRoll);
+        HighlightColorValue = source.HighlightColorValue;
+        SpawnRoll = CopyRange(source.SpawnRoll);
+        HighlightInitialIntensity = source.HighlightInitialIntensity;
+        FadeIntensityPerFrame = source.FadeIntensityPerFrame;
+        BlinkIntensityPerFrame = source.BlinkIntensityPerFrame;
+        BlinkIntensityLimit = source.BlinkIntensityLimit;
+        HueDriftPerShape = source.HueDriftPerShape;
+    }
+
+    /// <summary>Creates an independent copy of one integer range and its tuning Rails.</summary>
+    private static IntRange CopyRange(IntRange source)
+    {
+        return new IntRange(
+            source.MinInclusive,
+            source.MaxExclusive,
+            source.LowRail,
+            source.HighRail);
+    }
 }
 
 /// <summary>
@@ -399,41 +419,29 @@ public sealed class ShapeGlitchStandaloneSettings
 [Serializable]
 public sealed class ShapeGlitchSyncSettings
 {
-    /// <summary>Inclusive minimum for the Synced Mode per-activation Blink/Fade Roll.</summary>
-    [Range(0, 1)] public int ModeRollMin;
+    /// <summary>Synced Mode per-activation range selecting the Blink or Fade mode.</summary>
+    public IntRange ModeRoll;
 
-    /// <summary>Exclusive maximum for the Synced Mode per-activation Blink/Fade Roll.</summary>
-    [Range(1, 2)] public int ModeRollMaxExclusive;
+    /// <summary>Synced Mode per-activation range for the number of packed-shape highlights.</summary>
+    public IntRange HighlightCount;
 
-    /// <summary>Inclusive minimum number of Synced Mode packed-shape highlights per activation.</summary>
-    [Min(1)] public int HighlightCountMin;
-
-    /// <summary>Exclusive maximum number of Synced Mode packed-shape highlights per activation.</summary>
-    [Min(2)] public int HighlightCountMaxExclusive;
-
-    /// <summary>Inclusive minimum for the Synced Mode per-activation packed-shape Roll.</summary>
-    [Range(0, 8)] public int ShapeRollMin;
-
-    /// <summary>Exclusive maximum for the Synced Mode per-activation packed-shape Roll.</summary>
-    [Range(1, 9)] public int ShapeRollMaxExclusive;
+    /// <summary>Synced Mode per-activation range selecting the packed Shape List.</summary>
+    public IntRange ShapeRoll;
 
     /// <summary>HSV value used for the randomly rolled Synced Mode highlight color.</summary>
     [Range(0f, 1f)] public float HighlightColorValue;
 
-    /// <summary>Inclusive minimum for the Synced Mode per-frame highlight spawn Roll.</summary>
-    [Min(0)] public int SpawnRollMin;
-
-    /// <summary>Exclusive Synced Mode spawn-roll ceiling before the current highlight count is subtracted.</summary>
-    [Min(2)] public int SpawnRollCeilingExclusive;
+    /// <summary>Synced Mode spawn-roll range whose maximum is reduced by the live highlight count.</summary>
+    public IntRange SpawnRoll;
 
     /// <summary>Intensity assigned when a Synced Mode packed-shape highlight spawns.</summary>
     [Min(0f)] public float HighlightInitialIntensity;
 
-    /// <summary>Intensity removed from a fading Synced Mode highlight on each packed-shape step.</summary>
-    [Min(0f)] public float FadeIntensityStep;
+    /// <summary>Intensity removed from each active fading highlight per rendered frame.</summary>
+    [Min(0f)] public float FadeIntensityPerFrame;
 
-    /// <summary>Intensity added to a blinking Synced Mode highlight on each packed-shape step.</summary>
-    [Min(0f)] public float BlinkIntensityStep;
+    /// <summary>Intensity added to each active blinking highlight per rendered frame.</summary>
+    [Min(0f)] public float BlinkIntensityPerFrame;
 
     /// <summary>Intensity limit after which a blinking Synced Mode highlight turns off.</summary>
     [Min(0f)] public float BlinkIntensityLimit;
@@ -449,19 +457,25 @@ public sealed class ShapeGlitchSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        ModeRollMin = source.ModeRollMin;
-        ModeRollMaxExclusive = source.ModeRollMaxExclusive;
-        HighlightCountMin = source.HighlightCountMin;
-        HighlightCountMaxExclusive = source.HighlightCountMaxExclusive;
-        ShapeRollMin = source.ShapeRollMin;
-        ShapeRollMaxExclusive = source.ShapeRollMaxExclusive;
+        ModeRoll = CopyRange(source.ModeRoll);
+        HighlightCount = CopyRange(source.HighlightCount);
+        ShapeRoll = CopyRange(source.ShapeRoll);
         HighlightColorValue = source.HighlightColorValue;
-        SpawnRollMin = source.SpawnRollMin;
-        SpawnRollCeilingExclusive = source.SpawnRollCeilingExclusive;
+        SpawnRoll = CopyRange(source.SpawnRoll);
         HighlightInitialIntensity = source.HighlightInitialIntensity;
-        FadeIntensityStep = source.FadeIntensityStep;
-        BlinkIntensityStep = source.BlinkIntensityStep;
+        FadeIntensityPerFrame = source.FadeIntensityPerFrame;
+        BlinkIntensityPerFrame = source.BlinkIntensityPerFrame;
         BlinkIntensityLimit = source.BlinkIntensityLimit;
         HueDriftPerShape = source.HueDriftPerShape;
+    }
+
+    /// <summary>Creates an independent copy of one integer range and its tuning Rails.</summary>
+    private static IntRange CopyRange(IntRange source)
+    {
+        return new IntRange(
+            source.MinInclusive,
+            source.MaxExclusive,
+            source.LowRail,
+            source.HighRail);
     }
 }
