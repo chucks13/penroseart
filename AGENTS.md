@@ -13,6 +13,10 @@ happen. Effects and Transitions are the first-class citizens of this codebase. T
 change is that the wall works, looks right, and runs optimized and stable for the length of a
 show.
 
+Crashes follow the same rule. A bad value that crashes an Effect is an accepted cost, not a
+reason for guards. Log the crash and surface it immediately, then fix the cause. Do not add
+clamps, validation, or defensive checks against our own editor input.
+
 Navigation/editing: Serena first — activate Serena project `penroseart` before repo navigation or edits.
 
 ## Agent instruction files
@@ -53,7 +57,9 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
   everywhere in one pass and delete the old form. **Best pattern, in the best place, once.**
 - This is a personal installation with no installed base. Do not add backwards-compatibility
   shims, dual code paths, or parallel `*Legacy`/`*V2` types unless explicitly asked. Do not
-  keep old implementations "just in case" — **git history is the safety net.**
+  keep old implementations "just in case" — **git history is the safety net.** When a
+  serialized shape changes, do not write migration code. Restore or regenerate the stale
+  assets in the editor.
 - Treat "this is low-risk / minimal change / let's keep both for now" as a **smell** when it
   means preserving a second copy of anything. Prefer the decisive refactor that leaves
   exactly one canonical form.
