@@ -6,15 +6,16 @@ using System;
 /// Renders expanding screen-space ripple rings and maps them to Penrose tiles.
 /// </summary>
 [EffectSyncSettings(typeof(RippleSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(RippleStandaloneSettingsAsset))]
 public class Ripple : ScreenEffect
 {
     // Standalone Defaults
 
-    /// <summary>Authored minimum per-frame drop-spawn threshold for the unchanged Standalone look.</summary>
-    private const float StandaloneIntensityMin = 0.01f;
+    /// <summary>Authored minimum per-frame drop-spawn chance for the unchanged Standalone look.</summary>
+    private const float StandaloneDropSpawnChanceMin = 0.01f;
 
-    /// <summary>Authored maximum per-frame drop-spawn threshold for the unchanged Standalone look.</summary>
-    private const float StandaloneIntensityMax = 0.02f;
+    /// <summary>Authored maximum per-frame drop-spawn chance for the unchanged Standalone look.</summary>
+    private const float StandaloneDropSpawnChanceMax = 0.02f;
 
     /// <summary>Authored minimum pre-division drop velocity for the unchanged Standalone look.</summary>
     private const float StandaloneVelocityMin = 0.01f;
@@ -36,6 +37,27 @@ public class Ripple : ScreenEffect
 
     // Sync Defaults
 
+    /// <summary>Authored minimum per-frame drop-spawn chance for the current Synced look.</summary>
+    private const float SyncDropSpawnChanceMin = 0.01f;
+
+    /// <summary>Authored maximum per-frame drop-spawn chance for the current Synced look.</summary>
+    private const float SyncDropSpawnChanceMax = 0.02f;
+
+    /// <summary>Authored minimum pre-division drop velocity for the current Synced look.</summary>
+    private const float SyncVelocityMin = 0.01f;
+
+    /// <summary>Authored maximum pre-division drop velocity for the current Synced look.</summary>
+    private const float SyncVelocityMax = 0.9f;
+
+    /// <summary>Authored divisor applied to each randomly rolled drop velocity in Synced Mode.</summary>
+    private const float SyncVelocityDivisor = 2000f;
+
+    /// <summary>Authored divisor that maps screen-space distance into ripple phase in Synced Mode.</summary>
+    private const float SyncDistanceDivisor = 20f;
+
+    /// <summary>Authored palette phase offset for the current Synced look.</summary>
+    private const float SyncPaletteOffset = 0.5f;
+
     /// <summary>Authored maximum Waveform-driven hue shift in Synced Mode.</summary>
     private const float SyncHueShiftMax = 0.2f;
 
@@ -43,23 +65,32 @@ public class Ripple : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Ripple's Standalone Defaults.</summary>
-    public static RippleStandaloneSettings StandaloneSettings => new RippleStandaloneSettings(
-        new FloatRange(StandaloneIntensityMin, StandaloneIntensityMax),
-        new FloatRange(StandaloneVelocityMin, StandaloneVelocityMax),
-        StandaloneVelocityDivisor,
-        StandaloneDistanceDivisor,
-        StandalonePaletteOffset,
-        StandaloneHueShift);
+    /// <summary>Resolves a fresh copy of Ripple's file-local Standalone Defaults.</summary>
+    public static RippleStandaloneSettings StandaloneDefaults => new()
+    {
+        DropSpawnChance = new FloatRange(
+            StandaloneDropSpawnChanceMin,
+            StandaloneDropSpawnChanceMax),
+        Velocity = new FloatRange(StandaloneVelocityMin, StandaloneVelocityMax),
+        VelocityDivisor = StandaloneVelocityDivisor,
+        DistanceDivisor = StandaloneDistanceDivisor,
+        PaletteOffset = StandalonePaletteOffset,
+        HueShift = StandaloneHueShift,
+    };
 
     /// <summary>Resolves a fresh copy of Ripple's file-local Sync Defaults.</summary>
-    public static RippleSyncSettings SyncDefaults => new RippleSyncSettings
+    public static RippleSyncSettings SyncDefaults => new()
     {
+        DropSpawnChance = new FloatRange(SyncDropSpawnChanceMin, SyncDropSpawnChanceMax),
+        Velocity = new FloatRange(SyncVelocityMin, SyncVelocityMax),
+        VelocityDivisor = SyncVelocityDivisor,
+        DistanceDivisor = SyncDistanceDivisor,
+        PaletteOffset = SyncPaletteOffset,
         HueShiftMax = SyncHueShiftMax,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private RippleStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private RippleStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private RippleSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -68,7 +99,9 @@ public class Ripple : ScreenEffect
     private Color endColor;
     private Drop[] drops;
     private Vector2 screen;
-    private float intensity;
+
+    /// <summary>Current per-frame chance of spawning a new drop, rolled from the active mode's range.</summary>
+    private float dropSpawnChance;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -92,12 +125,17 @@ public class Ripple : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Ripple),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Ripple),
             SyncDefaults);
         waveform = waveforms.Random();
-        intensity = Random.Range(standaloneSettings.Intensity.Min, standaloneSettings.Intensity.Max);
+        FloatRange dropSpawnChanceRange = beatManager.IsSynced
+            ? SyncSettings.DropSpawnChance
+            : standaloneSettings.DropSpawnChance;
+        dropSpawnChance = Random.Range(dropSpawnChanceRange.Min, dropSpawnChanceRange.Max);
     }
 
     /// <summary>
@@ -110,16 +148,28 @@ public class Ripple : ScreenEffect
     /// </summary>
     public override void Draw()
     {
-        // Beat pulse scales ripple brightness while drop radius/progression remains independent.
-        // Standalone reads the file-local hue shift so a Sync Settings edit can never move the
-        // Standalone look; Waveform.Lerp returns its second argument when no live clock is sampled.
+        bool isSynced = beatManager.IsSynced;
+        FloatRange velocityRange = isSynced ? SyncSettings.Velocity : standaloneSettings.Velocity;
+        float velocityDivisor = isSynced
+            ? SyncSettings.VelocityDivisor
+            : standaloneSettings.VelocityDivisor;
+        float distanceDivisor = isSynced
+            ? SyncSettings.DistanceDivisor
+            : standaloneSettings.DistanceDivisor;
+        float paletteOffset = isSynced
+            ? SyncSettings.PaletteOffset
+            : standaloneSettings.PaletteOffset;
+
+        // The Waveform shifts palette hue while drop radius/progression remains independent. Each
+        // mode reads its own saved hue shift so tuning one surface cannot move the other, and
+        // Waveform.Lerp returns its second argument when no live clock is sampled.
         float hueShift = waveform.Lerp(
             0f,
-            beatManager.IsSynced ? SyncSettings.HueShiftMax : standaloneSettings.HueShift);
-        if (Random.value < intensity)
+            isSynced ? SyncSettings.HueShiftMax : standaloneSettings.HueShift);
+        if (Random.value < dropSpawnChance)
         {
             Array.Resize(ref drops, drops.Length + 1);
-            drops[drops.Length - 1] = new Drop(standaloneSettings);
+            drops[drops.Length - 1] = new Drop(velocityRange, velocityDivisor);
         }
         buffer.Fade();
 
@@ -135,9 +185,9 @@ public class Ripple : ScreenEffect
                 {
                     drops[i].Update(effectDelta);
                     var d = Vector2.Distance(screen, drops[i].Position);
-                    sum += (drops[i].radius - (d / standaloneSettings.DistanceDivisor)).Clamp01();
+                    sum += (drops[i].radius - (d / distanceDivisor)).Clamp01();
                 }
-                sum += standaloneSettings.PaletteOffset;
+                sum += paletteOffset;
                 sum %= 1f;
                 screenBuffer[idx] = APalette.read(sum + hueShift, true);
             }
@@ -156,12 +206,11 @@ public class Ripple : ScreenEffect
         public float radius = 0f;
 
         /// <summary>
-        /// Creates a ripple drop at a random screen position using the activation's Standalone Settings.
+        /// Creates a ripple drop at a random screen position using the active mode's velocity Settings.
         /// </summary>
-        public Drop(RippleStandaloneSettings standaloneSettings)
+        public Drop(FloatRange velocityRange, float velocityDivisor)
         {
-            velocity = Random.Range(standaloneSettings.Velocity.Min, standaloneSettings.Velocity.Max) /
-                standaloneSettings.VelocityDivisor;
+            velocity = Random.Range(velocityRange.Min, velocityRange.Max) / velocityDivisor;
             position = new Vector2(Random.Range(0, width), Random.Range(0, height));
         }
 
@@ -178,28 +227,15 @@ public class Ripple : ScreenEffect
     }
 }
 
-/// <summary>The resolved Standalone Settings that preserve Ripple's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by Ripple's Standalone Defaults and Settings; the in-file
+/// Defaults preserve the authored no-music look.
+/// </summary>
+[Serializable]
 public sealed class RippleStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from Ripple's file-local defaults.</summary>
-    public RippleStandaloneSettings(
-        FloatRange intensity,
-        FloatRange velocity,
-        float velocityDivisor,
-        float distanceDivisor,
-        float paletteOffset,
-        float hueShift)
-    {
-        Intensity = intensity;
-        Velocity = velocity;
-        VelocityDivisor = velocityDivisor;
-        DistanceDivisor = distanceDivisor;
-        PaletteOffset = paletteOffset;
-        HueShift = hueShift;
-    }
-
-    /// <summary>Per-activation range for the per-frame drop-spawn threshold.</summary>
-    public FloatRange Intensity;
+    /// <summary>Per-activation range for the per-frame chance of spawning a new drop.</summary>
+    public FloatRange DropSpawnChance;
 
     /// <summary>Per-drop pre-division velocity range.</summary>
     public FloatRange Velocity;
@@ -215,16 +251,56 @@ public sealed class RippleStandaloneSettings
 
     /// <summary>Fixed hue shift applied to every palette read in Standalone Mode.</summary>
     public float HueShift;
+
+    /// <summary>Copies every Ripple Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(RippleStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        DropSpawnChance = CopyRange(source.DropSpawnChance);
+        Velocity = CopyRange(source.Velocity);
+        VelocityDivisor = source.VelocityDivisor;
+        DistanceDivisor = source.DistanceDivisor;
+        PaletteOffset = source.PaletteOffset;
+        HueShift = source.HueShift;
+    }
+
+    /// <summary>Copies one FloatRange so saved Settings cannot mutate authored Defaults through aliasing.</summary>
+    private static FloatRange CopyRange(FloatRange source)
+    {
+        return new FloatRange(source.Min, source.Max, source.LowRail, source.HighRail);
+    }
 }
 
-/// <summary>The saved-or-default musical-response settings used by Ripple in Synced Mode.</summary>
+/// <summary>
+/// The serializable value shape shared by Ripple's Sync Defaults and Sync Settings for its
+/// musical response in Synced Mode.
+/// </summary>
 [Serializable]
 public sealed class RippleSyncSettings
 {
+    /// <summary>Per-activation range for the per-frame chance of spawning a new drop.</summary>
+    public FloatRange DropSpawnChance;
+
+    /// <summary>Per-drop pre-division velocity range.</summary>
+    public FloatRange Velocity;
+
+    /// <summary>Divisor applied to each randomly rolled drop velocity.</summary>
+    public float VelocityDivisor;
+
+    /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
+    public float DistanceDivisor;
+
+    /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
+    public float PaletteOffset;
+
     /// <summary>Maximum hue shift reached at the Waveform peak in Synced Mode.</summary>
     [Range(0f, 1f)] public float HueShiftMax;
 
-    /// <summary>Copies every Ripple Sync Setting from another value.</summary>
+    /// <summary>Copies every Ripple Sync Setting, including range endpoints and Rails.</summary>
     public void CopyFrom(RippleSyncSettings source)
     {
         if (source == null)
@@ -232,6 +308,17 @@ public sealed class RippleSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
+        DropSpawnChance = CopyRange(source.DropSpawnChance);
+        Velocity = CopyRange(source.Velocity);
+        VelocityDivisor = source.VelocityDivisor;
+        DistanceDivisor = source.DistanceDivisor;
+        PaletteOffset = source.PaletteOffset;
         HueShiftMax = source.HueShiftMax;
+    }
+
+    /// <summary>Copies one FloatRange so saved Settings cannot mutate authored Defaults through aliasing.</summary>
+    private static FloatRange CopyRange(FloatRange source)
+    {
+        return new FloatRange(source.Min, source.Max, source.LowRail, source.HighRail);
     }
 }
