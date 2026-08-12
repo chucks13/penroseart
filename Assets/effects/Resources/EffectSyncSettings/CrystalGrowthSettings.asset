@@ -14,13 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrystalGrowthSyncSettingsAsset
   effectTypeName: CrystalGrowth
   settings:
-    KickThreshold: 0.33333334
+    LowLevelsForm: 0
+    ActivityLevelsForm: 0
+    LowPresenceThreshold: 0.375
     ActivityLevel:
       Min: 0.233
       Max: 0.433
       LowRail: 0.233
       HighRail: 0.433
-    DropFadeBars: 2
+    QuietGrowthMultiplier: 0.5
+    EnergyPace:
+      Min: 0.75
+      Max: 1.25
+      LowRail: 0.75
+      HighRail: 1.25
     DropFlashBrightness: 1.2
     DropFlashSpread: 1.5
     DropFlashSeeds: 3
@@ -32,11 +39,10 @@ MonoBehaviour:
     DropRatchetSpread: 4
     DropStrobeDepth: 0.9
     DropSeedBurst: 12
-    DropSeedBurstThreshold: 0.5
     FillHoldback: 0.65
     FillSwell: 0.35
     DrivingBrightnessFloor: 0.8
-    KickSeedBurst:
+    LowSeedBurst:
       Min: 2
       Max: 6
       LowRail: 2
@@ -65,11 +71,6 @@ MonoBehaviour:
       Max: 3.5
       LowRail: 1.5
       HighRail: 3.5
-    SeedInterval:
-      Min: 0.18
-      Max: 0.35
-      LowRail: 0.18
-      HighRail: 0.35
     TipThreshold: 0.8
     TipWhitenAmount: 0.5
     BloomCountBase: 3
