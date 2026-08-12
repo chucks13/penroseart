@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Renders directional palette bars in screen space and maps them to Penrose tiles.
 /// </summary>
 [EffectSyncSettings(typeof(RainbowBarsSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(RainbowBarsStandaloneSettingsAsset))]
 public class RainbowBars : ScreenEffect
 {
     // Standalone Defaults
@@ -17,8 +18,12 @@ public class RainbowBars : ScreenEffect
     private const int StandaloneDirectionMaxExclusive = 8;
 
     /// <summary>
-    /// Authored neutral brightness for the unchanged Standalone look when no Waveform sample is available.
+    /// Authored lower brightness endpoint, kept identical to Sync so the two modes do not move until
+    /// tuned. Without live Waveform placement, Standalone rendering rests on the upper endpoint.
     /// </summary>
+    private const float StandaloneBrightnessAtWaveformTrough = 0.85f;
+
+    /// <summary>Authored brightness at the Waveform peak and at rest for the unchanged Standalone look.</summary>
     private const float StandaloneBrightnessAtRest = 1f;
 
     /// <summary>Authored secondary-axis skew that shapes the unchanged Standalone direction sampling.</summary>
@@ -32,11 +37,11 @@ public class RainbowBars : ScreenEffect
     /// <summary>Authored exclusive upper bound supplied to a Synced Mode direction roll.</summary>
     private const int SyncDirectionMaxExclusive = 8;
 
-    /// <summary>Authored inclusive minimum response mode supplied to the distortion roll.</summary>
-    private const int SyncDistortionModeMinInclusive = 0;
+    /// <summary>Authored inclusive minimum response mode supplied to the Waveform-response roll.</summary>
+    private const int SyncWaveformResponseModeMinInclusive = 0;
 
-    /// <summary>Authored exclusive upper bound supplied to the three-mode distortion roll.</summary>
-    private const int SyncDistortionModeMaxExclusive = 3;
+    /// <summary>Authored exclusive upper bound supplied to the three-mode Waveform-response roll.</summary>
+    private const int SyncWaveformResponseModeMaxExclusive = 3;
 
     /// <summary>Authored brightness multiplier reached at the Waveform trough in Synced Mode.</summary>
     private const float SyncBrightnessAtWaveformTrough = 0.85f;
@@ -66,22 +71,29 @@ public class RainbowBars : ScreenEffect
     /// <summary>The bands slow their scroll over the eight beats leading into a Drop.</summary>
     protected override int DropSlowdownBeats => SyncSettings.DropSlowdownBeats;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of RainbowBars' Standalone Defaults.</summary>
-    public static RainbowBarsStandaloneSettings StandaloneSettings => new RainbowBarsStandaloneSettings(
-        StandaloneDirectionMinInclusive,
-        StandaloneDirectionMaxExclusive,
-        StandaloneBrightnessAtRest,
-        StandaloneDirectionSkew);
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate RainbowBars' authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static RainbowBarsStandaloneSettings StandaloneDefaults => new()
+    {
+        Direction = new IntRange(
+            StandaloneDirectionMinInclusive,
+            StandaloneDirectionMaxExclusive),
+        Brightness = new FloatRange(
+            StandaloneBrightnessAtWaveformTrough,
+            StandaloneBrightnessAtRest),
+        DirectionSkew = StandaloneDirectionSkew,
+    };
 
     /// <summary>Resolves a fresh copy of RainbowBars' file-local Sync Defaults.</summary>
-    public static RainbowBarsSyncSettings SyncDefaults => new RainbowBarsSyncSettings
+    public static RainbowBarsSyncSettings SyncDefaults => new()
     {
-        DirectionMinInclusive = SyncDirectionMinInclusive,
-        DirectionMaxExclusive = SyncDirectionMaxExclusive,
-        DistortionModeMinInclusive = SyncDistortionModeMinInclusive,
-        DistortionModeMaxExclusive = SyncDistortionModeMaxExclusive,
-        BrightnessAtWaveformTrough = SyncBrightnessAtWaveformTrough,
-        BrightnessAtRest = SyncBrightnessAtRest,
+        Direction = new IntRange(SyncDirectionMinInclusive, SyncDirectionMaxExclusive),
+        WaveformResponseMode = new IntRange(
+            SyncWaveformResponseModeMinInclusive,
+            SyncWaveformResponseModeMaxExclusive),
+        Brightness = new FloatRange(SyncBrightnessAtWaveformTrough, SyncBrightnessAtRest),
         HueShiftAtWaveformPeak = SyncHueShiftAtWaveformPeak,
         TimeOffsetAtWaveformPeak = SyncTimeOffsetAtWaveformPeak,
         DirectionSkew = SyncDirectionSkew,
@@ -89,8 +101,8 @@ public class RainbowBars : ScreenEffect
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private RainbowBarsStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private RainbowBarsStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private RainbowBarsSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -99,8 +111,8 @@ public class RainbowBars : ScreenEffect
     /// <summary>The screen-space direction used to sample the palette bands.</summary>
     private Direction direction;
 
-    /// <summary>Which beat response this activation applies: brightness, color, or time.</summary>
-    private int distortionMode; // 0: Brightness, 1: Color, 2: Time
+    /// <summary>Which Waveform response this activation applies: brightness, color, or time.</summary>
+    private int waveformResponseMode; // 0: Brightness, 1: Color, 2: Time
 
     /// <summary>
     /// Called ever frame to update the debug UI text element
@@ -114,21 +126,22 @@ public class RainbowBars : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(RainbowBars),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(RainbowBars),
             SyncDefaults);
         waveform = waveforms.Random();
-        int directionMinInclusive = beatManager.IsSynced
-            ? SyncSettings.DirectionMinInclusive
-            : standaloneSettings.DirectionMinInclusive;
-        int directionMaxExclusive = beatManager.IsSynced
-            ? SyncSettings.DirectionMaxExclusive
-            : standaloneSettings.DirectionMaxExclusive;
-        direction = (Direction)Random.Range(directionMinInclusive, directionMaxExclusive);
-        distortionMode = Random.Range(
-            SyncSettings.DistortionModeMinInclusive,
-            SyncSettings.DistortionModeMaxExclusive);
+        IntRange directionRange = beatManager.IsSynced
+            ? SyncSettings.Direction
+            : standaloneSettings.Direction;
+        direction = (Direction)Random.Range(
+            directionRange.MinInclusive,
+            directionRange.MaxExclusive);
+        waveformResponseMode = Random.Range(
+            SyncSettings.WaveformResponseMode.MinInclusive,
+            SyncSettings.WaveformResponseMode.MaxExclusive);
     }
 
     /// <summary>
@@ -147,23 +160,24 @@ public class RainbowBars : ScreenEffect
     /// </summary>
     public override void Draw()
     {
-        float brightnessAtRest = beatManager.IsSynced
-            ? SyncSettings.BrightnessAtRest
-            : standaloneSettings.BrightnessAtRest;
-        float directionSkew = beatManager.IsSynced
+        bool isSynced = beatManager.IsSynced;
+        FloatRange brightnessRange = isSynced
+            ? SyncSettings.Brightness
+            : standaloneSettings.Brightness;
+        float directionSkew = isSynced
             ? SyncSettings.DirectionSkew
             : standaloneSettings.DirectionSkew;
-        float beatBrightness = brightnessAtRest;
+        float beatBrightness = brightnessRange.Max;
         float hueShift = 0.0f;
         float sampleTime = effectTime;
 
         // This effect owns all three response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;
-        if (distortionMode == 0)
-            beatBrightness = waveform.Lerp(SyncSettings.BrightnessAtWaveformTrough, brightnessAtRest);
-        else if (distortionMode == 1)
+        if (waveformResponseMode == 0)
+            beatBrightness = waveform.Lerp(brightnessRange.Min, brightnessRange.Max);
+        else if (waveformResponseMode == 1)
             hueShift = SyncSettings.HueShiftAtWaveformPeak * rhythm;
-        else if (distortionMode == 2)
+        else if (waveformResponseMode == 2)
             sampleTime = effectTime + (SyncSettings.TimeOffsetAtWaveformPeak * rhythm);
 
         for (int x = 0; x < width; x++)
@@ -204,56 +218,56 @@ public class RainbowBars : ScreenEffect
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce RainbowBars' authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by RainbowBars' fully populated Standalone Defaults and saved
+/// Standalone Settings; Unity may create an empty instance before serialized values are applied.
+/// </summary>
+[Serializable]
 public sealed class RainbowBarsStandaloneSettings
 {
-    /// <summary>Creates one resolved Standalone Settings value from RainbowBars' file-local defaults.</summary>
-    public RainbowBarsStandaloneSettings(
-        int directionMinInclusive,
-        int directionMaxExclusive,
-        float brightnessAtRest,
-        float directionSkew)
-    {
-        DirectionMinInclusive = directionMinInclusive;
-        DirectionMaxExclusive = directionMaxExclusive;
-        BrightnessAtRest = brightnessAtRest;
-        DirectionSkew = directionSkew;
-    }
+    /// <summary>Per-activation range supplied to the Standalone direction roll.</summary>
+    public IntRange Direction;
 
-    /// <summary>Inclusive lower endpoint supplied to the Standalone direction roll.</summary>
-    public int DirectionMinInclusive;
-
-    /// <summary>Exclusive upper endpoint supplied to the Standalone direction roll.</summary>
-    public int DirectionMaxExclusive;
-
-    /// <summary>Neutral brightness used without a live Waveform sample and by non-brightness response modes.</summary>
-    public float BrightnessAtRest;
+    /// <summary>Waveform brightness endpoints, from trough to peak/rest.</summary>
+    public FloatRange Brightness;
 
     /// <summary>Secondary-axis coefficient used by directional palette sampling.</summary>
-    public float DirectionSkew;
+    [Min(0f)] public float DirectionSkew;
+
+    /// <summary>Copies every RainbowBars Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(RainbowBarsStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        Direction = new IntRange(
+            source.Direction.MinInclusive,
+            source.Direction.MaxExclusive,
+            source.Direction.LowRail,
+            source.Direction.HighRail);
+        Brightness = new FloatRange(
+            source.Brightness.Min,
+            source.Brightness.Max,
+            source.Brightness.LowRail,
+            source.Brightness.HighRail);
+        DirectionSkew = source.DirectionSkew;
+    }
 }
 
-/// <summary>Editable music-response values saved as RainbowBars' Sync Settings.</summary>
+/// <summary>The serializable value shape shared by RainbowBars' Sync Defaults and Sync Settings.</summary>
 [Serializable]
 public sealed class RainbowBarsSyncSettings
 {
-    /// <summary>Inclusive lower endpoint supplied to a Synced Mode direction roll.</summary>
-    [Min(0)] public int DirectionMinInclusive;
+    /// <summary>Per-activation range supplied to a Synced Mode direction roll.</summary>
+    public IntRange Direction;
 
-    /// <summary>Exclusive upper endpoint supplied to a Synced Mode direction roll.</summary>
-    [Min(1)] public int DirectionMaxExclusive;
+    /// <summary>Range supplied to the brightness, color, or time Waveform-response roll.</summary>
+    public IntRange WaveformResponseMode;
 
-    /// <summary>Inclusive lower endpoint supplied to the distortion-mode roll.</summary>
-    [Min(0)] public int DistortionModeMinInclusive;
-
-    /// <summary>Exclusive upper endpoint supplied to the distortion-mode roll.</summary>
-    [Min(1)] public int DistortionModeMaxExclusive;
-
-    /// <summary>Brightness multiplier reached at the Waveform trough.</summary>
-    [Range(0f, 1f)] public float BrightnessAtWaveformTrough;
-
-    /// <summary>Neutral brightness multiplier used at the Waveform peak, at rest, and by non-brightness response modes.</summary>
-    [Range(0f, 1f)] public float BrightnessAtRest;
+    /// <summary>Waveform brightness endpoints, from trough to peak/rest.</summary>
+    public FloatRange Brightness;
 
     /// <summary>Palette hue offset reached at the Waveform peak.</summary>
     [Range(0f, 1f)] public float HueShiftAtWaveformPeak;
@@ -278,12 +292,21 @@ public sealed class RainbowBarsSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        DirectionMinInclusive = source.DirectionMinInclusive;
-        DirectionMaxExclusive = source.DirectionMaxExclusive;
-        DistortionModeMinInclusive = source.DistortionModeMinInclusive;
-        DistortionModeMaxExclusive = source.DistortionModeMaxExclusive;
-        BrightnessAtWaveformTrough = source.BrightnessAtWaveformTrough;
-        BrightnessAtRest = source.BrightnessAtRest;
+        Direction = new IntRange(
+            source.Direction.MinInclusive,
+            source.Direction.MaxExclusive,
+            source.Direction.LowRail,
+            source.Direction.HighRail);
+        WaveformResponseMode = new IntRange(
+            source.WaveformResponseMode.MinInclusive,
+            source.WaveformResponseMode.MaxExclusive,
+            source.WaveformResponseMode.LowRail,
+            source.WaveformResponseMode.HighRail);
+        Brightness = new FloatRange(
+            source.Brightness.Min,
+            source.Brightness.Max,
+            source.Brightness.LowRail,
+            source.Brightness.HighRail);
         HueShiftAtWaveformPeak = source.HueShiftAtWaveformPeak;
         TimeOffsetAtWaveformPeak = source.TimeOffsetAtWaveformPeak;
         DirectionSkew = source.DirectionSkew;
