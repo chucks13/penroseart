@@ -159,8 +159,8 @@ The per-player change detector for song structure: an identifier that differs wh
 _Avoid_: using the track id to detect structure change; comparing generations with less-than/greater-than; treating an identical track as an unchanged structure.
 
 **Fill**:
-A short musical moment marked within a Phrase — anywhere inside it, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats` and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
-_Avoid_: expecting `Active` without the running 4-count — a Fill is a Synced Mode fact, and Standalone Mode never reports one.
+A short musical transition in the tail of a Phrase — from its marked start beat through the Phrase's final beat, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats` and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
+_Avoid_: placing a Fill anywhere outside the Phrase tail; treating it as able to stop before the Phrase ends; expecting `Active` without the running 4-count — a Fill is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Drop**:
 The climactic section of a track. A Drop is its own Phrase and starts on that Phrase's first beat. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
