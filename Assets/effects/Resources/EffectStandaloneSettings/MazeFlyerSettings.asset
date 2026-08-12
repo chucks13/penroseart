@@ -53,3 +53,4 @@ MonoBehaviour:
     EdgeLineShade: 0.25
     RaySampleSpread: 0.7
     SharedPaletteMinValue: 0.8
+    MinBrightness: 0.4

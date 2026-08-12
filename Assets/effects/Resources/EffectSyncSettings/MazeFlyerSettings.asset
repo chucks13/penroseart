@@ -52,11 +52,9 @@ MonoBehaviour:
     EdgeLineShade: 0.25
     RaySampleSpread: 0.7
     SharedPaletteMinValue: 0.8
-    WaveformRayRecoilDistance: 0
-    WaveformFaceBrightnessBoost: 0
-    WaveformRayDistanceBoost: 0
+    MinBrightness: 0.4
     OnBeatLowThreshold: 0.35
-    OnBeatBrightnessPulse: 0.5
+    OnBeatBrightnessPulse: 0.75
     LowEnergyFlightSpeed: 1
     MidEnergyFlightSpeed: 1.6
     HighEnergyFlightSpeed: 2.25

@@ -164,9 +164,9 @@ public class MazeFlyer : EffectBase
     /// Authored brightness the darkest traced surface maps to, lifting the whole picture without
     /// touching the fog curve that produced the darkness. The traced brightness is remapped into
     /// the band from this floor up to 1 rather than clamped against it, so the dark field keeps
-    /// its gradient instead of collapsing to one flat tone. 0 is the exact identity.
+    /// its gradient instead of collapsing to one flat tone. Judged at the wall; 0 is the identity.
     /// </summary>
-    private const float StandaloneMinBrightness = 0f;
+    private const float StandaloneMinBrightness = 0.4f;
 
     // Sync Defaults
 
@@ -260,8 +260,8 @@ public class MazeFlyer : EffectBase
     /// <summary>Authored Synced minimum HSV value for colors rolled from the shared palette.</summary>
     private const float SyncSharedPaletteMinValue = 0.8f;
 
-    /// <summary>Authored Synced brightness the darkest traced surface maps to. 0 is the exact identity.</summary>
-    private const float SyncMinBrightness = 0f;
+    /// <summary>Authored Synced brightness the darkest traced surface maps to. Judged at the wall.</summary>
+    private const float SyncMinBrightness = 0.4f;
 
     /// <summary>
     /// Authored low-band strength that arms the On Beat brightness pulse. Lows are read from
@@ -272,11 +272,11 @@ public class MazeFlyer : EffectBase
 
     /// <summary>
     /// Authored brightness multiplier boost applied to every traced wall while a quarter-beat
-    /// On Beat gate is open and lows exceed <see cref="SyncOnBeatLowThreshold"/>. Multiplicative,
-    /// so fog-black stays black and depth survives the pulse. Zero disables the response.
-    /// First-audition value pending wall judgment.
+    /// On Beat gate is open and lows exceed <see cref="SyncOnBeatLowThreshold"/>. Multiplicative
+    /// and applied before <see cref="SyncMinBrightness"/>, so it scales the picture rather than
+    /// adding to it and the depth gradient survives the pulse. Zero disables the response.
     /// </summary>
-    private const float SyncOnBeatBrightnessPulse = 0.5f;
+    private const float SyncOnBeatBrightnessPulse = 0.75f;
 
     /// <summary>
     /// Authored flight speed while the phrase-scoped energy state reads Low. The energy-state
