@@ -10,6 +10,7 @@ using Random = UnityEngine.Random;
 /// 16-cubed grid) and averages them into the tile's color.
 /// </summary>
 [EffectSyncSettings(typeof(MazeFlyerSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(MazeFlyerStandaloneSettingsAsset))]
 public class MazeFlyer : EffectBase
 {
     // Standalone Defaults
@@ -18,7 +19,7 @@ public class MazeFlyer : EffectBase
     /// Authored inclusive minimum for the per-activation flight-speed roll, in voxel cells per
     /// second.
     /// </summary>
-    private const float StandaloneOverallSpeedMin = 1.0f;
+    private const float StandaloneFlightSpeedMin = 1.0f;
 
     /// <summary>
     /// Authored inclusive maximum for the per-activation flight-speed roll, in voxel cells per
@@ -28,19 +29,25 @@ public class MazeFlyer : EffectBase
     /// Governs the Standalone roll only; Synced Mode replaces the roll with the energy-state
     /// tier speeds in the Sync Settings.
     /// </summary>
-    private const float StandaloneOverallSpeedMax = 2.25f;
+    private const float StandaloneFlightSpeedMax = 2.25f;
 
     /// <summary>Authored multiplier deriving camera turn speed from the rolled flight speed.</summary>
     private const float StandaloneTurnSpeedMultiplier = 2.5f;
 
+    /// <summary>
+    /// Authored SmoothDamp time constant, in seconds, used when Standalone flight returns to its
+    /// rolled speed after leaving Synced Mode.
+    /// </summary>
+    private const float StandaloneFlightSpeedSmoothTime = 2.0f;
+
     /// <summary>Authored probability that a non-guaranteed voxel cell is filled.</summary>
-    private const float StandaloneFillProbability = 0.25f;
+    private const float StandaloneRandomCellOccupancyProbability = 0.25f;
 
     /// <summary>Authored coordinate scale used to generate the Spatial Waves hue field.</summary>
-    private const float StandaloneSpatialScale = 0.15f;
+    private const float StandaloneSpatialWavesHueScale = 0.15f;
 
     /// <summary>Authored voxel-block width used by the Block Regions color mode.</summary>
-    private const int StandaloneBlockSize = 4;
+    private const int StandaloneBlockRegionsSize = 4;
 
     /// <summary>Authored saturation of voxels in the Pure Random color mode.</summary>
     private const float StandalonePureRandomSaturation = 0.9f;
@@ -55,10 +62,10 @@ public class MazeFlyer : EffectBase
     private const float StandaloneSpatialWavesValue = 0.95f;
 
     /// <summary>Authored minimum hue jitter applied within each Block Regions voxel.</summary>
-    private const float StandaloneBlockHueJitterMin = -0.05f;
+    private const float StandaloneBlockRegionsHueJitterMin = -0.05f;
 
     /// <summary>Authored maximum hue jitter applied within each Block Regions voxel.</summary>
-    private const float StandaloneBlockHueJitterMax = 0.05f;
+    private const float StandaloneBlockRegionsHueJitterMax = 0.05f;
 
     /// <summary>Authored saturation of voxels in the Block Regions color mode.</summary>
     private const float StandaloneBlockRegionsSaturation = 0.88f;
@@ -76,7 +83,7 @@ public class MazeFlyer : EffectBase
     };
 
     /// <summary>Authored camera focal length used to project tile centers into voxel rays.</summary>
-    private const float StandaloneFocalLength = 18.0f;
+    private const float StandaloneCameraFocalLength = 18.0f;
 
     /// <summary>Authored normalized move progress at which look-ahead turn blending begins.</summary>
     private const float StandaloneTurnBlendStart = 0.2f;
@@ -85,7 +92,7 @@ public class MazeFlyer : EffectBase
     /// Authored navigation threshold: rolls above this value continue ahead, while rolls at or below
     /// it enter the non-reversing direction choice when alternatives exist.
     /// </summary>
-    private const float StandaloneDirectionChoiceThreshold = 0.35f;
+    private const float StandaloneForwardContinuationThreshold = 0.35f;
 
     /// <summary>
     /// Authored maximum ray distance and baseline fog range. Pulled in from 20 so the fog curve
@@ -143,7 +150,7 @@ public class MazeFlyer : EffectBase
     /// point. Smaller sharpens toward point sampling; larger blurs across neighboring tiles.
     /// First-audition value pending wall judgment.
     /// </summary>
-    private const float StandaloneSampleSpread = 0.7f;
+    private const float StandaloneRaySampleSpread = 0.7f;
 
     /// <summary>
     /// Authored minimum HSV value for colors rolled from the shared palette. Palettes may carry
@@ -155,26 +162,116 @@ public class MazeFlyer : EffectBase
 
     // Sync Defaults
 
+    /// <summary>Authored inclusive minimum for the Synced per-activation flight-speed roll.</summary>
+    private const float SyncFlightSpeedMin = 1.0f;
+
+    /// <summary>Authored inclusive maximum for the Synced per-activation flight-speed roll.</summary>
+    private const float SyncFlightSpeedMax = 2.25f;
+
+    /// <summary>Authored Synced multiplier deriving camera turn speed from flight speed.</summary>
+    private const float SyncTurnSpeedMultiplier = 2.5f;
+
+    /// <summary>Authored Synced probability that a non-guaranteed voxel cell is occupied.</summary>
+    private const float SyncRandomCellOccupancyProbability = 0.25f;
+
+    /// <summary>Authored Synced coordinate scale used to generate the Spatial Waves hue field.</summary>
+    private const float SyncSpatialWavesHueScale = 0.15f;
+
+    /// <summary>Authored Synced voxel-block width used by the Block Regions color mode.</summary>
+    private const int SyncBlockRegionsSize = 4;
+
+    /// <summary>Authored Synced saturation of voxels in the Pure Random color mode.</summary>
+    private const float SyncPureRandomSaturation = 0.9f;
+
+    /// <summary>Authored Synced value of voxels in the Pure Random color mode.</summary>
+    private const float SyncPureRandomValue = 0.95f;
+
+    /// <summary>Authored Synced saturation of voxels in the Spatial Waves color mode.</summary>
+    private const float SyncSpatialWavesSaturation = 0.85f;
+
+    /// <summary>Authored Synced value of voxels in the Spatial Waves color mode.</summary>
+    private const float SyncSpatialWavesValue = 0.95f;
+
+    /// <summary>Authored Synced minimum hue jitter within each Block Regions voxel.</summary>
+    private const float SyncBlockRegionsHueJitterMin = -0.05f;
+
+    /// <summary>Authored Synced maximum hue jitter within each Block Regions voxel.</summary>
+    private const float SyncBlockRegionsHueJitterMax = 0.05f;
+
+    /// <summary>Authored Synced saturation of voxels in the Block Regions color mode.</summary>
+    private const float SyncBlockRegionsSaturation = 0.88f;
+
+    /// <summary>Authored Synced value of voxels in the Block Regions color mode.</summary>
+    private const float SyncBlockRegionsValue = 0.95f;
+
+    /// <summary>Authored Synced colors sampled by the Curated Palette mode.</summary>
+    private static readonly Color[] SyncCuratedPalette =
+    {
+        Color.HSVToRGB(0.78f, 0.9f, 0.95f), // Purple/Magenta
+        Color.HSVToRGB(0.55f, 0.9f, 0.95f), // Cyan/Blue
+        Color.HSVToRGB(0.18f, 0.9f, 0.95f), // Yellow/Gold
+        Color.HSVToRGB(0.38f, 0.9f, 0.95f)  // Lime Green
+    };
+
+    /// <summary>Authored Synced camera focal length used to project tile centers into voxel rays.</summary>
+    private const float SyncCameraFocalLength = 18.0f;
+
+    /// <summary>Authored Synced move progress where look-ahead turn blending begins.</summary>
+    private const float SyncTurnBlendStart = 0.2f;
+
+    /// <summary>Authored Synced threshold above which navigation continues ahead when possible.</summary>
+    private const float SyncForwardContinuationThreshold = 0.35f;
+
+    /// <summary>Authored Synced maximum ray distance and baseline fog range.</summary>
+    private const float SyncMaxRayDistance = 14.0f;
+
+    /// <summary>Authored Synced shade multiplier for voxel faces hit across the X axis.</summary>
+    private const float SyncXAxisFaceShade = 0.75f;
+
+    /// <summary>Authored Synced shade multiplier for voxel faces hit across the Y axis.</summary>
+    private const float SyncYAxisFaceShade = 0.95f;
+
+    /// <summary>Authored Synced shade multiplier for voxel faces hit across the Z axis.</summary>
+    private const float SyncZAxisFaceShade = 0.60f;
+
+    /// <summary>Authored Synced camera-headlight shade floor at full grazing incidence.</summary>
+    private const float SyncHeadlightMinShade = 0.5f;
+
+    /// <summary>Authored Synced density of the squared-exponential fog curve.</summary>
+    private const float SyncFogDensity = 2.5f;
+
+    /// <summary>Authored Synced on-wall thickness of voxel edge lines, in tile pitches.</summary>
+    private const float SyncEdgeLineThicknessTiles = 0.7f;
+
+    /// <summary>Authored Synced shade multiplier at the edge of a voxel face.</summary>
+    private const float SyncEdgeLineShade = 0.25f;
+
+    /// <summary>Authored Synced scale of the rotated-grid supersample pattern.</summary>
+    private const float SyncRaySampleSpread = 0.7f;
+
+    /// <summary>Authored Synced minimum HSV value for colors rolled from the shared palette.</summary>
+    private const float SyncSharedPaletteMinValue = 0.8f;
+
     /// <summary>
     /// Authored maximum ray displacement on heavy beat hits. High values produce bigger wall recoil.
     /// This audio-reactivity control is a beat-feel tuning point. The response is temporarily disabled
     /// at 0f; the commented suggestion was 0.20f, with a recommended range of 0.05f to 0.40f.
     /// </summary>
-    private const float SyncPulseStrength = 0f;
+    private const float SyncWaveformRayRecoilDistance = 0f;
 
     /// <summary>
     /// Authored extra brightness boost added to voxel faces on audio peaks. This audio-reactivity control
     /// is a beat-feel tuning point. The response is temporarily disabled at 0f; the commented suggestion
     /// was 0.25f, with a recommended range of 0.00f to 0.50f.
     /// </summary>
-    private const float SyncPeakBrightnessBoost = 0f;
+    private const float SyncWaveformFaceBrightnessBoost = 0f;
 
     /// <summary>
     /// Authored amount by which fog distance contracts or expands with the rhythm, where 0 means off.
     /// This audio-reactivity control is a beat-feel tuning point. The response is temporarily disabled
     /// at 0f; the commented suggestion was 3.0f, with a recommended range of 0.0f to 6.0f.
     /// </summary>
-    private const float SyncDynamicFogAmount = 0f;
+    private const float SyncWaveformRayDistanceBoost = 0f;
 
     /// <summary>
     /// Authored low-band strength that arms the On Beat brightness pulse. Lows are read from
@@ -196,26 +293,26 @@ public class MazeFlyer : EffectBase
     /// speeds replace the Standalone speed roll in Synced Mode; the real-time Levels play no
     /// part in speed. First-audition value pending wall judgment.
     /// </summary>
-    private const float SyncLowEnergySpeed = 1.0f;
+    private const float SyncLowEnergyFlightSpeed = 1.0f;
 
     /// <summary>
     /// Authored flight speed while the phrase-scoped energy state reads Mid. First-audition
     /// value pending wall judgment.
     /// </summary>
-    private const float SyncMidEnergySpeed = 1.6f;
+    private const float SyncMidEnergyFlightSpeed = 1.6f;
 
     /// <summary>
     /// Authored flight speed while the phrase-scoped energy state reads High. First-audition
     /// value pending wall judgment.
     /// </summary>
-    private const float SyncHighEnergySpeed = 2.25f;
+    private const float SyncHighEnergyFlightSpeed = 2.25f;
 
     /// <summary>
     /// Authored SmoothDamp time constant, in seconds, easing the flight speed between energy
     /// tier plateaus so a phrase change never jerks the flight. First-audition value pending
     /// wall judgment.
     /// </summary>
-    private const float SyncSpeedSmoothTime = 2.0f;
+    private const float SyncFlightSpeedSmoothTime = 2.0f;
 
     /// <summary>
     /// Authored ramp window, in beats, for the beat-locked speed glide. Once the announced next
@@ -223,7 +320,7 @@ public class MazeFlyer : EffectBase
     /// the next tier's, arriving as the phrase boundary lands instead of trailing it.
     /// First-audition value pending wall judgment.
     /// </summary>
-    private const int SyncSpeedRampBeats = 8;
+    private const int SyncEnergyFlightSpeedRampBeats = 8;
 
     /// <summary>
     /// Authored wind-down, in beats, over which the flight falls to a dead stop ahead of an
@@ -271,7 +368,7 @@ public class MazeFlyer : EffectBase
     /// replaces the retired Fill camera roll, whose per-frame accumulation spun uncontrolled
     /// whenever the flight froze. First-audition value pending wall judgment.
     /// </summary>
-    private const float SyncDropSpinSpeed = 90f;
+    private const float SyncDropCameraSpinSpeed = 90f;
 
     // Effect Settings resolution
 
@@ -279,25 +376,27 @@ public class MazeFlyer : EffectBase
     /// Resolves a fresh copy of MazeFlyer's Standalone Defaults. The curated palette is cloned
     /// per resolve, so no activation shares mutable state with the authored table.
     /// </summary>
-    public static MazeFlyerStandaloneSettings StandaloneSettings => new MazeFlyerStandaloneSettings
+    public static MazeFlyerStandaloneSettings StandaloneDefaults => new MazeFlyerStandaloneSettings
     {
-        OverallSpeedMin = StandaloneOverallSpeedMin,
-        OverallSpeedMax = StandaloneOverallSpeedMax,
+        FlightSpeed = new FloatRange(StandaloneFlightSpeedMin, StandaloneFlightSpeedMax),
         TurnSpeedMultiplier = StandaloneTurnSpeedMultiplier,
-        FillProbability = StandaloneFillProbability,
-        SpatialScale = StandaloneSpatialScale,
-        BlockSize = StandaloneBlockSize,
+        FlightSpeedSmoothTime = StandaloneFlightSpeedSmoothTime,
+        RandomCellOccupancyProbability = StandaloneRandomCellOccupancyProbability,
+        SpatialWavesHueScale = StandaloneSpatialWavesHueScale,
+        BlockRegionsSize = StandaloneBlockRegionsSize,
         PureRandomSaturation = StandalonePureRandomSaturation,
         PureRandomValue = StandalonePureRandomValue,
         SpatialWavesSaturation = StandaloneSpatialWavesSaturation,
         SpatialWavesValue = StandaloneSpatialWavesValue,
-        BlockHueJitter = new FloatRange(StandaloneBlockHueJitterMin, StandaloneBlockHueJitterMax),
+        BlockRegionsHueJitter = new FloatRange(
+            StandaloneBlockRegionsHueJitterMin,
+            StandaloneBlockRegionsHueJitterMax),
         BlockRegionsSaturation = StandaloneBlockRegionsSaturation,
         BlockRegionsValue = StandaloneBlockRegionsValue,
         CuratedPalette = (Color[])StandaloneCuratedPalette.Clone(),
-        FocalLength = StandaloneFocalLength,
+        CameraFocalLength = StandaloneCameraFocalLength,
         TurnBlendStart = StandaloneTurnBlendStart,
-        DirectionChoiceThreshold = StandaloneDirectionChoiceThreshold,
+        ForwardContinuationThreshold = StandaloneForwardContinuationThreshold,
         MaxRayDistance = StandaloneMaxRayDistance,
         XAxisFaceShade = StandaloneXAxisFaceShade,
         YAxisFaceShade = StandaloneYAxisFaceShade,
@@ -306,36 +405,68 @@ public class MazeFlyer : EffectBase
         FogDensity = StandaloneFogDensity,
         EdgeLineThicknessTiles = StandaloneEdgeLineThicknessTiles,
         EdgeLineShade = StandaloneEdgeLineShade,
-        SampleSpread = StandaloneSampleSpread,
+        RaySampleSpread = StandaloneRaySampleSpread,
         SharedPaletteMinValue = StandaloneSharedPaletteMinValue,
     };
 
     /// <summary>Resolves a fresh copy of MazeFlyer's file-local Sync Defaults.</summary>
     public static MazeFlyerSyncSettings SyncDefaults => new MazeFlyerSyncSettings
     {
-        PulseStrength = SyncPulseStrength,
-        PeakBrightnessBoost = SyncPeakBrightnessBoost,
-        DynamicFogAmount = SyncDynamicFogAmount,
+        FlightSpeed = new FloatRange(SyncFlightSpeedMin, SyncFlightSpeedMax),
+        TurnSpeedMultiplier = SyncTurnSpeedMultiplier,
+        RandomCellOccupancyProbability = SyncRandomCellOccupancyProbability,
+        SpatialWavesHueScale = SyncSpatialWavesHueScale,
+        BlockRegionsSize = SyncBlockRegionsSize,
+        PureRandomSaturation = SyncPureRandomSaturation,
+        PureRandomValue = SyncPureRandomValue,
+        SpatialWavesSaturation = SyncSpatialWavesSaturation,
+        SpatialWavesValue = SyncSpatialWavesValue,
+        BlockRegionsHueJitter = new FloatRange(
+            SyncBlockRegionsHueJitterMin,
+            SyncBlockRegionsHueJitterMax),
+        BlockRegionsSaturation = SyncBlockRegionsSaturation,
+        BlockRegionsValue = SyncBlockRegionsValue,
+        CuratedPalette = (Color[])SyncCuratedPalette.Clone(),
+        CameraFocalLength = SyncCameraFocalLength,
+        TurnBlendStart = SyncTurnBlendStart,
+        ForwardContinuationThreshold = SyncForwardContinuationThreshold,
+        MaxRayDistance = SyncMaxRayDistance,
+        XAxisFaceShade = SyncXAxisFaceShade,
+        YAxisFaceShade = SyncYAxisFaceShade,
+        ZAxisFaceShade = SyncZAxisFaceShade,
+        HeadlightMinShade = SyncHeadlightMinShade,
+        FogDensity = SyncFogDensity,
+        EdgeLineThicknessTiles = SyncEdgeLineThicknessTiles,
+        EdgeLineShade = SyncEdgeLineShade,
+        RaySampleSpread = SyncRaySampleSpread,
+        SharedPaletteMinValue = SyncSharedPaletteMinValue,
+        WaveformRayRecoilDistance = SyncWaveformRayRecoilDistance,
+        WaveformFaceBrightnessBoost = SyncWaveformFaceBrightnessBoost,
+        WaveformRayDistanceBoost = SyncWaveformRayDistanceBoost,
         OnBeatLowThreshold = SyncOnBeatLowThreshold,
         OnBeatBrightnessPulse = SyncOnBeatBrightnessPulse,
-        LowEnergySpeed = SyncLowEnergySpeed,
-        MidEnergySpeed = SyncMidEnergySpeed,
-        HighEnergySpeed = SyncHighEnergySpeed,
-        SpeedSmoothTime = SyncSpeedSmoothTime,
-        SpeedRampBeats = SyncSpeedRampBeats,
+        LowEnergyFlightSpeed = SyncLowEnergyFlightSpeed,
+        MidEnergyFlightSpeed = SyncMidEnergyFlightSpeed,
+        HighEnergyFlightSpeed = SyncHighEnergyFlightSpeed,
+        FlightSpeedSmoothTime = SyncFlightSpeedSmoothTime,
+        EnergyFlightSpeedRampBeats = SyncEnergyFlightSpeedRampBeats,
         DropStopBeats = SyncDropStopBeats,
         DropSitBeats = SyncDropSitBeats,
         DropLaunchMultiplier = SyncDropLaunchMultiplier,
-        DropSpinSpeed = SyncDropSpinSpeed,
+        DropCameraSpinSpeed = SyncDropCameraSpinSpeed,
         FillEdgeInversion = SyncFillEdgeInversion,
         FillLineGlow = SyncFillLineGlow,
     };
 
     /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private MazeFlyerStandaloneSettings standaloneSettings = StandaloneSettings;
+    private MazeFlyerStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private MazeFlyerSyncSettings SyncSettings { get; set; } = SyncDefaults;
+
+    /// <summary>Selects one dual-homed Effect Setting from the surface active this frame.</summary>
+    private T ActiveSetting<T>(T standaloneValue, T syncValue) =>
+        beatManager.IsSynced ? syncValue : standaloneValue;
 
     // Effect contract
 
@@ -479,7 +610,9 @@ public class MazeFlyer : EffectBase
     {
         base.OnStart();
 
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(MazeFlyer),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(MazeFlyer),
             SyncDefaults);
@@ -496,15 +629,18 @@ public class MazeFlyer : EffectBase
         // authored Waveform-selection subrange to expose as Effect Settings.
         waveform = waveforms.Random();
 
-        rolledFlySpeed = Random.Range(
-            standaloneSettings.OverallSpeedMin,
-            standaloneSettings.OverallSpeedMax);
+        FloatRange flightSpeedRange = ActiveSetting(
+            standaloneSettings.FlightSpeed,
+            SyncSettings.FlightSpeed);
+        rolledFlySpeed = Random.Range(flightSpeedRange.Min, flightSpeedRange.Max);
 
         // An activation is already a visual cut, so the flight starts directly at its target —
         // the energy tier when synced, the roll otherwise — with no ramp from a stale speed.
         flySpeed = TargetFlySpeed();
         flySpeedVelocity = 0f;
-        turnSpeed = flySpeed * standaloneSettings.TurnSpeedMultiplier;
+        turnSpeed = flySpeed * ActiveSetting(
+            standaloneSettings.TurnSpeedMultiplier,
+            SyncSettings.TurnSpeedMultiplier);
         dropLaunchArmed = false;
         wasDropActive = false;
         previousGridBeat = null;
@@ -517,14 +653,9 @@ public class MazeFlyer : EffectBase
         GenerateVoxelGrid();
         InitializeCameraPosition();
 
-        // Per-activation ray-setup caches: the supersample offsets pre-scaled by the activation's
-        // sample spread, and the tile centers copied out of the tile metadata objects into one
-        // contiguous array so the per-tile loop reads sequential memory instead of chasing 900
-        // heap references every frame.
-        for (int i = 0; i < RaySampleOffsets.Length; i++)
-        {
-            scaledSampleOffsets[i] = RaySampleOffsets[i] * standaloneSettings.SampleSpread;
-        }
+        // Tile centers are copied out of the tile metadata objects into one contiguous array so
+        // the per-tile loop reads sequential memory instead of chasing 900 heap references every
+        // frame. Only invariant geometry is cached; live settings stay at their frame consumers.
         if (tileCenters == null || tileCenters.Length != tiles.Length)
         {
             tileCenters = new Vector2[tiles.Length];
@@ -555,12 +686,6 @@ public class MazeFlyer : EffectBase
         new Vector2(-0.125f, -0.375f),
         new Vector2(-0.375f, 0.125f)
     };
-
-    /// <summary>
-    /// <see cref="RaySampleOffsets"/> pre-scaled by the activation's sample spread, rebuilt each
-    /// Roll so the per-ray loop skips the two per-sample multiplies.
-    /// </summary>
-    private readonly Vector2[] scaledSampleOffsets = new Vector2[RaySampleOffsets.Length];
 
     /// <summary>
     /// Tile centers copied from <see cref="EffectBase.tiles"/> into one contiguous array per
@@ -629,7 +754,8 @@ public class MazeFlyer : EffectBase
         bool isBeatSynced = beatManager.IsSynced;
 
         // Sample waveform envelope only when synced. The hard 0f is what keeps the
-        // rhythm-scaled Sync Settings (PulseStrength, PeakBrightnessBoost, DynamicFogAmount)
+        // rhythm-scaled Sync Settings (WaveformRayRecoilDistance,
+        // WaveformFaceBrightnessBoost, WaveformRayDistanceBoost)
         // classified sync-only: Standalone frames reach those slots, but scaled by this 0f a
         // live tweak cannot change the Standalone look.
         float rhythm = isBeatSynced ? waveform.Envelope : 0.0f;
@@ -660,26 +786,37 @@ public class MazeFlyer : EffectBase
         // pre-scaled so each ray assembles its direction from component math alone.
         TraceFrame frame = new TraceFrame
         {
-            PulseDistance = rhythm * SyncSettings.PulseStrength,
-            MaxRayDistance = standaloneSettings.MaxRayDistance + (rhythm * SyncSettings.DynamicFogAmount),
-            FogDensity = standaloneSettings.FogDensity,
-            PeakBoost = rhythm * SyncSettings.PeakBrightnessBoost,
+            PulseDistance = rhythm * SyncSettings.WaveformRayRecoilDistance,
+            MaxRayDistance = ActiveSetting(
+                standaloneSettings.MaxRayDistance,
+                SyncSettings.MaxRayDistance) + (rhythm * SyncSettings.WaveformRayDistanceBoost),
+            FogDensity = ActiveSetting(standaloneSettings.FogDensity, SyncSettings.FogDensity),
+            PeakBoost = rhythm * SyncSettings.WaveformFaceBrightnessBoost,
             BrightnessPulse = brightnessPulse,
             EdgeInversion = edgeInversion,
-            XAxisFaceShade = standaloneSettings.XAxisFaceShade,
-            YAxisFaceShade = standaloneSettings.YAxisFaceShade,
-            ZAxisFaceShade = standaloneSettings.ZAxisFaceShade,
-            HeadlightMinShade = standaloneSettings.HeadlightMinShade,
-            EdgeBandScale = standaloneSettings.EdgeLineThicknessTiles / standaloneSettings.FocalLength,
-            EdgeLineShade = standaloneSettings.EdgeLineShade,
+            XAxisFaceShade = ActiveSetting(standaloneSettings.XAxisFaceShade, SyncSettings.XAxisFaceShade),
+            YAxisFaceShade = ActiveSetting(standaloneSettings.YAxisFaceShade, SyncSettings.YAxisFaceShade),
+            ZAxisFaceShade = ActiveSetting(standaloneSettings.ZAxisFaceShade, SyncSettings.ZAxisFaceShade),
+            HeadlightMinShade = ActiveSetting(standaloneSettings.HeadlightMinShade, SyncSettings.HeadlightMinShade),
+            EdgeBandScale = ActiveSetting(
+                standaloneSettings.EdgeLineThicknessTiles,
+                SyncSettings.EdgeLineThicknessTiles) / ActiveSetting(
+                standaloneSettings.CameraFocalLength,
+                SyncSettings.CameraFocalLength),
+            EdgeLineShade = ActiveSetting(standaloneSettings.EdgeLineShade, SyncSettings.EdgeLineShade),
             FillLineGlow = SyncSettings.FillLineGlow,
         };
 
-        Vector3 forwardScaled = cameraRot * Vector3.forward * standaloneSettings.FocalLength;
+        Vector3 forwardScaled = cameraRot * Vector3.forward * ActiveSetting(
+            standaloneSettings.CameraFocalLength,
+            SyncSettings.CameraFocalLength);
         Vector3 cameraRight = cameraRot * Vector3.right;
         Vector3 cameraUp = cameraRot * Vector3.up;
 
         float sampleWeight = 1.0f / RaySampleOffsets.Length;
+        float raySampleSpread = ActiveSetting(
+            standaloneSettings.RaySampleSpread,
+            SyncSettings.RaySampleSpread);
         Vector3 rayOrigin = cameraPos;
 
         for (int i = 0; i < buffer.Length; i++)
@@ -687,8 +824,9 @@ public class MazeFlyer : EffectBase
             Vector2 center = tileCenters[i];
 
             float r = 0f, g = 0f, b = 0f;
-            foreach (Vector2 offset in scaledSampleOffsets)
+            foreach (Vector2 sampleOffset in RaySampleOffsets)
             {
+                Vector2 offset = sampleOffset * raySampleSpread;
                 float sx = center.x + offset.x;
                 float sy = center.y + offset.y;
 
@@ -738,11 +876,13 @@ public class MazeFlyer : EffectBase
                     // guaranteeing the maze a regular pillar structure to fly between.
                     bool onEvenLattice = (x % 2 == 0) && (y % 2 == 0) && (z % 2 == 0);
 
-                    // Random.value spans the complete probability domain; FillProbability authors its
+                    // Random.value spans the complete probability domain; the occupancy probability authors its
                     // threshold. Guaranteed even-lattice cells short-circuit before that roll, so they
                     // consume no Random.value and retain the original mode-specific roll order.
                     int index = VoxelIndex(x, y, z);
-                    if (onEvenLattice || Random.value < standaloneSettings.FillProbability)
+                    if (onEvenLattice || Random.value < ActiveSetting(
+                        standaloneSettings.RandomCellOccupancyProbability,
+                        SyncSettings.RandomCellOccupancyProbability))
                     {
                         voxelSolid[index] = true;
                         voxelColors[index] = GetVoxelColor(x, y, z);
@@ -769,15 +909,19 @@ public class MazeFlyer : EffectBase
                 return columnColors[x, z];
 
             case ColorMode.SpatialWaves:
-                float spatialScale = standaloneSettings.SpatialScale;
+                float spatialScale = ActiveSetting(
+                    standaloneSettings.SpatialWavesHueScale,
+                    SyncSettings.SpatialWavesHueScale);
                 float waveHue = (Mathf.Sin(x * spatialScale) + Mathf.Cos(y * spatialScale) + Mathf.Sin(z * spatialScale) + 3f) / 6f;
                 return Color.HSVToRGB(
                     waveHue,
-                    standaloneSettings.SpatialWavesSaturation,
-                    standaloneSettings.SpatialWavesValue);
+                    ActiveSetting(standaloneSettings.SpatialWavesSaturation, SyncSettings.SpatialWavesSaturation),
+                    ActiveSetting(standaloneSettings.SpatialWavesValue, SyncSettings.SpatialWavesValue));
 
             case ColorMode.BlockRegions:
-                int blockSize = standaloneSettings.BlockSize;
+                int blockSize = ActiveSetting(
+                    standaloneSettings.BlockRegionsSize,
+                    SyncSettings.BlockRegionsSize);
                 int blockX = x / blockSize;
                 int blockY = y / blockSize;
                 int blockZ = z / blockSize;
@@ -788,12 +932,14 @@ public class MazeFlyer : EffectBase
                 float baseHue = (Mathf.Abs(blockHash) % 100) / 100.0f;
                 float blockHue = (
                     baseHue +
-                    Random.Range(standaloneSettings.BlockHueJitter.Min, standaloneSettings.BlockHueJitter.Max) +
+                    Random.Range(
+                        ActiveSetting(standaloneSettings.BlockRegionsHueJitter, SyncSettings.BlockRegionsHueJitter).Min,
+                        ActiveSetting(standaloneSettings.BlockRegionsHueJitter, SyncSettings.BlockRegionsHueJitter).Max) +
                     1.0f) % 1.0f;
                 return Color.HSVToRGB(
                     blockHue,
-                    standaloneSettings.BlockRegionsSaturation,
-                    standaloneSettings.BlockRegionsValue);
+                    ActiveSetting(standaloneSettings.BlockRegionsSaturation, SyncSettings.BlockRegionsSaturation),
+                    ActiveSetting(standaloneSettings.BlockRegionsValue, SyncSettings.BlockRegionsValue));
 
             default:
                 return Color.white;
@@ -813,8 +959,8 @@ public class MazeFlyer : EffectBase
                 // Random.value spans the complete hue-wheel domain; only saturation and value are authored settings.
                 return Color.HSVToRGB(
                     Random.value,
-                    standaloneSettings.PureRandomSaturation,
-                    standaloneSettings.PureRandomValue);
+                    ActiveSetting(standaloneSettings.PureRandomSaturation, SyncSettings.PureRandomSaturation),
+                    ActiveSetting(standaloneSettings.PureRandomValue, SyncSettings.PureRandomValue));
 
             case ColorMode.SharedPalette:
             {
@@ -826,13 +972,17 @@ public class MazeFlyer : EffectBase
                 return Color.HSVToRGB(
                     hue,
                     saturation,
-                    Mathf.Max(value, standaloneSettings.SharedPaletteMinValue));
+                    Mathf.Max(value, ActiveSetting(
+                        standaloneSettings.SharedPaletteMinValue,
+                        SyncSettings.SharedPaletteMinValue)));
             }
 
             default:
                 // The inline selector spans every entry in the complete authored palette table.
-                return standaloneSettings.CuratedPalette[
-                    Random.Range(0, standaloneSettings.CuratedPalette.Length)];
+                Color[] curatedPalette = ActiveSetting(
+                    standaloneSettings.CuratedPalette,
+                    SyncSettings.CuratedPalette);
+                return curatedPalette[Random.Range(0, curatedPalette.Length)];
         }
     }
 
@@ -885,7 +1035,14 @@ public class MazeFlyer : EffectBase
         // Standalone frames the target is the rolled speed the flight already holds, so the
         // sync knobs cannot move a Standalone frame.
         flySpeed = Mathf.SmoothDamp(
-            flySpeed, TargetFlySpeed(), ref flySpeedVelocity, SyncSettings.SpeedSmoothTime, float.PositiveInfinity, deltaTime);
+            flySpeed,
+            TargetFlySpeed(),
+            ref flySpeedVelocity,
+            ActiveSetting(
+                standaloneSettings.FlightSpeedSmoothTime,
+                SyncSettings.FlightSpeedSmoothTime),
+            float.PositiveInfinity,
+            deltaTime);
 
         // The Drop response multiplies the smoothed speed rather than the SmoothDamp target:
         // its envelopes are already continuous and beat-locked, and the one discontinuity —
@@ -893,7 +1050,9 @@ public class MazeFlyer : EffectBase
         // into a slow swell. Turn agility follows the same effective speed, so a full stop
         // also freezes the camera's turning.
         float effectiveFlySpeed = flySpeed * DropSpeedFactor();
-        turnSpeed = effectiveFlySpeed * standaloneSettings.TurnSpeedMultiplier;
+        turnSpeed = effectiveFlySpeed * ActiveSetting(
+            standaloneSettings.TurnSpeedMultiplier,
+            SyncSettings.TurnSpeedMultiplier);
 
         moveProgress += deltaTime * effectiveFlySpeed;
 
@@ -917,7 +1076,10 @@ public class MazeFlyer : EffectBase
         Vector3 blendedForward = Vector3.Lerp(
             currentDirVec,
             nextDirVec,
-            Mathf.SmoothStep(standaloneSettings.TurnBlendStart, 1.0f, moveProgress)).normalized;
+            Mathf.SmoothStep(
+                ActiveSetting(standaloneSettings.TurnBlendStart, SyncSettings.TurnBlendStart),
+                1.0f,
+                moveProgress)).normalized;
 
         if (blendedForward != Vector3.zero)
         {
@@ -932,7 +1094,7 @@ public class MazeFlyer : EffectBase
         // and sit hold a true standstill and Standalone frames never spin.
         cameraRot = Quaternion.Slerp(cameraRot, targetRot, deltaTime * turnSpeed)
                   * Quaternion.AngleAxis(
-                      SyncSettings.DropSpinSpeed * dropLaunchStrength * deltaTime,
+                      SyncSettings.DropCameraSpinSpeed * dropLaunchStrength * deltaTime,
                       Vector3.forward);
     }
 
@@ -957,9 +1119,9 @@ public class MazeFlyer : EffectBase
         // At the flip the new tier holds the speed the ramp just arrived at, so there is no kink.
         if (beatManager.NextEnergy.Level is { } nextState
             && beatManager.NextEnergy.BeatsUntil is { } beatsUntil
-            && beatsUntil <= SyncSettings.SpeedRampBeats)
+            && beatsUntil <= SyncSettings.EnergyFlightSpeedRampBeats)
         {
-            float rampProgress = 1.0f - ((float)beatsUntil / SyncSettings.SpeedRampBeats);
+            float rampProgress = 1.0f - ((float)beatsUntil / SyncSettings.EnergyFlightSpeedRampBeats);
             return Mathf.Lerp(tierSpeed, TierSpeed(nextState), rampProgress);
         }
 
@@ -969,9 +1131,9 @@ public class MazeFlyer : EffectBase
     /// <summary>Returns the authored flight speed for one phrase-scoped energy tier.</summary>
     private float TierSpeed(Energy energyState) => energyState switch
     {
-        Energy.Low => SyncSettings.LowEnergySpeed,
-        Energy.Mid => SyncSettings.MidEnergySpeed,
-        _ => SyncSettings.HighEnergySpeed,
+        Energy.Low => SyncSettings.LowEnergyFlightSpeed,
+        Energy.Mid => SyncSettings.MidEnergyFlightSpeed,
+        _ => SyncSettings.HighEnergyFlightSpeed,
     };
 
     /// <summary>
@@ -1063,11 +1225,13 @@ public class MazeFlyer : EffectBase
             }
         }
 
-        // Random.value spans the complete probability domain; DirectionChoiceThreshold authors its
+        // Random.value spans the complete probability domain; ForwardContinuationThreshold authors its
         // split. The short-circuit is load-bearing: the roll is consumed only when continuing ahead
         // is possible, so restructuring this condition would change the Standalone look.
         if (canContinueAhead &&
-            (Random.value > standaloneSettings.DirectionChoiceThreshold || openCount == 1))
+            (Random.value > ActiveSetting(
+                standaloneSettings.ForwardContinuationThreshold,
+                SyncSettings.ForwardContinuationThreshold) || openCount == 1))
         {
             nextMoveDir = moveDir;
         }
@@ -1342,26 +1506,27 @@ public class MazeFlyer : EffectBase
     }
 }
 
-/// <summary>The fixed Standalone Settings resolved from MazeFlyer's file-local Standalone Defaults.</summary>
+/// <summary>The serializable value shape shared by MazeFlyer's Standalone Defaults and saved Settings.</summary>
+[Serializable]
 public sealed class MazeFlyerStandaloneSettings
 {
-    /// <summary>Inclusive minimum for the per-activation flight-speed roll, in voxel cells per second.</summary>
-    public float OverallSpeedMin;
-
-    /// <summary>Inclusive maximum for the per-activation flight-speed roll, in voxel cells per second.</summary>
-    public float OverallSpeedMax;
+    /// <summary>Per-activation flight-speed range, in voxel cells per second.</summary>
+    public FloatRange FlightSpeed;
 
     /// <summary>Multiplier deriving camera turn speed from the rolled flight speed.</summary>
     public float TurnSpeedMultiplier;
 
-    /// <summary>Probability that a non-guaranteed voxel cell is filled.</summary>
-    public float FillProbability;
+    /// <summary>SmoothDamp time constant, in seconds, used to return to the rolled flight speed.</summary>
+    public float FlightSpeedSmoothTime;
+
+    /// <summary>Probability that a non-guaranteed voxel cell is occupied.</summary>
+    public float RandomCellOccupancyProbability;
 
     /// <summary>Coordinate scale used to generate the Spatial Waves hue field.</summary>
-    public float SpatialScale;
+    public float SpatialWavesHueScale;
 
     /// <summary>Voxel-block width used by the Block Regions color mode.</summary>
-    public int BlockSize;
+    public int BlockRegionsSize;
 
     /// <summary>Saturation of voxels in the Pure Random color mode.</summary>
     public float PureRandomSaturation;
@@ -1376,7 +1541,7 @@ public sealed class MazeFlyerStandaloneSettings
     public float SpatialWavesValue;
 
     /// <summary>Per-voxel hue-jitter range used by the Block Regions color mode.</summary>
-    public FloatRange BlockHueJitter;
+    public FloatRange BlockRegionsHueJitter;
 
     /// <summary>Saturation of voxels in the Block Regions color mode.</summary>
     public float BlockRegionsSaturation;
@@ -1388,13 +1553,13 @@ public sealed class MazeFlyerStandaloneSettings
     public Color[] CuratedPalette;
 
     /// <summary>Camera focal length used to project tile centers into voxel rays.</summary>
-    public float FocalLength;
+    public float CameraFocalLength;
 
     /// <summary>Normalized move progress at which look-ahead turn blending begins.</summary>
     public float TurnBlendStart;
 
     /// <summary>Threshold separating forward continuation from alternate non-reversing direction selection.</summary>
-    public float DirectionChoiceThreshold;
+    public float ForwardContinuationThreshold;
 
     /// <summary>Maximum ray distance and baseline fog range.</summary>
     public float MaxRayDistance;
@@ -1421,16 +1586,142 @@ public sealed class MazeFlyerStandaloneSettings
     public float EdgeLineShade;
 
     /// <summary>Scale of the rotated-grid supersample pattern, in tile-center units.</summary>
-    public float SampleSpread;
+    public float RaySampleSpread;
 
     /// <summary>Minimum HSV value for colors rolled from the shared palette.</summary>
     public float SharedPaletteMinValue;
+
+    /// <summary>
+    /// Copies every MazeFlyer Standalone Setting, cloning mutable ranges and palette storage so
+    /// saved assets cannot mutate the in-file Standalone Defaults.
+    /// </summary>
+    public void CopyFrom(MazeFlyerStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        FlightSpeed = new FloatRange(
+            source.FlightSpeed.Min,
+            source.FlightSpeed.Max,
+            source.FlightSpeed.LowRail,
+            source.FlightSpeed.HighRail);
+        TurnSpeedMultiplier = source.TurnSpeedMultiplier;
+        FlightSpeedSmoothTime = source.FlightSpeedSmoothTime;
+        RandomCellOccupancyProbability = source.RandomCellOccupancyProbability;
+        SpatialWavesHueScale = source.SpatialWavesHueScale;
+        BlockRegionsSize = source.BlockRegionsSize;
+        PureRandomSaturation = source.PureRandomSaturation;
+        PureRandomValue = source.PureRandomValue;
+        SpatialWavesSaturation = source.SpatialWavesSaturation;
+        SpatialWavesValue = source.SpatialWavesValue;
+        BlockRegionsHueJitter = new FloatRange(
+            source.BlockRegionsHueJitter.Min,
+            source.BlockRegionsHueJitter.Max,
+            source.BlockRegionsHueJitter.LowRail,
+            source.BlockRegionsHueJitter.HighRail);
+        BlockRegionsSaturation = source.BlockRegionsSaturation;
+        BlockRegionsValue = source.BlockRegionsValue;
+        CuratedPalette = (Color[])source.CuratedPalette.Clone();
+        CameraFocalLength = source.CameraFocalLength;
+        TurnBlendStart = source.TurnBlendStart;
+        ForwardContinuationThreshold = source.ForwardContinuationThreshold;
+        MaxRayDistance = source.MaxRayDistance;
+        XAxisFaceShade = source.XAxisFaceShade;
+        YAxisFaceShade = source.YAxisFaceShade;
+        ZAxisFaceShade = source.ZAxisFaceShade;
+        HeadlightMinShade = source.HeadlightMinShade;
+        FogDensity = source.FogDensity;
+        EdgeLineThicknessTiles = source.EdgeLineThicknessTiles;
+        EdgeLineShade = source.EdgeLineShade;
+        RaySampleSpread = source.RaySampleSpread;
+        SharedPaletteMinValue = source.SharedPaletteMinValue;
+    }
 }
 
 /// <summary>The saved musical-response settings used by MazeFlyer in Synced Mode.</summary>
 [Serializable]
 public sealed class MazeFlyerSyncSettings
 {
+    /// <summary>Per-activation fallback flight-speed range, in voxel cells per second.</summary>
+    public FloatRange FlightSpeed;
+
+    /// <summary>Multiplier deriving camera turn speed from the active flight speed.</summary>
+    public float TurnSpeedMultiplier;
+
+    /// <summary>Probability that a non-guaranteed voxel cell is occupied.</summary>
+    public float RandomCellOccupancyProbability;
+
+    /// <summary>Coordinate scale used to generate the Spatial Waves hue field.</summary>
+    public float SpatialWavesHueScale;
+
+    /// <summary>Voxel-block width used by the Block Regions color mode.</summary>
+    public int BlockRegionsSize;
+
+    /// <summary>Saturation of voxels in the Pure Random color mode.</summary>
+    public float PureRandomSaturation;
+
+    /// <summary>Value of voxels in the Pure Random color mode.</summary>
+    public float PureRandomValue;
+
+    /// <summary>Saturation of voxels in the Spatial Waves color mode.</summary>
+    public float SpatialWavesSaturation;
+
+    /// <summary>Value of voxels in the Spatial Waves color mode.</summary>
+    public float SpatialWavesValue;
+
+    /// <summary>Per-voxel hue-jitter range used by the Block Regions color mode.</summary>
+    public FloatRange BlockRegionsHueJitter;
+
+    /// <summary>Saturation of voxels in the Block Regions color mode.</summary>
+    public float BlockRegionsSaturation;
+
+    /// <summary>Value of voxels in the Block Regions color mode.</summary>
+    public float BlockRegionsValue;
+
+    /// <summary>Colors sampled by the Curated Palette mode.</summary>
+    public Color[] CuratedPalette;
+
+    /// <summary>Camera focal length used to project tile centers into voxel rays.</summary>
+    public float CameraFocalLength;
+
+    /// <summary>Normalized move progress at which look-ahead turn blending begins.</summary>
+    public float TurnBlendStart;
+
+    /// <summary>Threshold above which navigation continues forward when that direction is open.</summary>
+    public float ForwardContinuationThreshold;
+
+    /// <summary>Maximum ray distance and baseline fog range.</summary>
+    public float MaxRayDistance;
+
+    /// <summary>Shade multiplier for voxel faces hit across the X axis.</summary>
+    public float XAxisFaceShade;
+
+    /// <summary>Shade multiplier for voxel faces hit across the Y axis.</summary>
+    public float YAxisFaceShade;
+
+    /// <summary>Shade multiplier for voxel faces hit across the Z axis.</summary>
+    public float ZAxisFaceShade;
+
+    /// <summary>Shade floor of the camera headlight at full grazing incidence.</summary>
+    public float HeadlightMinShade;
+
+    /// <summary>Density of the squared-exponential fog curve over normalized ray distance.</summary>
+    public float FogDensity;
+
+    /// <summary>On-wall thickness of voxel edge lines, in tile pitches.</summary>
+    public float EdgeLineThicknessTiles;
+
+    /// <summary>Shade multiplier at the edge of a voxel face.</summary>
+    public float EdgeLineShade;
+
+    /// <summary>Scale of the rotated-grid supersample pattern, in tile-center units.</summary>
+    public float RaySampleSpread;
+
+    /// <summary>Minimum HSV value for colors rolled from the shared palette.</summary>
+    public float SharedPaletteMinValue;
+
     /// <summary>
     /// Maximum ray displacement on heavy beat hits. High values produce bigger wall recoil. Zero
     /// temporarily disables the response. This is a beat-feel tuning control; 0.20 was suggested,
@@ -1439,7 +1730,7 @@ public sealed class MazeFlyerSyncSettings
     [Header("Audio Reactivity Settings")]
     [Tooltip("Maximum ray displacement on heavy beat hits. High values = bigger wall recoil. 0 disables it; recommended: 0.05 to 0.40.")]
     [Range(0f, 0.40f)]
-    public float PulseStrength;
+    public float WaveformRayRecoilDistance;
 
     /// <summary>
     /// Extra brightness boost added to voxel faces on audio peaks. Zero temporarily disables the
@@ -1447,7 +1738,7 @@ public sealed class MazeFlyerSyncSettings
     /// </summary>
     [Tooltip("Extra brightness boost added to voxel faces on audio peaks. 0 disables it; recommended: 0.00 to 0.50.")]
     [Range(0f, 0.50f)]
-    public float PeakBrightnessBoost;
+    public float WaveformFaceBrightnessBoost;
 
     /// <summary>
     /// Amount by which fog distance contracts or expands with the rhythm. Zero means off and
@@ -1456,7 +1747,7 @@ public sealed class MazeFlyerSyncSettings
     /// </summary>
     [Tooltip("How much fog distance contracts or expands with the rhythm. 0 disables it; recommended: 0.0 to 6.0.")]
     [Range(0f, 6.0f)]
-    public float DynamicFogAmount;
+    public float WaveformRayDistanceBoost;
 
     /// <summary>
     /// Low-band strength that arms the On Beat brightness pulse, read from BeatManager's
@@ -1480,17 +1771,17 @@ public sealed class MazeFlyerSyncSettings
     /// </summary>
     [Tooltip("Flight speed (voxels/sec) while the phrase-scoped energy state is Low.")]
     [Min(0f)]
-    public float LowEnergySpeed;
+    public float LowEnergyFlightSpeed;
 
     /// <summary>Flight speed while the phrase-scoped energy state reads Mid.</summary>
     [Tooltip("Flight speed (voxels/sec) while the phrase-scoped energy state is Mid.")]
     [Min(0f)]
-    public float MidEnergySpeed;
+    public float MidEnergyFlightSpeed;
 
     /// <summary>Flight speed while the phrase-scoped energy state reads High.</summary>
     [Tooltip("Flight speed (voxels/sec) while the phrase-scoped energy state is High.")]
     [Min(0f)]
-    public float HighEnergySpeed;
+    public float HighEnergyFlightSpeed;
 
     /// <summary>
     /// SmoothDamp time constant, in seconds, easing the flight speed between energy tier
@@ -1498,7 +1789,7 @@ public sealed class MazeFlyerSyncSettings
     /// </summary>
     [Tooltip("Seconds of SmoothDamp easing between energy tier speeds. Higher = gentler ramps.")]
     [Range(0.1f, 5f)]
-    public float SpeedSmoothTime;
+    public float FlightSpeedSmoothTime;
 
     /// <summary>
     /// Ramp window, in beats, for the beat-locked speed glide toward the announced next energy
@@ -1506,7 +1797,7 @@ public sealed class MazeFlyerSyncSettings
     /// </summary>
     [Tooltip("Beats before an announced energy-state change over which speed glides to the next tier's speed.")]
     [Range(1, 32)]
-    public int SpeedRampBeats;
+    public int EnergyFlightSpeedRampBeats;
 
     /// <summary>
     /// Wind-down, in beats, over which the flight falls to a dead stop; the stop completes
@@ -1548,7 +1839,7 @@ public sealed class MazeFlyerSyncSettings
     /// </summary>
     [Tooltip("Camera spin rate at the Drop landing, in degrees per second, settling with the launch over the 16-beat grid. 0 disables.")]
     [Min(0f)]
-    public float DropSpinSpeed;
+    public float DropCameraSpinSpeed;
 
     /// <summary>Copies every MazeFlyer Sync Setting from another value.</summary>
     public void CopyFrom(MazeFlyerSyncSettings source)
@@ -1558,20 +1849,54 @@ public sealed class MazeFlyerSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        PulseStrength = source.PulseStrength;
-        PeakBrightnessBoost = source.PeakBrightnessBoost;
-        DynamicFogAmount = source.DynamicFogAmount;
+        FlightSpeed = new FloatRange(
+            source.FlightSpeed.Min,
+            source.FlightSpeed.Max,
+            source.FlightSpeed.LowRail,
+            source.FlightSpeed.HighRail);
+        TurnSpeedMultiplier = source.TurnSpeedMultiplier;
+        RandomCellOccupancyProbability = source.RandomCellOccupancyProbability;
+        SpatialWavesHueScale = source.SpatialWavesHueScale;
+        BlockRegionsSize = source.BlockRegionsSize;
+        PureRandomSaturation = source.PureRandomSaturation;
+        PureRandomValue = source.PureRandomValue;
+        SpatialWavesSaturation = source.SpatialWavesSaturation;
+        SpatialWavesValue = source.SpatialWavesValue;
+        BlockRegionsHueJitter = new FloatRange(
+            source.BlockRegionsHueJitter.Min,
+            source.BlockRegionsHueJitter.Max,
+            source.BlockRegionsHueJitter.LowRail,
+            source.BlockRegionsHueJitter.HighRail);
+        BlockRegionsSaturation = source.BlockRegionsSaturation;
+        BlockRegionsValue = source.BlockRegionsValue;
+        CuratedPalette = (Color[])source.CuratedPalette.Clone();
+        CameraFocalLength = source.CameraFocalLength;
+        TurnBlendStart = source.TurnBlendStart;
+        ForwardContinuationThreshold = source.ForwardContinuationThreshold;
+        MaxRayDistance = source.MaxRayDistance;
+        XAxisFaceShade = source.XAxisFaceShade;
+        YAxisFaceShade = source.YAxisFaceShade;
+        ZAxisFaceShade = source.ZAxisFaceShade;
+        HeadlightMinShade = source.HeadlightMinShade;
+        FogDensity = source.FogDensity;
+        EdgeLineThicknessTiles = source.EdgeLineThicknessTiles;
+        EdgeLineShade = source.EdgeLineShade;
+        RaySampleSpread = source.RaySampleSpread;
+        SharedPaletteMinValue = source.SharedPaletteMinValue;
+        WaveformRayRecoilDistance = source.WaveformRayRecoilDistance;
+        WaveformFaceBrightnessBoost = source.WaveformFaceBrightnessBoost;
+        WaveformRayDistanceBoost = source.WaveformRayDistanceBoost;
         OnBeatLowThreshold = source.OnBeatLowThreshold;
         OnBeatBrightnessPulse = source.OnBeatBrightnessPulse;
-        LowEnergySpeed = source.LowEnergySpeed;
-        MidEnergySpeed = source.MidEnergySpeed;
-        HighEnergySpeed = source.HighEnergySpeed;
-        SpeedSmoothTime = source.SpeedSmoothTime;
-        SpeedRampBeats = source.SpeedRampBeats;
+        LowEnergyFlightSpeed = source.LowEnergyFlightSpeed;
+        MidEnergyFlightSpeed = source.MidEnergyFlightSpeed;
+        HighEnergyFlightSpeed = source.HighEnergyFlightSpeed;
+        FlightSpeedSmoothTime = source.FlightSpeedSmoothTime;
+        EnergyFlightSpeedRampBeats = source.EnergyFlightSpeedRampBeats;
         DropStopBeats = source.DropStopBeats;
         DropSitBeats = source.DropSitBeats;
         DropLaunchMultiplier = source.DropLaunchMultiplier;
-        DropSpinSpeed = source.DropSpinSpeed;
+        DropCameraSpinSpeed = source.DropCameraSpinSpeed;
         FillEdgeInversion = source.FillEdgeInversion;
         FillLineGlow = source.FillLineGlow;
     }
