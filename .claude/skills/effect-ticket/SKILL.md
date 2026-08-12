@@ -273,6 +273,8 @@ Boundaries — in every brief:
   makes the setting half-live under a Play Mode edit.
 - The worker added no guard that did not exist before, and no defensive layer the framing
   paragraph forbids.
+- No check survives whose removal leaves behavior identical. The contract carries the fact,
+  never the check.
 - Tests sit on agreed seams only, and no test pins an authored tuning value — an assertion that
   encodes one is at the wrong seam and is deleted, not preserved.
 - Every complete-domain claim is checked against the consuming code.
