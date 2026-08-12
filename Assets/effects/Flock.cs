@@ -32,6 +32,7 @@ using UnityEngine;
 /// </para>
 /// </remarks>
 [EffectSyncSettings(typeof(FlockSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(FlockStandaloneSettingsAsset))]
 public class Flock : EffectBase
 {
     // Standalone Defaults
@@ -63,7 +64,10 @@ public class Flock : EffectBase
     /// <summary>Standalone Routine posture that preserves full palette color and visible trails without a Grid.</summary>
     private const float StandaloneRoutineEnvelope = 1f;
 
-    /// <summary>Trail half-life in seconds at the top of the Routine envelope.</summary>
+    /// <summary>Standalone trail half-life at the bottom of the Routine envelope.</summary>
+    private const float StandaloneTrailHalfLifeMin = 0.03f;
+
+    /// <summary>Standalone trail half-life at the top of the Routine envelope.</summary>
     private const float StandaloneTrailHalfLifeMax = 0.25f;
 
     /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
@@ -138,11 +142,11 @@ public class Flock : EffectBase
 
     // Normalized schooling and spectral detail
 
-    /// <summary>Normalized Mid level below which no schooling maneuver is added.</summary>
-    private const float SyncMidManeuverThreshold = 0.2f;
+    /// <summary>Minimum normalized Mid level below which no schooling maneuver is added.</summary>
+    private const float SyncMidManeuverLevelMin = 0.2f;
 
-    /// <summary>Normalized Mid level that produces the full schooling maneuver.</summary>
-    private const float SyncMidManeuverFull = 0.65f;
+    /// <summary>Maximum normalized Mid level that produces the full schooling maneuver.</summary>
+    private const float SyncMidManeuverLevelMax = 0.65f;
 
     /// <summary>Alignment lift on a strong normalized Mid-band maneuver.</summary>
     private const float SyncMidAlignmentLift = 0.75f;
@@ -153,11 +157,11 @@ public class Flock : EffectBase
     /// <summary>Shared course-bending force applied by a strong normalized Mid-band maneuver.</summary>
     private const float SyncCollectiveTurnStrength = 0.75f;
 
-    /// <summary>Normalized spectral centroid below which no extra agitation is added.</summary>
-    private const float SyncSpectralCentroidThreshold = 0.25f;
+    /// <summary>Minimum normalized spectral centroid below which no extra agitation is added.</summary>
+    private const float SyncSpectralCentroidMin = 0.25f;
 
-    /// <summary>Normalized spectral centroid that produces full extra agitation.</summary>
-    private const float SyncSpectralCentroidFull = 0.65f;
+    /// <summary>Maximum normalized spectral centroid that produces full extra agitation.</summary>
+    private const float SyncSpectralCentroidMax = 0.65f;
 
     /// <summary>Separation lift when the normalized spectrum leans toward high-frequency detail.</summary>
     private const float SyncSpectralSeparationLift = 1f;
@@ -207,13 +211,13 @@ public class Flock : EffectBase
 
     // Drop gathering and release
 
-    /// <summary>Number of beats before a Drop during which the flock gathers at wall center.</summary>
-    private const float SyncDropRunwayBeats = 8f;
+    /// <summary>Number of beats before a Drop over which the flock gathers at wall center.</summary>
+    private const float SyncDropGatherBeats = 8f;
 
-    /// <summary>Strength of center-seeking steering at the end of the Drop runway.</summary>
+    /// <summary>Strength of center-seeking steering at the end of the pre-Drop gather.</summary>
     private const float SyncDropGatherSteering = 3f;
 
-    /// <summary>Share of ordinary separation removed at the end of the Drop runway.</summary>
+    /// <summary>Share of ordinary separation removed at the end of the pre-Drop gather.</summary>
     private const float SyncDropGatherSeparationSuppression = 0.9f;
 
     /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
@@ -251,6 +255,38 @@ public class Flock : EffectBase
     /// <summary>Additional wander turn rate at full spectral agitation.</summary>
     private const float SyncSpectralWanderTurnLift = 1f;
 
+    // Both-mode flocking and wander
+
+    /// <summary>Synced weight of steering toward neighbors' travel direction.</summary>
+    private const float SyncBaseAlignmentWeight = 0.75f;
+
+    /// <summary>Synced weight of steering toward the local flock center.</summary>
+    private const float SyncBaseCohesionWeight = 1f;
+
+    /// <summary>Synced weight of steering away from nearby boids.</summary>
+    private const float SyncBaseSeparationWeight = 1.25f;
+
+    /// <summary>Minimum Synced share of a boid's steering force devoted to continuous wander.</summary>
+    private const float SyncWanderStrengthMin = 0.2f;
+
+    /// <summary>Maximum Synced share of a boid's steering force devoted to continuous wander.</summary>
+    private const float SyncWanderStrengthMax = 0.45f;
+
+    /// <summary>Slowest Synced wander phase rate selected for a Grid, in radians per second.</summary>
+    private const float SyncWanderTurnRateMin = 0.5f;
+
+    /// <summary>Fastest Synced wander phase rate selected for a Grid, in radians per second.</summary>
+    private const float SyncWanderTurnRateMax = 1.1f;
+
+    /// <summary>Maximum Synced heading offset used by a boid's continuous wander.</summary>
+    private const float SyncWanderHeadingRadians = 0.7853982f;
+
+    /// <summary>Minimum Synced per-boid multiplier that prevents wander phases from moving in lockstep.</summary>
+    private const float SyncWanderFrequencyMin = 0.8f;
+
+    /// <summary>Maximum Synced per-boid multiplier that prevents wander phases from moving in lockstep.</summary>
+    private const float SyncWanderFrequencyMax = 1.2f;
+
     // Runtime mechanism constants
 
     /// <summary>Number of boids simulated by the effect.</summary>
@@ -269,17 +305,23 @@ public class Flock : EffectBase
     /// </summary>
     private static readonly bool TrailsEnabled = true;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of Flock's Standalone Defaults.</summary>
-    public static FlockStandaloneSettings StandaloneSettings => new FlockStandaloneSettings
+    /// <summary>
+    /// Resolves a fresh copy so saved Standalone Settings can never mutate Flock's authored
+    /// Standalone Defaults.
+    /// </summary>
+    public static FlockStandaloneSettings StandaloneDefaults => new()
     {
         BaseAlignmentWeight = StandaloneBaseAlignmentWeight,
         BaseCohesionWeight = StandaloneBaseCohesionWeight,
         BaseSeparationWeight = StandaloneBaseSeparationWeight,
         MovementActivity = StandaloneMovementActivity,
-        QuietSpeedMultiplier = StandaloneQuietSpeedMultiplier,
-        ActiveSpeedMultiplier = StandaloneActiveSpeedMultiplier,
+        SpeedMultiplier = new FloatRange(
+            StandaloneQuietSpeedMultiplier,
+            StandaloneActiveSpeedMultiplier),
         RoutineEnvelope = StandaloneRoutineEnvelope,
-        TrailHalfLife = StandaloneTrailHalfLifeMax,
+        TrailHalfLife = new FloatRange(
+            StandaloneTrailHalfLifeMin,
+            StandaloneTrailHalfLifeMax),
         RoutineHueShift = StandaloneRoutineHueShift,
         RoutineSaturationFloor = StandaloneRoutineSaturationFloor,
         RoutineValueFloor = StandaloneRoutineValueFloor,
@@ -292,25 +334,31 @@ public class Flock : EffectBase
     };
 
     /// <summary>Resolves a fresh copy of Flock's file-local Sync Defaults.</summary>
-    public static FlockSyncSettings SyncDefaults => new FlockSyncSettings
+    public static FlockSyncSettings SyncDefaults => new()
     {
+        BaseAlignmentWeight = SyncBaseAlignmentWeight,
+        BaseCohesionWeight = SyncBaseCohesionWeight,
+        BaseSeparationWeight = SyncBaseSeparationWeight,
         MovementLowWeight = SyncMovementLowWeight,
         MovementMidWeight = SyncMovementMidWeight,
         MovementHighWeight = SyncMovementHighWeight,
-        QuietActivityThreshold = SyncQuietActivityThreshold,
-        ActiveActivityThreshold = SyncActiveActivityThreshold,
-        QuietSpeedMultiplier = SyncQuietSpeedMultiplier,
-        ActiveSpeedMultiplier = SyncActiveSpeedMultiplier,
-        MidManeuverThreshold = SyncMidManeuverThreshold,
-        MidManeuverFull = SyncMidManeuverFull,
+        MovementLevel = new FloatRange(
+            SyncQuietActivityThreshold,
+            SyncActiveActivityThreshold),
+        SpeedMultiplier = new FloatRange(
+            SyncQuietSpeedMultiplier,
+            SyncActiveSpeedMultiplier),
+        MidManeuverLevel = new FloatRange(
+            SyncMidManeuverLevelMin,
+            SyncMidManeuverLevelMax),
         MidAlignmentLift = SyncMidAlignmentLift,
         MidCohesionLift = SyncMidCohesionLift,
         CollectiveTurnStrength = SyncCollectiveTurnStrength,
-        SpectralCentroidThreshold = SyncSpectralCentroidThreshold,
-        SpectralCentroidFull = SyncSpectralCentroidFull,
+        SpectralCentroid = new FloatRange(
+            SyncSpectralCentroidMin,
+            SyncSpectralCentroidMax),
         SpectralSeparationLift = SyncSpectralSeparationLift,
-        TrailHalfLifeMin = SyncTrailHalfLifeMin,
-        TrailHalfLifeMax = SyncTrailHalfLifeMax,
+        TrailHalfLife = new FloatRange(SyncTrailHalfLifeMin, SyncTrailHalfLifeMax),
         RoutineHueShift = SyncRoutineHueShift,
         RoutineSaturationFloor = SyncRoutineSaturationFloor,
         RoutineValueFloor = SyncRoutineValueFloor,
@@ -322,7 +370,7 @@ public class Flock : EffectBase
         FillOrbitAtFullGather = SyncFillOrbitAtFullGather,
         FillAlignmentLift = SyncFillAlignmentLift,
         FillSeparationLift = SyncFillSeparationLift,
-        DropRunwayBeats = SyncDropRunwayBeats,
+        DropGatherBeats = SyncDropGatherBeats,
         DropGatherSteering = SyncDropGatherSteering,
         DropGatherSeparationSuppression = SyncDropGatherSeparationSuppression,
         DropReleaseBeats = SyncDropReleaseBeats,
@@ -336,10 +384,14 @@ public class Flock : EffectBase
         QuietWanderTurnMultiplier = SyncQuietWanderTurnMultiplier,
         SpectralWanderStrengthLift = SyncSpectralWanderStrengthLift,
         SpectralWanderTurnLift = SyncSpectralWanderTurnLift,
+        WanderStrength = new FloatRange(SyncWanderStrengthMin, SyncWanderStrengthMax),
+        WanderTurnRate = new FloatRange(SyncWanderTurnRateMin, SyncWanderTurnRateMax),
+        WanderHeadingRadians = SyncWanderHeadingRadians,
+        WanderFrequency = new FloatRange(SyncWanderFrequencyMin, SyncWanderFrequencyMax),
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private FlockStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private FlockStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private FlockSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -408,7 +460,9 @@ public class Flock : EffectBase
     /// </remarks>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Flock),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Flock),
             SyncDefaults);
@@ -476,8 +530,8 @@ public class Flock : EffectBase
     /// </summary>
     /// <remarks>
     /// Low uses three Low slots and one Mid; Mid uses three Mid and one Low; High uses one High,
-    /// two Mid, and one Low. Missing Energy uses the Mid recipe so Standalone starts from balanced
-    /// artistic state even though its live envelope later uses an explicit steady fallback.
+    /// two Mid, and one Low. Missing Energy uses the Mid recipe so Standalone Mode starts from a
+    /// balanced artistic state even though its live envelope later uses an explicit steady posture.
     /// </remarks>
     private void RerollRoutine()
     {
@@ -507,8 +561,14 @@ public class Flock : EffectBase
     /// <summary>Selects the gentle wander strength and turn rate used for the current Grid.</summary>
     private void RerollWander()
     {
-        wanderStrength = Random.Range(standaloneSettings.WanderStrength.Min, standaloneSettings.WanderStrength.Max);
-        wanderTurnRate = Random.Range(standaloneSettings.WanderTurnRate.Min, standaloneSettings.WanderTurnRate.Max);
+        FloatRange wanderStrengthRange = IsSynced
+            ? SyncSettings.WanderStrength
+            : standaloneSettings.WanderStrength;
+        FloatRange wanderTurnRateRange = IsSynced
+            ? SyncSettings.WanderTurnRate
+            : standaloneSettings.WanderTurnRate;
+        wanderStrength = Random.Range(wanderStrengthRange.Min, wanderStrengthRange.Max);
+        wanderTurnRate = Random.Range(wanderTurnRateRange.Min, wanderTurnRateRange.Max);
     }
 
     /// <summary>Randomly chooses one of the two directions around the wall center.</summary>
@@ -622,11 +682,12 @@ public class Flock : EffectBase
     {
         if (TrailsEnabled)
         {
-            float halfLife = IsSynced
-                ? Mathf.Clamp01(routineEnvelope).Lerp(
-                    SyncSettings.TrailHalfLifeMin,
-                    SyncSettings.TrailHalfLifeMax)
+            FloatRange trailHalfLife = IsSynced
+                ? SyncSettings.TrailHalfLife
                 : standaloneSettings.TrailHalfLife;
+            float halfLife = Mathf.Clamp01(routineEnvelope).Lerp(
+                trailHalfLife.Min,
+                trailHalfLife.Max);
             buffer.Fade(GetTrailRetention(halfLife, effectDelta));
         }
         else
@@ -673,14 +734,14 @@ public class Flock : EffectBase
             + (Mathf.Clamp01(mid) * SyncSettings.MovementMidWeight)
             + (Mathf.Clamp01(high) * SyncSettings.MovementHighWeight);
         return weighted.Remap(
-            SyncSettings.QuietActivityThreshold,
-            SyncSettings.ActiveActivityThreshold,
+            SyncSettings.MovementLevel.Min,
+            SyncSettings.MovementLevel.Max,
             0f,
             1f,
             clamp: true);
     }
 
-    /// <summary>Returns the live Routine envelope, or its steady visual fallback in Standalone.</summary>
+    /// <summary>Returns the live Routine envelope, or its steady visual posture in Standalone Mode.</summary>
     /// <param name="envelope">Current Routine envelope in <c>[0..1]</c>.</param>
     /// <remarks>Mode selection reads whether a musical Grid is available to place the Routine.</remarks>
     /// <returns>The clamped live envelope, or the authored Standalone posture.</returns>
@@ -696,13 +757,10 @@ public class Flock : EffectBase
     /// <returns>Multiplier applied to each boid's authored maximum speed.</returns>
     private float GetMovementSpeedMultiplier(float activity)
     {
-        float quietSpeedMultiplier = IsSynced
-            ? SyncSettings.QuietSpeedMultiplier
-            : standaloneSettings.QuietSpeedMultiplier;
-        float activeSpeedMultiplier = IsSynced
-            ? SyncSettings.ActiveSpeedMultiplier
-            : standaloneSettings.ActiveSpeedMultiplier;
-        return Mathf.Clamp01(activity).Lerp(quietSpeedMultiplier, activeSpeedMultiplier);
+        FloatRange speedMultiplier = IsSynced
+            ? SyncSettings.SpeedMultiplier
+            : standaloneSettings.SpeedMultiplier;
+        return Mathf.Clamp01(activity).Lerp(speedMultiplier.Min, speedMultiplier.Max);
     }
 
     /// <summary>Returns an activity-gated schooling maneuver from normalized Mid.</summary>
@@ -712,8 +770,8 @@ public class Flock : EffectBase
     private float GetMidManeuver(float normalizedMid, float activity)
     {
         float maneuver = normalizedMid.Remap(
-            SyncSettings.MidManeuverThreshold,
-            SyncSettings.MidManeuverFull,
+            SyncSettings.MidManeuverLevel.Min,
+            SyncSettings.MidManeuverLevel.Max,
             0f,
             1f,
             clamp: true);
@@ -727,8 +785,8 @@ public class Flock : EffectBase
     private float GetSpectralAgitation(float normalizedCentroid, float activity)
     {
         float agitation = normalizedCentroid.Remap(
-            SyncSettings.SpectralCentroidThreshold,
-            SyncSettings.SpectralCentroidFull,
+            SyncSettings.SpectralCentroid.Min,
+            SyncSettings.SpectralCentroid.Max,
             0f,
             1f,
             clamp: true);
@@ -863,23 +921,23 @@ public class Flock : EffectBase
         return Mathf.SmoothStep(0f, 1f, progress) * durationBoost;
     }
 
-    /// <summary>Returns a smooth zero-to-one gathering amount across the configured runway before a Drop.</summary>
+    /// <summary>Returns a smooth zero-to-one gathering amount across the configured window before a Drop.</summary>
     /// <param name="dropActive">Whether the Drop has already begun.</param>
     /// <param name="beatsUntil">Whole-beat countdown to Drop onset.</param>
     /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
-    /// <returns>Pre-Drop gathering in <c>[0..1]</c>, or zero outside the runway.</returns>
+    /// <returns>Pre-Drop gathering in <c>[0..1]</c>, or zero outside the gather window.</returns>
     private float GetDropApproach(bool dropActive, int? beatsUntil, float? beatProgress)
     {
         if (dropActive ||
             beatsUntil is not { } beats ||
             beats < 0 ||
-            beats > SyncSettings.DropRunwayBeats)
+            beats > SyncSettings.DropGatherBeats)
         {
             return 0f;
         }
 
         float continuousBeatsUntil = beats - Mathf.Clamp01(beatProgress ?? 0f);
-        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / SyncSettings.DropRunwayBeats);
+        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / SyncSettings.DropGatherBeats);
         return Mathf.SmoothStep(0f, 1f, progress);
     }
 
@@ -949,9 +1007,10 @@ public class Flock : EffectBase
             velocity = new Vector2(Random.Range(-maxSpeed, maxSpeed), Random.Range(-maxSpeed, maxSpeed));
             position = new Vector2(Random.Range(min.x, max.x), Random.Range(min.y, max.y));
             wanderPhase = Random.Range(0f, Mathf.PI * 2f);
-            wanderFrequency = Random.Range(
-                parent.standaloneSettings.WanderFrequency.Min,
-                parent.standaloneSettings.WanderFrequency.Max);
+            FloatRange wanderFrequencyRange = parent.IsSynced
+                ? parent.SyncSettings.WanderFrequency
+                : parent.standaloneSettings.WanderFrequency;
+            wanderFrequency = Random.Range(wanderFrequencyRange.Min, wanderFrequencyRange.Max);
         }
 
         /// <summary>Adds an immediate clockwise or counter-clockwise velocity impulse around a center point.</summary>
@@ -1028,13 +1087,22 @@ public class Flock : EffectBase
         private Vector2 GetWeightedFlockingAcceleration()
         {
             float fillSpread = parent.fillOrbitDrive * (1f - parent.dropGather);
-            float alignmentWeight = parent.standaloneSettings.BaseAlignmentWeight
+            float baseAlignmentWeight = parent.IsSynced
+                ? parent.SyncSettings.BaseAlignmentWeight
+                : parent.standaloneSettings.BaseAlignmentWeight;
+            float baseCohesionWeight = parent.IsSynced
+                ? parent.SyncSettings.BaseCohesionWeight
+                : parent.standaloneSettings.BaseCohesionWeight;
+            float baseSeparationWeight = parent.IsSynced
+                ? parent.SyncSettings.BaseSeparationWeight
+                : parent.standaloneSettings.BaseSeparationWeight;
+            float alignmentWeight = baseAlignmentWeight
                 * (1f + (parent.SyncSettings.FillAlignmentLift * parent.fillOrbitDrive)
                     + (parent.SyncSettings.MidAlignmentLift * parent.midManeuver));
-            float cohesionWeight = parent.standaloneSettings.BaseCohesionWeight
+            float cohesionWeight = baseCohesionWeight
                 * (1f + (parent.SyncSettings.MidCohesionLift * parent.midManeuver))
                 * (1f - (parent.SyncSettings.DropCohesionSuppression * parent.dropRelease));
-            float separationWeight = parent.standaloneSettings.BaseSeparationWeight
+            float separationWeight = baseSeparationWeight
                 * (1f + (parent.SyncSettings.FillSeparationLift * fillSpread)
                     + (parent.SyncSettings.SpectralSeparationLift * parent.spectralAgitation)
                     + (parent.SyncSettings.DropSeparationLift * parent.dropRelease))
@@ -1108,7 +1176,10 @@ public class Flock : EffectBase
             wanderPhase = Mathf.Repeat(
                 wanderPhase + (Mathf.Max(0f, deltaTime) * activeWanderTurnRate * wanderFrequency),
                 Mathf.PI * 2f);
-            float headingOffset = Mathf.Sin(wanderPhase) * parent.standaloneSettings.WanderHeadingRadians;
+            float wanderHeadingRadians = parent.IsSynced
+                ? parent.SyncSettings.WanderHeadingRadians
+                : parent.standaloneSettings.WanderHeadingRadians;
+            float headingOffset = Mathf.Sin(wanderPhase) * wanderHeadingRadians;
             return Steer(GetWanderDirection(velocity, headingOffset), desiredSpeed) * activeWanderStrength;
         }
 
@@ -1211,41 +1282,44 @@ public class Flock : EffectBase
     }
 }
 
-/// <summary>The fixed Standalone Settings resolved from Flock's file-local defaults.</summary>
+/// <summary>
+/// The serializable value shape shared by Flock's fully populated Standalone Defaults and saved
+/// Standalone Settings; Unity may create an empty instance before serialized values are applied.
+/// </summary>
+[Serializable]
 public sealed class FlockStandaloneSettings
 {
     /// <summary>Baseline weight of steering toward neighbors' travel direction.</summary>
-    public float BaseAlignmentWeight;
+    [Min(0f)] public float BaseAlignmentWeight;
 
     /// <summary>Baseline weight of steering toward the local flock center.</summary>
-    public float BaseCohesionWeight;
+    [Min(0f)] public float BaseCohesionWeight;
 
     /// <summary>Baseline weight of steering away from nearby boids.</summary>
-    public float BaseSeparationWeight;
+    [Min(0f)] public float BaseSeparationWeight;
 
     /// <summary>Fixed broad movement activity used without live musical placement.</summary>
-    public float MovementActivity;
+    [Range(0f, 1f)] public float MovementActivity;
 
-    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
-    public float QuietSpeedMultiplier;
-
-    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
-    public float ActiveSpeedMultiplier;
+    /// <summary>
+    /// Quiet-to-active range for the ordinary speed limit relative to each boid's authored maximum.
+    /// </summary>
+    public FloatRange SpeedMultiplier;
 
     /// <summary>Fixed Routine posture used without a musical Grid.</summary>
-    public float RoutineEnvelope;
+    [Range(0f, 1f)] public float RoutineEnvelope;
 
-    /// <summary>Fixed trail half-life in seconds.</summary>
-    public float TrailHalfLife;
+    /// <summary>Trail half-life range interpolated from the bottom to the top of the Routine envelope.</summary>
+    public FloatRange TrailHalfLife;
 
     /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
-    public float RoutineHueShift;
+    [Range(0f, 1f)] public float RoutineHueShift;
 
     /// <summary>Share of authored saturation retained at the bottom of the Routine.</summary>
-    public float RoutineSaturationFloor;
+    [Range(0f, 1f)] public float RoutineSaturationFloor;
 
     /// <summary>Share of authored value retained at the bottom of the Routine.</summary>
-    public float RoutineValueFloor;
+    [Range(0f, 1f)] public float RoutineValueFloor;
 
     /// <summary>Per-Grid range for continuous wander strength.</summary>
     public FloatRange WanderStrength;
@@ -1254,22 +1328,67 @@ public sealed class FlockStandaloneSettings
     public FloatRange WanderTurnRate;
 
     /// <summary>Maximum heading offset used by continuous wander.</summary>
-    public float WanderHeadingRadians;
+    [Min(0f)] public float WanderHeadingRadians;
 
     /// <summary>Per-boid range for the independent wander-frequency multiplier.</summary>
     public FloatRange WanderFrequency;
 
     /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
-    public float QuietWanderMultiplier;
+    [Range(0f, 1f)] public float QuietWanderMultiplier;
 
     /// <summary>Share of ordinary wander turn rate retained during complete quiet.</summary>
-    public float QuietWanderTurnMultiplier;
+    [Range(0f, 1f)] public float QuietWanderTurnMultiplier;
+
+    /// <summary>
+    /// Copies every Flock Standalone Setting, including range endpoints and Rails, from another value.
+    /// </summary>
+    public void CopyFrom(FlockStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        BaseAlignmentWeight = source.BaseAlignmentWeight;
+        BaseCohesionWeight = source.BaseCohesionWeight;
+        BaseSeparationWeight = source.BaseSeparationWeight;
+        MovementActivity = source.MovementActivity;
+        SpeedMultiplier = CopyRange(source.SpeedMultiplier);
+        RoutineEnvelope = source.RoutineEnvelope;
+        TrailHalfLife = CopyRange(source.TrailHalfLife);
+        RoutineHueShift = source.RoutineHueShift;
+        RoutineSaturationFloor = source.RoutineSaturationFloor;
+        RoutineValueFloor = source.RoutineValueFloor;
+        WanderStrength = CopyRange(source.WanderStrength);
+        WanderTurnRate = CopyRange(source.WanderTurnRate);
+        WanderHeadingRadians = source.WanderHeadingRadians;
+        WanderFrequency = CopyRange(source.WanderFrequency);
+        QuietWanderMultiplier = source.QuietWanderMultiplier;
+        QuietWanderTurnMultiplier = source.QuietWanderTurnMultiplier;
+    }
+
+    /// <summary>Copies one range so a saved Rail can never mutate the authored default range.</summary>
+    /// <param name="source">Range whose endpoints and Rails are copied.</param>
+    /// <returns>An independent range with the same endpoints and Rails.</returns>
+    private static FloatRange CopyRange(FloatRange source)
+    {
+        return new FloatRange(source.Min, source.Max, source.LowRail, source.HighRail);
+    }
 }
 
-/// <summary>The serializable musical-response settings saved for Flock.</summary>
+/// <summary>The serializable value shape shared by Flock's Sync Defaults and saved Sync Settings.</summary>
 [Serializable]
 public sealed class FlockSyncSettings
 {
+    /// <summary>Baseline weight of steering toward neighbors' travel direction.</summary>
+    [Min(0f)] public float BaseAlignmentWeight;
+
+    /// <summary>Baseline weight of steering toward the local flock center.</summary>
+    [Min(0f)] public float BaseCohesionWeight;
+
+    /// <summary>Baseline weight of steering away from nearby boids.</summary>
+    [Min(0f)] public float BaseSeparationWeight;
+
     /// <summary>Share of broad movement activity contributed by the smoothed Low band.</summary>
     [Range(0f, 1f)] public float MovementLowWeight;
 
@@ -1279,23 +1398,16 @@ public sealed class FlockSyncSettings
     /// <summary>Share of broad movement activity contributed by the smoothed High band.</summary>
     [Range(0f, 1f)] public float MovementHighWeight;
 
-    /// <summary>Weighted level below which the flock adopts its quiet posture.</summary>
-    [Range(0f, 1f)] public float QuietActivityThreshold;
+    /// <summary>Weighted Levels range mapped from the flock's quiet posture to its active posture.</summary>
+    public FloatRange MovementLevel;
 
-    /// <summary>Weighted level at which the flock reaches its active posture.</summary>
-    [Range(0f, 1f)] public float ActiveActivityThreshold;
+    /// <summary>
+    /// Quiet-to-active range for the ordinary speed limit relative to each boid's authored maximum.
+    /// </summary>
+    public FloatRange SpeedMultiplier;
 
-    /// <summary>Ordinary speed limit at complete quiet, relative to each boid's authored maximum.</summary>
-    [Min(0f)] public float QuietSpeedMultiplier;
-
-    /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
-    [Min(0f)] public float ActiveSpeedMultiplier;
-
-    /// <summary>Normalized Mid level below which no schooling maneuver is added.</summary>
-    [Range(0f, 1f)] public float MidManeuverThreshold;
-
-    /// <summary>Normalized Mid level that produces the full schooling maneuver.</summary>
-    [Range(0f, 1f)] public float MidManeuverFull;
+    /// <summary>Normalized Mid range mapped from no schooling maneuver to the full maneuver.</summary>
+    public FloatRange MidManeuverLevel;
 
     /// <summary>Alignment lift on a strong normalized Mid-band maneuver.</summary>
     [Min(0f)] public float MidAlignmentLift;
@@ -1306,20 +1418,14 @@ public sealed class FlockSyncSettings
     /// <summary>Shared course-bending force applied by a strong normalized Mid-band maneuver.</summary>
     [Min(0f)] public float CollectiveTurnStrength;
 
-    /// <summary>Normalized spectral centroid below which no extra agitation is added.</summary>
-    [Range(0f, 1f)] public float SpectralCentroidThreshold;
-
-    /// <summary>Normalized spectral centroid that produces full extra agitation.</summary>
-    [Range(0f, 1f)] public float SpectralCentroidFull;
+    /// <summary>Normalized spectral-centroid range mapped from no agitation to full agitation.</summary>
+    public FloatRange SpectralCentroid;
 
     /// <summary>Separation lift when the normalized spectrum leans toward high-frequency detail.</summary>
     [Min(0f)] public float SpectralSeparationLift;
 
-    /// <summary>Trail half-life in seconds at the bottom of the Routine envelope.</summary>
-    [Min(0.0001f)] public float TrailHalfLifeMin;
-
-    /// <summary>Trail half-life in seconds at the top of the Routine envelope.</summary>
-    [Min(0.0001f)] public float TrailHalfLifeMax;
+    /// <summary>Trail half-life range interpolated from the bottom to the top of the Routine envelope.</summary>
+    public FloatRange TrailHalfLife;
 
     /// <summary>Maximum coordinated hue shift applied by the Routine.</summary>
     [Range(0f, 1f)] public float RoutineHueShift;
@@ -1354,13 +1460,13 @@ public sealed class FlockSyncSettings
     /// <summary>Separation lift that lets a Fill-only orbit widen.</summary>
     [Min(0f)] public float FillSeparationLift;
 
-    /// <summary>Number of beats before a Drop during which the flock gathers at wall center.</summary>
-    [Min(0.0001f)] public float DropRunwayBeats;
+    /// <summary>Number of beats before a Drop over which the flock gathers at wall center.</summary>
+    [Min(0.0001f)] public float DropGatherBeats;
 
-    /// <summary>Strength of center-seeking steering at the end of the Drop runway.</summary>
+    /// <summary>Strength of center-seeking steering at the end of the pre-Drop gather.</summary>
     [Min(0f)] public float DropGatherSteering;
 
-    /// <summary>Share of ordinary separation removed at the end of the Drop runway.</summary>
+    /// <summary>Share of ordinary separation removed at the end of the pre-Drop gather.</summary>
     [Range(0f, 1f)] public float DropGatherSeparationSuppression;
 
     /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
@@ -1396,6 +1502,18 @@ public sealed class FlockSyncSettings
     /// <summary>Additional wander turn rate at full spectral agitation.</summary>
     [Min(0f)] public float SpectralWanderTurnLift;
 
+    /// <summary>Per-Grid range for continuous wander strength.</summary>
+    public FloatRange WanderStrength;
+
+    /// <summary>Per-Grid range for wander phase rate in radians per second.</summary>
+    public FloatRange WanderTurnRate;
+
+    /// <summary>Maximum heading offset used by continuous wander.</summary>
+    [Min(0f)] public float WanderHeadingRadians;
+
+    /// <summary>Per-boid range for the independent wander-frequency multiplier.</summary>
+    public FloatRange WanderFrequency;
+
     /// <summary>Copies every Flock Sync Setting from another value.</summary>
     public void CopyFrom(FlockSyncSettings source)
     {
@@ -1404,23 +1522,21 @@ public sealed class FlockSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
+        BaseAlignmentWeight = source.BaseAlignmentWeight;
+        BaseCohesionWeight = source.BaseCohesionWeight;
+        BaseSeparationWeight = source.BaseSeparationWeight;
         MovementLowWeight = source.MovementLowWeight;
         MovementMidWeight = source.MovementMidWeight;
         MovementHighWeight = source.MovementHighWeight;
-        QuietActivityThreshold = source.QuietActivityThreshold;
-        ActiveActivityThreshold = source.ActiveActivityThreshold;
-        QuietSpeedMultiplier = source.QuietSpeedMultiplier;
-        ActiveSpeedMultiplier = source.ActiveSpeedMultiplier;
-        MidManeuverThreshold = source.MidManeuverThreshold;
-        MidManeuverFull = source.MidManeuverFull;
+        MovementLevel = CopyRange(source.MovementLevel);
+        SpeedMultiplier = CopyRange(source.SpeedMultiplier);
+        MidManeuverLevel = CopyRange(source.MidManeuverLevel);
         MidAlignmentLift = source.MidAlignmentLift;
         MidCohesionLift = source.MidCohesionLift;
         CollectiveTurnStrength = source.CollectiveTurnStrength;
-        SpectralCentroidThreshold = source.SpectralCentroidThreshold;
-        SpectralCentroidFull = source.SpectralCentroidFull;
+        SpectralCentroid = CopyRange(source.SpectralCentroid);
         SpectralSeparationLift = source.SpectralSeparationLift;
-        TrailHalfLifeMin = source.TrailHalfLifeMin;
-        TrailHalfLifeMax = source.TrailHalfLifeMax;
+        TrailHalfLife = CopyRange(source.TrailHalfLife);
         RoutineHueShift = source.RoutineHueShift;
         RoutineSaturationFloor = source.RoutineSaturationFloor;
         RoutineValueFloor = source.RoutineValueFloor;
@@ -1432,7 +1548,7 @@ public sealed class FlockSyncSettings
         FillOrbitAtFullGather = source.FillOrbitAtFullGather;
         FillAlignmentLift = source.FillAlignmentLift;
         FillSeparationLift = source.FillSeparationLift;
-        DropRunwayBeats = source.DropRunwayBeats;
+        DropGatherBeats = source.DropGatherBeats;
         DropGatherSteering = source.DropGatherSteering;
         DropGatherSeparationSuppression = source.DropGatherSeparationSuppression;
         DropReleaseBeats = source.DropReleaseBeats;
@@ -1446,5 +1562,17 @@ public sealed class FlockSyncSettings
         QuietWanderTurnMultiplier = source.QuietWanderTurnMultiplier;
         SpectralWanderStrengthLift = source.SpectralWanderStrengthLift;
         SpectralWanderTurnLift = source.SpectralWanderTurnLift;
+        WanderStrength = CopyRange(source.WanderStrength);
+        WanderTurnRate = CopyRange(source.WanderTurnRate);
+        WanderHeadingRadians = source.WanderHeadingRadians;
+        WanderFrequency = CopyRange(source.WanderFrequency);
+    }
+
+    /// <summary>Copies one range so a saved Rail can never mutate the authored default range.</summary>
+    /// <param name="source">Range whose endpoints and Rails are copied.</param>
+    /// <returns>An independent range with the same endpoints and Rails.</returns>
+    private static FloatRange CopyRange(FloatRange source)
+    {
+        return new FloatRange(source.Min, source.Max, source.LowRail, source.HighRail);
     }
 }
