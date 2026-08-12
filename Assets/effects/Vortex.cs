@@ -7,6 +7,7 @@ using Random = UnityEngine.Random;
 /// Renders nearest-spinner palette fields from moving angular sources.
 /// </summary>
 [EffectSyncSettings(typeof(VortexSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(VortexStandaloneSettingsAsset))]
 public class Vortex : EffectBase
 {
     // Standalone Defaults
@@ -17,11 +18,11 @@ public class Vortex : EffectBase
     /// <summary>Authored exclusive upper bound supplied to the unchanged Standalone spinner-count roll.</summary>
     private const int StandaloneSpinnerCountMaxExclusive = 5;
 
-    /// <summary>Authored inclusive minimum supplied to the unchanged Standalone speed roll.</summary>
-    private const int StandaloneSpeedMinInclusive = 50;
+    /// <summary>Authored inclusive minimum angular speed in degrees per second for Standalone.</summary>
+    private const int StandaloneAngularSpeedDegreesPerSecondMinInclusive = 50;
 
-    /// <summary>Authored exclusive upper bound supplied to the unchanged Standalone speed roll.</summary>
-    private const int StandaloneSpeedMaxExclusive = 100;
+    /// <summary>Authored exclusive maximum angular speed in degrees per second for Standalone.</summary>
+    private const int StandaloneAngularSpeedDegreesPerSecondMaxExclusive = 100;
 
     /// <summary>Authored inclusive minimum supplied to the unchanged Standalone direction roll.</summary>
     private const int StandaloneDirectionRollMinInclusive = 0;
@@ -67,11 +68,11 @@ public class Vortex : EffectBase
     /// <summary>Authored exclusive upper bound supplied to a Synced Mode spinner-count roll.</summary>
     private const int SyncSpinnerCountMaxExclusive = 5;
 
-    /// <summary>Authored inclusive minimum supplied to a Synced Mode speed roll.</summary>
-    private const int SyncSpeedMinInclusive = 50;
+    /// <summary>Authored inclusive minimum angular speed in degrees per second for Synced Mode.</summary>
+    private const int SyncAngularSpeedDegreesPerSecondMinInclusive = 50;
 
-    /// <summary>Authored exclusive upper bound supplied to a Synced Mode speed roll.</summary>
-    private const int SyncSpeedMaxExclusive = 100;
+    /// <summary>Authored exclusive maximum angular speed in degrees per second for Synced Mode.</summary>
+    private const int SyncAngularSpeedDegreesPerSecondMaxExclusive = 100;
 
     /// <summary>Authored inclusive minimum supplied to a Synced Mode direction roll.</summary>
     private const int SyncDirectionRollMinInclusive = 0;
@@ -146,18 +147,15 @@ public class Vortex : EffectBase
          Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Vortex's Standalone Defaults.</summary>
-    public static VortexStandaloneSettings StandaloneSettings => new VortexStandaloneSettings
+    public static VortexStandaloneSettings StandaloneDefaults => new VortexStandaloneSettings
     {
-        SpinnerCountMinInclusive = StandaloneSpinnerCountMinInclusive,
-        SpinnerCountMaxExclusive = StandaloneSpinnerCountMaxExclusive,
-        SpeedMinInclusive = StandaloneSpeedMinInclusive,
-        SpeedMaxExclusive = StandaloneSpeedMaxExclusive,
-        DirectionRollMinInclusive = StandaloneDirectionRollMinInclusive,
-        DirectionRollMaxExclusive = StandaloneDirectionRollMaxExclusive,
-        TwistMin = StandaloneTwistMin,
-        TwistMax = StandaloneTwistMax,
-        DistortionRollMinInclusive = StandaloneDistortionRollMinInclusive,
-        DistortionRollMaxExclusive = StandaloneDistortionRollMaxExclusive,
+        SpinnerCount = new IntRange(StandaloneSpinnerCountMinInclusive, StandaloneSpinnerCountMaxExclusive),
+        AngularSpeedDegreesPerSecond = new IntRange(
+            StandaloneAngularSpeedDegreesPerSecondMinInclusive,
+            StandaloneAngularSpeedDegreesPerSecondMaxExclusive),
+        ReverseDirectionRoll = new IntRange(StandaloneDirectionRollMinInclusive, StandaloneDirectionRollMaxExclusive),
+        SpinnerTwist = new FloatRange(StandaloneTwistMin, StandaloneTwistMax),
+        DistortionModeRoll = new IntRange(StandaloneDistortionRollMinInclusive, StandaloneDistortionRollMaxExclusive),
         RingScaleAtRest = StandaloneRingScaleAtRest,
         HorizontalRadius = StandaloneHorizontalRadius,
         VerticalRadius = StandaloneVerticalRadius,
@@ -169,16 +167,13 @@ public class Vortex : EffectBase
     /// <summary>Resolves a fresh copy of Vortex's file-local Sync Defaults.</summary>
     public static VortexSyncSettings SyncDefaults => new VortexSyncSettings
     {
-        SpinnerCountMinInclusive = SyncSpinnerCountMinInclusive,
-        SpinnerCountMaxExclusive = SyncSpinnerCountMaxExclusive,
-        SpeedMinInclusive = SyncSpeedMinInclusive,
-        SpeedMaxExclusive = SyncSpeedMaxExclusive,
-        DirectionRollMinInclusive = SyncDirectionRollMinInclusive,
-        DirectionRollMaxExclusive = SyncDirectionRollMaxExclusive,
-        TwistMin = SyncTwistMin,
-        TwistMax = SyncTwistMax,
-        DistortionRollMinInclusive = SyncDistortionRollMinInclusive,
-        DistortionRollMaxExclusive = SyncDistortionRollMaxExclusive,
+        SpinnerCount = new IntRange(SyncSpinnerCountMinInclusive, SyncSpinnerCountMaxExclusive),
+        AngularSpeedDegreesPerSecond = new IntRange(
+            SyncAngularSpeedDegreesPerSecondMinInclusive,
+            SyncAngularSpeedDegreesPerSecondMaxExclusive),
+        ReverseDirectionRoll = new IntRange(SyncDirectionRollMinInclusive, SyncDirectionRollMaxExclusive),
+        SpinnerTwist = new FloatRange(SyncTwistMin, SyncTwistMax),
+        DistortionModeRoll = new IntRange(SyncDistortionRollMinInclusive, SyncDistortionRollMaxExclusive),
         RingScaleAtRest = SyncRingScaleAtRest,
         HorizontalRadius = SyncHorizontalRadius,
         VerticalRadius = SyncVerticalRadius,
@@ -190,14 +185,15 @@ public class Vortex : EffectBase
         TimeStepAtWaveformPeak = SyncTimeStepAtWaveformPeak,
         DropSpinDecayBeats = SyncDropSpinDecayBeats,
         DropSpinSpeedAtStart = SyncDropSpinSpeedAtStart,
-        DropRingCloseThresholdBeatsUntil = SyncDropRingCloseThresholdBeatsUntil,
-        DropRingClosedBeatsUntil = SyncDropRingClosedBeatsUntil,
+        DropRingCloseCountdownBeats = new IntRange(
+            SyncDropRingClosedBeatsUntil,
+            SyncDropRingCloseThresholdBeatsUntil),
         DropRingClosedScale = SyncDropRingClosedScale,
         FillSaturation = SyncFillSaturation,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private VortexStandaloneSettings standaloneSettings = StandaloneSettings;
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
+    private VortexStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private VortexSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -206,7 +202,7 @@ public class Vortex : EffectBase
     private int count;
 
     /// <summary>The signed base angular speed rolled for the current activation.</summary>
-    private float speed;
+    private float angularSpeedDegreesPerSecond;
 
     /// <summary>The accumulated spinner-orbit angle in degrees.</summary>
     private float angle;
@@ -241,7 +237,9 @@ public class Vortex : EffectBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(Vortex),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Vortex),
             SyncDefaults);
@@ -251,36 +249,22 @@ public class Vortex : EffectBase
         ringScale = isSynced
             ? SyncSettings.RingScaleAtRest
             : standaloneSettings.RingScaleAtRest;
-        int spinnerCountMinInclusive = isSynced
-            ? SyncSettings.SpinnerCountMinInclusive
-            : standaloneSettings.SpinnerCountMinInclusive;
-        int spinnerCountMaxExclusive = isSynced
-            ? SyncSettings.SpinnerCountMaxExclusive
-            : standaloneSettings.SpinnerCountMaxExclusive;
-        count = Random.Range(spinnerCountMinInclusive, spinnerCountMaxExclusive);
+        IntRange spinnerCount = isSynced ? SyncSettings.SpinnerCount : standaloneSettings.SpinnerCount;
+        count = Random.Range(spinnerCount.MinInclusive, spinnerCount.MaxExclusive);
         angle = 0f;
-        int speedMinInclusive = isSynced
-            ? SyncSettings.SpeedMinInclusive
-            : standaloneSettings.SpeedMinInclusive;
-        int speedMaxExclusive = isSynced
-            ? SyncSettings.SpeedMaxExclusive
-            : standaloneSettings.SpeedMaxExclusive;
-        speed = Random.Range(speedMinInclusive, speedMaxExclusive);
-        int directionRollMinInclusive = isSynced
-            ? SyncSettings.DirectionRollMinInclusive
-            : standaloneSettings.DirectionRollMinInclusive;
-        int directionRollMaxExclusive = isSynced
-            ? SyncSettings.DirectionRollMaxExclusive
-            : standaloneSettings.DirectionRollMaxExclusive;
-        if (Random.Range(directionRollMinInclusive, directionRollMaxExclusive) == 0)
-            speed = -speed;
-        float twistMin = isSynced
-            ? SyncSettings.TwistMin
-            : standaloneSettings.TwistMin;
-        float twistMax = isSynced
-            ? SyncSettings.TwistMax
-            : standaloneSettings.TwistMax;
-        float twist = Random.Range(twistMin, twistMax);
+        IntRange angularSpeed = isSynced
+            ? SyncSettings.AngularSpeedDegreesPerSecond
+            : standaloneSettings.AngularSpeedDegreesPerSecond;
+        angularSpeedDegreesPerSecond = Random.Range(
+            angularSpeed.MinInclusive,
+            angularSpeed.MaxExclusive);
+        IntRange reverseDirectionRoll = isSynced
+            ? SyncSettings.ReverseDirectionRoll
+            : standaloneSettings.ReverseDirectionRoll;
+        if (Random.Range(reverseDirectionRoll.MinInclusive, reverseDirectionRoll.MaxExclusive) == 0)
+            angularSpeedDegreesPerSecond = -angularSpeedDegreesPerSecond;
+        FloatRange spinnerTwist = isSynced ? SyncSettings.SpinnerTwist : standaloneSettings.SpinnerTwist;
+        float twist = Random.Range(spinnerTwist.Min, spinnerTwist.Max);
         spinners = new spinner[count];
         for (int i = 0; i < count; i++)
         {
@@ -290,13 +274,12 @@ public class Vortex : EffectBase
             spinners[i] = sample;
             //            spinners[i].palette = spinners[0].palette;          // make palettes the same
         }
-        int distortionRollMinInclusive = isSynced
-            ? SyncSettings.DistortionRollMinInclusive
-            : standaloneSettings.DistortionRollMinInclusive;
-        int distortionRollMaxExclusive = isSynced
-            ? SyncSettings.DistortionRollMaxExclusive
-            : standaloneSettings.DistortionRollMaxExclusive;
-        distortionMode = Random.Range(distortionRollMinInclusive, distortionRollMaxExclusive) * 2;      // 0 or 2
+        IntRange distortionModeRoll = isSynced
+            ? SyncSettings.DistortionModeRoll
+            : standaloneSettings.DistortionModeRoll;
+        distortionMode = Random.Range(
+            distortionModeRoll.MinInclusive,
+            distortionModeRoll.MaxExclusive) * 2;      // 0 or 2
 
         buffer.Clear();
     }
@@ -321,7 +304,7 @@ public class Vortex : EffectBase
         int spinnerArms = isSynced
             ? SyncSettings.SpinnerArms
             : standaloneSettings.SpinnerArms;
-        float spinSpeed = speed * delta;
+        float spinSpeed = angularSpeedDegreesPerSecond * delta;
         if (beatManager.Drop.Active)
             spinSpeed = beatManager.Drop.In.Decay(SyncSettings.DropSpinDecayBeats)
                 .Remap(1f, 0f, SyncSettings.DropSpinSpeedAtStart, spinSpeed);
@@ -351,10 +334,10 @@ public class Vortex : EffectBase
             ? SyncSettings.RingScaleAtRest
             : standaloneSettings.RingScaleAtRest;
         ringScale = beatManager.Drop.BeatsUntil is { } beatsTilDrop &&
-                    beatsTilDrop < SyncSettings.DropRingCloseThresholdBeatsUntil
+                    beatsTilDrop < SyncSettings.DropRingCloseCountdownBeats.MaxExclusive
             ? ((float)beatsTilDrop).Remap(
-                SyncSettings.DropRingCloseThresholdBeatsUntil,
-                SyncSettings.DropRingClosedBeatsUntil,
+                SyncSettings.DropRingCloseCountdownBeats.MaxExclusive,
+                SyncSettings.DropRingCloseCountdownBeats.MinInclusive,
                 ringScaleAtRest,
                 SyncSettings.DropRingClosedScale)
             : ringScaleAtRest;
@@ -456,97 +439,102 @@ public class Vortex : EffectBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce Vortex's authored no-music look.</summary>
+/// <summary>
+/// The serializable value shape shared by Vortex's Standalone Defaults and saved Standalone Settings.
+/// </summary>
+[Serializable]
 public sealed class VortexStandaloneSettings
 {
-    /// <summary>Inclusive lower endpoint supplied to the Standalone spinner-count roll.</summary>
-    public int SpinnerCountMinInclusive;
+    /// <summary>Per-activation range for the number of moving spinner sources.</summary>
+    public IntRange SpinnerCount;
 
-    /// <summary>Exclusive upper endpoint supplied to the Standalone spinner-count roll.</summary>
-    public int SpinnerCountMaxExclusive;
+    /// <summary>Per-activation range for the spinner orbit's angular speed in degrees per second.</summary>
+    public IntRange AngularSpeedDegreesPerSecond;
 
-    /// <summary>Inclusive lower endpoint supplied to the Standalone speed roll.</summary>
-    public int SpeedMinInclusive;
+    /// <summary>Per-activation roll whose zero result reverses the spinner orbit.</summary>
+    public IntRange ReverseDirectionRoll;
 
-    /// <summary>Exclusive upper endpoint supplied to the Standalone speed roll.</summary>
-    public int SpeedMaxExclusive;
+    /// <summary>Per-activation range for the shared radial palette twist.</summary>
+    public FloatRange SpinnerTwist;
 
-    /// <summary>Inclusive lower endpoint supplied to the Standalone direction roll.</summary>
-    public int DirectionRollMinInclusive;
-
-    /// <summary>Exclusive upper endpoint supplied to the Standalone direction roll.</summary>
-    public int DirectionRollMaxExclusive;
-
-    /// <summary>Minimum shared twist supplied to the Standalone twist roll.</summary>
-    public float TwistMin;
-
-    /// <summary>Maximum shared twist supplied to the Standalone twist roll.</summary>
-    public float TwistMax;
-
-    /// <summary>Inclusive lower selector supplied to the Standalone distortion roll.</summary>
-    public int DistortionRollMinInclusive;
-
-    /// <summary>Exclusive upper selector supplied to the Standalone distortion roll.</summary>
-    public int DistortionRollMaxExclusive;
+    /// <summary>Per-activation selector range whose result chooses the Waveform response mode.</summary>
+    public IntRange DistortionModeRoll;
 
     /// <summary>Fully open ring scale used without a live Drop-closing ramp.</summary>
-    public float RingScaleAtRest;
+    [Min(0f)] public float RingScaleAtRest;
 
     /// <summary>Horizontal radius of each spinner's elliptical orbit.</summary>
-    public float HorizontalRadius;
+    [Min(0f)] public float HorizontalRadius;
 
     /// <summary>Vertical radius of each spinner's elliptical orbit.</summary>
-    public float VerticalRadius;
+    [Min(0f)] public float VerticalRadius;
 
     /// <summary>Number of angular palette arms sampled by every spinner.</summary>
-    public int SpinnerArms;
+    [Min(1)] public int SpinnerArms;
 
     /// <summary>Neutral brightness used at rest and by non-brightness response modes.</summary>
-    public float BrightnessAtRest;
+    [Range(0f, 1f)] public float BrightnessAtRest;
 
     /// <summary>Frame-time multiplier used by distortion mode two.</summary>
     public float TimeScale;
+
+    /// <summary>Copies every Vortex Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(VortexStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        SpinnerCount = Copy(source.SpinnerCount);
+        AngularSpeedDegreesPerSecond = Copy(source.AngularSpeedDegreesPerSecond);
+        ReverseDirectionRoll = Copy(source.ReverseDirectionRoll);
+        SpinnerTwist = Copy(source.SpinnerTwist);
+        DistortionModeRoll = Copy(source.DistortionModeRoll);
+        RingScaleAtRest = source.RingScaleAtRest;
+        HorizontalRadius = source.HorizontalRadius;
+        VerticalRadius = source.VerticalRadius;
+        SpinnerArms = source.SpinnerArms;
+        BrightnessAtRest = source.BrightnessAtRest;
+        TimeScale = source.TimeScale;
+    }
+
+    /// <summary>Creates an independent copy of an integer settings range and its Rails.</summary>
+    private static IntRange Copy(IntRange source) => new(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Creates an independent copy of a floating-point settings range and its Rails.</summary>
+    private static FloatRange Copy(FloatRange source) => new(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
 }
 
 /// <summary>Editable music-response values saved as Vortex's Sync Settings.</summary>
 [Serializable]
 public sealed class VortexSyncSettings
 {
-    /// <summary>Inclusive lower endpoint supplied to a Synced Mode spinner-count roll.</summary>
-    [Min(1)] public int SpinnerCountMinInclusive;
+    /// <summary>Per-Roll range for the number of moving spinner sources.</summary>
+    public IntRange SpinnerCount;
 
-    /// <summary>Exclusive upper endpoint supplied to a Synced Mode spinner-count roll.</summary>
-    [Min(2)] public int SpinnerCountMaxExclusive;
+    /// <summary>Per-Roll range for the spinner orbit's angular speed in degrees per second.</summary>
+    public IntRange AngularSpeedDegreesPerSecond;
 
-    /// <summary>Inclusive lower endpoint supplied to a Synced Mode speed roll.</summary>
-    [Min(0)] public int SpeedMinInclusive;
+    /// <summary>Per-Roll range whose zero result reverses the spinner orbit.</summary>
+    public IntRange ReverseDirectionRoll;
 
-    /// <summary>Exclusive upper endpoint supplied to a Synced Mode speed roll.</summary>
-    [Min(1)] public int SpeedMaxExclusive;
-
-    /// <summary>Inclusive lower endpoint supplied to a Synced Mode direction roll.</summary>
-    [Min(0)] public int DirectionRollMinInclusive;
-
-    /// <summary>Exclusive upper endpoint supplied to a Synced Mode direction roll.</summary>
-    [Min(1)] public int DirectionRollMaxExclusive;
-
-    /// <summary>Minimum shared twist supplied to a Synced Mode twist roll.</summary>
-    public float TwistMin;
-
-    /// <summary>Maximum shared twist supplied to a Synced Mode twist roll.</summary>
-    public float TwistMax;
+    /// <summary>Per-Roll range for the shared radial palette twist.</summary>
+    public FloatRange SpinnerTwist;
 
     /// <summary>
-    /// Inclusive lower selector supplied to the Synced Mode distortion roll. The roll result is
-    /// doubled onto modes zero and two, so the bounds are capped at the reachable arms.
+    /// Per-Roll selector whose result is doubled onto modes zero and two; its upper endpoint stays
+    /// at two so randomization cannot reach an inert response mode.
     /// </summary>
-    [Range(0, 1)] public int DistortionRollMinInclusive;
-
-    /// <summary>
-    /// Exclusive upper selector supplied to the Synced Mode distortion roll. Capped at two: a wider
-    /// roll would double past the response arms into an inert mode.
-    /// </summary>
-    [Range(1, 2)] public int DistortionRollMaxExclusive;
+    public IntRange DistortionModeRoll;
 
     /// <summary>Fully open ring scale used without a live Drop-closing ramp.</summary>
     [Min(0f)] public float RingScaleAtRest;
@@ -584,11 +572,11 @@ public sealed class VortexSyncSettings
     /// <summary>Spin speed reached at the beginning of the Drop slam.</summary>
     public float DropSpinSpeedAtStart;
 
-    /// <summary>Drop countdown threshold where the ring-closing ramp begins.</summary>
-    [Min(1)] public int DropRingCloseThresholdBeatsUntil;
-
-    /// <summary>Drop countdown where the rings are fully shut.</summary>
-    [Min(0)] public int DropRingClosedBeatsUntil;
+    /// <summary>
+    /// Countdown endpoints interpolated by the Drop ring-closing ramp: the upper endpoint starts
+    /// the close and the lower endpoint is fully shut.
+    /// </summary>
+    public IntRange DropRingCloseCountdownBeats;
 
     /// <summary>Ring scale reached when the Drop-closing ramp has fully shut the rings.</summary>
     [Min(0f)] public float DropRingClosedScale;
@@ -604,16 +592,11 @@ public sealed class VortexSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        SpinnerCountMinInclusive = source.SpinnerCountMinInclusive;
-        SpinnerCountMaxExclusive = source.SpinnerCountMaxExclusive;
-        SpeedMinInclusive = source.SpeedMinInclusive;
-        SpeedMaxExclusive = source.SpeedMaxExclusive;
-        DirectionRollMinInclusive = source.DirectionRollMinInclusive;
-        DirectionRollMaxExclusive = source.DirectionRollMaxExclusive;
-        TwistMin = source.TwistMin;
-        TwistMax = source.TwistMax;
-        DistortionRollMinInclusive = source.DistortionRollMinInclusive;
-        DistortionRollMaxExclusive = source.DistortionRollMaxExclusive;
+        SpinnerCount = Copy(source.SpinnerCount);
+        AngularSpeedDegreesPerSecond = Copy(source.AngularSpeedDegreesPerSecond);
+        ReverseDirectionRoll = Copy(source.ReverseDirectionRoll);
+        SpinnerTwist = Copy(source.SpinnerTwist);
+        DistortionModeRoll = Copy(source.DistortionModeRoll);
         RingScaleAtRest = source.RingScaleAtRest;
         HorizontalRadius = source.HorizontalRadius;
         VerticalRadius = source.VerticalRadius;
@@ -625,9 +608,22 @@ public sealed class VortexSyncSettings
         TimeStepAtWaveformPeak = source.TimeStepAtWaveformPeak;
         DropSpinDecayBeats = source.DropSpinDecayBeats;
         DropSpinSpeedAtStart = source.DropSpinSpeedAtStart;
-        DropRingCloseThresholdBeatsUntil = source.DropRingCloseThresholdBeatsUntil;
-        DropRingClosedBeatsUntil = source.DropRingClosedBeatsUntil;
+        DropRingCloseCountdownBeats = Copy(source.DropRingCloseCountdownBeats);
         DropRingClosedScale = source.DropRingClosedScale;
         FillSaturation = source.FillSaturation;
     }
+
+    /// <summary>Creates an independent copy of an integer settings range and its Rails.</summary>
+    private static IntRange Copy(IntRange source) => new(
+        source.MinInclusive,
+        source.MaxExclusive,
+        source.LowRail,
+        source.HighRail);
+
+    /// <summary>Creates an independent copy of a floating-point settings range and its Rails.</summary>
+    private static FloatRange Copy(FloatRange source) => new(
+        source.Min,
+        source.Max,
+        source.LowRail,
+        source.HighRail);
 }
