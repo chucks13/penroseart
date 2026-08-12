@@ -6,6 +6,7 @@ using Random = UnityEngine.Random;
 /// Combines two internally owned child Effects using a Perlin noise mask and colored border band.
 /// </summary>
 [EffectSyncSettings(typeof(NoiseMixerSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(NoiseMixerStandaloneSettingsAsset))]
 public class NoiseMixer : MixerBase
 {
     // Standalone Defaults
@@ -66,16 +67,16 @@ public class NoiseMixer : MixerBase
     public override Repertoire Repertoire =>
         Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    /// <summary>Resolves a fresh immutable-by-convention copy of NoiseMixer's Standalone Defaults.</summary>
-    public static NoiseMixerStandaloneSettings StandaloneSettings => new NoiseMixerStandaloneSettings
+    /// <summary>Resolves a fresh copy of NoiseMixer's file-local Standalone Defaults.</summary>
+    public static NoiseMixerStandaloneSettings StandaloneDefaults => new NoiseMixerStandaloneSettings
     {
         BorderSaturation = StandaloneBorderSaturation,
         BorderValue = StandaloneBorderValue,
-        DistortionModeMin = StandaloneDistortionModeMin,
-        DistortionModeMaxExclusive = StandaloneDistortionModeMaxExclusive,
+        DistortionMode = new IntRange(
+            StandaloneDistortionModeMin,
+            StandaloneDistortionModeMaxExclusive),
         NoiseScale = StandaloneNoiseScale,
-        BaseMaskWidth = StandaloneBaseMaskWidth,
-        PeakMaskWidth = StandalonePeakMaskWidth,
+        MaskWidth = new FloatRange(StandaloneBaseMaskWidth, StandalonePeakMaskWidth),
     };
 
     /// <summary>Resolves a fresh copy of NoiseMixer's file-local Sync Defaults.</summary>
@@ -83,17 +84,15 @@ public class NoiseMixer : MixerBase
     {
         BorderSaturation = SyncBorderSaturation,
         BorderValue = SyncBorderValue,
-        DistortionModeMin = SyncDistortionModeMin,
-        DistortionModeMaxExclusive = SyncDistortionModeMaxExclusive,
+        DistortionMode = new IntRange(SyncDistortionModeMin, SyncDistortionModeMaxExclusive),
         NoiseScale = SyncNoiseScale,
-        BaseMaskWidth = SyncBaseMaskWidth,
-        PeakMaskWidth = SyncPeakMaskWidth,
+        MaskWidth = new FloatRange(SyncBaseMaskWidth, SyncPeakMaskWidth),
         RhythmTimeOffset = SyncRhythmTimeOffset,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
     /// <summary>The Standalone Settings fixed for the current activation.</summary>
-    private NoiseMixerStandaloneSettings standaloneSettings = StandaloneSettings;
+    private NoiseMixerStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private NoiseMixerSyncSettings SyncSettings { get; set; } = SyncDefaults;
@@ -139,7 +138,9 @@ public class NoiseMixer : MixerBase
     /// </summary>
     public override void OnStart()
     {
-        standaloneSettings = StandaloneSettings;
+        standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
+            typeof(NoiseMixer),
+            StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(NoiseMixer),
             SyncDefaults);
@@ -160,13 +161,10 @@ public class NoiseMixer : MixerBase
             borderHue = Random.value;
         }
 
-        int distortionModeMin = beatManager.IsSynced
-            ? SyncSettings.DistortionModeMin
-            : standaloneSettings.DistortionModeMin;
-        int distortionModeMaxExclusive = beatManager.IsSynced
-            ? SyncSettings.DistortionModeMaxExclusive
-            : standaloneSettings.DistortionModeMaxExclusive;
-        distortionMode = Random.Range(distortionModeMin, distortionModeMaxExclusive);
+        IntRange distortionModes = beatManager.IsSynced
+            ? SyncSettings.DistortionMode
+            : standaloneSettings.DistortionMode;
+        distortionMode = Random.Range(distortionModes.MinInclusive, distortionModes.MaxExclusive);
 
         controller.debugText.text = debugText;
     }
@@ -191,18 +189,15 @@ public class NoiseMixer : MixerBase
 
         float rhythm = waveform.Envelope;
         bool isSynced = beatManager.IsSynced;
-        float baseMaskWidth = isSynced
-            ? SyncSettings.BaseMaskWidth
-            : standaloneSettings.BaseMaskWidth;
-        float peakMaskWidth = isSynced
-            ? SyncSettings.PeakMaskWidth
-            : standaloneSettings.PeakMaskWidth;
+        FloatRange maskWidth = isSynced
+            ? SyncSettings.MaskWidth
+            : standaloneSettings.MaskWidth;
 
         float sampleTime = effectTime + (SyncSettings.RhythmTimeOffset * rhythm);
-        float width = baseMaskWidth;
+        float width = maskWidth.Min;
         if (distortionMode == 1)
         {
-            width = waveform.Lerp(baseMaskWidth, peakMaskWidth);
+            width = waveform.Lerp(maskWidth.Min, maskWidth.Max);
         }
 
         float scale = isSynced
@@ -239,7 +234,8 @@ public class NoiseMixer : MixerBase
     }
 }
 
-/// <summary>The non-editable Standalone Settings that reproduce NoiseMixer's authored no-music look.</summary>
+/// <summary>Editable values saved as NoiseMixer's Standalone Settings.</summary>
+[Serializable]
 public sealed class NoiseMixerStandaloneSettings
 {
     /// <summary>Border saturation used in Standalone Mode.</summary>
@@ -248,20 +244,37 @@ public sealed class NoiseMixerStandaloneSettings
     /// <summary>Border value used in Standalone Mode.</summary>
     public float BorderValue;
 
-    /// <summary>Inclusive lower endpoint supplied to the Standalone distortion-mode roll.</summary>
-    public int DistortionModeMin;
-
-    /// <summary>Exclusive upper endpoint supplied to the Standalone distortion-mode roll.</summary>
-    public int DistortionModeMaxExclusive;
+    /// <summary>Per-Roll range selecting the distortion mode; the upper endpoint is exclusive.</summary>
+    public IntRange DistortionMode;
 
     /// <summary>Scale from tile-center coordinates into Perlin noise space in Standalone Mode.</summary>
     public float NoiseScale;
 
-    /// <summary>Base half-width of the noise-mask border in Standalone Mode.</summary>
-    public float BaseMaskWidth;
+    /// <summary>Noise-mask border half-width from the trough base to the Waveform peak; the peak endpoint doubles as the no-placement fallback, which fixes the Standalone width.</summary>
+    public FloatRange MaskWidth;
 
-    /// <summary>Half-width used by the no-placement Waveform fallback in Standalone Mode.</summary>
-    public float PeakMaskWidth;
+    /// <summary>Copies every NoiseMixer Standalone Setting, including range endpoints and Rails.</summary>
+    public void CopyFrom(NoiseMixerStandaloneSettings source)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        BorderSaturation = source.BorderSaturation;
+        BorderValue = source.BorderValue;
+        DistortionMode = new IntRange(
+            source.DistortionMode.MinInclusive,
+            source.DistortionMode.MaxExclusive,
+            source.DistortionMode.LowRail,
+            source.DistortionMode.HighRail);
+        NoiseScale = source.NoiseScale;
+        MaskWidth = new FloatRange(
+            source.MaskWidth.Min,
+            source.MaskWidth.Max,
+            source.MaskWidth.LowRail,
+            source.MaskWidth.HighRail);
+    }
 }
 
 /// <summary>Editable music-response values saved as NoiseMixer's Sync Settings.</summary>
@@ -274,20 +287,14 @@ public sealed class NoiseMixerSyncSettings
     /// <summary>Border value used in Synced Mode.</summary>
     [Range(0f, 1f)] public float BorderValue;
 
-    /// <summary>Inclusive lower endpoint supplied to a Synced Mode distortion-mode roll.</summary>
-    [Min(0)] public int DistortionModeMin;
-
-    /// <summary>Exclusive upper endpoint supplied to a Synced Mode distortion-mode roll.</summary>
-    [Min(1)] public int DistortionModeMaxExclusive;
+    /// <summary>Per-Roll range selecting the distortion mode; the upper endpoint is exclusive.</summary>
+    public IntRange DistortionMode;
 
     /// <summary>Scale from tile-center coordinates into Perlin noise space in Synced Mode.</summary>
     [Min(0f)] public float NoiseScale;
 
-    /// <summary>Base half-width of the noise-mask border in Synced Mode.</summary>
-    [Min(0f)] public float BaseMaskWidth;
-
-    /// <summary>Half-width reached by the noise-mask border at a Waveform peak.</summary>
-    [Min(0f)] public float PeakMaskWidth;
+    /// <summary>Noise-mask border half-width from the trough base to the Waveform peak; the peak endpoint doubles as the no-placement fallback, which fixes the Standalone width.</summary>
+    public FloatRange MaskWidth;
 
     /// <summary>Extra Perlin sample-time offset at a full Waveform envelope.</summary>
     [Min(0f)] public float RhythmTimeOffset;
@@ -305,11 +312,17 @@ public sealed class NoiseMixerSyncSettings
 
         BorderSaturation = source.BorderSaturation;
         BorderValue = source.BorderValue;
-        DistortionModeMin = source.DistortionModeMin;
-        DistortionModeMaxExclusive = source.DistortionModeMaxExclusive;
+        DistortionMode = new IntRange(
+            source.DistortionMode.MinInclusive,
+            source.DistortionMode.MaxExclusive,
+            source.DistortionMode.LowRail,
+            source.DistortionMode.HighRail);
         NoiseScale = source.NoiseScale;
-        BaseMaskWidth = source.BaseMaskWidth;
-        PeakMaskWidth = source.PeakMaskWidth;
+        MaskWidth = new FloatRange(
+            source.MaskWidth.Min,
+            source.MaskWidth.Max,
+            source.MaskWidth.LowRail,
+            source.MaskWidth.HighRail);
         RhythmTimeOffset = source.RhythmTimeOffset;
         DropSlowdownBeats = source.DropSlowdownBeats;
     }
