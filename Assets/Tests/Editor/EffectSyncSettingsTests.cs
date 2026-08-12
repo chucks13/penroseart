@@ -133,6 +133,87 @@ public sealed class EffectSyncSettingsTests
             defaults.PaletteConditioning);
     }
 
+    /// <summary>
+    /// Pulse Standalone Defaults resolve as fresh, mutually independent copies without pinning the
+    /// authored look values that ADR-0013 reserves for watching on the wall.
+    /// </summary>
+    [Test]
+    public void PulseStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = Pulse.StandaloneDefaults;
+        var second = Pulse.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.BaseHue, Is.Not.SameAs(second.BaseHue));
+        Assert.That(first.BaseHue.Min, Is.EqualTo(second.BaseHue.Min));
+        Assert.That(first.BaseHue.Max, Is.EqualTo(second.BaseHue.Max));
+        Assert.That(first.ColorPingPongSeconds, Is.Not.SameAs(second.ColorPingPongSeconds));
+        Assert.That(first.ColorPingPongSeconds.Min, Is.EqualTo(second.ColorPingPongSeconds.Min));
+        Assert.That(first.ColorPingPongSeconds.Max, Is.EqualTo(second.ColorPingPongSeconds.Max));
+        Assert.That(first.ColorHueDelta, Is.Not.SameAs(second.ColorHueDelta));
+        Assert.That(first.ColorHueDelta.Min, Is.EqualTo(second.ColorHueDelta.Min));
+        Assert.That(first.ColorHueDelta.Max, Is.EqualTo(second.ColorHueDelta.Max));
+        Assert.That(first.BeatMode, Is.Not.SameAs(second.BeatMode));
+        Assert.That(first.BeatMode.MinInclusive, Is.EqualTo(second.BeatMode.MinInclusive));
+        Assert.That(first.BeatMode.MaxExclusive, Is.EqualTo(second.BeatMode.MaxExclusive));
+        Assert.That(first.PulseMultiplier, Is.Not.SameAs(second.PulseMultiplier));
+        Assert.That(first.PulseMultiplier.Min, Is.EqualTo(second.PulseMultiplier.Min));
+        Assert.That(first.PulseMultiplier.Max, Is.EqualTo(second.PulseMultiplier.Max));
+        Assert.That(first.PulseScaleDivisorMilliseconds, Is.EqualTo(second.PulseScaleDivisorMilliseconds));
+        Assert.That(first.PulseHeightAtWaveformPeak, Is.EqualTo(second.PulseHeightAtWaveformPeak));
+        Assert.That(first.SaturationPulseMultiplier, Is.EqualTo(second.SaturationPulseMultiplier));
+        Assert.That(first.ValuePulseBase, Is.EqualTo(second.ValuePulseBase));
+    }
+
+    /// <summary>
+    /// Restore replaces every edited Pulse Standalone Setting and Rail with the current file-local
+    /// Standalone Defaults, without pinning the authored tuning values in the test.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryPulseValue()
+    {
+        var asset = (PulseStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(Pulse),
+            TempAssetFolder);
+        asset.Settings.BaseHue = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.ColorPingPongSeconds = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.ColorHueDelta = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.BeatMode = new IntRange(17, 18, 16, 19);
+        asset.Settings.PulseMultiplier = new FloatRange(26f, 27f, 25f, 28f);
+        asset.Settings.PulseScaleDivisorMilliseconds = 29f;
+        asset.Settings.PulseHeightAtWaveformPeak = 30f;
+        asset.Settings.SaturationPulseMultiplier = 31f;
+        asset.Settings.ValuePulseBase = 32f;
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Pulse), TempAssetFolder);
+
+        var defaults = Pulse.StandaloneDefaults;
+        Assert.That(asset.Settings.BaseHue.Min, Is.EqualTo(defaults.BaseHue.Min));
+        Assert.That(asset.Settings.BaseHue.Max, Is.EqualTo(defaults.BaseHue.Max));
+        Assert.That(asset.Settings.BaseHue.LowRail, Is.EqualTo(defaults.BaseHue.LowRail));
+        Assert.That(asset.Settings.BaseHue.HighRail, Is.EqualTo(defaults.BaseHue.HighRail));
+        Assert.That(asset.Settings.ColorPingPongSeconds.Min, Is.EqualTo(defaults.ColorPingPongSeconds.Min));
+        Assert.That(asset.Settings.ColorPingPongSeconds.Max, Is.EqualTo(defaults.ColorPingPongSeconds.Max));
+        Assert.That(asset.Settings.ColorPingPongSeconds.LowRail, Is.EqualTo(defaults.ColorPingPongSeconds.LowRail));
+        Assert.That(asset.Settings.ColorPingPongSeconds.HighRail, Is.EqualTo(defaults.ColorPingPongSeconds.HighRail));
+        Assert.That(asset.Settings.ColorHueDelta.Min, Is.EqualTo(defaults.ColorHueDelta.Min));
+        Assert.That(asset.Settings.ColorHueDelta.Max, Is.EqualTo(defaults.ColorHueDelta.Max));
+        Assert.That(asset.Settings.ColorHueDelta.LowRail, Is.EqualTo(defaults.ColorHueDelta.LowRail));
+        Assert.That(asset.Settings.ColorHueDelta.HighRail, Is.EqualTo(defaults.ColorHueDelta.HighRail));
+        Assert.That(asset.Settings.BeatMode.MinInclusive, Is.EqualTo(defaults.BeatMode.MinInclusive));
+        Assert.That(asset.Settings.BeatMode.MaxExclusive, Is.EqualTo(defaults.BeatMode.MaxExclusive));
+        Assert.That(asset.Settings.BeatMode.LowRail, Is.EqualTo(defaults.BeatMode.LowRail));
+        Assert.That(asset.Settings.BeatMode.HighRail, Is.EqualTo(defaults.BeatMode.HighRail));
+        Assert.That(asset.Settings.PulseMultiplier.Min, Is.EqualTo(defaults.PulseMultiplier.Min));
+        Assert.That(asset.Settings.PulseMultiplier.Max, Is.EqualTo(defaults.PulseMultiplier.Max));
+        Assert.That(asset.Settings.PulseMultiplier.LowRail, Is.EqualTo(defaults.PulseMultiplier.LowRail));
+        Assert.That(asset.Settings.PulseMultiplier.HighRail, Is.EqualTo(defaults.PulseMultiplier.HighRail));
+        Assert.That(asset.Settings.PulseScaleDivisorMilliseconds, Is.EqualTo(defaults.PulseScaleDivisorMilliseconds));
+        Assert.That(asset.Settings.PulseHeightAtWaveformPeak, Is.EqualTo(defaults.PulseHeightAtWaveformPeak));
+        Assert.That(asset.Settings.SaturationPulseMultiplier, Is.EqualTo(defaults.SaturationPulseMultiplier));
+        Assert.That(asset.Settings.ValuePulseBase, Is.EqualTo(defaults.ValuePulseBase));
+    }
+
     /// <summary>Ripple Standalone Settings resolve as fresh copies without pinning authored values.</summary>
     [Test]
     public void RippleStandaloneSettingsResolveToStandaloneDefaults()
@@ -240,6 +321,58 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
         Assert.That(asset.Settings.DropReverseScrollRateMultiplier, Is.EqualTo(defaults.DropReverseScrollRateMultiplier));
         Assert.That(asset.Settings.DropRingCompression, Is.EqualTo(defaults.DropRingCompression));
+    }
+
+    /// <summary>Restore replaces every edited Pulse Sync Setting and Rail with the file-local Sync Defaults.</summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryPulseValue()
+    {
+        var asset = (PulseSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(Pulse),
+            TempAssetFolder);
+        asset.Settings.BaseHue = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.ColorPingPongSeconds = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.ColorHueDelta = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.BeatMode = new IntRange(17, 18, 16, 19);
+        asset.Settings.PulseMultiplier = new FloatRange(26f, 27f, 25f, 28f);
+        asset.Settings.PulseScaleDivisorMilliseconds = 29f;
+        asset.Settings.PulseHeightAtWaveformTrough = 30f;
+        asset.Settings.PulseHeightAtWaveformPeak = 31f;
+        asset.Settings.FillColorTimeMultiplier = 32f;
+        asset.Settings.SaturationPulseMultiplier = 33f;
+        asset.Settings.ValuePulseBase = 34f;
+        asset.Settings.DropSlowdownBeats = 35;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Pulse), TempAssetFolder);
+
+        var defaults = Pulse.SyncDefaults;
+        Assert.That(asset.Settings.BaseHue.Min, Is.EqualTo(defaults.BaseHue.Min));
+        Assert.That(asset.Settings.BaseHue.Max, Is.EqualTo(defaults.BaseHue.Max));
+        Assert.That(asset.Settings.BaseHue.LowRail, Is.EqualTo(defaults.BaseHue.LowRail));
+        Assert.That(asset.Settings.BaseHue.HighRail, Is.EqualTo(defaults.BaseHue.HighRail));
+        Assert.That(asset.Settings.ColorPingPongSeconds.Min, Is.EqualTo(defaults.ColorPingPongSeconds.Min));
+        Assert.That(asset.Settings.ColorPingPongSeconds.Max, Is.EqualTo(defaults.ColorPingPongSeconds.Max));
+        Assert.That(asset.Settings.ColorPingPongSeconds.LowRail, Is.EqualTo(defaults.ColorPingPongSeconds.LowRail));
+        Assert.That(asset.Settings.ColorPingPongSeconds.HighRail, Is.EqualTo(defaults.ColorPingPongSeconds.HighRail));
+        Assert.That(asset.Settings.ColorHueDelta.Min, Is.EqualTo(defaults.ColorHueDelta.Min));
+        Assert.That(asset.Settings.ColorHueDelta.Max, Is.EqualTo(defaults.ColorHueDelta.Max));
+        Assert.That(asset.Settings.ColorHueDelta.LowRail, Is.EqualTo(defaults.ColorHueDelta.LowRail));
+        Assert.That(asset.Settings.ColorHueDelta.HighRail, Is.EqualTo(defaults.ColorHueDelta.HighRail));
+        Assert.That(asset.Settings.BeatMode.MinInclusive, Is.EqualTo(defaults.BeatMode.MinInclusive));
+        Assert.That(asset.Settings.BeatMode.MaxExclusive, Is.EqualTo(defaults.BeatMode.MaxExclusive));
+        Assert.That(asset.Settings.BeatMode.LowRail, Is.EqualTo(defaults.BeatMode.LowRail));
+        Assert.That(asset.Settings.BeatMode.HighRail, Is.EqualTo(defaults.BeatMode.HighRail));
+        Assert.That(asset.Settings.PulseMultiplier.Min, Is.EqualTo(defaults.PulseMultiplier.Min));
+        Assert.That(asset.Settings.PulseMultiplier.Max, Is.EqualTo(defaults.PulseMultiplier.Max));
+        Assert.That(asset.Settings.PulseMultiplier.LowRail, Is.EqualTo(defaults.PulseMultiplier.LowRail));
+        Assert.That(asset.Settings.PulseMultiplier.HighRail, Is.EqualTo(defaults.PulseMultiplier.HighRail));
+        Assert.That(asset.Settings.PulseScaleDivisorMilliseconds, Is.EqualTo(defaults.PulseScaleDivisorMilliseconds));
+        Assert.That(asset.Settings.PulseHeightAtWaveformTrough, Is.EqualTo(defaults.PulseHeightAtWaveformTrough));
+        Assert.That(asset.Settings.PulseHeightAtWaveformPeak, Is.EqualTo(defaults.PulseHeightAtWaveformPeak));
+        Assert.That(asset.Settings.FillColorTimeMultiplier, Is.EqualTo(defaults.FillColorTimeMultiplier));
+        Assert.That(asset.Settings.SaturationPulseMultiplier, Is.EqualTo(defaults.SaturationPulseMultiplier));
+        Assert.That(asset.Settings.ValuePulseBase, Is.EqualTo(defaults.ValuePulseBase));
+        Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
     }
 
     /// <summary>Restore replaces every edited Ripple Sync Setting with the current file-local Sync Defaults.</summary>
