@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
-using System.IO;
 
 /// <summary>
 /// Unity component that owns the Penrose tile model, generated preview mesh, layout metadata, and 900-color runtime buffer.
@@ -13,7 +11,9 @@ public class Penrose : MonoBehaviour
 {
     public const int Total = 900;
     public const float FullScale = 1.0f / 140.0f;
-    private const float TestScale = 1f / 100f;
+
+    /// <summary>Scale used by the coarse position consumed by Vortex and geometric transitions.</summary>
+    private const float CoarsePositionScale = 1f / 100f;
     public Color bgColor = Color.gray;
 
     [Header("Display Size")]
@@ -41,8 +41,6 @@ public class Penrose : MonoBehaviour
     private MeshRenderer meshRenderer;
     private Material material;
     private float bgBrightness;
-    private Dictionary<Vector2, int> centerLookup;
-    private Vector2[] centers;
     private Vector2Int min;
     private Vector2Int max;
 
@@ -179,8 +177,6 @@ public class Penrose : MonoBehaviour
     {
         int ix2 = 0;
         tiles = new TileData[Total];
-        centers = new Vector2[Total];
-        centerLookup = new Dictionary<Vector2, int>();
         for (var i = 0; i < Total; i++)
         {
             var cent = (vertices[ix2] + vertices[ix2 + 2]) / 2;
@@ -199,7 +195,11 @@ public class Penrose : MonoBehaviour
             {
                 neighbors = new neighbor[Layout.tiles[i].neighbors.Length],
                 type = Layout.tiles[i].type,
-                position = { x = (int)((cent.x * TestScale) + 0.5f), y = (int)((cent.y * TestScale) + 0.5f) },
+                coarsePosition =
+                {
+                    x = (int)((cent.x * CoarsePositionScale) + 0.5f),
+                    y = (int)((cent.y * CoarsePositionScale) + 0.5f)
+                },
                 center = { x = cent.x * FullScale, y = cent.y * FullScale },
                 section = Layout.tiles[i].section,
                 tileangle = segangle,
@@ -216,8 +216,6 @@ public class Penrose : MonoBehaviour
             }
             //            t.neighbors[j] = RawData.Tiles[idx++];
             tiles[i] = t;
-            centers[i] = t.position;
-            centerLookup[centers[i]] = i;
         }
     }
 
@@ -301,30 +299,29 @@ public class Penrose : MonoBehaviour
     }
 
     /// <summary>
-    /// Finds the logical tile index at an integerized Penrose position.
+    /// Finds the logical tile whose exact center is nearest to an effect-layout point.
     /// </summary>
-    public int GetIndexFromPosition(Vector2 position)
+    /// <param name="effectLayoutPosition">
+    /// Point in the same effect-layout units as <see cref="TileData.center"/> and <see cref="Bounds"/>.
+    /// </param>
+    /// <returns>The nearest logical tile index. Equal-distance ties preserve the previous later-index behavior.</returns>
+    /// <remarks>Performs one linear scan over all 900 exact tile centers.</remarks>
+    public int GetNearestTileIndex(Vector2 effectLayoutPosition)
     {
-        // if we have a correct position already then return the index
-        if (centerLookup.ContainsKey(position)) return centerLookup[position];
+        int nearestIndex = 0;
+        float nearestSquaredDistance = (effectLayoutPosition - tiles[0].center).sqrMagnitude;
 
-        // try to find the nearest position
-        var idx = -1;
-        var minDistance = 100000000f;
-
-        for (int i = 0; i < Total; i++)
+        for (int i = 1; i < Total; i++)
         {
-            var d = (position - centers[i]).magnitude; // get the distance
-            if (d > minDistance) continue;              // continue unless we find a shorter distance
+            float squaredDistance = (effectLayoutPosition - tiles[i].center).sqrMagnitude;
+            if (squaredDistance > nearestSquaredDistance)
+                continue;
 
-            idx = i;
-            minDistance = d;
+            nearestIndex = i;
+            nearestSquaredDistance = squaredDistance;
         }
 
-        if (idx < 0 || idx > Total)
-            throw new IndexOutOfRangeException($"{idx}: {minDistance}, {position}");
-
-        return centerLookup[centers[idx]];
+        return nearestIndex;
     }
 
     /// <summary>
@@ -365,7 +362,7 @@ public class Penrose : MonoBehaviour
         /// Lossy integer position computed component-wise as <c>(int)(rawCenter / 100 + 0.5)</c>.
         /// The current 900 tiles occupy 846 distinct position values; this field is not a unique tile key.
         /// </summary>
-        public Vector2Int position;
+        public Vector2Int coarsePosition;
 
         /// <summary>Reciprocal full-edge adjacencies in layout order.</summary>
         public neighbor[] neighbors;

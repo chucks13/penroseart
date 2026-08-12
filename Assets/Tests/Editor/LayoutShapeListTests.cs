@@ -1,12 +1,12 @@
-// Verifies that the shipped layout file still deserializes into every named Shape List accessor.
+// Verifies the shipped layout's Shape List decoding and effect-facing Penrose geometry.
 
 using System.IO;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
 /// <summary>
-/// Parses the real <c>penrose_layout.txt</c> and checks that every named Shape List accessor
-/// reports the group count the layout file carries.
+/// Parses the real <c>penrose_layout.txt</c> and checks its named Shape Lists and runtime tile geometry.
 /// </summary>
 public class LayoutShapeListTests
 {
@@ -59,6 +59,39 @@ public class LayoutShapeListTests
             Assert.AreEqual(5, group.TileCount, $"star group {i} tile count");
             for (int j = 0; j < group.TileCount; j++)
                 Assert.That(group[j], Is.InRange(0, Penrose.Total - 1), $"star group {i} tile {j}");
+        }
+    }
+
+    /// <summary>
+    /// Scenario: runtime geometry is generated from the shipped layout and every exact tile center is queried.
+    /// Asserts the nearest-tile interface preserves all 900 logical tile identities despite collisions in the
+    /// separate coarse positions.
+    /// </summary>
+    [Test]
+    public void NearestTileLookupReturnsEveryTileAtItsExactCenter()
+    {
+        var gameObject = new GameObject("penrose-geometry-test", typeof(MeshFilter), typeof(MeshRenderer));
+
+        try
+        {
+            Penrose penrose = gameObject.AddComponent<Penrose>();
+            // EditMode does not run MonoBehaviour lifecycle methods, so invoke the same setup Unity runs in Play Mode.
+            MethodInfo awake = typeof(Penrose).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(awake, "Penrose.Awake setup method");
+            awake.Invoke(penrose, null);
+            penrose.Init(layout);
+
+            for (int i = 0; i < Penrose.Total; i++)
+            {
+                Assert.AreEqual(
+                    i,
+                    penrose.GetNearestTileIndex(penrose.tiles[i].center),
+                    $"tile {i} exact center");
+            }
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
         }
     }
 }

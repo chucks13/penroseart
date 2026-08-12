@@ -188,7 +188,7 @@ child.Draw();
 
 ## Wall geometry available to effects
 
-`EffectBase.Init()` gives every Effect the active `penrose` model and caches its `tiles` array. The runtime loads `Assets/StreamingAssets/penrose_layout.txt`; its `Mesh` coordinates are the source for both the Unity preview mesh and the effect-visible center, position, tile angle, radius, and polar angle. Geometry is therefore part of the Effect interface, not preview-only data.
+`EffectBase.Init()` gives every Effect the active `penrose` model and caches its `tiles` array. The runtime loads `Assets/StreamingAssets/penrose_layout.txt`; its `Mesh` coordinates are the source for both the Unity preview mesh and the effect-visible center, coarse position, tile angle, radius, and polar angle. Geometry is therefore part of the Effect interface, not preview-only data.
 
 ### Coordinate system and bounds
 
@@ -205,7 +205,7 @@ Each entry in `tiles` has exactly these nine fields:
 | Field | Unit / domain | Meaning |
 | --- | --- | --- |
 | `center` | effect-layout units (`Vector2`) | Exact effect-facing tile center derived from the mesh after the y-axis flip. |
-| `position` | coarse integer position units (`Vector2Int`) | Lossy bucket computed component-wise as `(int)(rawCenter / 100 + 0.5)`. It is not a tile identity: 900 tiles occupy 846 distinct values. |
+| `coarsePosition` | coarse integer position units (`Vector2Int`) | Lossy bucket computed component-wise as `(int)(rawCenter / 100 + 0.5)`. It is not a tile identity: 900 tiles occupy 846 distinct values. |
 | `neighbors` | tile indexes plus unitless edge-class labels | Full-edge adjacency entries. Neighbor counts are `{1:6, 2:50, 3:36, 4:808}` tiles. |
 | `section` | integer identifier `0..17` | Physical build section. Every section has 50 tiles, is connected, and the 18 sections form three spatial rows of six rather than radial wedges. |
 | `edgeAndSeamDistance` | Neighbor steps | Shortest adjacency distance from the union of wall-edge tiles and tiles touching another section. Values/counts are `{0:371, 1:295, 2:182, 3:52}`. |

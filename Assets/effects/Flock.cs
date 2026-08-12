@@ -699,7 +699,7 @@ public class Flock : EffectBase
         }
     }
 
-    /// <summary>Advances boids sequentially and projects their live palette colors onto nearest Penrose tiles.</summary>
+    /// <summary>Advances boids sequentially and projects their live palette colors onto nearest exact-center Penrose tiles.</summary>
     /// <remarks>
     /// Sequential updates are intentional existing behavior: later boids observe positions already advanced for
     /// earlier boids in the same frame. Converting this loop to multiple passes would subtly change the motion.
@@ -713,7 +713,7 @@ public class Flock : EffectBase
 
             // Sample the animated palette live; caching this color would miss palette transitions after OnStart.
             Color paletteColor = APalette.read((float)i / BoidCount, true);
-            buffer[penrose.GetIndexFromPosition(boid.position)] =
+            buffer[penrose.GetNearestTileIndex(boid.position)] =
                 ApplyRoutineColor(paletteColor, routineEnvelope);
         }
     }

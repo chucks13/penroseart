@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using Random = UnityEngine.Random;
 /// <summary>
 /// Radial iris transition that expands or contracts from the center.
@@ -79,8 +77,14 @@ public class IrisTransition : TransitionBase
     }
 
     /// <summary>
-    /// Shared radial iris implementation for normal transitions and external blending.
+    /// Draws the shared radial iris for normal transitions and external blending against the preserved coarse tile
+    /// geometry.
     /// </summary>
+    /// <param name="dest">Destination buffer for the blended frame.</param>
+    /// <param name="src1">First transition source.</param>
+    /// <param name="src2">Second transition source.</param>
+    /// <param name="V2">Normalized iris progress.</param>
+    /// <param name="dir">Direction selector that swaps the source sides when zero.</param>
     private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, int dir)
     {
         Color[] a1 = src1;
@@ -99,7 +103,7 @@ public class IrisTransition : TransitionBase
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            float dist = controller.penrose.tiles[i].position.sqrMagnitude;
+            float dist = controller.penrose.tiles[i].coarsePosition.sqrMagnitude;
 
             if (dist > size)
             {

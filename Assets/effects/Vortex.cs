@@ -370,7 +370,7 @@ public class Vortex : EffectBase
             // find the closest
             for (int j = 0; j < spinners.Length; j++)
             {
-                Vector2 delta = tiles[i].position - spinners[j].center;
+                Vector2 delta = tiles[i].coarsePosition - spinners[j].center;
                 float d2 = (delta.x * delta.x) + (delta.y * delta.y);
                 // Add a micro-bias tied to spinner index and tile index
                 // Breaks simultaneous crossing without shifting visible geometry
@@ -381,7 +381,7 @@ public class Vortex : EffectBase
                     which = j;
                 }
             }
-            Color c = spinners[which].Draw(i, tiles[i].position) * beatBrightness;
+            Color c = spinners[which].Draw(i, tiles[i].coarsePosition) * beatBrightness;
             float h, s, v_col;
             Color.RGBToHSV(c, out h, out s, out v_col);
             if (hueShift > 0)

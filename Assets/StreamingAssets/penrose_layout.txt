@@ -34,7 +34,7 @@
 //            AnimateLoops, Lightning) to trace loops/stars/lines on the wall.
 //
 // Derived runtime geometry (not stored as fields in this JSON):
-//   TileData.position is a lossy integer bucket: 900 tiles occupy 846 distinct
+//   TileData.coarsePosition is a lossy integer bucket: 900 tiles occupy 846 distinct
 //   values in the current layout. TileData.edgeAndSeamDistance is the shortest
 //   neighbor-step distance from any wall-edge tile or section-seam tile; it is
 //   not a concentric ring. Penrose.Bounds is centered at zero with size

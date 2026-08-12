@@ -104,15 +104,22 @@ public class DirectionalWipe : TransitionBase
     }
 
     /// <summary>
-    /// Shared directional wipe implementation for normal transitions and external blending.
+    /// Draws the shared directional wipe for normal transitions and external blending against the preserved coarse
+    /// tile geometry.
     /// </summary>
+    /// <param name="dest">Destination buffer for the blended frame.</param>
+    /// <param name="src1">Source shown ahead of the wipe threshold.</param>
+    /// <param name="src2">Source shown behind the wipe threshold.</param>
+    /// <param name="V2">Normalized wipe progress.</param>
+    /// <param name="Angle2">Rotation applied to the coarse tile position.</param>
+    /// <param name="transitionSettings">Current settings for the reactive edge treatment.</param>
     private void Draw2(Color[] dest, Color[] src1, Color[] src2, float V2, float Angle2, TransitionSettings transitionSettings)
     {
         float lowBandLevel = CurrentLowBandLevel();
 
         for (int i = 0; i < buffer.Length; i++)
         {
-            Vector2 point = Rotate(controller.penrose.tiles[i].position, Angle2);
+            Vector2 point = Rotate(controller.penrose.tiles[i].coarsePosition, Angle2);
             float halfDiagonal = diagonalsize / 2f;
             float projectedProgress = point.x.Remap(-halfDiagonal, halfDiagonal, 0f, 1f);
             Color baseColor = projectedProgress >= V2 ? src1[i] : src2[i];
