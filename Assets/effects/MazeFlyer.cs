@@ -1288,10 +1288,11 @@ public class MazeFlyer : EffectBase
     }
 
     /// <summary>
-    /// Executes 3D DDA voxel ray stepping, returning the color of
-    /// the first filled voxel — face-shaded, headlight-dimmed by grazing incidence, edge-lined at
-    /// the frame's Fill inversion weight, squared-exponentially fogged, and scaled by the frame's
-    /// On Beat brightness pulse — or black past the fog range. Runs 3,600 times per frame; every
+    /// Executes 3D DDA voxel ray stepping, returning the color of the first filled voxel —
+    /// face-shaded, headlight-dimmed by grazing incidence, edge-lined at the frame's Fill
+    /// inversion weight, squared-exponentially fogged, scaled by the frame's On Beat brightness
+    /// pulse, and finally remapped into the band from the frame's MinBrightness up to 1 — or
+    /// black past the fog range. Runs 3,600 times per frame; every
     /// frame-invariant input arrives precomputed in the <see cref="TraceFrame"/>.
     /// </summary>
     private Color TraceVoxelRay(Vector3 rayOrigin, Vector3 rayDir, in TraceFrame frame)
@@ -1354,8 +1355,10 @@ public class MazeFlyer : EffectBase
                 float shade = baseShade * headlight;
 
                 // Squared-exponential fog over the normalized ray distance: near walls stay
-                // bright, the sub-tile far field crushes toward black. At the range cutoff the
-                // curve is already near zero, so the black past-range return stays seamless.
+                // bright, the sub-tile far field crushes toward black. The floor lifts a hit at
+                // the cutoff clear of the black past-range return, so the two no longer meet
+                // seamlessly; the even-lattice occupancy guarantee is what keeps a ray from
+                // reaching that return at the authored range.
                 float normalizedDistance = distanceTraveled / frame.MaxRayDistance;
                 float fogExponent = frame.FogDensity * normalizedDistance;
                 float fog = MathF.Exp(-fogExponent * fogExponent);
@@ -1364,8 +1367,9 @@ public class MazeFlyer : EffectBase
                     rayOrigin + (rayDir * distanceTraveled), hitAxis, distanceTraveled, in frame);
                 // Remap the traced brightness into the band from the authored floor up to 1, so a
                 // lift of the dark end keeps the fog's gradient rather than clipping it flat. The
-                // unclamped Lerp preserves the above-1 headroom the On Beat pulse writes, leaving
-                // that response exactly as loud as it was before the floor existed.
+                // unclamped Lerp carries the above-1 headroom the On Beat pulse writes through
+                // the remap. The band scales that pulse's swing along with everything else, so
+                // the authored pulse is tuned against the floor in use, not independently of it.
                 float brightness = Mathf.LerpUnclamped(
                     frame.MinBrightness,
                     1.0f,
@@ -1766,7 +1770,9 @@ public sealed class MazeFlyerSyncSettings
     [Range(1, 32)]
     public int EnergyFlightSpeedRampBeats;
 
-    /// <summary>Wind-down duration, in beats, before the pre-Drop sit.</summary>
+    /// <summary>
+    /// Wind-down duration, in beats, completing <see cref="DropSitBeats"/> before the Drop lands.
+    /// </summary>
     [Tooltip("Beats of wind-down to a dead stop, completing DropSitBeats before the Drop lands.")]
     [Range(1, 16)]
     public int DropStopBeats;
