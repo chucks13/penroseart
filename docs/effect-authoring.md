@@ -250,7 +250,7 @@ One `Lines2` group repeats tile `466` in consecutive positions. This is an obser
 
 ## Reacting to musical structure (Fill and Drop)
 
-A **Fill** is a short musical moment inside a Phrase. A **Drop** is the climactic Phrase of a track. An Effect can use direct state and Stock Envelopes from the BeatManager Data Surface for both. The following pattern comes from `Tunnel` and applies to an Effect with a value that moves continuously.
+A **Fill** is a short musical transition in the tail of a Phrase, running from its marked start beat through the final beat. A **Drop** is the climactic Phrase of a track. An Effect can use direct state and Stock Envelopes from the BeatManager Data Surface for both. The following pattern comes from `Tunnel` and applies to an Effect with a value that moves continuously.
 
 ### 1. Advertise the capability
 

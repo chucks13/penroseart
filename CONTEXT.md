@@ -143,7 +143,7 @@ RaveSystem's name for the analyzed phrase signal: current/next phrase labels, ac
 _Avoid_: confusing Track Phase with **Bar Phase** or the wall's **Grid**; treating phrase labels as an enum; treating unavailable Track Phase as Standalone Mode while other live timing is present.
 
 **Song Structure**:
-The complete ordered Phrase list created for a track when it loads — e.g. intro, up, drop, chorus, down, up, drop, down, outro — with Fills marked anywhere within its Phrases. Each player broadcasts its own Song Structure, keyed by Structure Generation; the on-air drop and fill lanes are conveniences carved off it because those moments are used so much.
+The complete ordered Phrase list created for a track when it loads — e.g. intro, up, drop, chorus, down, up, drop, down, outro — with Fills marked in the tails of its Phrases. Each player broadcasts its own Song Structure, keyed by Structure Generation; the on-air drop and fill lanes are conveniences carved off it because those moments are used so much.
 _Avoid_: treating the on-air drop/fill lanes as a separate musical source from the structure; "phrase map" or "structure phrase" as distinct concepts — the list is the Song Structure and its pieces are Phrases.
 
 **Phrase**:
