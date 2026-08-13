@@ -14,35 +14,53 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FlockSyncSettingsAsset
   effectTypeName: Flock
   settings:
+    BaseAlignmentWeight: 0.75
+    BaseCohesionWeight: 1
+    BaseSeparationWeight: 1.25
     MovementLowWeight: 0.7
     MovementMidWeight: 0.25
     MovementHighWeight: 0.05
-    QuietActivityThreshold: 0.1
-    ActiveActivityThreshold: 0.5
-    QuietSpeedMultiplier: 0.1
-    ActiveSpeedMultiplier: 1.5
-    MidManeuverThreshold: 0.2
-    MidManeuverFull: 0.65
+    MovementLevel:
+      Min: 0.1
+      Max: 0.5
+      LowRail: 0.1
+      HighRail: 0.5
+    SpeedMultiplier:
+      Min: 0.1
+      Max: 1.5
+      LowRail: 0.1
+      HighRail: 1.5
+    MidManeuverLevel:
+      Min: 0.2
+      Max: 0.65
+      LowRail: 0.2
+      HighRail: 0.65
     MidAlignmentLift: 0.75
     MidCohesionLift: 0.5
     CollectiveTurnStrength: 0.75
-    SpectralCentroidThreshold: 0.25
-    SpectralCentroidFull: 0.65
+    SpectralCentroid:
+      Min: 0.25
+      Max: 0.65
+      LowRail: 0.25
+      HighRail: 0.65
     SpectralSeparationLift: 1
-    TrailHalfLifeMin: 0.03
-    TrailHalfLifeMax: 0.25
+    TrailHalfLife:
+      Min: 0.03
+      Max: 0.25
+      LowRail: 0.03
+      HighRail: 0.25
     RoutineHueShift: 0.2
     RoutineSaturationFloor: 0.7
     RoutineValueFloor: 0.7
     TypicalFillBeats: 4
     MinimumFillBeats: 1
-    MaximumFillLeadBeats: 2
+    MaximumFillLeadBeats: 4
     FillOnsetImpulse: 6
-    FillOrbitSteering: 2
-    FillOrbitAtFullGather: 0.35
+    FillOrbitSteering: 4
+    FillOrbitAtFullGather: 0.5
     FillAlignmentLift: 0.35
     FillSeparationLift: 0.5
-    DropRunwayBeats: 8
+    DropGatherBeats: 8
     DropGatherSteering: 3
     DropGatherSeparationSuppression: 0.9
     DropReleaseBeats: 2
@@ -56,3 +74,19 @@ MonoBehaviour:
     QuietWanderTurnMultiplier: 0.5
     SpectralWanderStrengthLift: 1.5
     SpectralWanderTurnLift: 1
+    WanderStrength:
+      Min: 0.2
+      Max: 0.45
+      LowRail: 0.2
+      HighRail: 0.45
+    WanderTurnRate:
+      Min: 0.5
+      Max: 1.1
+      LowRail: 0.5
+      HighRail: 1.1
+    WanderHeadingRadians: 0.7853982
+    WanderFrequency:
+      Min: 0.8
+      Max: 1.2
+      LowRail: 0.8
+      HighRail: 1.2
