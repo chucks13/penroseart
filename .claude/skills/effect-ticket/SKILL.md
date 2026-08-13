@@ -293,6 +293,8 @@ Boundaries — in every brief:
 
 - Every musical fact comes from the Data Surface, BeatManager's read-only face. Never read OSC
   directly, and never derive a musical fact locally.
+- Trust contract-valid RaveSystem frames. `BeatManager.IsSynced` is the only mode decision. A false
+  value means Standalone, where every musical group rests.
 - Implement directly in this session — never delegate to another worker or agent.
 - Never open or close Unity — the maintainer owns the Editor state. The `scripts/unity-*.sh`
   scripts work with the Editor open or closed, so you may run them in either state.
