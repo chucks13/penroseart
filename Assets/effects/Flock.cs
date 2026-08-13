@@ -430,6 +430,18 @@ public class Flock : EffectBase
     /// <summary>Low-dominant quiet-to-active posture derived from smoothed levels.</summary>
     private float movementActivity;
 
+    /// <summary>Current frame's live-settings speed multiplier shared by every Boid.</summary>
+    private float movementSpeedMultiplier = 1f;
+
+    /// <summary>Current frame's live musical alignment weight shared by every Boid.</summary>
+    private float alignmentWeight;
+
+    /// <summary>Current frame's live musical cohesion weight shared by every Boid.</summary>
+    private float cohesionWeight;
+
+    /// <summary>Current frame's live musical separation weight shared by every Boid.</summary>
+    private float separationWeight;
+
     /// <summary>Current Energy's phrase-pace multiplier, neutral in Standalone Mode.</summary>
     private float energyPaceMultiplier = 1f;
 
@@ -556,11 +568,12 @@ public class Flock : EffectBase
     private void RerollRoutine()
     {
         Energy energy = beatManager.Energy.Level ?? Energy.Mid;
-        Energy[] energyRecipe = energy switch
+        System.Span<Energy> energyRecipe = stackalloc Energy[4];
+        (energyRecipe[0], energyRecipe[1], energyRecipe[2], energyRecipe[3]) = energy switch
         {
-            Energy.Low => new[] { Energy.Low, Energy.Low, Energy.Low, Energy.Mid },
-            Energy.Mid => new[] { Energy.Mid, Energy.Mid, Energy.Mid, Energy.Low },
-            Energy.High => new[] { Energy.High, Energy.Mid, Energy.Mid, Energy.Low },
+            Energy.Low => (Energy.Low, Energy.Low, Energy.Low, Energy.Mid),
+            Energy.Mid => (Energy.Mid, Energy.Mid, Energy.Mid, Energy.Low),
+            Energy.High => (Energy.High, Energy.Mid, Energy.Mid, Energy.Low),
             _ => throw new System.ArgumentOutOfRangeException(nameof(energy), energy, "Unsupported Energy level."),
         };
 
@@ -599,6 +612,7 @@ public class Flock : EffectBase
     private void ResetMusicalState()
     {
         movementActivity = 0f;
+        movementSpeedMultiplier = 1f;
         energyPaceMultiplier = 1f;
         midManeuver = 0f;
         spectralAgitation = 0f;
@@ -645,6 +659,7 @@ public class Flock : EffectBase
             smoothed.Mid,
             smoothed.High);
         energyPaceMultiplier = GetEnergyPaceMultiplier(beatManager.Energy.Level);
+        movementSpeedMultiplier = GetMovementSpeedMultiplier(movementActivity);
 
         midManeuver = GetMidManeuver(normalized.Mid, movementActivity);
         spectralAgitation = GetSpectralAgitation(normalized.Centroid, movementActivity);
@@ -745,6 +760,30 @@ public class Flock : EffectBase
     /// </remarks>
     private void UpdateAndRenderBoids()
     {
+        float fillSpread = fillOrbitDrive * (1f - Mathf.Max(dropSpiral, dropGather));
+        bool isSynced = IsSynced;
+        float baseAlignmentWeight = isSynced
+            ? SyncSettings.BaseAlignmentWeight
+            : standaloneSettings.BaseAlignmentWeight;
+        float baseCohesionWeight = isSynced
+            ? SyncSettings.BaseCohesionWeight
+            : standaloneSettings.BaseCohesionWeight;
+        float baseSeparationWeight = isSynced
+            ? SyncSettings.BaseSeparationWeight
+            : standaloneSettings.BaseSeparationWeight;
+        alignmentWeight = baseAlignmentWeight
+            * (1f + (SyncSettings.FillAlignmentLift * fillOrbitDrive)
+                + (SyncSettings.MidAlignmentLift * midManeuver));
+        cohesionWeight = baseCohesionWeight
+            * (1f + (SyncSettings.MidCohesionLift * midManeuver))
+            * (1f - (SyncSettings.DropCohesionSuppression * dropAftermath));
+        separationWeight = baseSeparationWeight
+            * energyPaceMultiplier
+            * (1f + (SyncSettings.FillSeparationLift * fillSpread)
+                + (SyncSettings.SpectralSeparationLift * spectralAgitation)
+                + (SyncSettings.DropSeparationLift * dropAftermath))
+            * (1f - (SyncSettings.DropGatherSeparationSuppression * dropGather));
+
         for (int i = 0; i < flock.Length; i++)
         {
             Boid boid = flock[i];
@@ -1071,11 +1110,6 @@ public class Flock : EffectBase
         /// <param name="deltaTime">Elapsed effect time in seconds.</param>
         public void Update(float deltaTime)
         {
-            if (boids == null)
-            {
-                return;
-            }
-
             position += deltaTime * velocity;
 
             float speedLimit = GetActiveSpeedLimit();
@@ -1092,7 +1126,7 @@ public class Flock : EffectBase
         /// <returns>Maximum velocity magnitude for the current frame.</returns>
         private float GetActiveSpeedLimit()
         {
-            float ordinarySpeedLimit = maxSpeed * parent.GetMovementSpeedMultiplier(parent.movementActivity);
+            float ordinarySpeedLimit = maxSpeed * parent.movementSpeedMultiplier;
             float eventDrive = Mathf.Clamp01(Mathf.Max(parent.fillOrbitDrive, parent.dropGather));
             float speedLimit = Mathf.Lerp(
                 ordinarySpeedLimit,
@@ -1108,33 +1142,9 @@ public class Flock : EffectBase
         /// <returns>Weighted alignment, cohesion, and separation acceleration.</returns>
         private Vector2 GetWeightedFlockingAcceleration()
         {
-            float fillSpread = parent.fillOrbitDrive
-                * (1f - Mathf.Max(parent.dropSpiral, parent.dropGather));
-            float baseAlignmentWeight = parent.IsSynced
-                ? parent.SyncSettings.BaseAlignmentWeight
-                : parent.standaloneSettings.BaseAlignmentWeight;
-            float baseCohesionWeight = parent.IsSynced
-                ? parent.SyncSettings.BaseCohesionWeight
-                : parent.standaloneSettings.BaseCohesionWeight;
-            float baseSeparationWeight = parent.IsSynced
-                ? parent.SyncSettings.BaseSeparationWeight
-                : parent.standaloneSettings.BaseSeparationWeight;
-            float alignmentWeight = baseAlignmentWeight
-                * (1f + (parent.SyncSettings.FillAlignmentLift * parent.fillOrbitDrive)
-                    + (parent.SyncSettings.MidAlignmentLift * parent.midManeuver));
-            float cohesionWeight = baseCohesionWeight
-                * (1f + (parent.SyncSettings.MidCohesionLift * parent.midManeuver))
-                * (1f - (parent.SyncSettings.DropCohesionSuppression * parent.dropAftermath));
-            float separationWeight = baseSeparationWeight
-                * parent.energyPaceMultiplier
-                * (1f + (parent.SyncSettings.FillSeparationLift * fillSpread)
-                    + (parent.SyncSettings.SpectralSeparationLift * parent.spectralAgitation)
-                    + (parent.SyncSettings.DropSeparationLift * parent.dropAftermath))
-                * (1f - (parent.SyncSettings.DropGatherSeparationSuppression * parent.dropGather));
-
-            return (alignmentSteering * alignmentWeight)
-                + (cohesionSteering * cohesionWeight)
-                + (separationSteering * separationWeight);
+            return (alignmentSteering * parent.alignmentWeight)
+                + (cohesionSteering * parent.cohesionWeight)
+                + (separationSteering * parent.separationWeight);
         }
 
         /// <summary>Adds collective turning, independent wander, Fill orbit, Drop gathering, and Drop aftermath steering.</summary>
