@@ -43,6 +43,8 @@ its base class, never its name — some Mixers carry no "Mixer" in their name. L
 
 - Implementation workers run Codex `gpt-5.6-sol --effort xhigh`, always. Do not lower this
   selection.
+- Standards and Spec review workers run Codex `gpt-5.6-sol --effort xhigh`, always. Run both
+  reviews as visible, read-only Codex workers.
 
 ## Commit before the next change
 
@@ -78,9 +80,16 @@ arrive. The sender lives in RaveSystem, so no code in this repo says what the wi
 6. If code appears to contradict either document, report the mismatch as the finding and stop
    for a maintainer ruling.
 
+## Documentation order
+
+Canonical application documents describe implemented and maintainer-approved behavior. Do not
+change them first to support a proposed code change. After the maintainer approves the behavior,
+update the related documents before the ticket lands. Code comments and XML documentation move
+with the code that they explain.
+
 ## Status and resume
 
-The ticket is the only record that survives a session. Post a status comment at every phase
+Git and the ticket are the records that survive a session. Post a status comment at every phase
 boundary, and post one before the session ends with the ticket open. The comment states what
 landed by hash, what the maintainer ruled, and what comes next. Record a finding on the ticket
 when you find it. Debt on this ticket belongs to this ticket, not to a later session that has
@@ -90,8 +99,8 @@ A resumed ticket starts from state, not from the Phase A reading list. The readi
 ticket-scoped. Phase A steps 2 and 3 are session-scoped, so complete them again in every
 session.
 
-Git says what landed. The comments on the ticket say what the maintainer ruled. A surviving
-worklog holds the working state. Read a Phase A document again only when the current step needs
+Git says what landed. The comments on the ticket say what the maintainer ruled. Create a new
+worklog for the resumed session. Read a Phase A document again only when the current step needs
 it. The Musical claims rule names one such need. Rejoin the phase the evidence names, not the
 phase the last comment names.
 
@@ -202,31 +211,65 @@ The look and the features stay exactly as the maintainer approved them in Phases
 scope is the branch, never the Effect alone: every file the branch touched, whole files, tests
 and side quests included. The coordinator does not narrow this scope.
 
-1. Brief one implementation worker for polish and optimization together. Steps 2–4 of the
-   musicality loop govern the brief, the diff review, and the validation. Add
-   `~/.claude/skills/polish/SKILL.md` to the reading list in the brief — it is the polish
-   standard. Optimization makes the Effect as cheap as it can be without a change to its look.
-   The target hardware is unknown.
+1. Confirm that a commit contains the last wall-approved change and that the tree is clean.
 
-2. Re-run the compile and test scripts. Then run the full suite once with the Editor closed.
-   Only batchmode runs the `[UnityTest]` coroutines the bridge omits, so nothing lands on
-   bridge green alone. Confirm the batchmode `total=` exceeds the bridge count. The check on
-   this phase is the maintainer at the wall: the wall still looks the same.
+2. With the `codex-worker` skill, brief one implementation worker for polish and optimization
+   together. Give the worker these goals:
+
+   - Polish every file that the branch changed.
+   - Remove unnecessary runtime work and allocations from the changed hot paths.
+   - Simplify the changed code where one direct design can replace avoidable complexity.
+   - Preserve the approved look, features, live settings behavior, and Random behavior.
+
+3. State the goals, acceptance criteria, and behavior-bearing boundaries. Let the worker propose
+   the implementation. Add these requirements to the brief:
+
+   - Load `polish` and read `~/.agents/skills/improve-codebase-architecture/SKILL.md` in addition
+     to the standard worker skills.
+
+   - Apply only the changed-scope YAGNI and deletion-test guidance from that skill. Do not run its
+     scan, report, or grilling workflow.
+
+   - Use the Microsoft Learn MCP as the primary source for C# optimization claims.
+
+   - Use static inspection and code reasoning. Do not run a profiler.
+
+   - Keep architecture work inside the changed scope. Do not add speculative architecture.
+
+4. Review the diff and validate it as steps 3 and 4 of the musicality loop prescribe. Run the
+   full suite once with the Editor closed. Record the test route and the exact test count. Confirm
+   that the batchmode run includes the `[UnityTest]` coroutines that the bridge omits. A bridge
+   run is an inner-loop result and is not the full-suite gate.
+
+5. Ask the maintainer to judge the wall. Phase E completes only when the wall still matches the
+   approved Phase D result.
 
 ## Phase F — Land and close
 
 1. With the `commit` skill, make logical commits. Include the Unity `.meta` and `.asset` files.
 
-2. Run the `code-review` skill against the branch fixed point. Resolve hard violations in logical
-   follow-up commits.
+2. Resolve the branch fixed point and confirm that the three-dot diff is not empty. Use the
+   Standards and Spec axis definitions from `code-review`. With the `codex-worker` skill, launch
+   two independent, visible Codex workers in parallel. Use the read-only research shape so each
+   worker receives its own axis brief:
 
-3. Merge to master by ref update — `git fetch . <branch>:master` — so no file churn hits the
-   open Editor. Switch to master, delete the branch, push.
+   - The Standards worker reads the complete diff, the repository standards, and the smell
+     baseline from `code-review`.
+   - The Spec worker reads the complete diff, the ticket body, and every ticket comment from
+     oldest to newest.
 
-4. Close the ticket. A finding that surfaced here but stays unfixed lands on the epic issue, not
-   in this ticket's closed comments.
+3. Present the two reports separately. Resolve hard violations in logical follow-up commits. If
+   any commit changes the reviewed candidate, run both reviews again. Only the final reviewed
+   `HEAD` can land.
 
-5. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
+4. Record the reviewed `HEAD`. Merge to master by ref update — `git fetch . <branch>:master` —
+   so no file churn hits the open Editor. Switch to master, delete the branch, and push.
+
+5. Confirm that `master` points to the reviewed commit, the push succeeded, and the worktree is
+   clean. Close the ticket only after all three checks pass. A finding that surfaced here but
+   stays unfixed lands on the epic issue, not in this ticket's closed comments.
+
+6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
    skill only for a maintainer ruling or a process failure that repeated. Retire the worklog.
 
 ## Worker briefs
@@ -240,10 +283,9 @@ Reading list — the worker reads all of it before touching code:
   `docs/osc-client-contract.md`.
 - The Effect's own source and settings assets, and `Assets/core/Rhythm/BeatManager.cs` for the
   surface it may read.
-- These skills, read as files: `~/.claude/skills/domain-modeling/SKILL.md`,
-  `~/.claude/skills/codebase-design/SKILL.md`, `~/.claude/skills/unity/SKILL.md`,
-  `~/.claude/skills/csharp/SKILL.md`. Where a skill names a harness tool (Serena, Memory Vault,
-  Microsoft Learn), the worker maps to its own tools. The content binds.
+- Load `domain-modeling`, `codebase-design`, `unity`, and `csharp` before touching code. Where a
+  skill names a harness tool, the worker maps that tool to its available equivalent. The skill
+  content binds.
 
 Boundaries — in every brief:
 
