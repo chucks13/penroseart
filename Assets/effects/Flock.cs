@@ -202,10 +202,10 @@ public class Flock : EffectBase
     private const float SyncFillOnsetImpulse = 6f;
 
     /// <summary>Strength of continuous Fill steering around wall center.</summary>
-    private const float SyncFillOrbitSteering = 2f;
+    private const float SyncFillOrbitSteering = 4f;
 
     /// <summary>Share of Fill orbit retained at the end of the Drop gather, creating a tightening spiral.</summary>
-    private const float SyncFillOrbitAtFullGather = 0.35f;
+    private const float SyncFillOrbitAtFullGather = 0.5f;
 
     /// <summary>Alignment lift at full Fill drive.</summary>
     private const float SyncFillAlignmentLift = 0.35f;
