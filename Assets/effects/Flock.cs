@@ -16,6 +16,7 @@ using UnityEngine;
 /// <para>The musical signals have deliberately separate jobs:</para>
 /// <list type="bullet">
 /// <item><description>Smoothed Low/Mid/High levels set the flock's broad quiet-to-active travel speed.</description></item>
+/// <item><description>Energy sets the phrase pace, tightening Low and loosening High around neutral Mid.</description></item>
 /// <item><description>Normalized Mid strengthens schooling and bends the shared course.</description></item>
 /// <item><description>Normalized spectral centroid increases separation and independent wander.</description></item>
 /// <item><description>A four-bar <see cref="Routine"/> changes trail lifetime and palette treatment.</description></item>
@@ -140,6 +141,12 @@ public class Flock : EffectBase
     /// <summary>Ordinary speed limit at full activity, relative to each boid's authored maximum.</summary>
     private const float SyncActiveSpeedMultiplier = 1.5f;
 
+    /// <summary>Phrase-pace multiplier at Low Energy, slowing and tightening the flock body.</summary>
+    private const float SyncLowEnergyPaceMultiplier = 0.75f;
+
+    /// <summary>Phrase-pace multiplier at High Energy, speeding and loosening the flock body.</summary>
+    private const float SyncHighEnergyPaceMultiplier = 1.25f;
+
     // Normalized schooling and spectral detail
 
     /// <summary>Minimum normalized Mid level below which no schooling maneuver is added.</summary>
@@ -191,9 +198,6 @@ public class Flock : EffectBase
     /// <summary>The shortest supported Fill duration used to cap short-window compensation.</summary>
     private const float SyncMinimumFillBeats = 1f;
 
-    /// <summary>Maximum number of beats used to establish the Fill orbit before onset.</summary>
-    private const float SyncMaximumFillLeadBeats = 2f;
-
     /// <summary>Base tangential velocity added when a typical Fill begins; shorter Fills receive a duration boost.</summary>
     private const float SyncFillOnsetImpulse = 6f;
 
@@ -209,10 +213,13 @@ public class Flock : EffectBase
     /// <summary>Separation lift that lets a Fill-only orbit widen.</summary>
     private const float SyncFillSeparationLift = 0.5f;
 
-    // Drop gathering and release
+    // Drop spiral, gathering, and aftermath
 
-    /// <summary>Number of beats before a Drop over which the flock gathers at wall center.</summary>
-    private const float SyncDropGatherBeats = 8f;
+    /// <summary>Soft center-seeking steering that bends a Fill orbit as soon as its Drop is announced.</summary>
+    private const float SyncDropSpiralSteering = 0.75f;
+
+    /// <summary>Number of beats before a Drop over which the flock finishes gathering at wall center.</summary>
+    private const int SyncDropGatherBeats = 8;
 
     /// <summary>Strength of center-seeking steering at the end of the pre-Drop gather.</summary>
     private const float SyncDropGatherSteering = 3f;
@@ -220,8 +227,11 @@ public class Flock : EffectBase
     /// <summary>Share of ordinary separation removed at the end of the pre-Drop gather.</summary>
     private const float SyncDropGatherSeparationSuppression = 0.9f;
 
-    /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
-    private const int SyncDropReleaseBeats = 2;
+    /// <summary>Number of Drop beats over which the torn-apart aftermath fades from the landing.</summary>
+    private const int SyncDropAftermathBeats = 16;
+
+    /// <summary>Trail half-life in seconds at the Drop landing before the bloom fades.</summary>
+    private const float SyncDropTrailHalfLife = 1.5f;
 
     /// <summary>Initial Drop burst speed relative to each boid's ordinary maximum speed.</summary>
     private const float SyncDropBurstSpeedMultiplier = 1.6f;
@@ -229,16 +239,16 @@ public class Flock : EffectBase
     /// <summary>Share of pre-Drop velocity retained in the radial burst so a Fill can leave angular momentum.</summary>
     private const float SyncDropVelocityCarry = 0.35f;
 
-    /// <summary>Strength of outward steering during the short Drop release.</summary>
+    /// <summary>Strength of outward steering during the Drop aftermath.</summary>
     private const float SyncDropOutwardSteering = 1.5f;
 
-    /// <summary>Maximum speed lift during the short Drop release.</summary>
+    /// <summary>Maximum speed lift at the start of the Drop aftermath.</summary>
     private const float SyncDropSpeedLift = 0.75f;
 
-    /// <summary>Share of cohesion removed at the start of the Drop release.</summary>
+    /// <summary>Share of cohesion removed at the start of the Drop aftermath.</summary>
     private const float SyncDropCohesionSuppression = 0.9f;
 
-    /// <summary>Separation lift at the start of the Drop release.</summary>
+    /// <summary>Separation lift at the start of the Drop aftermath.</summary>
     private const float SyncDropSeparationLift = 1.25f;
 
     // Continuous wander response
@@ -348,6 +358,9 @@ public class Flock : EffectBase
         SpeedMultiplier = new FloatRange(
             SyncQuietSpeedMultiplier,
             SyncActiveSpeedMultiplier),
+        EnergyPaceMultiplier = new FloatRange(
+            SyncLowEnergyPaceMultiplier,
+            SyncHighEnergyPaceMultiplier),
         MidManeuverLevel = new FloatRange(
             SyncMidManeuverLevelMin,
             SyncMidManeuverLevelMax),
@@ -364,16 +377,17 @@ public class Flock : EffectBase
         RoutineValueFloor = SyncRoutineValueFloor,
         TypicalFillBeats = SyncTypicalFillBeats,
         MinimumFillBeats = SyncMinimumFillBeats,
-        MaximumFillLeadBeats = SyncMaximumFillLeadBeats,
         FillOnsetImpulse = SyncFillOnsetImpulse,
         FillOrbitSteering = SyncFillOrbitSteering,
         FillOrbitAtFullGather = SyncFillOrbitAtFullGather,
         FillAlignmentLift = SyncFillAlignmentLift,
         FillSeparationLift = SyncFillSeparationLift,
+        DropSpiralSteering = SyncDropSpiralSteering,
         DropGatherBeats = SyncDropGatherBeats,
         DropGatherSteering = SyncDropGatherSteering,
         DropGatherSeparationSuppression = SyncDropGatherSeparationSuppression,
-        DropReleaseBeats = SyncDropReleaseBeats,
+        DropAftermathBeats = SyncDropAftermathBeats,
+        DropTrailHalfLife = SyncDropTrailHalfLife,
         DropBurstSpeedMultiplier = SyncDropBurstSpeedMultiplier,
         DropVelocityCarry = SyncDropVelocityCarry,
         DropOutwardSteering = SyncDropOutwardSteering,
@@ -416,6 +430,9 @@ public class Flock : EffectBase
     /// <summary>Low-dominant quiet-to-active posture derived from smoothed levels.</summary>
     private float movementActivity;
 
+    /// <summary>Current Energy's phrase-pace multiplier, neutral in Standalone Mode.</summary>
+    private float energyPaceMultiplier = 1f;
+
     /// <summary>Activity-gated schooling maneuver derived from normalized Mid.</summary>
     private float midManeuver;
 
@@ -437,11 +454,14 @@ public class Flock : EffectBase
     /// <summary>Duration-aware Fill orbit drive, allowed above one for very short Fills.</summary>
     private float fillOrbitDrive;
 
-    /// <summary>Smooth zero-to-one progress through the eight-beat pre-Drop gather.</summary>
+    /// <summary>Early inward bend while a live Fill announces an upcoming Drop.</summary>
+    private float dropSpiral;
+
+    /// <summary>Smooth zero-to-one progress through the configured final pre-Drop gather.</summary>
     private float dropGather;
 
-    /// <summary>Short one-to-zero release envelope after the Drop begins.</summary>
-    private float dropRelease;
+    /// <summary>Landing-relative one-to-zero aftermath envelope across at least one nominal Grid.</summary>
+    private float dropAftermath;
 
     /// <summary>Previous Fill state retained locally to identify its onset.</summary>
     private bool previousFillActive;
@@ -512,9 +532,9 @@ public class Flock : EffectBase
     /// Returns the live musical interpretation values used to tune the effect on the wall.
     /// </summary>
     public override string DebugText() =>
-        $"ACT {movementActivity:0.00} MID {midManeuver:0.00} DETAIL {spectralAgitation:0.00}\n" +
+        $"ACT {movementActivity:0.00} PACE {energyPaceMultiplier:0.00} MID {midManeuver:0.00} DETAIL {spectralAgitation:0.00}\n" +
         $"ROUTINE {routineEnvelope:0.00} WANDER {wanderStrength:0.00}/{wanderTurnRate:0.00}\n" +
-        $"FILL {fillOrbitDrive:0.00}\nGATHER {dropGather:0.00}\nDROP {dropRelease:0.00}";
+        $"FILL {fillOrbitDrive:0.00}\nSPIRAL {dropSpiral:0.00} GATHER {dropGather:0.00}\nDROP {dropAftermath:0.00}";
 
     /// <summary>
     /// Reserved deactivation hook. Controller does not currently call this method.
@@ -579,12 +599,14 @@ public class Flock : EffectBase
     private void ResetMusicalState()
     {
         movementActivity = 0f;
+        energyPaceMultiplier = 1f;
         midManeuver = 0f;
         spectralAgitation = 0f;
         routineEnvelope = 0f;
         fillOrbitDrive = 0f;
+        dropSpiral = 0f;
         dropGather = 0f;
-        dropRelease = 0f;
+        dropAftermath = 0f;
 
         // Starting during an active event joins its sustained motion without inventing a false onset impulse.
         previousFillActive = beatManager.Fill.Active;
@@ -622,30 +644,37 @@ public class Flock : EffectBase
             smoothed.Low,
             smoothed.Mid,
             smoothed.High);
+        energyPaceMultiplier = GetEnergyPaceMultiplier(beatManager.Energy.Level);
 
         midManeuver = GetMidManeuver(normalized.Mid, movementActivity);
         spectralAgitation = GetSpectralAgitation(normalized.Centroid, movementActivity);
     }
 
-    /// <summary>Updates duration-aware Fill motion, the eight-beat Drop gather, and local onset impulses.</summary>
+    /// <summary>Updates duration-aware Fill motion, Drop spiral/gather motion, and local onset impulses.</summary>
     private void UpdateMusicalMotion()
     {
         UpdateFillMotion();
         UpdateDropMotion();
     }
 
-    /// <summary>Builds and sustains Fill orbit motion, then adds one tangential impulse at Fill onset.</summary>
+    /// <summary>
+    /// Swells Fill orbit motion through the Fill's In Stock Envelope and adds one tangential
+    /// impulse at onset, unless the active Drop owns its full In span.
+    /// </summary>
     private void UpdateFillMotion()
     {
         var fill = beatManager.Fill;
+        var drop = beatManager.Drop;
         bool fillActive = fill.Active;
-        fillOrbitDrive = GetFillApproach(
-            fillActive,
-            fill.BeatsUntil,
-            beatManager.Timing.BeatProgress,
-            fill.LengthBeats);
+        float fillBuild = fill.In.Build();
+        fillOrbitDrive = drop.Active
+            ? 0f
+            : GetFillOrbitDrive(fillBuild, fill.LengthBeats);
+        dropSpiral = drop.BeatsUntil.HasValue
+            ? fillBuild
+            : 0f;
 
-        if (fillActive && !previousFillActive)
+        if (!drop.Active && fillActive && !previousFillActive)
         {
             float impulse = SyncSettings.FillOnsetImpulse * GetFillDurationBoost(fill.LengthBeats);
             for (int i = 0; i < flock.Length; i++)
@@ -657,12 +686,15 @@ public class Flock : EffectBase
         previousFillActive = fillActive;
     }
 
-    /// <summary>Builds pre-Drop gathering, applies the onset burst, and samples the short release envelope.</summary>
+    /// <summary>
+    /// Builds the final zero-to-one gathering amount from the Drop's Before Stock Envelope,
+    /// applies the landing burst, and samples the sixteen-beat In aftermath.
+    /// </summary>
     private void UpdateDropMotion()
     {
         var drop = beatManager.Drop;
         bool dropActive = drop.Active;
-        dropGather = GetDropApproach(dropActive, drop.BeatsUntil, beatManager.Timing.BeatProgress);
+        dropGather = drop.Before.Build(SyncSettings.DropGatherBeats);
 
         if (dropActive && !previousDropActive)
         {
@@ -677,10 +709,13 @@ public class Flock : EffectBase
         }
 
         previousDropActive = dropActive;
-        dropRelease = drop.In.Decay(SyncSettings.DropReleaseBeats);
+        dropAftermath = drop.In.Decay(SyncSettings.DropAftermathBeats);
     }
 
-    /// <summary>Fades the previous frame by Routine half-life, or clears it when trails are disabled.</summary>
+    /// <summary>
+    /// Fades the previous frame by Routine half-life, blooms that half-life at the Drop landing,
+    /// or clears the frame when trails are disabled.
+    /// </summary>
     private void PrepareFrameBuffer()
     {
         if (TrailsEnabled)
@@ -691,6 +726,10 @@ public class Flock : EffectBase
             float halfLife = Mathf.Clamp01(routineEnvelope).Lerp(
                 trailHalfLife.Min,
                 trailHalfLife.Max);
+            halfLife = Mathf.Lerp(
+                halfLife,
+                SyncSettings.DropTrailHalfLife,
+                dropAftermath);
             buffer.Fade(GetTrailRetention(halfLife, effectDelta));
         }
         else
@@ -755,7 +794,7 @@ public class Flock : EffectBase
             : standaloneSettings.RoutineEnvelope;
     }
 
-    /// <summary>Maps broad activity to the flock's quiet-to-active ordinary speed limit.</summary>
+    /// <summary>Composes Levels-driven activity with Energy phrase pace for the ordinary speed limit.</summary>
     /// <param name="activity">Calibrated broad movement activity.</param>
     /// <returns>Multiplier applied to each boid's authored maximum speed.</returns>
     private float GetMovementSpeedMultiplier(float activity)
@@ -763,7 +802,33 @@ public class Flock : EffectBase
         FloatRange speedMultiplier = IsSynced
             ? SyncSettings.SpeedMultiplier
             : standaloneSettings.SpeedMultiplier;
-        return Mathf.Clamp01(activity).Lerp(speedMultiplier.Min, speedMultiplier.Max);
+        return Mathf.Clamp01(activity).Lerp(speedMultiplier.Min, speedMultiplier.Max)
+            * energyPaceMultiplier;
+    }
+
+    /// <summary>Maps the current Energy level to the authored Low-to-High phrase pace.</summary>
+    /// <param name="energy">Current track-relative Energy, or null while that classification rests.</param>
+    /// <returns>
+    /// The Low endpoint, the midpoint for Mid or unavailable Energy, or the High endpoint; one in
+    /// Standalone Mode so the authored Standalone body remains unchanged.
+    /// </returns>
+    private float GetEnergyPaceMultiplier(Energy? energy)
+    {
+        if (!IsSynced)
+        {
+            return 1f;
+        }
+
+        return (energy ?? Energy.Mid) switch
+        {
+            Energy.Low => SyncSettings.EnergyPaceMultiplier.Min,
+            Energy.Mid => Mathf.Lerp(
+                SyncSettings.EnergyPaceMultiplier.Min,
+                SyncSettings.EnergyPaceMultiplier.Max,
+                0.5f),
+            Energy.High => SyncSettings.EnergyPaceMultiplier.Max,
+            _ => throw new ArgumentOutOfRangeException(nameof(energy), energy, "Unsupported Energy level."),
+        };
     }
 
     /// <summary>Returns an activity-gated schooling maneuver from normalized Mid.</summary>
@@ -890,58 +955,13 @@ public class Flock : EffectBase
         return Mathf.Sqrt(SyncSettings.TypicalFillBeats / duration);
     }
 
-    /// <summary>Builds the duration-aware orbit before Fill onset and holds it throughout the active Fill.</summary>
-    /// <param name="fillActive">Whether the Fill is currently active.</param>
-    /// <param name="beatsUntil">Whole-beat countdown to Fill onset.</param>
-    /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
-    /// <param name="lengthBeats">Known Fill length used for lead time and short-window compensation.</param>
+    /// <summary>Builds the duration-aware orbit through an active Fill's In Stock Envelope.</summary>
+    /// <param name="fillBuild">Continuous zero-to-one build through the active Fill.</param>
+    /// <param name="lengthBeats">Known Fill length used for short-window compensation.</param>
     /// <returns>Fill orbit drive; short Fills may intentionally return more than 1.</returns>
-    private float GetFillApproach(
-        bool fillActive,
-        int? beatsUntil,
-        float? beatProgress,
-        int? lengthBeats)
+    private float GetFillOrbitDrive(float fillBuild, int? lengthBeats)
     {
-        float durationBoost = GetFillDurationBoost(lengthBeats);
-        if (fillActive)
-        {
-            return durationBoost;
-        }
-
-        float leadBeats = lengthBeats is > 0
-            ? Mathf.Clamp(
-                lengthBeats.Value,
-                SyncSettings.MinimumFillBeats,
-                SyncSettings.MaximumFillLeadBeats)
-            : SyncSettings.MaximumFillLeadBeats;
-        if (beatsUntil is not { } beats || beats < 0 || beats > leadBeats)
-        {
-            return 0f;
-        }
-
-        float continuousBeatsUntil = beats - Mathf.Clamp01(beatProgress ?? 0f);
-        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / leadBeats);
-        return Mathf.SmoothStep(0f, 1f, progress) * durationBoost;
-    }
-
-    /// <summary>Returns a smooth zero-to-one gathering amount across the configured window before a Drop.</summary>
-    /// <param name="dropActive">Whether the Drop has already begun.</param>
-    /// <param name="beatsUntil">Whole-beat countdown to Drop onset.</param>
-    /// <param name="beatProgress">Current beat progress in <c>[0..1]</c>.</param>
-    /// <returns>Pre-Drop gathering in <c>[0..1]</c>, or zero outside the gather window.</returns>
-    private float GetDropApproach(bool dropActive, int? beatsUntil, float? beatProgress)
-    {
-        if (dropActive ||
-            beatsUntil is not { } beats ||
-            beats < 0 ||
-            beats > SyncSettings.DropGatherBeats)
-        {
-            return 0f;
-        }
-
-        float continuousBeatsUntil = beats - Mathf.Clamp01(beatProgress ?? 0f);
-        float progress = 1f - Mathf.Clamp01(continuousBeatsUntil / SyncSettings.DropGatherBeats);
-        return Mathf.SmoothStep(0f, 1f, progress);
+        return fillBuild * GetFillDurationBoost(lengthBeats);
     }
 
     // Individual boid simulation
@@ -1068,7 +1088,7 @@ public class Flock : EffectBase
             WrapAtBounds();
         }
 
-        /// <summary>Returns the ordinary speed limit lifted as needed by Fill, gathering, or Drop release.</summary>
+        /// <summary>Returns the ordinary speed limit lifted as needed by Fill, gathering, or Drop aftermath.</summary>
         /// <returns>Maximum velocity magnitude for the current frame.</returns>
         private float GetActiveSpeedLimit()
         {
@@ -1081,14 +1101,15 @@ public class Flock : EffectBase
             return Mathf.Lerp(
                 speedLimit,
                 maxSpeed * (1f + parent.SyncSettings.DropSpeedLift),
-                parent.dropRelease);
+                parent.dropAftermath);
         }
 
         /// <summary>Combines classic flocking forces after applying live musical weight changes.</summary>
         /// <returns>Weighted alignment, cohesion, and separation acceleration.</returns>
         private Vector2 GetWeightedFlockingAcceleration()
         {
-            float fillSpread = parent.fillOrbitDrive * (1f - parent.dropGather);
+            float fillSpread = parent.fillOrbitDrive
+                * (1f - Mathf.Max(parent.dropSpiral, parent.dropGather));
             float baseAlignmentWeight = parent.IsSynced
                 ? parent.SyncSettings.BaseAlignmentWeight
                 : parent.standaloneSettings.BaseAlignmentWeight;
@@ -1103,11 +1124,12 @@ public class Flock : EffectBase
                     + (parent.SyncSettings.MidAlignmentLift * parent.midManeuver));
             float cohesionWeight = baseCohesionWeight
                 * (1f + (parent.SyncSettings.MidCohesionLift * parent.midManeuver))
-                * (1f - (parent.SyncSettings.DropCohesionSuppression * parent.dropRelease));
+                * (1f - (parent.SyncSettings.DropCohesionSuppression * parent.dropAftermath));
             float separationWeight = baseSeparationWeight
+                * parent.energyPaceMultiplier
                 * (1f + (parent.SyncSettings.FillSeparationLift * fillSpread)
                     + (parent.SyncSettings.SpectralSeparationLift * parent.spectralAgitation)
-                    + (parent.SyncSettings.DropSeparationLift * parent.dropRelease))
+                    + (parent.SyncSettings.DropSeparationLift * parent.dropAftermath))
                 * (1f - (parent.SyncSettings.DropGatherSeparationSuppression * parent.dropGather));
 
             return (alignmentSteering * alignmentWeight)
@@ -1115,12 +1137,13 @@ public class Flock : EffectBase
                 + (separationSteering * separationWeight);
         }
 
-        /// <summary>Adds collective turning, independent wander, Fill orbit, Drop gathering, and Drop release steering.</summary>
+        /// <summary>Adds collective turning, independent wander, Fill orbit, Drop gathering, and Drop aftermath steering.</summary>
         /// <param name="deltaTime">Elapsed effect time in seconds.</param>
         /// <param name="speedLimit">Current desired speed used by steering forces.</param>
         private void AddMusicalSteering(float deltaTime, float speedLimit)
         {
-            float dropDominance = Mathf.Max(parent.dropGather, parent.dropRelease);
+            float preDropDominance = Mathf.Max(parent.dropSpiral, parent.dropGather);
+            float dropDominance = Mathf.Max(preDropDominance, parent.dropAftermath);
             float eventDominance = Mathf.Clamp01(Mathf.Max(parent.fillOrbitDrive, dropDominance));
 
             // Mid bends the shared course only while Fill/Drop choreography is not dominant.
@@ -1128,7 +1151,8 @@ public class Flock : EffectBase
             acceleration += Steer(collectiveTurn, speedLimit)
                 * (parent.SyncSettings.CollectiveTurnStrength * parent.midManeuver * (1f - eventDominance));
 
-            // Every boid wanders independently; Drop choreography suppresses that local disagreement.
+            // Every boid wanders independently; the spiral and gather suppress that local disagreement,
+            // then the landing turns it back on so the torn-apart flock writes across the dark field.
             float quietWanderMultiplier = parent.IsSynced
                 ? parent.SyncSettings.QuietWanderMultiplier
                 : parent.standaloneSettings.QuietWanderMultiplier;
@@ -1146,9 +1170,10 @@ public class Flock : EffectBase
                     speedLimit,
                     activeWanderStrength,
                     activeWanderTurnRate)
-                * (1f - dropDominance);
+                * (1f - preDropDominance);
 
-            // Fill circles the center, gathering bends that circle into a spiral, and Drop reverses it outward.
+            // Fill circles the center, an announced Drop bends it inward immediately, the gather finishes
+            // the collapse, and the Drop reverses it outward.
             Vector2 radial = position - parent.wallCenter;
             Vector2 tangent = new(-radial.y, radial.x);
             float orbitAmount = parent.fillOrbitDrive * Mathf.Lerp(
@@ -1158,9 +1183,11 @@ public class Flock : EffectBase
             acceleration += Steer(tangent * parent.fillOrbitDirection, speedLimit)
                 * (parent.SyncSettings.FillOrbitSteering * orbitAmount);
             acceleration += Steer(-radial, speedLimit)
+                * (parent.SyncSettings.DropSpiralSteering * parent.dropSpiral);
+            acceleration += Steer(-radial, speedLimit)
                 * (parent.SyncSettings.DropGatherSteering * parent.dropGather);
             acceleration += Steer(radial, speedLimit)
-                * (parent.SyncSettings.DropOutwardSteering * parent.dropRelease);
+                * (parent.SyncSettings.DropOutwardSteering * parent.dropAftermath);
         }
 
         /// <summary>Advances this boid's independent wander phase and returns its gentle steering force.</summary>
@@ -1408,6 +1435,12 @@ public sealed class FlockSyncSettings
     /// </summary>
     public FloatRange SpeedMultiplier;
 
+    /// <summary>
+    /// Low-to-High Energy range for phrase pace; Mid uses the midpoint, and the selected value also
+    /// scales separation so Low tightens while High loosens.
+    /// </summary>
+    public FloatRange EnergyPaceMultiplier;
+
     /// <summary>Normalized Mid range mapped from no schooling maneuver to the full maneuver.</summary>
     public FloatRange MidManeuverLevel;
 
@@ -1444,9 +1477,6 @@ public sealed class FlockSyncSettings
     /// <summary>The shortest supported Fill duration used to cap short-window compensation.</summary>
     [Min(0.0001f)] public float MinimumFillBeats;
 
-    /// <summary>Maximum number of beats used to establish the Fill orbit before onset.</summary>
-    [Min(0.0001f)] public float MaximumFillLeadBeats;
-
     /// <summary>Base tangential velocity added when a typical Fill begins.</summary>
     [Min(0f)] public float FillOnsetImpulse;
 
@@ -1462,8 +1492,11 @@ public sealed class FlockSyncSettings
     /// <summary>Separation lift that lets a Fill-only orbit widen.</summary>
     [Min(0f)] public float FillSeparationLift;
 
-    /// <summary>Number of beats before a Drop over which the flock gathers at wall center.</summary>
-    [Min(0.0001f)] public float DropGatherBeats;
+    /// <summary>Soft center-seeking steering that bends a Fill orbit as soon as its Drop is announced.</summary>
+    [Min(0f)] public float DropSpiralSteering;
+
+    /// <summary>Number of beats before a Drop over which the flock finishes gathering at wall center.</summary>
+    [Min(1)] public int DropGatherBeats;
 
     /// <summary>Strength of center-seeking steering at the end of the pre-Drop gather.</summary>
     [Min(0f)] public float DropGatherSteering;
@@ -1471,8 +1504,11 @@ public sealed class FlockSyncSettings
     /// <summary>Share of ordinary separation removed at the end of the pre-Drop gather.</summary>
     [Range(0f, 1f)] public float DropGatherSeparationSuppression;
 
-    /// <summary>Number of Drop beats during which the outward release remains dominant.</summary>
-    [Min(1)] public int DropReleaseBeats;
+    /// <summary>Number of Drop beats over which the torn-apart aftermath fades from the landing.</summary>
+    [Min(16)] public int DropAftermathBeats;
+
+    /// <summary>Trail half-life in seconds at the Drop landing before the bloom fades.</summary>
+    [Min(0.0001f)] public float DropTrailHalfLife;
 
     /// <summary>Initial Drop burst speed relative to each boid's ordinary maximum speed.</summary>
     [Min(0f)] public float DropBurstSpeedMultiplier;
@@ -1480,16 +1516,16 @@ public sealed class FlockSyncSettings
     /// <summary>Share of pre-Drop velocity retained in the radial burst.</summary>
     [Range(0f, 1f)] public float DropVelocityCarry;
 
-    /// <summary>Strength of outward steering during the short Drop release.</summary>
+    /// <summary>Strength of outward steering during the Drop aftermath.</summary>
     [Min(0f)] public float DropOutwardSteering;
 
-    /// <summary>Maximum speed lift during the short Drop release.</summary>
+    /// <summary>Maximum speed lift at the start of the Drop aftermath.</summary>
     [Min(0f)] public float DropSpeedLift;
 
-    /// <summary>Share of cohesion removed at the start of the Drop release.</summary>
+    /// <summary>Share of cohesion removed at the start of the Drop aftermath.</summary>
     [Range(0f, 1f)] public float DropCohesionSuppression;
 
-    /// <summary>Separation lift at the start of the Drop release.</summary>
+    /// <summary>Separation lift at the start of the Drop aftermath.</summary>
     [Min(0f)] public float DropSeparationLift;
 
     /// <summary>Share of ordinary wander strength retained during complete quiet.</summary>
@@ -1532,6 +1568,7 @@ public sealed class FlockSyncSettings
         MovementHighWeight = source.MovementHighWeight;
         MovementLevel = CopyRange(source.MovementLevel);
         SpeedMultiplier = CopyRange(source.SpeedMultiplier);
+        EnergyPaceMultiplier = CopyRange(source.EnergyPaceMultiplier);
         MidManeuverLevel = CopyRange(source.MidManeuverLevel);
         MidAlignmentLift = source.MidAlignmentLift;
         MidCohesionLift = source.MidCohesionLift;
@@ -1544,16 +1581,17 @@ public sealed class FlockSyncSettings
         RoutineValueFloor = source.RoutineValueFloor;
         TypicalFillBeats = source.TypicalFillBeats;
         MinimumFillBeats = source.MinimumFillBeats;
-        MaximumFillLeadBeats = source.MaximumFillLeadBeats;
         FillOnsetImpulse = source.FillOnsetImpulse;
         FillOrbitSteering = source.FillOrbitSteering;
         FillOrbitAtFullGather = source.FillOrbitAtFullGather;
         FillAlignmentLift = source.FillAlignmentLift;
         FillSeparationLift = source.FillSeparationLift;
+        DropSpiralSteering = source.DropSpiralSteering;
         DropGatherBeats = source.DropGatherBeats;
         DropGatherSteering = source.DropGatherSteering;
         DropGatherSeparationSuppression = source.DropGatherSeparationSuppression;
-        DropReleaseBeats = source.DropReleaseBeats;
+        DropAftermathBeats = source.DropAftermathBeats;
+        DropTrailHalfLife = source.DropTrailHalfLife;
         DropBurstSpeedMultiplier = source.DropBurstSpeedMultiplier;
         DropVelocityCarry = source.DropVelocityCarry;
         DropOutwardSteering = source.DropOutwardSteering;
