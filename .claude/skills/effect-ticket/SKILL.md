@@ -224,11 +224,13 @@ and side quests included. The coordinator does not narrow this scope.
 3. State the goals, acceptance criteria, and behavior-bearing boundaries. Let the worker propose
    the implementation. Add these requirements to the brief:
 
-   - Load `polish` and read `~/.agents/skills/improve-codebase-architecture/SKILL.md` in addition
-     to the standard worker skills.
+   - Load `polish` in addition to the standard worker skills.
 
-   - Apply only the changed-scope YAGNI and deletion-test guidance from that skill. Do not run its
-     scan, report, or grilling workflow.
+   - Limit architecture analysis to branch-changed files and dependencies that the diff exposes.
+     Apply YAGNI before the worker widens that scope.
+
+   - Apply the deletion test to each structural proposal. Accept new structure only when the same
+     change deletes the old form and leaves one simpler interface.
 
    - Use the Microsoft Learn MCP as the primary source for C# optimization claims.
 
@@ -267,7 +269,7 @@ and side quests included. The coordinator does not narrow this scope.
 
 5. Confirm that `master` points to the reviewed commit, the push succeeded, and the worktree is
    clean. Close the ticket only after all three checks pass. A finding that surfaced here but
-   stays unfixed lands on the epic issue, not in this ticket's closed comments.
+   stays unfixed lands on the epic issue, not in comments on the closed ticket.
 
 6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
    skill only for a maintainer ruling or a process failure that repeated. Retire the worklog.

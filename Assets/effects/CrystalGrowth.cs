@@ -157,8 +157,8 @@ public class CrystalGrowth : EffectBase
     private const CrystalGrowthSyncSettings.LevelsForm SyncActivityLevelsForm =
         CrystalGrowthSyncSettings.LevelsForm.Normalized;
 
-    /// <summary>Selected-form Low value above which Crystal Growth's bass-presence proxy qualifies an open On Beat window (a third).</summary>
-    private const float SyncLowPresenceThreshold = 1f / 3f;
+    /// <summary>Selected-form Low value above which Crystal Growth's bass-presence proxy qualifies an open On Beat window (three eighths).</summary>
+    private const float SyncLowPresenceThreshold = 0.375f;
 
     /// <summary>Selected-form Average Levels value mapped to minimum broad-spectrum activity (a third minus a soft band).</summary>
     private const float SyncActivityLevelMin = 0.233f;
@@ -795,15 +795,16 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     /// <param name="dt">Current effect delta in seconds.</param>
     /// <param name="continuousPace">Average- and Energy-scaled Synced pace for the idle-seed clock.</param>
-    /// <param name="isSynced">Whether this frame reads Synced musical state and Sync Settings.</param>
+    /// <param name="isSynced">
+    /// The frame-coherent <see cref="BeatManager.IsSynced"/> decision. False means that no usable beat
+    /// is available and this frame uses Standalone.
+    /// </param>
     /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
     private void SeedThisFrame(float dt, float continuousPace, bool isSynced, float goldenStep)
     {
-        int? beatInBar = beatManager.Timing.BeatInBar;
-
-        if (isSynced && beatInBar is { } bib)
+        if (isSynced)
         {
-            SeedSynced(dt, bib, continuousPace, goldenStep);
+            SeedSynced(dt, beatManager.Timing.BeatInBar.Value, continuousPace, goldenStep);
             return;
         }
 
@@ -884,9 +885,10 @@ public class CrystalGrowth : EffectBase
     /// <returns>The selected immutable low/mid/high band set.</returns>
     private LevelBands ReadLevelsForm(CrystalGrowthSyncSettings.LevelsForm form) => form switch
     {
+        CrystalGrowthSyncSettings.LevelsForm.Normalized => beatManager.Levels.Normalized,
         CrystalGrowthSyncSettings.LevelsForm.Smoothed => beatManager.Levels.Smoothed,
         CrystalGrowthSyncSettings.LevelsForm.Peak => beatManager.Levels.Peak,
-        _ => beatManager.Levels.Normalized,
+        _ => throw new ArgumentOutOfRangeException(nameof(form)),
     };
 
     /// <summary>
