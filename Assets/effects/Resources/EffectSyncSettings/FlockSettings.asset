@@ -32,9 +32,9 @@ MonoBehaviour:
       HighRail: 1.5
     EnergyPaceMultiplier:
       Min: 0.75
-      Max: 1.25
+      Max: 1
       LowRail: 0.75
-      HighRail: 1.25
+      HighRail: 1
     MidManeuverLevel:
       Min: 0.2
       Max: 0.65
@@ -59,8 +59,8 @@ MonoBehaviour:
     RoutineValueFloor: 0.7
     TypicalFillBeats: 4
     MinimumFillBeats: 1
-    FillOnsetImpulse: 6
-    FillOrbitSteering: 4
+    FillOnsetImpulse: 10
+    FillOrbitSteering: 8
     FillOrbitAtFullGather: 0.5
     FillAlignmentLift: 0.35
     FillSeparationLift: 0.5

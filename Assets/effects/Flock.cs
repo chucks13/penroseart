@@ -144,8 +144,8 @@ public class Flock : EffectBase
     /// <summary>Phrase-pace multiplier at Low Energy, slowing and tightening the flock body.</summary>
     private const float SyncLowEnergyPaceMultiplier = 0.75f;
 
-    /// <summary>Phrase-pace multiplier at High Energy, speeding and loosening the flock body.</summary>
-    private const float SyncHighEnergyPaceMultiplier = 1.25f;
+    /// <summary>Phrase-pace multiplier at High Energy, the unscaled ceiling so Fill can still steer.</summary>
+    private const float SyncHighEnergyPaceMultiplier = 1f;
 
     // Normalized schooling and spectral detail
 
@@ -199,10 +199,10 @@ public class Flock : EffectBase
     private const float SyncMinimumFillBeats = 1f;
 
     /// <summary>Base tangential velocity added when a typical Fill begins; shorter Fills receive a duration boost.</summary>
-    private const float SyncFillOnsetImpulse = 6f;
+    private const float SyncFillOnsetImpulse = 10f;
 
     /// <summary>Strength of continuous Fill steering around wall center.</summary>
-    private const float SyncFillOrbitSteering = 4f;
+    private const float SyncFillOrbitSteering = 8f;
 
     /// <summary>Share of Fill orbit retained at the end of the Drop gather, creating a tightening spiral.</summary>
     private const float SyncFillOrbitAtFullGather = 0.5f;
@@ -1446,8 +1446,8 @@ public sealed class FlockSyncSettings
     public FloatRange SpeedMultiplier;
 
     /// <summary>
-    /// Low-to-High Energy range for phrase pace; Mid uses the midpoint, and the selected value also
-    /// scales separation so Low tightens while High loosens.
+    /// Low-to-High Energy range for phrase pace; Mid uses the midpoint. Low slows and tightens;
+    /// High is the unscaled ceiling so Fill steering still holds.
     /// </summary>
     public FloatRange EnergyPaceMultiplier;
 
