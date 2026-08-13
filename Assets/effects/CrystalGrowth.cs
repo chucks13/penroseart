@@ -16,7 +16,7 @@ using Random = UnityEngine.Random;
 ///   fading behind it to a dim floor (never to black), so earlier growth lingers as a visible layer.</description></item>
 /// <item><description>The <b>growing front</b> is the bright leading edge sweeping outward along the real
 ///   (aperiodic) tile graph, claiming each tile it touches and whitening slightly at the very tip. This is what
-///   reads as a crystal growing, and it is what the beat drives.</description></item>
+///   reads as a crystal growing, and it is the visible mechanism the Effect's musical responses shape.</description></item>
 /// </list>
 ///
 /// Behind the front, each grown tile eases its color toward its same-layer neighbors so the many colliding
@@ -26,8 +26,9 @@ using Random = UnityEngine.Random;
 /// it. A newer generation's front always wins, so a new layer sweeps over and repaints the still-glowing
 /// layers beneath it as a visible bright wave.
 ///
-/// Sync (the headliner) vs. Standalone (a sensible default) ride one mechanic — the front always advances
-/// off <see cref="EffectBase.effectDelta"/> so the wall never freezes. The beat only modulates:
+/// Synced Mode and Standalone Mode share one growth mechanic — the front always advances off
+/// <see cref="EffectBase.effectDelta"/> so the wall never freezes. Their different rhythms shape that
+/// mechanic as follows:
 /// <list type="bullet">
 /// <item><description>WHEN seeds spawn — Synced combines the wire-authored On Beat window with a selectable
 ///   <see cref="BeatManager.Levels"/> Low form used as this Effect's bass-presence proxy. Each window can launch
@@ -80,10 +81,10 @@ public class CrystalGrowth : EffectBase
     /// <summary>Maximum hue relaxation applied during one frame, so a long frame hitch can't over-relax in one step.</summary>
     private const float StandaloneHueRelaxMaxPerFrame = 0.5f;
 
-    /// <summary>Smoothed Average Levels value mapped to minimum activity by the self-driven spread machinery (a third minus a soft band).</summary>
+    /// <summary>Lower endpoint for remapping Standalone Smoothed Average Levels into brightness depth (a third minus a soft band).</summary>
     private const float StandaloneActivityLevelMin = 0.233f;
 
-    /// <summary>Smoothed Average Levels value mapped to full activity by the self-driven spread machinery (a third plus a soft band).</summary>
+    /// <summary>Upper endpoint for remapping Standalone Smoothed Average Levels into brightness depth (a third plus a soft band).</summary>
     private const float StandaloneActivityLevelMax = 0.433f;
 
     /// <summary>Golden-ratio conjugate: the step that spaces successive seed colors evenly across the palette.</summary>
@@ -364,7 +365,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private CrystalGrowthSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>Per-tile front heat in [0..1]; the bright moving band. Decays toward 0, but a grown tile still renders at the Standalone Settings floor (keyed on <see cref="gen"/>), so charge is only the bright part above the floor.</summary>
+    /// <summary>Per-tile front heat in [0..1]; the bright moving band. Decays toward 0, but a grown tile still renders at the active mode's crystal floor (keyed on <see cref="gen"/>), so charge is only the bright part above the floor.</summary>
     private float[] charge;
 
     /// <summary>Per-tile palette position in [0..1]; the color the claiming generation painted onto the tile.</summary>
@@ -1137,7 +1138,7 @@ public class CrystalGrowth : EffectBase
         }
     }
 
-    /// <summary>A bloom is 3–5 seeds — used for a new generation and the Standalone downbeat.</summary>
+    /// <summary>Returns the current mode's randomly varied bloom count for a new generation or Standalone downbeat.</summary>
     private int BloomCount()
     {
         int bloomCountBase = beatManager.IsSynced
@@ -1181,8 +1182,7 @@ public sealed class CrystalGrowthStandaloneSettings
     public float HueRelaxMaxPerFrame;
 
     /// <summary>
-    /// Smoothed Average Levels range mapped from minimum to full activity by the Standalone spread
-    /// machinery.
+    /// Smoothed Average Levels range remapped into Standalone brightness depth.
     /// </summary>
     public FloatRange ActivityLevel;
 
