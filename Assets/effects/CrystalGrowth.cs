@@ -388,7 +388,7 @@ public class CrystalGrowth : EffectBase
     /// <summary>Hue revealed when the matching current-generation claim is retracted.</summary>
     private float[] priorHueByClaim;
 
-    /// <summary>Number of retained claims in the current generation's bounded history.</summary>
+    /// <summary>Exact number of tiles claimed by the current generation and retained in its bounded history.</summary>
     private int currentGenerationClaimCount;
 
     /// <summary>Current-generation claim count captured at the Fill's rising edge.</summary>
@@ -537,7 +537,7 @@ public class CrystalGrowth : EffectBase
         previousSixteenthOn = beatManager.Pulses.On(Duration.Sixteenth);
 
         // Seed the very first crystal so Standalone Mode has something growing immediately.
-        PlantSeed();
+        PlantSeed(isSynced ? SyncSettings.GoldenStep : standaloneSettings.GoldenStep);
     }
 
     /// <summary>Reserved deactivation hook. Controller does not currently call this.</summary>
@@ -576,11 +576,12 @@ public class CrystalGrowth : EffectBase
         // already-open On Beat window and its Beat Pulse accent. Average is independent broad-spectrum activity:
         // it scales continuous growth, the idle-seed clock, and Waveform brightness depth without deciding whether
         // the beat exists. Levels is a live-set aggregate, not an absolute loudness meter.
-        float activity = ReadLevels();
+        float activity = ReadLevels(isSynced);
         float energyPace = isSynced ? ReadEnergyPace() : 1f;
         float continuousPace = isSynced
             ? activity.Lerp(SyncSettings.QuietGrowthMultiplier, 1f) * energyPace
             : 1f;
+        float goldenStep = isSynced ? SyncSettings.GoldenStep : standaloneSettings.GoldenStep;
 
         // The Fill is the tail of the current Phrase, and it does not always lead to a Drop, so its gesture must
         // build tension AND resolve cleanly on its own. Its stock Build retracts the current generation along the
@@ -604,14 +605,16 @@ public class CrystalGrowth : EffectBase
         {
             dropResponseActive = true;
             BeginNextGeneration();
-            PlantUnisonSeeds(SyncSettings.DropFlashSeeds);
+            PlantUnisonSeeds(SyncSettings.DropFlashSeeds, goldenStep);
         }
         previousDropActive = dropActive;
         dropResponseAmount = dropResponseActive ? beatManager.Grid.Decay() : 0f;
 
         if (!inFill && sixteenthOn && !previousSixteenthOn && dropResponseActive)
         {
-            PlantSeeds(Mathf.CeilToInt(SyncSettings.DropSeedBurst * dropResponseAmount));
+            PlantSeeds(
+                Mathf.CeilToInt(SyncSettings.DropSeedBurst * dropResponseAmount),
+                goldenStep);
         }
         previousSixteenthOn = sixteenthOn;
 
@@ -622,7 +625,7 @@ public class CrystalGrowth : EffectBase
         }
         else
         {
-            SeedThisFrame(deltaTime, continuousPace);
+            SeedThisFrame(deltaTime, continuousPace, isSynced, goldenStep);
 
             // Synced composes two independent terms: Average × Energy scales continuous pace, while the wire Beat
             // Pulse is accented only by remapped Low presence. Keeping the terms additive prevents Average or
@@ -646,11 +649,13 @@ public class CrystalGrowth : EffectBase
             int maxFrontPassesPerFrame = isSynced
                 ? SyncSettings.MaxFrontPassesPerFrame
                 : standaloneSettings.MaxFrontPassesPerFrame;
+            float heatEpsilon = isSynced ? SyncSettings.HeatEpsilon : standaloneSettings.HeatEpsilon;
+            float frontPush = isSynced ? SyncSettings.FrontPush : standaloneSettings.FrontPush;
             while (spreadBudget >= 1f && passes < maxFrontPassesPerFrame)
             {
                 spreadBudget -= 1f;
                 passes++;
-                PropagateFrontOnce();
+                PropagateFrontOnce(heatEpsilon, frontPush);
             }
             if (isSynced && passes == maxFrontPassesPerFrame)
             {
@@ -671,10 +676,10 @@ public class CrystalGrowth : EffectBase
         // of snapping back only after the Grid-bound response reaches zero.
         if (!inFill && (!dropResponseActive || dropResponseAmount <= DropGenerationOverlapAmount))
         {
-            CheckGenerationAdvance();
+            CheckGenerationAdvance(isSynced, goldenStep);
         }
 
-        RelaxHue(deltaTime);
+        RelaxHue(deltaTime, isSynced);
 
         // Brightness keeps the selected Average Levels form's existing depth role: the configured floor keeps
         // active tiles bright, and minimum broad-spectrum activity lifts the result toward steady.
@@ -728,13 +733,14 @@ public class CrystalGrowth : EffectBase
     /// only same-generation neighbors are averaged so a newer layer's repaint stays crisp. Brightness is never
     /// touched, so the black / floor / bright-front contrast is preserved.
     /// </summary>
-    private void RelaxHue(float dt)
+    /// <param name="isSynced">Whether this frame reads the live Sync Settings surface.</param>
+    private void RelaxHue(float dt, bool isSynced)
     {
         // Clamp the blend rate so a long frame hitch can't over-relax in one step.
-        float hueRelaxPerSec = beatManager.IsSynced
+        float hueRelaxPerSec = isSynced
             ? SyncSettings.HueRelaxPerSec
             : standaloneSettings.HueRelaxPerSec;
-        float hueRelaxMaxPerFrame = beatManager.IsSynced
+        float hueRelaxMaxPerFrame = isSynced
             ? SyncSettings.HueRelaxMaxPerFrame
             : standaloneSettings.HueRelaxMaxPerFrame;
         float k = Mathf.Min(
@@ -745,17 +751,18 @@ public class CrystalGrowth : EffectBase
             return;
         }
 
-        Array.Copy(hue, nextHue, hue.Length);
-
         for (int i = 0; i < hue.Length; i++)
         {
+            // Preserve the current value in the destination buffer before applying any relaxation. Doing this
+            // inside the required tile traversal avoids a separate full-array copy.
+            float h = hue[i];
+            nextHue[i] = h;
             int gi = gen[i];
             if (gi == 0)
             {
                 continue;
             }
 
-            float h = hue[i];
             float sumOffset = 0f;
             int n = 0;
 
@@ -788,17 +795,19 @@ public class CrystalGrowth : EffectBase
     /// </summary>
     /// <param name="dt">Current effect delta in seconds.</param>
     /// <param name="continuousPace">Average- and Energy-scaled Synced pace for the idle-seed clock.</param>
-    private void SeedThisFrame(float dt, float continuousPace)
+    /// <param name="isSynced">Whether this frame reads Synced musical state and Sync Settings.</param>
+    /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
+    private void SeedThisFrame(float dt, float continuousPace, bool isSynced, float goldenStep)
     {
         int? beatInBar = beatManager.Timing.BeatInBar;
 
-        if (beatManager.IsSynced && beatInBar is { } bib)
+        if (isSynced && beatInBar is { } bib)
         {
-            SeedSynced(dt, bib, continuousPace);
+            SeedSynced(dt, bib, continuousPace, goldenStep);
             return;
         }
 
-        SeedSelfDriven(dt);
+        SeedSelfDriven(dt, goldenStep);
     }
 
     /// <summary>
@@ -806,7 +815,9 @@ public class CrystalGrowth : EffectBase
     /// trickle of seeds keeps several fronts crawling at once, and a synthetic downbeat periodically blooms a
     /// burst and resets the spread surge so the wall pulses in waves.
     /// </summary>
-    private void SeedSelfDriven(float dt)
+    /// <param name="dt">Current effect delta in seconds.</param>
+    /// <param name="goldenStep">Live Standalone palette step.</param>
+    private void SeedSelfDriven(float dt, float goldenStep)
     {
         selfPulseNoisePosition += dt * standaloneSettings.SelfPulseNoiseSpeed;
         selfBeatPhase += dt / selfBeatPeriod;
@@ -822,14 +833,14 @@ public class CrystalGrowth : EffectBase
                 standaloneSettings.SelfPulsePeak.Max,
                 accent);
 
-            PlantSeeds(BloomCount());
+            PlantSeeds(BloomCount(isSynced: false), goldenStep);
         }
 
         // Steady fill between downbeats so there are always several live fronts, not one lonely crystal.
         seedTimer += dt;
         if (seedTimer >= seedInterval)
         {
-            PlantSeed();
+            PlantSeed(goldenStep);
             seedTimer = 0f;
             seedInterval = Random.Range(
                 standaloneSettings.SeedInterval.Min,
@@ -846,15 +857,15 @@ public class CrystalGrowth : EffectBase
     /// Standalone retains its former Smoothed reads and saved-or-default activity range so a Sync Settings
     /// edit cannot move the approved self-driven look. Missing wire Levels read as zero.
     /// </summary>
-    private float ReadLevels()
+    /// <param name="isSynced">Whether to read the selectable Sync forms or Standalone Smoothed Levels.</param>
+    private float ReadLevels(bool isSynced)
     {
-        bool isSynced = beatManager.IsSynced;
         LevelBands lowBands = isSynced
             ? ReadLevelsForm(SyncSettings.LowLevelsForm)
             : beatManager.Levels.Smoothed;
-        LevelBands activityBands = isSynced
+        LevelBands activityBands = isSynced && SyncSettings.ActivityLevelsForm != SyncSettings.LowLevelsForm
             ? ReadLevelsForm(SyncSettings.ActivityLevelsForm)
-            : beatManager.Levels.Smoothed;
+            : lowBands;
         lowLevel = lowBands.Low;
         averageLevel = activityBands.Average;
         lowPresence = isSynced
@@ -915,7 +926,8 @@ public class CrystalGrowth : EffectBase
     /// <param name="dt">Current effect delta in seconds.</param>
     /// <param name="beatInBar">Current one-based beat label.</param>
     /// <param name="continuousPace">Average- and Energy-scaled Synced pace.</param>
-    private void SeedSynced(float dt, int beatInBar, float continuousPace)
+    /// <param name="goldenStep">Live Sync palette step.</param>
+    private void SeedSynced(float dt, int beatInBar, float continuousPace, float goldenStep)
     {
         bool onBeatWindowOpen = beatManager.Beats.OnBeat(beatInBar);
         if (!onBeatWindowOpen)
@@ -934,7 +946,7 @@ public class CrystalGrowth : EffectBase
 
             // Fill does not create a second seed path here. Drop owns its one-shot unison layer and its
             // Grid-bound sixteenth bursts, so this branch remains only the Low-qualified On Beat response.
-            PlantSeeds(burst);
+            PlantSeeds(burst, goldenStep);
             seededThisOnBeatWindow = true;
         }
 
@@ -943,7 +955,7 @@ public class CrystalGrowth : EffectBase
         seedTimer += dt * continuousPace;
         if (seedTimer >= seedInterval)
         {
-            PlantSeed();
+            PlantSeed(goldenStep);
             seedTimer = 0f;
             seedInterval = Random.Range(
                 SyncSettings.IdleSeedInterval.Min,
@@ -956,9 +968,9 @@ public class CrystalGrowth : EffectBase
     /// Each seed steps <see cref="hueCursor"/> by the golden ratio so its crystal grows in a fresh, well-separated
     /// palette color; many such crystals collide into a multicolor field within one generation.
     /// </summary>
-    private void PlantSeed()
+    /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
+    private void PlantSeed(float goldenStep)
     {
-        float goldenStep = beatManager.IsSynced ? SyncSettings.GoldenStep : standaloneSettings.GoldenStep;
         hueCursor = Mathf.Repeat(hueCursor + goldenStep, 1f);
 
         int t = Random.Range(0, charge.Length);
@@ -972,11 +984,13 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>Plants <paramref name="count"/> seeds at once — one bloom's worth of fresh fronts.</summary>
-    private void PlantSeeds(int count)
+    /// <param name="count">Number of independently colored seeds to plant.</param>
+    /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
+    private void PlantSeeds(int count, float goldenStep)
     {
         for (int s = 0; s < count; s++)
         {
-            PlantSeed();
+            PlantSeed(goldenStep);
         }
     }
 
@@ -985,9 +999,10 @@ public class CrystalGrowth : EffectBase
     /// single colored wave fanning out from a few origins rather than a scatter of separate-colored crystals.
     /// Used by the Drop flash to wash one new layer across the wall.
     /// </summary>
-    private void PlantUnisonSeeds(int count)
+    /// <param name="count">Number of same-hue seeds to plant.</param>
+    /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
+    private void PlantUnisonSeeds(int count, float goldenStep)
     {
-        float goldenStep = beatManager.IsSynced ? SyncSettings.GoldenStep : standaloneSettings.GoldenStep;
         hueCursor = Mathf.Repeat(hueCursor + goldenStep, 1f);
         for (int s = 0; s < count; s++)
         {
@@ -1008,10 +1023,10 @@ public class CrystalGrowth : EffectBase
     /// layer's bright front sweeps over and repaints the layers beneath it. Same-generation tiles still relay
     /// heat so the rim keeps moving. Works through the double buffers, then swaps them in.
     /// </summary>
-    private void PropagateFrontOnce()
+    /// <param name="heatEpsilon">Live threshold below which front heat no longer propagates.</param>
+    /// <param name="frontPush">Live fraction of heat carried into the next adjacency ring.</param>
+    private void PropagateFrontOnce(float heatEpsilon, float frontPush)
     {
-        float heatEpsilon = beatManager.IsSynced ? SyncSettings.HeatEpsilon : standaloneSettings.HeatEpsilon;
-        float frontPush = beatManager.IsSynced ? SyncSettings.FrontPush : standaloneSettings.FrontPush;
         Array.Copy(charge, nextCharge, charge.Length);
         Array.Copy(gen, nextGen, gen.Length);
         Array.Copy(hue, nextHue, hue.Length);
@@ -1064,23 +1079,16 @@ public class CrystalGrowth : EffectBase
     /// Opens the next layer on top once the current generation has claimed most of the wall: there is nothing
     /// left for its front to take, so the next palette color blooms immediately instead of dwelling.
     /// </summary>
-    private void CheckGenerationAdvance()
+    /// <param name="isSynced">Whether this frame reads the live Sync Settings surface.</param>
+    /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
+    private void CheckGenerationAdvance(bool isSynced, float goldenStep)
     {
-        int claimed = 0;
-        for (int i = 0; i < gen.Length; i++)
-        {
-            if (gen[i] == generation)
-            {
-                claimed++;
-            }
-        }
-
-        float coverageToAdvance = beatManager.IsSynced
+        float coverageToAdvance = isSynced
             ? SyncSettings.CoverageToAdvance
             : standaloneSettings.CoverageToAdvance;
-        if (claimed >= (int)(coverageToAdvance * Penrose.Total))
+        if (currentGenerationClaimCount >= (int)(coverageToAdvance * Penrose.Total))
         {
-            StartNextGeneration();
+            StartNextGeneration(isSynced, goldenStep);
         }
     }
 
@@ -1088,10 +1096,12 @@ public class CrystalGrowth : EffectBase
     /// Starts the next generation and blooms several seeds of it (each its own palette color via
     /// <see cref="PlantSeed"/>) whose bright fronts then sweep outward over the still-glowing wall.
     /// </summary>
-    private void StartNextGeneration()
+    /// <param name="isSynced">Whether this frame reads the live Sync Settings surface.</param>
+    /// <param name="goldenStep">Live palette step from the current mode's Settings surface.</param>
+    private void StartNextGeneration(bool isSynced, float goldenStep)
     {
         BeginNextGeneration();
-        PlantSeeds(BloomCount());
+        PlantSeeds(BloomCount(isSynced), goldenStep);
     }
 
     /// <summary>
@@ -1139,12 +1149,13 @@ public class CrystalGrowth : EffectBase
     }
 
     /// <summary>Returns the current mode's randomly varied bloom count for a new generation or Standalone downbeat.</summary>
-    private int BloomCount()
+    /// <param name="isSynced">Whether to read the live Sync Settings surface.</param>
+    private int BloomCount(bool isSynced)
     {
-        int bloomCountBase = beatManager.IsSynced
+        int bloomCountBase = isSynced
             ? SyncSettings.BloomCountBase
             : standaloneSettings.BloomCountBase;
-        IntRange bloomCountOffset = beatManager.IsSynced
+        IntRange bloomCountOffset = isSynced
             ? SyncSettings.BloomCountOffset
             : standaloneSettings.BloomCountOffset;
         return bloomCountBase + Random.Range(
