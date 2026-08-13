@@ -24,43 +24,33 @@ public sealed class BeatManagerDataSurfaceTests
         Assert.That(beatManager.Levels.Normalized.Average, Is.Zero);
     }
 
-    /// <summary>Valid wire facts remain readable even before the running beat count makes the frame synced.</summary>
+    /// <summary>
+    /// Verifies that stopping a valid Synced source returns its musical facts to Standalone values.
+    /// </summary>
     [Test]
-    public void RawWireFactsDoNotDependOnTheDerivedSyncState()
+    public void StoppingLiveBeatSourceClearsContractValidMusicalFacts()
     {
-        var snapshot = new RaveWireSnapshot
-        {
-            bpm = 128f,
-            beat = new BeatPosition { current = 32, total = 256 },
-            bar = new BarPosition { current = 8, nextMs = 300 },
-            beatInBar = -1,
-            beatAverageMs = 469,
-            beatsCountMs = new[] { 0, 469, 938, 1407 },
-            onBeats = new[] { true, false, false, false },
-            beatPulse = 0.75f,
-            timingGrid = new TimingGrid { state = "locked", beat = 9, bar = 3 },
-        };
+        var snapshot = BeatClockFixture.CreateSnapshot(128f, 0f);
+        snapshot.beat = new BeatPosition { current = 32, total = 256 };
+        snapshot.bar = new BarPosition { current = 8, nextMs = 300 };
+        snapshot.timingGrid = new TimingGrid { state = "locked", beat = 9, bar = 3 };
         var beatManager = new BeatManager();
         beatManager.FeedWireSnapshot(snapshot);
 
         beatManager.Update(0f);
 
-        Assert.That(beatManager.IsSynced, Is.False);
+        Assert.That(beatManager.IsSynced, Is.True);
         Assert.That(beatManager.Timing.Bpm, Is.EqualTo(128f));
         Assert.That(beatManager.Timing.Beat, Is.EqualTo(32));
-        Assert.That(beatManager.Timing.BeatProgress, Is.Null);
         Assert.That(beatManager.Beats.OnBeatMs(1), Is.Zero);
         Assert.That(beatManager.Beats.OnBeat(1), Is.True);
-        Assert.That(beatManager.Pulses.Beat, Is.EqualTo(0.75f));
-        Assert.That(beatManager.Pulses.OffBeat, Is.Zero);
-        Assert.That(beatManager.Pulses.Every(Duration.Quarter), Is.Zero);
         Assert.That(beatManager.Grid.State, Is.EqualTo(GridState.Locked));
         Assert.That(beatManager.Grid.Beat, Is.EqualTo(9));
-        Assert.That(beatManager.Grid.Progress, Is.Null);
 
         beatManager.SetLiveBeatSource(false);
         beatManager.Update(1f);
 
+        Assert.That(beatManager.IsSynced, Is.False);
         Assert.That(beatManager.Timing.Bpm, Is.Null);
         Assert.That(beatManager.Timing.Beat, Is.Null);
         Assert.That(beatManager.Timing.Bar, Is.Null);

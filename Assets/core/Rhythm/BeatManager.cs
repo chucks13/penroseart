@@ -66,9 +66,10 @@ public partial class BeatManager
     private bool liveBeatActive;
 
     /// <summary>
-    /// Whether the captured frame contains the wire's running one-through-four beat count.
+    /// Whether the captured frame uses Synced mode, defined by the wire's running one-through-four beat count.
     /// </summary>
     /// <remarks>
+    /// This property is the sole mode authority. A false value means Standalone, where every musical group rests.
     /// Captured once per <see cref="Update"/> so it remains coherent with every public value group.
     /// </remarks>
     public bool IsSynced { get; private set; }

@@ -127,22 +127,20 @@ public sealed class BeatManagerSpanTests
     }
 
     /// <summary>
-    /// Verifies independently valued live countdown lanes still feed their whole-beat approach envelopes
-    /// while the beat clock is absent.
+    /// Verifies that upcoming Fill and Drop spans read contract-valid Synced countdowns.
     /// </summary>
     [Test]
-    public void BeforeEnvelopesReadIndependentLiveCountdownsWithoutABeatClock()
+    public void BeforeEnvelopesReadSyncedCountdowns()
     {
-        var beatManager = new BeatManager();
-        var snapshot = new RaveWireSnapshot
+        var beatManager = LiveManager(snapshot =>
         {
-            dropState = new CountdownState { active = 0, countBeats = 4, lengthBeats = 16, remaining = 1 },
-            fillState = new CountdownState { active = 0, countBeats = 2, lengthBeats = 8, remaining = 1 },
-        };
-        beatManager.FeedWireSnapshot(snapshot);
-        beatManager.Update(0f);
+            snapshot.dropState =
+                new CountdownState { active = 0, countBeats = 4, lengthBeats = 16, remaining = 1 };
+            snapshot.fillState =
+                new CountdownState { active = 0, countBeats = 2, lengthBeats = 8, remaining = 1 };
+        });
 
-        Assert.That(beatManager.IsSynced, Is.False);
+        Assert.That(beatManager.IsSynced, Is.True);
         Assert.That(beatManager.Drop.BeatsUntil, Is.EqualTo(4));
         Assert.That(beatManager.Fill.BeatsUntil, Is.EqualTo(2));
         Assert.That(beatManager.Drop.Before.Build(8), Is.EqualTo(0.5f));
@@ -152,22 +150,21 @@ public sealed class BeatManagerSpanTests
     }
 
     /// <summary>
-    /// Verifies live through-event envelopes step with whole-beat countdown changes while the intra-beat
-    /// clock lane is absent.
+    /// Verifies that active Fill and Drop spans advance from contract-valid Synced countdowns.
     /// </summary>
     [Test]
-    public void InEnvelopesStepFromLiveCountdownsWithoutABeatClock()
+    public void InEnvelopesStepFromSyncedCountdowns()
     {
+        var snapshot = BeatClockFixture.CreateSnapshot(120f, 0f);
         var beatManager = new BeatManager();
-        var snapshot = new RaveWireSnapshot
-        {
-            dropState = new CountdownState { active = 1, countBeats = 16, lengthBeats = 32, remaining = 1 },
-            fillState = new CountdownState { active = 1, countBeats = 24, lengthBeats = 32, remaining = 1 },
-        };
+        snapshot.dropState =
+            new CountdownState { active = 1, countBeats = 16, lengthBeats = 32, remaining = 1 };
+        snapshot.fillState =
+            new CountdownState { active = 1, countBeats = 24, lengthBeats = 32, remaining = 1 };
         beatManager.FeedWireSnapshot(snapshot);
         beatManager.Update(0f);
 
-        Assert.That(beatManager.IsSynced, Is.False);
+        Assert.That(beatManager.IsSynced, Is.True);
         Assert.That(beatManager.Drop.In.Build(), Is.EqualTo(0.5f));
         Assert.That(beatManager.Drop.In.Decay(), Is.EqualTo(0.5f));
         Assert.That(beatManager.Drop.In.Build(8), Is.EqualTo(1f));

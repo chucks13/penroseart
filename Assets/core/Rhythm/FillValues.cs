@@ -47,7 +47,9 @@ public readonly struct FillValues
 
 public partial class BeatManager
 {
-    /// <summary>The fill wire lane and its direct derived values.</summary>
+    /// <summary>
+    /// The Synced-only fill wire lane and its direct derived values. It rests in Standalone mode.
+    /// </summary>
     public FillValues Fill { get; private set; }
 
     /// <summary>Captures the settled Fill lane.</summary>

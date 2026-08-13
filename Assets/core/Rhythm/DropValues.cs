@@ -82,7 +82,9 @@ public readonly struct DropValues
 
 public partial class BeatManager
 {
-    /// <summary>The drop wire lane and its direct derived values.</summary>
+    /// <summary>
+    /// The Synced-only drop wire lane and its direct derived values. It rests in Standalone mode.
+    /// </summary>
     public DropValues Drop { get; private set; }
 
     /// <summary>Captures the settled Drop lane.</summary>
