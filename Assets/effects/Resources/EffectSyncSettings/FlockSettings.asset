@@ -30,6 +30,11 @@ MonoBehaviour:
       Max: 1.5
       LowRail: 0.1
       HighRail: 1.5
+    EnergyPaceMultiplier:
+      Min: 0.75
+      Max: 1.25
+      LowRail: 0.75
+      HighRail: 1.25
     MidManeuverLevel:
       Min: 0.2
       Max: 0.65
@@ -54,16 +59,17 @@ MonoBehaviour:
     RoutineValueFloor: 0.7
     TypicalFillBeats: 4
     MinimumFillBeats: 1
-    MaximumFillLeadBeats: 4
     FillOnsetImpulse: 6
     FillOrbitSteering: 4
     FillOrbitAtFullGather: 0.5
     FillAlignmentLift: 0.35
     FillSeparationLift: 0.5
+    DropSpiralSteering: 0.75
     DropGatherBeats: 8
     DropGatherSteering: 3
     DropGatherSeparationSuppression: 0.9
-    DropReleaseBeats: 2
+    DropAftermathBeats: 16
+    DropTrailHalfLife: 1.5
     DropBurstSpeedMultiplier: 1.6
     DropVelocityCarry: 0.35
     DropOutwardSteering: 1.5
