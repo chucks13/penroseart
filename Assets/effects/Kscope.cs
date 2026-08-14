@@ -156,7 +156,6 @@ public class Kscope : ScreenEffect
     /// <summary>The allocation-free reader over the mirror groups rolled for this activation.</summary>
     private LayoutData.ShapeList.Reader mirrorList;
 
-    private int[] centerline;
     List<picture> colorTex = new List<picture>();
     List<picture> monoTex = new List<picture>();
     Texture2D currentTex;
@@ -294,50 +293,6 @@ public class Kscope : ScreenEffect
         return $"file {fname} ";
     }
 
-    /// <summary>Finds the eight center tiles omitted by mirror2 and builds the patch array that copies them from the source buffer.</summary>
-    /// <remarks>
-    /// The display is known to contain 900 tiles and mirror2 omits eight of them. Without this patch those tiles are never
-    /// copied from the unchanged source buffer, leaving a hole. Mirror10 does not need the patch, but drawing only eight
-    /// extra tiles is why no special layout check is made.
-    /// </remarks>
-    private void fixCenterLineInit()
-    {
-        centerline = new int[8];
-        int y = 0;
-        for (int x = 0; x < 900; x++)
-        {
-            if (y == centerline.Length)
-                break;
-            int groupcount = mirrorList.GroupCount;     // how many copies
-            bool used = false;                                    // Draw the mirrors
-            for (int i = 0; i < groupcount; i++)
-            {
-                LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
-                for (int j = 0; j < group.TileCount; j++)
-                {
-                    if (group[j] == x)
-                    {
-                        used = true;
-                        break;
-                    }
-                }
-            }
-            if (!used)
-                centerline[y++] = x;
-        }
-    }
-    /// <summary>
-    /// Patches centerline tiles omitted by mirror shape data before mirror replication.
-    /// </summary>
-    private void fixCenterLineDraw()
-    {
-        for (int i = 0; i < centerline.Length; i++)
-        {
-            int j = centerline[i];
-            buffer[j] = buffer[j];
-        }
-
-    }
     /// <summary>
     /// Performs one-time setup after reflection creates this effect instance.
     /// </summary>
@@ -408,7 +363,6 @@ public class Kscope : ScreenEffect
         mirrorList = Random.Range(0, 2) == 0
             ? penrose.Layout.shapes.Mirror2
             : penrose.Layout.shapes.Mirror10;
-        fixCenterLineInit();
 
         int colorCount = colorTex.Count;
         int monoCount = monoTex.Count;
@@ -558,8 +512,6 @@ public class Kscope : ScreenEffect
         // convert the 2D Matrix buffer to a tile buffer
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
         int groupcount = mirrorList.GroupCount;     // how many copies
-        // fix missing verticle column
-        fixCenterLineDraw();
         // Draw the mirrors
         for (int i = 0; i < groupcount; i++)
         {
