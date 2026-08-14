@@ -500,7 +500,9 @@ public class Kscope : ScreenEffect
 
                 var color = currentTex.GetPixel((int)x2, (int)y2);
                 if (mode != 0)
-                    color = APalette.read(color.r % 1f, true);
+                    // The palette supplies hue and saturation only; the mono image keeps its own
+                    // brightness, so the picture's structure reads under any palette, dark ones included.
+                    color = APalette.read(color.r % 1f, true).WithBrightness(color.r);
                 if (beatMode > 0)
                 {
                     Color.RGBToHSV(color, out float h, out float s, out float v);

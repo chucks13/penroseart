@@ -109,6 +109,13 @@ public static class ExtensionMethods
         return Color.HSVToRGB(h, s, v > max ? max : v);
     }
 
+    /// <summary>Replaces a color brightness while preserving hue and saturation.</summary>
+    public static Color WithBrightness(this Color color, float value)
+    {
+        Color.RGBToHSV(color, out var h, out var s, out _);
+        return Color.HSVToRGB(h, s, value);
+    }
+
     /// <summary>Multiplies every color in an array by a fade amount in-place.</summary>
     public static Color[] Fade(this Color[] colors, float amount = 0.98f)
     {

@@ -949,19 +949,12 @@ public class MazeFlyer : EffectBase
                     ActiveSetting(standaloneSettings.PureRandomValue, SyncSettings.PureRandomValue));
 
             case ColorMode.SharedPalette:
-            {
                 // Random.value rolls a blended position across the shared animated show palette.
                 // The rolled color's HSV value is lifted to the authored floor — face shading and
                 // fog only multiply downward, so a dark palette entry would read as an unlit wall.
-                Color rolled = APalette.read(Random.value, true);
-                Color.RGBToHSV(rolled, out float hue, out float saturation, out float value);
-                return Color.HSVToRGB(
-                    hue,
-                    saturation,
-                    Mathf.Max(value, ActiveSetting(
-                        standaloneSettings.SharedPaletteMinValue,
-                        SyncSettings.SharedPaletteMinValue)));
-            }
+                return APalette.read(Random.value, true).MinBrightness(ActiveSetting(
+                    standaloneSettings.SharedPaletteMinValue,
+                    SyncSettings.SharedPaletteMinValue));
 
             default:
                 // The inline selector spans every entry in the complete authored palette table.
