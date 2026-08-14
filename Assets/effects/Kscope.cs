@@ -73,20 +73,26 @@ public class Kscope : ScreenEffect
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
-    /// Fraction of the source image panned per beat before musical pacing — pattern-relative, so
-    /// every image crosses the same share of its own mirror period per beat. The pools span
-    /// 12x13 to 528x494 pixels; an absolute pixel rate raced the small images and crawled the
-    /// large ones. One tenth matches the retired 12 px/beat at the pools' median ~100 px width.
+    /// Wall units the source image's width spans in Synced Mode — the sampling zoom. Image size
+    /// must never reach the wall: the pools span 12x13 to 528x494 pixels, and any raw-size
+    /// sampling makes speed and the On-Beat Push read differently per image. Twenty-five fits
+    /// the whole picture in one Mirror2 half of the 50x22 wall.
+    /// </summary>
+    private const float SyncImageSpan = 25f;
+
+    /// <summary>
+    /// Fraction of the source image panned per beat before musical pacing. With every image
+    /// scaled to the authored footprint, this is the same wall distance on every image — one
+    /// tenth crosses the picture in ten beats.
     /// </summary>
     private const float SyncPanFractionPerBeat = 0.1f;
 
     /// <summary>
-    /// Fraction of the source image's pattern swept past the screen's corner radius per beat
-    /// before musical pacing — the same unit the pan magnitude uses. Rotation is normalized by
-    /// the image's own period because a fixed angular rate reads ~44x harder on the smallest
-    /// pool image than the largest: perceived rotation is repeats sweeping past, not degrees.
+    /// Kaleidoscope rotation in radians per beat before musical pacing — about seventeen
+    /// degrees. Uniform across images because Synced sampling scales every image to the
+    /// authored footprint.
     /// </summary>
-    private const float SyncRotationFractionPerBeat = 0.1f;
+    private const float SyncRotationRadiansPerBeat = 0.3f;
 
     /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
     private const float SyncEnergyPaceLow = 0.75f;
@@ -139,8 +145,9 @@ public class Kscope : ScreenEffect
         TextureAdvanceRangeDivisor = SyncTextureAdvanceRangeDivisor,
         ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
+        ImageSpan = SyncImageSpan,
         PanFractionPerBeat = SyncPanFractionPerBeat,
-        RotationFractionPerBeat = SyncRotationFractionPerBeat,
+        RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
         EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         LowPresenceThreshold = SyncLowPresenceThreshold,
         OnBeatPushStrength = SyncOnBeatPushStrength,
@@ -473,18 +480,17 @@ public class Kscope : ScreenEffect
         float beatHue = SyncSettings.BeatHueOffset * rhythm;
         float localDelta = DropSlowdown(effectDelta, SyncSettings.DropSlowdownBeats);
         float rotationDelta;
+        // Texture pixels sampled per wall unit. Synced scales every image to the authored
+        // footprint so image size never reaches the wall — speed and the On-Beat Push read
+        // the same on every image. Standalone keeps the historical 1:1 sampling and look.
+        float sampleScale = 1f;
         if (beatManager.IsSynced)
         {
             float motionScale = ReadSyncedMotionScale();
             positionX += motionX * SyncSettings.PanFractionPerBeat * texWidth * motionScale * localDelta;
             positionY += motionY * SyncSettings.PanFractionPerBeat * texHeight * motionScale * localDelta;
-            // Perceived rotation is pattern repeats sweeping past, not degrees, so the angular
-            // rate is normalized by the image's own period: the authored fraction sweeps past
-            // the screen's corner radius per beat on every image size — the pan magnitudes' unit.
-            float patternPeriod = (texWidth + texHeight) * 0.5f;
-            float cornerRadius = Mathf.Sqrt((width * width) + (height * height)) * 0.5f;
-            rotationDelta = aspeed * SyncSettings.RotationFractionPerBeat * patternPeriod / cornerRadius
-                * motionScale * effectDelta;
+            rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
+            sampleScale = texWidth / SyncSettings.ImageSpan;
         }
         else
         {
@@ -507,9 +513,9 @@ public class Kscope : ScreenEffect
                 // center about screen
                 double x1 = x - wh;
                 double y1 = y - yh;
-                // apply rotation
-                double x2 = (m11 * x1) + (m12 * y1);
-                double y2 = (m21 * x1) + (m22 * y1);
+                // apply rotation, then scale to the authored footprint
+                double x2 = ((m11 * x1) + (m12 * y1)) * sampleScale;
+                double y2 = ((m21 * x1) + (m22 * y1)) * sampleScale;
                 // offset to position
                 x2 += positionX;
                 y2 += positionY;
@@ -686,13 +692,17 @@ public sealed class KscopeSyncSettings
     /// <summary>Exclusive upper bound of the discrete channel-swap selector roll.</summary>
     public int ChannelSwapSelectorMaxExclusive;
 
+    /// <summary>Wall units the image's width spans in Synced Mode — the sampling zoom.</summary>
+    [Tooltip("Wall units the image's width spans on the 50x22 wall — the zoom. 25 fits the picture in one Mirror2 half; smaller tiles the image more, larger crops into it.")]
+    [Min(0f)] public float ImageSpan;
+
     /// <summary>Fraction of the source image panned per beat before musical pacing — per axis, so X crosses that share of the width and Y of the height.</summary>
     [Tooltip("Fraction of the image panned per beat before Energy pace and On-Beat Push. Pattern-relative, so every image size reads the same speed; 0.1 crosses a tenth of the image per beat.")]
     [Min(0f)] public float PanFractionPerBeat;
 
-    /// <summary>Fraction of the image's pattern swept past the screen's corner radius per beat before musical pacing.</summary>
-    [Tooltip("Fraction of the image swept past the screen corner per beat before Energy pace and On-Beat Push. Same unit as Pan Fraction Per Beat, so every image size reads the same rotation speed; 0 stops rotation.")]
-    [Min(0f)] public float RotationFractionPerBeat;
+    /// <summary>Kaleidoscope rotation in radians per beat before musical pacing.</summary>
+    [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation. Reads the same on every image because Synced sampling fixes the footprint.")]
+    [Min(0f)] public float RotationRadiansPerBeat;
 
     /// <summary>Low-to-High Energy pace range; Mid uses the midpoint.</summary>
     [Tooltip("Motion pace by Energy: Low = Min, Mid = midpoint, High = Max. A value of 1 is neutral; the range carries its own tuning Rails.")]
@@ -724,8 +734,9 @@ public sealed class KscopeSyncSettings
         TextureAdvanceRangeDivisor = source.TextureAdvanceRangeDivisor;
         ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
         ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
+        ImageSpan = source.ImageSpan;
         PanFractionPerBeat = source.PanFractionPerBeat;
-        RotationFractionPerBeat = source.RotationFractionPerBeat;
+        RotationRadiansPerBeat = source.RotationRadiansPerBeat;
         EnergyPace = new FloatRange(
             source.EnergyPace.Min,
             source.EnergyPace.Max,
