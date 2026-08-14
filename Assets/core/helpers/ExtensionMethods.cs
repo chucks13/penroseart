@@ -116,6 +116,13 @@ public static class ExtensionMethods
         return Color.HSVToRGB(h, s, value);
     }
 
+    /// <summary>Raises a color's saturation to at least a floor while preserving hue and brightness.</summary>
+    public static Color MinSaturation(this Color color, float min)
+    {
+        Color.RGBToHSV(color, out var h, out var s, out var v);
+        return Color.HSVToRGB(h, s < min ? min : s, v);
+    }
+
     /// <summary>Multiplies every color in an array by a fade amount in-place.</summary>
     public static Color[] Fade(this Color[] colors, float amount = 0.98f)
     {

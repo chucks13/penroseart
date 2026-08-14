@@ -82,10 +82,10 @@ public class Kscope : ScreenEffect
 
     /// <summary>
     /// Fraction of the source image panned per beat before musical pacing. With every image
-    /// scaled to the authored footprint, this is the same wall distance on every image — one
-    /// tenth crosses the picture in ten beats.
+    /// scaled to the authored footprint, this is the same wall distance on every image — four
+    /// tenths crosses the picture in two and a half beats, a readable drift at Mid pace.
     /// </summary>
-    private const float SyncPanFractionPerBeat = 0.1f;
+    private const float SyncPanFractionPerBeat = 0.4f;
 
     /// <summary>
     /// Kaleidoscope rotation in radians per beat before musical pacing — about seventeen
@@ -95,22 +95,31 @@ public class Kscope : ScreenEffect
     private const float SyncRotationRadiansPerBeat = 0.3f;
 
     /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
-    private const float SyncEnergyPaceLow = 0.75f;
+    private const float SyncEnergyPaceLow = 0.6f;
 
     /// <summary>High Energy pace accelerates the base motion; Mid remains neutral at the range midpoint.</summary>
-    private const float SyncEnergyPaceHigh = 1.25f;
+    private const float SyncEnergyPaceHigh = 1.5f;
 
     /// <summary>
     /// Normalized Low threshold where bass presence begins contributing to the On-Beat Push. Levels
     /// are track-relative, so this remains a live tuning knob instead of an absolute-loudness claim.
     /// </summary>
-    private const float SyncLowPresenceThreshold = 0.45f;
+    private const float SyncLowPresenceThreshold = 0.25f;
 
     /// <summary>
-    /// Pace added at a fully gated quarter-note pulse peak. One half makes the bass hit legible
-    /// above the Energy-paced motion without overwhelming the underlying image.
+    /// Pace added at a fully gated quarter-note pulse peak. The gate product rarely nears one —
+    /// the threshold remap and the decaying pulse both discount it — so strength calibrates in
+    /// whole units; three reads as a clear kick above the Energy-paced base.
     /// </summary>
-    private const float SyncOnBeatPushStrength = 0.5f;
+    private const float SyncOnBeatPushStrength = 3f;
+
+    /// <summary>
+    /// Minimum saturation applied to the shared-palette read in Synced mono mode. Every
+    /// stage-directed activation starts a three-second RGB palette crossfade, and some palette
+    /// pairs pass through gray mid-fade; the mono recombination would paint that gray across the
+    /// whole footprint as a near-white wall. The floor keeps those moments tinted instead.
+    /// </summary>
+    private const float SyncPaletteSaturationFloor = 0.3f;
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     private const float SyncBeatHueOffset = 0.5f;
@@ -151,6 +160,7 @@ public class Kscope : ScreenEffect
         EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         LowPresenceThreshold = SyncLowPresenceThreshold,
         OnBeatPushStrength = SyncOnBeatPushStrength,
+        PaletteSaturationFloor = SyncPaletteSaturationFloor,
         BeatHueOffset = SyncBeatHueOffset,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
@@ -186,6 +196,15 @@ public class Kscope : ScreenEffect
     /// reference is what the next activation destroys.
     /// </summary>
     private Texture2D ownedTex;
+
+    /// <summary>Mean of the active texture's red channel, captured at activation for the debug readout.</summary>
+    private float debugImageMean;
+
+    /// <summary>Standard deviation of the active texture's red channel, captured at activation for the debug readout.</summary>
+    private float debugImageDeviation;
+
+    /// <summary>Name of the mirror layout rolled for this activation, shown in the debug readout.</summary>
+    private string debugMirrorName = "";
     int mode;
     int texWidth;
     int texHeight;
@@ -294,11 +313,27 @@ public class Kscope : ScreenEffect
 
     }
     /// <summary>
-    /// Returns text for the Controller debug display while this effect is active.
+    /// Returns text for the Controller debug display while this effect is active: file, pool,
+    /// mirror layout, active-texture red mean and deviation, palette transition state, and the
+    /// percentage of near-white wall tiles — the white-wall symptom.
     /// </summary>
     public override string DebugText()
     {
-        return $"file {fname} ";
+        int neutralBright = 0;
+        for (int i = 0; i < buffer.Length; i++)
+        {
+            Color.RGBToHSV(buffer[i], out _, out float s, out float v);
+            // The worker-measured symptom band: barely tinted but lit — saturation under 0.15
+            // at brightness 0.5 or more.
+            if (s < 0.15f && v >= 0.5f)
+                neutralBright++;
+        }
+        string paletteState = APalette.IsTransitioning
+            ? $"fade {APalette.TransitionProgress:F2}"
+            : "steady";
+        return $"file {fname} {(mode == 0 ? "color" : "mono")} {debugMirrorName} " +
+            $"img {debugImageMean:F2}±{debugImageDeviation:F2} " +
+            $"pal {paletteState} white {(100 * neutralBright) / buffer.Length}% ";
     }
 
     /// <summary>
@@ -387,6 +422,29 @@ public class Kscope : ScreenEffect
         }
         return newTex;
     }
+
+    /// <summary>
+    /// Captures the active texture's red-channel mean and standard deviation for the debug
+    /// readout. Red is the channel the mono path consumes for both palette position and
+    /// brightness, so a pale, low-deviation reading is the wash-prone case.
+    /// </summary>
+    private void CaptureDebugImageStats()
+    {
+        float sum = 0f;
+        float sumSquares = 0f;
+        for (int x = 0; x < texWidth; x++)
+        {
+            for (int y = 0; y < texHeight; y++)
+            {
+                float r = currentTex.GetPixel(x, y).r;
+                sum += r;
+                sumSquares += r * r;
+            }
+        }
+        int pixelCount = texWidth * texHeight;
+        debugImageMean = sum / pixelCount;
+        debugImageDeviation = Mathf.Sqrt(Mathf.Max(0f, sumSquares / pixelCount - debugImageMean * debugImageMean));
+    }
     /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
@@ -411,9 +469,11 @@ public class Kscope : ScreenEffect
         // Unfiltered acquisition spans the complete curated Waveform Pool, so there is no authored subrange.
         waveform = waveforms.Random();
         // This coin flip spans both available mirror layouts, so its complete selector domain stays inline.
-        mirrorList = Random.Range(0, 2) == 0
+        bool usesMirror2 = Random.Range(0, 2) == 0;
+        mirrorList = usesMirror2
             ? penrose.Layout.shapes.Mirror2
             : penrose.Layout.shapes.Mirror10;
+        debugMirrorName = usesMirror2 ? "mirror2" : "mirror10";
 
         int colorCount = colorTex.Count;
         int monoCount = monoTex.Count;
@@ -466,6 +526,7 @@ public class Kscope : ScreenEffect
         }
         texWidth = currentTex.width;
         texHeight = currentTex.height;
+        CaptureDebugImageStats();
         if (isSynced)
         {
             // Synced magnitudes stay live in Sync Settings; the Roll retains direction only.
@@ -544,6 +605,10 @@ public class Kscope : ScreenEffect
             rotationDelta = aspeed * effectDelta * ReferenceFrameRate;
         }
 
+        // Synced floors the mono palette read's saturation: every stage-directed activation
+        // starts a three-second RGB palette crossfade, and gray-passing pairs would wash the
+        // footprint near-white. Standalone keeps the historical unfloored read.
+        float paletteSaturationFloor = beatManager.IsSynced ? SyncSettings.PaletteSaturationFloor : 0f;
         double m11 = Math.Cos(angle);
         double m12 = -Math.Sin(angle);
         double m21 = Math.Sin(angle);
@@ -579,9 +644,14 @@ public class Kscope : ScreenEffect
 
                 var color = currentTex.GetPixel((int)x2, (int)y2);
                 if (mode != 0)
+                {
                     // The palette supplies hue and saturation only; the mono image keeps its own
                     // brightness, so the picture's structure reads under any palette, dark ones included.
-                    color = APalette.read(color.r % 1f, true).WithBrightness(color.r);
+                    Color palette = APalette.read(color.r % 1f, true);
+                    if (paletteSaturationFloor > 0f)
+                        palette = palette.MinSaturation(paletteSaturationFloor);
+                    color = palette.WithBrightness(color.r);
+                }
                 if (beatMode > 0)
                 {
                     Color.RGBToHSV(color, out float h, out float s, out float v);
@@ -761,6 +831,10 @@ public sealed class KscopeSyncSettings
     [Tooltip("Pace added at the peak of each quarter-note Duration Pulse after the Normalized Low gate. 0 disables the push; raise it for a harder bass hit.")]
     [Min(0f)] public float OnBeatPushStrength;
 
+    /// <summary>Minimum saturation applied to the shared-palette read in mono mode.</summary>
+    [Tooltip("Floor on the palette read's saturation in mono mode. Keeps a mid-crossfade gray palette from washing the wall white; 0 disables, higher forces stronger tinting.")]
+    [Range(0f, 1f)] public float PaletteSaturationFloor;
+
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float BeatHueOffset;
 
@@ -789,6 +863,7 @@ public sealed class KscopeSyncSettings
             source.EnergyPace.HighRail);
         LowPresenceThreshold = source.LowPresenceThreshold;
         OnBeatPushStrength = source.OnBeatPushStrength;
+        PaletteSaturationFloor = source.PaletteSaturationFloor;
         BeatHueOffset = source.BeatHueOffset;
         DropSlowdownBeats = source.DropSlowdownBeats;
     }

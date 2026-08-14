@@ -343,6 +343,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.EnergyPace = new FloatRange(23f, 24f, 22f, 25f);
         asset.Settings.LowPresenceThreshold = 0.26f;
         asset.Settings.OnBeatPushStrength = 27f;
+        asset.Settings.PaletteSaturationFloor = 0.27f;
         asset.Settings.BeatHueOffset = 0.28f;
         asset.Settings.DropSlowdownBeats = 29;
 
@@ -359,6 +360,7 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.EnergyPace, defaults.EnergyPace);
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
         Assert.That(asset.Settings.OnBeatPushStrength, Is.EqualTo(defaults.OnBeatPushStrength));
+        Assert.That(asset.Settings.PaletteSaturationFloor, Is.EqualTo(defaults.PaletteSaturationFloor));
         Assert.That(asset.Settings.BeatHueOffset, Is.EqualTo(defaults.BeatHueOffset));
         Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
     }
