@@ -81,10 +81,12 @@ public class Kscope : ScreenEffect
     private const float SyncPanFractionPerBeat = 0.1f;
 
     /// <summary>
-    /// Kaleidoscope rotation in radians per beat before musical pacing. Three tenths is a visible
-    /// turn (about seventeen degrees) that leaves the source image readable.
+    /// Fraction of the source image's pattern swept past the screen's corner radius per beat
+    /// before musical pacing — the same unit the pan magnitude uses. Rotation is normalized by
+    /// the image's own period because a fixed angular rate reads ~44x harder on the smallest
+    /// pool image than the largest: perceived rotation is repeats sweeping past, not degrees.
     /// </summary>
-    private const float SyncRotationRadiansPerBeat = 0.3f;
+    private const float SyncRotationFractionPerBeat = 0.1f;
 
     /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
     private const float SyncEnergyPaceLow = 0.75f;
@@ -138,7 +140,7 @@ public class Kscope : ScreenEffect
         ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
         PanFractionPerBeat = SyncPanFractionPerBeat,
-        RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
+        RotationFractionPerBeat = SyncRotationFractionPerBeat,
         EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         LowPresenceThreshold = SyncLowPresenceThreshold,
         OnBeatPushStrength = SyncOnBeatPushStrength,
@@ -476,7 +478,13 @@ public class Kscope : ScreenEffect
             float motionScale = ReadSyncedMotionScale();
             positionX += motionX * SyncSettings.PanFractionPerBeat * texWidth * motionScale * localDelta;
             positionY += motionY * SyncSettings.PanFractionPerBeat * texHeight * motionScale * localDelta;
-            rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
+            // Perceived rotation is pattern repeats sweeping past, not degrees, so the angular
+            // rate is normalized by the image's own period: the authored fraction sweeps past
+            // the screen's corner radius per beat on every image size — the pan magnitudes' unit.
+            float patternPeriod = (texWidth + texHeight) * 0.5f;
+            float cornerRadius = Mathf.Sqrt((width * width) + (height * height)) * 0.5f;
+            rotationDelta = aspeed * SyncSettings.RotationFractionPerBeat * patternPeriod / cornerRadius
+                * motionScale * effectDelta;
         }
         else
         {
@@ -682,9 +690,9 @@ public sealed class KscopeSyncSettings
     [Tooltip("Fraction of the image panned per beat before Energy pace and On-Beat Push. Pattern-relative, so every image size reads the same speed; 0.1 crosses a tenth of the image per beat.")]
     [Min(0f)] public float PanFractionPerBeat;
 
-    /// <summary>Kaleidoscope rotation magnitude in radians per beat before musical pacing.</summary>
-    [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation.")]
-    [Min(0f)] public float RotationRadiansPerBeat;
+    /// <summary>Fraction of the image's pattern swept past the screen's corner radius per beat before musical pacing.</summary>
+    [Tooltip("Fraction of the image swept past the screen corner per beat before Energy pace and On-Beat Push. Same unit as Pan Fraction Per Beat, so every image size reads the same rotation speed; 0 stops rotation.")]
+    [Min(0f)] public float RotationFractionPerBeat;
 
     /// <summary>Low-to-High Energy pace range; Mid uses the midpoint.</summary>
     [Tooltip("Motion pace by Energy: Low = Min, Mid = midpoint, High = Max. A value of 1 is neutral; the range carries its own tuning Rails.")]
@@ -717,7 +725,7 @@ public sealed class KscopeSyncSettings
         ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
         ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
         PanFractionPerBeat = source.PanFractionPerBeat;
-        RotationRadiansPerBeat = source.RotationRadiansPerBeat;
+        RotationFractionPerBeat = source.RotationFractionPerBeat;
         EnergyPace = new FloatRange(
             source.EnergyPace.Min,
             source.EnergyPace.Max,
