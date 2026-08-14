@@ -18,18 +18,14 @@ MonoBehaviour:
     TextureAdvanceRangeDivisor: 3
     ColorSwapRollMaxExclusive: 3
     ChannelSwapSelectorMaxExclusive: 2
-    MotionStep:
-      MinInclusive: 1
-      MaxExclusive: 3
-      LowRail: 1
-      HighRail: 3
-    MotionStepDivisor: 4
-    AngularSpeedStep:
-      MinInclusive: -1
-      MaxExclusive: 2
-      LowRail: -1
-      HighRail: 2
-    AngularSpeedStepDivisor: 100
+    PanPixelsPerBeat: 12
+    RotationRadiansPerBeat: 0.3
+    EnergyPace:
+      Min: 0.75
+      Max: 1.25
+      LowRail: 0.75
+      HighRail: 1.25
+    LowPresenceThreshold: 0.45
+    OnBeatPushStrength: 8
     BeatHueOffset: 0.5
-    RhythmDeltaBoost: 0.002
     DropSlowdownBeats: 8
