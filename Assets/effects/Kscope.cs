@@ -180,11 +180,12 @@ public class Kscope : ScreenEffect
     Texture2D currentTex;
 
     /// <summary>
-    /// The channel-swapped copy owned by the current activation, or null when the pick renders
+    /// The script-created copy owned by the current activation — a channel-swapped variant, a
+    /// Synced footprint prescale, or the prescale of a swap — or null when the pick renders
     /// straight from the pool. Script-created textures are never garbage-collected, so this
     /// reference is what the next activation destroys.
     /// </summary>
-    private Texture2D swappedTex;
+    private Texture2D ownedTex;
     int mode;
     int texWidth;
     int texHeight;
@@ -352,18 +353,52 @@ public class Kscope : ScreenEffect
         }
         return newTex;
     }
+
+    /// <summary>
+    /// Box-averages a source texture down to the authored footprint resolution — one texel per
+    /// wall unit across <paramref name="imageSpan"/> wall units of width, aspect preserved.
+    /// </summary>
+    /// <remarks>
+    /// Draw samples one texel per wall unit, so an image wider than the footprint would be
+    /// minified by point sampling — thin features fall between the samples and vanish, and
+    /// periodic ones alias into large flat fields. Each output texel instead averages the source
+    /// block it replaces, so every source pixel contributes and the wall shows the image's true
+    /// tone. The caller owns the returned script-created texture.
+    /// </remarks>
+    private Texture2D PrescaleToFootprint(Texture2D source, float imageSpan)
+    {
+        int targetWidth = Mathf.CeilToInt(imageSpan);
+        int targetHeight = Mathf.Max(1, Mathf.RoundToInt(source.height * (float)targetWidth / source.width));
+        Texture2D newTex = new Texture2D(targetWidth, targetHeight);
+        for (int x = 0; x < targetWidth; x++)
+        {
+            int x0 = x * source.width / targetWidth;
+            int x1 = (x + 1) * source.width / targetWidth;
+            for (int y = 0; y < targetHeight; y++)
+            {
+                int y0 = y * source.height / targetHeight;
+                int y1 = (y + 1) * source.height / targetHeight;
+                Color sum = Color.clear;
+                for (int sx = x0; sx < x1; sx++)
+                    for (int sy = y0; sy < y1; sy++)
+                        sum += source.GetPixel(sx, sy);
+                newTex.SetPixel(x, y, sum / ((x1 - x0) * (y1 - y0)));
+            }
+        }
+        return newTex;
+    }
     /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
         // Unity never garbage-collects script-created textures, so the previous activation's
-        // channel-swapped copy is destroyed here — every activation path (switch-in and re-roll)
+        // owned copy is destroyed here — every activation path (switch-in and re-roll)
         // passes through OnStart.
-        if (swappedTex != null)
+        if (ownedTex != null)
         {
-            UnityEngine.Object.Destroy(swappedTex);
-            swappedTex = null;
+            UnityEngine.Object.Destroy(ownedTex);
+            ownedTex = null;
         }
 
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
@@ -408,8 +443,8 @@ public class Kscope : ScreenEffect
             if (Random.Range(0, colorSwapRollMaxExclusive) == 0)
             {
                 // The copy is script-owned; the destroy at the top of the next OnStart releases it.
-                swappedTex = messTexture(currentTex, channelSwapSelectorMaxExclusive);
-                currentTex = swappedTex;
+                ownedTex = messTexture(currentTex, channelSwapSelectorMaxExclusive);
+                currentTex = ownedTex;
             }
             mode = 0;
         }
@@ -418,6 +453,16 @@ public class Kscope : ScreenEffect
             currentTex = monoTex[which - colorCount].tex;
             fname = monoTex[which - colorCount].fname;
             mode = 1;
+        }
+        if (isSynced && currentTex.width > SyncSettings.ImageSpan)
+        {
+            // Wider than the footprint means Draw's point sampling would skip texels — see
+            // PrescaleToFootprint. The prescale replaces any channel-swapped copy as the owned texture.
+            Texture2D prescaled = PrescaleToFootprint(currentTex, SyncSettings.ImageSpan);
+            if (ownedTex != null)
+                UnityEngine.Object.Destroy(ownedTex);
+            ownedTex = prescaled;
+            currentTex = prescaled;
         }
         texWidth = currentTex.width;
         texHeight = currentTex.height;
