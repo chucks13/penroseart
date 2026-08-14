@@ -19,14 +19,14 @@ MonoBehaviour:
     ColorSwapRollMaxExclusive: 3
     ChannelSwapSelectorMaxExclusive: 2
     ImageSpan: 25
-    PanFractionPerBeat: 0.1
+    PanFractionPerBeat: 0.4
     RotationRadiansPerBeat: 0.3
     EnergyPace:
-      Min: 0.75
-      Max: 1.25
-      LowRail: 0.75
-      HighRail: 1.25
+      Min: 0.6
+      Max: 1.5
+      LowRail: 0.6
+      HighRail: 1.5
     LowPresenceThreshold: 0.45
-    OnBeatPushStrength: 10
+    OnBeatPushStrength: 3
     BeatHueOffset: 0.5
     DropSlowdownBeats: 8
