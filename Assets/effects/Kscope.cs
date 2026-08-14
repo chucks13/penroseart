@@ -9,7 +9,6 @@ using UnityEngine;
 using UnityEngine.Networking;
 using Random = UnityEngine.Random;
 
-#if true
 /// <summary>
 /// Loads StreamingAssets textures and maps them through kaleidoscope/mirror patterns.
 /// </summary>
@@ -159,12 +158,16 @@ public class Kscope : ScreenEffect
     List<picture> colorTex = new List<picture>();
     List<picture> monoTex = new List<picture>();
     Texture2D currentTex;
-    //    int last = -1;
+
+    /// <summary>
+    /// The channel-swapped copy owned by the current activation, or null when the pick renders
+    /// straight from the pool. Script-created textures are never garbage-collected, so this
+    /// reference is what the next activation destroys.
+    /// </summary>
+    private Texture2D swappedTex;
     int mode;
     int texWidth;
     int texHeight;
-    int centerX;
-    int centerY;
     int beatMode;
     float positionX;
     float positionY;
@@ -175,10 +178,10 @@ public class Kscope : ScreenEffect
     int which = 0;
 
     /// <summary>
-    /// Called ever frame to update the debug UI text element 
+    /// Regenerates the files.txt manifest for one StreamingAssets image folder. Desktop platforms
+    /// write the manifest because Android cannot enumerate StreamingAssets directories — the
+    /// Android path can only read a manifest a desktop run already wrote.
     /// </summary>
-    /// <returns></returns>
-    /// 
     public void WriteFileList(string directoryPath)
     {
         string[] fileNames = Directory.GetFiles(directoryPath);
@@ -211,22 +214,6 @@ public class Kscope : ScreenEffect
         return fileContents;
     }
     /// <summary>
-    /// Loads a PNG file from disk into a Texture2D.
-    /// </summary>
-    public static Texture2D LoadPNG(string filePath)
-    {
-        Texture2D tex = null;
-        byte[] fileData;
-
-        if (File.Exists(filePath))
-        {
-            fileData = File.ReadAllBytes(filePath);
-            tex = new Texture2D(2, 2);
-            tex.LoadImage(fileData); //..this will auto-resize the texture dimensions.
-        }
-        return tex;
-    }
-    /// <summary>
     /// Loads a picture from the active StreamingAssets image folder.
     /// </summary>
     public Texture2D LoadPicture(string fileName)
@@ -255,17 +242,12 @@ public class Kscope : ScreenEffect
 
         List<picture> texList = new List<picture>();
         string contents = LoadTextFile(path + "/files.txt");
-        //        string[] fileNames = new string[0];
         string[] fileNames = contents.Split('\n');
         foreach (string fileName in fileNames)
         {
             string fullPath = path + "/" + fileName.TrimEnd('\r');
             if (!fileName.Contains(".png"))
                 continue;
-            //            if (fileName.Contains(".meta"))
-            //                continue;
-            //            if (fileName.Contains(".txt"))
-            //                continue;
             Texture2D tex;
             try
             {
@@ -350,6 +332,15 @@ public class Kscope : ScreenEffect
     /// </summary>
     public override void OnStart()
     {
+        // Unity never garbage-collects script-created textures, so the previous activation's
+        // channel-swapped copy is destroyed here — every activation path (switch-in and re-roll)
+        // passes through OnStart.
+        if (swappedTex != null)
+        {
+            UnityEngine.Object.Destroy(swappedTex);
+            swappedTex = null;
+        }
+
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
             typeof(Kscope),
             StandaloneDefaults);
@@ -392,7 +383,7 @@ public class Kscope : ScreenEffect
             : standaloneSettings.AngularSpeedStepDivisor;
         // The inline zero is the structural no-bonus endpoint of this discrete advance roll.
         which = (which + textureMinimumAdvance +
-            Random.Range(0, total / textureAdvanceRangeDivisor)) % total;// Random.Range(0, total);
+            Random.Range(0, total / textureAdvanceRangeDivisor)) % total;
         if (which < colorCount)
         {
             currentTex = colorTex[which].tex;
@@ -400,7 +391,11 @@ public class Kscope : ScreenEffect
             // sometime swap 2 colors
             // Zero is the designated success slot; the authored slot count controls the one-in-N chance.
             if (Random.Range(0, colorSwapRollMaxExclusive) == 0)
-                currentTex = messTexture(currentTex, channelSwapSelectorMaxExclusive);
+            {
+                // The copy is script-owned; the destroy at the top of the next OnStart releases it.
+                swappedTex = messTexture(currentTex, channelSwapSelectorMaxExclusive);
+                currentTex = swappedTex;
+            }
             mode = 0;
         }
         else
@@ -420,8 +415,6 @@ public class Kscope : ScreenEffect
         // Each position roll spans the complete source-texture extent, not an authored subrange.
         positionX = Random.Range(0, texWidth);
         positionY = Random.Range(0, texHeight);
-        centerX = texWidth / 2;
-        centerY = texHeight / 2;
         angle = 0;
         aspeed = Random.Range(
             angularSpeedStep.MinInclusive,
@@ -437,10 +430,6 @@ public class Kscope : ScreenEffect
     {
     }
 
-    /// <summary>
-    /// Called every frame by controller when the effect is selected
-    /// </summary>
-    /// 
     /*
      * x2=cosßx1-sinßy1
      * y2=sinßx1+cosßy1
@@ -479,9 +468,6 @@ public class Kscope : ScreenEffect
                 // apply rotation
                 double x2 = (m11 * x1) + (m12 * y1);
                 double y2 = (m21 * x1) + (m22 * y1);
-                // center about texture
-                //                x2 += centerX;
-                //                y2 += centerY;
                 // offset to position
                 x2 += positionX;
                 y2 += positionY;
@@ -659,4 +645,3 @@ public sealed class KscopeSyncSettings
         DropSlowdownBeats = source.DropSlowdownBeats;
     }
 }
-#endif
