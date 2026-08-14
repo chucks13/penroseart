@@ -14,6 +14,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::KscopeSyncSettingsAsset
   effectTypeName: Kscope
   settings:
+    TextureMinimumAdvance: 1
+    TextureAdvanceRangeDivisor: 3
+    ColorSwapRollMaxExclusive: 3
+    ChannelSwapSelectorMaxExclusive: 2
+    MotionStep:
+      MinInclusive: 1
+      MaxExclusive: 3
+      LowRail: 1
+      HighRail: 3
+    MotionStepDivisor: 4
+    AngularSpeedStep:
+      MinInclusive: -1
+      MaxExclusive: 2
+      LowRail: -1
+      HighRail: 2
+    AngularSpeedStepDivisor: 100
     BeatHueOffset: 0.5
     RhythmDeltaBoost: 0.002
     DropSlowdownBeats: 8
