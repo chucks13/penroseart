@@ -72,29 +72,38 @@ public class Kscope : ScreenEffect
     /// <summary>Exclusive upper bound of the channel-swap selector roll in Synced Mode.</summary>
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
-    /// <summary>Inclusive minimum texture-motion step in Synced Mode.</summary>
-    private const int SyncMotionStepMin = 1;
+    /// <summary>
+    /// Source-texture pixels panned per beat before musical pacing. Twelve keeps the image moving
+    /// visibly without racing across the smaller texture sources.
+    /// </summary>
+    private const float SyncPanPixelsPerBeat = 12f;
 
-    /// <summary>Exclusive maximum texture-motion step in Synced Mode.</summary>
-    private const int SyncMotionStepMaxExclusive = 3;
+    /// <summary>
+    /// Kaleidoscope rotation in radians per beat before musical pacing. Three tenths is a visible
+    /// turn (about seventeen degrees) that leaves the source image readable.
+    /// </summary>
+    private const float SyncRotationRadiansPerBeat = 0.3f;
 
-    /// <summary>Divisor converting a Synced motion step into texture-motion rate.</summary>
-    private const float SyncMotionStepDivisor = 4f;
+    /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
+    private const float SyncEnergyPaceLow = 0.75f;
 
-    /// <summary>Inclusive minimum kaleidoscope angular-speed step in Synced Mode.</summary>
-    private const int SyncAngularSpeedStepMin = -1;
+    /// <summary>High Energy pace accelerates the base motion; Mid remains neutral at the range midpoint.</summary>
+    private const float SyncEnergyPaceHigh = 1.25f;
 
-    /// <summary>Exclusive maximum kaleidoscope angular-speed step in Synced Mode.</summary>
-    private const int SyncAngularSpeedStepMaxExclusive = 2;
+    /// <summary>
+    /// Normalized Low threshold where bass presence begins contributing to the On-Beat Push. Levels
+    /// are track-relative, so this remains a live tuning knob instead of an absolute-loudness claim.
+    /// </summary>
+    private const float SyncLowPresenceThreshold = 0.45f;
 
-    /// <summary>Divisor converting a Synced angular-speed step into rotation rate.</summary>
-    private const float SyncAngularSpeedStepDivisor = 100f;
+    /// <summary>
+    /// Pace added at a fully gated quarter-note pulse peak. One half makes the bass hit legible
+    /// above the Energy-paced motion without overwhelming the underlying image.
+    /// </summary>
+    private const float SyncOnBeatPushStrength = 0.5f;
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     private const float SyncBeatHueOffset = 0.5f;
-
-    /// <summary>Extra frame delta contributed at the held Waveform's peak in beat-responsive motion modes.</summary>
-    private const float SyncRhythmDeltaBoost = 0.002f;
 
     /// <summary>
     /// Number of beats used by the inherited Drop slowdown. This was the call's implicit default before capture.
@@ -103,7 +112,7 @@ public class Kscope : ScreenEffect
 
     // Runtime mechanism constants
 
-    /// <summary>Reference frame rate converting the effect's authored per-frame motion into delta-time motion.</summary>
+    /// <summary>Reference frame rate converting Standalone's authored per-frame motion into delta-time motion.</summary>
     private const float ReferenceFrameRate = 60f;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Kscope's Standalone Defaults.</summary>
@@ -126,12 +135,12 @@ public class Kscope : ScreenEffect
         TextureAdvanceRangeDivisor = SyncTextureAdvanceRangeDivisor,
         ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
-        MotionStep = new IntRange(SyncMotionStepMin, SyncMotionStepMaxExclusive),
-        MotionStepDivisor = SyncMotionStepDivisor,
-        AngularSpeedStep = new IntRange(SyncAngularSpeedStepMin, SyncAngularSpeedStepMaxExclusive),
-        AngularSpeedStepDivisor = SyncAngularSpeedStepDivisor,
+        PanPixelsPerBeat = SyncPanPixelsPerBeat,
+        RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
+        EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
+        LowPresenceThreshold = SyncLowPresenceThreshold,
+        OnBeatPushStrength = SyncOnBeatPushStrength,
         BeatHueOffset = SyncBeatHueOffset,
-        RhythmDeltaBoost = SyncRhythmDeltaBoost,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
@@ -168,13 +177,18 @@ public class Kscope : ScreenEffect
     int mode;
     int texWidth;
     int texHeight;
+    /// <summary>Two-way activation coin whose non-zero side enables the existing beat hue shift.</summary>
     int beatMode;
     float positionX;
     float positionY;
+    /// <summary>Signed Standalone horizontal rate, or the Synced horizontal direction.</summary>
     float motionX;
+    /// <summary>Signed Standalone vertical rate, or the Synced vertical direction.</summary>
     float motionY;
     float angle;
+    /// <summary>Signed Standalone angular rate, or the Synced rotation direction.</summary>
     float aspeed;
+    /// <summary>Texture-catalog index advanced by the activation Roll.</summary>
     int which = 0;
 
     /// <summary>
@@ -371,16 +385,6 @@ public class Kscope : ScreenEffect
         int channelSwapSelectorMaxExclusive = isSynced
             ? SyncSettings.ChannelSwapSelectorMaxExclusive
             : standaloneSettings.ChannelSwapSelectorMaxExclusive;
-        IntRange motionStep = isSynced ? SyncSettings.MotionStep : standaloneSettings.MotionStep;
-        float motionStepDivisor = isSynced
-            ? SyncSettings.MotionStepDivisor
-            : standaloneSettings.MotionStepDivisor;
-        IntRange angularSpeedStep = isSynced
-            ? SyncSettings.AngularSpeedStep
-            : standaloneSettings.AngularSpeedStep;
-        float angularSpeedStepDivisor = isSynced
-            ? SyncSettings.AngularSpeedStepDivisor
-            : standaloneSettings.AngularSpeedStepDivisor;
         // The inline zero is the structural no-bonus endpoint of this discrete advance roll.
         which = (which + textureMinimumAdvance +
             Random.Range(0, total / textureAdvanceRangeDivisor)) % total;
@@ -406,8 +410,19 @@ public class Kscope : ScreenEffect
         }
         texWidth = currentTex.width;
         texHeight = currentTex.height;
-        motionX = Random.Range(motionStep.MinInclusive, motionStep.MaxExclusive) / motionStepDivisor;
-        motionY = Random.Range(motionStep.MinInclusive, motionStep.MaxExclusive) / motionStepDivisor;
+        if (isSynced)
+        {
+            // Synced magnitudes stay live in Sync Settings; the Roll retains direction only.
+            motionX = 1f;
+            motionY = 1f;
+        }
+        else
+        {
+            IntRange motionStep = standaloneSettings.MotionStep;
+            float motionStepDivisor = standaloneSettings.MotionStepDivisor;
+            motionX = Random.Range(motionStep.MinInclusive, motionStep.MaxExclusive) / motionStepDivisor;
+            motionY = Random.Range(motionStep.MinInclusive, motionStep.MaxExclusive) / motionStepDivisor;
+        }
         // Each sign flip spans the complete two-direction domain, so its selector stays inline.
         motionX *= Random.Range(0, 2) == 0 ? 1f : -1f;
         motionY *= Random.Range(0, 2) == 0 ? 1f : -1f;
@@ -416,11 +431,20 @@ public class Kscope : ScreenEffect
         positionX = Random.Range(0, texWidth);
         positionY = Random.Range(0, texHeight);
         angle = 0;
-        aspeed = Random.Range(
-            angularSpeedStep.MinInclusive,
-            angularSpeedStep.MaxExclusive) / angularSpeedStepDivisor;
-        // The discrete [0, 3) roll spans all three algorithm modes, so its complete domain stays inline.
-        beatMode = Random.Range(0, 3);
+        if (isSynced)
+        {
+            // Synced rotation magnitude stays live in Sync Settings; the Roll retains direction only.
+            aspeed = Random.Range(0, 2) == 0 ? 1f : -1f;
+        }
+        else
+        {
+            IntRange angularSpeedStep = standaloneSettings.AngularSpeedStep;
+            aspeed = Random.Range(
+                angularSpeedStep.MinInclusive,
+                angularSpeedStep.MaxExclusive) / standaloneSettings.AngularSpeedStepDivisor;
+        }
+        // The discrete [0, 2) roll is a two-way coin deciding whether the beat hue shift is active.
+        beatMode = Random.Range(0, 2);
     }
 
     /// <summary>
@@ -443,13 +467,21 @@ public class Kscope : ScreenEffect
         }
         float rhythm = waveform.Envelope;
         float beatHue = SyncSettings.BeatHueOffset * rhythm;
-        float localDelta = DropSlowdown(
-            beatMode < 2 ? effectDelta + (SyncSettings.RhythmDeltaBoost * rhythm) : effectDelta,
-            SyncSettings.DropSlowdownBeats);
-
-
-        positionX += motionX * localDelta * ReferenceFrameRate;
-        positionY += motionY * localDelta * ReferenceFrameRate;
+        float localDelta = DropSlowdown(effectDelta, SyncSettings.DropSlowdownBeats);
+        float rotationDelta;
+        if (beatManager.IsSynced)
+        {
+            float motionScale = ReadSyncedMotionScale();
+            positionX += motionX * SyncSettings.PanPixelsPerBeat * motionScale * localDelta;
+            positionY += motionY * SyncSettings.PanPixelsPerBeat * motionScale * localDelta;
+            rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
+        }
+        else
+        {
+            positionX += motionX * localDelta * ReferenceFrameRate;
+            positionY += motionY * localDelta * ReferenceFrameRate;
+            rotationDelta = aspeed * effectDelta * ReferenceFrameRate;
+        }
 
         double m11 = Math.Cos(angle);
         double m12 = -Math.Sin(angle);
@@ -457,7 +489,7 @@ public class Kscope : ScreenEffect
         double m22 = Math.Cos(angle);
         double wh = width / 2;
         double yh = height / 2;
-        angle += aspeed * effectDelta * ReferenceFrameRate;
+        angle += rotationDelta;
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -519,6 +551,55 @@ public class Kscope : ScreenEffect
                 buffer[group[j]] = tileColor;
             }
         }
+    }
+
+    /// <summary>
+    /// Converts the authored per-beat magnitudes into per-second motion, paced by current Energy
+    /// and lifted by the gated On-Beat Push.
+    /// </summary>
+    /// <remarks>
+    /// Musical meanings: <c>CONTEXT.md</c> entries Data Surface and Energy. The live interval is
+    /// the <c>/rave/onair/beat_avg_ms</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private float ReadSyncedMotionScale()
+    {
+        float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
+        return (ReadEnergyPace() + ReadOnBeatPush()) / beatSeconds;
+    }
+
+    /// <summary>Maps Low/Mid/High Energy onto the authored pace range, resting at neutral when unavailable.</summary>
+    /// <remarks>
+    /// Musical meaning: <c>CONTEXT.md</c> entry Energy; wire lane:
+    /// <c>docs/osc-client-contract.md</c> <c>/rave/onair/energy_state</c>.
+    /// </remarks>
+    private float ReadEnergyPace()
+    {
+        FloatRange pace = SyncSettings.EnergyPace;
+        return beatManager.Energy.Level switch
+        {
+            Energy.Low => pace.Min,
+            Energy.Mid => (pace.Min + pace.Max) * 0.5f,
+            Energy.High => pace.Max,
+            _ => 1f,
+        };
+    }
+
+    /// <summary>Returns the quarter-note Duration Pulse scaled by track-relative Normalized Low presence.</summary>
+    /// <remarks>
+    /// Musical meanings: <c>CONTEXT.md</c> entries Duration Pulse / Duration Gate and Levels;
+    /// wire lane: <c>docs/osc-client-contract.md</c> <c>/rave/onair/levels</c>.
+    /// </remarks>
+    private float ReadOnBeatPush()
+    {
+        float lowPresence = beatManager.Levels.Normalized.Low.Remap(
+            SyncSettings.LowPresenceThreshold,
+            1f,
+            0f,
+            1f,
+            clamp: true);
+        return beatManager.Pulses.Every(Duration.Quarter) *
+            lowPresence *
+            SyncSettings.OnBeatPushStrength;
     }
 
 
@@ -595,23 +676,28 @@ public sealed class KscopeSyncSettings
     /// <summary>Exclusive upper bound of the discrete channel-swap selector roll.</summary>
     public int ChannelSwapSelectorMaxExclusive;
 
-    /// <summary>Integer step endpoints used to roll texture motion.</summary>
-    public IntRange MotionStep = new IntRange();
+    /// <summary>Texture pan magnitude in source pixels per beat before musical pacing.</summary>
+    [Tooltip("Source-texture pixels panned per beat before Energy pace and On-Beat Push. Raise for faster travel at every BPM.")]
+    [Min(0f)] public float PanPixelsPerBeat;
 
-    /// <summary>Divisor converting a rolled motion step into texture-motion rate.</summary>
-    public float MotionStepDivisor;
+    /// <summary>Kaleidoscope rotation magnitude in radians per beat before musical pacing.</summary>
+    [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation.")]
+    [Min(0f)] public float RotationRadiansPerBeat;
 
-    /// <summary>Integer step endpoints used to roll kaleidoscope rotation speed.</summary>
-    public IntRange AngularSpeedStep = new IntRange();
+    /// <summary>Low-to-High Energy pace range; Mid uses the midpoint.</summary>
+    [Tooltip("Motion pace by Energy: Low = Min, Mid = midpoint, High = Max. A value of 1 is neutral; the range carries its own tuning Rails.")]
+    public FloatRange EnergyPace = new FloatRange();
 
-    /// <summary>Divisor converting a rolled angular step into rotation rate.</summary>
-    public float AngularSpeedStepDivisor;
+    /// <summary>Normalized Low threshold where bass presence begins opening the On-Beat Push.</summary>
+    [Tooltip("Track-relative Normalized Low level where the On-Beat Push begins. Raise it when non-bass material triggers the push; lower it when bass hits do not open it.")]
+    [Range(0f, 1f)] public float LowPresenceThreshold;
+
+    /// <summary>Pace added at a fully gated quarter-note pulse peak.</summary>
+    [Tooltip("Pace added at the peak of each quarter-note Duration Pulse after the Normalized Low gate. 0 disables the push; raise it for a harder bass hit.")]
+    [Min(0f)] public float OnBeatPushStrength;
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float BeatHueOffset;
-
-    /// <summary>Extra frame delta contributed at the held Waveform's peak.</summary>
-    [Min(0f)] public float RhythmDeltaBoost;
 
     /// <summary>Number of beats used by the inherited Drop slowdown.</summary>
     [Min(1)] public int DropSlowdownBeats;
@@ -628,20 +714,16 @@ public sealed class KscopeSyncSettings
         TextureAdvanceRangeDivisor = source.TextureAdvanceRangeDivisor;
         ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
         ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
-        MotionStep = new IntRange(
-            source.MotionStep.MinInclusive,
-            source.MotionStep.MaxExclusive,
-            source.MotionStep.LowRail,
-            source.MotionStep.HighRail);
-        MotionStepDivisor = source.MotionStepDivisor;
-        AngularSpeedStep = new IntRange(
-            source.AngularSpeedStep.MinInclusive,
-            source.AngularSpeedStep.MaxExclusive,
-            source.AngularSpeedStep.LowRail,
-            source.AngularSpeedStep.HighRail);
-        AngularSpeedStepDivisor = source.AngularSpeedStepDivisor;
+        PanPixelsPerBeat = source.PanPixelsPerBeat;
+        RotationRadiansPerBeat = source.RotationRadiansPerBeat;
+        EnergyPace = new FloatRange(
+            source.EnergyPace.Min,
+            source.EnergyPace.Max,
+            source.EnergyPace.LowRail,
+            source.EnergyPace.HighRail);
+        LowPresenceThreshold = source.LowPresenceThreshold;
+        OnBeatPushStrength = source.OnBeatPushStrength;
         BeatHueOffset = source.BeatHueOffset;
-        RhythmDeltaBoost = source.RhythmDeltaBoost;
         DropSlowdownBeats = source.DropSlowdownBeats;
     }
 }

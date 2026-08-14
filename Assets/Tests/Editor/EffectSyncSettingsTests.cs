@@ -337,13 +337,13 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.TextureAdvanceRangeDivisor = 18;
         asset.Settings.ColorSwapRollMaxExclusive = 19;
         asset.Settings.ChannelSwapSelectorMaxExclusive = 20;
-        asset.Settings.MotionStep = new IntRange(21, 22, 20, 23);
-        asset.Settings.MotionStepDivisor = 24f;
-        asset.Settings.AngularSpeedStep = new IntRange(25, 26, 24, 27);
-        asset.Settings.AngularSpeedStepDivisor = 28f;
-        asset.Settings.BeatHueOffset = 0.29f;
-        asset.Settings.RhythmDeltaBoost = 0.3f;
-        asset.Settings.DropSlowdownBeats = 31;
+        asset.Settings.PanPixelsPerBeat = 21f;
+        asset.Settings.RotationRadiansPerBeat = 22f;
+        asset.Settings.EnergyPace = new FloatRange(23f, 24f, 22f, 25f);
+        asset.Settings.LowPresenceThreshold = 0.26f;
+        asset.Settings.OnBeatPushStrength = 27f;
+        asset.Settings.BeatHueOffset = 0.28f;
+        asset.Settings.DropSlowdownBeats = 29;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Kscope), TempAssetFolder);
 
@@ -352,12 +352,12 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.TextureAdvanceRangeDivisor, Is.EqualTo(defaults.TextureAdvanceRangeDivisor));
         Assert.That(asset.Settings.ColorSwapRollMaxExclusive, Is.EqualTo(defaults.ColorSwapRollMaxExclusive));
         Assert.That(asset.Settings.ChannelSwapSelectorMaxExclusive, Is.EqualTo(defaults.ChannelSwapSelectorMaxExclusive));
-        AssertIntRangeEqual(asset.Settings.MotionStep, defaults.MotionStep);
-        Assert.That(asset.Settings.MotionStepDivisor, Is.EqualTo(defaults.MotionStepDivisor));
-        AssertIntRangeEqual(asset.Settings.AngularSpeedStep, defaults.AngularSpeedStep);
-        Assert.That(asset.Settings.AngularSpeedStepDivisor, Is.EqualTo(defaults.AngularSpeedStepDivisor));
+        Assert.That(asset.Settings.PanPixelsPerBeat, Is.EqualTo(defaults.PanPixelsPerBeat));
+        Assert.That(asset.Settings.RotationRadiansPerBeat, Is.EqualTo(defaults.RotationRadiansPerBeat));
+        AssertFloatRangeEqual(asset.Settings.EnergyPace, defaults.EnergyPace);
+        Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
+        Assert.That(asset.Settings.OnBeatPushStrength, Is.EqualTo(defaults.OnBeatPushStrength));
         Assert.That(asset.Settings.BeatHueOffset, Is.EqualTo(defaults.BeatHueOffset));
-        Assert.That(asset.Settings.RhythmDeltaBoost, Is.EqualTo(defaults.RhythmDeltaBoost));
         Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
     }
 
