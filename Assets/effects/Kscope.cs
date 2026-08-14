@@ -73,10 +73,12 @@ public class Kscope : ScreenEffect
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
-    /// Source-texture pixels panned per beat before musical pacing. Twelve keeps the image moving
-    /// visibly without racing across the smaller texture sources.
+    /// Fraction of the source image panned per beat before musical pacing — pattern-relative, so
+    /// every image crosses the same share of its own mirror period per beat. The pools span
+    /// 12x13 to 528x494 pixels; an absolute pixel rate raced the small images and crawled the
+    /// large ones. One tenth matches the retired 12 px/beat at the pools' median ~100 px width.
     /// </summary>
-    private const float SyncPanPixelsPerBeat = 12f;
+    private const float SyncPanFractionPerBeat = 0.1f;
 
     /// <summary>
     /// Kaleidoscope rotation in radians per beat before musical pacing. Three tenths is a visible
@@ -135,7 +137,7 @@ public class Kscope : ScreenEffect
         TextureAdvanceRangeDivisor = SyncTextureAdvanceRangeDivisor,
         ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
-        PanPixelsPerBeat = SyncPanPixelsPerBeat,
+        PanFractionPerBeat = SyncPanFractionPerBeat,
         RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
         EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         LowPresenceThreshold = SyncLowPresenceThreshold,
@@ -472,8 +474,8 @@ public class Kscope : ScreenEffect
         if (beatManager.IsSynced)
         {
             float motionScale = ReadSyncedMotionScale();
-            positionX += motionX * SyncSettings.PanPixelsPerBeat * motionScale * localDelta;
-            positionY += motionY * SyncSettings.PanPixelsPerBeat * motionScale * localDelta;
+            positionX += motionX * SyncSettings.PanFractionPerBeat * texWidth * motionScale * localDelta;
+            positionY += motionY * SyncSettings.PanFractionPerBeat * texHeight * motionScale * localDelta;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
@@ -676,9 +678,9 @@ public sealed class KscopeSyncSettings
     /// <summary>Exclusive upper bound of the discrete channel-swap selector roll.</summary>
     public int ChannelSwapSelectorMaxExclusive;
 
-    /// <summary>Texture pan magnitude in source pixels per beat before musical pacing.</summary>
-    [Tooltip("Source-texture pixels panned per beat before Energy pace and On-Beat Push. Raise for faster travel at every BPM.")]
-    [Min(0f)] public float PanPixelsPerBeat;
+    /// <summary>Fraction of the source image panned per beat before musical pacing — per axis, so X crosses that share of the width and Y of the height.</summary>
+    [Tooltip("Fraction of the image panned per beat before Energy pace and On-Beat Push. Pattern-relative, so every image size reads the same speed; 0.1 crosses a tenth of the image per beat.")]
+    [Min(0f)] public float PanFractionPerBeat;
 
     /// <summary>Kaleidoscope rotation magnitude in radians per beat before musical pacing.</summary>
     [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation.")]
@@ -714,7 +716,7 @@ public sealed class KscopeSyncSettings
         TextureAdvanceRangeDivisor = source.TextureAdvanceRangeDivisor;
         ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
         ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
-        PanPixelsPerBeat = source.PanPixelsPerBeat;
+        PanFractionPerBeat = source.PanFractionPerBeat;
         RotationRadiansPerBeat = source.RotationRadiansPerBeat;
         EnergyPace = new FloatRange(
             source.EnergyPace.Min,
