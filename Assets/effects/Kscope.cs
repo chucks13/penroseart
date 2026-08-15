@@ -490,13 +490,12 @@ public class Kscope : ScreenEffect
      */
     /// <summary>Samples the moving texture into the wall buffer, then mirrors every selected Shape List group.</summary>
     /// <remarks>
-    /// In Synced Mode, one source-pixels-per-wall-unit scale uses the smaller of the current
-    /// source-width-to-50 and source-height-to-22 ratios. The same live scale governs the rotated
-    /// sampling grid and converts <c>PanWallUnitsPerBeat</c> for both Energy pace and the gated
-    /// On-Beat Push into texture coordinates without stretching the source. Rotation keeps their
-    /// combined per-second scale. Musical meanings are defined by the Data Surface, Energy, and
-    /// Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
-    /// <c>docs/osc-client-contract.md</c>.
+    /// In Synced Mode, Energy pace and the gated On-Beat Push combine into one motion scale.
+    /// <c>PanWallUnitsPerBeat</c> converts that motion into a source-relative position delta per
+    /// axis, while sampling remains one source texel per screen-buffer pixel so image presentation
+    /// stays unchanged. Rotation keeps the combined per-second scale. Musical meanings are defined
+    /// by the Data Surface, Energy, and Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes
+    /// are defined in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public override void Draw()
     {
@@ -507,19 +506,14 @@ public class Kscope : ScreenEffect
         float rhythm = waveform.Envelope;
         float beatHue = SyncSettings.BeatHueOffset * rhythm;
         float localDelta = DropSlowdown(effectDelta, SyncSettings.DropSlowdownBeats);
-        float sourcePixelsPerWallUnit = 1f;
         float rotationDelta;
         if (beatManager.IsSynced)
         {
-            sourcePixelsPerWallUnit = Mathf.Min((float)texWidth / width, (float)texHeight / height);
             float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
-            float energyScale = ReadEnergyPace() / beatSeconds;
-            float onBeatPushScale = ReadOnBeatPush() / beatSeconds;
-            float energyPanDelta = SyncSettings.PanWallUnitsPerBeat * energyScale * localDelta * sourcePixelsPerWallUnit;
-            float onBeatPushPanDelta = SyncSettings.PanWallUnitsPerBeat * onBeatPushScale * localDelta * sourcePixelsPerWallUnit;
-            positionX += motionX * (energyPanDelta + onBeatPushPanDelta);
-            positionY += motionY * (energyPanDelta + onBeatPushPanDelta);
-            float motionScale = energyScale + onBeatPushScale;
+            float motionScale = (ReadEnergyPace() + ReadOnBeatPush()) / beatSeconds;
+            float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
+            positionX += motionX * panWallDelta * texWidth / width;
+            positionY += motionY * panWallDelta * texHeight / height;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
@@ -545,9 +539,9 @@ public class Kscope : ScreenEffect
             for (int y = 0; y < height; y++)
             {
                 // center about screen
-                double x1 = (x - wh) * sourcePixelsPerWallUnit;
-                double y1 = (y - yh) * sourcePixelsPerWallUnit;
-                // One uniform scale before rotation preserves source aspect and rotation geometry.
+                double x1 = x - wh;
+                double y1 = y - yh;
+                // Apply rotation at one source texel per screen-buffer pixel.
                 double x2 = (m11 * x1) + (m12 * y1);
                 double y2 = (m21 * x1) + (m22 * y1);
                 // offset to position
