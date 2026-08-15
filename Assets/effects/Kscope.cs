@@ -489,6 +489,13 @@ public class Kscope : ScreenEffect
      * y2=sinßx1+cosßy1
      */
     /// <summary>Samples the moving texture into the wall buffer, then mirrors every selected Shape List group.</summary>
+    /// <remarks>
+    /// In Synced Mode, Energy pace is expressed in source texels while the gated On-Beat Push is
+    /// expressed in wall units and converted to texture coordinates per axis. Rotation keeps their
+    /// combined per-second scale. Musical meanings are defined by the Data Surface, Energy, and
+    /// Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     public override void Draw()
     {
         if (Input.GetKeyDown(KeyCode.Return))
@@ -501,10 +508,14 @@ public class Kscope : ScreenEffect
         float rotationDelta;
         if (beatManager.IsSynced)
         {
-            float motionScale = ReadSyncedMotionScale();
-            float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
-            positionX += motionX * panWallDelta * texWidth / width;
-            positionY += motionY * panWallDelta * texHeight / height;
+            float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
+            float energyScale = ReadEnergyPace() / beatSeconds;
+            float onBeatPushScale = ReadOnBeatPush() / beatSeconds;
+            float energyPanDelta = SyncSettings.PanWallUnitsPerBeat * energyScale * localDelta;
+            float onBeatPushPanDelta = SyncSettings.PanWallUnitsPerBeat * onBeatPushScale * localDelta;
+            positionX += motionX * (energyPanDelta + (onBeatPushPanDelta * texWidth / width));
+            positionY += motionY * (energyPanDelta + (onBeatPushPanDelta * texHeight / height));
+            float motionScale = energyScale + onBeatPushScale;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
@@ -591,20 +602,6 @@ public class Kscope : ScreenEffect
                 buffer[group[j]] = tileColor;
             }
         }
-    }
-
-    /// <summary>
-    /// Converts the authored per-beat magnitudes into per-second motion, paced by current Energy
-    /// and lifted by the gated On-Beat Push.
-    /// </summary>
-    /// <remarks>
-    /// Musical meanings: <c>CONTEXT.md</c> entries Data Surface and Energy. The live interval is
-    /// the <c>/rave/onair/beat_avg_ms</c> lane in <c>docs/osc-client-contract.md</c>.
-    /// </remarks>
-    private float ReadSyncedMotionScale()
-    {
-        float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
-        return (ReadEnergyPace() + ReadOnBeatPush()) / beatSeconds;
     }
 
     /// <summary>Maps Low/Mid/High Energy onto the authored pace range, resting at neutral when unavailable.</summary>
