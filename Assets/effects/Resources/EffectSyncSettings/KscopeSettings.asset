@@ -25,7 +25,7 @@ MonoBehaviour:
       Max: 1.5
       LowRail: 0.5
       HighRail: 1.25
-    LowPresenceThreshold: 0.25
+    LowPresenceThreshold: 0.4
     OnBeatPushStrength: 10
     PaletteSaturationFloor: 0.3
     BeatHueOffset: 0.5
