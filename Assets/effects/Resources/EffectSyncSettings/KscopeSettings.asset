@@ -21,12 +21,12 @@ MonoBehaviour:
     PanWallUnitsPerBeat: 10
     RotationRadiansPerBeat: 0.3
     EnergyPace:
-      Min: 0.6
+      Min: 0.5
       Max: 1.5
-      LowRail: 0.6
-      HighRail: 1.5
+      LowRail: 0.5
+      HighRail: 1.25
     LowPresenceThreshold: 0.25
-    OnBeatPushStrength: 3
+    OnBeatPushStrength: 10
     PaletteSaturationFloor: 0.3
     BeatHueOffset: 0.5
     DropSlowdownBeats: 8
