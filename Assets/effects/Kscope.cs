@@ -73,33 +73,33 @@ public class Kscope : ScreenEffect
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
-    /// Wall units panned per beat before musical pacing. Ten preserves the wall's current
+    /// Wall units panned per beat before musical pacing. Six preserves the wall-approved
     /// neutral-pace drift without coupling motion to the source image.
     /// </summary>
-    private const float SyncPanWallUnitsPerBeat = 10f;
+    private const float SyncPanWallUnitsPerBeat = 6f;
 
-    /// <summary>Neutral Mirror2 calibration before the layout is tuned on the wall.</summary>
-    private const float SyncMirror2MotionScale = 1f;
+    /// <summary>Mirror2 motion calibration chosen on the wall to match Mirror10.</summary>
+    private const float SyncMirror2MotionScale = 2f;
 
-    /// <summary>Neutral Mirror10 calibration before the layout is tuned on the wall.</summary>
+    /// <summary>Neutral Mirror10 reference used by the wall-tuned Mirror2 calibration.</summary>
     private const float SyncMirror10MotionScale = 1f;
 
     /// <summary>
-    /// Kaleidoscope rotation in radians per beat before musical pacing — about seventeen
+    /// Kaleidoscope rotation in radians per beat before musical pacing — about six
     /// degrees.
     /// </summary>
-    private const float SyncRotationRadiansPerBeat = 0.3f;
+    private const float SyncRotationRadiansPerBeat = 0.1f;
 
     /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
-    private const float SyncEnergyPaceLow = 0.5f;
+    private const float SyncEnergyPaceLow = 0.75f;
 
     /// <summary>High Energy pace accelerates the base motion; Mid remains neutral at the range midpoint.</summary>
     private const float SyncEnergyPaceHigh = 1.5f;
 
     /// <summary>
-    /// Upper editor rail retained from wall tuning without changing the authored High Energy pace.
+    /// Upper editor rail matches the wall-tuned High Energy pace.
     /// </summary>
-    private const float SyncEnergyPaceHighRail = 1.25f;
+    private const float SyncEnergyPaceHighRail = 1.5f;
 
     /// <summary>
     /// Normalized Low threshold where bass presence begins contributing to the On-Beat Push. Levels
@@ -110,9 +110,9 @@ public class Kscope : ScreenEffect
     /// <summary>
     /// Pace added where the continuous wire beat pulse reaches one after the Normalized Low
     /// gate. The gate product rarely nears one — the threshold remap discounts it — so strength
-    /// calibrates in whole units; ten reads as clear acceleration above the Energy-paced base.
+    /// calibrates in whole units; seven reads as clear acceleration above the Energy-paced base.
     /// </summary>
-    private const float SyncOnBeatPushStrength = 10f;
+    private const float SyncOnBeatPushStrength = 7f;
 
     /// <summary>
     /// Minimum saturation applied to the shared-palette read in Synced mono mode. Every
