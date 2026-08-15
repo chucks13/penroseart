@@ -73,24 +73,14 @@ public class Kscope : ScreenEffect
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
-    /// Wall units the source image's width spans in Synced Mode — the sampling zoom. Image size
-    /// must never reach the wall: the pools span 12x13 to 528x494 pixels, and any raw-size
-    /// sampling makes speed and the On-Beat Push read differently per image. Twenty-five fits
-    /// the whole picture in one Mirror2 half of the 50x22 wall.
+    /// Wall units panned per beat before musical pacing. Ten preserves the wall's current
+    /// neutral-pace drift without coupling motion to the source image.
     /// </summary>
-    private const float SyncImageSpan = 25f;
-
-    /// <summary>
-    /// Fraction of the source image panned per beat before musical pacing. With every image
-    /// scaled to the authored footprint, this is the same wall distance on every image — four
-    /// tenths crosses the picture in two and a half beats, a readable drift at Mid pace.
-    /// </summary>
-    private const float SyncPanFractionPerBeat = 0.4f;
+    private const float SyncPanWallUnitsPerBeat = 10f;
 
     /// <summary>
     /// Kaleidoscope rotation in radians per beat before musical pacing — about seventeen
-    /// degrees. Uniform across images because Synced sampling scales every image to the
-    /// authored footprint.
+    /// degrees.
     /// </summary>
     private const float SyncRotationRadiansPerBeat = 0.3f;
 
@@ -154,8 +144,7 @@ public class Kscope : ScreenEffect
         TextureAdvanceRangeDivisor = SyncTextureAdvanceRangeDivisor,
         ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
-        ImageSpan = SyncImageSpan,
-        PanFractionPerBeat = SyncPanFractionPerBeat,
+        PanWallUnitsPerBeat = SyncPanWallUnitsPerBeat,
         RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
         EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         LowPresenceThreshold = SyncLowPresenceThreshold,
@@ -190,8 +179,7 @@ public class Kscope : ScreenEffect
     Texture2D currentTex;
 
     /// <summary>
-    /// The script-created copy owned by the current activation — a channel-swapped variant, a
-    /// Synced footprint prescale, or the prescale of a swap — or null when the pick renders
+    /// The channel-swapped copy owned by the current activation, or null when the pick renders
     /// straight from the pool. Script-created textures are never garbage-collected, so this
     /// reference is what the next activation destroys.
     /// </summary>
@@ -390,40 +378,6 @@ public class Kscope : ScreenEffect
     }
 
     /// <summary>
-    /// Box-averages a source texture down to the authored footprint resolution — one texel per
-    /// wall unit across <paramref name="imageSpan"/> wall units of width, aspect preserved.
-    /// </summary>
-    /// <remarks>
-    /// Draw samples one texel per wall unit, so an image wider than the footprint would be
-    /// minified by point sampling — thin features fall between the samples and vanish, and
-    /// periodic ones alias into large flat fields. Each output texel instead averages the source
-    /// block it replaces, so every source pixel contributes and the wall shows the image's true
-    /// tone. The caller owns the returned script-created texture.
-    /// </remarks>
-    private Texture2D PrescaleToFootprint(Texture2D source, float imageSpan)
-    {
-        int targetWidth = Mathf.CeilToInt(imageSpan);
-        int targetHeight = Mathf.Max(1, Mathf.RoundToInt(source.height * (float)targetWidth / source.width));
-        Texture2D newTex = new Texture2D(targetWidth, targetHeight);
-        for (int x = 0; x < targetWidth; x++)
-        {
-            int x0 = x * source.width / targetWidth;
-            int x1 = (x + 1) * source.width / targetWidth;
-            for (int y = 0; y < targetHeight; y++)
-            {
-                int y0 = y * source.height / targetHeight;
-                int y1 = (y + 1) * source.height / targetHeight;
-                Color sum = Color.clear;
-                for (int sx = x0; sx < x1; sx++)
-                    for (int sy = y0; sy < y1; sy++)
-                        sum += source.GetPixel(sx, sy);
-                newTex.SetPixel(x, y, sum / ((x1 - x0) * (y1 - y0)));
-            }
-        }
-        return newTex;
-    }
-
-    /// <summary>
     /// Captures the active texture's red-channel mean and standard deviation for the debug
     /// readout. Red is the channel the mono path consumes for both palette position and
     /// brightness, so a pale, low-deviation reading is the wash-prone case.
@@ -451,7 +405,7 @@ public class Kscope : ScreenEffect
     public override void OnStart()
     {
         // Unity never garbage-collects script-created textures, so the previous activation's
-        // owned copy is destroyed here — every activation path (switch-in and re-roll)
+        // channel-swapped copy is destroyed here — every activation path (switch-in and re-roll)
         // passes through OnStart.
         if (ownedTex != null)
         {
@@ -513,16 +467,6 @@ public class Kscope : ScreenEffect
             currentTex = monoTex[which - colorCount].tex;
             fname = monoTex[which - colorCount].fname;
             mode = 1;
-        }
-        if (isSynced && currentTex.width > SyncSettings.ImageSpan)
-        {
-            // Wider than the footprint means Draw's point sampling would skip texels — see
-            // PrescaleToFootprint. The prescale replaces any channel-swapped copy as the owned texture.
-            Texture2D prescaled = PrescaleToFootprint(currentTex, SyncSettings.ImageSpan);
-            if (ownedTex != null)
-                UnityEngine.Object.Destroy(ownedTex);
-            ownedTex = prescaled;
-            currentTex = prescaled;
         }
         texWidth = currentTex.width;
         texHeight = currentTex.height;
@@ -586,17 +530,12 @@ public class Kscope : ScreenEffect
         float beatHue = SyncSettings.BeatHueOffset * rhythm;
         float localDelta = DropSlowdown(effectDelta, SyncSettings.DropSlowdownBeats);
         float rotationDelta;
-        // Texture pixels sampled per wall unit. Synced scales every image to the authored
-        // footprint so image size never reaches the wall — speed and the On-Beat Push read
-        // the same on every image. Standalone keeps the historical 1:1 sampling and look.
-        float sampleScale = 1f;
         if (beatManager.IsSynced)
         {
             float motionScale = ReadSyncedMotionScale();
-            positionX += motionX * SyncSettings.PanFractionPerBeat * texWidth * motionScale * localDelta;
-            positionY += motionY * SyncSettings.PanFractionPerBeat * texHeight * motionScale * localDelta;
+            positionX += motionX * SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
+            positionY += motionY * SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
-            sampleScale = texWidth / SyncSettings.ImageSpan;
         }
         else
         {
@@ -623,9 +562,9 @@ public class Kscope : ScreenEffect
                 // center about screen
                 double x1 = x - wh;
                 double y1 = y - yh;
-                // apply rotation, then scale to the authored footprint
-                double x2 = ((m11 * x1) + (m12 * y1)) * sampleScale;
-                double y2 = ((m21 * x1) + (m22 * y1)) * sampleScale;
+                // apply rotation at one source texel per screen-buffer pixel
+                double x2 = (m11 * x1) + (m12 * y1);
+                double y2 = (m21 * x1) + (m22 * y1);
                 // offset to position
                 x2 += positionX;
                 y2 += positionY;
@@ -807,16 +746,12 @@ public sealed class KscopeSyncSettings
     /// <summary>Exclusive upper bound of the discrete channel-swap selector roll.</summary>
     public int ChannelSwapSelectorMaxExclusive;
 
-    /// <summary>Wall units the image's width spans in Synced Mode — the sampling zoom.</summary>
-    [Tooltip("Wall units the image's width spans on the 50x22 wall — the zoom. 25 fits the picture in one Mirror2 half; smaller tiles the image more, larger crops into it.")]
-    [Min(0f)] public float ImageSpan;
-
-    /// <summary>Fraction of the source image panned per beat before musical pacing — per axis, so X crosses that share of the width and Y of the height.</summary>
-    [Tooltip("Fraction of the image panned per beat before Energy pace and On-Beat Push. Pattern-relative, so every image size reads the same speed; 0.1 crosses a tenth of the image per beat.")]
-    [Min(0f)] public float PanFractionPerBeat;
+    /// <summary>Screen-buffer pixels panned per beat before musical pacing.</summary>
+    [Tooltip("Wall units panned per beat before Energy pace and On-Beat Push. One wall unit is one pixel in Kscope's 50x22 screen buffer; 10 moves ten wall pixels at motion scale 1.")]
+    [Min(0f)] public float PanWallUnitsPerBeat;
 
     /// <summary>Kaleidoscope rotation in radians per beat before musical pacing.</summary>
-    [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation. Reads the same on every image because Synced sampling fixes the footprint.")]
+    [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation.")]
     [Min(0f)] public float RotationRadiansPerBeat;
 
     /// <summary>Low-to-High Energy pace range; Mid uses the midpoint.</summary>
@@ -853,8 +788,7 @@ public sealed class KscopeSyncSettings
         TextureAdvanceRangeDivisor = source.TextureAdvanceRangeDivisor;
         ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
         ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
-        ImageSpan = source.ImageSpan;
-        PanFractionPerBeat = source.PanFractionPerBeat;
+        PanWallUnitsPerBeat = source.PanWallUnitsPerBeat;
         RotationRadiansPerBeat = source.RotationRadiansPerBeat;
         EnergyPace = new FloatRange(
             source.EnergyPace.Min,

@@ -325,7 +325,7 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// Restore replaces every edited Kscope Sync Setting and Rail with the current file-local Sync
-    /// Defaults, including the picture-shaping values dual-homed on both mode surfaces.
+    /// Defaults, including the wall-unit pan value that must be present in the saved asset.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryKscopeValue()
@@ -337,8 +337,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.TextureAdvanceRangeDivisor = 18;
         asset.Settings.ColorSwapRollMaxExclusive = 19;
         asset.Settings.ChannelSwapSelectorMaxExclusive = 20;
-        asset.Settings.ImageSpan = 20.5f;
-        asset.Settings.PanFractionPerBeat = 21f;
+        asset.Settings.PanWallUnitsPerBeat = 21f;
         asset.Settings.RotationRadiansPerBeat = 22f;
         asset.Settings.EnergyPace = new FloatRange(23f, 24f, 22f, 25f);
         asset.Settings.LowPresenceThreshold = 0.26f;
@@ -354,8 +353,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.TextureAdvanceRangeDivisor, Is.EqualTo(defaults.TextureAdvanceRangeDivisor));
         Assert.That(asset.Settings.ColorSwapRollMaxExclusive, Is.EqualTo(defaults.ColorSwapRollMaxExclusive));
         Assert.That(asset.Settings.ChannelSwapSelectorMaxExclusive, Is.EqualTo(defaults.ChannelSwapSelectorMaxExclusive));
-        Assert.That(asset.Settings.ImageSpan, Is.EqualTo(defaults.ImageSpan));
-        Assert.That(asset.Settings.PanFractionPerBeat, Is.EqualTo(defaults.PanFractionPerBeat));
+        Assert.That(asset.Settings.PanWallUnitsPerBeat, Is.EqualTo(defaults.PanWallUnitsPerBeat));
         Assert.That(asset.Settings.RotationRadiansPerBeat, Is.EqualTo(defaults.RotationRadiansPerBeat));
         AssertFloatRangeEqual(asset.Settings.EnergyPace, defaults.EnergyPace);
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
