@@ -503,10 +503,10 @@ public class Kscope : ScreenEffect
     /// <remarks>
     /// In Synced Mode, Energy pace and the gated On-Beat Push combine into one motion scale.
     /// The current mirror layout's live calibration normalizes that scale before it drives pan and
-    /// rotation. <c>PanWallUnitsPerBeat</c> then converts the motion into a source-relative position
-    /// delta per axis, while sampling remains one source texel per screen-buffer pixel so image
-    /// presentation stays unchanged. Musical meanings are defined by the Data Surface, Energy, and
-    /// Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
+    /// rotation. <c>PanWallUnitsPerBeat</c> then moves the sampling position in screen-buffer pixels,
+    /// independent of source dimensions, while sampling remains one source texel per screen-buffer
+    /// pixel so image presentation stays unchanged. Musical meanings are defined by the Data Surface,
+    /// Energy, and Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public override void Draw()
@@ -528,8 +528,8 @@ public class Kscope : ScreenEffect
             float motionScale = (ReadEnergyPace() + ReadOnBeatPush())
                 * mirrorMotionScale / beatSeconds;
             float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
-            positionX += motionX * panWallDelta * texWidth / width;
-            positionY += motionY * panWallDelta * texHeight / height;
+            positionX += motionX * panWallDelta;
+            positionY += motionY * panWallDelta;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
