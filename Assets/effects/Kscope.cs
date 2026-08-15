@@ -85,7 +85,7 @@ public class Kscope : ScreenEffect
     private const float SyncRotationRadiansPerBeat = 0.3f;
 
     /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
-    private const float SyncEnergyPaceLow = 0.6f;
+    private const float SyncEnergyPaceLow = 0.5f;
 
     /// <summary>High Energy pace accelerates the base motion; Mid remains neutral at the range midpoint.</summary>
     private const float SyncEnergyPaceHigh = 1.5f;
@@ -98,10 +98,10 @@ public class Kscope : ScreenEffect
 
     /// <summary>
     /// Pace added at a fully gated wire-beat-pulse peak. The gate product rarely nears one —
-    /// the threshold remap discounts it — so strength calibrates in whole units; three reads
+    /// the threshold remap discounts it — so strength calibrates in whole units; ten reads
     /// as a clear kick above the Energy-paced base.
     /// </summary>
-    private const float SyncOnBeatPushStrength = 3f;
+    private const float SyncOnBeatPushStrength = 10f;
 
     /// <summary>
     /// Minimum saturation applied to the shared-palette read in Synced mono mode. Every
