@@ -97,9 +97,9 @@ public class Kscope : ScreenEffect
     private const float SyncLowPresenceThreshold = 0.25f;
 
     /// <summary>
-    /// Pace added at a fully gated quarter-note pulse peak. The gate product rarely nears one —
-    /// the threshold remap and the decaying pulse both discount it — so strength calibrates in
-    /// whole units; three reads as a clear kick above the Energy-paced base.
+    /// Pace added at a fully gated wire-beat-pulse peak. The gate product rarely nears one —
+    /// the threshold remap discounts it — so strength calibrates in whole units; three reads
+    /// as a clear kick above the Energy-paced base.
     /// </summary>
     private const float SyncOnBeatPushStrength = 3f;
 
@@ -654,10 +654,13 @@ public class Kscope : ScreenEffect
         };
     }
 
-    /// <summary>Returns the quarter-note Duration Pulse scaled by track-relative Normalized Low presence.</summary>
+    /// <summary>Returns the wire beat pulse scaled by track-relative Normalized Low presence.</summary>
     /// <remarks>
-    /// Musical meanings: <c>CONTEXT.md</c> entries Duration Pulse / Duration Gate and Levels;
-    /// wire lane: <c>docs/osc-client-contract.md</c> <c>/rave/onair/levels</c>.
+    /// The wire pulse rests at zero between beats, peaks at one on each beat, and falls back,
+    /// so the push lands as a per-beat hit. Musical meanings: <c>CONTEXT.md</c> entries
+    /// Duration Pulse / Duration Gate (the wire <c>beat_pulse</c> offering) and Levels; wire
+    /// lanes: <c>docs/osc-client-contract.md</c> <c>/rave/onair/beat_pulse</c> and
+    /// <c>/rave/onair/levels</c>.
     /// </remarks>
     private float ReadOnBeatPush()
     {
@@ -667,7 +670,7 @@ public class Kscope : ScreenEffect
             0f,
             1f,
             clamp: true);
-        return beatManager.Pulses.Every(Duration.Quarter) *
+        return beatManager.Pulses.Beat *
             lowPresence *
             SyncSettings.OnBeatPushStrength;
     }
@@ -762,8 +765,8 @@ public sealed class KscopeSyncSettings
     [Tooltip("Track-relative Normalized Low level where the On-Beat Push begins. Raise it when non-bass material triggers the push; lower it when bass hits do not open it.")]
     [Range(0f, 1f)] public float LowPresenceThreshold;
 
-    /// <summary>Pace added at a fully gated quarter-note pulse peak.</summary>
-    [Tooltip("Pace added at the peak of each quarter-note Duration Pulse after the Normalized Low gate. 0 disables the push; raise it for a harder bass hit.")]
+    /// <summary>Pace added at a fully gated wire-beat-pulse peak.</summary>
+    [Tooltip("Pace added at the peak of the wire beat pulse after the Normalized Low gate. 0 disables the push; raise it for a harder bass hit.")]
     [Min(0f)] public float OnBeatPushStrength;
 
     /// <summary>Minimum saturation applied to the shared-palette read in mono mode.</summary>
