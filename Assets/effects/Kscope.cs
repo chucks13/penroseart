@@ -502,8 +502,9 @@ public class Kscope : ScreenEffect
         if (beatManager.IsSynced)
         {
             float motionScale = ReadSyncedMotionScale();
-            positionX += motionX * SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
-            positionY += motionY * SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
+            float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
+            positionX += motionX * panWallDelta * texWidth / width;
+            positionY += motionY * panWallDelta * texHeight / height;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
