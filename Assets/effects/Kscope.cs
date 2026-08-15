@@ -91,15 +91,20 @@ public class Kscope : ScreenEffect
     private const float SyncEnergyPaceHigh = 1.5f;
 
     /// <summary>
+    /// Upper editor rail retained from wall tuning without changing the authored High Energy pace.
+    /// </summary>
+    private const float SyncEnergyPaceHighRail = 1.25f;
+
+    /// <summary>
     /// Normalized Low threshold where bass presence begins contributing to the On-Beat Push. Levels
     /// are track-relative, so this remains a live tuning knob instead of an absolute-loudness claim.
     /// </summary>
     private const float SyncLowPresenceThreshold = 0.25f;
 
     /// <summary>
-    /// Pace added at a fully gated wire-beat-pulse peak. The gate product rarely nears one —
-    /// the threshold remap discounts it — so strength calibrates in whole units; ten reads
-    /// as a clear kick above the Energy-paced base.
+    /// Pace added where the continuous wire beat pulse reaches one after the Normalized Low
+    /// gate. The gate product rarely nears one — the threshold remap discounts it — so strength
+    /// calibrates in whole units; ten reads as clear acceleration above the Energy-paced base.
     /// </summary>
     private const float SyncOnBeatPushStrength = 10f;
 
@@ -146,7 +151,11 @@ public class Kscope : ScreenEffect
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
         PanWallUnitsPerBeat = SyncPanWallUnitsPerBeat,
         RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
-        EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
+        EnergyPace = new FloatRange(
+            SyncEnergyPaceLow,
+            SyncEnergyPaceHigh,
+            SyncEnergyPaceLow,
+            SyncEnergyPaceHighRail),
         LowPresenceThreshold = SyncLowPresenceThreshold,
         OnBeatPushStrength = SyncOnBeatPushStrength,
         PaletteSaturationFloor = SyncPaletteSaturationFloor,
@@ -184,12 +193,6 @@ public class Kscope : ScreenEffect
     /// reference is what the next activation destroys.
     /// </summary>
     private Texture2D ownedTex;
-
-    /// <summary>Mean of the active texture's red channel, captured at activation for the debug readout.</summary>
-    private float debugImageMean;
-
-    /// <summary>Standard deviation of the active texture's red channel, captured at activation for the debug readout.</summary>
-    private float debugImageDeviation;
 
     /// <summary>Name of the mirror layout rolled for this activation, shown in the debug readout.</summary>
     private string debugMirrorName = "";
@@ -301,27 +304,16 @@ public class Kscope : ScreenEffect
 
     }
     /// <summary>
-    /// Returns text for the Controller debug display while this effect is active: file, pool,
-    /// mirror layout, active-texture red mean and deviation, palette transition state, and the
-    /// percentage of near-white wall tiles — the white-wall symptom.
+    /// Returns cheap live tuning text for the Controller debug display: file, pool, mirror layout,
+    /// wire beat pulse, Normalized Low, and the resulting On-Beat Push.
     /// </summary>
     public override string DebugText()
     {
-        int neutralBright = 0;
-        for (int i = 0; i < buffer.Length; i++)
-        {
-            Color.RGBToHSV(buffer[i], out _, out float s, out float v);
-            // The worker-measured symptom band: barely tinted but lit — saturation under 0.15
-            // at brightness 0.5 or more.
-            if (s < 0.15f && v >= 0.5f)
-                neutralBright++;
-        }
-        string paletteState = APalette.IsTransitioning
-            ? $"fade {APalette.TransitionProgress:F2}"
-            : "steady";
+        float pulse = beatManager.Pulses.Beat;
+        float low = beatManager.Levels.Normalized.Low;
+        float push = beatManager.IsSynced ? ReadOnBeatPush() : 0f;
         return $"file {fname} {(mode == 0 ? "color" : "mono")} {debugMirrorName} " +
-            $"img {debugImageMean:F2}±{debugImageDeviation:F2} " +
-            $"pal {paletteState} white {(100 * neutralBright) / buffer.Length}% ";
+            $"pulse {pulse:F2} low {low:F2} push {push:F2} ";
     }
 
     /// <summary>
@@ -377,28 +369,6 @@ public class Kscope : ScreenEffect
         return newTex;
     }
 
-    /// <summary>
-    /// Captures the active texture's red-channel mean and standard deviation for the debug
-    /// readout. Red is the channel the mono path consumes for both palette position and
-    /// brightness, so a pale, low-deviation reading is the wash-prone case.
-    /// </summary>
-    private void CaptureDebugImageStats()
-    {
-        float sum = 0f;
-        float sumSquares = 0f;
-        for (int x = 0; x < texWidth; x++)
-        {
-            for (int y = 0; y < texHeight; y++)
-            {
-                float r = currentTex.GetPixel(x, y).r;
-                sum += r;
-                sumSquares += r * r;
-            }
-        }
-        int pixelCount = texWidth * texHeight;
-        debugImageMean = sum / pixelCount;
-        debugImageDeviation = Mathf.Sqrt(Mathf.Max(0f, sumSquares / pixelCount - debugImageMean * debugImageMean));
-    }
     /// <summary>
     /// Initializes per-activation random state before this effect starts drawing.
     /// </summary>
@@ -470,7 +440,6 @@ public class Kscope : ScreenEffect
         }
         texWidth = currentTex.width;
         texHeight = currentTex.height;
-        CaptureDebugImageStats();
         if (isSynced)
         {
             // Synced magnitudes stay live in Sync Settings; the Roll retains direction only.
@@ -654,13 +623,14 @@ public class Kscope : ScreenEffect
         };
     }
 
-    /// <summary>Returns the wire beat pulse scaled by track-relative Normalized Low presence.</summary>
+    /// <summary>Returns the continuous wire beat pulse scaled by track-relative Normalized Low presence.</summary>
     /// <remarks>
-    /// The wire pulse rests at zero between beats, peaks at one on each beat, and falls back,
-    /// so the push lands as a per-beat hit. Musical meanings: <c>CONTEXT.md</c> entries
-    /// Duration Pulse / Duration Gate (the wire <c>beat_pulse</c> offering) and Levels; wire
-    /// lanes: <c>docs/osc-client-contract.md</c> <c>/rave/onair/beat_pulse</c> and
-    /// <c>/rave/onair/levels</c>.
+    /// The wire pulse is a triangle: one on each beat, zero halfway to the next beat, then rising
+    /// back to one. Multiplying that continuous shape by thresholded Normalized Low produces the
+    /// authored beat-synchronous push; it is not a one-shot trigger. Musical meanings:
+    /// <c>CONTEXT.md</c> entries Duration Pulse / Duration Gate (the wire <c>beat_pulse</c>
+    /// offering) and Levels; wire lanes: <c>docs/osc-client-contract.md</c>
+    /// <c>/rave/onair/beat_pulse</c> and <c>/rave/onair/levels</c>.
     /// </remarks>
     private float ReadOnBeatPush()
     {
@@ -765,8 +735,8 @@ public sealed class KscopeSyncSettings
     [Tooltip("Track-relative Normalized Low level where the On-Beat Push begins. Raise it when non-bass material triggers the push; lower it when bass hits do not open it.")]
     [Range(0f, 1f)] public float LowPresenceThreshold;
 
-    /// <summary>Pace added at a fully gated wire-beat-pulse peak.</summary>
-    [Tooltip("Pace added at the peak of the wire beat pulse after the Normalized Low gate. 0 disables the push; raise it for a harder bass hit.")]
+    /// <summary>Pace added where the continuous wire beat pulse reaches one after the Normalized Low gate.</summary>
+    [Tooltip("Pace added where the continuous wire beat pulse reaches 1 after the Normalized Low gate. 0 disables the push; raise it for stronger beat-synchronous acceleration.")]
     [Min(0f)] public float OnBeatPushStrength;
 
     /// <summary>Minimum saturation applied to the shared-palette read in mono mode.</summary>
