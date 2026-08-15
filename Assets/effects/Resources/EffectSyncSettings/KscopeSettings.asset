@@ -18,15 +18,15 @@ MonoBehaviour:
     TextureAdvanceRangeDivisor: 3
     ColorSwapRollMaxExclusive: 3
     ChannelSwapSelectorMaxExclusive: 2
-    PanWallUnitsPerBeat: 10
-    RotationRadiansPerBeat: 0.3
+    PanWallUnitsPerBeat: 6
+    RotationRadiansPerBeat: 0.1
     EnergyPace:
-      Min: 0.5
+      Min: 0.75
       Max: 1.5
-      LowRail: 0.5
-      HighRail: 1.25
-    LowPresenceThreshold: 0.4
-    OnBeatPushStrength: 10
+      LowRail: 0.75
+      HighRail: 1.5
+    LowPresenceThreshold: 0.3333
+    OnBeatPushStrength: 8
     PaletteSaturationFloor: 0.3
     BeatHueOffset: 0.5
     DropSlowdownBeats: 8
