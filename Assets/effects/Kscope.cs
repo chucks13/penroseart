@@ -78,6 +78,12 @@ public class Kscope : ScreenEffect
     /// </summary>
     private const float SyncPanWallUnitsPerBeat = 10f;
 
+    /// <summary>Neutral Mirror2 calibration before the layout is tuned on the wall.</summary>
+    private const float SyncMirror2MotionScale = 1f;
+
+    /// <summary>Neutral Mirror10 calibration before the layout is tuned on the wall.</summary>
+    private const float SyncMirror10MotionScale = 1f;
+
     /// <summary>
     /// Kaleidoscope rotation in radians per beat before musical pacing — about seventeen
     /// degrees.
@@ -150,6 +156,8 @@ public class Kscope : ScreenEffect
         ColorSwapRollMaxExclusive = SyncColorSwapRollMaxExclusive,
         ChannelSwapSelectorMaxExclusive = SyncChannelSwapSelectorMaxExclusive,
         PanWallUnitsPerBeat = SyncPanWallUnitsPerBeat,
+        Mirror2MotionScale = SyncMirror2MotionScale,
+        Mirror10MotionScale = SyncMirror10MotionScale,
         RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
         EnergyPace = new FloatRange(
             SyncEnergyPaceLow,
@@ -182,6 +190,9 @@ public class Kscope : ScreenEffect
 
     /// <summary>The allocation-free reader over the mirror groups rolled for this activation.</summary>
     private LayoutData.ShapeList.Reader mirrorList;
+
+    /// <summary>Whether the activation's mirror-layout coin selected Mirror2 rather than Mirror10.</summary>
+    private bool usesMirror2;
 
     List<picture> colorTex = new List<picture>();
     List<picture> monoTex = new List<picture>();
@@ -393,7 +404,7 @@ public class Kscope : ScreenEffect
         // Unfiltered acquisition spans the complete curated Waveform Pool, so there is no authored subrange.
         waveform = waveforms.Random();
         // This coin flip spans both available mirror layouts, so its complete selector domain stays inline.
-        bool usesMirror2 = Random.Range(0, 2) == 0;
+        usesMirror2 = Random.Range(0, 2) == 0;
         mirrorList = usesMirror2
             ? penrose.Layout.shapes.Mirror2
             : penrose.Layout.shapes.Mirror10;
@@ -491,11 +502,12 @@ public class Kscope : ScreenEffect
     /// <summary>Samples the moving texture into the wall buffer, then mirrors every selected Shape List group.</summary>
     /// <remarks>
     /// In Synced Mode, Energy pace and the gated On-Beat Push combine into one motion scale.
-    /// <c>PanWallUnitsPerBeat</c> converts that motion into a source-relative position delta per
-    /// axis, while sampling remains one source texel per screen-buffer pixel so image presentation
-    /// stays unchanged. Rotation keeps the combined per-second scale. Musical meanings are defined
-    /// by the Data Surface, Energy, and Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes
-    /// are defined in <c>docs/osc-client-contract.md</c>.
+    /// The current mirror layout's live calibration normalizes that scale before it drives pan and
+    /// rotation. <c>PanWallUnitsPerBeat</c> then converts the motion into a source-relative position
+    /// delta per axis, while sampling remains one source texel per screen-buffer pixel so image
+    /// presentation stays unchanged. Musical meanings are defined by the Data Surface, Energy, and
+    /// Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
+    /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public override void Draw()
     {
@@ -510,7 +522,11 @@ public class Kscope : ScreenEffect
         if (beatManager.IsSynced)
         {
             float beatSeconds = beatManager.Timing.BeatAverageMilliseconds.Value / 1000f;
-            float motionScale = (ReadEnergyPace() + ReadOnBeatPush()) / beatSeconds;
+            float mirrorMotionScale = usesMirror2
+                ? SyncSettings.Mirror2MotionScale
+                : SyncSettings.Mirror10MotionScale;
+            float motionScale = (ReadEnergyPace() + ReadOnBeatPush())
+                * mirrorMotionScale / beatSeconds;
             float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
             positionX += motionX * panWallDelta * texWidth / width;
             positionY += motionY * panWallDelta * texHeight / height;
@@ -719,6 +735,14 @@ public sealed class KscopeSyncSettings
     [Tooltip("Wall units panned per beat before Energy pace and On-Beat Push. One wall unit is one pixel in Kscope's 50x22 screen buffer; 10 moves ten wall pixels at motion scale 1.")]
     [Min(0f)] public float PanWallUnitsPerBeat;
 
+    /// <summary>Motion calibration applied while Mirror2 is active.</summary>
+    [Tooltip("Multiplier applied to Energy pace and On-Beat Push while Mirror2 is active. 1 is neutral; tune until motion reads like Mirror10.")]
+    [Min(0f)] public float Mirror2MotionScale;
+
+    /// <summary>Motion calibration applied while Mirror10 is active.</summary>
+    [Tooltip("Multiplier applied to Energy pace and On-Beat Push while Mirror10 is active. 1 is neutral; tune until motion reads like Mirror2.")]
+    [Min(0f)] public float Mirror10MotionScale;
+
     /// <summary>Kaleidoscope rotation in radians per beat before musical pacing.</summary>
     [Tooltip("Radians rotated per beat before Energy pace and On-Beat Push. 0.3 is about 17 degrees per beat; 0 stops rotation.")]
     [Min(0f)] public float RotationRadiansPerBeat;
@@ -758,6 +782,8 @@ public sealed class KscopeSyncSettings
         ColorSwapRollMaxExclusive = source.ColorSwapRollMaxExclusive;
         ChannelSwapSelectorMaxExclusive = source.ChannelSwapSelectorMaxExclusive;
         PanWallUnitsPerBeat = source.PanWallUnitsPerBeat;
+        Mirror2MotionScale = source.Mirror2MotionScale;
+        Mirror10MotionScale = source.Mirror10MotionScale;
         RotationRadiansPerBeat = source.RotationRadiansPerBeat;
         EnergyPace = new FloatRange(
             source.EnergyPace.Min,

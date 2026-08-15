@@ -325,7 +325,7 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// Restore replaces every edited Kscope Sync Setting and Rail with the current file-local Sync
-    /// Defaults, including the wall-unit pan value that must be present in the saved asset.
+    /// Defaults, including wall-unit pan and both live mirror-layout motion calibrations.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryKscopeValue()
@@ -338,13 +338,15 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ColorSwapRollMaxExclusive = 19;
         asset.Settings.ChannelSwapSelectorMaxExclusive = 20;
         asset.Settings.PanWallUnitsPerBeat = 21f;
-        asset.Settings.RotationRadiansPerBeat = 22f;
-        asset.Settings.EnergyPace = new FloatRange(23f, 24f, 22f, 25f);
-        asset.Settings.LowPresenceThreshold = 0.26f;
-        asset.Settings.OnBeatPushStrength = 27f;
-        asset.Settings.PaletteSaturationFloor = 0.27f;
-        asset.Settings.BeatHueOffset = 0.28f;
-        asset.Settings.DropSlowdownBeats = 29;
+        asset.Settings.Mirror2MotionScale = 22f;
+        asset.Settings.Mirror10MotionScale = 23f;
+        asset.Settings.RotationRadiansPerBeat = 24f;
+        asset.Settings.EnergyPace = new FloatRange(25f, 26f, 24f, 27f);
+        asset.Settings.LowPresenceThreshold = 0.28f;
+        asset.Settings.OnBeatPushStrength = 29f;
+        asset.Settings.PaletteSaturationFloor = 0.29f;
+        asset.Settings.BeatHueOffset = 0.3f;
+        asset.Settings.DropSlowdownBeats = 31;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Kscope), TempAssetFolder);
 
@@ -354,6 +356,8 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ColorSwapRollMaxExclusive, Is.EqualTo(defaults.ColorSwapRollMaxExclusive));
         Assert.That(asset.Settings.ChannelSwapSelectorMaxExclusive, Is.EqualTo(defaults.ChannelSwapSelectorMaxExclusive));
         Assert.That(asset.Settings.PanWallUnitsPerBeat, Is.EqualTo(defaults.PanWallUnitsPerBeat));
+        Assert.That(asset.Settings.Mirror2MotionScale, Is.EqualTo(defaults.Mirror2MotionScale));
+        Assert.That(asset.Settings.Mirror10MotionScale, Is.EqualTo(defaults.Mirror10MotionScale));
         Assert.That(asset.Settings.RotationRadiansPerBeat, Is.EqualTo(defaults.RotationRadiansPerBeat));
         AssertFloatRangeEqual(asset.Settings.EnergyPace, defaults.EnergyPace);
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
