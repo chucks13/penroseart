@@ -618,22 +618,27 @@ public class Kscope : ScreenEffect
         // convert the 2D Matrix buffer to a tile buffer
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
         int groupcount = mirrorList.GroupCount;     // how many copies
+        bool fillActive = beatManager.Fill.Active;
         // Draw the mirrors
         for (int i = 0; i < groupcount; i++)
         {
             LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
             Color tileColor = buffer[group[0]];
+            if (fillActive)
+            {
+                // Fill drains color from the group-first sRGB color while holding its Rec.709
+                // relative luminance. The monotonic transfer preserves perceived brightness, so
+                // image definition survives across every source.
+                Color linearColor = tileColor.linear;
+                float luminance = (0.2126f * linearColor.r) +
+                    (0.7152f * linearColor.g) +
+                    (0.0722f * linearColor.b);
+                float gray = Mathf.LinearToGammaSpace(luminance);
+                // Full desaturation defines the black-and-white Fill treatment, so zero stays structural.
+                tileColor = new Color(gray, gray, gray);
+            }
             for (int j = 0; j < group.TileCount; j++)
             {
-                if (beatManager.Fill.Active)            // blak and whire on fill
-                {
-                    float h, s, v_col;
-                    Color.RGBToHSV(tileColor, out h, out s, out v_col);
-                    v_col = (h + s + v_col) % 1f;                   // assure there is brightness variation
-                    // Full desaturation defines the black-and-white Fill treatment, so zero stays structural.
-                    s = 0f;
-                    tileColor = Color.HSVToRGB(h, s, v_col);
-                }
                 buffer[group[j]] = tileColor;
             }
         }
