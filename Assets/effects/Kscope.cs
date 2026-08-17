@@ -630,10 +630,9 @@ public class Kscope : ScreenEffect
         }
         if (beatManager.Fill.Active)
         {
-            // Fill drains color from every tile on the wall and shows the picture's negative:
-            // each tile renders the inverse of its Rec.709 relative luminance. The transfer
-            // stays monotonic, so image definition survives across every source. The pass runs
-            // on the whole buffer, after
+            // Fill drains color from every tile on the wall while holding its Rec.709 relative
+            // luminance. The monotonic transfer preserves perceived brightness, so image
+            // definition survives across every source. The pass runs on the whole buffer, after
             // mirror replication, because the mirror groups do not cover the wall — Mirror2
             // leaves its eight centerline tiles outside every group, and a group-loop treatment
             // left them colored on an otherwise black-and-white wall.
@@ -643,7 +642,7 @@ public class Kscope : ScreenEffect
                 float luminance = (0.2126f * linearColor.r) +
                     (0.7152f * linearColor.g) +
                     (0.0722f * linearColor.b);
-                float gray = 1f - Mathf.LinearToGammaSpace(luminance);
+                float gray = Mathf.LinearToGammaSpace(luminance);
                 // Full desaturation defines the black-and-white Fill treatment, so zero stays structural.
                 buffer[i] = new Color(gray, gray, gray);
             }
