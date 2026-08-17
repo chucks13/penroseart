@@ -24,11 +24,11 @@ MonoBehaviour:
     RotationRadiansPerBeat: 0.2
     EnergyPace:
       Min: 0.75
-      Max: 1.5
+      Max: 1.25
       LowRail: 0.75
-      HighRail: 1.5
+      HighRail: 1.25
     LowPresenceThreshold: 0.25
-    OnBeatPushStrength: 7
+    OnBeatPushStrength: 8
     PaletteSaturationFloor: 0.3
     BeatHueOffset: 0.5
     FillContrast: 2

@@ -108,12 +108,12 @@ public class Kscope : ScreenEffect
     private const float SyncEnergyPaceLow = 0.75f;
 
     /// <summary>High Energy pace accelerates the base motion; Mid remains neutral at the range midpoint.</summary>
-    private const float SyncEnergyPaceHigh = 1.5f;
+    private const float SyncEnergyPaceHigh = 1.25f;
 
     /// <summary>
     /// Upper editor rail matches the wall-tuned High Energy pace.
     /// </summary>
-    private const float SyncEnergyPaceHighRail = 1.5f;
+    private const float SyncEnergyPaceHighRail = 1.25f;
 
     /// <summary>
     /// Normalized Low threshold where bass presence begins contributing to the On-Beat Push. Levels
@@ -124,9 +124,9 @@ public class Kscope : ScreenEffect
     /// <summary>
     /// Pace added where the continuous wire beat pulse reaches one after the Normalized Low
     /// gate. The gate product rarely nears one — the threshold remap discounts it — so strength
-    /// calibrates in whole units; seven reads as clear acceleration above the Energy-paced base.
+    /// calibrates in whole units; eight reads as clear acceleration above the Energy-paced base.
     /// </summary>
-    private const float SyncOnBeatPushStrength = 7f;
+    private const float SyncOnBeatPushStrength = 8f;
 
     /// <summary>
     /// Minimum saturation applied to the shared-palette read in Synced mono mode. Every
