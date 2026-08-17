@@ -1,16 +1,5 @@
-Installed 2 packages in 25ms
-tile centers x [-19.55, 19.55] y [-8.81, 9.53] (bounds ±25/±11)
-mirror2: 446 groups, 454 unique seed tiles
-mirror10: 163 groups, 163 unique seed tiles
-wrote wall_mirror2_alpha_0.00.gif (6.8 MB)
-wrote wall_mirror10_alpha_0.00.gif (7.1 MB)
-wrote wall_mirror2_alpha_0.75.gif (6.7 MB)
-wrote wall_mirror10_alpha_0.75.gif (6.9 MB)
-
-wedge color variety at alpha=0 (mean per-frame tile-color std; higher = more visible kaleidoscope structure):
-  slash.png        mirror2 0.297   mirror10 0.246
-  smiley.png       mirror2 0.168   mirror10 0.153
-  tech.png         mirror2 0.220   mirror10 0.133
-  abstract1.png    mirror2 0.107   mirror10 0.118
-  crystal.png      mirror2 0.096   mirror10 0.069
-  ai2.png          mirror2 0.084   mirror10 0.081
+warning: `--no-sync` is a no-op for Python scripts with inline metadata, which always run in isolation
+palette model: bhw1_24_gp (16 scene palettes; mono S floor 0.3)
+rendered 14 images x 2 layouts; no image cap
+wrote /Users/hunter/Projects/penroseart/prototype/kscope-pace/out/viewer.html
+viewer artifacts currently total 91.6 MB in /Users/hunter/Projects/penroseart/prototype/kscope-pace/out

@@ -1,21 +1,22 @@
+warning: `--no-sync` is a no-op for Python scripts with inline metadata, which always run in isolation
 pool: 14 images | L_ref (geometric mean) = 4.1
 
-image           pool   size      contrast  L       quadrant L
--------------------------------------------------------------
-slash.png       color  12x13    0.2083    1.23    -
-smiley.png      color  18x18    0.1793    1.75    -
-latticebw.png   mono   103x53    0.1559    2.2     -
-lattice.png     color  101x101   0.1515    2.41    -
-tech.png        color  49x55    0.2285    2.63    -
-anstract3.png   color  95x56    0.1711    3.61    -
-fingermesh.png  color  33x40    0.303     3.77    -
-ball.png        color  143x154   0.2817    4.78    3.6 2.2 12.6 2.5
-abstract1.png   color  110x73    0.1905    4.79    -
-crystal.png     mono   308x306   0.1655    5.03    6.7 3.8 5.1 3.7
-chuck.png       color  88x126   0.2098    5.09    -
-ai1.png         color  88x64    0.2804    6.45    -
-abstract2.png   color  105x105   0.1765    7.07    -
-ai2.png         color  528x494   0.27      37.31   52.8 37.9 35.4 31.6
+image           pool   size      contrast  L       flat%   shade%   hard%   shading share  quadrant L
+-----------------------------------------------------------------------------------------------------
+slash.png       color  12x13    0.2083    1.23    73.9    0.0      26.1    0.0            -
+smiley.png      color  18x18    0.1793    1.75    13.9    54.2     31.9    63.0           -
+latticebw.png   mono   103x53    0.1559    2.2     13.1    64.6     22.2    74.4           -
+lattice.png     color  101x101   0.1515    2.41    2.2     73.8     24.0    75.5           -
+tech.png        color  49x55    0.2285    2.63    13.8    55.2     31.0    64.0           -
+anstract3.png   color  95x56    0.1711    3.61    4.1     78.9     17.0    82.2           -
+fingermesh.png  color  33x40    0.303     3.77    14.8    52.6     32.6    61.7           -
+ball.png        color  143x154   0.2817    4.78    7.8     59.7     32.5    64.7           3.6 2.2 12.6 2.5
+abstract1.png   color  110x73    0.1905    4.79    69.4    15.1     15.6    49.1           -
+crystal.png     mono   308x306   0.1655    5.03    18.8    63.3     17.9    77.9           6.7 3.8 5.1 3.7
+chuck.png       color  88x126   0.2098    5.09    16.5    56.8     26.7    68.1           -
+ai1.png         color  88x64    0.2804    6.45    10.5    48.3     41.2    54.0           -
+abstract2.png   color  105x105   0.1765    7.07    4.7     86.3     9.0     90.6           -
+ai2.png         color  528x494   0.27      37.31   7.0     74.8     18.2    80.5           52.8 37.9 35.4 31.6
 
 factor = clamp((L / L_ref)^alpha, 0.4, 2.5)
 wall px/beat/axis = 6.75 * factor | pattern %/beat = wall / (2*width)

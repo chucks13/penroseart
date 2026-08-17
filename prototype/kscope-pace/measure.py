@@ -2,8 +2,10 @@
 # requires-python = ">=3.12"
 # dependencies = ["numpy", "pillow"]
 # ///
-# PROTOTYPE — throwaway (see README.md). Measures correlation length L for every
-# Kscope pool image and prints the calibration-factor table for candidate alphas.
+# PROTOTYPE — throwaway (see README.md). Characterizes every Kscope pool image:
+# feature scale, contrast, and whether local structure is smooth shading or flat
+# regions separated by hard edges. The older pace-calibration table remains as
+# historical input to the Sync-standardization question this prototype first asked.
 import json
 from pathlib import Path
 
@@ -22,11 +24,38 @@ ALPHAS = [0.0, 0.25, 0.5, 0.75, 1.0]
 # Current wall tuning, Mirror10, Mid energy: 6 px/beat * 1.125 pace, per axis.
 BASE_PX_PER_BEAT = 6.0 * 1.125
 
+# Local source-texel character bands. Difference is RMS RGB in [0,1]. A change
+# within 2.5 code values/channel is visually flat at source resolution; 0.08 is
+# a clearly visible local step. Values between them describe gentle shading.
+FLAT_MAX = 2.5 / 255.0
+HARD_EDGE_MIN = 0.08
+
 
 def load_intensity(path: Path) -> tuple[np.ndarray, np.ndarray]:
     """Returns (rgb float array HxWx3 in [0,1], intensity HxW = channel mean)."""
     rgb = np.asarray(Image.open(path).convert("RGB"), dtype=np.float32) / 255.0
     return rgb, rgb.mean(axis=2)
+
+
+def image_character(rgb: np.ndarray) -> dict[str, float]:
+    """Measure whether local source structure is flat, gently shaded, or hard-edged."""
+    dx = np.sqrt(np.mean(np.square(rgb[:, 1:] - rgb[:, :-1]), axis=2)).ravel()
+    dy = np.sqrt(np.mean(np.square(rgb[1:] - rgb[:-1]), axis=2)).ravel()
+    local = np.concatenate([dx, dy])
+    flat = local <= FLAT_MAX
+    hard = local >= HARD_EDGE_MIN
+    shaded = ~(flat | hard)
+    changing = ~flat
+
+    return {
+        "flat_pct": round(float(flat.mean() * 100.0), 1),
+        "shaded_pct": round(float(shaded.mean() * 100.0), 1),
+        "hard_edge_pct": round(float(hard.mean() * 100.0), 1),
+        "shading_share_pct": round(
+            float(shaded.sum() / max(1, changing.sum()) * 100.0), 1
+        ),
+        "local_change_p95": round(float(np.percentile(local, 95)), 4),
+    }
 
 
 def mirror_tile(i: np.ndarray, pad: int) -> np.ndarray:
@@ -106,6 +135,7 @@ def measure(path: Path) -> dict:
         "L": round(length, 2),
         "quadrant_L": quadrants,
         "curve": {d: round(v, 4) for d, v in curve.items()},
+        **image_character(rgb),
     }
 
 
@@ -119,14 +149,19 @@ def main() -> None:
     l_ref = float(np.exp(np.log(ls).mean()))  # geometric mean of the pool
 
     print(f"pool: {len(results)} images | L_ref (geometric mean) = {l_ref:.1f}\n")
-    hdr = f"{'image':<16}{'pool':<7}{'size':<10}{'contrast':<10}{'L':<8}quadrant L"
+    hdr = (
+        f"{'image':<16}{'pool':<7}{'size':<10}{'contrast':<10}{'L':<8}"
+        f"{'flat%':<8}{'shade%':<9}{'hard%':<8}{'shading share':<15}quadrant L"
+    )
     print(hdr)
     print("-" * len(hdr))
     for r in sorted(results, key=lambda r: r["L"]):
         q = " ".join(str(x) for x in r["quadrant_L"]) if r["quadrant_L"] else "-"
         print(
             f"{r['name']:<16}{r['pool']:<7}{r['w']}x{r['h']:<6}"
-            f"{r['plateau']:<10}{r['L']:<8}{q}"
+            f"{r['plateau']:<10}{r['L']:<8}{r['flat_pct']:<8.1f}"
+            f"{r['shaded_pct']:<9.1f}{r['hard_edge_pct']:<8.1f}"
+            f"{r['shading_share_pct']:<15.1f}{q}"
         )
 
     print("\nfactor = clamp((L / L_ref)^alpha, %.1f, %.1f)" % (RAIL_LO, RAIL_HI))
