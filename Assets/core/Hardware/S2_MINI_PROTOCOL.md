@@ -1,63 +1,81 @@
-# Penrose S2 Mini Firmware Protocol v1.0
+# Penrose S2 Mini host protocol
 
-## Overview
-This document defines the communication protocol between the Penrose Simulator (C#) and the S2 Mini (ESP32-S2) distributed hardware controllers. The system uses USB-Serial to manage multiple boards, each responsible for specific segments of the Penrose Wall.
+> **Status:** This document describes the host contract that `SerialOut.cs` implements. The current build does not define `ENABLE_SERIAL`, so USB serial output is dormant. The current build uses UDP/E1.31 output. This repository does not contain device firmware. We did not verify firmware conformance.
 
-## Connection Settings
-- **Baud Rate:** 2000000
-- **Data Bits:** 8
-- **Parity:** None
-- **Stop Bits:** 1
-- **Note:** The ESP32-S2 typically reboots upon Serial connection. The PC side includes a 200ms delay to allow the bootloader to finish before starting the handshake.
+## Connection
 
-## Command Set
+The host opens each candidate port with these settings:
 
-### 1. Handshake / Query ('?' - 0x3F)
-Sent by the PC to discover what pixels this board controls.
+- Baud rate: 2,000,000.
+- Data bits: 8.
 
-**PC Sends:** 
-`0x3F` (1 byte)
+- Parity: none.
+- Stop bits: 1.
 
-**Arduino Response:**
-- `[1 byte]`: Board Type (0x01 = LED Driver)
-- `[1 byte]`: Payload Size (N)
-- `[2 bytes]`: Start Index (Big-Endian/MSB first).
-- `[2 bytes]`: Pixel Count (Big-Endian/MSB first).
+The host also sets these port options:
 
-*Example:* An LED board handling pixels 900-1440 would respond: `0x01 0x04 0x03 0x84 0x02 0x1C` (where 0x04 is the payload size).
+- DTR and RTS: enabled.
+- Read timeout: 500 ms during discovery.
+- Write timeout: 1,000 ms.
 
----
+After the port opens, the host waits 2 seconds for the ESP32-S2 boot process. It then discards received boot data and starts the query.
 
-### 2. Data Packet ('D' - 0x44)
-Sent by the PC to update the color buffer.
+This protocol encodes all 16-bit values as unsigned, big-endian values. It sends the most-significant byte first.
 
-**PC Sends:**
-- `0x44` (1 byte)
-- `[2 bytes]`: Start Index
-- `[2 bytes]`: Pixel Count
-- `[Count * 3 bytes]`: Raw RGB data (R-G-B order).
+## Commands
 
-**Arduino Action:**
-Store these bytes in the local `CRGB` array and immediately call `FastLED.show()`.
+### Query: `?` (`0x3F`)
 
-## Arduino Implementation Strategy
+The host sends one byte:
 
-### Initialization
-Use `Serial.begin(230400)`. Since the ESP32-S2 uses native USB-CDC, the baud rate is largely ignored by the hardware, but keeping it at 230400 ensures compatibility with the C# `SerialPort` configuration.
+```text
+3F
+```
 
-### Main Loop
-1. Poll `Serial.available()`.
-2. Read the command byte.
-3. Use a `switch` statement to route to:
-    - `handleQuery()`: Write the hardcoded segment map.
-    - `handleData()`: Read exactly `5 + (count * 3)` bytes, copy to `leds`, then call `FastLED.show()`.
+The device must reply with:
 
-### Buffer Management
-Because the S2 Mini has ample RAM, it is recommended to allocate a `CRGB` array large enough to hold all pixels for its assigned segments plus a small serial RX buffer to prevent overflows during high-speed transfers.
+```text
+[board type: 1 byte] [payload size: 1 byte] [payload: N bytes]
+```
 
-## Error Handling
-- If the Arduino receives an unknown command byte, it should flush the serial buffer to re-sync.
-- The PC side implements a 1-second timeout. If the Arduino hangs during a read, the PC will mark the port as "ignored" and continue running the rest of the wall.
+For an LED driver, the response fields are:
 
-## Mapping Responsibility
-The Arduino "owns" the mapping. If you want to change which part of the wall a board controls, simply update the start/count values in the Arduino sketch. The Penrose Simulator will automatically adjust its output the next time it connects.
+- Board type: `0x01`.
+- Payload size: `0x04`.
+- Start index: 2 bytes.
+- Pixel count: 2 bytes.
+
+For example, a board that owns pixels 900 through 1439 replies:
+
+```text
+01 04 03 84 02 1C
+```
+
+The host rejects any board type other than `0x01`. It uses the returned start index and count to select pixels for that board.
+
+### Data: `D` (`0x44`) and latch: `L` (`0x4C`)
+
+For each frame, the host writes one contiguous packet:
+
+```text
+44 [start: 2 bytes] [count: 2 bytes] [RGB: count × 3 bytes] 4C
+```
+
+Each pixel is three bytes in red, green, blue order. The device must buffer the `D` payload. The final `L` command commits the buffered colors to the LEDs. The host does not wait for an acknowledgement after this frame packet.
+
+### Synchronize: `S` (`0x53`)
+
+The host recovery routine discards its input and output buffers, sends `S`, and waits up to 600 ms for one response byte:
+
+- ACK: `0x06`.
+- NACK: `0x15`.
+
+Either response tells the host that the device command loop is alive. Any other response or a timeout fails recovery. `SerialOut` defines this recovery routine, but the current send path does not call it.
+
+## Failure behavior
+
+If discovery fails, the host closes the port and ignores it for 10 seconds before another attempt. A frame-write exception marks only that board unavailable. The other boards continue.
+
+## Mapping responsibility
+
+The device supplies its start index and pixel count in the query response. Change those values in the device firmware to change the owned range. On the next successful connection, the host uses the new range without a host-side mapping entry.

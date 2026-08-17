@@ -11,7 +11,7 @@ A general-purpose, allocation-conscious .NET implementation of OSC 1.1, using th
 
 ## Status
 
-Feature-complete for the OSC 1.1 core behaviors implemented in this library. All public types are in place. Test suite covers the OSC example bytes verbatim plus per-tag round-trip encode/decode and OSC 1.1 path/stream additions.
+Feature-complete for the OSC 1.1 core behaviors implemented in this library. All public types are in place. Tests cover the OSC example bytes verbatim, a general message round trip for int32, float32, and string arguments, and the OSC 1.1 path/stream additions.
 
 ## Standards target
 
@@ -27,7 +27,7 @@ Feature-complete for the OSC 1.1 core behaviors implemented in this library. All
 - **Address validation**: literal-address checks (sender-registered handler addresses) and pattern-address checks (sender-on-the-wire addresses).
 - **Address pattern matching**: full OSC wildcard support (`?`, `*`, `//`, `[abc]`, `[a-z]`, `[!abc]`, `{foo,bar}`), including the spec edge cases (backwards ranges as literal sets, `!` only at start, trailing/leading `-` literal).
 - **Address-space dispatch**: handler registration and routing for receiver-side use, with bundle decomposition and timetag forwarding.
-- **UDP transport**: sender and receiver, broadcast-capable, allocation-free per send/receive after warm-up.
+- **UDP transport**: sender and receiver with broadcast support.
 - **SLIP stream framing**: OSC 1.1 packet framing helpers for TCP, serial, WebSocket, or other stream adapters.
 
 ## Not implemented yet
@@ -61,7 +61,7 @@ using System.Net;
 using RaveSystem.Osc;
 
 var dispatcher = new OscDispatcher();
-dispatcher.Register("/oscillator/*/frequency", (ReadOnlySpan<byte> address, ref OscReader reader, OscTimeTag _t) =>
+dispatcher.Register("/oscillator/4/frequency", (ReadOnlySpan<byte> address, ref OscReader reader, OscTimeTag _t) =>
 {
     reader.MoveNext();
     var hz = reader.ReadFloat32();

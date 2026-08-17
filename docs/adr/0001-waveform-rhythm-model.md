@@ -11,5 +11,5 @@ surfaces can show what is wrong, while runtime Pool acquisition refuses a malfor
 instead of falling back to the Beat Pulse — a silent fallback would hide the authoring mistake it
 covers.
 
-The model, notation, file format, and the split between tolerant parsing and strict runtime
-acquisition are documented in `docs/waveform-system.md`.
+The runtime types' XML docs define the model, notation, and acquisition behavior. The header in
+`Assets/StreamingAssets/penrose_waveforms.txt` defines the Pool file format.

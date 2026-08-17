@@ -1,6 +1,6 @@
 # Penrose Waveform Designer
 
-This folder contains a web-based tool for designing and managing waveforms used in the Penrose project. The waveforms defined here can be exported as a JSON file, which is then loaded by the Penrose C# application.
+This folder contains a standalone browser sketchpad for designing and visualizing waveform ideas. Its JSON file belongs only to the browser tool; the Penrose runtime does not consume it.
 
 ## Files in this Folder
 
@@ -28,10 +28,10 @@ This folder contains a web-based tool for designing and managing waveforms used 
 
 5.  **Saving Your Work (Exporting to JSON)**:
    *   All changes to waveform properties (Name, Energy, Sequences) are automatically saved to the internal list when you type.
-   *   To persist these changes to the `penrose_waveforms.json` file and make them available to the Penrose C# project, click the **Export JSON** button.
+   *   To persist these changes to the browser tool's `penrose_waveforms.json` file, click the **Export JSON** button.
    *   This will download a file named `penrose_waveforms.json` to your browser's downloads folder.
    *   **Crucial Step**: **Move this downloaded `penrose_waveforms.json` file into this `waveforms/` folder, replacing the existing one.** This ensures your changes are saved and can be committed to version control.
 
-## Integration with Penrose C# Project
+## Penrose runtime
 
-The `penrose_waveforms.json` file in this directory is intended to be loaded by the Penrose C# project. Ensure that this file is up-to-date with your desired waveforms before building or running the Penrose application.
+The runtime Pool is [`Assets/StreamingAssets/penrose_waveforms.txt`](../Assets/StreamingAssets/penrose_waveforms.txt), loaded and decoded by [`WaveformPool`](../Assets/core/Rhythm/WaveformPool.cs). The JSON in this directory is not a runtime input; transfer a waveform into the Pool through the Waveform Pool editor or its canonical text format.
