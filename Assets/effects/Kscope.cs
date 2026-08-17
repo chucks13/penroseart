@@ -78,11 +78,11 @@ public class Kscope : ScreenEffect
     /// </summary>
     private const float SyncPanWallUnitsPerBeat = 4f;
 
-    /// <summary>Mirror2 motion calibration chosen on the wall to match Mirror10.</summary>
+    /// <summary>Mirror2 motion calibration chosen on the wall.</summary>
     private const float SyncMirror2MotionScale = 2f;
 
-    /// <summary>Neutral Mirror10 reference used by the wall-tuned Mirror2 calibration.</summary>
-    private const float SyncMirror10MotionScale = 1f;
+    /// <summary>Mirror10 motion calibration chosen on the wall.</summary>
+    private const float SyncMirror10MotionScale = 2f;
 
     /// <summary>
     /// Kaleidoscope rotation in radians per beat before musical pacing — about eleven

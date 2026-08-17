@@ -20,7 +20,7 @@ MonoBehaviour:
     ChannelSwapSelectorMaxExclusive: 2
     PanWallUnitsPerBeat: 4
     Mirror2MotionScale: 2
-    Mirror10MotionScale: 1
+    Mirror10MotionScale: 2
     RotationRadiansPerBeat: 0.2
     EnergyPace:
       Min: 0.75
