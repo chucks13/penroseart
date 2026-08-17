@@ -313,9 +313,13 @@ public class Kscope : ScreenEffect
         string[] fileNames = contents.Split('\n');
         foreach (string fileName in fileNames)
         {
-            string fullPath = path + "/" + fileName.TrimEnd('\r');
-            if (!fileName.Contains(".png"))
+            // files.txt can carry Windows line endings; trim the \r before every use of the name.
+            string trimmedName = fileName.TrimEnd('\r');
+            // The listing includes Unity's .meta sidecars in the Editor, and "x.png.meta"
+            // contains ".png" — only a name that ends with the extension is an image.
+            if (!trimmedName.EndsWith(".png", StringComparison.Ordinal))
                 continue;
+            string fullPath = path + "/" + trimmedName;
             Texture2D tex;
             try
             {
@@ -328,9 +332,7 @@ public class Kscope : ScreenEffect
             }
             picture pic = new picture();
             pic.tex = tex;
-            // files.txt can carry Windows line endings; an untrimmed \r inside the HUD's
-            // "file <name>" readout renders as a stray break, hiding the name.
-            pic.fname = fileName.TrimEnd('\r');
+            pic.fname = trimmedName;
 
             texList.Add(pic);
         }
