@@ -7,7 +7,7 @@ Unity is the host and simulator. The effect system itself is mostly plain C# so 
 ## Start here
 
 - [`docs/runtime-architecture.md`](docs/runtime-architecture.md) — how the Controller, catalogs, buffers, transitions, inputs, and outputs fit together.
-- [`docs/beat-manager.md`](docs/beat-manager.md) — the read-only wire and derived musical-data interface.
+- [`BeatManager` XML docs](Assets/core/Rhythm/BeatManager.cs) and [`CONTEXT.md`](CONTEXT.md) — the read-only musical Data Surface and its canonical vocabulary.
 - [`docs/effect-authoring.md`](docs/effect-authoring.md) — how to create Effects and Transitions, use their lifecycles, and work with buffers.
 - [`docs/code-map.md`](docs/code-map.md) — file-by-file map of the project-authored runtime code.
 - [`CONTEXT.md`](CONTEXT.md) — operational project context and platform/output notes.
@@ -41,7 +41,7 @@ Effects write into a `Color[] buffer` with `Penrose.Total == 900` entries. The c
 
 ## Authoring effects and transitions
 
-For a new effect, copy `Assets/effects/EmptyEffect.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, and implement `Draw()`.
+For a new effect, follow the fitted scaffold workflow in [`docs/effect-authoring.md`](docs/effect-authoring.md). It covers the Effect class, Standalone and Sync Settings, Unity-generated assets, and the required catalog opt-in.
 
 For a new transition, copy `Assets/transitions/EmptyTransition.cs`, rename the file and class, remove `[RuntimeCatalogIgnore]`, and implement its A-to-B blend and timing settings.
 
@@ -55,7 +55,7 @@ Choose the base class by shape:
 
 Effects, transitions, and blenders are discovered by `Factory<T>` using reflection. Catalog entries are sorted by type full name, so indexes are deterministic for a fixed set of classes.
 
-Indexes are not permanent IDs. Adding, removing, or renaming classes can shift sorted indexes. For debugging and inspection, prefer name-based controls such as `forceEffectName`.
+Indexes are not permanent IDs. Adding, removing, or renaming classes can shift sorted indexes. Operator tooling uses the indexed Held Effect selection and Director-owned staged choices.
 
 ## Beat system
 
@@ -84,9 +84,7 @@ The USB serial path through `SerialOut` remains in the code and compiles in only
 
 ## Debug controls
 
-The live force-effect override is intended for development and visual testing:
+The Controller inspector and Tuning Window expose the current development controls:
 
-- `forceEffect`: enable/disable the override from the Inspector or Escape key.
-- `forceEffectName`: case-insensitive substring match against effect class names.
-
-When enabled and matched, the controller cancels transitions, jumps immediately to the matching effect, and stays there while the force remains active.
+- `heldEffect` is an indexed **Random / Effect** selection. Choosing an Effect moves to it through the Director and then holds it; choosing Random resumes normal switching.
+- The Director can stage **Next Effect** and **Next Transition** choices for the next decision. **Show Now** starts an ordinary Transition to the staged Effect immediately.

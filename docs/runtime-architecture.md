@@ -14,27 +14,27 @@ Unity scene
        ├─ transition catalog: TransitionBase[] + TransitionSettings
        ├─ blender catalog: BlenderBase[]
        ├─ musical state/tools: BeatManager + sibling Waveforms
-       ├─ rhythm inputs: RaveOscReceiver, OSCReader
+       ├─ OSC inputs: TouchOscSurface + RaveOscReceiver
        ├─ planning: Director builds six track-scoped TrackCueSheet slots
        ├─ sequencing: Director hands over the on-air focus player's sheet and answers cue decisions
        ├─ execution: Switcher holds and performs the in-force sheet against its player's clock
-       ├─ overlays/blending: drums, optional camera, optional PixelReceiver
+       ├─ overlays/blending: drums, optional camera, PixelReceiver
        ├─ diagnostics: CueLog per-session sequencing trace file
-       └─ outputs: serial hardware path or legacy UDP/ACN path
+       └─ outputs: active UDP/E1.31 path or dormant serial path
 ```
 
 The project intentionally does **not** model every effect as a scene object. Effects, transitions, and blenders are runtime objects discovered from C# types. This keeps authoring close to creative-coding practice: copy a class, rename it, implement the frame algorithm, and let the runtime catalog discover it.
 
 ## Startup sequence
 
-`Controller.Start()` is the main startup boundary.
+`BeatManager` is constructed by the `Controller` field initializer. `Controller.Awake()` then creates the sibling `Waveforms` surface with that instance. `Controller.Start()` is the main startup boundary for the remaining runtime.
 
 1. Find and initialize the scene's `Penrose` component.
 2. Discover and instantiate every non-ignored `EffectBase` subclass through `Factory<EffectBase>`.
 3. Discover and instantiate every non-ignored `TransitionBase` subclass; transitions read their code defaults and saved `TransitionSettings`.
 4. Discover and instantiate every non-ignored `BlenderBase` subclass.
-5. Create plain C# helpers such as `drums`, `PixelReceiver`, `BeatManager`, its sibling `Waveforms` acquisition surface, `Timer`, and optionally `CameraReader` / `SerialOut`.
-6. Add Unity-hosted input receivers such as `OSCReader` and `RaveOscReceiver`.
+5. Create plain C# helpers such as `drums`, `PixelReceiver`, and `Timer`, plus optional `CameraReader` / `SerialOut`.
+6. Add the Unity-hosted `TouchOscSurface` and `RaveOscReceiver` components.
 7. Create the `Switcher` and `Director`; the timer callback goes to `Director.OnTimerFinished` for Standalone Mode cadence.
 8. Enter the frame loop in `Controller.Update()`.
 
@@ -58,7 +58,7 @@ The active runtime frame flow is:
 
 ## Sequencing model
 
-[`docs/switching-model.md`](switching-model.md) is the single source of truth for switching behavior — the model this runtime is being rewired to match. Where the code still disagrees with the model, the model wins and the code is the defect. ADR-0009 defines the durable rule: the **Director directs** and the **Mechanical Switcher executes**.
+The Director/Switcher rewiring is complete. The runtime code under `Assets/core/Switching/` and ADRs [`0009`](adr/0009-the-director-owns-the-plan-the-switcher-owns-the-move.md), [`0010`](adr/0010-a-cue-sheet-is-a-tracks-whole-plan.md), and [`0011`](adr/0011-a-fired-cue-mark-is-never-performed-again.md) are authoritative. The former design model is preserved only as a [historical investigation](investigation/switching-model.md).
 
 The Director owns the decision layer: which Performer should be on stage and which Transition should move between A and B. The Switcher owns the in-force Cue Sheet and its check-offs, decides when its marks are due, and owns the in-flight mechanical execution: source Effect, target Effect, active Transition, progress, and completion. It does not own a pending or loaded-cue lifecycle.
 
@@ -70,7 +70,7 @@ Standalone Mode is the intentional self-running behavior whenever no usable musi
 
 Synced Mode is active when BeatManager's usable musical clock is present (`IsSynced`); transport connectivity alone does not decide the mode. `BeatManager.LiveOrder.Focus` selects the sheet the Director hands over. The Switcher executes against the on-air beat and Grid — the timing authority; the wire guarantees on-air values equal the focus player's values in the same capture, and per-player surfaces serve song structure and sheet building. The Director never follows musical position, reads the Grid, or self-ticks a musical count.
 
-`TrackCueSheet.Build(...)` is the single creative planning seam. When a player's complete structure generation changes, it builds one full-track plan into that player's slot, seeded by structure generation plus player number and the per-run salt (ADR-0008). The plan contains every Cue Mark with its Effect and Transition already assigned: marks sit at sensible, irregular spacing — never clumped, never metronomic — and never leave more than 64 beats (4 Grids) without a transition. Effects are dealt from bag order alone; capability is asked only of an Anchor's ride-through carrier, and no transition is written from an effect into itself. Around a Drop or Fill a capable Effect is already on the wall and no Transition's Runway or Tail crosses the moment; on a short Grid the cast Transition's Runway fits. Phrase boundaries are preferred mark positions, not mandatory transitions.
+`TrackCueSheet.Build(...)` is the single creative planning seam. When a player's complete structure generation changes, it builds one full-track plan into that player's slot, seeded by structure generation plus player number and the per-run salt (ADR-0008). The plan contains every Cue Mark with its Effect and Transition already assigned: marks sit at sensible, irregular spacing — never clumped, never metronomic — and never leave more than four actual Grids without a transition. Effects are dealt from bag order alone; capability is asked only of an Anchor's ride-through carrier, and no transition is written from an effect into itself. Around a Drop or Fill a capable Effect is already on the wall and no Transition's Runway or Tail crosses the moment; on a short Grid the cast Transition's Runway fits. Phrase boundaries are preferred mark positions, not mandatory transitions.
 
 At runtime the Director hands the focus player's current sheet to the Switcher on every synced tick; `Cast(sheet)` is an idempotent handover for the same player and structure generation, and a handover changes nothing on the wall by itself. The Switcher thinks once per Grid, at the Grid's start. An unfired, non-self-blend Cue Mark at the next boundary fires at boundary minus Runway and is permanently checked off. Otherwise, a re-crossed fired mark, self-blend, or Stillness goes through the one Off-Plan doorway; a taken cue uses the normal scheduler to land at the same boundary. Marks skipped by a forward jump lapse as Missed Cues — not performed late — and once started a Transition is fire-and-forget. The loop lane may corroborate traces and diagnostics, but never selects behavior (ADR-0011).
 
@@ -78,7 +78,7 @@ At runtime the Director hands the focus player's current sheet to the Switcher o
 
 ### Planned cadence and always-on Stillness
 
-**The Director's plan-time rule** applies while `TrackCueSheet.Build(...)` walks a track's Phrase map: never leave more than 64 beats (4 Grids) without a transition, and place marks at sensible, irregular spacing — never clumped, never metronomic. There is no numeric spacing floor; the other invariant is that no two blends overlap, guaranteed by casting transitions that fit the space they are given. Both are properties of the written plan, settled before a single beat is performed.
+**The Director's plan-time rule** applies while `TrackCueSheet.Build(...)` walks a track's Phrase map: never leave more than four actual Grids without a transition, and place marks at sensible, irregular spacing — never clumped, never metronomic. There is no numeric spacing floor; the other invariant is that no two blends overlap, guaranteed by casting transitions that fit the space they are given. Both are properties of the written plan, settled before a single beat is performed.
 
 **The Switcher's run-time rule** is Stillness — whole Grids since the last fired cue, a property of the wall, not of any sheet. It increments at every Grid-start think and resets only when a cue fires. Three still Grids make the fourth Grid's deal a take, short or not. Re-crossed fired marks, self-blends, and Stillness all use the same Off-Plan doorway, and no loop state gates it.
 
@@ -110,7 +110,7 @@ The Switcher uses Runway to decide when a Cue Mark is due and starts the Transit
 
 `BeatManager` is the one read-only musical gateway for the whole application: anything needing a musical fact reads it there, which is why nothing else reads OSC directly. `RaveOscReceiver.ApplyTo(...)` applies the latest live on-air snapshot before `BeatManager.Update()` captures the frame. Without a usable live clock the wall is deliberately in Standalone Mode — a preference, not a fallback.
 
-The Data Surface is shallow and frame-coherent: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Players`, `LiveOrder`, and always-present `Levels`. Individual wire values read `null` when unavailable; derived values sit beside the wire values they describe. Consumers own any previous-frame comparisons, and `IsSynced` is the single mode authority. `docs/beat-manager.md` describes the surface; ADR-0005 governs read-only serving.
+The Data Surface is shallow and frame-coherent: `Timing`, `Track`, `Beats`, `Offbeats`, `Pulses`, `Phrase`, `NextPhrase`, `Drop`, `Fill`, `Energy`, `NextEnergy`, `Loop`, `Grid`, `Players`, `LiveOrder`, and always-present `Levels`. Individual wire values read `null` when unavailable; derived values sit beside the wire values they describe. Consumers own any previous-frame comparisons, and `IsSynced` is the single mode authority. The [`BeatManager` XML docs](../Assets/core/Rhythm/BeatManager.cs) define the code contract, [`CONTEXT.md`](../CONTEXT.md) defines its vocabulary, and ADR-0005 governs read-only serving.
 
 `Waveforms` is a sibling acquisition surface, not a child of BeatManager. The Controller owns one instance and exposes it to Effects and Transitions as `waveforms`. Performers acquire immutable, clock-bound `Waveform` values by Energy or compose a `Routine`; each held value reads its own `Envelope` or maps it through `Lerp(from, to)`. `Waveforms.None` is the explicit non-null value a Mixer assigns to suppress a child's response.
 
@@ -145,7 +145,7 @@ A type appears in the catalog when it is:
 - a subclass of the catalog base type; and
 - not marked with `[RuntimeCatalogIgnore]`.
 
-The resulting types are sorted by `Type.FullName` using ordinal comparison. This makes indexes deterministic for a fixed set of classes.
+The resulting types are sorted by `Type.FullName` using `StringComparer.OrdinalIgnoreCase`. This makes indexes deterministic for a fixed set of classes.
 
 Indexes are still not permanent IDs. Adding, removing, or renaming an effect can move later sorted indexes. Use name-based controls for debugging and operator workflows when possible.
 
@@ -161,7 +161,7 @@ Draw()       every active frame
 OnEnd()      reserved, but Controller does not currently call it
 ```
 
-`EffectBase.Init()` connects the effect to `Controller.Instance`, the active `Penrose` model, tile metadata, and a `Color[] buffer` sized to `Penrose.Total`.
+`Controller` calls `EffectBase.BindController(this)` before `Init()`. `Init()` requires that binding, then reads the bound Controller's active `Penrose` model and tile metadata and creates a `Color[] buffer` sized to `Penrose.Total`.
 
 `EffectBase.Draw()` implementations write one frame into that local `buffer`. The Switcher returns the active Effect or Transition buffer to the Controller, which makes it the current `penrose.buffer` for overlays, output, and preview.
 
@@ -233,14 +233,13 @@ The project uses conditional compilation for optional output and control paths.
 | --- | --- |
 | `ENABLE_SERIAL` | File-defined at the top of `Controller.cs`; when defined, makes USB serial the active output path. Currently commented out, so the compiled output is UDP/E1.31. |
 | `ENABLE_TELNET` | Enables the remote command-line interface on port 23. Inactive by default; revisit before re-enabling. |
-| `ENABLE_BLENDING` | Enables `PixelReceiver` and dual-source frame blending. |
 | `PREP_CAPTURE` | Enables localhost pixel feedback/capture helper behavior and a synthetic blend source for testing. |
 
 **Active output** is ACN/E1.31 UDP through `Controller.sendUDPFrame()` / `sendACN()`, targeting the destination IP from the Controller's `IP` field / UI input. **Serial output** through `SerialOut` (`sendSerialFrame()` sends wire-mapped physical LED order to the S2 Mini / ESP32 boards) compiles in only when `ENABLE_SERIAL` is defined; it is currently disabled after issues with serial in use.
 
 Standalone API compatibility is intentionally `.NET Standard 2.1`; desktop `System.IO.Ports` support comes from platform-specific plugin assets under `Assets/Plugins/System.IO.Ports/` for macOS, Windows, and Linux x64. Android, iOS, and WebGL are not covered by that plugin setup — if they become production targets they need either serial-disabled builds or a platform-specific USB serial transport.
 
-Control and input paths are OSC (`OSCReader`, `RaveOscReceiver`), optional `PixelReceiver` blending, drum overlays, keyboard shortcuts, and the optional telnet/debug path.
+Control and input paths are OSC (`TouchOscSurface`, `RaveOscReceiver`), `PixelReceiver` blending, drum overlays, keyboard shortcuts, and the optional telnet/debug path.
 
 ## Major subsystems
 
@@ -262,10 +261,11 @@ Control and input paths are OSC (`OSCReader`, `RaveOscReceiver`), optional `Pixe
 | Sequencing diagnostics | `Assets/core/Runtime/CueLog.cs` | Per-session trace file: owns naming, rotation, lazy open, and contained failure; callers own the record vocabulary. |
 | Rhythm Data Surface | `Assets/core/Rhythm/BeatManager.cs`, `LiveOrderValues.cs`, other `*Values.cs`, `StockEnvelopes.cs`, `Duration.cs` | One live/Standalone musical gateway exposing shallow, frame-coherent wire values and derived musical values, including the live-order focus used by Synced Mode. |
 | Waveform tools | `Assets/core/Rhythm/Waveforms.cs`, `Waveform.cs`, `WaveformPool.cs`, `Routine.cs` | Sibling acquisition surface, immutable clock-bound values, Pool loading/codec, and direct four-bar choreography composition. |
-| Rave OSC | `Assets/core/IO/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs`, `Assets/OSCReader.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
+| TouchOSC | `Assets/core/IO/TouchOscSurface.cs`, `Assets/OSC/*.cs` | Receive operator controls and send surface feedback through the generic OSC library. |
+| Rave OSC | `Assets/core/IO/RaveOscReceiver.cs`, `Assets/OSC/Rave/*.cs` | Receive/apply RaveSystem on-air state into BeatManager before Director ticks. |
 | Drum overlay | `Assets/core/ReactiveInputs/drums.cs` | Drum/ring overlay triggers and drawing. |
 | Serial output | `Assets/core/Hardware/SerialOut.cs` | USB serial discovery and frame output for S2 Mini / ESP32 boards. |
-| Legacy UDP output | `Assets/core/Runtime/Controller.cs` (`sendUDPFrame`, `sendACN`) | E1.31/ACN output path retained for non-serial builds. |
+| Active UDP output | `Assets/core/Runtime/Controller.cs` (`sendUDPFrame`, `sendACN`) | Compiled E1.31/ACN output path while `ENABLE_SERIAL` remains undefined. |
 
 ## Known architectural pressure points
 

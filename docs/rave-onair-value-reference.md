@@ -90,9 +90,6 @@ coordinate matters, derive bar and beat-in-bar from `beat` with the contract's f
 
 ## Penrose-side caveats (implementation record)
 
-- **`on_beats` unavailable parse bug**: `RegisterFourBools` reads each lane as `!= 0`
-  (`Assets/OSC/Rave/RaveOscPacketParser.cs`), so the contract's `-1 -1 -1 -1` unavailable
-  shape parses as all four gates *open*. Fix in the implement effort.
 - **`beat_pulse` has no unavailable sentinel**: `0.0` doubles as the triangle's trough
   and "no usable timing." The one lane where the surface cannot manufacture `null` from
   the wire value alone.

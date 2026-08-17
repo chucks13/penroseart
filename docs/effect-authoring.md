@@ -90,6 +90,27 @@ and simulation—and documents why each musical source controls its particular v
 `EmptyEffect`; consult `Flock` when adding Routines, calibrated levels, Standalone behavior, Fill/Drop
 choreography, persistent trails, or a stateful simulation.
 
+## Rhythm cheat sheet
+
+| I want... | Use |
+| --- | --- |
+| Pulse with the beat | `waveform.Lerp(from, to)` |
+| A rhythm that varies over four bars | `Routine.Of(...)` + `routine.Lerp(from, to)` |
+| Calmer / busier rhythms | `waveforms.Random(Energy.Low)` / `(Energy.High)` |
+| Change rhythm as the music moves | Call the Waveform selection again in `OnNewGrid()` |
+| Tension rising through a Fill or Drop | `beatManager.Fill.In.Build()` / `Drop.In.Build()` |
+| A flash that fades after the Drop | `beatManager.Drop.In.Decay(beats)` |
+| Slow into an approaching Drop | `beatManager.Drop.Before.Decay(8)` |
+| Charge up as a Drop approaches | `beatManager.Drop.Before.Build(8)` |
+| Rise into the next Chorus | `beatManager.Chorus.Before.Build(32)` |
+| Wind down toward the Outro | `beatManager.Outro.Before.Decay(64)` |
+| Shape within the current section | `beatManager.Chorus.In.Build()`. Any Phrase Handle works. |
+| React to audio loudness | `beatManager.Levels.Smoothed` / `.Peak` |
+| Know whether a live beat is usable | `beatManager.IsSynced` |
+| A deliberate look with no music | Choose the `to` endpoint. It is the fallback. |
+
+Optional musical facts are nullable. Use `?? fallback` or `is { } value`. Booleans and Pulses are never null. See [`Flock`](../Assets/effects/Flock.cs) for a complete production example.
+
 ## Create a new transition
 
 1. Copy `Assets/transitions/EmptyTransition.cs`.
@@ -98,7 +119,7 @@ choreography, persistent trails, or a stateful simulation.
 4. Adjust its Runway/Tail settings and implement the A-to-B blend in `Draw()`.
 5. Enter Play Mode or run a compile/import check so Unity generates the new `.meta` file and compiles the class.
 
-`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`docs/switching-model.md`](switching-model.md)).
+`EmptyTransition` is likewise ignored by the runtime catalog. Its comments explain the transition lifecycle, A-to-B progress, Runways/Tails, and the same BeatManager/Waveforms tools available to effects. Transition Repertoire's Runway and Tail also participate in track-sheet planning: the Director casts Transitions that fit the space they are given, and no Transition's Runway or Tail crosses a Drop or Fill moment (see [`TrackCueSheet`](../Assets/core/Switching/TrackCueSheet.cs) and ADRs 0009-0011).
 
 ## Choose a base class
 

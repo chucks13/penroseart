@@ -39,16 +39,16 @@ This is a single-context repo: root `CONTEXT.md` plus root `docs/adr/`. See `doc
 
 ## Start Here
 
-- `README.md` — current orientation and runtime loop.
+- `readme.md` — current orientation and runtime loop.
 - `CONTEXT.md` — canonical project glossary (pure vocabulary; architecture, platform, and output notes live in `docs/runtime-architecture.md`).
-- `docs/switching-model.md` — the single source of truth for switching behavior; read it before any Director, Switcher, or sequencing work.
+- Switching behavior: the code under `Assets/core/Switching/` and ADRs 0009–0011 are authoritative. Read those ADRs before Director, Switcher, or sequencing work. The archived design model is `docs/investigation/switching-model.md`.
 - `docs/runtime-architecture.md`, `docs/effect-authoring.md`, and `docs/code-map.md` — runtime shape, effect authoring, and file map.
-- `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards.
+- `Assets/core/Hardware/S2_MINI_PROTOCOL.md` — USB serial protocol for the S2 Mini / ESP32 boards (a dormant path: serial is compiled out).
 
 ## Development Philosophy
 
 - Treat the core C# runtime as the product. Unity scene objects, UI, and assets wrap around these core files; they are not the primary architecture.
-- **Behavioral claims in docs, comments, and memories are hypotheses to verify against code, tests, and logs — not facts to build on.** When documentation layers disagree, test the claim against the runtime instead of picking a layer to trust, then fix the losing document in the same session. Neither defend machinery nor delete it on a doc claim alone.
+- **The code is the source of truth. Any document may be stale.** Verify behavioral claims in docs, comments, and memories against the code before you build on them. Raise every doc-vs-code mismatch to the maintainer immediately. The maintainer rules which side moved: doc rot gets the document fixed, and code drift from recorded intent becomes an issue. One exception: the imported RaveSystem wire contract stays authoritative for wire behavior (see OSC Boundary). Neither defend nor delete machinery on a doc claim alone.
 - Custom property drawers and inspectors are downstream debug views; runtime code must not be preserved just to keep them fed. They follow the runtime, not the reverse, and should be changed as needed.
 
 ## Simplicity and Hard Cuts
@@ -97,7 +97,7 @@ Start with these before adding new structures:
 - `Assets/core/Transitions/TransitionBase.cs` — base for transitions between effects and some external-source blend behavior.
 - `Assets/core/helpers/Factory.cs` — reflection-based discovery and instantiation of effect, transition, and blender classes.
 - `Assets/core/helpers/GPalette.cs` and `Assets/core/Rhythm/BeatManager.cs` — shared color and rhythm systems. If a task changes the live beat source or beat data contract, refactoring `BeatManager.cs` and its direct effect/consumer call sites is in scope; adding or changing a data surface is not (see below).
-- `Assets/core/Hardware/SerialOut.cs`, `Assets/OSCReader.cs`, `Assets/core/IO/PixelReceiver.cs`, and `Assets/core/ReactiveInputs/drums.cs` — hardware/control/input paths.
+- `Assets/core/Hardware/SerialOut.cs`, `Assets/core/IO/RaveOscReceiver.cs`, `Assets/core/IO/TouchOscSurface.cs`, `Assets/core/IO/PixelReceiver.cs`, and `Assets/core/ReactiveInputs/drums.cs` — hardware/control/input paths.
 
 `Controller.cs` is intentionally central. Refactor it only with explicit approval because many hardware, scene, and runtime behaviors pass through it. Small wiring changes needed to connect an approved runtime model change are allowed; broad Controller restructuring still requires explicit approval.
 
@@ -152,13 +152,14 @@ Start with these before adding new structures:
 - `Assets/OSC/*.cs` is a Unity-compatible vendored copy of the generic `RaveSystem.Osc` library. Keep generic OSC behavior, wire format, dispatch, transport, and Unity compatibility concerns there.
 - Penrose/Rave application policy belongs in `Assets/OSC/Rave/`, `Assets/core/IO/RaveOscReceiver.cs`, `Assets/core/Rhythm/BeatManager.cs`, or other core consumers — not as special cases in the generic OSC files.
 - Before changing `Assets/OSC/*.cs`, state whether the change is a generic OSC/library change, a Unity compatibility port change, or Penrose/Rave application policy. If unclear, stop and ask.
-- Root-level `Assets/OSC.cs` and `Assets/OSCReader.cs` are project-specific/legacy integration files, not the vendored `Assets/OSC/` library boundary.
+- `docs/osc-client-contract.md` is the imported RaveSystem wire contract. It is external documentation: never edit it in this repo. Wire facts come from it, and a code-vs-contract disagreement is a candidate client bug to raise.
 - The copyright and `Origin:` headers on `Assets/OSC/*.cs` mark imported RaveSystem code. Never apply that header pattern to any other file.
 - For OSC work, read `docs/adr/0002-vendored-ravesystem-osc-boundary.md` before editing the vendored library or adapter layer.
 
 ## Documentation and Workflows
 
 - ADR style: the domain-modeling skill's `ADR-FORMAT.md` is the single authority. Read that file before writing an ADR; never derive the format from past ADRs or from summaries of it.
+- **Documentation lives where it cannot drift.** Behavior belongs in the code as XML doc comments, vocabulary in `CONTEXT.md`, decisions in ADRs, and wire and hardware facts in the contracts. Navigation belongs in `readme.md`, `docs/code-map.md`, and `docs/runtime-architecture.md`. A markdown file that re-explains what the code already says is a second source of truth. Fold it into XML docs on the owning symbols, then delete it.
 - **Document what you touch:** any symbol you touch or create — public or private, production or test — gets C# XML doc comments (symbol-scoped, not whole-file; no retroactive sweeps). New files start with a `//` file-purpose comment. Touched tests document the scenario under test and the asserted outcome; `<inheritdoc/>` is not a stand-in for that. Repair documentation warnings (bad cref, placement) — never delete a doc comment to silence one. There is deliberately no compiler-enforced documentation gate.
 - **Rules, not rulers:** documents state rules and name roles, never people. A rule stands on its location and its reason, never on who decided it. Attribution lives in git history and the issue tracker. When a document must mark a settled point, label the point as decided and state it.
 - **History earns its place:** keep skills, plans, and canonical docs free of history. Record a past event only when it changes behavior now, for example a failed approach that must not return. Full provenance belongs in the historical records under `docs/investigation/` and `docs/architecture-reviews/`.

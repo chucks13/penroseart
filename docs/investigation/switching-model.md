@@ -1,3 +1,6 @@
+> [!NOTE]
+> Archived 2026-08. This is the historical design model from the Director/Switcher rewiring. The runtime code and ADRs 0009–0011 are now authoritative. At archive time, the code had diverged from this model in the ways recorded by the drift audit; deferred intent divergence remains tracked in issue #173.
+
 # The Switching Model
 
 The model of the switching product: how the wall changes, and who decides, while a

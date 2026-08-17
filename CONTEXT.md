@@ -63,7 +63,7 @@ A ten-Tile compound motif in which five fat Tiles form a Star and five thin Tile
 _Avoid_: Star; Lotusball — it uses a different fat/thin adjacency pattern.
 
 **Lotusball**:
-A connected ten-Tile motif of five fat and five thin Tiles built around one fat Tile that touches four of the others. Its fat Tiles never form a Star, which is what separates it from a Starball.
+A connected ten-Tile motif of five fat and five thin Tiles built around one fat Tile that touches four of the others. Its fat Tiles never form a Star, which is what separates it from a Starball. The shipped Shape List has one clipped nine-Tile group (group 24); the runtime handles that wall-edge exception while ten Tiles remains the canonical shape.
 _Avoid_: Starball; assuming its groups must have the Star's closed-cycle topology.
 
 **Line Ribbon**:
@@ -159,11 +159,11 @@ The per-player change detector for song structure: an identifier that differs wh
 _Avoid_: using the track id to detect structure change; comparing generations with less-than/greater-than; treating an identical track as an unchanged structure.
 
 **Fill**:
-A short musical transition in the tail of a Phrase — from its marked start beat through the Phrase's final beat, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats` and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
+A short musical transition in the tail of a Phrase — from its marked start beat through the Phrase's final beat, commonly one to four beats but not bounded by four — described by `BeatManager.Fill`. The wire's one countdown lane changes meaning with `Active`; BeatManager serves it only under its readable names — `BeatsRemaining` while active, `BeatsUntil` while upcoming — beside `LengthBeats`, `Progress`, and nullable `Remaining` (the count of Fills remaining on the selected player's track), with the Stock Envelopes reached through its **Before** and **In** spans. The selected Effect or Transition owns how it responds.
 _Avoid_: placing a Fill anywhere outside the Phrase tail; treating it as able to stop before the Phrase ends; expecting `Active` without the running 4-count — a Fill is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Drop**:
-The climactic section of a track. A Drop is its own Phrase and starts on that Phrase's first beat. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, and `Progress`, with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
+The climactic section of a track. A Drop is its own Phrase and starts on that Phrase's first beat. `BeatManager.Drop` has the same direct shape as Fill: `Active`, `LengthBeats`, readable `BeatsRemaining` or `BeatsUntil`, `Progress`, and nullable `Remaining` (the count of Drops remaining on the selected player's track), with the Stock Envelopes reached through its **Before** and **In** spans. There is no separate "next drop" wire lane; the same lane describes the current or upcoming drop according to `Active`.
 _Avoid_: expecting `Active` without the running 4-count — a Drop is a Synced Mode fact, and Standalone Mode never reports one.
 
 **Energy**:
@@ -464,7 +464,7 @@ Unity Editor state where the wall runtime is not running. Authoring changes made
 _Avoid_: assuming Edit Mode authoring is the only durable authoring path; forcing creative tuning to happen without seeing the wall in motion.
 
 **Tuning Window**:
-The canonical Unity workspace for detailed wall observation and Transition tuning. Its focused Live, Rhythm, and Transitions tabs show live sequencing state — including the Cue Sheet tracker, which lays the in-force plan out by Grid — alongside musical state and saved Transition Settings; the compact Controller Inspector opens it directly. It may steer the Director's Next Effect and Next Transition without taking timing ownership away from the Director. Effect authoring has no dedicated window surface yet.
+The canonical Unity workspace for detailed wall observation and Effect or Transition tuning. Its focused Live, Rhythm, Effects, and Transitions tabs show live sequencing state — including the Cue Sheet tracker, which lays the in-force plan out by Grid — alongside musical state and saved Effect or Transition Settings; the compact Controller Inspector opens it directly. It may steer the Director's Next Effect and Next Transition without taking timing ownership away from the Director.
 _Avoid_: burying detailed observability in the narrow Controller Inspector; presenting unfinished Effect authoring as a real workspace; making a fake preview path that does not exercise the Director and Switcher.
 
 **Phrase Event View**:
