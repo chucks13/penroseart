@@ -328,7 +328,9 @@ public class Kscope : ScreenEffect
             }
             picture pic = new picture();
             pic.tex = tex;
-            pic.fname = fileName;
+            // files.txt can carry Windows line endings; an untrimmed \r inside the HUD's
+            // "file <name>" readout renders as a stray break, hiding the name.
+            pic.fname = fileName.TrimEnd('\r');
 
             texList.Add(pic);
         }
