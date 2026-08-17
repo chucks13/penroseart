@@ -129,19 +129,19 @@ public class Kscope : ScreenEffect
     /// Contrast applied to the Fill grayscale around mid-gray. One keeps the image's own
     /// luminance contrast, which the wall read as soft after the retired hash's artificial
     /// spread; the knob exists so the wall can find the value between the two extremes.
-    /// The wall sat on 1.5 as the hardness between them.
+    /// The wall sat on 2 as the hardness between them.
     /// </summary>
-    private const float SyncFillContrast = 1.5f;
+    private const float SyncFillContrast = 2f;
 
-    /// <summary>Window in whole beats across which the Drop approach freeze deepens.</summary>
-    private const int SyncDropSlowdownBeats = 8;
+    /// <summary>Window in whole beats across which the Drop approach freeze deepens. The wall tightened it to 6.</summary>
+    private const int SyncDropSlowdownBeats = 6;
 
     /// <summary>
     /// Pace added at the Drop landing, decaying to zero across the burst window. Additive so the
-    /// landing displaces the same wall distance in every Energy state; 4.5 reproduces the prior
-    /// 5x-of-Mid-pace landing magnitude.
+    /// landing displaces the same wall distance in every Energy state. The wall settled on 3,
+    /// softer than the 4.5 that reproduced the prior 5x-of-Mid-pace landing magnitude.
     /// </summary>
-    private const float SyncDropBurstPace = 4.5f;
+    private const float SyncDropBurstPace = 3f;
 
     /// <summary>Window in whole beats across which the landing burst decays, matching the freeze window it split from.</summary>
     private const int SyncDropBurstBeats = 8;

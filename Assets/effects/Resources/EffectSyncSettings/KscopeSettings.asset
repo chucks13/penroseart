@@ -31,5 +31,7 @@ MonoBehaviour:
     OnBeatPushStrength: 7
     PaletteSaturationFloor: 0.3
     BeatHueOffset: 0.5
-    FillContrast: 1.5
-    DropSlowdownBeats: 8
+    FillContrast: 2
+    DropSlowdownBeats: 6
+    DropBurstPace: 3
+    DropBurstBeats: 8
