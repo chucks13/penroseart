@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kscope pace prototype</title>
+<style>
+  body { background: #111; color: #ddd; font: 14px/1.5 -apple-system, sans-serif; margin: 24px; }
+  h1 { font-size: 18px; }
+  h2 { font-size: 15px; margin: 28px 0 6px; color: #fff; }
+  p  { max-width: 70em; color: #aaa; }
+  img { width: 100%; max-width: 1500px; image-rendering: pixelated; display: block; border: 1px solid #333; }
+  .note { color: #c9a; }
+  hr { border: 0; border-top: 1px solid #333; margin: 36px 0; }
+</style>
+</head>
+<body>
+<h1>Kscope — desk wall (throwaway prototype)</h1>
+
+<h2>CURRENT BEHAVIOR — the Beat Push, as the branch code runs today</h2>
+<p>No proposal here: this is the landed motion law, ported exactly. White square = the
+wire beat pulse (1 on the beat, 0 halfway to the next). The push displaces the wall
+pattern by an <b>identical</b> amount on every image — measured in this render:
+24.89 wall px/beat/axis on Mirror2 and 12.45 on Mirror10, for slash and ai2 alike.
+No image term exists anywhere in the motion math.</p>
+<img src="push_current_wall.gif">
+
+<hr>
+
+<h2>Explored and set aside below: feature-scale normalization + rejected speed calibration</h2>
+<p>One authored rule, no per-image settings, no speed factors: each image's measured
+feature scale (correlation length L) is pulled into one band at load — box-averaged
+down when too smooth (ai2 ×0.11), gently upscaled when too fine (slash ×3.25,
+smiley ×2.29), <b>untouched when already in band</b> (9 of 14 pool images).
+Identical settings everywhere: Pan 6, Mid energy, rotation on, no push, 120 BPM.</p>
+
+<h2>Mirror10 — today (1:1 sampling)</h2><img src="wall_mirror10_alpha_0.00.gif">
+<h2>Mirror10 — feature-scale normalized</h2><img src="wall_mirror10_norm.gif">
+<h2>Mirror2 — today (1:1 sampling)</h2><img src="wall_mirror2_alpha_0.00.gif">
+<h2>Mirror2 — feature-scale normalized</h2><img src="wall_mirror2_norm.gif">
+
+<p class="note">Wedge color variety (higher = more visible kaleidoscope structure), mirror2/mirror10:<br>
+today: slash .30/.25 &nbsp; smiley .17/.15 &nbsp; tech .22/.13 &nbsp; abstract1 .11/.12 &nbsp; crystal .10/.07 &nbsp; ai2 .08/.08 &nbsp; (3.5× spread)<br>
+normalized: slash .21/.19 &nbsp; smiley .18/.17 &nbsp; tech .22/.13 &nbsp; abstract1 .11/.12 &nbsp; crystal .10/.07 &nbsp; ai2 .21/.20 &nbsp; (~2× spread)</p>
+
+<hr>
+
+<h2>Earlier material (kept for reference)</h2>
+<p>The per-image <i>speed</i> calibration direction, judged and rejected at this desk:
+it visibly un-equalized the progression. And the v1 pre-mirror buffer panels.</p>
+<h2>Mirror10 — rejected speed calibration (alpha=0.75)</h2><img src="wall_mirror10_alpha_0.75.gif">
+<h2>Mirror2 — rejected speed calibration (alpha=0.75)</h2><img src="wall_mirror2_alpha_0.75.gif">
+<h2>v1 buffer panels — alpha 0 / 0.5 / 0.75 / 1</h2>
+<img src="pace_alpha_0.00.gif"><img src="pace_alpha_0.50.gif">
+<img src="pace_alpha_0.75.gif"><img src="pace_alpha_1.00.gif">
+<h2>v1 push comparison</h2><img src="push_compare.gif">
+</body>
+</html>

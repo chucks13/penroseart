@@ -1,0 +1,109 @@
+pool: 14 images | L_ref (geometric mean) = 4.1
+
+image           pool   size      contrast  L       quadrant L
+-------------------------------------------------------------
+slash.png       color  12x13    0.2083    1.23    -
+smiley.png      color  18x18    0.1793    1.75    -
+latticebw.png   mono   103x53    0.1559    2.2     -
+lattice.png     color  101x101   0.1515    2.41    -
+tech.png        color  49x55    0.2285    2.63    -
+anstract3.png   color  95x56    0.1711    3.61    -
+fingermesh.png  color  33x40    0.303     3.77    -
+ball.png        color  143x154   0.2817    4.78    3.6 2.2 12.6 2.5
+abstract1.png   color  110x73    0.1905    4.79    -
+crystal.png     mono   308x306   0.1655    5.03    6.7 3.8 5.1 3.7
+chuck.png       color  88x126   0.2098    5.09    -
+ai1.png         color  88x64    0.2804    6.45    -
+abstract2.png   color  105x105   0.1765    7.07    -
+ai2.png         color  528x494   0.27      37.31   52.8 37.9 35.4 31.6
+
+factor = clamp((L / L_ref)^alpha, 0.4, 2.5)
+wall px/beat/axis = 6.75 * factor | pattern %/beat = wall / (2*width)
+
+alpha=0.0   wall-rate spread    1.0x   pattern-rate spread   44.0x
+alpha=0.25  wall-rate spread    2.3x   pattern-rate spread   18.7x
+alpha=0.5   wall-rate spread    4.6x   pattern-rate spread   12.7x
+alpha=0.75  wall-rate spread    6.2x   pattern-rate spread    8.9x
+alpha=1.0   wall-rate spread    6.2x   pattern-rate spread    8.4x
+
+alpha=0.0 factors:
+  slash.png        L=1.23    factor=1.00
+  smiley.png       L=1.75    factor=1.00
+  latticebw.png    L=2.2     factor=1.00
+  lattice.png      L=2.41    factor=1.00
+  tech.png         L=2.63    factor=1.00
+  anstract3.png    L=3.61    factor=1.00
+  fingermesh.png   L=3.77    factor=1.00
+  ball.png         L=4.78    factor=1.00
+  abstract1.png    L=4.79    factor=1.00
+  crystal.png      L=5.03    factor=1.00
+  chuck.png        L=5.09    factor=1.00
+  ai1.png          L=6.45    factor=1.00
+  abstract2.png    L=7.07    factor=1.00
+  ai2.png          L=37.31   factor=1.00
+
+alpha=0.25 factors:
+  slash.png        L=1.23    factor=0.74
+  smiley.png       L=1.75    factor=0.81
+  latticebw.png    L=2.2     factor=0.85
+  lattice.png      L=2.41    factor=0.87
+  tech.png         L=2.63    factor=0.89
+  anstract3.png    L=3.61    factor=0.97
+  fingermesh.png   L=3.77    factor=0.98
+  ball.png         L=4.78    factor=1.04
+  abstract1.png    L=4.79    factor=1.04
+  crystal.png      L=5.03    factor=1.05
+  chuck.png        L=5.09    factor=1.05
+  ai1.png          L=6.45    factor=1.12
+  abstract2.png    L=7.07    factor=1.14
+  ai2.png          L=37.31   factor=1.73
+
+alpha=0.5 factors:
+  slash.png        L=1.23    factor=0.55
+  smiley.png       L=1.75    factor=0.65
+  latticebw.png    L=2.2     factor=0.73
+  lattice.png      L=2.41    factor=0.76
+  tech.png         L=2.63    factor=0.80
+  anstract3.png    L=3.61    factor=0.94
+  fingermesh.png   L=3.77    factor=0.96
+  ball.png         L=4.78    factor=1.08
+  abstract1.png    L=4.79    factor=1.08
+  crystal.png      L=5.03    factor=1.10
+  chuck.png        L=5.09    factor=1.11
+  ai1.png          L=6.45    factor=1.25
+  abstract2.png    L=7.07    factor=1.31
+  ai2.png          L=37.31   factor=2.50
+
+alpha=0.75 factors:
+  slash.png        L=1.23    factor=0.40
+  smiley.png       L=1.75    factor=0.53
+  latticebw.png    L=2.2     factor=0.62
+  lattice.png      L=2.41    factor=0.67
+  tech.png         L=2.63    factor=0.71
+  anstract3.png    L=3.61    factor=0.91
+  fingermesh.png   L=3.77    factor=0.94
+  ball.png         L=4.78    factor=1.12
+  abstract1.png    L=4.79    factor=1.12
+  crystal.png      L=5.03    factor=1.16
+  chuck.png        L=5.09    factor=1.17
+  ai1.png          L=6.45    factor=1.40
+  abstract2.png    L=7.07    factor=1.50
+  ai2.png          L=37.31   factor=2.50
+
+alpha=1.0 factors:
+  slash.png        L=1.23    factor=0.40
+  smiley.png       L=1.75    factor=0.42
+  latticebw.png    L=2.2     factor=0.53
+  lattice.png      L=2.41    factor=0.58
+  tech.png         L=2.63    factor=0.64
+  anstract3.png    L=3.61    factor=0.88
+  fingermesh.png   L=3.77    factor=0.91
+  ball.png         L=4.78    factor=1.16
+  abstract1.png    L=4.79    factor=1.16
+  crystal.png      L=5.03    factor=1.22
+  chuck.png        L=5.09    factor=1.24
+  ai1.png          L=6.45    factor=1.57
+  abstract2.png    L=7.07    factor=1.72
+  ai2.png          L=37.31   factor=2.50
+
+wrote /Users/hunter/Projects/penroseart/prototype/kscope-pace/out/measure.json

@@ -1,0 +1,17 @@
+Installed 2 packages in 20ms
+image           pool   size      contrast  L       variety m2  variety m10 
+---------------------------------------------------------------------------
+slash.png       color  12x13     0.2083    1.23    0.295       0.246       
+fingermesh.png  color  33x40     0.303     3.77    0.215       0.173       
+tech.png        color  49x55     0.2285    2.63    0.183       0.149       
+ai1.png         color  88x64     0.2804    6.45    0.159       0.160       
+ball.png        color  143x154   0.2817    4.78    0.171       0.141       
+smiley.png      color  18x18     0.1793    1.75    0.167       0.144       
+abstract1.png   color  110x73    0.1905    4.79    0.129       0.153       
+chuck.png       color  88x126    0.2098    5.09    0.134       0.145       
+lattice.png     color  101x101   0.1515    2.41    0.146       0.097       
+anstract3.png   color  95x56     0.1711    3.61    0.125       0.108       
+latticebw.png   mono   103x53    0.1559    2.2     0.115       0.100       
+abstract2.png   color  105x105   0.1765    7.07    0.106       0.078       
+ai2.png         color  528x494   0.27      37.31   0.110       0.050       
+crystal.png     mono   308x306   0.1655    5.03    0.078       0.053       

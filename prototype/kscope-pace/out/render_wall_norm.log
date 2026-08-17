@@ -1,0 +1,18 @@
+Installed 2 packages in 10ms
+target L 4.0, band [2.5, 8.0]
+  slash.png        L   1.23 ->  4.05   12x13 -> 39x42   x3.25 (upscaled)
+  smiley.png       L   1.75 ->  4.11   18x18 -> 41x41   x2.29 (upscaled)
+  tech.png         L   2.63 ->  2.63   49x55 -> 49x55   x1.00 (in band)
+  abstract1.png    L   4.79 ->  4.79   110x73 -> 110x73   x1.00 (in band)
+  crystal.png      L   5.03 ->  5.03   308x306 -> 308x306   x1.00 (in band)
+  ai2.png          L  37.31 ->  5.02   528x494 -> 57x53   x0.11 (box-averaged down)
+wrote wall_mirror2_norm.gif (6.5 MB)
+wrote wall_mirror10_norm.gif (6.9 MB)
+
+wedge color variety, normalized (compare render_wall.log alpha=0 numbers):
+  slash.png        mirror2 0.213   mirror10 0.186
+  smiley.png       mirror2 0.175   mirror10 0.165
+  tech.png         mirror2 0.220   mirror10 0.133
+  abstract1.png    mirror2 0.107   mirror10 0.118
+  crystal.png      mirror2 0.096   mirror10 0.069
+  ai2.png          mirror2 0.214   mirror10 0.201
