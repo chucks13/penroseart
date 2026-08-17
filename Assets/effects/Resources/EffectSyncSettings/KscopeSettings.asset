@@ -18,10 +18,10 @@ MonoBehaviour:
     TextureAdvanceRangeDivisor: 3
     ColorSwapRollMaxExclusive: 3
     ChannelSwapSelectorMaxExclusive: 2
-    PanWallUnitsPerBeat: 6
+    PanWallUnitsPerBeat: 4
     Mirror2MotionScale: 2
     Mirror10MotionScale: 1
-    RotationRadiansPerBeat: 0.1
+    RotationRadiansPerBeat: 0.2
     EnergyPace:
       Min: 0.75
       Max: 1.5

@@ -73,10 +73,10 @@ public class Kscope : ScreenEffect
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
-    /// Wall units panned per beat before musical pacing. Six preserves the wall-approved
+    /// Wall units panned per beat before musical pacing. Four preserves the wall-approved
     /// neutral-pace drift without coupling motion to the source image.
     /// </summary>
-    private const float SyncPanWallUnitsPerBeat = 6f;
+    private const float SyncPanWallUnitsPerBeat = 4f;
 
     /// <summary>Mirror2 motion calibration chosen on the wall to match Mirror10.</summary>
     private const float SyncMirror2MotionScale = 2f;
@@ -85,10 +85,10 @@ public class Kscope : ScreenEffect
     private const float SyncMirror10MotionScale = 1f;
 
     /// <summary>
-    /// Kaleidoscope rotation in radians per beat before musical pacing — about six
+    /// Kaleidoscope rotation in radians per beat before musical pacing — about eleven
     /// degrees.
     /// </summary>
-    private const float SyncRotationRadiansPerBeat = 0.1f;
+    private const float SyncRotationRadiansPerBeat = 0.2f;
 
     /// <summary>Low Energy pace slows the base motion while keeping the effect visibly alive.</summary>
     private const float SyncEnergyPaceLow = 0.75f;
@@ -125,15 +125,20 @@ public class Kscope : ScreenEffect
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     private const float SyncBeatHueOffset = 0.5f;
 
-    /// <summary>
-    /// Number of beats used by the inherited Drop slowdown. This was the call's implicit default before capture.
-    /// </summary>
+    /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
     private const int SyncDropSlowdownBeats = 8;
 
     // Runtime mechanism constants
 
     /// <summary>Reference frame rate converting Standalone's authored per-frame motion into delta-time motion.</summary>
     private const float ReferenceFrameRate = 60f;
+
+    /// <summary>
+    /// Pace added at the Drop landing, decaying to zero across the slowdown window. Additive so the
+    /// landing displaces the same wall distance in every Energy state; 4.5 reproduces the prior
+    /// 5x-of-Mid-pace landing magnitude.
+    /// </summary>
+    private const float SyncDropBurstPace = 4.5f;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Kscope's Standalone Defaults.</summary>
     public static KscopeStandaloneSettings StandaloneDefaults => new KscopeStandaloneSettings
@@ -501,9 +506,9 @@ public class Kscope : ScreenEffect
      */
     /// <summary>Samples the moving texture into the wall buffer, then mirrors every selected Shape List group.</summary>
     /// <remarks>
-    /// In Synced Mode, Energy pace and the gated On-Beat Push combine into one motion scale.
-    /// The current mirror layout's live calibration normalizes that scale before it drives pan and
-    /// rotation. <c>PanWallUnitsPerBeat</c> then moves the sampling position in screen-buffer pixels,
+    /// In Synced Mode, Energy pace, the gated On-Beat Push, and the additive Drop landing burst
+    /// combine into one motion scale; the current mirror layout's live calibration and the Drop
+    /// approach freeze scale that whole rate before it drives pan and rotation. <c>PanWallUnitsPerBeat</c> then moves the sampling position in screen-buffer pixels,
     /// independent of source dimensions, while sampling remains one source texel per screen-buffer
     /// pixel so image presentation stays unchanged. Musical meanings are defined by the Data Surface,
     /// Energy, and Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
@@ -517,7 +522,6 @@ public class Kscope : ScreenEffect
         }
         float rhythm = waveform.Envelope;
         float beatHue = SyncSettings.BeatHueOffset * rhythm;
-        float localDelta = DropSlowdown(effectDelta, SyncSettings.DropSlowdownBeats);
         float rotationDelta;
         if (beatManager.IsSynced)
         {
@@ -525,17 +529,23 @@ public class Kscope : ScreenEffect
             float mirrorMotionScale = usesMirror2
                 ? SyncSettings.Mirror2MotionScale
                 : SyncSettings.Mirror10MotionScale;
-            float motionScale = (ReadEnergyPace() + ReadOnBeatPush())
-                * mirrorMotionScale / beatSeconds;
-            float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * localDelta;
+            // Drop gesture: the approach freeze scales the whole movement, while the landing burst
+            // is an additive pace term so the landing displaces the same wall distance in every
+            // Energy state. Both envelopes rest at no-effect outside a Drop.
+            float dropFreeze = beatManager.Drop.Before.Decay(SyncSettings.DropSlowdownBeats);
+            float dropBurst = SyncDropBurstPace
+                * beatManager.Drop.In.Decay(SyncSettings.DropSlowdownBeats);
+            float motionScale = (ReadEnergyPace() + ReadOnBeatPush() + dropBurst)
+                * mirrorMotionScale * dropFreeze / beatSeconds;
+            float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * effectDelta;
             positionX += motionX * panWallDelta;
             positionY += motionY * panWallDelta;
             rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
         {
-            positionX += motionX * localDelta * ReferenceFrameRate;
-            positionY += motionY * localDelta * ReferenceFrameRate;
+            positionX += motionX * effectDelta * ReferenceFrameRate;
+            positionY += motionY * effectDelta * ReferenceFrameRate;
             rotationDelta = aspeed * effectDelta * ReferenceFrameRate;
         }
 
@@ -766,7 +776,7 @@ public sealed class KscopeSyncSettings
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float BeatHueOffset;
 
-    /// <summary>Number of beats used by the inherited Drop slowdown.</summary>
+    /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
     [Min(1)] public int DropSlowdownBeats;
 
     /// <summary>Copies every Kscope Sync Setting from another value.</summary>

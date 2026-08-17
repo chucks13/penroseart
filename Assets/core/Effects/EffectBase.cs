@@ -151,19 +151,15 @@ public abstract class EffectBase
     }
 
     /// <summary>
-    /// Slows a caller-provided value while approaching and entering a Drop.
+    /// Shapes a caller-provided value through the Drop gesture: a linear slowdown to a full stop
+    /// across the <paramref name="beats"/> approaching the Drop, then a 5x burst on the landing
+    /// that decays back to the unshaped value across the same window into the Drop.
     /// </summary>
     protected float DropSlowdown(float value, int beats = 8)
     {
         value *= beatManager.Drop.Before.Decay(beats);
-
-        if (beatManager.Drop.Active)
-        {
-            float rampDown = value * beatManager.Drop.In.Decay(beats).Remap(1f, 0f, 5f, value);
-            if (rampDown > value)
-                value = rampDown;
-        }
-
+        // In.Decay rests at zero outside an active Drop, so the burst factor is identity there.
+        value *= 1f + (4f * beatManager.Drop.In.Decay(beats));
         return value;
     }
 
