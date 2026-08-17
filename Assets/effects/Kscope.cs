@@ -33,7 +33,7 @@ public class Kscope : ScreenEffect
     private const int StandaloneColorSwapRollMaxExclusive = 3;
 
     /// <summary>
-    /// Exclusive upper bound of the discrete channel-swap selector roll in <see cref="messTexture"/>.
+    /// Exclusive upper bound of the discrete channel-swap selector roll in <see cref="CreateChannelSwappedTexture"/>.
     /// The switch defines three channel swaps, but this authored bound reaches only the first two
     /// (red/blue and red/green); the green/blue arm is unreachable today, recorded on #111's
     /// findings list rather than changed here.
@@ -60,16 +60,30 @@ public class Kscope : ScreenEffect
 
     // Sync Defaults
 
-    /// <summary>Minimum number of texture-catalog slots advanced on each Synced activation.</summary>
+    /// <summary>
+    /// Minimum number of texture-catalog slots advanced on each Synced activation. One prevents
+    /// the catalog index from standing still before the random bonus is added.
+    /// </summary>
     private const int SyncTextureMinimumAdvance = 1;
 
-    /// <summary>Divisor forming the discrete random-advance upper bound in Synced Mode.</summary>
+    /// <summary>
+    /// Divisor applied to the texture count to form the Synced random-advance upper bound. One
+    /// third limits each activation's random bonus to roughly one third of the catalog.
+    /// </summary>
     private const int SyncTextureAdvanceRangeDivisor = 3;
 
-    /// <summary>Exclusive upper bound of the discrete color-swap roll in Synced Mode.</summary>
+    /// <summary>
+    /// Exclusive upper bound of the Synced color-swap roll; one selected slot out of three
+    /// mutates a color texture.
+    /// </summary>
     private const int SyncColorSwapRollMaxExclusive = 3;
 
-    /// <summary>Exclusive upper bound of the channel-swap selector roll in Synced Mode.</summary>
+    /// <summary>
+    /// Exclusive upper bound of the Synced channel-swap selector roll in
+    /// <see cref="CreateChannelSwappedTexture"/>. The switch defines three channel swaps, but
+    /// this authored bound reaches only the first two (red/blue and red/green); the green/blue
+    /// arm remains deliberately unreachable, matching Standalone.
+    /// </summary>
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
@@ -151,6 +165,12 @@ public class Kscope : ScreenEffect
     /// <summary>Reference frame rate converting Standalone's authored per-frame motion into delta-time motion.</summary>
     private const float ReferenceFrameRate = 60f;
 
+    /// <summary>
+    /// Number of distinct values in each 8-bit image channel. The mono palette tables cover the
+    /// complete source-image value domain so Draw can index them without a sparse fallback.
+    /// </summary>
+    private const int TextureChannelValueCount = byte.MaxValue + 1;
+
     /// <summary>Resolves a fresh immutable-by-convention copy of Kscope's Standalone Defaults.</summary>
     public static KscopeStandaloneSettings StandaloneDefaults => new KscopeStandaloneSettings
     {
@@ -190,7 +210,7 @@ public class Kscope : ScreenEffect
         DropBurstBeats = SyncDropBurstBeats,
     };
 
-    /// <summary>The Standalone Settings fixed for the current activation.</summary>
+    /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
     private KscopeStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
@@ -200,12 +220,27 @@ public class Kscope : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
-    public class picture
+    /// <summary>One loaded source texture and the filename shown in Kscope's debug readout.</summary>
+    private sealed class Picture
     {
-        public Texture2D tex;
-        public string fname;
-    };
-    string fname = "";
+        /// <summary>The readable source texture sampled by Kscope.</summary>
+        public readonly Texture2D Texture;
+
+        /// <summary>The source filename shown in Kscope's debug readout.</summary>
+        public readonly string FileName;
+
+        /// <summary>Creates one immutable texture-catalog entry.</summary>
+        /// <param name="texture">The readable source texture.</param>
+        /// <param name="fileName">The source filename shown in the debug readout.</param>
+        public Picture(Texture2D texture, string fileName)
+        {
+            Texture = texture;
+            FileName = fileName;
+        }
+    }
+
+    /// <summary>The current source filename shown in Kscope's debug readout.</summary>
+    private string currentFileName = "";
 
     /// <summary>The allocation-free reader over the mirror groups rolled for this activation.</summary>
     private LayoutData.ShapeList.Reader mirrorList;
@@ -213,44 +248,86 @@ public class Kscope : ScreenEffect
     /// <summary>Whether the activation's mirror-layout coin selected Mirror2 rather than Mirror10.</summary>
     private bool usesMirror2;
 
-    List<picture> colorTex = new List<picture>();
-    List<picture> monoTex = new List<picture>();
-    Texture2D currentTex;
+    /// <summary>The loaded color-image pool.</summary>
+    private List<Picture> colorTextures = new();
+
+    /// <summary>The loaded monochrome-image pool.</summary>
+    private List<Picture> monochromeTextures = new();
+
+    /// <summary>The source or channel-swapped texture sampled by the current activation.</summary>
+    private Texture2D currentTexture;
+
+    /// <summary>
+    /// Source-pool textures superseded by an Enter-key rescan. Destruction waits until OnStart
+    /// selects from the replacement pools, so the rescan frame can finish sampling its old source.
+    /// </summary>
+    private readonly List<Texture2D> retiredPoolTextures = new();
+
+    /// <summary>
+    /// Palette hue indexed by the complete 8-bit mono-image value domain. Draw rebuilds the table
+    /// every frame so the animated palette and live Settings never become activation-cached.
+    /// </summary>
+    private float[] monochromePaletteHueByValue;
+
+    /// <summary>
+    /// Palette saturation indexed by the complete 8-bit mono-image value domain. Draw rebuilds
+    /// the table beside hue, preserving live palette fades without per-tile palette reads.
+    /// </summary>
+    private float[] monochromePaletteSaturationByValue;
 
     /// <summary>
     /// The channel-swapped copy owned by the current activation, or null when the pick renders
     /// straight from the pool. Script-created textures are never garbage-collected, so this
     /// reference is what the next activation destroys.
     /// </summary>
-    private Texture2D ownedTex;
+    private Texture2D ownedTexture;
 
     /// <summary>Name of the mirror layout rolled for this activation, shown in the debug readout.</summary>
     private string debugMirrorName = "";
-    int mode;
-    int texWidth;
-    int texHeight;
-    /// <summary>Two-way activation coin whose non-zero side enables the existing beat hue shift.</summary>
-    int beatMode;
-    float positionX;
-    float positionY;
+
+    /// <summary>Whether the current source uses mono-image palette coloring.</summary>
+    private bool isMonochromeTexture;
+
+    /// <summary>Width of the current source texture.</summary>
+    private int textureWidth;
+
+    /// <summary>Height of the current source texture.</summary>
+    private int textureHeight;
+
+    /// <summary>Two-way activation coin whose true side enables the existing beat hue shift.</summary>
+    private bool appliesBeatHue;
+
+    /// <summary>Current horizontal source-texture sampling position.</summary>
+    private float positionX;
+
+    /// <summary>Current vertical source-texture sampling position.</summary>
+    private float positionY;
+
     /// <summary>Signed Standalone horizontal rate, or the Synced horizontal direction.</summary>
-    float motionX;
+    private float motionX;
+
     /// <summary>Signed Standalone vertical rate, or the Synced vertical direction.</summary>
-    float motionY;
-    float angle;
+    private float motionY;
+
+    /// <summary>Current kaleidoscope rotation angle in radians.</summary>
+    private float angle;
+
     /// <summary>Signed Standalone angular rate, or the Synced rotation direction.</summary>
-    float aspeed;
+    private float angularSpeed;
+
     /// <summary>Mode the last Roll determined its values under; a differing live mode re-rolls.</summary>
-    bool rolledSynced;
+    private bool wasSyncedAtRoll;
+
     /// <summary>Texture-catalog index advanced by the activation Roll.</summary>
-    int which = 0;
+    private int textureIndex;
 
     /// <summary>
     /// Regenerates the files.txt manifest for one StreamingAssets image folder. Desktop platforms
     /// write the manifest because Android cannot enumerate StreamingAssets directories — the
     /// Android path can only read a manifest a desktop run already wrote.
     /// </summary>
-    public void WriteFileList(string directoryPath)
+    /// <param name="directoryPath">Absolute StreamingAssets image-folder path.</param>
+    private static void WriteFileList(string directoryPath)
     {
         string[] fileNames = Directory.GetFiles(directoryPath);
         for (int i = 0; i < fileNames.Length; i++)
@@ -259,32 +336,27 @@ public class Kscope : ScreenEffect
         }
         File.WriteAllLines(directoryPath + "/files.txt", fileNames);
     }
-    /// <summary>
-    /// Reads a text file from StreamingAssets.
-    /// </summary>
-    public string LoadTextFile(string fileName)
+    /// <summary>Reads a text file from StreamingAssets.</summary>
+    /// <param name="fileName">StreamingAssets-relative file path.</param>
+    /// <returns>The complete text file contents.</returns>
+    private static string LoadTextFile(string fileName)
     {
         string filePath = Application.streamingAssetsPath + "/" + fileName;
-        string fileContents = "";
-
         if (Application.platform == RuntimePlatform.Android)
         {
             UnityWebRequest www = UnityWebRequest.Get(filePath);
             www.SendWebRequest();
             while (!www.isDone) { }
-            fileContents = www.downloadHandler.text;
-        }
-        else
-        {
-            fileContents = File.ReadAllText(filePath);
+            return www.downloadHandler.text;
         }
 
-        return fileContents;
+        return File.ReadAllText(filePath);
     }
-    /// <summary>
-    /// Loads a picture from the active StreamingAssets image folder.
-    /// </summary>
-    public Texture2D LoadPicture(string fileName)
+
+    /// <summary>Loads a readable picture from the active StreamingAssets image folder.</summary>
+    /// <param name="fileName">StreamingAssets-relative image path.</param>
+    /// <returns>The decoded source texture.</returns>
+    private static Texture2D LoadPicture(string fileName)
     {
         string filePath = Application.streamingAssetsPath + "/" + fileName;
         byte[] fileData;
@@ -299,16 +371,20 @@ public class Kscope : ScreenEffect
         {
             fileData = File.ReadAllBytes(filePath);
         }
-        Texture2D texture = new Texture2D(2, 2);
+        Texture2D texture = new(2, 2);
         texture.LoadImage(fileData);
         return texture;
     }
-    List<picture> readDirectory(string path)
+
+    /// <summary>Loads every PNG named by one StreamingAssets image-folder manifest.</summary>
+    /// <param name="path">StreamingAssets-relative image-folder path.</param>
+    /// <returns>The loaded texture-catalog entries in manifest order.</returns>
+    private static List<Picture> ReadDirectory(string path)
     {
         if (Application.platform != RuntimePlatform.Android)
             WriteFileList(Application.streamingAssetsPath + path);
 
-        List<picture> texList = new List<picture>();
+        List<Picture> textures = new();
         string contents = LoadTextFile(path + "/files.txt");
         string[] fileNames = contents.Split('\n');
         foreach (string fileName in fileNames)
@@ -320,23 +396,19 @@ public class Kscope : ScreenEffect
             if (!trimmedName.EndsWith(".png", StringComparison.Ordinal))
                 continue;
             string fullPath = path + "/" + trimmedName;
-            Texture2D tex;
+            Texture2D texture;
             try
             {
-                tex = LoadPicture(fullPath);
+                texture = LoadPicture(fullPath);
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError("Error loading image: " + ex.Message);
                 continue;
             }
-            picture pic = new picture();
-            pic.tex = tex;
-            pic.fname = trimmedName;
-
-            texList.Add(pic);
+            textures.Add(new Picture(texture, trimmedName));
         }
-        return texList;
+        return textures;
 
     }
     /// <summary>
@@ -348,61 +420,93 @@ public class Kscope : ScreenEffect
         float pulse = beatManager.Pulses.Beat;
         float low = beatManager.Levels.Normalized.Low;
         float push = beatManager.IsSynced ? ReadOnBeatPush() : 0f;
-        return $"file {fname} {(mode == 0 ? "color" : "mono")} {debugMirrorName} " +
+        return $"file {currentFileName} {(isMonochromeTexture ? "mono" : "color")} {debugMirrorName} " +
             $"pulse {pulse:F2} low {low:F2} push {push:F2} ";
     }
 
     /// <summary>
-    /// Performs one-time setup after reflection creates this effect instance.
+    /// Performs screen setup, allocates the reusable mono-palette tables, retires any superseded
+    /// image pools, and loads the current StreamingAssets image catalogs.
     /// </summary>
     public override void Init()
     {
         base.Init();
-        colorTex = readDirectory($"/images/color");
-        monoTex = readDirectory($"/images/mono");
+        RetireTexturePool(colorTextures);
+        RetireTexturePool(monochromeTextures);
+        colorTextures = ReadDirectory($"/images/color");
+        monochromeTextures = ReadDirectory($"/images/mono");
+        monochromePaletteHueByValue = new float[TextureChannelValueCount];
+        monochromePaletteSaturationByValue = new float[TextureChannelValueCount];
+    }
+
+    /// <summary>
+    /// Retains one superseded image pool until an activation selects from the replacement pools.
+    /// </summary>
+    /// <param name="texturePool">The source pool no longer returned by future selections.</param>
+    private void RetireTexturePool(List<Picture> texturePool)
+    {
+        for (int i = 0; i < texturePool.Count; i++)
+        {
+            retiredPoolTextures.Add(texturePool[i].Texture);
+        }
+    }
+
+    /// <summary>
+    /// Destroys every superseded pool texture after the current activation has selected its
+    /// replacement, then retains the list capacity for future Enter-key rescans.
+    /// </summary>
+    private void DestroyRetiredPoolTextures()
+    {
+        for (int i = 0; i < retiredPoolTextures.Count; i++)
+        {
+            UnityEngine.Object.Destroy(retiredPoolTextures[i]);
+        }
+
+        retiredPoolTextures.Clear();
     }
 
     /// <summary>
     /// Returns a copy of a color texture with one randomly chosen pair of color channels swapped.
     /// </summary>
-    /// <param name="oldtex">The source texture whose pixels are copied.</param>
+    /// <param name="oldTexture">The source texture whose pixels are copied.</param>
     /// <param name="channelSwapSelectorMaxExclusive">The exclusive selector bound for channel-pair choice.</param>
     /// <returns>A new texture containing the selected channel swap.</returns>
-    Texture2D messTexture(Texture2D oldtex, int channelSwapSelectorMaxExclusive)
+    private static Texture2D CreateChannelSwappedTexture(
+        Texture2D oldTexture,
+        int channelSwapSelectorMaxExclusive)
     {
-        Texture2D newTex = new Texture2D(oldtex.width, oldtex.height);
+        Texture2D newTexture = new(oldTexture.width, oldTexture.height);
+        Color32[] pixels = oldTexture.GetPixels32();
         // The inline zero is the structural start of the selector domain. The authored bound reaches
         // only two of the switch's three swap arms; see StandaloneChannelSwapSelectorMaxExclusive and
         // SyncChannelSwapSelectorMaxExclusive.
         int swap = Random.Range(0, channelSwapSelectorMaxExclusive);
-        float a;
-        for (int x = 0; x < oldtex.width; x++)
+        for (int i = 0; i < pixels.Length; i++)
         {
-            for (int y = 0; y < oldtex.height; y++)
+            ref Color32 color = ref pixels[i];
+            byte channel;
+            switch (swap)
             {
-                var color = oldtex.GetPixel(x, y);
-                switch (swap)
-                {
-                    case 0:
-                        a = color.r;
-                        color.r = color.b;
-                        color.b = a;
-                        break;
-                    case 1:
-                        a = color.r;
-                        color.r = color.g;
-                        color.g = a;
-                        break;
-                    case 2:
-                        a = color.g;
-                        color.g = color.b;
-                        color.b = a;
-                        break;
-                }
-                newTex.SetPixel(x, y, color);
+                case 0:
+                    channel = color.r;
+                    color.r = color.b;
+                    color.b = channel;
+                    break;
+                case 1:
+                    channel = color.r;
+                    color.r = color.g;
+                    color.g = channel;
+                    break;
+                case 2:
+                    channel = color.g;
+                    color.g = color.b;
+                    color.b = channel;
+                    break;
             }
         }
-        return newTex;
+
+        newTexture.SetPixels32(pixels);
+        return newTexture;
     }
 
     /// <summary>
@@ -413,10 +517,10 @@ public class Kscope : ScreenEffect
         // Unity never garbage-collects script-created textures, so the previous activation's
         // channel-swapped copy is destroyed here — every activation path (switch-in and re-roll)
         // passes through OnStart.
-        if (ownedTex != null)
+        if (ownedTexture != null)
         {
-            UnityEngine.Object.Destroy(ownedTex);
-            ownedTex = null;
+            UnityEngine.Object.Destroy(ownedTexture);
+            ownedTexture = null;
         }
 
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
@@ -435,11 +539,11 @@ public class Kscope : ScreenEffect
             : penrose.Layout.shapes.Mirror10;
         debugMirrorName = usesMirror2 ? "mirror2" : "mirror10";
 
-        int colorCount = colorTex.Count;
-        int monoCount = monoTex.Count;
+        int colorCount = colorTextures.Count;
+        int monoCount = monochromeTextures.Count;
         int total = colorCount + monoCount;
         bool isSynced = beatManager.IsSynced;
-        rolledSynced = isSynced;
+        wasSyncedAtRoll = isSynced;
         int textureMinimumAdvance = isSynced
             ? SyncSettings.TextureMinimumAdvance
             : standaloneSettings.TextureMinimumAdvance;
@@ -453,30 +557,30 @@ public class Kscope : ScreenEffect
             ? SyncSettings.ChannelSwapSelectorMaxExclusive
             : standaloneSettings.ChannelSwapSelectorMaxExclusive;
         // The inline zero is the structural no-bonus endpoint of this discrete advance roll.
-        which = (which + textureMinimumAdvance +
+        textureIndex = (textureIndex + textureMinimumAdvance +
             Random.Range(0, total / textureAdvanceRangeDivisor)) % total;
-        if (which < colorCount)
+        if (textureIndex < colorCount)
         {
-            currentTex = colorTex[which].tex;
-            fname = colorTex[which].fname;
+            currentTexture = colorTextures[textureIndex].Texture;
+            currentFileName = colorTextures[textureIndex].FileName;
             // sometime swap 2 colors
             // Zero is the designated success slot; the authored slot count controls the one-in-N chance.
             if (Random.Range(0, colorSwapRollMaxExclusive) == 0)
             {
                 // The copy is script-owned; the destroy at the top of the next OnStart releases it.
-                ownedTex = messTexture(currentTex, channelSwapSelectorMaxExclusive);
-                currentTex = ownedTex;
+                ownedTexture = CreateChannelSwappedTexture(currentTexture, channelSwapSelectorMaxExclusive);
+                currentTexture = ownedTexture;
             }
-            mode = 0;
+            isMonochromeTexture = false;
         }
         else
         {
-            currentTex = monoTex[which - colorCount].tex;
-            fname = monoTex[which - colorCount].fname;
-            mode = 1;
+            currentTexture = monochromeTextures[textureIndex - colorCount].Texture;
+            currentFileName = monochromeTextures[textureIndex - colorCount].FileName;
+            isMonochromeTexture = true;
         }
-        texWidth = currentTex.width;
-        texHeight = currentTex.height;
+        textureWidth = currentTexture.width;
+        textureHeight = currentTexture.height;
         if (isSynced)
         {
             // Synced magnitudes stay live in Sync Settings; the Roll retains direction only.
@@ -495,23 +599,27 @@ public class Kscope : ScreenEffect
         motionY *= Random.Range(0, 2) == 0 ? 1f : -1f;
 
         // Each position roll spans the complete source-texture extent, not an authored subrange.
-        positionX = Random.Range(0, texWidth);
-        positionY = Random.Range(0, texHeight);
+        positionX = Random.Range(0, textureWidth);
+        positionY = Random.Range(0, textureHeight);
         angle = 0;
         if (isSynced)
         {
             // Synced rotation magnitude stays live in Sync Settings; the Roll retains direction only.
-            aspeed = Random.Range(0, 2) == 0 ? 1f : -1f;
+            angularSpeed = Random.Range(0, 2) == 0 ? 1f : -1f;
         }
         else
         {
             IntRange angularSpeedStep = standaloneSettings.AngularSpeedStep;
-            aspeed = Random.Range(
+            angularSpeed = Random.Range(
                 angularSpeedStep.MinInclusive,
                 angularSpeedStep.MaxExclusive) / standaloneSettings.AngularSpeedStepDivisor;
         }
         // The discrete [0, 2) roll is a two-way coin deciding whether the beat hue shift is active.
-        beatMode = Random.Range(0, 2);
+        appliesBeatHue = Random.Range(0, 2) > 0;
+
+        // A replacement is now selected, so no texture retired by the Enter-key rescan can be
+        // sampled by this or any later frame.
+        DestroyRetiredPoolTextures();
     }
 
     /// <summary>
@@ -545,7 +653,7 @@ public class Kscope : ScreenEffect
         // The Roll bakes mode-conditional values (direction-only magnitudes under Synced Mode),
         // so a mode change mid-activation re-rolls instead of running one mode's law on the
         // other mode's values.
-        if (beatManager.IsSynced != rolledSynced)
+        if (beatManager.IsSynced != wasSyncedAtRoll)
         {
             OnStart();
         }
@@ -569,19 +677,27 @@ public class Kscope : ScreenEffect
             float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * effectDelta;
             positionX += motionX * panWallDelta;
             positionY += motionY * panWallDelta;
-            rotationDelta = aspeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
+            rotationDelta = angularSpeed * SyncSettings.RotationRadiansPerBeat * motionScale * effectDelta;
         }
         else
         {
             positionX += motionX * effectDelta * ReferenceFrameRate;
             positionY += motionY * effectDelta * ReferenceFrameRate;
-            rotationDelta = aspeed * effectDelta * ReferenceFrameRate;
+            rotationDelta = angularSpeed * effectDelta * ReferenceFrameRate;
         }
 
-        // Synced floors the mono palette read's saturation: every stage-directed activation
-        // starts a three-second RGB palette crossfade, and gray-passing pairs would wash the
-        // footprint near-white. Standalone keeps the historical unfloored read.
-        float paletteSaturationFloor = beatManager.IsSynced ? SyncSettings.PaletteSaturationFloor : 0f;
+        if (isMonochromeTexture)
+        {
+            // Synced floors the mono palette read's saturation: every stage-directed activation
+            // starts a three-second RGB palette crossfade, and gray-passing pairs would wash the
+            // footprint near-white. Standalone keeps the historical unfloored read. Rebuilding
+            // the small table per frame preserves that live palette and Settings behavior.
+            float paletteSaturationFloor = beatManager.IsSynced
+                ? SyncSettings.PaletteSaturationFloor
+                : 0f;
+            PrepareMonochromePalette(paletteSaturationFloor);
+        }
+
         double m11 = Math.Cos(angle);
         double m12 = -Math.Sin(angle);
         double m21 = Math.Sin(angle);
@@ -606,26 +722,27 @@ public class Kscope : ScreenEffect
                     x2 = -x2;
                 if (y2 < 0)
                     y2 = -y2;
-                int xp = (int)x2 / texWidth;
-                int yp = (int)y2 / texHeight;
-                x2 %= texWidth;
-                y2 %= texHeight;
+                int xp = (int)x2 / textureWidth;
+                int yp = (int)y2 / textureHeight;
+                x2 %= textureWidth;
+                y2 %= textureHeight;
                 if ((xp & 1) != 0)
-                    x2 = (texWidth - 1) - x2;
+                    x2 = (textureWidth - 1) - x2;
                 if ((yp & 1) != 0)
-                    y2 = (texHeight - 1) - y2;
+                    y2 = (textureHeight - 1) - y2;
 
-                var color = currentTex.GetPixel((int)x2, (int)y2);
-                if (mode != 0)
+                Color color = currentTexture.GetPixel((int)x2, (int)y2);
+                if (isMonochromeTexture)
                 {
                     // The palette supplies hue and saturation only; the mono image keeps its own
                     // brightness, so the picture's structure reads under any palette, dark ones included.
-                    Color palette = APalette.read(color.r % 1f, true);
-                    if (paletteSaturationFloor > 0f)
-                        palette = palette.MinSaturation(paletteSaturationFloor);
-                    color = palette.WithBrightness(color.r);
+                    int paletteIndex = Mathf.RoundToInt(color.r * byte.MaxValue);
+                    color = Color.HSVToRGB(
+                        monochromePaletteHueByValue[paletteIndex],
+                        monochromePaletteSaturationByValue[paletteIndex],
+                        color.r);
                 }
-                if (beatMode > 0)
+                if (appliesBeatHue)
                 {
                     Color.RGBToHSV(color, out float h, out float s, out float v);
                     color = Color.HSVToRGB((h + beatHue) % 1f, s, v);
@@ -635,9 +752,9 @@ public class Kscope : ScreenEffect
         }
         // convert the 2D Matrix buffer to a tile buffer
         ScreenEffect.ConvertScreenBuffer(ref screenBuffer, in buffer);
-        int groupcount = mirrorList.GroupCount;     // how many copies
+        int groupCount = mirrorList.GroupCount;     // how many copies
         // Draw the mirrors
-        for (int i = 0; i < groupcount; i++)
+        for (int i = 0; i < groupCount; i++)
         {
             LayoutData.ShapeList.Group group = mirrorList.GetGroup(i);
             Color tileColor = buffer[group[0]];
@@ -667,6 +784,31 @@ public class Kscope : ScreenEffect
                 // Full desaturation defines the black-and-white Fill treatment, so zero stays structural.
                 buffer[i] = new Color(gray, gray, gray);
             }
+        }
+    }
+
+    /// <summary>
+    /// Samples the complete 8-bit mono-image value domain from the live animated palette and
+    /// caches the hue and saturation that the existing brightness recombination consumes. The
+    /// white endpoint intentionally wraps to zero, matching the former <c>color.r % 1f</c> read.
+    /// </summary>
+    /// <param name="minimumSaturation">Live saturation floor for this frame; zero preserves the palette.</param>
+    private void PrepareMonochromePalette(float minimumSaturation)
+    {
+        for (int i = 0; i < TextureChannelValueCount; i++)
+        {
+            float imageValue = (float)i / byte.MaxValue;
+            Color palette = APalette.read(imageValue % 1f, true);
+            if (minimumSaturation > 0f)
+            {
+                palette = palette.MinSaturation(minimumSaturation);
+            }
+
+            Color.RGBToHSV(
+                palette,
+                out monochromePaletteHueByValue[i],
+                out monochromePaletteSaturationByValue[i],
+                out _);
         }
     }
 
@@ -729,13 +871,13 @@ public sealed class KscopeStandaloneSettings
     public int ChannelSwapSelectorMaxExclusive;
 
     /// <summary>Integer step endpoints used to roll texture motion.</summary>
-    public IntRange MotionStep = new IntRange();
+    public IntRange MotionStep;
 
     /// <summary>Divisor converting a rolled motion step into texture-motion rate.</summary>
     public float MotionStepDivisor;
 
     /// <summary>Integer step endpoints used to roll kaleidoscope rotation speed.</summary>
-    public IntRange AngularSpeedStep = new IntRange();
+    public IntRange AngularSpeedStep;
 
     /// <summary>Divisor converting a rolled angular step into rotation rate.</summary>
     public float AngularSpeedStepDivisor;

@@ -109,13 +109,6 @@ public static class ExtensionMethods
         return Color.HSVToRGB(h, s, v > max ? max : v);
     }
 
-    /// <summary>Replaces a color brightness while preserving hue and saturation.</summary>
-    public static Color WithBrightness(this Color color, float value)
-    {
-        Color.RGBToHSV(color, out var h, out var s, out _);
-        return Color.HSVToRGB(h, s, value);
-    }
-
     /// <summary>Raises a color's saturation to at least a floor while preserving hue and brightness.</summary>
     public static Color MinSaturation(this Color color, float min)
     {
