@@ -129,8 +129,9 @@ public class Kscope : ScreenEffect
     /// Contrast applied to the Fill grayscale around mid-gray. One keeps the image's own
     /// luminance contrast, which the wall read as soft after the retired hash's artificial
     /// spread; the knob exists so the wall can find the value between the two extremes.
+    /// The wall sat on 1.5 as the hardness between them.
     /// </summary>
-    private const float SyncFillContrast = 1f;
+    private const float SyncFillContrast = 1.5f;
 
     /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
     private const int SyncDropSlowdownBeats = 8;
