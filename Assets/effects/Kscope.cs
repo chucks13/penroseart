@@ -226,6 +226,8 @@ public class Kscope : ScreenEffect
     float angle;
     /// <summary>Signed Standalone angular rate, or the Synced rotation direction.</summary>
     float aspeed;
+    /// <summary>Mode the last Roll determined its values under; a differing live mode re-rolls.</summary>
+    bool rolledSynced;
     /// <summary>Texture-catalog index advanced by the activation Roll.</summary>
     int which = 0;
 
@@ -419,6 +421,7 @@ public class Kscope : ScreenEffect
         int monoCount = monoTex.Count;
         int total = colorCount + monoCount;
         bool isSynced = beatManager.IsSynced;
+        rolledSynced = isSynced;
         int textureMinimumAdvance = isSynced
             ? SyncSettings.TextureMinimumAdvance
             : standaloneSettings.TextureMinimumAdvance;
@@ -510,7 +513,8 @@ public class Kscope : ScreenEffect
     /// combine into one motion scale; the current mirror layout's live calibration and the Drop
     /// approach freeze scale that whole rate before it drives pan and rotation. <c>PanWallUnitsPerBeat</c> then moves the sampling position in screen-buffer pixels,
     /// independent of source dimensions, while sampling remains one source texel per screen-buffer
-    /// pixel so image presentation stays unchanged. Musical meanings are defined by the Data Surface,
+    /// pixel so image presentation stays unchanged. A mode change mid-activation re-rolls the
+    /// Effect, so each mode's law always runs on values its own Roll determined. Musical meanings are defined by the Data Surface,
     /// Energy, and Levels entries in <c>CONTEXT.md</c>; timing and pulse lanes are defined in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
@@ -519,6 +523,13 @@ public class Kscope : ScreenEffect
         if (Input.GetKeyDown(KeyCode.Return))
         {
             Init();
+        }
+        // The Roll bakes mode-conditional values (direction-only magnitudes under Synced Mode),
+        // so a mode change mid-activation re-rolls instead of running one mode's law on the
+        // other mode's values.
+        if (beatManager.IsSynced != rolledSynced)
+        {
+            OnStart();
         }
         float rhythm = waveform.Envelope;
         float beatHue = SyncSettings.BeatHueOffset * rhythm;
