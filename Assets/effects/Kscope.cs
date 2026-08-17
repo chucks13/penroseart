@@ -111,11 +111,6 @@ public class Kscope : ScreenEffect
     private const float SyncEnergyPaceHigh = 1.25f;
 
     /// <summary>
-    /// Upper editor rail matches the wall-tuned High Energy pace.
-    /// </summary>
-    private const float SyncEnergyPaceHighRail = 1.25f;
-
-    /// <summary>
     /// Normalized Low threshold where bass presence begins contributing to the On-Beat Push. Levels
     /// are track-relative, so this remains a live tuning knob instead of an absolute-loudness claim.
     /// </summary>
@@ -195,11 +190,7 @@ public class Kscope : ScreenEffect
         Mirror2MotionScale = SyncMirror2MotionScale,
         Mirror10MotionScale = SyncMirror10MotionScale,
         RotationRadiansPerBeat = SyncRotationRadiansPerBeat,
-        EnergyPace = new FloatRange(
-            SyncEnergyPaceLow,
-            SyncEnergyPaceHigh,
-            SyncEnergyPaceLow,
-            SyncEnergyPaceHighRail),
+        EnergyPace = new FloatRange(SyncEnergyPaceLow, SyncEnergyPaceHigh),
         LowPresenceThreshold = SyncLowPresenceThreshold,
         OnBeatPushStrength = SyncOnBeatPushStrength,
         PaletteSaturationFloor = SyncPaletteSaturationFloor,
@@ -834,9 +825,10 @@ public class Kscope : ScreenEffect
     /// The wire pulse is a triangle: one on each beat, zero halfway to the next beat, then rising
     /// back to one. Multiplying that continuous shape by thresholded Normalized Low produces the
     /// authored beat-synchronous push; it is not a one-shot trigger. Musical meanings:
-    /// <c>CONTEXT.md</c> entries Duration Pulse / Duration Gate (the wire <c>beat_pulse</c>
-    /// offering) and Levels; wire lanes: <c>docs/osc-client-contract.md</c>
-    /// <c>/rave/onair/beat_pulse</c> and <c>/rave/onair/levels</c>.
+    /// <c>CONTEXT.md</c> entries Duration Pulse / Duration Gate — whose pulse-offering list
+    /// names the wire's own analyzed <c>beat_pulse</c>, the distinct offering read here — and
+    /// Levels; wire lanes: <c>docs/osc-client-contract.md</c> <c>/rave/onair/beat_pulse</c>
+    /// and <c>/rave/onair/levels</c>.
     /// </remarks>
     private float ReadOnBeatPush()
     {
