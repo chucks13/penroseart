@@ -346,6 +346,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.OnBeatPushStrength = 29f;
         asset.Settings.PaletteSaturationFloor = 0.29f;
         asset.Settings.BeatHueOffset = 0.3f;
+        asset.Settings.FillContrast = 30f;
         asset.Settings.DropSlowdownBeats = 31;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Kscope), TempAssetFolder);
@@ -364,6 +365,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.OnBeatPushStrength, Is.EqualTo(defaults.OnBeatPushStrength));
         Assert.That(asset.Settings.PaletteSaturationFloor, Is.EqualTo(defaults.PaletteSaturationFloor));
         Assert.That(asset.Settings.BeatHueOffset, Is.EqualTo(defaults.BeatHueOffset));
+        Assert.That(asset.Settings.FillContrast, Is.EqualTo(defaults.FillContrast));
         Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
     }
 

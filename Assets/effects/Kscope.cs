@@ -125,6 +125,13 @@ public class Kscope : ScreenEffect
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     private const float SyncBeatHueOffset = 0.5f;
 
+    /// <summary>
+    /// Contrast applied to the Fill grayscale around mid-gray. One keeps the image's own
+    /// luminance contrast, which the wall read as soft after the retired hash's artificial
+    /// spread; the knob exists so the wall can find the value between the two extremes.
+    /// </summary>
+    private const float SyncFillContrast = 1f;
+
     /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
     private const int SyncDropSlowdownBeats = 8;
 
@@ -173,6 +180,7 @@ public class Kscope : ScreenEffect
         OnBeatPushStrength = SyncOnBeatPushStrength,
         PaletteSaturationFloor = SyncPaletteSaturationFloor,
         BeatHueOffset = SyncBeatHueOffset,
+        FillContrast = SyncFillContrast,
         DropSlowdownBeats = SyncDropSlowdownBeats,
     };
 
@@ -643,6 +651,9 @@ public class Kscope : ScreenEffect
                     (0.7152f * linearColor.g) +
                     (0.0722f * linearColor.b);
                 float gray = Mathf.LinearToGammaSpace(luminance);
+                // The live FillContrast knob pivots the gray on mid-gray; expansion saturates at
+                // black and white, which is the contrast operation's definition, not a guard.
+                gray = Mathf.Clamp01(0.5f + ((gray - 0.5f) * SyncSettings.FillContrast));
                 // Full desaturation defines the black-and-white Fill treatment, so zero stays structural.
                 buffer[i] = new Color(gray, gray, gray);
             }
@@ -797,6 +808,10 @@ public sealed class KscopeSyncSettings
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float BeatHueOffset;
 
+    /// <summary>Contrast applied to the Fill grayscale around mid-gray.</summary>
+    [Tooltip("Contrast on the Fill grayscale around mid-gray. 1 keeps the image's own luminance contrast; above 1 hardens the black-and-white toward the extremes; 0 flattens to mid-gray.")]
+    [Min(0f)] public float FillContrast;
+
     /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
     [Min(1)] public int DropSlowdownBeats;
 
@@ -825,6 +840,7 @@ public sealed class KscopeSyncSettings
         OnBeatPushStrength = source.OnBeatPushStrength;
         PaletteSaturationFloor = source.PaletteSaturationFloor;
         BeatHueOffset = source.BeatHueOffset;
+        FillContrast = source.FillContrast;
         DropSlowdownBeats = source.DropSlowdownBeats;
     }
 }
