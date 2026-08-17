@@ -348,6 +348,8 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.BeatHueOffset = 0.3f;
         asset.Settings.FillContrast = 30f;
         asset.Settings.DropSlowdownBeats = 31;
+        asset.Settings.DropBurstPace = 32f;
+        asset.Settings.DropBurstBeats = 33;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Kscope), TempAssetFolder);
 
@@ -367,6 +369,8 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.BeatHueOffset, Is.EqualTo(defaults.BeatHueOffset));
         Assert.That(asset.Settings.FillContrast, Is.EqualTo(defaults.FillContrast));
         Assert.That(asset.Settings.DropSlowdownBeats, Is.EqualTo(defaults.DropSlowdownBeats));
+        Assert.That(asset.Settings.DropBurstPace, Is.EqualTo(defaults.DropBurstPace));
+        Assert.That(asset.Settings.DropBurstBeats, Is.EqualTo(defaults.DropBurstBeats));
     }
 
     /// <summary>

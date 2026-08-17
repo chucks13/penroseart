@@ -133,20 +133,23 @@ public class Kscope : ScreenEffect
     /// </summary>
     private const float SyncFillContrast = 1.5f;
 
-    /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
+    /// <summary>Window in whole beats across which the Drop approach freeze deepens.</summary>
     private const int SyncDropSlowdownBeats = 8;
+
+    /// <summary>
+    /// Pace added at the Drop landing, decaying to zero across the burst window. Additive so the
+    /// landing displaces the same wall distance in every Energy state; 4.5 reproduces the prior
+    /// 5x-of-Mid-pace landing magnitude.
+    /// </summary>
+    private const float SyncDropBurstPace = 4.5f;
+
+    /// <summary>Window in whole beats across which the landing burst decays, matching the freeze window it split from.</summary>
+    private const int SyncDropBurstBeats = 8;
 
     // Runtime mechanism constants
 
     /// <summary>Reference frame rate converting Standalone's authored per-frame motion into delta-time motion.</summary>
     private const float ReferenceFrameRate = 60f;
-
-    /// <summary>
-    /// Pace added at the Drop landing, decaying to zero across the slowdown window. Additive so the
-    /// landing displaces the same wall distance in every Energy state; 4.5 reproduces the prior
-    /// 5x-of-Mid-pace landing magnitude.
-    /// </summary>
-    private const float SyncDropBurstPace = 4.5f;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of Kscope's Standalone Defaults.</summary>
     public static KscopeStandaloneSettings StandaloneDefaults => new KscopeStandaloneSettings
@@ -183,6 +186,8 @@ public class Kscope : ScreenEffect
         BeatHueOffset = SyncBeatHueOffset,
         FillContrast = SyncFillContrast,
         DropSlowdownBeats = SyncDropSlowdownBeats,
+        DropBurstPace = SyncDropBurstPace,
+        DropBurstBeats = SyncDropBurstBeats,
     };
 
     /// <summary>The Standalone Settings fixed for the current activation.</summary>
@@ -553,8 +558,8 @@ public class Kscope : ScreenEffect
             // is an additive pace term so the landing displaces the same wall distance in every
             // Energy state. Both envelopes rest at no-effect outside a Drop.
             float dropFreeze = beatManager.Drop.Before.Decay(SyncSettings.DropSlowdownBeats);
-            float dropBurst = SyncDropBurstPace
-                * beatManager.Drop.In.Decay(SyncSettings.DropSlowdownBeats);
+            float dropBurst = SyncSettings.DropBurstPace
+                * beatManager.Drop.In.Decay(SyncSettings.DropBurstBeats);
             float motionScale = (ReadEnergyPace() + ReadOnBeatPush() + dropBurst)
                 * mirrorMotionScale * dropFreeze / beatSeconds;
             float panWallDelta = SyncSettings.PanWallUnitsPerBeat * motionScale * effectDelta;
@@ -813,8 +818,17 @@ public sealed class KscopeSyncSettings
     [Tooltip("Contrast on the Fill grayscale around mid-gray. 1 keeps the image's own luminance contrast; above 1 hardens the black-and-white toward the extremes; 0 flattens to mid-gray.")]
     [Min(0f)] public float FillContrast;
 
-    /// <summary>Window in whole beats across which the Drop approach freeze and landing burst decay.</summary>
+    /// <summary>Window in whole beats across which the Drop approach freeze deepens.</summary>
+    [Tooltip("Beats before the Drop landing across which the approach freeze deepens. No longer owns the landing burst; that window is Drop Burst Beats.")]
     [Min(1)] public int DropSlowdownBeats;
+
+    /// <summary>Pace added at the Drop landing, decaying to zero across the burst window.</summary>
+    [Tooltip("Pace added at the instant the Drop lands, on top of Energy pace and On-Beat Push. 0 disables the landing burst; 4.5 reproduces the historical five-times-Mid-pace landing.")]
+    [Min(0f)] public float DropBurstPace;
+
+    /// <summary>Window in whole beats across which the landing burst decays to zero.</summary>
+    [Tooltip("Beats after the Drop landing across which the speed-up decays back to the base pace. Independent of the approach freeze window.")]
+    [Min(1)] public int DropBurstBeats;
 
     /// <summary>Copies every Kscope Sync Setting from another value.</summary>
     public void CopyFrom(KscopeSyncSettings source)
@@ -843,5 +857,7 @@ public sealed class KscopeSyncSettings
         BeatHueOffset = source.BeatHueOffset;
         FillContrast = source.FillContrast;
         DropSlowdownBeats = source.DropSlowdownBeats;
+        DropBurstPace = source.DropBurstPace;
+        DropBurstBeats = source.DropBurstBeats;
     }
 }
