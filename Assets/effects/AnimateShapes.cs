@@ -340,6 +340,13 @@ public class AnimateShapes : EffectBase
             float backgroundDropHueOffset = effectTime * backgroundDropHueRate;
             for (int i = 0; i < buffer.Length; i++)
             {
+                // The foreground pass overwrites exact Circle/Arc membership, so its Drop colors
+                // cannot survive this frame and do not need an HSV conversion here.
+                if (foregroundShapes.GetGroupIndex(i) >= 0)
+                {
+                    continue;
+                }
+
                 float phase = Mathf.Repeat(
                     i * backgroundDropTileHueStep + backgroundDropHueOffset,
                     1f);
