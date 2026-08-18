@@ -1777,6 +1777,8 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.ForegroundDropRibbonWindowBeats = 221;
         asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
+        asset.Settings.ForegroundDropRibbonPaletteSpread = 223f;
+        asset.Settings.ForegroundDropRibbonBrightnessOverdrive = 224f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpSeconds = 24f;
@@ -1809,6 +1811,12 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding,
             Is.EqualTo(defaults.ForegroundDropRibbonFlowCyclesPerBeatAtLanding));
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonPaletteSpread,
+            Is.EqualTo(defaults.ForegroundDropRibbonPaletteSpread));
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonBrightnessOverdrive,
+            Is.EqualTo(defaults.ForegroundDropRibbonBrightnessOverdrive));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));

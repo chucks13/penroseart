@@ -109,11 +109,27 @@ public class AnimateShapes : EffectBase
 
     /// <summary>
     /// Authored foreground Drop ribbon flow at the landing, in palette cycles per beat. One cycle per
-    /// beat matches the established Angles impact speed. Every Circle and Arc spreads the complete
-    /// conditioned palette exactly once along its own path; that whole-palette spread is fixed rather
-    /// than a setting so every shape length reads as one complete ribbon. Tune live at the wall.
+    /// beat matches the established Angles impact speed. Tune live at the wall.
     /// </summary>
     private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1f;
+
+    /// <summary>
+    /// Authored fraction of the conditioned palette each Circle and Arc spreads along its own path
+    /// during the Drop response. The whole-palette spread (1) put bands only a few Tiles wide on
+    /// shapes tens of Tiles long, so the ribbons read as shimmer on the wall; a quarter palette makes
+    /// each color band span a visible run of Tiles. A fractional spread leaves a coordinate seam
+    /// where a closed Circle's ends meet — accepted pending wall judgment. Tune live at the wall.
+    /// </summary>
+    private const float SyncForegroundDropRibbonPaletteSpread = 0.25f;
+
+    /// <summary>
+    /// Authored ribbon brightness multiplier at the landing. The Drop background is the overdriven
+    /// V=10 rainbow, so a foreground response at ordinary palette brightness sits dimmer than the
+    /// field it rides on and disappears; overdriving the ribbon colors past the output clip point
+    /// makes the shapes the brightest objects on the wall. The multiplier eases back to 1 as the
+    /// envelope closes. Tune live at the wall.
+    /// </summary>
+    private const float SyncForegroundDropRibbonBrightnessOverdrive = 4f;
 
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
@@ -196,6 +212,8 @@ public class AnimateShapes : EffectBase
         ForegroundDropRibbonWindowBeats = SyncForegroundDropRibbonWindowBeats,
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding,
+        ForegroundDropRibbonPaletteSpread = SyncForegroundDropRibbonPaletteSpread,
+        ForegroundDropRibbonBrightnessOverdrive = SyncForegroundDropRibbonBrightnessOverdrive,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -303,8 +321,9 @@ public class AnimateShapes : EffectBase
     /// </summary>
     /// <remarks>
     /// The foreground Drop ribbons read their Stock Envelope and measured beat interval here every
-    /// frame, so both Sync Settings remain live in Play Mode. The authored window is independent of the
-    /// wire's Drop length, and Energy scales only the ordinary crawl, never the ribbon flow phase.
+    /// frame, so every ribbon Sync Setting remains live in Play Mode. The authored window is
+    /// independent of the wire's Drop length, and Energy scales only the ordinary crawl, never the
+    /// ribbon flow phase.
     /// </remarks>
     public override void Draw()
     {
@@ -325,6 +344,8 @@ public class AnimateShapes : EffectBase
         foregroundDropRibbonEnvelope = beatManager.Drop.In.Decay(
             SyncSettings.ForegroundDropRibbonWindowBeats);
         UpdateForegroundDropRibbonFlowPhase(foregroundDropRibbonEnvelope);
+        float ribbonPaletteSpread = SyncSettings.ForegroundDropRibbonPaletteSpread;
+        float ribbonBrightnessOverdrive = SyncSettings.ForegroundDropRibbonBrightnessOverdrive;
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
@@ -392,7 +413,7 @@ public class AnimateShapes : EffectBase
                 if (foregroundDropRibbonEnvelope > 0f)
                 {
                     float ribbonPalettePosition = Mathf.Repeat(
-                        shape.GetPosition(idx) +
+                        (shape.GetPosition(idx) * ribbonPaletteSpread) +
                         foregroundDropRibbonFlowPhase,
                         1f);
                     float shortestHueDelta = Mathf.Repeat(
@@ -419,6 +440,18 @@ public class AnimateShapes : EffectBase
                     Color.RGBToHSV(paletteColor, out _, out _, out float value);
                     value = Mathf.Lerp(value, 1f, fillBrightnessLift);
                     paletteColor = new Color(value, value, value, paletteColor.a);
+                }
+                if (foregroundDropRibbonEnvelope > 0f)
+                {
+                    // The Drop background rides V=10, so at ordinary palette brightness the ribbons
+                    // sit dimmer than the field they cross. Overdriving past the output clip point
+                    // keeps the shapes the brightest thing on the wall; the multiplier eases back to
+                    // 1 as the envelope closes, landing exactly on the ordinary crawl brightness.
+                    float overdrive = 1f +
+                        ((ribbonBrightnessOverdrive - 1f) * foregroundDropRibbonEnvelope);
+                    paletteColor.r *= overdrive;
+                    paletteColor.g *= overdrive;
+                    paletteColor.b *= overdrive;
                 }
                 buffer[idx] = paletteColor;
             }
@@ -549,10 +582,24 @@ public sealed class AnimateShapesSyncSettings
 
     /// <summary>
     /// Live foreground Drop ribbon flow at the landing, in palette cycles per beat. One cycle per beat
-    /// is the authored impact speed; Energy does not rescale it, and every shape's fixed coordinate
-    /// spreads the complete conditioned palette exactly once along its path.
+    /// is the authored impact speed; Energy does not rescale it. The palette span each shape carries
+    /// is <see cref="ForegroundDropRibbonPaletteSpread"/>.
     /// </summary>
     public float ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
+
+    /// <summary>
+    /// Live fraction of the conditioned palette each Circle and Arc spreads along its own path during
+    /// the Drop response. 1 spreads the complete palette once and puts bands only a few Tiles wide on
+    /// these shapes; smaller values widen each color band. A fractional spread leaves a coordinate
+    /// seam where a closed Circle's ends meet.
+    /// </summary>
+    public float ForegroundDropRibbonPaletteSpread;
+
+    /// <summary>
+    /// Live ribbon brightness multiplier at the landing, easing back to 1 as the envelope closes.
+    /// Values past the output clip point let the ribbons out-shine the V=10 Drop background.
+    /// </summary>
+    public float ForegroundDropRibbonBrightnessOverdrive;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -601,6 +648,9 @@ public sealed class AnimateShapesSyncSettings
         ForegroundDropRibbonWindowBeats = source.ForegroundDropRibbonWindowBeats;
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             source.ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
+        ForegroundDropRibbonPaletteSpread = source.ForegroundDropRibbonPaletteSpread;
+        ForegroundDropRibbonBrightnessOverdrive =
+            source.ForegroundDropRibbonBrightnessOverdrive;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
