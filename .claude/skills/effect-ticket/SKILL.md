@@ -60,9 +60,10 @@ rejected look becomes a follow-up commit, or a revert by hash.
 A worker that edits a dirty tree mixes two changes into one diff. Nobody can tell the two apart
 after that, and nobody can revert one of them.
 
-When a change reshapes a settings class, its `.asset` goes stale: a new field loads as zero, and
-a removed field lingers as drift. Ask the maintainer to re-save the asset before the wall
-judgment.
+When a change reshapes a settings class, update its `.asset` files in the same change — they are
+plain text. A stale asset loads a new field as zero and keeps a removed field as drift, and
+committing that drift is worse than editing the asset. `.meta` files stay Unity-owned without
+exception.
 
 ## Musical claims
 
@@ -298,7 +299,8 @@ Boundaries — in every brief:
 - Implement directly in this session — never delegate to another worker or agent.
 - Never open or close Unity — the maintainer owns the Editor state. The `scripts/unity-*.sh`
   scripts work with the Editor open or closed, so you may run them in either state.
-- Never create or edit `.meta` or `.asset` files.
+- Never create or edit `.meta` files — Unity owns them. `.asset` files are text: when a change
+  reshapes a settings class, update its `.asset` in the same pass so the two never drift.
 - Do not commit.
 - After the final edit, run `git diff --check` exactly once. Report the result, then stop without
   another edit or check.
