@@ -973,18 +973,24 @@ public sealed class EffectSyncSettingsTests
 
         Assert.That(first, Is.Not.SameAs(second));
         Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
-        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
-        Assert.That(first.CircleTilePositionStep, Is.EqualTo(second.CircleTilePositionStep));
+        AssertPaletteConditioningEqual(
+            first.ForegroundPaletteConditioning,
+            second.ForegroundPaletteConditioning);
+        Assert.That(first.ForegroundTilePositionStep, Is.EqualTo(second.ForegroundTilePositionStep));
         Assert.That(
-            first.CirclePositionAdvancePerSecond,
-            Is.EqualTo(second.CirclePositionAdvancePerSecond));
-        Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
-        AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
+            first.ForegroundPositionAdvancePerSecond,
+            Is.EqualTo(second.ForegroundPositionAdvancePerSecond));
+        Assert.That(
+            first.ForegroundWaveformResponseMode,
+            Is.Not.SameAs(second.ForegroundWaveformResponseMode));
+        AssertIntRangeEqual(
+            first.ForegroundWaveformResponseMode,
+            second.ForegroundWaveformResponseMode);
     }
 
     /// <summary>
-    /// Restore replaces every edited AnimateShapes Standalone Setting and distortion-mode Rail with
-    /// the current file-local Standalone Defaults.
+    /// Restore replaces every edited AnimateShapes Standalone Setting and foreground response-mode
+    /// Rail with the current file-local Standalone Defaults.
     /// </summary>
     [Test]
     public void RestoreStandaloneDefaultsCopiesEveryAnimateShapesValue()
@@ -993,7 +999,7 @@ public sealed class EffectSyncSettingsTests
             typeof(AnimateShapes),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.PaletteConditioning = new PaletteConditioning
+        asset.Settings.ForegroundPaletteConditioning = new PaletteConditioning
         {
             TargetLuminance = 0.11f,
             MinimumLuminance = 0.12f,
@@ -1004,9 +1010,9 @@ public sealed class EffectSyncSettingsTests
             DuplicateThreshold = 0.017f,
             HueRedistribution = 0.18f,
         };
-        asset.Settings.CircleTilePositionStep = 18f;
-        asset.Settings.CirclePositionAdvancePerSecond = 19f;
-        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
+        asset.Settings.ForegroundTilePositionStep = 18f;
+        asset.Settings.ForegroundPositionAdvancePerSecond = 19f;
+        asset.Settings.ForegroundWaveformResponseMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
             typeof(AnimateShapes),
@@ -1015,15 +1021,17 @@ public sealed class EffectSyncSettingsTests
         var defaults = AnimateShapes.StandaloneDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
         AssertPaletteConditioningEqual(
-            asset.Settings.PaletteConditioning,
-            defaults.PaletteConditioning);
+            asset.Settings.ForegroundPaletteConditioning,
+            defaults.ForegroundPaletteConditioning);
         Assert.That(
-            asset.Settings.CircleTilePositionStep,
-            Is.EqualTo(defaults.CircleTilePositionStep));
+            asset.Settings.ForegroundTilePositionStep,
+            Is.EqualTo(defaults.ForegroundTilePositionStep));
         Assert.That(
-            asset.Settings.CirclePositionAdvancePerSecond,
-            Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
-        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
+            asset.Settings.ForegroundPositionAdvancePerSecond,
+            Is.EqualTo(defaults.ForegroundPositionAdvancePerSecond));
+        AssertIntRangeEqual(
+            asset.Settings.ForegroundWaveformResponseMode,
+            defaults.ForegroundWaveformResponseMode);
     }
 
     /// <summary>Restore replaces every edited Tunnel Sync Setting with the current file-local Sync Defaults.</summary>
@@ -1517,8 +1525,8 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including Energy-crawl and distortion-mode Rails, the foreground Drop ribbon
-    /// controls, and the held Waveform name—with the current file-local Sync Defaults.
+    /// replaces it—including foreground Energy-crawl and Waveform-response Rails, foreground Drop
+    /// ribbon controls, and the held Waveform name—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()
@@ -1527,7 +1535,7 @@ public sealed class EffectSyncSettingsTests
             typeof(AnimateShapes),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.PaletteConditioning = new PaletteConditioning
+        asset.Settings.ForegroundPaletteConditioning = new PaletteConditioning
         {
             TargetLuminance = 0.21f,
             MinimumLuminance = 0.22f,
@@ -1538,38 +1546,38 @@ public sealed class EffectSyncSettingsTests
             DuplicateThreshold = 0.027f,
             HueRedistribution = 0.28f,
         };
-        asset.Settings.CircleTilePositionStep = 18f;
-        asset.Settings.CirclePositionAdvancePerSecond = 19f;
-        asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.ForegroundTilePositionStep = 18f;
+        asset.Settings.ForegroundPositionAdvancePerSecond = 19f;
+        asset.Settings.ForegroundEnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.ForegroundDropRibbonWindowBeats = 221;
         asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
         asset.Settings.ForegroundDropRibbonBrightness = 223f;
-        asset.Settings.WaveformName = "sentinel entry";
-        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
-        asset.Settings.HueResponseMagnitude = 23f;
-        asset.Settings.TimeWarpHueResponseMagnitude = 24f;
-        asset.Settings.DropTileHueStep = 25f;
-        asset.Settings.DropHueRate = 26f;
-        asset.Settings.DropBrightness = 27f;
-        asset.Settings.FillBlackAndWhiteProbability = 0.29f;
-        asset.Settings.FillBrightnessLift = 0.31f;
+        asset.Settings.ForegroundWaveformName = "sentinel entry";
+        asset.Settings.ForegroundWaveformResponseMode = new IntRange(20, 21, 19, 22);
+        asset.Settings.ForegroundWaveformStrongPositionShift = 23f;
+        asset.Settings.ForegroundWaveformSubtlePositionShift = 24f;
+        asset.Settings.BackgroundDropTileHueStep = 25f;
+        asset.Settings.BackgroundDropHueRate = 26f;
+        asset.Settings.BackgroundDropValue = 27f;
+        asset.Settings.ForegroundFillBlackAndWhiteProbability = 0.29f;
+        asset.Settings.ForegroundFillBrightnessLift = 0.31f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateShapes), TempAssetFolder);
 
         var defaults = AnimateShapes.SyncDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
         AssertPaletteConditioningEqual(
-            asset.Settings.PaletteConditioning,
-            defaults.PaletteConditioning);
+            asset.Settings.ForegroundPaletteConditioning,
+            defaults.ForegroundPaletteConditioning);
         Assert.That(
-            asset.Settings.CircleTilePositionStep,
-            Is.EqualTo(defaults.CircleTilePositionStep));
+            asset.Settings.ForegroundTilePositionStep,
+            Is.EqualTo(defaults.ForegroundTilePositionStep));
         Assert.That(
-            asset.Settings.CirclePositionAdvancePerSecond,
-            Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
+            asset.Settings.ForegroundPositionAdvancePerSecond,
+            Is.EqualTo(defaults.ForegroundPositionAdvancePerSecond));
         AssertFloatRangeEqual(
-            asset.Settings.EnergyCrawlSpeedMultiplier,
-            defaults.EnergyCrawlSpeedMultiplier);
+            asset.Settings.ForegroundEnergyCrawlSpeedMultiplier,
+            defaults.ForegroundEnergyCrawlSpeedMultiplier);
         Assert.That(
             asset.Settings.ForegroundDropRibbonWindowBeats,
             Is.EqualTo(defaults.ForegroundDropRibbonWindowBeats));
@@ -1579,21 +1587,33 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.ForegroundDropRibbonBrightness,
             Is.EqualTo(defaults.ForegroundDropRibbonBrightness));
-        Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));
-        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
-        Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(
-            asset.Settings.TimeWarpHueResponseMagnitude,
-            Is.EqualTo(defaults.TimeWarpHueResponseMagnitude));
-        Assert.That(asset.Settings.DropTileHueStep, Is.EqualTo(defaults.DropTileHueStep));
-        Assert.That(asset.Settings.DropHueRate, Is.EqualTo(defaults.DropHueRate));
-        Assert.That(asset.Settings.DropBrightness, Is.EqualTo(defaults.DropBrightness));
+            asset.Settings.ForegroundWaveformName,
+            Is.EqualTo(defaults.ForegroundWaveformName));
+        AssertIntRangeEqual(
+            asset.Settings.ForegroundWaveformResponseMode,
+            defaults.ForegroundWaveformResponseMode);
         Assert.That(
-            asset.Settings.FillBlackAndWhiteProbability,
-            Is.EqualTo(defaults.FillBlackAndWhiteProbability));
+            asset.Settings.ForegroundWaveformStrongPositionShift,
+            Is.EqualTo(defaults.ForegroundWaveformStrongPositionShift));
         Assert.That(
-            asset.Settings.FillBrightnessLift,
-            Is.EqualTo(defaults.FillBrightnessLift));
+            asset.Settings.ForegroundWaveformSubtlePositionShift,
+            Is.EqualTo(defaults.ForegroundWaveformSubtlePositionShift));
+        Assert.That(
+            asset.Settings.BackgroundDropTileHueStep,
+            Is.EqualTo(defaults.BackgroundDropTileHueStep));
+        Assert.That(
+            asset.Settings.BackgroundDropHueRate,
+            Is.EqualTo(defaults.BackgroundDropHueRate));
+        Assert.That(
+            asset.Settings.BackgroundDropValue,
+            Is.EqualTo(defaults.BackgroundDropValue));
+        Assert.That(
+            asset.Settings.ForegroundFillBlackAndWhiteProbability,
+            Is.EqualTo(defaults.ForegroundFillBlackAndWhiteProbability));
+        Assert.That(
+            asset.Settings.ForegroundFillBrightnessLift,
+            Is.EqualTo(defaults.ForegroundFillBrightnessLift));
     }
 
     /// <summary>

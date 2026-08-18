@@ -15,7 +15,7 @@ MonoBehaviour:
   effectTypeName: AnimateShapes
   settings:
     BackgroundHueRate: 0.1
-    PaletteConditioning:
+    ForegroundPaletteConditioning:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12
       LuminanceEqualization: 0.85
@@ -24,9 +24,9 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    CircleTilePositionStep: 0.01
-    CirclePositionAdvancePerSecond: 1
-    EnergyCrawlSpeedMultiplier:
+    ForegroundTilePositionStep: 0.01
+    ForegroundPositionAdvancePerSecond: 1
+    ForegroundEnergyCrawlSpeedMultiplier:
       Min: 0.75
       Max: 1.25
       LowRail: 0.5
@@ -34,16 +34,16 @@ MonoBehaviour:
     ForegroundDropRibbonWindowBeats: 16
     ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 1
     ForegroundDropRibbonBrightness: 1.25
-    WaveformName: beats 2 and 4
-    DistortionMode:
+    ForegroundWaveformName: beats 2 and 4
+    ForegroundWaveformResponseMode:
       MinInclusive: 1
       MaxExclusive: 3
       LowRail: 1
       HighRail: 3
-    HueResponseMagnitude: 0.25
-    TimeWarpHueResponseMagnitude: 0.05
-    DropTileHueStep: 0.001
-    DropHueRate: 0.5
-    DropBrightness: 10
-    FillBlackAndWhiteProbability: 0.125
-    FillBrightnessLift: 0.8
+    ForegroundWaveformStrongPositionShift: 0.25
+    ForegroundWaveformSubtlePositionShift: 0.05
+    BackgroundDropTileHueStep: 0.001
+    BackgroundDropHueRate: 0.5
+    BackgroundDropValue: 10
+    ForegroundFillBlackAndWhiteProbability: 0.125
+    ForegroundFillBrightnessLift: 0.8

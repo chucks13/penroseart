@@ -15,7 +15,7 @@ MonoBehaviour:
   effectTypeName: AnimateShapes
   settings:
     BackgroundHueRate: 0.1
-    PaletteConditioning:
+    ForegroundPaletteConditioning:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12
       LuminanceEqualization: 0.85
@@ -24,9 +24,9 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    CircleTilePositionStep: 0.01
-    CirclePositionAdvancePerSecond: 0.6
-    DistortionMode:
+    ForegroundTilePositionStep: 0.01
+    ForegroundPositionAdvancePerSecond: 0.6
+    ForegroundWaveformResponseMode:
       MinInclusive: 1
       MaxExclusive: 3
       LowRail: 1

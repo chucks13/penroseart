@@ -19,8 +19,8 @@ public sealed class AnimateShapesStandaloneSettingsAsset :
     public AnimateShapesStandaloneSettings Settings => settings ??= CreateDefaultSettings();
 
     /// <summary>
-    /// Copies AnimateShapes' current file-local Standalone Defaults, including the distortion-mode
-    /// Rails, over the saved Standalone Settings.
+    /// Copies AnimateShapes' current file-local Standalone Defaults, including the foreground
+    /// Waveform-response mode Rails, over the saved Standalone Settings.
     /// </summary>
     public override void RestoreStandaloneDefaults()
     {
