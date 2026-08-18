@@ -61,9 +61,8 @@ A worker that edits a dirty tree mixes two changes into one diff. Nobody can tel
 after that, and nobody can revert one of them.
 
 When a change reshapes a settings class, update its `.asset` files in the same change — they are
-plain text. A stale asset loads a new field as zero and keeps a removed field as drift, and
-committing that drift is worse than editing the asset. `.meta` files stay Unity-owned without
-exception.
+plain text, and a stale asset loads a new field as zero and keeps a removed field as drift.
+`.meta` files stay Unity-owned without exception.
 
 ## Musical claims
 
@@ -147,7 +146,8 @@ Per ADR-0013, Phase B adds Standalone Settings and audits both setting surfaces.
    Start/End names.
 4. Keep numeric values separate only when their production consumers use them independently.
 5. Remove the replaced scalar fields in the same pass.
-6. Ask the maintainer to restore each changed asset from the source defaults.
+6. Update each changed `.asset` in the same pass, seeding the reshaped fields from the source
+   defaults.
 
 One worker applies the audit changes and adds the Standalone Settings asset type and Effects-tab wiring.
 Make the asset serialized, editable during Play Mode, persistent after the run, and restorable. The
@@ -184,9 +184,9 @@ one.
 1. Discuss with the maintainer what this Effect should do with the capability. The maintainer
    owns the intent; you own the design conversation; the worker implements.
 
-2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). There is
-   no `--events` flag; read progress with `tail --label <label>`. State goals, never a design —
-   the worker proposes the design and you judge it.
+2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`); read
+   progress with `tail --label <label>`. State goals, never a design — the worker proposes the
+   design and you judge it.
 
 3. Review the diff yourself against the checklist below. The worker report is a claim, not
    evidence.
