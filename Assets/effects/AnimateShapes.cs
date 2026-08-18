@@ -78,10 +78,10 @@ public class AnimateShapes : EffectBase
     private const float SyncCircleTilePositionStep = 0.01f;
 
     /// <summary>
-    /// Authored Synced Mode palette-position advance per second. The 0.6 rate preserves the approved
-    /// 0.01-per-frame crawl at the 60 fps reference rate.
+    /// Authored Synced Mode palette-position advance per second. Raised from the frame-rate
+    /// conversion's baseline 0.6 (the approved 0.01-per-frame crawl at 60 fps) to 1 at the wall.
     /// </summary>
-    private const float SyncCirclePositionAdvancePerSecond = 0.6f;
+    private const float SyncCirclePositionAdvancePerSecond = 1f;
 
     /// <summary>
     /// Authored Low Energy multiplier for the foreground Circle and Arc crawl. The ruled 0.75 Low
