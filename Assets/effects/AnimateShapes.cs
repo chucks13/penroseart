@@ -102,16 +102,18 @@ public class AnimateShapes : EffectBase
     private const float SyncEnergyCrawlSpeedMultiplierHighRail = 1.5f;
 
     /// <summary>
-    /// Authored foreground Drop surge window in beats. Sixteen beats gives each landing one finite
+    /// Authored foreground Drop ribbon window in beats. Sixteen beats gives each landing one finite
     /// response independent of the wire's Drop length. Tune live at the wall.
     /// </summary>
-    private const int SyncForegroundDropSurgeWindowBeats = 16;
+    private const int SyncForegroundDropRibbonWindowBeats = 16;
 
     /// <summary>
-    /// Authored foreground palette-position surge at the Drop landing, in cycles per beat. One cycle
-    /// per beat matches the established Angles impact speed. Tune live at the wall.
+    /// Authored foreground Drop ribbon flow at the landing, in palette cycles per beat. One cycle per
+    /// beat matches the established Angles impact speed. Every Circle and Arc spreads the complete
+    /// conditioned palette exactly once along its own path; that whole-palette spread is fixed rather
+    /// than a setting so every shape length reads as one complete ribbon. Tune live at the wall.
     /// </summary>
-    private const float SyncForegroundDropSurgeCyclesPerBeatAtLanding = 1f;
+    private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1f;
 
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
@@ -191,9 +193,9 @@ public class AnimateShapes : EffectBase
             SyncHighEnergyCrawlSpeedMultiplier,
             SyncEnergyCrawlSpeedMultiplierLowRail,
             SyncEnergyCrawlSpeedMultiplierHighRail),
-        ForegroundDropSurgeWindowBeats = SyncForegroundDropSurgeWindowBeats,
-        ForegroundDropSurgeCyclesPerBeatAtLanding =
-            SyncForegroundDropSurgeCyclesPerBeatAtLanding,
+        ForegroundDropRibbonWindowBeats = SyncForegroundDropRibbonWindowBeats,
+        ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
+            SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -222,6 +224,18 @@ public class AnimateShapes : EffectBase
     /// <summary>Per-group cyclic palette positions advanced across the packed Circle and Arc data.</summary>
     private float[] positions;
 
+    /// <summary>
+    /// Bounded palette-cycle phase shared by every foreground Circle and Arc during the Drop response.
+    /// It advances only while the response is visible, holds after the window, and resets at activation.
+    /// </summary>
+    private float foregroundDropRibbonFlowPhase;
+
+    /// <summary>
+    /// The frame's single <see cref="InSpan.Decay(int)"/> read, retained after <see cref="Draw"/>
+    /// uses it for ribbon flow and palette-coordinate mixing so <see cref="DebugText"/> can expose it.
+    /// </summary>
+    private float foregroundDropRibbonEnvelope;
+
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
 
@@ -240,11 +254,14 @@ public class AnimateShapes : EffectBase
     public override string DebugText()
     {
         string modeName = distortionMode == 1 ? "Color" : "Time Warp";
-        return $"shape: {shapeName}\nBeat Mode: {modeName}";
+        return $"shape: {shapeName}\nBeat Mode: {modeName}" +
+            (foregroundDropRibbonEnvelope > 0f
+                ? $"\nDROP {foregroundDropRibbonEnvelope:0.00}  {SyncSettings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding:0.00} cpb"
+                : "");
     }
 
     /// <summary>
-    /// Initializes per-activation random state before this effect starts drawing.
+    /// Initializes per-activation random and Drop-ribbon state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
@@ -272,6 +289,8 @@ public class AnimateShapes : EffectBase
             positions[i] = Random.value;
         }
         background = Random.value;
+        foregroundDropRibbonFlowPhase = 0f;
+        foregroundDropRibbonEnvelope = 0f;
     }
 
     /// <summary>
@@ -283,9 +302,9 @@ public class AnimateShapes : EffectBase
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
     /// <remarks>
-    /// The foreground Drop surge reads its Stock Envelope and measured beat interval here every frame,
-    /// so both Sync Settings remain live in Play Mode. The authored window is independent of the wire's
-    /// Drop length, and Energy scales only the ordinary crawl before the surge is added.
+    /// The foreground Drop ribbons read their Stock Envelope and measured beat interval here every
+    /// frame, so both Sync Settings remain live in Play Mode. The authored window is independent of the
+    /// wire's Drop length, and Energy scales only the ordinary crawl, never the ribbon flow phase.
     /// </remarks>
     public override void Draw()
     {
@@ -303,16 +322,9 @@ public class AnimateShapes : EffectBase
             beatManager.Energy.Level);
         float foregroundPositionAdvancePerSecond =
             circlePositionAdvancePerSecond * energyCrawlSpeedMultiplier;
-        float foregroundDropSurgeEnvelope = beatManager.Drop.In.Decay(
-            SyncSettings.ForegroundDropSurgeWindowBeats);
-        if (foregroundDropSurgeEnvelope > 0f)
-        {
-            foregroundPositionAdvancePerSecond +=
-                SyncSettings.ForegroundDropSurgeCyclesPerBeatAtLanding *
-                1000f /
-                beatManager.Timing.BeatAverageMilliseconds.Value *
-                foregroundDropSurgeEnvelope;
-        }
+        foregroundDropRibbonEnvelope = beatManager.Drop.In.Decay(
+            SyncSettings.ForegroundDropRibbonWindowBeats);
+        UpdateForegroundDropRibbonFlowPhase(foregroundDropRibbonEnvelope);
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
@@ -377,6 +389,24 @@ public class AnimateShapes : EffectBase
                     circleTilePositionStep * group.PackedIndex(j) +
                     beatOffset * timeWarpHueScale +
                     positionShift) % 1f;
+                if (foregroundDropRibbonEnvelope > 0f)
+                {
+                    float ribbonPalettePosition = Mathf.Repeat(
+                        ((float)group.PackedIndex(j) / group.TileCount) +
+                        foregroundDropRibbonFlowPhase,
+                        1f);
+                    float shortestHueDelta = Mathf.Repeat(
+                        ribbonPalettePosition - palettePosition + 0.5f,
+                        1f) - 0.5f;
+
+                    // Each shape maps the complete conditioned palette exactly once along its path.
+                    // Mix in cyclic palette-coordinate space before the one lookup so every Drop
+                    // frame stays on the palette while it slides continuously back to the crawl.
+                    palettePosition = Mathf.Repeat(
+                        palettePosition +
+                        (shortestHueDelta * foregroundDropRibbonEnvelope),
+                        1f);
+                }
                 Color paletteColor = conditionedPalette.ReadCyclic(
                     palettePosition,
                     doblend: true);
@@ -395,6 +425,26 @@ public class AnimateShapes : EffectBase
             positions[i] = (groupPosition +
                 foregroundPositionAdvancePerSecond * effectDelta) % 1f;
         }
+    }
+
+    /// <summary>
+    /// Advances the shared foreground Drop ribbon current at the live authored cycles-per-beat rate.
+    /// </summary>
+    /// <param name="envelope">Current foreground Drop ribbon response envelope.</param>
+    private void UpdateForegroundDropRibbonFlowPhase(float envelope)
+    {
+        if (envelope <= 0f)
+        {
+            return;
+        }
+
+        float cyclesPerSecond =
+            SyncSettings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding *
+            1000f /
+            beatManager.Timing.BeatAverageMilliseconds.Value;
+        foregroundDropRibbonFlowPhase = Mathf.Repeat(
+            foregroundDropRibbonFlowPhase + (cyclesPerSecond * envelope * effectDelta),
+            1f);
     }
 
     /// <summary>Maps the current Energy level to the authored foreground crawl-speed multiplier.</summary>
@@ -492,16 +542,17 @@ public sealed class AnimateShapesSyncSettings
     public FloatRange EnergyCrawlSpeedMultiplier;
 
     /// <summary>
-    /// Live foreground Drop surge window in beats. Sixteen beats gives each landing one finite
+    /// Live foreground Drop ribbon window in beats. Sixteen beats gives each landing one finite
     /// response even when the wire's Drop Phrase continues longer.
     /// </summary>
-    public int ForegroundDropSurgeWindowBeats;
+    public int ForegroundDropRibbonWindowBeats;
 
     /// <summary>
-    /// Live foreground palette-position surge at the Drop landing, in cycles per beat. One cycle per
-    /// beat is the authored impact speed; Energy does not rescale it.
+    /// Live foreground Drop ribbon flow at the landing, in palette cycles per beat. One cycle per beat
+    /// is the authored impact speed; Energy does not rescale it, and every shape's fixed coordinate
+    /// spreads the complete conditioned palette exactly once along its path.
     /// </summary>
-    public float ForegroundDropSurgeCyclesPerBeatAtLanding;
+    public float ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -547,9 +598,9 @@ public sealed class AnimateShapesSyncSettings
             source.EnergyCrawlSpeedMultiplier.Max,
             source.EnergyCrawlSpeedMultiplier.LowRail,
             source.EnergyCrawlSpeedMultiplier.HighRail);
-        ForegroundDropSurgeWindowBeats = source.ForegroundDropSurgeWindowBeats;
-        ForegroundDropSurgeCyclesPerBeatAtLanding =
-            source.ForegroundDropSurgeCyclesPerBeatAtLanding;
+        ForegroundDropRibbonWindowBeats = source.ForegroundDropRibbonWindowBeats;
+        ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
+            source.ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,

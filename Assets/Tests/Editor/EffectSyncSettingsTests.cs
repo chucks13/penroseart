@@ -1751,7 +1751,7 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including Energy-crawl and distortion-mode Rails and both foreground Drop surge
+    /// replaces it—including Energy-crawl and distortion-mode Rails and both foreground Drop ribbon
     /// controls—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
@@ -1775,8 +1775,8 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.CircleTilePositionStep = 18f;
         asset.Settings.CirclePositionAdvancePerSecond = 19f;
         asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.ForegroundDropSurgeWindowBeats = 221;
-        asset.Settings.ForegroundDropSurgeCyclesPerBeatAtLanding = 222f;
+        asset.Settings.ForegroundDropRibbonWindowBeats = 221;
+        asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpSeconds = 24f;
@@ -1804,11 +1804,11 @@ public sealed class EffectSyncSettingsTests
             asset.Settings.EnergyCrawlSpeedMultiplier,
             defaults.EnergyCrawlSpeedMultiplier);
         Assert.That(
-            asset.Settings.ForegroundDropSurgeWindowBeats,
-            Is.EqualTo(defaults.ForegroundDropSurgeWindowBeats));
+            asset.Settings.ForegroundDropRibbonWindowBeats,
+            Is.EqualTo(defaults.ForegroundDropRibbonWindowBeats));
         Assert.That(
-            asset.Settings.ForegroundDropSurgeCyclesPerBeatAtLanding,
-            Is.EqualTo(defaults.ForegroundDropSurgeCyclesPerBeatAtLanding));
+            asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding,
+            Is.EqualTo(defaults.ForegroundDropRibbonFlowCyclesPerBeatAtLanding));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));
