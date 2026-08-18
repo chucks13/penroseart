@@ -31,6 +31,8 @@ MonoBehaviour:
       Max: 1.25
       LowRail: 0.5
       HighRail: 1.5
+    ForegroundDropSurgeWindowBeats: 16
+    ForegroundDropSurgeCyclesPerBeatAtLanding: 1
     DistortionMode:
       MinInclusive: 1
       MaxExclusive: 3

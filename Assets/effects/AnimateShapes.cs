@@ -101,6 +101,18 @@ public class AnimateShapes : EffectBase
     /// <summary>Upper tuning Rail for exploring faster Energy-driven foreground crawl.</summary>
     private const float SyncEnergyCrawlSpeedMultiplierHighRail = 1.5f;
 
+    /// <summary>
+    /// Authored foreground Drop surge window in beats. Sixteen beats gives each landing one finite
+    /// response independent of the wire's Drop length. Tune live at the wall.
+    /// </summary>
+    private const int SyncForegroundDropSurgeWindowBeats = 16;
+
+    /// <summary>
+    /// Authored foreground palette-position surge at the Drop landing, in cycles per beat. One cycle
+    /// per beat matches the established Angles impact speed. Tune live at the wall.
+    /// </summary>
+    private const float SyncForegroundDropSurgeCyclesPerBeatAtLanding = 1f;
+
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
 
@@ -179,6 +191,9 @@ public class AnimateShapes : EffectBase
             SyncHighEnergyCrawlSpeedMultiplier,
             SyncEnergyCrawlSpeedMultiplierLowRail,
             SyncEnergyCrawlSpeedMultiplierHighRail),
+        ForegroundDropSurgeWindowBeats = SyncForegroundDropSurgeWindowBeats,
+        ForegroundDropSurgeCyclesPerBeatAtLanding =
+            SyncForegroundDropSurgeCyclesPerBeatAtLanding,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -267,6 +282,11 @@ public class AnimateShapes : EffectBase
     /// <summary>
     /// Renders one frame into this effect's 900-color buffer.
     /// </summary>
+    /// <remarks>
+    /// The foreground Drop surge reads its Stock Envelope and measured beat interval here every frame,
+    /// so both Sync Settings remain live in Play Mode. The authored window is independent of the wire's
+    /// Drop length, and Energy scales only the ordinary crawl before the surge is added.
+    /// </remarks>
     public override void Draw()
     {
         bool isSynced = beatManager.IsSynced;
@@ -281,6 +301,18 @@ public class AnimateShapes : EffectBase
             : standaloneSettings.CirclePositionAdvancePerSecond;
         float energyCrawlSpeedMultiplier = GetEnergyCrawlSpeedMultiplier(
             beatManager.Energy.Level);
+        float foregroundPositionAdvancePerSecond =
+            circlePositionAdvancePerSecond * energyCrawlSpeedMultiplier;
+        float foregroundDropSurgeEnvelope = beatManager.Drop.In.Decay(
+            SyncSettings.ForegroundDropSurgeWindowBeats);
+        if (foregroundDropSurgeEnvelope > 0f)
+        {
+            foregroundPositionAdvancePerSecond +=
+                SyncSettings.ForegroundDropSurgeCyclesPerBeatAtLanding *
+                1000f /
+                beatManager.Timing.BeatAverageMilliseconds.Value *
+                foregroundDropSurgeEnvelope;
+        }
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
@@ -361,7 +393,7 @@ public class AnimateShapes : EffectBase
                 buffer[idx] = paletteColor;
             }
             positions[i] = (groupPosition +
-                circlePositionAdvancePerSecond * energyCrawlSpeedMultiplier * effectDelta) % 1f;
+                foregroundPositionAdvancePerSecond * effectDelta) % 1f;
         }
     }
 
@@ -459,6 +491,18 @@ public sealed class AnimateShapesSyncSettings
     /// </summary>
     public FloatRange EnergyCrawlSpeedMultiplier;
 
+    /// <summary>
+    /// Live foreground Drop surge window in beats. Sixteen beats gives each landing one finite
+    /// response even when the wire's Drop Phrase continues longer.
+    /// </summary>
+    public int ForegroundDropSurgeWindowBeats;
+
+    /// <summary>
+    /// Live foreground palette-position surge at the Drop landing, in cycles per beat. One cycle per
+    /// beat is the authored impact speed; Energy does not rescale it.
+    /// </summary>
+    public float ForegroundDropSurgeCyclesPerBeatAtLanding;
+
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
 
@@ -503,6 +547,9 @@ public sealed class AnimateShapesSyncSettings
             source.EnergyCrawlSpeedMultiplier.Max,
             source.EnergyCrawlSpeedMultiplier.LowRail,
             source.EnergyCrawlSpeedMultiplier.HighRail);
+        ForegroundDropSurgeWindowBeats = source.ForegroundDropSurgeWindowBeats;
+        ForegroundDropSurgeCyclesPerBeatAtLanding =
+            source.ForegroundDropSurgeCyclesPerBeatAtLanding;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
