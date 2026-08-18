@@ -3,9 +3,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Marks a serialized string field that holds a Waveform Pool entry name, so editor surfaces
+/// Marks a serialized string field that holds a Waveform Pool entry's unique persisted name, so editor surfaces
 /// render it as a pulldown over the current Pool instead of a free text box. The stored value
-/// stays the plain entry name; runtime acquisition reads it through
+/// stays that plain one-name/one-entry identity; runtime acquisition reads it through
 /// <see cref="Waveforms.Named"/>.
 /// </summary>
 public sealed class WaveformNameAttribute : PropertyAttribute

@@ -16,7 +16,7 @@ public sealed class Waveforms
     /// <summary>The runtime-bound Waveforms available for acquisition.</summary>
     private readonly Waveform[] waveforms;
 
-    /// <summary>Pool entry name of each Waveform, aligned by index, for named acquisition.</summary>
+    /// <summary>Unique persisted identity of each Waveform, aligned by index, for named acquisition.</summary>
     private readonly string[] names;
 
     /// <summary>
@@ -32,7 +32,7 @@ public sealed class Waveforms
     {
     }
 
-    /// <summary>Creates the acquisition surface from caller-supplied Pool entries.</summary>
+    /// <summary>Creates the acquisition surface from caller-supplied Pool entries with unique persisted names.</summary>
     /// <param name="clockSource">The shared musical source runtime Waveforms read.</param>
     /// <param name="poolEntries">The required, non-empty Pool.</param>
     public Waveforms(BeatManager clockSource, IReadOnlyList<WaveformPool.Entry> poolEntries)
@@ -51,6 +51,14 @@ public sealed class Waveforms
         {
             throw new InvalidOperationException(
                 $"Waveform Pool '{WaveformPool.FilePath}' contains no Waveforms.");
+        }
+
+        var duplicateName = WaveformPool.FindDuplicateName(poolEntries);
+        if (duplicateName != null)
+        {
+            throw new InvalidOperationException(
+                $"Waveform Pool '{WaveformPool.FilePath}' contains duplicate entry name '{duplicateName}'. " +
+                "Pool entry names are persisted identities and must be unique.");
         }
 
         waveforms = new Waveform[poolEntries.Count];
@@ -108,7 +116,7 @@ public sealed class Waveforms
     }
 
     /// <summary>
-    /// Draws the Pool Preset saved under the given name, for a performer that holds one selected
+    /// Draws the one Pool Preset identified by the given unique persisted name, for a performer that holds one selected
     /// Waveform instead of drawing randomly. A name missing from the Pool — including a Pool-side
     /// rename of a selected entry — is a configuration error and fails visibly rather than
     /// widening to a fallback.

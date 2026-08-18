@@ -38,17 +38,17 @@ public static class WaveformPool
     /// <summary>Absolute path to the Pool file under StreamingAssets (valid in the Editor and at runtime).</summary>
     public static string FilePath => Application.streamingAssetsPath + "/" + FileName;
 
-    /// <summary>One named Preset: a display name paired with its parsed Waveform.</summary>
+    /// <summary>One named Preset: a persisted identity paired with its parsed Waveform.</summary>
     public struct Entry
     {
-        /// <summary>The human/editor display name; runtime acquisition does not treat it as identity.</summary>
+        /// <summary>The unique persisted identity used by authoring and exact runtime acquisition.</summary>
         public string name;
 
         /// <summary>The parsed one-bar Waveform definition.</summary>
         public Waveform waveform;
 
         /// <summary>Creates one named Pool entry.</summary>
-        /// <param name="name">The human/editor display name.</param>
+        /// <param name="name">The unique persisted identity.</param>
         /// <param name="waveform">The parsed Waveform definition.</param>
         public Entry(string name, Waveform waveform)
         {
@@ -173,9 +173,12 @@ public static class WaveformPool
         return entries;
     }
 
-    /// <summary>Whether a Preset name can be serialized without changing the Pool record structure.</summary>
-    /// <remarks>Names are display labels. They need not be unique, but they cannot be blank or contain macro delimiters.</remarks>
-    /// <param name="name">The proposed display name.</param>
+    /// <summary>Whether one Preset name can be serialized without changing the Pool record structure.</summary>
+    /// <remarks>
+    /// This checks one name's grammar. The containing Pool separately requires one exact name per entry because
+    /// the name is the persisted identity used by <see cref="Waveforms.Named"/> and Waveform-name settings.
+    /// </remarks>
+    /// <param name="name">The proposed persisted identity.</param>
     /// <returns><see langword="true"/> when the name is safe to serialize.</returns>
     public static bool IsValidName(string name)
     {
@@ -187,9 +190,31 @@ public static class WaveformPool
         return name.IndexOfAny(ReservedNameCharacters) < 0;
     }
 
+    /// <summary>Finds the first exact entry name that appears more than once in a Pool.</summary>
+    /// <remarks>
+    /// Name identity uses ordinal comparison, matching <see cref="Waveforms.Named"/>. Returning the duplicate
+    /// lets construction and serialization preserve their existing exception contracts while sharing one rule.
+    /// </remarks>
+    /// <param name="entries">The complete Pool whose persisted names are inspected.</param>
+    /// <returns>The first duplicate name in document order, or <see langword="null"/> when all names are distinct.</returns>
+    internal static string FindDuplicateName(IReadOnlyList<Entry> entries)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (!names.Add(entries[i].name))
+            {
+                return entries[i].name;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Rewrites the whole Pool canonically: a fixed header comment, then one column-aligned macro per entry,
-    /// in list order. This is the full-file rewrite the Editor performs on save — see the type remarks.
+    /// in list order. Entry names must be unique persisted identities. This is the full-file rewrite the Editor
+    /// performs on save — see the type remarks.
     /// </summary>
     public static string Serialize(IReadOnlyList<Entry> entries)
     {
@@ -213,6 +238,15 @@ public static class WaveformPool
             nameWidth = Mathf.Max(nameWidth, entry.name.Length);
             sequenceWidth = Mathf.Max(sequenceWidth, (entry.waveform.sequence ?? "").Length);
             amplitudeWidth = Mathf.Max(amplitudeWidth, (entry.waveform.amplitude ?? "").Length);
+        }
+
+        var duplicateName = FindDuplicateName(entries);
+        if (duplicateName != null)
+        {
+            throw new ArgumentException(
+                $"Waveform Pool contains duplicate entry name \"{duplicateName}\". " +
+                "Pool entry names are persisted identities and must be unique.",
+                nameof(entries));
         }
 
         for (var i = 0; i < entries.Count; i++)
@@ -261,8 +295,9 @@ public static class WaveformPool
         "//   offset     phase shift in beats; 0.5 lands on the \"&\" (offbeat).\n" +
         "//\n" +
         "// Entry order is preserved for authoring. Runtime performers acquire by Energy, uniformly across\n" +
-        "// the whole Pool, or by entry name; no performer stores a row index. Renaming an entry breaks any\n" +
-        "// saved setting that selects it by name — visibly, at the next acquisition.\n" +
+        "// the whole Pool, or by unique entry name; no performer stores a row index. One non-empty name\n" +
+        "// identifies exactly one entry. Renaming an entry breaks any saved setting that selects it by name —\n" +
+        "// visibly, at the next acquisition.\n" +
         "\n";
 
     /// <summary>Parses a Pool numeric field with invariant culture, reporting and defaulting on a bad value.</summary>

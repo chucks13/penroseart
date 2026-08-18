@@ -241,6 +241,28 @@ public sealed class WaveformPoolDocumentTests
         Assert.That(failed.Error, Does.Contain("at least one Preset"));
         Assert.That(document.IsDirty("empty-draft", recoveredValuesNeedSave: false), Is.True);
     }
+
+    /// <summary>Duplicate persisted names fail Save visibly without replacing the last valid Pool document.</summary>
+    [Test]
+    public void Save_DuplicateNamesFailsAndLeavesFileUntouched()
+    {
+        const string original = "DEFINE_WAVEFORM(original){ QQQQ | 8888 | 0.3 | 0 }";
+        File.WriteAllText(path, original);
+        var document = new WaveformPoolDocument(path);
+        document.AcceptLoad(document.Load(), "original-draft");
+        var entries = new[]
+        {
+            new WaveformPool.Entry("same name", Waveform.Parse("QQQQ", "8888", 0.3f, 0f, out _)),
+            new WaveformPool.Entry("same name", Waveform.Parse("QQQQ", "8000", 0.3f, 0f, out _)),
+        };
+
+        var failed = document.Save(entries, "duplicate-draft", overwriteExternalChange: false);
+
+        Assert.That(failed.Status, Is.EqualTo(WaveformPoolDocumentSaveStatus.Failed));
+        Assert.That(failed.Error, Does.Contain("duplicate").And.Contain("same name"));
+        Assert.That(File.ReadAllText(path), Is.EqualTo(original));
+        Assert.That(document.IsDirty("duplicate-draft", recoveredValuesNeedSave: false), Is.True);
+    }
 }
 
 /// <summary>Behavior tests for the Beat Manager's honest Waveform Pool preview state.</summary>
@@ -272,6 +294,20 @@ public sealed class WaveformPoolPreviewTests
         Assert.That(preview.IsUsable, Is.False);
         Assert.That(preview.Error, Does.Contain("broken").And.Contain("malformed"));
         Assert.That(preview.Entries, Is.Empty, "No synthetic or widened preview selection may hide the defect.");
+    }
+
+    /// <summary>Duplicate persisted names make the runtime-faithful editor preview visibly unavailable.</summary>
+    [Test]
+    public void FromText_DuplicateNamesAreUnavailable()
+    {
+        var preview = WaveformPoolPreview.FromText(
+            "DEFINE_WAVEFORM(same name){ QQQQ | 8888 | 0.3 | 0 }\n" +
+            "DEFINE_WAVEFORM(same name){ QQQQ | 8000 | 0.3 | 0 }",
+            fileExists: true);
+
+        Assert.That(preview.IsUsable, Is.False);
+        Assert.That(preview.Error, Does.Contain("duplicate").And.Contain("same name"));
+        Assert.That(preview.Entries, Is.Empty);
     }
 
     /// <summary>Verifies a damaged suffix previews exactly the valid prefix the current runtime parser retains.</summary>

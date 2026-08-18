@@ -82,9 +82,14 @@ public sealed class WaveformsTests
     [Test]
     public void Named_ReturnsTheEntrySavedUnderThatName()
     {
-        var waveforms = CreateSeededWaveforms();
+        var waveforms = new Waveforms(new BeatManager(), new[]
+        {
+            Entry("first", "QQQQ", "8888"),
+            Entry("second", "QQQQ", "0808"),
+        });
 
-        AssertNotationIn(waveforms.Named("beats 2 and 4"), ("QQQQ", "0808", 0f));
+        AssertNotationIn(waveforms.Named("first"), ("QQQQ", "8888", 0f));
+        AssertNotationIn(waveforms.Named("second"), ("QQQQ", "0808", 0f));
     }
 
     /// <summary>A selected name missing from the Pool is a visible configuration error.</summary>
@@ -102,6 +107,22 @@ public sealed class WaveformsTests
     {
         Assert.Throws<InvalidOperationException>(
             () => new Waveforms(new BeatManager(), Array.Empty<WaveformPool.Entry>()));
+    }
+
+    /// <summary>Duplicate persisted Pool names make construction fail visibly and identify the duplicate.</summary>
+    [Test]
+    public void Construction_DuplicateNames_ThrowsWithDuplicateName()
+    {
+        var poolEntries = new[]
+        {
+            Entry("same name", "QQQQ", "8888"),
+            Entry("same name", "QQQQ", "8000"),
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new Waveforms(new BeatManager(), poolEntries));
+
+        Assert.That(exception.Message, Does.Contain("duplicate").And.Contain("same name"));
     }
 
     /// <summary>Caller mutation after construction cannot replace the values owned by Waveforms.</summary>

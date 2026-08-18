@@ -31,7 +31,7 @@ public sealed class WaveformPoolTests
         var source = new WaveformPool.Entry[]
         {
             new("first", Waveform.Parse("QQQQ", "8888", 0.333f, 0.125f, out _)),
-            new("first", Waveform.Parse("EEEEEEEE", "80808080", 0.5f, -0.25f, out _)),
+            new("second", Waveform.Parse("EEEEEEEE", "80808080", 0.5f, -0.25f, out _)),
         };
 
         var serialized = WaveformPool.Serialize(source);
@@ -40,7 +40,7 @@ public sealed class WaveformPoolTests
         Assert.That(diagnostics, Is.Empty);
         Assert.That(parsed, Has.Count.EqualTo(2));
         Assert.That(parsed[0].name, Is.EqualTo("first"));
-        Assert.That(parsed[1].name, Is.EqualTo("first"), "Display names intentionally need not be unique.");
+        Assert.That(parsed[1].name, Is.EqualTo("second"));
         Assert.That(parsed[0].waveform.sequence, Is.EqualTo("QQQQ"));
         Assert.That(parsed[0].waveform.rounding, Is.EqualTo(0.333f));
         Assert.That(parsed[0].waveform.offset, Is.EqualTo(0.125f));

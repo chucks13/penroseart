@@ -7,14 +7,15 @@ using UnityEngine;
 
 /// <summary>
 /// Renders a <see cref="WaveformNameAttribute"/> string field as a pulldown over the current
-/// Waveform Pool entry names, so a setting selects an existing Preset instead of retyping one.
+/// Waveform Pool's unique persisted entry names, so a setting selects exactly one existing Preset
+/// instead of retyping one.
 /// A saved name missing from the Pool stays shown and marked — the defect is the maintainer's to
 /// see, and the runtime fails visibly on it — until the pulldown repoints to a real entry.
 /// </summary>
 [CustomPropertyDrawer(typeof(WaveformNameAttribute))]
 public sealed class WaveformNameDrawer : PropertyDrawer
 {
-    /// <summary>Pool entry names in document order, cached against the Pool file write time.</summary>
+    /// <summary>Unique persisted Pool entry names in document order, cached against the Pool file write time.</summary>
     private static string[] cachedNames;
 
     /// <summary>Pool file write time the cached names were read at.</summary>
@@ -52,7 +53,7 @@ public sealed class WaveformNameDrawer : PropertyDrawer
     }
 
     /// <summary>
-    /// Reads the Pool entry names, re-parsing only when the Pool file's write time moves, so a
+    /// Reads the unique persisted Pool entry names, re-parsing only when the Pool file's write time moves, so a
     /// repainting tuning window costs one file stat per repaint instead of a parse.
     /// </summary>
     private static string[] PoolNames()
