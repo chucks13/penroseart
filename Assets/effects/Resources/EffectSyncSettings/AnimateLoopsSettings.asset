@@ -17,12 +17,15 @@ MonoBehaviour:
     BackgroundHueRate: 0.1
     RingTileHueStep: 0.01
     RingHueAdvance: 0.01
-    DistortionModeMinInclusive: 1
-    DistortionModeMaxExclusive: 3
+    DistortionMode:
+      MinInclusive: 1
+      MaxExclusive: 3
+      LowRail: 1
+      HighRail: 3
     HueResponseMagnitude: 0.25
     TimeWarpSeconds: 0.5
     TimeWarpHueScale: 0.1
-    DropDensity: 0.001
-    DropSpeed: 0.5
+    DropTileHueStep: 0.001
+    DropHueRate: 0.5
     DropBrightness: 10
     FillBlackAndWhiteProbability: 0.125
