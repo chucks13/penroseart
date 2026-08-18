@@ -47,6 +47,24 @@ public sealed class WaveformPoolTests
         LogAssert.NoUnexpectedReceived();
     }
 
+    /// <summary>The authoritative checked-in Pool header matches the canonical serializer's format contract.</summary>
+    [Test]
+    public void CheckedInHeader_MatchesCanonicalSerializerHeader()
+    {
+        const string firstEntry = "\nDEFINE_WAVEFORM(";
+        var checkedIn = WaveformPool.ReadFileOrEmpty();
+        var generated = WaveformPool.Serialize(new[]
+        {
+            new WaveformPool.Entry("test", Waveform.Parse("QQQQ", "8888", 0.3f, 0f, out _)),
+        });
+        var checkedInEntry = checkedIn.IndexOf(firstEntry, StringComparison.Ordinal);
+        var generatedEntry = generated.IndexOf(firstEntry, StringComparison.Ordinal);
+
+        Assert.That(checkedInEntry, Is.GreaterThanOrEqualTo(0));
+        Assert.That(generatedEntry, Is.GreaterThanOrEqualTo(0));
+        Assert.That(checkedIn[..(checkedInEntry + 1)], Is.EqualTo(generated[..(generatedEntry + 1)]));
+    }
+
     /// <summary>Verifies names that would alter macro structure cannot reach the full-file serializer.</summary>
     [TestCase("")]
     [TestCase("bad)name")]

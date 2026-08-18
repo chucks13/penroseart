@@ -32,7 +32,7 @@ public sealed class Waveforms
     {
     }
 
-    /// <summary>Creates the acquisition surface from caller-supplied Pool entries with unique persisted names.</summary>
+    /// <summary>Creates the acquisition surface from caller-supplied Pool entries with valid, unique persisted names.</summary>
     /// <param name="clockSource">The shared musical source runtime Waveforms read.</param>
     /// <param name="poolEntries">The required, non-empty Pool.</param>
     public Waveforms(BeatManager clockSource, IReadOnlyList<WaveformPool.Entry> poolEntries)
@@ -51,6 +51,17 @@ public sealed class Waveforms
         {
             throw new InvalidOperationException(
                 $"Waveform Pool '{WaveformPool.FilePath}' contains no Waveforms.");
+        }
+
+        for (var i = 0; i < poolEntries.Count; i++)
+        {
+            var entryName = poolEntries[i].name;
+            if (!WaveformPool.IsValidName(entryName))
+            {
+                throw new InvalidOperationException(
+                    $"Waveform Pool '{WaveformPool.FilePath}' contains invalid entry name '{entryName}'. " +
+                    "Pool entry names must be non-empty and cannot contain macro delimiters.");
+            }
         }
 
         var duplicateName = WaveformPool.FindDuplicateName(poolEntries);

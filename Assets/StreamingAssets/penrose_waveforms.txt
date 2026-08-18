@@ -14,8 +14,9 @@
 //   offset     phase shift in beats; 0.5 lands on the "&" (offbeat).
 //
 // Entry order is preserved for authoring. Runtime performers acquire by Energy, uniformly across
-// the whole Pool, or by entry name; no performer stores a row index. Renaming an entry breaks any
-// saved setting that selects it by name — visibly, at the next acquisition.
+// the whole Pool, or by unique entry name; no performer stores a row index. One non-empty name
+// identifies exactly one entry. Renaming an entry breaks any saved setting that selects it by name —
+// visibly, at the next acquisition.
 
 DEFINE_WAVEFORM(beat pulse)    { QQQQ     | 8888     | 0.3 | 0 }
 DEFINE_WAVEFORM(beats 1 and 3) { QQQQ     | 8080     | 0.3 | 0 }

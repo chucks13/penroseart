@@ -310,6 +310,19 @@ public sealed class WaveformPoolPreviewTests
         Assert.That(preview.Entries, Is.Empty);
     }
 
+    /// <summary>An invalid persisted name makes the runtime-faithful editor preview visibly unavailable.</summary>
+    [Test]
+    public void FromText_InvalidNameIsUnavailable()
+    {
+        var preview = WaveformPoolPreview.FromText(
+            "DEFINE_WAVEFORM(bad|name){ QQQQ | 8888 | 0.3 | 0 }",
+            fileExists: true);
+
+        Assert.That(preview.IsUsable, Is.False);
+        Assert.That(preview.Error, Does.Contain("empty").And.Contain("delimiter"));
+        Assert.That(preview.Entries, Is.Empty);
+    }
+
     /// <summary>Verifies a damaged suffix previews exactly the valid prefix the current runtime parser retains.</summary>
     [Test]
     public void FromText_UnrecoverableSuffixMatchesRuntimeValidPrefix()

@@ -53,17 +53,20 @@ public sealed class WaveformNameDrawer : PropertyDrawer
     }
 
     /// <summary>
-    /// Reads the unique persisted Pool entry names, re-parsing only when the Pool file's write time moves, so a
-    /// repainting tuning window costs one file stat per repaint instead of a parse.
+    /// Reads the valid, unique persisted Pool entry names through the runtime-faithful preview, re-reading only when
+    /// the Pool file's write time moves. An unusable Pool yields no choices, so the current setting stays visibly missing.
     /// </summary>
     private static string[] PoolNames()
     {
         DateTime writeTimeUtc = File.GetLastWriteTimeUtc(WaveformPool.FilePath);
         if (cachedNames == null || writeTimeUtc != cachedWriteTimeUtc)
         {
-            var entries = WaveformPool.Parse(WaveformPool.ReadFileOrEmpty());
-            cachedNames = new string[entries.Count];
-            for (var i = 0; i < entries.Count; i++)
+            var preview = WaveformPoolPreview.FromText(
+                WaveformPool.ReadFileOrEmpty(),
+                File.Exists(WaveformPool.FilePath));
+            var entries = preview.Entries;
+            cachedNames = new string[entries.Length];
+            for (var i = 0; i < entries.Length; i++)
             {
                 cachedNames[i] = entries[i].name;
             }

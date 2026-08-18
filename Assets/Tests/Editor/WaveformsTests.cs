@@ -125,6 +125,22 @@ public sealed class WaveformsTests
         Assert.That(exception.Message, Does.Contain("duplicate").And.Contain("same name"));
     }
 
+    /// <summary>Invalid persisted Pool names make construction fail before named acquisition can accept them.</summary>
+    [TestCase("")]
+    [TestCase("bad|name")]
+    public void Construction_InvalidName_Throws(string name)
+    {
+        var poolEntries = new[]
+        {
+            Entry(name, "QQQQ", "8888"),
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new Waveforms(new BeatManager(), poolEntries));
+
+        Assert.That(exception.Message, Does.Contain("invalid").And.Contain("non-empty"));
+    }
+
     /// <summary>Caller mutation after construction cannot replace the values owned by Waveforms.</summary>
     [Test]
     public void Construction_SnapshotsPoolValuesBeforeCallerMutation()
