@@ -27,6 +27,9 @@
 # Agent scratch: purely local, never tracked.
 /.scratch/
 
+# Prototypes are scratch: purely local, never tracked.
+/prototype/
+
 # Claude Code personal/local settings
 .claude/settings.local.json
 /.claude/worktrees/
