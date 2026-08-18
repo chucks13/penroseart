@@ -102,8 +102,8 @@ public class AnimateShapes : EffectBase
     private const int SyncForegroundDropRibbonWindowBeats = 16;
 
     /// <summary>
-    /// Authored foreground Drop ribbon flow at the landing, in palette cycles per beat. One cycle per
-    /// beat matches the established Angles impact speed. Tune live at the wall.
+    /// Authored foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. One cycle
+    /// per beat matches the established Angles impact speed. Tune live at the wall.
     /// </summary>
     private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1f;
 
@@ -216,14 +216,14 @@ public class AnimateShapes : EffectBase
     private float[] positions;
 
     /// <summary>
-    /// Bounded palette-cycle phase shared by every foreground Circle and Arc during the Drop response.
+    /// Bounded hue-wheel phase shared by every foreground Circle and Arc during the Drop response.
     /// It advances only while the response is visible, holds after the window, and resets at activation.
     /// </summary>
     private float foregroundDropRibbonFlowPhase;
 
     /// <summary>
     /// The frame's single <see cref="InSpan.Decay(int)"/> read, retained after <see cref="Draw"/>
-    /// uses it for ribbon flow and palette-coordinate mixing so <see cref="DebugText"/> can expose it.
+    /// uses it for ribbon flow and rainbow mixing so <see cref="DebugText"/> can expose it.
     /// </summary>
     private float foregroundDropRibbonEnvelope;
 
@@ -350,16 +350,11 @@ public class AnimateShapes : EffectBase
         bool dropActive = beatManager.Drop.Active;
         if (dropActive)
         {
-            // The landing belongs to the foreground ribbons: the rainbow field cuts out at the
-            // impact and floods back in as the ribbon window closes, so the palette colors riding
-            // the shapes are never out-shouted by an overdriven background.
-            float dropBackgroundBrightness =
-                dropBrightness * (1f - foregroundDropRibbonEnvelope);
             float dropHueOffset = effectTime * dropHueRate;
             for (int i = 0; i < buffer.Length; i++)
             {
                 float phase = Mathf.Repeat(i * dropTileHueStep + dropHueOffset, 1f);
-                buffer[i] = Color.HSVToRGB(phase, 1f, dropBackgroundBrightness);
+                buffer[i] = Color.HSVToRGB(phase, 1f, dropBrightness);
             }
         }
         else
@@ -390,24 +385,6 @@ public class AnimateShapes : EffectBase
                     (groupPosition +
                     circleTilePositionStep * group.PackedIndex(j) +
                     positionShift) % 1f;
-                if (ribbonActive)
-                {
-                    float ribbonPalettePosition = Mathf.Repeat(
-                        shape.GetPosition(idx) + foregroundDropRibbonFlowPhase,
-                        1f);
-                    float shortestHueDelta = Mathf.Repeat(
-                        ribbonPalettePosition - palettePosition + 0.5f,
-                        1f) - 0.5f;
-
-                    // Each shape maps the whole conditioned palette along its path, exactly as
-                    // Angles maps it along a Line Ribbon. Mix in cyclic palette-coordinate space
-                    // before the one lookup so every Drop frame stays on the palette while it
-                    // slides back to the crawl.
-                    palettePosition = Mathf.Repeat(
-                        palettePosition +
-                        (shortestHueDelta * foregroundDropRibbonEnvelope),
-                        1f);
-                }
                 Color paletteColor = conditionedPalette.ReadCyclic(
                     palettePosition,
                     doblend: true);
@@ -420,6 +397,21 @@ public class AnimateShapes : EffectBase
                     Color.RGBToHSV(paletteColor, out _, out _, out float value);
                     value = Mathf.Lerp(value, 1f, fillBrightnessLift);
                     paletteColor = new Color(value, value, value, paletteColor.a);
+                }
+                if (ribbonActive)
+                {
+                    // The Drop response paints the full hue wheel once along each Circle and Arc
+                    // and flows it at the authored cycles per beat. The shared palette plays no
+                    // part in the ribbon color, so no palette pick can mute the landing; the
+                    // envelope dissolves the rainbow back into the palette crawl as the window
+                    // closes. The Drop background is untouched by this response.
+                    float ribbonHue = Mathf.Repeat(
+                        shape.GetPosition(idx) + foregroundDropRibbonFlowPhase,
+                        1f);
+                    paletteColor = Color.Lerp(
+                        paletteColor,
+                        Color.HSVToRGB(ribbonHue, 1f, 1f),
+                        foregroundDropRibbonEnvelope);
                 }
                 buffer[idx] = paletteColor;
             }
@@ -548,9 +540,9 @@ public sealed class AnimateShapesSyncSettings
     public int ForegroundDropRibbonWindowBeats;
 
     /// <summary>
-    /// Live foreground Drop ribbon flow at the landing, in palette cycles per beat. One cycle per beat
-    /// is the authored impact speed; Energy does not rescale it. Each shape carries the complete
-    /// conditioned palette once along its path, exactly as Angles carries it along a Line Ribbon.
+    /// Live foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. One cycle per
+    /// beat is the authored impact speed; Energy does not rescale it. Each shape carries the full
+    /// rainbow once along its path; the shared palette plays no part in the ribbon color.
     /// </summary>
     public float ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
 
