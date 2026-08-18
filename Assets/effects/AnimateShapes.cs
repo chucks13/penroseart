@@ -392,7 +392,7 @@ public class AnimateShapes : EffectBase
                 if (foregroundDropRibbonEnvelope > 0f)
                 {
                     float ribbonPalettePosition = Mathf.Repeat(
-                        ((float)group.PackedIndex(j) / group.TileCount) +
+                        shape.GetPosition(idx) +
                         foregroundDropRibbonFlowPhase,
                         1f);
                     float shortestHueDelta = Mathf.Repeat(
