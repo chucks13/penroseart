@@ -40,10 +40,16 @@ public class AnimateShapes : EffectBase
     private const float StandaloneCircleTilePositionStep = 0.01f;
 
     /// <summary>
-    /// Authored per-frame palette-position advance for each Circle or Arc's stored position,
-    /// preserving the approved frame-driven Standalone crawl.
+    /// Authored palette-position advance per second for each Circle or Arc's stored position.
+    /// The 0.6 rate preserves the approved 0.01-per-frame crawl at the 60 fps reference rate.
     /// </summary>
-    private const float StandaloneCirclePositionAdvance = 0.01f;
+    private const float StandaloneCirclePositionAdvancePerSecond = 0.6f;
+
+    /// <summary>
+    /// Authored Circle or Arc group reseeds per second. Sixty preserves the approved one-reseed-per-frame
+    /// cadence at the 60 fps reference rate.
+    /// </summary>
+    private const float StandaloneGroupReseedsPerSecond = 60f;
 
     /// <summary>Authored inclusive lower bound of the Standalone distortion-mode roll; 1 selects Color.</summary>
     private const int StandaloneDistortionModeMinInclusive = 1;
@@ -77,8 +83,17 @@ public class AnimateShapes : EffectBase
     /// <summary>Authored Synced Mode counterpart to the cyclic palette-position step between Tiles.</summary>
     private const float SyncCircleTilePositionStep = 0.01f;
 
-    /// <summary>Authored Synced Mode counterpart to each Circle or Arc's per-frame palette-position advance.</summary>
-    private const float SyncCirclePositionAdvance = 0.01f;
+    /// <summary>
+    /// Authored Synced Mode palette-position advance per second. The 0.6 rate preserves the approved
+    /// 0.01-per-frame crawl at the 60 fps reference rate.
+    /// </summary>
+    private const float SyncCirclePositionAdvancePerSecond = 0.6f;
+
+    /// <summary>
+    /// Authored Synced Mode Circle or Arc group reseeds per second. Sixty preserves the approved
+    /// one-reseed-per-frame cadence at the 60 fps reference rate.
+    /// </summary>
+    private const float SyncGroupReseedsPerSecond = 60f;
 
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
@@ -127,7 +142,8 @@ public class AnimateShapes : EffectBase
         BackgroundHueRate = StandaloneBackgroundHueRate,
         PaletteConditioning = StandalonePaletteConditioning,
         CircleTilePositionStep = StandaloneCircleTilePositionStep,
-        CirclePositionAdvance = StandaloneCirclePositionAdvance,
+        CirclePositionAdvancePerSecond = StandaloneCirclePositionAdvancePerSecond,
+        GroupReseedsPerSecond = StandaloneGroupReseedsPerSecond,
         DistortionMode = new IntRange(
             StandaloneDistortionModeMinInclusive,
             StandaloneDistortionModeMaxExclusive),
@@ -139,7 +155,8 @@ public class AnimateShapes : EffectBase
         BackgroundHueRate = SyncBackgroundHueRate,
         PaletteConditioning = SyncPaletteConditioning,
         CircleTilePositionStep = SyncCircleTilePositionStep,
-        CirclePositionAdvance = SyncCirclePositionAdvance,
+        CirclePositionAdvancePerSecond = SyncCirclePositionAdvancePerSecond,
+        GroupReseedsPerSecond = SyncGroupReseedsPerSecond,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -166,6 +183,9 @@ public class AnimateShapes : EffectBase
 
     /// <summary>Per-group cyclic palette positions advanced across the packed Circle and Arc data.</summary>
     private float[] positions;
+
+    /// <summary>Fractional Circle or Arc group reseeds carried between frames.</summary>
+    private float groupReseedAccumulator;
 
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
@@ -216,6 +236,7 @@ public class AnimateShapes : EffectBase
         {
             positions[i] = Random.value;
         }
+        groupReseedAccumulator = 0f;
         background = Random.value;
     }
 
@@ -236,9 +257,12 @@ public class AnimateShapes : EffectBase
         float circleTilePositionStep = isSynced
             ? SyncSettings.CircleTilePositionStep
             : standaloneSettings.CircleTilePositionStep;
-        float circlePositionAdvance = isSynced
-            ? SyncSettings.CirclePositionAdvance
-            : standaloneSettings.CirclePositionAdvance;
+        float circlePositionAdvancePerSecond = isSynced
+            ? SyncSettings.CirclePositionAdvancePerSecond
+            : standaloneSettings.CirclePositionAdvancePerSecond;
+        float groupReseedsPerSecond = isSynced
+            ? SyncSettings.GroupReseedsPerSecond
+            : standaloneSettings.GroupReseedsPerSecond;
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
@@ -260,7 +284,12 @@ public class AnimateShapes : EffectBase
             sampleTime = effectTime + (SyncSettings.TimeWarpSeconds * rhythm);
 
         float beatOffset = sampleTime - effectTime;
-        positions[Random.Range(0, groupCount)] = Random.value;
+        groupReseedAccumulator += groupReseedsPerSecond * effectDelta;
+        while (groupReseedAccumulator >= 1f)
+        {
+            positions[Random.Range(0, groupCount)] = Random.value;
+            groupReseedAccumulator -= 1f;
+        }
         background += effectDelta * backgroundHueRate;
         background %= 1f;
         bool dropActive = beatManager.Drop.Active;
@@ -311,7 +340,7 @@ public class AnimateShapes : EffectBase
                 }
                 buffer[idx] = paletteColor;
             }
-            positions[i] = (groupPosition + circlePositionAdvance) % 1f;
+            positions[i] = (groupPosition + circlePositionAdvancePerSecond * effectDelta) % 1f;
         }
     }
 
@@ -333,8 +362,11 @@ public sealed class AnimateShapesStandaloneSettings
     /// <summary>Cyclic palette-position step between Tiles within each packed Circle or Arc.</summary>
     public float CircleTilePositionStep;
 
-    /// <summary>Per-frame palette-position advance for each packed Circle or Arc's stored position.</summary>
-    public float CirclePositionAdvance;
+    /// <summary>Palette-position advance per second for each packed Circle or Arc's stored position.</summary>
+    public float CirclePositionAdvancePerSecond;
+
+    /// <summary>Circle or Arc group positions reseeded per second.</summary>
+    public float GroupReseedsPerSecond;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -350,7 +382,8 @@ public sealed class AnimateShapesStandaloneSettings
         BackgroundHueRate = source.BackgroundHueRate;
         PaletteConditioning = source.PaletteConditioning;
         CircleTilePositionStep = source.CircleTilePositionStep;
-        CirclePositionAdvance = source.CirclePositionAdvance;
+        CirclePositionAdvancePerSecond = source.CirclePositionAdvancePerSecond;
+        GroupReseedsPerSecond = source.GroupReseedsPerSecond;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
@@ -372,8 +405,11 @@ public sealed class AnimateShapesSyncSettings
     /// <summary>Live Synced Mode cyclic palette-position step between Tiles within each packed Circle or Arc.</summary>
     public float CircleTilePositionStep;
 
-    /// <summary>Live Synced Mode per-frame palette-position advance for each packed Circle or Arc.</summary>
-    public float CirclePositionAdvance;
+    /// <summary>Live Synced Mode palette-position advance per second for each packed Circle or Arc.</summary>
+    public float CirclePositionAdvancePerSecond;
+
+    /// <summary>Live Synced Mode Circle or Arc group positions reseeded per second.</summary>
+    public float GroupReseedsPerSecond;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -410,7 +446,8 @@ public sealed class AnimateShapesSyncSettings
         BackgroundHueRate = source.BackgroundHueRate;
         PaletteConditioning = source.PaletteConditioning;
         CircleTilePositionStep = source.CircleTilePositionStep;
-        CirclePositionAdvance = source.CirclePositionAdvance;
+        CirclePositionAdvancePerSecond = source.CirclePositionAdvancePerSecond;
+        GroupReseedsPerSecond = source.GroupReseedsPerSecond;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,

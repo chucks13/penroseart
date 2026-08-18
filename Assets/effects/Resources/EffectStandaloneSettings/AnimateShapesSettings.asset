@@ -25,7 +25,8 @@ MonoBehaviour:
       DuplicateThreshold: 0.08
       HueRedistribution: 1
     CircleTilePositionStep: 0.01
-    CirclePositionAdvance: 0.01
+    CirclePositionAdvancePerSecond: 0.6
+    GroupReseedsPerSecond: 60
     DistortionMode:
       MinInclusive: 1
       MaxExclusive: 3
