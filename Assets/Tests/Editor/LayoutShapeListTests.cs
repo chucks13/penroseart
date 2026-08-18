@@ -53,7 +53,7 @@ public class LayoutShapeListTests
     {
         LayoutData.ShapeList shapes = layout.shapes;
 
-        Assert.AreEqual(73, shapes.Rings.GroupCount, "Rings");
+        Assert.AreEqual(73, shapes.Circles.GroupCount, "Circles");
         Assert.AreEqual(45, shapes.Stars.GroupCount, "Stars");
         Assert.AreEqual(7, shapes.Lines0.GroupCount, "Lines0");
         Assert.AreEqual(15, shapes.Lines1.GroupCount, "Lines1");
@@ -192,39 +192,39 @@ public class LayoutShapeListTests
     }
 
     /// <summary>
-    /// Scenario: the Rings Shape List is read as ordered neighboring fat-Tile paths.
-    /// Asserts every packed path and the shared closed-Ring versus wall-clipped-Arc classification,
+    /// Scenario: the Circles Shape List is read as ordered neighboring fat-Tile paths.
+    /// Asserts every packed path and the shared closed-Circle versus wall-clipped-Arc classification,
     /// including the corresponding normalized traversal positions.
     /// </summary>
     [Test]
-    public void RingsExposePackedPathsClosureAndPositions()
+    public void CirclesExposePackedPathsClosureAndPositions()
     {
-        LayoutData.ShapeList.Reader rings = layout.shapes.Rings;
-        for (int groupIndex = 0; groupIndex < rings.GroupCount; groupIndex++)
+        LayoutData.ShapeList.Reader circles = layout.shapes.Circles;
+        for (int groupIndex = 0; groupIndex < circles.GroupCount; groupIndex++)
         {
-            LayoutData.ShapeList.Group group = rings.GetGroup(groupIndex);
+            LayoutData.ShapeList.Group group = circles.GetGroup(groupIndex);
             for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
             {
                 int tile = group[tileIndex];
-                Assert.AreEqual(0, penrose.tiles[tile].type, $"Rings group {groupIndex} Tile {tile} type");
+                Assert.AreEqual(0, penrose.tiles[tile].type, $"Circles group {groupIndex} Tile {tile} type");
                 if (tileIndex > 0)
                 {
                     Assert.IsTrue(
                         AreNeighbors(group[tileIndex - 1], tile),
-                        $"Rings group {groupIndex} path edge {tileIndex - 1}");
+                        $"Circles group {groupIndex} path edge {tileIndex - 1}");
                 }
             }
 
             bool expectedClosed = group.TileCount > 2 && AreNeighbors(group[group.TileCount - 1], group[0]);
-            Assert.AreEqual(expectedClosed, rings.IsClosed(groupIndex), $"Rings group {groupIndex} closure");
+            Assert.AreEqual(expectedClosed, circles.IsClosed(groupIndex), $"Circles group {groupIndex} closure");
             float denominator = expectedClosed ? group.TileCount : group.TileCount - 1;
             for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
             {
                 float expectedPosition = denominator > 0f ? tileIndex / denominator : 0f;
                 Assert.AreEqual(
                     expectedPosition,
-                    rings.GetPosition(group[tileIndex]),
-                    $"Rings group {groupIndex} position {tileIndex}");
+                    circles.GetPosition(group[tileIndex]),
+                    $"Circles group {groupIndex} position {tileIndex}");
             }
         }
     }
@@ -314,7 +314,7 @@ public class LayoutShapeListTests
         LayoutData.ShapeList shapes = layout.shapes;
         return new[]
         {
-            shapes.Rings,
+            shapes.Circles,
             shapes.Stars,
             shapes.Lines0,
             shapes.Lines1,

@@ -28,7 +28,7 @@ _Avoid_: a radial wedge; using "section" for song structure — that is a Phrase
 
 **Edge-and-Seam Distance**:
 The number of Neighbor steps from a Tile to the nearest outer wall edge or boundary between Sections. Tiles on either seed boundary have distance zero.
-_Avoid_: Ring — the values are not concentric; Radius — that is geometric distance from the wall's origin.
+_Avoid_: Circle — the values are not concentric; Radius — that is geometric distance from the wall's origin.
 
 **Rhomb Type**:
 The wall's two Penrose Tile geometries: fat rhombs with angles near 72/108 degrees and thin rhombs with angles near 36/144 degrees.
@@ -43,7 +43,7 @@ A named collection of Tile groups that traces repeated geometric motifs or symme
 _Avoid_: a Buffer; assuming every Shape List group is a closed path or has the same number of Tiles.
 
 **Motif**:
-One Shape List group considered as a single figure on the wall — a Star, a Starball, a Lotusball, a Ring, an Arc, or a Line Ribbon. The word names the figure a viewer sees, whether or not anything is currently lighting it.
+One Shape List group considered as a single figure on the wall — a Star, a Starball, a Lotusball, a Circle, an Arc, or a Line Ribbon. The word names the figure a viewer sees, whether or not anything is currently lighting it.
 _Avoid_: the Shape List itself, which is the whole collection; assuming a Motif is closed, or that every Motif in one Shape List holds the same number of Tiles.
 
 **Part**:
@@ -55,16 +55,16 @@ The Tiles that border a Motif without belonging to it, lit so the Motif reads as
 _Avoid_: an outline drawn in darkness — a Contour is a colour against a colour; the Motif's own Tiles; treating one Effect's claim resolution as canonical.
 
 **Star**:
-A closed cycle of five neighboring fat Tiles. It has three lives on the wall: a Motif in its own Shape List, the Core Part of every Starball, and the smallest Ring.
+A closed cycle of five neighboring fat Tiles. It has three lives on the wall: a Motif in its own Shape List, the Core Part of every Starball, and the smallest Circle.
 _Avoid_: Starball — that is the larger compound motif around a Star.
 
-**Ring**:
-A closed circuit of neighboring fat Tiles. A Star is the smallest Ring.
-_Avoid_: Loop — that term is musical; Arc — that is the wall-clipped open form.
+**Circle**:
+A closed circuit of neighboring fat Tiles. A Star is the smallest Circle.
+_Avoid_: Loop — that term is musical; Ring — an Effect's own radial banding (Tunnel, Vortex), not this Motif; Arc — that is the wall-clipped open form.
 
 **Arc**:
-An open chain of neighboring fat Tiles formed where the wall boundary clips a Ring.
-_Avoid_: Line Ribbon — that is a separate open-chain Motif family; Ring — that is closed.
+An open chain of neighboring fat Tiles formed where the wall boundary clips a Circle.
+_Avoid_: Line Ribbon — that is a separate open-chain Motif family; Circle — that is closed.
 
 **Starball**:
 A ten-Tile compound motif in which five fat Tiles form a Star and five thin Tiles surround it.
@@ -80,7 +80,7 @@ _Avoid_: a Tile's coordinate center; a Motif's centroid — both are geometry, n
 
 **Line Ribbon**:
 An ordered open chain of neighboring Tiles that runs across the wall, possibly shortened where it meets the wall edge.
-_Avoid_: Loop — that term is musical; Arc — that is the wall-clipped form of a Ring; a closed Star or other Shape List motif.
+_Avoid_: Loop — that term is musical; Arc — that is the wall-clipped form of a Circle; a closed Star or other Shape List motif.
 
 **Performer**:
 The umbrella for anything that can be put on the wall — an Effect, Transition, or Mixer — seen as something called on stage rather than as a class. The Director casts Performers; the Switcher moves them on and off. **Everything else in the system exists to serve Performers**: modules inform them, and never restrict or command them.

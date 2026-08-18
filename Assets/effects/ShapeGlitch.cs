@@ -253,7 +253,7 @@ public class ShapeGlitch : MixerBase
                 shape = penrose.Layout.shapes.Lines3;
                 break;
             case 4:
-                shape = penrose.Layout.shapes.Rings;
+                shape = penrose.Layout.shapes.Circles;
                 break;
             case 5:
                 shape = penrose.Layout.shapes.Lotusballs;

@@ -1685,62 +1685,62 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// AnimateLoops Standalone Defaults resolve as fresh, mutually independent copies without
+    /// Circles Standalone Defaults resolve as fresh, mutually independent copies without
     /// pinning authored tuning values that are judged on the wall.
     /// </summary>
     [Test]
-    public void AnimateLoopsStandaloneDefaultsResolveAsIndependentCopies()
+    public void CirclesStandaloneDefaultsResolveAsIndependentCopies()
     {
-        var first = AnimateLoops.StandaloneDefaults;
-        var second = AnimateLoops.StandaloneDefaults;
+        var first = Circles.StandaloneDefaults;
+        var second = Circles.StandaloneDefaults;
 
         Assert.That(first, Is.Not.SameAs(second));
         Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
-        Assert.That(first.RingTileHueStep, Is.EqualTo(second.RingTileHueStep));
-        Assert.That(first.RingHueAdvance, Is.EqualTo(second.RingHueAdvance));
+        Assert.That(first.CircleTileHueStep, Is.EqualTo(second.CircleTileHueStep));
+        Assert.That(first.CircleHueAdvance, Is.EqualTo(second.CircleHueAdvance));
         Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
         AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
     }
 
     /// <summary>
-    /// Restore replaces every edited AnimateLoops Standalone Setting and distortion-mode Rail with
+    /// Restore replaces every edited Circles Standalone Setting and distortion-mode Rail with
     /// the current file-local Standalone Defaults.
     /// </summary>
     [Test]
-    public void RestoreStandaloneDefaultsCopiesEveryAnimateLoopsValue()
+    public void RestoreStandaloneDefaultsCopiesEveryCirclesValue()
     {
-        var asset = (AnimateLoopsStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
-            typeof(AnimateLoops),
+        var asset = (CirclesStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(Circles),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.RingTileHueStep = 18f;
-        asset.Settings.RingHueAdvance = 19f;
+        asset.Settings.CircleTileHueStep = 18f;
+        asset.Settings.CircleHueAdvance = 19f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
-            typeof(AnimateLoops),
+            typeof(Circles),
             TempAssetFolder);
 
-        var defaults = AnimateLoops.StandaloneDefaults;
+        var defaults = Circles.StandaloneDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        Assert.That(asset.Settings.RingTileHueStep, Is.EqualTo(defaults.RingTileHueStep));
-        Assert.That(asset.Settings.RingHueAdvance, Is.EqualTo(defaults.RingHueAdvance));
+        Assert.That(asset.Settings.CircleTileHueStep, Is.EqualTo(defaults.CircleTileHueStep));
+        Assert.That(asset.Settings.CircleHueAdvance, Is.EqualTo(defaults.CircleHueAdvance));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
     }
 
     /// <summary>
-    /// Restore replaces every edited AnimateLoops Sync Setting and distortion-mode Rail with the
+    /// Restore replaces every edited Circles Sync Setting and distortion-mode Rail with the
     /// current file-local Sync Defaults.
     /// </summary>
     [Test]
-    public void RestoreSyncDefaultsCopiesEveryAnimateLoopsValue()
+    public void RestoreSyncDefaultsCopiesEveryCirclesValue()
     {
-        var asset = (AnimateLoopsSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
-            typeof(AnimateLoops),
+        var asset = (CirclesSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(Circles),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.RingTileHueStep = 18f;
-        asset.Settings.RingHueAdvance = 19f;
+        asset.Settings.CircleTileHueStep = 18f;
+        asset.Settings.CircleHueAdvance = 19f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpSeconds = 24f;
@@ -1750,12 +1750,12 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropBrightness = 28f;
         asset.Settings.FillBlackAndWhiteProbability = 0.29f;
 
-        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateLoops), TempAssetFolder);
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Circles), TempAssetFolder);
 
-        var defaults = AnimateLoops.SyncDefaults;
+        var defaults = Circles.SyncDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        Assert.That(asset.Settings.RingTileHueStep, Is.EqualTo(defaults.RingTileHueStep));
-        Assert.That(asset.Settings.RingHueAdvance, Is.EqualTo(defaults.RingHueAdvance));
+        Assert.That(asset.Settings.CircleTileHueStep, Is.EqualTo(defaults.CircleTileHueStep));
+        Assert.That(asset.Settings.CircleHueAdvance, Is.EqualTo(defaults.CircleHueAdvance));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));

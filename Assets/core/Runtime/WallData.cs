@@ -97,7 +97,7 @@ public class LayoutData
     [Serializable]
     public class ShapeList
     {
-        /// <summary>Packed Ring and Arc group data populated from the layout's <c>loops</c> JSON field.</summary>
+        /// <summary>Packed Circle and Arc group data populated from the layout's <c>loops</c> JSON field.</summary>
         [SerializeField] private int[] loops;
 
         /// <summary>Packed star group data populated from the layout's <c>stars</c> JSON field.</summary>
@@ -127,8 +127,8 @@ public class LayoutData
         /// <summary>Packed variable-size mirror group data populated from the layout's <c>mirror10</c> JSON field.</summary>
         [SerializeField] private int[] mirror10;
 
-        /// <summary>Facts derived from the Rings Shape List during layout loading.</summary>
-        private DerivedFacts ringsFacts;
+        /// <summary>Facts derived from the Circles Shape List during layout loading.</summary>
+        private DerivedFacts circlesFacts;
 
         /// <summary>Facts derived from the Stars Shape List during layout loading.</summary>
         private DerivedFacts starsFacts;
@@ -195,12 +195,12 @@ public class LayoutData
             /// <summary>The packed order is an open Line Ribbon.</summary>
             Ribbon,
 
-            /// <summary>The packed order is a closed Ring or wall-clipped Arc.</summary>
-            Ring,
+            /// <summary>The packed order is a closed Circle or wall-clipped Arc.</summary>
+            Circle,
         }
 
-        /// <summary>Allocation-free access to the Ring and Arc groups stored in the serialized <c>loops</c> field.</summary>
-        public Reader Rings => new(loops, ringsFacts);
+        /// <summary>Allocation-free access to the Circle and Arc groups stored in the serialized <c>loops</c> field.</summary>
+        public Reader Circles => new(loops, circlesFacts);
 
         /// <summary>Allocation-free access to the star Shape List groups.</summary>
         public Reader Stars => new(stars, starsFacts);
@@ -239,8 +239,8 @@ public class LayoutData
             var tileScratch = new int[tiles.Length];
             int nextStamp = 0;
 
-            ringsFacts = DeriveFacts(
-                loops, tiles, RoleKind.None, PathKind.Ring, stampByTile, tileScratch, ref nextStamp);
+            circlesFacts = DeriveFacts(
+                loops, tiles, RoleKind.None, PathKind.Circle, stampByTile, tileScratch, ref nextStamp);
             starsFacts = DeriveFacts(
                 stars, tiles, RoleKind.None, PathKind.None, stampByTile, tileScratch, ref nextStamp);
             lines0Facts = DeriveFacts(
@@ -352,13 +352,13 @@ public class LayoutData
                 contourByGroup);
         }
 
-        /// <summary>Derives the promoted packed-order position and Rings-family closure fact for one group.</summary>
+        /// <summary>Derives the promoted packed-order position and Circles-family closure fact for one group.</summary>
         /// <param name="group">The group's deduplicated packed-order Tiles.</param>
         /// <param name="tiles">The effect-facing Tiles carrying Neighbors.</param>
         /// <param name="groupIndex">The group index receiving the derived closure fact.</param>
         /// <param name="pathKind">The path convention carried by this Shape List.</param>
         /// <param name="positionByTile">The per-Tile position array receiving normalized traversal positions.</param>
-        /// <param name="closedByGroup">The per-group closure array receiving Ring/Arc classification.</param>
+        /// <param name="closedByGroup">The per-group closure array receiving Circle/Arc classification.</param>
         private static void DerivePathFacts(
             int[] group,
             Penrose.TileData[] tiles,
@@ -372,11 +372,11 @@ public class LayoutData
                 return;
             }
 
-            bool isClosedRing = pathKind == PathKind.Ring
+            bool isClosedCircle = pathKind == PathKind.Circle
                 && group.Length > 2
                 && AreNeighbors(tiles, group[group.Length - 1], group[0]);
-            closedByGroup[groupIndex] = isClosedRing;
-            float denominator = isClosedRing ? group.Length : group.Length - 1;
+            closedByGroup[groupIndex] = isClosedCircle;
+            float denominator = isClosedCircle ? group.Length : group.Length - 1;
             for (int pathIndex = 0; pathIndex < group.Length; pathIndex++)
             {
                 positionByTile[group[pathIndex]] = denominator > 0f
@@ -549,10 +549,10 @@ public class LayoutData
             /// <summary>Creates one immutable bundle of derived Shape List arrays.</summary>
             /// <param name="groupByTile">Per-Tile group membership, or -1.</param>
             /// <param name="partByTile">Per-Tile finest named Part role.</param>
-            /// <param name="positionByTile">Per-Tile Ribbon or Ring position, or -1.</param>
+            /// <param name="positionByTile">Per-Tile Ribbon or Circle position, or -1.</param>
             /// <param name="centerByGroup">Per-group Lotusball Center Tile, or -1.</param>
             /// <param name="centroidByGroup">Per-group centroid in effect-layout coordinates.</param>
-            /// <param name="closedByGroup">Per-group closed Ring fact.</param>
+            /// <param name="closedByGroup">Per-group closed Circle fact.</param>
             /// <param name="contourByGroup">Per-group Contour Tiles.</param>
             public DerivedFacts(
                 int[] groupByTile,
@@ -578,7 +578,7 @@ public class LayoutData
             /// <summary>Per-Tile finest named Part role.</summary>
             public PartRole[] PartByTile { get; }
 
-            /// <summary>Per-Tile Ribbon or Ring position, or -1.</summary>
+            /// <summary>Per-Tile Ribbon or Circle position, or -1.</summary>
             public float[] PositionByTile { get; }
 
             /// <summary>Per-group Lotusball Center Tile, or -1.</summary>
@@ -587,7 +587,7 @@ public class LayoutData
             /// <summary>Per-group centroid in effect-layout coordinates.</summary>
             public Vector2[] CentroidByGroup { get; }
 
-            /// <summary>Per-group closed Ring fact.</summary>
+            /// <summary>Per-group closed Circle fact.</summary>
             public bool[] ClosedByGroup { get; }
 
             /// <summary>Per-group Contour Tiles.</summary>
@@ -655,14 +655,14 @@ public class LayoutData
                 return new Group(contour, 0, contour.Length);
             }
 
-            /// <summary>Returns one Tile's normalized position along its Line Ribbon, Ring, or Arc.</summary>
+            /// <summary>Returns one Tile's normalized position along its Line Ribbon, Circle, or Arc.</summary>
             /// <param name="tileIndex">The direct wall Tile index.</param>
             /// <returns>The deduplicated packed-order position, or -1 when this list carries no position for the Tile.</returns>
             public float GetPosition(int tileIndex) => facts.PositionByTile[tileIndex];
 
-            /// <summary>Reports whether one Rings-list group is a closed Ring rather than a wall-clipped Arc.</summary>
+            /// <summary>Reports whether one Circles-list group is a closed Circle rather than a wall-clipped Arc.</summary>
             /// <param name="groupIndex">The zero-based group index.</param>
-            /// <returns><c>true</c> for a closed Ring; <c>false</c> for an Arc or a non-Rings motif.</returns>
+            /// <returns><c>true</c> for a closed Circle; <c>false</c> for an Arc or a non-Circles motif.</returns>
             public bool IsClosed(int groupIndex) => facts.ClosedByGroup[groupIndex];
         }
 

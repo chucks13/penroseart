@@ -86,7 +86,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | Effect | Role |
 | --- | --- |
 | `Angles` | Tile-angle hue sweep where energy sets directional brightness depth and beat phase moves a hue front without changing brightness. |
-| `AnimateLoops` | Animated packed shape-loop coloring over a background. |
+| `Circles` | Animated packed Circle and Arc coloring over a background. |
 | `ColorSparkle` | Fading sparkle field over persistent buffer trails. |
 | `Flock` | Boid simulation projected to tile positions. |
 | `Julia` | Julia fractal evaluated directly at each Penrose tile center. |

@@ -243,7 +243,7 @@ Every one of the 3,446 directed neighbor entries has a reciprocal entry and corr
 
 ### Packed Shape Lists
 
-Several Effects use the ten packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateLoops`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Each named accessor, such as `penrose.Layout.shapes.Rings`, returns an allocation-free `LayoutData.ShapeList.Reader` over both the packed groups and their shared load-derived geometry facts; the packed arrays are private serialization details. Every list uses the same encoding:
+Several Effects use the ten packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `Circles`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Each named accessor, such as `penrose.Layout.shapes.Circles`, returns an allocation-free `LayoutData.ShapeList.Reader` over both the packed groups and their shared load-derived geometry facts; the packed arrays are private serialization details. Every list uses the same encoding:
 
 ```text
 shape[0]                         = group count N
@@ -256,7 +256,7 @@ The first value is the number of groups, not the number of tile indexes. The poi
 
 | Shape List | Groups | Observed current-layout property |
 | --- | ---: | --- |
-| `Rings` | 73 | Closed Rings and wall-clipped open Arcs; serialized as `loops` by the data-file contract. |
+| `Circles` | 73 | Closed Circles and wall-clipped open Arcs; serialized as `loops` by the data-file contract. |
 | `Stars` | 45 | Every group is exactly five tiles, forms a closed adjacency cycle, and contains only fat rhombs. |
 | `Lines0` | 7 | Line Ribbon family. |
 | `Lines1` | 15 | Line Ribbon family. |

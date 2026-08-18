@@ -4,22 +4,22 @@ using Random = UnityEngine.Random;
 
 
 /// <summary>
-/// Animates packed Penrose Ring and Arc groups over a background color.
+/// Animates packed Penrose Circle and Arc groups over a background color.
 /// </summary>
-[EffectSyncSettings(typeof(AnimateLoopsSyncSettingsAsset))]
-[EffectStandaloneSettings(typeof(AnimateLoopsStandaloneSettingsAsset))]
-public class AnimateLoops : EffectBase
+[EffectSyncSettings(typeof(CirclesSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(CirclesStandaloneSettingsAsset))]
+public class Circles : EffectBase
 {
     // Standalone Defaults
 
     /// <summary>Authored background hue advance per second for the unchanged Standalone look.</summary>
     private const float StandaloneBackgroundHueRate = 0.1f;
 
-    /// <summary>Authored hue step between Tiles within each packed Ring or Arc for the unchanged Standalone look.</summary>
-    private const float StandaloneRingTileHueStep = 0.01f;
+    /// <summary>Authored hue step between Tiles within each packed Circle or Arc for the unchanged Standalone look.</summary>
+    private const float StandaloneCircleTileHueStep = 0.01f;
 
-    /// <summary>Authored per-frame hue advance for each Ring or Arc's stored color in the unchanged Standalone look.</summary>
-    private const float StandaloneRingHueAdvance = 0.01f;
+    /// <summary>Authored per-frame hue advance for each Circle or Arc's stored color in the unchanged Standalone look.</summary>
+    private const float StandaloneCircleHueAdvance = 0.01f;
 
     /// <summary>Authored inclusive lower bound of the Standalone distortion-mode roll; 1 selects Color.</summary>
     private const int StandaloneDistortionModeMinInclusive = 1;
@@ -32,11 +32,11 @@ public class AnimateLoops : EffectBase
     /// <summary>Authored Synced Mode counterpart to the background hue advance used in Standalone Mode.</summary>
     private const float SyncBackgroundHueRate = 0.1f;
 
-    /// <summary>Authored Synced Mode counterpart to the hue step between Tiles within each packed Ring or Arc.</summary>
-    private const float SyncRingTileHueStep = 0.01f;
+    /// <summary>Authored Synced Mode counterpart to the hue step between Tiles within each packed Circle or Arc.</summary>
+    private const float SyncCircleTileHueStep = 0.01f;
 
-    /// <summary>Authored Synced Mode counterpart to each Ring or Arc's per-frame stored-color hue advance.</summary>
-    private const float SyncRingHueAdvance = 0.01f;
+    /// <summary>Authored Synced Mode counterpart to each Circle or Arc's per-frame stored-color hue advance.</summary>
+    private const float SyncCircleHueAdvance = 0.01f;
 
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
@@ -69,33 +69,33 @@ public class AnimateLoops : EffectBase
     /// <summary>Authored value supplied to the Drop background's HSV brightness slot.</summary>
     private const float SyncDropBrightness = 10f;
 
-    /// <summary>Probability that each Ring or Arc becomes black-and-white during an active Fill.</summary>
+    /// <summary>Probability that each Circle or Arc becomes black-and-white during an active Fill.</summary>
     private const float SyncFillBlackAndWhiteProbability = 0.125f;
 
-    /// <summary>AnimateLoops' looping motion suits Low/Mid-energy sections.</summary>
+    /// <summary>Circles' crawling motion suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     /// <summary>
-    /// Resolves a fresh copy so saved Standalone Settings cannot mutate AnimateLoops' authored
+    /// Resolves a fresh copy so saved Standalone Settings cannot mutate Circles' authored
     /// Standalone Defaults.
     /// </summary>
-    public static AnimateLoopsStandaloneSettings StandaloneDefaults => new()
+    public static CirclesStandaloneSettings StandaloneDefaults => new()
     {
         BackgroundHueRate = StandaloneBackgroundHueRate,
-        RingTileHueStep = StandaloneRingTileHueStep,
-        RingHueAdvance = StandaloneRingHueAdvance,
+        CircleTileHueStep = StandaloneCircleTileHueStep,
+        CircleHueAdvance = StandaloneCircleHueAdvance,
         DistortionMode = new IntRange(
             StandaloneDistortionModeMinInclusive,
             StandaloneDistortionModeMaxExclusive),
     };
 
-    /// <summary>Resolves a fresh copy of AnimateLoops' file-local Sync Defaults.</summary>
-    public static AnimateLoopsSyncSettings SyncDefaults => new()
+    /// <summary>Resolves a fresh copy of Circles' file-local Sync Defaults.</summary>
+    public static CirclesSyncSettings SyncDefaults => new()
     {
         BackgroundHueRate = SyncBackgroundHueRate,
-        RingTileHueStep = SyncRingTileHueStep,
-        RingHueAdvance = SyncRingHueAdvance,
+        CircleTileHueStep = SyncCircleTileHueStep,
+        CircleHueAdvance = SyncCircleHueAdvance,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -109,18 +109,18 @@ public class AnimateLoops : EffectBase
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
-    private AnimateLoopsStandaloneSettings standaloneSettings = StandaloneDefaults;
+    private CirclesStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
-    private AnimateLoopsSyncSettings SyncSettings { get; set; } = SyncDefaults;
+    private CirclesSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>Per-group colors advanced across the packed Ring and Arc data.</summary>
+    /// <summary>Per-group colors advanced across the packed Circle and Arc data.</summary>
     private Color[] colors;
 
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
 
-    /// <summary>Allocation-free access to the packed Ring and Arc groups supplied by the Penrose layout.</summary>
+    /// <summary>Allocation-free access to the packed Circle and Arc groups supplied by the Penrose layout.</summary>
     private LayoutData.ShapeList.Reader shape;
 
     /// <summary>The active packed-shape name shown in the debug readout.</summary>
@@ -144,20 +144,20 @@ public class AnimateLoops : EffectBase
     public override void OnStart()
     {
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
-            typeof(AnimateLoops),
+            typeof(Circles),
             StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
-            typeof(AnimateLoops),
+            typeof(Circles),
             SyncDefaults);
         waveform = waveforms.Random();
-        shape = penrose.Layout.shapes.Rings;
+        shape = penrose.Layout.shapes.Circles;
         IntRange distortionModeRange = beatManager.IsSynced
             ? SyncSettings.DistortionMode
             : standaloneSettings.DistortionMode;
         distortionMode = Random.Range(
             distortionModeRange.MinInclusive,
             distortionModeRange.MaxExclusive);
-        shapeName = "rings";
+        shapeName = "circles";
         colors = new Color[shape.GroupCount];
         for (int i = 0; i < shape.GroupCount; i++)
         {
@@ -181,11 +181,11 @@ public class AnimateLoops : EffectBase
             ? SyncSettings.BackgroundHueRate
             : standaloneSettings.BackgroundHueRate;
         float ringTileHueStep = isSynced
-            ? SyncSettings.RingTileHueStep
-            : standaloneSettings.RingTileHueStep;
+            ? SyncSettings.CircleTileHueStep
+            : standaloneSettings.CircleTileHueStep;
         float ringHueAdvance = isSynced
-            ? SyncSettings.RingHueAdvance
-            : standaloneSettings.RingHueAdvance;
+            ? SyncSettings.CircleHueAdvance
+            : standaloneSettings.CircleHueAdvance;
         float timeWarpHueScale = SyncSettings.TimeWarpHueScale;
         float dropTileHueStep = SyncSettings.DropTileHueStep;
         float dropHueRate = SyncSettings.DropHueRate;
@@ -252,26 +252,26 @@ public class AnimateLoops : EffectBase
 }
 
 /// <summary>
-/// The serializable value shape shared by AnimateLoops' fully populated Standalone Defaults and
+/// The serializable value shape shared by Circles' fully populated Standalone Defaults and
 /// saved Standalone Settings; Unity may create an empty instance before serialized values apply.
 /// </summary>
 [Serializable]
-public sealed class AnimateLoopsStandaloneSettings
+public sealed class CirclesStandaloneSettings
 {
     /// <summary>Background hue advance per second.</summary>
     public float BackgroundHueRate;
 
-    /// <summary>Hue step between Tiles within each packed Ring or Arc.</summary>
-    public float RingTileHueStep;
+    /// <summary>Hue step between Tiles within each packed Circle or Arc.</summary>
+    public float CircleTileHueStep;
 
-    /// <summary>Per-frame hue advance for each packed Ring or Arc's stored color.</summary>
-    public float RingHueAdvance;
+    /// <summary>Per-frame hue advance for each packed Circle or Arc's stored color.</summary>
+    public float CircleHueAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
 
-    /// <summary>Copies every AnimateLoops Standalone Setting, including distortion-mode Rails.</summary>
-    public void CopyFrom(AnimateLoopsStandaloneSettings source)
+    /// <summary>Copies every Circles Standalone Setting, including distortion-mode Rails.</summary>
+    public void CopyFrom(CirclesStandaloneSettings source)
     {
         if (source == null)
         {
@@ -279,8 +279,8 @@ public sealed class AnimateLoopsStandaloneSettings
         }
 
         BackgroundHueRate = source.BackgroundHueRate;
-        RingTileHueStep = source.RingTileHueStep;
-        RingHueAdvance = source.RingHueAdvance;
+        CircleTileHueStep = source.CircleTileHueStep;
+        CircleHueAdvance = source.CircleHueAdvance;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
@@ -289,18 +289,18 @@ public sealed class AnimateLoopsStandaloneSettings
     }
 }
 
-/// <summary>The saved-or-default musical-response settings used by AnimateLoops in Synced Mode.</summary>
+/// <summary>The saved-or-default musical-response settings used by Circles in Synced Mode.</summary>
 [Serializable]
-public sealed class AnimateLoopsSyncSettings
+public sealed class CirclesSyncSettings
 {
     /// <summary>Live Synced Mode background hue advance per second.</summary>
     public float BackgroundHueRate;
 
-    /// <summary>Live Synced Mode hue step between Tiles within each packed Ring or Arc.</summary>
-    public float RingTileHueStep;
+    /// <summary>Live Synced Mode hue step between Tiles within each packed Circle or Arc.</summary>
+    public float CircleTileHueStep;
 
-    /// <summary>Live Synced Mode per-frame hue advance for each packed Ring or Arc's stored color.</summary>
-    public float RingHueAdvance;
+    /// <summary>Live Synced Mode per-frame hue advance for each packed Circle or Arc's stored color.</summary>
+    public float CircleHueAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -323,11 +323,11 @@ public sealed class AnimateLoopsSyncSettings
     /// <summary>Value supplied to the Drop background's HSV brightness slot.</summary>
     [Min(0f)] public float DropBrightness;
 
-    /// <summary>Probability that each packed Ring or Arc becomes black-and-white during an active Fill.</summary>
+    /// <summary>Probability that each packed Circle or Arc becomes black-and-white during an active Fill.</summary>
     [Range(0f, 1f)] public float FillBlackAndWhiteProbability;
 
-    /// <summary>Copies every AnimateLoops Sync Setting from another value.</summary>
-    public void CopyFrom(AnimateLoopsSyncSettings source)
+    /// <summary>Copies every Circles Sync Setting from another value.</summary>
+    public void CopyFrom(CirclesSyncSettings source)
     {
         if (source == null)
         {
@@ -335,8 +335,8 @@ public sealed class AnimateLoopsSyncSettings
         }
 
         BackgroundHueRate = source.BackgroundHueRate;
-        RingTileHueStep = source.RingTileHueStep;
-        RingHueAdvance = source.RingHueAdvance;
+        CircleTileHueStep = source.CircleTileHueStep;
+        CircleHueAdvance = source.CircleHueAdvance;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,

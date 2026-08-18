@@ -31,7 +31,7 @@
 //            (tile count, tileIdx x tile count)].
 //            Pointers are indexes back into the same array. Decorative only:
 //            used by effects (TileShapes, ShapeGlitch, Petals, Mirror, Kscope,
-//            AnimateLoops, Lightning) to trace Rings, Arcs, Stars, and Line Ribbons on the wall.
+//            Circles, Lightning) to trace Circles, Arcs, Stars, and Line Ribbons on the wall.
 //
 // Derived runtime geometry (not stored as fields in this JSON):
 //   TileData.coarsePosition is a lossy integer bucket: 900 tiles occupy 846 distinct
