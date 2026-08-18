@@ -26,6 +26,11 @@ MonoBehaviour:
       HueRedistribution: 1
     CircleTilePositionStep: 0.01
     CirclePositionAdvancePerSecond: 0.6
+    EnergyCrawlSpeedMultiplier:
+      Min: 0.75
+      Max: 1.25
+      LowRail: 0.5
+      HighRail: 1.5
     GroupReseedsPerSecond: 60
     DistortionMode:
       MinInclusive: 1

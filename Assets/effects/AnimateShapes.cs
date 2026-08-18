@@ -90,6 +90,24 @@ public class AnimateShapes : EffectBase
     private const float SyncCirclePositionAdvancePerSecond = 0.6f;
 
     /// <summary>
+    /// Authored Low Energy multiplier for the foreground Circle and Arc crawl. The ruled 0.75 Low
+    /// and 1.25 High endpoints make Mid's midpoint exactly one, preserving the approved baseline speed.
+    /// </summary>
+    private const float SyncLowEnergyCrawlSpeedMultiplier = 0.75f;
+
+    /// <summary>
+    /// Authored High Energy multiplier for the foreground Circle and Arc crawl. The ruled 0.75 Low
+    /// and 1.25 High endpoints make Mid's midpoint exactly one, preserving the approved baseline speed.
+    /// </summary>
+    private const float SyncHighEnergyCrawlSpeedMultiplier = 1.25f;
+
+    /// <summary>Lower tuning Rail for exploring slower Energy-driven foreground crawl.</summary>
+    private const float SyncEnergyCrawlSpeedMultiplierLowRail = 0.5f;
+
+    /// <summary>Upper tuning Rail for exploring faster Energy-driven foreground crawl.</summary>
+    private const float SyncEnergyCrawlSpeedMultiplierHighRail = 1.5f;
+
+    /// <summary>
     /// Authored Synced Mode Circle or Arc group reseeds per second. Sixty preserves the approved
     /// one-reseed-per-frame cadence at the 60 fps reference rate.
     /// </summary>
@@ -156,6 +174,11 @@ public class AnimateShapes : EffectBase
         PaletteConditioning = SyncPaletteConditioning,
         CircleTilePositionStep = SyncCircleTilePositionStep,
         CirclePositionAdvancePerSecond = SyncCirclePositionAdvancePerSecond,
+        EnergyCrawlSpeedMultiplier = new FloatRange(
+            SyncLowEnergyCrawlSpeedMultiplier,
+            SyncHighEnergyCrawlSpeedMultiplier,
+            SyncEnergyCrawlSpeedMultiplierLowRail,
+            SyncEnergyCrawlSpeedMultiplierHighRail),
         GroupReseedsPerSecond = SyncGroupReseedsPerSecond,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
@@ -260,6 +283,8 @@ public class AnimateShapes : EffectBase
         float circlePositionAdvancePerSecond = isSynced
             ? SyncSettings.CirclePositionAdvancePerSecond
             : standaloneSettings.CirclePositionAdvancePerSecond;
+        float energyCrawlSpeedMultiplier = GetEnergyCrawlSpeedMultiplier(
+            beatManager.Energy.Level);
         float groupReseedsPerSecond = isSynced
             ? SyncSettings.GroupReseedsPerSecond
             : standaloneSettings.GroupReseedsPerSecond;
@@ -340,8 +365,37 @@ public class AnimateShapes : EffectBase
                 }
                 buffer[idx] = paletteColor;
             }
-            positions[i] = (groupPosition + circlePositionAdvancePerSecond * effectDelta) % 1f;
+            positions[i] = (groupPosition +
+                circlePositionAdvancePerSecond * energyCrawlSpeedMultiplier * effectDelta) % 1f;
         }
+    }
+
+    /// <summary>Maps the current Energy level to the authored foreground crawl-speed multiplier.</summary>
+    /// <param name="energy">Current track-relative Energy, or null while that classification rests.</param>
+    /// <returns>
+    /// The Low endpoint, the midpoint for Mid or unavailable Energy, or the High endpoint; exactly one
+    /// in Standalone Mode so its authored foreground crawl remains unchanged.
+    /// </returns>
+    private float GetEnergyCrawlSpeedMultiplier(Energy? energy)
+    {
+        if (!beatManager.IsSynced)
+        {
+            return 1f;
+        }
+
+        return (energy ?? Energy.Mid) switch
+        {
+            Energy.Low => SyncSettings.EnergyCrawlSpeedMultiplier.Min,
+            Energy.Mid => Mathf.Lerp(
+                SyncSettings.EnergyCrawlSpeedMultiplier.Min,
+                SyncSettings.EnergyCrawlSpeedMultiplier.Max,
+                0.5f),
+            Energy.High => SyncSettings.EnergyCrawlSpeedMultiplier.Max,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(energy),
+                energy,
+                "Unsupported Energy level."),
+        };
     }
 
 }
@@ -408,6 +462,12 @@ public sealed class AnimateShapesSyncSettings
     /// <summary>Live Synced Mode palette-position advance per second for each packed Circle or Arc.</summary>
     public float CirclePositionAdvancePerSecond;
 
+    /// <summary>
+    /// Low-to-High Energy range for foreground crawl speed. The ruled endpoints are 0.75 and 1.25;
+    /// Mid uses their midpoint of exactly one to preserve the approved baseline speed.
+    /// </summary>
+    public FloatRange EnergyCrawlSpeedMultiplier;
+
     /// <summary>Live Synced Mode Circle or Arc group positions reseeded per second.</summary>
     public float GroupReseedsPerSecond;
 
@@ -447,6 +507,11 @@ public sealed class AnimateShapesSyncSettings
         PaletteConditioning = source.PaletteConditioning;
         CircleTilePositionStep = source.CircleTilePositionStep;
         CirclePositionAdvancePerSecond = source.CirclePositionAdvancePerSecond;
+        EnergyCrawlSpeedMultiplier = new FloatRange(
+            source.EnergyCrawlSpeedMultiplier.Min,
+            source.EnergyCrawlSpeedMultiplier.Max,
+            source.EnergyCrawlSpeedMultiplier.LowRail,
+            source.EnergyCrawlSpeedMultiplier.HighRail);
         GroupReseedsPerSecond = source.GroupReseedsPerSecond;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,

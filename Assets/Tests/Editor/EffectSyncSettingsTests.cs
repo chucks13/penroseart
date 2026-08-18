@@ -1755,8 +1755,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited AnimateShapes Sync Setting and distortion-mode Rail with the
-    /// current file-local Sync Defaults.
+    /// Restore replaces every edited AnimateShapes Sync Setting, including Energy-crawl and
+    /// distortion-mode Rails, with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()
@@ -1778,6 +1778,7 @@ public sealed class EffectSyncSettingsTests
         };
         asset.Settings.CircleTilePositionStep = 18f;
         asset.Settings.CirclePositionAdvancePerSecond = 19f;
+        asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.GroupReseedsPerSecond = 19.5f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
@@ -1801,6 +1802,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.CirclePositionAdvancePerSecond,
             Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
+        AssertFloatRangeEqual(
+            asset.Settings.EnergyCrawlSpeedMultiplier,
+            defaults.EnergyCrawlSpeedMultiplier);
         Assert.That(
             asset.Settings.GroupReseedsPerSecond,
             Is.EqualTo(defaults.GroupReseedsPerSecond));
