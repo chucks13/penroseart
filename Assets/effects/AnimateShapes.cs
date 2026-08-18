@@ -108,6 +108,13 @@ public class AnimateShapes : EffectBase
     private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1f;
 
     /// <summary>
+    /// Authored Value supplied to the ribbon color's HSV brightness slot. One is the plain full
+    /// hue wheel; higher values overdrive the ribbons against the Drop background. Tune live at
+    /// the wall.
+    /// </summary>
+    private const float SyncForegroundDropRibbonBrightness = 1f;
+
+    /// <summary>
     /// Authored Pool entry name of the one Waveform this effect holds: peaks on counts 2 and 4,
     /// the figure its distortion response rides. A random draw put the response on a different
     /// figure every activation.
@@ -195,6 +202,7 @@ public class AnimateShapes : EffectBase
         ForegroundDropRibbonWindowBeats = SyncForegroundDropRibbonWindowBeats,
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding,
+        ForegroundDropRibbonBrightness = SyncForegroundDropRibbonBrightness,
         WaveformName = SyncWaveformName,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
@@ -346,6 +354,7 @@ public class AnimateShapes : EffectBase
         float dropTileHueStep = SyncSettings.DropTileHueStep;
         float dropHueRate = SyncSettings.DropHueRate;
         float dropBrightness = SyncSettings.DropBrightness;
+        float foregroundDropRibbonBrightness = SyncSettings.ForegroundDropRibbonBrightness;
         float fillBlackAndWhiteProbability = SyncSettings.FillBlackAndWhiteProbability;
         float fillBrightnessLift = SyncSettings.FillBrightnessLift;
         float positionShift = 0f;
@@ -433,7 +442,7 @@ public class AnimateShapes : EffectBase
                         1f);
                     paletteColor = Color.Lerp(
                         paletteColor,
-                        Color.HSVToRGB(ribbonHue, 1f, 1f),
+                        Color.HSVToRGB(ribbonHue, 1f, foregroundDropRibbonBrightness),
                         foregroundDropRibbonEnvelope);
                 }
                 buffer[idx] = paletteColor;
@@ -570,6 +579,13 @@ public sealed class AnimateShapesSyncSettings
     public float ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
 
     /// <summary>
+    /// Live Value supplied to the foreground Drop ribbon color's HSV brightness slot. Scales only
+    /// the ribbon rainbow — never the Drop background, and never the palette crawl the ribbon
+    /// dissolves into.
+    /// </summary>
+    public float ForegroundDropRibbonBrightness;
+
+    /// <summary>
     /// Live Pool entry name of the one Waveform this effect holds — the rhythm its distortion
     /// response rides. A name missing from the Pool is a configuration error and fails visibly.
     /// </summary>
@@ -623,6 +639,7 @@ public sealed class AnimateShapesSyncSettings
         ForegroundDropRibbonWindowBeats = source.ForegroundDropRibbonWindowBeats;
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             source.ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
+        ForegroundDropRibbonBrightness = source.ForegroundDropRibbonBrightness;
         WaveformName = source.WaveformName;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,

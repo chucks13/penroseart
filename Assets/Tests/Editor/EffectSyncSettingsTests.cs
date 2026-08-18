@@ -1517,7 +1517,7 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including Energy-crawl and distortion-mode Rails, both foreground Drop ribbon
+    /// replaces it—including Energy-crawl and distortion-mode Rails, the foreground Drop ribbon
     /// controls, and the held Waveform name—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
@@ -1543,6 +1543,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.ForegroundDropRibbonWindowBeats = 221;
         asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
+        asset.Settings.ForegroundDropRibbonBrightness = 223f;
         asset.Settings.WaveformName = "sentinel entry";
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
@@ -1575,6 +1576,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding,
             Is.EqualTo(defaults.ForegroundDropRibbonFlowCyclesPerBeatAtLanding));
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonBrightness,
+            Is.EqualTo(defaults.ForegroundDropRibbonBrightness));
         Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
