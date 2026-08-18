@@ -31,7 +31,7 @@ public class LayoutShapeListTests
     {
         LayoutData.ShapeList shapes = layout.shapes;
 
-        Assert.AreEqual(69, shapes.Loops.GroupCount, "Loops");
+        Assert.AreEqual(73, shapes.Loops.GroupCount, "Loops");
         Assert.AreEqual(45, shapes.Stars.GroupCount, "Stars");
         Assert.AreEqual(7, shapes.Lines0.GroupCount, "Lines0");
         Assert.AreEqual(15, shapes.Lines1.GroupCount, "Lines1");
