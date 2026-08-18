@@ -1517,8 +1517,8 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including Energy-crawl and distortion-mode Rails and both foreground Drop ribbon
-    /// controls—with the current file-local Sync Defaults.
+    /// replaces it—including Energy-crawl and distortion-mode Rails and all four foreground Drop
+    /// ribbon controls—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()

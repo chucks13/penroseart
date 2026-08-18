@@ -95,12 +95,6 @@ public class AnimateShapes : EffectBase
     /// </summary>
     private const float SyncHighEnergyCrawlSpeedMultiplier = 1.25f;
 
-    /// <summary>Lower tuning Rail for exploring slower Energy-driven foreground crawl.</summary>
-    private const float SyncEnergyCrawlSpeedMultiplierLowRail = 0.5f;
-
-    /// <summary>Upper tuning Rail for exploring faster Energy-driven foreground crawl.</summary>
-    private const float SyncEnergyCrawlSpeedMultiplierHighRail = 1.5f;
-
     /// <summary>
     /// Authored foreground Drop ribbon window in beats. Sixteen beats gives each landing one finite
     /// response independent of the wire's Drop length. Tune live at the wall.
@@ -118,7 +112,7 @@ public class AnimateShapes : EffectBase
     /// during the Drop response. The whole-palette spread (1) put bands only a few Tiles wide on
     /// shapes tens of Tiles long, so the ribbons read as shimmer on the wall; a quarter palette makes
     /// each color band span a visible run of Tiles. A fractional spread leaves a coordinate seam
-    /// where a closed Circle's ends meet — accepted pending wall judgment. Tune live at the wall.
+    /// where a closed Circle's ends meet — accepted at the wall. Tune live at the wall.
     /// </summary>
     private const float SyncForegroundDropRibbonPaletteSpread = 0.25f;
 
@@ -208,9 +202,7 @@ public class AnimateShapes : EffectBase
         CirclePositionAdvancePerSecond = SyncCirclePositionAdvancePerSecond,
         EnergyCrawlSpeedMultiplier = new FloatRange(
             SyncLowEnergyCrawlSpeedMultiplier,
-            SyncHighEnergyCrawlSpeedMultiplier,
-            SyncEnergyCrawlSpeedMultiplierLowRail,
-            SyncEnergyCrawlSpeedMultiplierHighRail),
+            SyncHighEnergyCrawlSpeedMultiplier),
         ForegroundDropRibbonWindowBeats = SyncForegroundDropRibbonWindowBeats,
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding,
@@ -376,21 +368,21 @@ public class AnimateShapes : EffectBase
             positions[Random.Range(0, groupCount)] = Random.value;
         }
         background += effectDelta * backgroundHueRate;
-        background %= 1f;
+        background = Mathf.Repeat(background, 1f);
         bool dropActive = beatManager.Drop.Active;
         if (dropActive)
         {
             float dropHueOffset = effectTime * dropHueRate;
             for (int i = 0; i < buffer.Length; i++)
             {
-                float phase = (i * dropTileHueStep + dropHueOffset) % 1f;
+                float phase = Mathf.Repeat(i * dropTileHueStep + dropHueOffset, 1f);
                 buffer[i] = Color.HSVToRGB(phase, 1f, dropBrightness);
             }
         }
         else
         {
             Color backgroundColor = Color.HSVToRGB(
-                (background + positionShift) % 1f,
+                Mathf.Repeat(background + positionShift, 1f),
                 1f,
                 1f);
             for (int i = 0; i < buffer.Length; i++)
@@ -628,10 +620,10 @@ public sealed class AnimateShapesSyncSettings
     public float DropBrightness;
 
     /// <summary>Probability that each packed Circle or Arc becomes black-and-white during an active Fill.</summary>
-    [Range(0f, 1f)] public float FillBlackAndWhiteProbability;
+    public float FillBlackAndWhiteProbability;
 
     /// <summary>Fraction of the distance from a Fill gray's sampled Value to full brightness that it is lifted.</summary>
-    [Range(0f, 1f)] public float FillBrightnessLift;
+    public float FillBrightnessLift;
 
     /// <summary>Copies every AnimateShapes Sync Setting from another value.</summary>
     public void CopyFrom(AnimateShapesSyncSettings source)
