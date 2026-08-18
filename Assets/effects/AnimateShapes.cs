@@ -140,11 +140,13 @@ public class AnimateShapes : EffectBase
     /// <summary>Maximum hue response applied when the rolled distortion mode is Color.</summary>
     private const float SyncHueResponseMagnitude = 0.25f;
 
-    /// <summary>Maximum seconds added to sampled effect time when the rolled distortion mode is Time.</summary>
-    private const float SyncTimeWarpSeconds = 0.5f;
-
-    /// <summary>Scale that maps the Time distortion's sampled-time offset into hue.</summary>
-    private const float SyncTimeWarpHueScale = 0.1f;
+    /// <summary>
+    /// Maximum hue response applied when the rolled distortion mode is Time. The 0.05 magnitude
+    /// preserves the former 0.5-second sampled-time offset multiplied by its 0.1 hue scale; keeping
+    /// their effective product here removes a second tuning knob that could not change the look
+    /// independently.
+    /// </summary>
+    private const float SyncTimeWarpHueResponseMagnitude = 0.05f;
 
     /// <summary>
     /// Current fixed hue step between consecutive Tile indexes in the Drop background. The unfinished
@@ -218,8 +220,7 @@ public class AnimateShapes : EffectBase
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
         HueResponseMagnitude = SyncHueResponseMagnitude,
-        TimeWarpSeconds = SyncTimeWarpSeconds,
-        TimeWarpHueScale = SyncTimeWarpHueScale,
+        TimeWarpHueResponseMagnitude = SyncTimeWarpHueResponseMagnitude,
         DropTileHueStep = SyncDropTileHueStep,
         DropHueRate = SyncDropHueRate,
         DropBrightness = SyncDropBrightness,
@@ -271,7 +272,12 @@ public class AnimateShapes : EffectBase
     /// </summary>
     public override string DebugText()
     {
-        string modeName = distortionMode == 1 ? "Color" : "Time Warp";
+        string modeName = distortionMode switch
+        {
+            1 => "Color",
+            2 => "Time Warp",
+            _ => $"None ({distortionMode})",
+        };
         return $"shape: {shapeName}\nBeat Mode: {modeName}" +
             (foregroundDropRibbonEnvelope > 0f
                 ? $"\nDROP {foregroundDropRibbonEnvelope:0.00}  {SyncSettings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding:0.00} cpb"
@@ -350,14 +356,12 @@ public class AnimateShapes : EffectBase
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
         conditionedPalette.Refresh(APalette, paletteConditioning);
-        float timeWarpHueScale = SyncSettings.TimeWarpHueScale;
         float dropTileHueStep = SyncSettings.DropTileHueStep;
         float dropHueRate = SyncSettings.DropHueRate;
         float dropBrightness = SyncSettings.DropBrightness;
         float fillBlackAndWhiteProbability = SyncSettings.FillBlackAndWhiteProbability;
         float fillBrightnessLift = SyncSettings.FillBrightnessLift;
         float positionShift = 0f;
-        float sampleTime = effectTime;
         int groupCount = shape.GroupCount;
 
         // This effect owns both response mappings and their clockless fallbacks.
@@ -365,9 +369,8 @@ public class AnimateShapes : EffectBase
         if (distortionMode == 1)
             positionShift = SyncSettings.HueResponseMagnitude * rhythm;
         else if (distortionMode == 2)
-            sampleTime = effectTime + (SyncSettings.TimeWarpSeconds * rhythm);
+            positionShift = SyncSettings.TimeWarpHueResponseMagnitude * rhythm;
 
-        float beatOffset = sampleTime - effectTime;
         if (Random.value < GroupReseedsPerSecond * effectDelta)
         {
             positions[Random.Range(0, groupCount)] = Random.value;
@@ -377,16 +380,17 @@ public class AnimateShapes : EffectBase
         bool dropActive = beatManager.Drop.Active;
         if (dropActive)
         {
+            float dropHueOffset = effectTime * dropHueRate;
             for (int i = 0; i < buffer.Length; i++)
             {
-                float phase = (i * dropTileHueStep + (effectTime * dropHueRate)) % 1f;
+                float phase = (i * dropTileHueStep + dropHueOffset) % 1f;
                 buffer[i] = Color.HSVToRGB(phase, 1f, dropBrightness);
             }
         }
         else
         {
             Color backgroundColor = Color.HSVToRGB(
-                (background + beatOffset * timeWarpHueScale + positionShift) % 1f,
+                (background + positionShift) % 1f,
                 1f,
                 1f);
             for (int i = 0; i < buffer.Length; i++)
@@ -396,6 +400,11 @@ public class AnimateShapes : EffectBase
         }
 
         bool fillActive = beatManager.Fill.Active;
+        bool ribbonActive = foregroundDropRibbonEnvelope > 0f;
+        float ribbonBrightnessMultiplier = ribbonActive
+            ? 1f + ((ribbonBrightnessOverdrive - 1f) * foregroundDropRibbonEnvelope)
+            : 1f;
+        float foregroundPositionAdvance = foregroundPositionAdvancePerSecond * effectDelta;
         for (int i = 0; i < groupCount; i++)
         {
             LayoutData.ShapeList.Group group = shape.GetGroup(i);
@@ -408,9 +417,8 @@ public class AnimateShapes : EffectBase
                 float palettePosition =
                     (groupPosition +
                     circleTilePositionStep * group.PackedIndex(j) +
-                    beatOffset * timeWarpHueScale +
                     positionShift) % 1f;
-                if (foregroundDropRibbonEnvelope > 0f)
+                if (ribbonActive)
                 {
                     float ribbonPalettePosition = Mathf.Repeat(
                         (shape.GetPosition(idx) * ribbonPaletteSpread) +
@@ -420,9 +428,9 @@ public class AnimateShapes : EffectBase
                         ribbonPalettePosition - palettePosition + 0.5f,
                         1f) - 0.5f;
 
-                    // Each shape maps the complete conditioned palette exactly once along its path.
-                    // Mix in cyclic palette-coordinate space before the one lookup so every Drop
-                    // frame stays on the palette while it slides continuously back to the crawl.
+                    // Each shape maps the authored fraction of the conditioned palette along its
+                    // path. Mix in cyclic palette-coordinate space before the one lookup so every
+                    // Drop frame stays on the palette while it slides back to the crawl.
                     palettePosition = Mathf.Repeat(
                         palettePosition +
                         (shortestHueDelta * foregroundDropRibbonEnvelope),
@@ -441,22 +449,19 @@ public class AnimateShapes : EffectBase
                     value = Mathf.Lerp(value, 1f, fillBrightnessLift);
                     paletteColor = new Color(value, value, value, paletteColor.a);
                 }
-                if (foregroundDropRibbonEnvelope > 0f)
+                if (ribbonActive)
                 {
                     // The Drop background rides V=10, so at ordinary palette brightness the ribbons
                     // sit dimmer than the field they cross. Overdriving past the output clip point
                     // keeps the shapes the brightest thing on the wall; the multiplier eases back to
                     // 1 as the envelope closes, landing exactly on the ordinary crawl brightness.
-                    float overdrive = 1f +
-                        ((ribbonBrightnessOverdrive - 1f) * foregroundDropRibbonEnvelope);
-                    paletteColor.r *= overdrive;
-                    paletteColor.g *= overdrive;
-                    paletteColor.b *= overdrive;
+                    paletteColor.r *= ribbonBrightnessMultiplier;
+                    paletteColor.g *= ribbonBrightnessMultiplier;
+                    paletteColor.b *= ribbonBrightnessMultiplier;
                 }
                 buffer[idx] = paletteColor;
             }
-            positions[i] = (groupPosition +
-                foregroundPositionAdvancePerSecond * effectDelta) % 1f;
+            positions[i] = (groupPosition + foregroundPositionAdvance) % 1f;
         }
     }
 
@@ -605,22 +610,22 @@ public sealed class AnimateShapesSyncSettings
     public IntRange DistortionMode;
 
     /// <summary>Maximum hue response applied by Color distortion.</summary>
-    [Min(0f)] public float HueResponseMagnitude;
+    public float HueResponseMagnitude;
 
-    /// <summary>Maximum seconds added to sampled effect time by Time distortion.</summary>
-    [Min(0f)] public float TimeWarpSeconds;
-
-    /// <summary>Scale from the Time distortion's sampled-time offset into hue.</summary>
-    [Min(0f)] public float TimeWarpHueScale;
+    /// <summary>
+    /// Maximum hue response applied by Time distortion. This single live magnitude replaces the
+    /// former sampled-time seconds and hue-scale controls whose product was the only rendered value.
+    /// </summary>
+    public float TimeWarpHueResponseMagnitude;
 
     /// <summary>Hue step between consecutive Tile indexes in the active Drop background.</summary>
-    [Min(0f)] public float DropTileHueStep;
+    public float DropTileHueStep;
 
     /// <summary>Drop background hue cycles advanced per second.</summary>
-    [Min(0f)] public float DropHueRate;
+    public float DropHueRate;
 
     /// <summary>Value supplied to the Drop background's HSV brightness slot.</summary>
-    [Min(0f)] public float DropBrightness;
+    public float DropBrightness;
 
     /// <summary>Probability that each packed Circle or Arc becomes black-and-white during an active Fill.</summary>
     [Range(0f, 1f)] public float FillBlackAndWhiteProbability;
@@ -657,8 +662,7 @@ public sealed class AnimateShapesSyncSettings
             source.DistortionMode.LowRail,
             source.DistortionMode.HighRail);
         HueResponseMagnitude = source.HueResponseMagnitude;
-        TimeWarpSeconds = source.TimeWarpSeconds;
-        TimeWarpHueScale = source.TimeWarpHueScale;
+        TimeWarpHueResponseMagnitude = source.TimeWarpHueResponseMagnitude;
         DropTileHueStep = source.DropTileHueStep;
         DropHueRate = source.DropHueRate;
         DropBrightness = source.DropBrightness;

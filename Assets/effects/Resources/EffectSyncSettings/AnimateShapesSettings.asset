@@ -41,8 +41,7 @@ MonoBehaviour:
       LowRail: 1
       HighRail: 3
     HueResponseMagnitude: 0.25
-    TimeWarpSeconds: 0.5
-    TimeWarpHueScale: 0.1
+    TimeWarpHueResponseMagnitude: 0.05
     DropTileHueStep: 0.001
     DropHueRate: 0.5
     DropBrightness: 10

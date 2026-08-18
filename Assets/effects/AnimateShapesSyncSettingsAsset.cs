@@ -14,7 +14,7 @@ public sealed class AnimateShapesSyncSettingsAsset : EffectSyncSettingsAsset, IS
     public override Type EffectType => typeof(AnimateShapes);
 
     /// <summary>The saved AnimateShapes Sync Settings.</summary>
-    public AnimateShapesSyncSettings Settings => settings ?? (settings = AnimateShapes.SyncDefaults);
+    public AnimateShapesSyncSettings Settings => settings ??= AnimateShapes.SyncDefaults;
 
     /// <summary>Copies AnimateShapes' current file-local Sync Defaults over the saved Sync Settings.</summary>
     public override void RestoreSyncDefaults()

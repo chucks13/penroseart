@@ -961,6 +961,71 @@ public sealed class EffectSyncSettingsTests
         AssertIntRangeEqual(asset.Settings.BloomCountOffset, defaults.BloomCountOffset);
     }
 
+    /// <summary>
+    /// AnimateShapes Standalone Defaults resolve as fresh, mutually independent copies without
+    /// pinning authored tuning values that are judged on the wall.
+    /// </summary>
+    [Test]
+    public void AnimateShapesStandaloneDefaultsResolveAsIndependentCopies()
+    {
+        var first = AnimateShapes.StandaloneDefaults;
+        var second = AnimateShapes.StandaloneDefaults;
+
+        Assert.That(first, Is.Not.SameAs(second));
+        Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
+        Assert.That(first.CircleTilePositionStep, Is.EqualTo(second.CircleTilePositionStep));
+        Assert.That(
+            first.CirclePositionAdvancePerSecond,
+            Is.EqualTo(second.CirclePositionAdvancePerSecond));
+        Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
+        AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
+    }
+
+    /// <summary>
+    /// Restore replaces every edited AnimateShapes Standalone Setting and distortion-mode Rail with
+    /// the current file-local Standalone Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreStandaloneDefaultsCopiesEveryAnimateShapesValue()
+    {
+        var asset = (AnimateShapesStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(AnimateShapes),
+            TempAssetFolder);
+        asset.Settings.BackgroundHueRate = 17f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.11f,
+            MinimumLuminance = 0.12f,
+            LuminanceEqualization = 0.13f,
+            HueSpreadReference = 0.14f,
+            MaximumLuminanceScale = 1.15f,
+            DarkLuminanceThreshold = 0.016f,
+            DuplicateThreshold = 0.017f,
+            HueRedistribution = 0.18f,
+        };
+        asset.Settings.CircleTilePositionStep = 18f;
+        asset.Settings.CirclePositionAdvancePerSecond = 19f;
+        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
+
+        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
+            typeof(AnimateShapes),
+            TempAssetFolder);
+
+        var defaults = AnimateShapes.StandaloneDefaults;
+        Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
+        Assert.That(
+            asset.Settings.CircleTilePositionStep,
+            Is.EqualTo(defaults.CircleTilePositionStep));
+        Assert.That(
+            asset.Settings.CirclePositionAdvancePerSecond,
+            Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
+        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
+    }
+
     /// <summary>Restore replaces every edited Tunnel Sync Setting with the current file-local Sync Defaults.</summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryTunnelValue()
@@ -1451,6 +1516,89 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
+    /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
+    /// replaces it—including Energy-crawl and distortion-mode Rails and both foreground Drop ribbon
+    /// controls—with the current file-local Sync Defaults.
+    /// </summary>
+    [Test]
+    public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()
+    {
+        var asset = (AnimateShapesSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(AnimateShapes),
+            TempAssetFolder);
+        asset.Settings.BackgroundHueRate = 17f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.21f,
+            MinimumLuminance = 0.22f,
+            LuminanceEqualization = 0.23f,
+            HueSpreadReference = 0.24f,
+            MaximumLuminanceScale = 1.25f,
+            DarkLuminanceThreshold = 0.026f,
+            DuplicateThreshold = 0.027f,
+            HueRedistribution = 0.28f,
+        };
+        asset.Settings.CircleTilePositionStep = 18f;
+        asset.Settings.CirclePositionAdvancePerSecond = 19f;
+        asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.ForegroundDropRibbonWindowBeats = 221;
+        asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
+        asset.Settings.ForegroundDropRibbonPaletteSpread = 223f;
+        asset.Settings.ForegroundDropRibbonBrightnessOverdrive = 224f;
+        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
+        asset.Settings.HueResponseMagnitude = 23f;
+        asset.Settings.TimeWarpHueResponseMagnitude = 24f;
+        asset.Settings.DropTileHueStep = 25f;
+        asset.Settings.DropHueRate = 26f;
+        asset.Settings.DropBrightness = 27f;
+        asset.Settings.FillBlackAndWhiteProbability = 0.29f;
+        asset.Settings.FillBrightnessLift = 0.31f;
+
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateShapes), TempAssetFolder);
+
+        var defaults = AnimateShapes.SyncDefaults;
+        Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
+        Assert.That(
+            asset.Settings.CircleTilePositionStep,
+            Is.EqualTo(defaults.CircleTilePositionStep));
+        Assert.That(
+            asset.Settings.CirclePositionAdvancePerSecond,
+            Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
+        AssertFloatRangeEqual(
+            asset.Settings.EnergyCrawlSpeedMultiplier,
+            defaults.EnergyCrawlSpeedMultiplier);
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonWindowBeats,
+            Is.EqualTo(defaults.ForegroundDropRibbonWindowBeats));
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding,
+            Is.EqualTo(defaults.ForegroundDropRibbonFlowCyclesPerBeatAtLanding));
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonPaletteSpread,
+            Is.EqualTo(defaults.ForegroundDropRibbonPaletteSpread));
+        Assert.That(
+            asset.Settings.ForegroundDropRibbonBrightnessOverdrive,
+            Is.EqualTo(defaults.ForegroundDropRibbonBrightnessOverdrive));
+        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
+        Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
+        Assert.That(
+            asset.Settings.TimeWarpHueResponseMagnitude,
+            Is.EqualTo(defaults.TimeWarpHueResponseMagnitude));
+        Assert.That(asset.Settings.DropTileHueStep, Is.EqualTo(defaults.DropTileHueStep));
+        Assert.That(asset.Settings.DropHueRate, Is.EqualTo(defaults.DropHueRate));
+        Assert.That(asset.Settings.DropBrightness, Is.EqualTo(defaults.DropBrightness));
+        Assert.That(
+            asset.Settings.FillBlackAndWhiteProbability,
+            Is.EqualTo(defaults.FillBlackAndWhiteProbability));
+        Assert.That(
+            asset.Settings.FillBrightnessLift,
+            Is.EqualTo(defaults.FillBrightnessLift));
+    }
+
+    /// <summary>
     /// Vortex Standalone Defaults resolve as fresh, mutually independent copies without pinning
     /// authored tuning values that are judged on the wall.
     /// </summary>
@@ -1682,154 +1830,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.BlinkIntensityPerFrame, Is.EqualTo(defaults.BlinkIntensityPerFrame));
         Assert.That(asset.Settings.BlinkIntensityLimit, Is.EqualTo(defaults.BlinkIntensityLimit));
         Assert.That(asset.Settings.HueDriftPerShape, Is.EqualTo(defaults.HueDriftPerShape));
-    }
-
-    /// <summary>
-    /// AnimateShapes Standalone Defaults resolve as fresh, mutually independent copies without
-    /// pinning authored tuning values that are judged on the wall.
-    /// </summary>
-    [Test]
-    public void AnimateShapesStandaloneDefaultsResolveAsIndependentCopies()
-    {
-        var first = AnimateShapes.StandaloneDefaults;
-        var second = AnimateShapes.StandaloneDefaults;
-
-        Assert.That(first, Is.Not.SameAs(second));
-        Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
-        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
-        Assert.That(first.CircleTilePositionStep, Is.EqualTo(second.CircleTilePositionStep));
-        Assert.That(
-            first.CirclePositionAdvancePerSecond,
-            Is.EqualTo(second.CirclePositionAdvancePerSecond));
-        Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
-        AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
-    }
-
-    /// <summary>
-    /// Restore replaces every edited AnimateShapes Standalone Setting and distortion-mode Rail with
-    /// the current file-local Standalone Defaults.
-    /// </summary>
-    [Test]
-    public void RestoreStandaloneDefaultsCopiesEveryAnimateShapesValue()
-    {
-        var asset = (AnimateShapesStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
-            typeof(AnimateShapes),
-            TempAssetFolder);
-        asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.PaletteConditioning = new PaletteConditioning
-        {
-            TargetLuminance = 0.11f,
-            MinimumLuminance = 0.12f,
-            LuminanceEqualization = 0.13f,
-            HueSpreadReference = 0.14f,
-            MaximumLuminanceScale = 1.15f,
-            DarkLuminanceThreshold = 0.016f,
-            DuplicateThreshold = 0.017f,
-            HueRedistribution = 0.18f,
-        };
-        asset.Settings.CircleTilePositionStep = 18f;
-        asset.Settings.CirclePositionAdvancePerSecond = 19f;
-        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
-
-        EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
-            typeof(AnimateShapes),
-            TempAssetFolder);
-
-        var defaults = AnimateShapes.StandaloneDefaults;
-        Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        AssertPaletteConditioningEqual(
-            asset.Settings.PaletteConditioning,
-            defaults.PaletteConditioning);
-        Assert.That(
-            asset.Settings.CircleTilePositionStep,
-            Is.EqualTo(defaults.CircleTilePositionStep));
-        Assert.That(
-            asset.Settings.CirclePositionAdvancePerSecond,
-            Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
-        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
-    }
-
-    /// <summary>
-    /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including Energy-crawl and distortion-mode Rails and both foreground Drop ribbon
-    /// controls—with the current file-local Sync Defaults.
-    /// </summary>
-    [Test]
-    public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()
-    {
-        var asset = (AnimateShapesSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
-            typeof(AnimateShapes),
-            TempAssetFolder);
-        asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.PaletteConditioning = new PaletteConditioning
-        {
-            TargetLuminance = 0.21f,
-            MinimumLuminance = 0.22f,
-            LuminanceEqualization = 0.23f,
-            HueSpreadReference = 0.24f,
-            MaximumLuminanceScale = 1.25f,
-            DarkLuminanceThreshold = 0.026f,
-            DuplicateThreshold = 0.027f,
-            HueRedistribution = 0.28f,
-        };
-        asset.Settings.CircleTilePositionStep = 18f;
-        asset.Settings.CirclePositionAdvancePerSecond = 19f;
-        asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.ForegroundDropRibbonWindowBeats = 221;
-        asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
-        asset.Settings.ForegroundDropRibbonPaletteSpread = 223f;
-        asset.Settings.ForegroundDropRibbonBrightnessOverdrive = 224f;
-        asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
-        asset.Settings.HueResponseMagnitude = 23f;
-        asset.Settings.TimeWarpSeconds = 24f;
-        asset.Settings.TimeWarpHueScale = 25f;
-        asset.Settings.DropTileHueStep = 26f;
-        asset.Settings.DropHueRate = 27f;
-        asset.Settings.DropBrightness = 28f;
-        asset.Settings.FillBlackAndWhiteProbability = 0.29f;
-        asset.Settings.FillBrightnessLift = 0.31f;
-
-        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateShapes), TempAssetFolder);
-
-        var defaults = AnimateShapes.SyncDefaults;
-        Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        AssertPaletteConditioningEqual(
-            asset.Settings.PaletteConditioning,
-            defaults.PaletteConditioning);
-        Assert.That(
-            asset.Settings.CircleTilePositionStep,
-            Is.EqualTo(defaults.CircleTilePositionStep));
-        Assert.That(
-            asset.Settings.CirclePositionAdvancePerSecond,
-            Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
-        AssertFloatRangeEqual(
-            asset.Settings.EnergyCrawlSpeedMultiplier,
-            defaults.EnergyCrawlSpeedMultiplier);
-        Assert.That(
-            asset.Settings.ForegroundDropRibbonWindowBeats,
-            Is.EqualTo(defaults.ForegroundDropRibbonWindowBeats));
-        Assert.That(
-            asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding,
-            Is.EqualTo(defaults.ForegroundDropRibbonFlowCyclesPerBeatAtLanding));
-        Assert.That(
-            asset.Settings.ForegroundDropRibbonPaletteSpread,
-            Is.EqualTo(defaults.ForegroundDropRibbonPaletteSpread));
-        Assert.That(
-            asset.Settings.ForegroundDropRibbonBrightnessOverdrive,
-            Is.EqualTo(defaults.ForegroundDropRibbonBrightnessOverdrive));
-        AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
-        Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
-        Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));
-        Assert.That(asset.Settings.TimeWarpHueScale, Is.EqualTo(defaults.TimeWarpHueScale));
-        Assert.That(asset.Settings.DropTileHueStep, Is.EqualTo(defaults.DropTileHueStep));
-        Assert.That(asset.Settings.DropHueRate, Is.EqualTo(defaults.DropHueRate));
-        Assert.That(asset.Settings.DropBrightness, Is.EqualTo(defaults.DropBrightness));
-        Assert.That(
-            asset.Settings.FillBlackAndWhiteProbability,
-            Is.EqualTo(defaults.FillBlackAndWhiteProbability));
-        Assert.That(
-            asset.Settings.FillBrightnessLift,
-            Is.EqualTo(defaults.FillBrightnessLift));
     }
 
     /// <summary>
