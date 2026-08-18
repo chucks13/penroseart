@@ -302,8 +302,9 @@ public class AnimateShapes : EffectBase
         foregroundPalette.Refresh(APalette, beatManager.IsSynced
             ? SyncSettings.ForegroundPaletteConditioning
             : standaloneSettings.ForegroundPaletteConditioning);
-        acquiredForegroundWaveformName = SyncSettings.ForegroundWaveformName;
-        waveform = waveforms.Named(acquiredForegroundWaveformName);
+        string requestedForegroundWaveformName = SyncSettings.ForegroundWaveformName;
+        waveform = waveforms.Named(requestedForegroundWaveformName);
+        acquiredForegroundWaveformName = requestedForegroundWaveformName;
         foregroundShapes = penrose.Layout.shapes.Circles;
         IntRange foregroundWaveformResponseModeRange = beatManager.IsSynced
             ? SyncSettings.ForegroundWaveformResponseMode
@@ -426,10 +427,11 @@ public class AnimateShapes : EffectBase
         float foregroundWaveformPositionShift = 0f;
         int groupCount = foregroundShapes.GroupCount;
 
-        if (SyncSettings.ForegroundWaveformName != acquiredForegroundWaveformName)
+        string requestedForegroundWaveformName = SyncSettings.ForegroundWaveformName;
+        if (requestedForegroundWaveformName != acquiredForegroundWaveformName)
         {
-            acquiredForegroundWaveformName = SyncSettings.ForegroundWaveformName;
-            waveform = waveforms.Named(acquiredForegroundWaveformName);
+            waveform = waveforms.Named(requestedForegroundWaveformName);
+            acquiredForegroundWaveformName = requestedForegroundWaveformName;
         }
 
         // Both strengths map the held Waveform only onto foreground palette position.

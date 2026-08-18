@@ -66,6 +66,7 @@ public sealed class AnimateShapesLayerOwnershipTests
 
             bool[] foregroundMembership = ReadForegroundMembership(layout.shapes.Circles);
             AnimateShapesSyncSettings settings = settingsAsset.Settings;
+            InstallWaveformFixture(controller, settings);
             settings.ForegroundWaveformResponseMode = new IntRange(1, 2);
             settings.ForegroundPositionAdvancePerSecond = 0f;
             settings.BackgroundHueRate = 0f;
@@ -120,11 +121,34 @@ public sealed class AnimateShapesLayerOwnershipTests
         Assert.That(
             effect.waveform.Envelope,
             Is.GreaterThan(0f),
-            "the held Waveform is away from its trough");
+            "the test-owned Waveform is away from its trough");
 
         UnityEngine.Random.InitState(1550);
         effect.Draw();
         return (Color[])effect.buffer.Clone();
+    }
+
+    /// <summary>Installs a test-owned named Waveform so ownership does not depend on shipped Preset tuning.</summary>
+    /// <param name="controller">The Controller whose startup-owned Waveforms surface receives the fixture.</param>
+    /// <param name="settings">The live Sync Settings redirected to the fixture's persisted name.</param>
+    private static void InstallWaveformFixture(
+        Controller controller,
+        AnimateShapesSyncSettings settings)
+    {
+        const string waveformName = "layer ownership pulse";
+        var fixture = new Waveforms(controller.beatManager, new[]
+        {
+            new WaveformPool.Entry(
+                waveformName,
+                Waveform.Parse("QQQQ", "8888", 0.3f, 0f, out _)),
+        });
+        // Controller startup owns this surface; the test replaces that startup result with its local Pool.
+        var setter = typeof(Controller)
+            .GetProperty(nameof(Controller.waveforms))
+            .GetSetMethod(nonPublic: true);
+        Assert.That(setter, Is.Not.Null, "the Controller Waveforms setter used by production startup");
+        setter.Invoke(controller, new object[] { fixture });
+        settings.ForegroundWaveformName = waveformName;
     }
 
     /// <summary>Builds exact foreground membership from every packed Circle and Arc group.</summary>
