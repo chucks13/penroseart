@@ -78,6 +78,24 @@ public sealed class WaveformsTests
         Assert.Throws<InvalidOperationException>(() => waveforms.Random(Energy.High));
     }
 
+    /// <summary>A named draw returns exactly the Pool entry saved under that name.</summary>
+    [Test]
+    public void Named_ReturnsTheEntrySavedUnderThatName()
+    {
+        var waveforms = CreateSeededWaveforms();
+
+        AssertNotationIn(waveforms.Named("beats 2 and 4"), ("QQQQ", "0808", 0f));
+    }
+
+    /// <summary>A selected name missing from the Pool is a visible configuration error.</summary>
+    [Test]
+    public void Named_WithoutMatchingEntry_Throws()
+    {
+        var waveforms = CreateSeededWaveforms();
+
+        Assert.Throws<InvalidOperationException>(() => waveforms.Named("no such entry"));
+    }
+
     /// <summary>An empty Pool is a startup defect, never an implicit Beat Pulse.</summary>
     [Test]
     public void EmptyPool_Throws()

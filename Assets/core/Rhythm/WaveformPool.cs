@@ -260,8 +260,9 @@ public static class WaveformPool
         "//   rounding   0..1 peak shape: 0 sharp triangle -> ~0.5 cosine dome -> 1 flat top.\n" +
         "//   offset     phase shift in beats; 0.5 lands on the \"&\" (offbeat).\n" +
         "//\n" +
-        "// Entry order is preserved for authoring. Runtime performers acquire by Energy or uniformly across\n" +
-        "// the whole Pool; no performer stores a row index.\n" +
+        "// Entry order is preserved for authoring. Runtime performers acquire by Energy, uniformly across\n" +
+        "// the whole Pool, or by entry name; no performer stores a row index. Renaming an entry breaks any\n" +
+        "// saved setting that selects it by name — visibly, at the next acquisition.\n" +
         "\n";
 
     /// <summary>Parses a Pool numeric field with invariant culture, reporting and defaulting on a bad value.</summary>

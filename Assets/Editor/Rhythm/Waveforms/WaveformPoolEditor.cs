@@ -242,7 +242,7 @@ public sealed class WaveformPoolEditor : EditorWindow
         {
             EditorGUILayout.LabelField("Presets", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Order controls presentation and save order. Runtime acquisition uses Energy, not row indexes or names.",
+                "Order controls presentation and save order. Runtime acquisition uses Energy or entry names, never row indexes. Renaming an entry breaks any saved setting that selects it by name.",
                 MessageType.None);
 
             using (var scroll = new EditorGUILayout.ScrollViewScope(listScroll, GUI.skin.box))

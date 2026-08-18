@@ -107,6 +107,13 @@ public class AnimateShapes : EffectBase
     /// </summary>
     private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1f;
 
+    /// <summary>
+    /// Authored Pool entry name of the one Waveform this effect holds: peaks on counts 2 and 4,
+    /// the figure its distortion response rides. A random draw put the response on a different
+    /// figure every activation.
+    /// </summary>
+    private const string SyncWaveformName = "beats 2 and 4";
+
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
 
@@ -188,6 +195,7 @@ public class AnimateShapes : EffectBase
         ForegroundDropRibbonWindowBeats = SyncForegroundDropRibbonWindowBeats,
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding,
+        WaveformName = SyncWaveformName,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -240,6 +248,13 @@ public class AnimateShapes : EffectBase
     private int distortionMode;
 
     /// <summary>
+    /// Pool entry name of the currently held Waveform, so a live Play Mode edit of the
+    /// WaveformName Sync Setting re-acquires while an unchanged setting leaves the held value —
+    /// and any owner's replacement of it — alone.
+    /// </summary>
+    private string acquiredWaveformName;
+
+    /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
     public override string DebugText()
@@ -257,7 +272,8 @@ public class AnimateShapes : EffectBase
     }
 
     /// <summary>
-    /// Initializes per-activation random and Drop-ribbon state before this effect starts drawing.
+    /// Resolves settings, acquires the selected Waveform, and initializes per-activation random
+    /// and Drop-ribbon state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
@@ -270,7 +286,8 @@ public class AnimateShapes : EffectBase
         conditionedPalette.Refresh(APalette, beatManager.IsSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning);
-        waveform = waveforms.Random();
+        acquiredWaveformName = SyncSettings.WaveformName;
+        waveform = waveforms.Named(acquiredWaveformName);
         shape = penrose.Layout.shapes.Circles;
         IntRange distortionModeRange = beatManager.IsSynced
             ? SyncSettings.DistortionMode
@@ -333,6 +350,12 @@ public class AnimateShapes : EffectBase
         float fillBrightnessLift = SyncSettings.FillBrightnessLift;
         float positionShift = 0f;
         int groupCount = shape.GroupCount;
+
+        if (SyncSettings.WaveformName != acquiredWaveformName)
+        {
+            acquiredWaveformName = SyncSettings.WaveformName;
+            waveform = waveforms.Named(acquiredWaveformName);
+        }
 
         // This effect owns both response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;
@@ -546,6 +569,13 @@ public sealed class AnimateShapesSyncSettings
     /// </summary>
     public float ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
 
+    /// <summary>
+    /// Live Pool entry name of the one Waveform this effect holds — the rhythm its distortion
+    /// response rides. A name missing from the Pool is a configuration error and fails visibly.
+    /// </summary>
+    [WaveformName]
+    public string WaveformName;
+
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
 
@@ -593,6 +623,7 @@ public sealed class AnimateShapesSyncSettings
         ForegroundDropRibbonWindowBeats = source.ForegroundDropRibbonWindowBeats;
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             source.ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
+        WaveformName = source.WaveformName;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,

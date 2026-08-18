@@ -13,8 +13,11 @@ using System.Collections.Generic;
 /// </remarks>
 public sealed class Waveforms
 {
-    /// <summary>The runtime-bound Waveforms available for random acquisition.</summary>
+    /// <summary>The runtime-bound Waveforms available for acquisition.</summary>
     private readonly Waveform[] waveforms;
+
+    /// <summary>Pool entry name of each Waveform, aligned by index, for named acquisition.</summary>
+    private readonly string[] names;
 
     /// <summary>
     /// Explicit non-null Waveform value Mixers assign when they intentionally suppress a child's
@@ -51,6 +54,7 @@ public sealed class Waveforms
         }
 
         waveforms = new Waveform[poolEntries.Count];
+        names = new string[poolEntries.Count];
         for (var i = 0; i < waveforms.Length; i++)
         {
             var entry = poolEntries[i];
@@ -61,6 +65,7 @@ public sealed class Waveforms
             }
 
             waveforms[i] = entry.waveform.Bind(clockSource);
+            names[i] = entry.name;
         }
 
         None = Waveform.Disabled(clockSource);
@@ -100,6 +105,28 @@ public sealed class Waveforms
         }
 
         return matches[UnityEngine.Random.Range(0, matches.Count)];
+    }
+
+    /// <summary>
+    /// Draws the Pool Preset saved under the given name, for a performer that holds one selected
+    /// Waveform instead of drawing randomly. A name missing from the Pool — including a Pool-side
+    /// rename of a selected entry — is a configuration error and fails visibly rather than
+    /// widening to a fallback.
+    /// </summary>
+    /// <param name="name">The exact Pool entry name.</param>
+    /// <returns>The runtime-bound Waveform saved under that name.</returns>
+    public Waveform Named(string name)
+    {
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (names[i] == name)
+            {
+                return waveforms[i];
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Waveform Pool '{WaveformPool.FilePath}' contains no entry named '{name}'.");
     }
 
     /// <summary>Draws uniformly across the whole Pool.</summary>

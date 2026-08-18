@@ -277,12 +277,12 @@ A per-waveform scalar in `[0..1]` controlling hump shape. At 0 the peak is sharp
 _Avoid_: "smoothing", "easing" (overloaded); treating it as a true low-pass filter.
 
 **Waveforms** (the acquisition surface):
-The shared Waveform acquisition surface beside BeatManager. Consumers draw immutable, clock-bound values from the required Pool, selecting by Energy; the held Waveform or Routine then reads its own current `Envelope` or applies caller-chosen endpoints through `Lerp(from, to)`. `None` is the explicit non-null value a Mixer uses to suppress a child's Waveform response.
+The shared Waveform acquisition surface beside BeatManager. Consumers draw immutable, clock-bound values from the required Pool, selecting by Energy or by entry name; the held Waveform or Routine then reads its own current `Envelope` or applies caller-chosen endpoints through `Lerp(from, to)`. `None` is the explicit non-null value a Mixer uses to suppress a child's Waveform response.
 _Avoid_: index addressing in any form (a Pool position may change at any time); nullable Waveform configuration; a provider-side `Evaluate` step; one-frame Waveform "Hit" state; reaching Waveforms through a BeatManager doorway (it is a sibling, not a child); runtime Waveform substitution.
 
 **Preset**:
-A named, saved Waveform spec in the Pool — a human/editor label for a `sequence + amplitude + rounding + offset` bundle. Runtime performers draw values by Energy rather than depending on a stable name or Pool position. The plain Beat Pulse (`QQQQ` / `8888`) is the canonical default.
-_Avoid_: treating Preset names as runtime identity, as a fixed hardcoded enumeration, or as an exhaustive description of the (effectively unbounded) Waveform space.
+A named, saved Waveform spec in the Pool — a human/editor label for a `sequence + amplitude + rounding + offset` bundle. Runtime performers draw values by Energy or hold one Preset selected by name; a Pool position is never a handle, and renaming an entry visibly breaks any saved setting that selects it by name. The plain Beat Pulse (`QQQQ` / `8888`) is the canonical default.
+_Avoid_: treating Preset names as a fixed hardcoded enumeration or as an exhaustive description of the (effectively unbounded) Waveform space.
 
 **Pool** (the curated Preset set):
 The hand-vetted collection of Presets that random selection draws from, so a random pick is always musically sensible. It is the **required runtime source of truth**, persisted as a **hand-editable text file in `StreamingAssets`** — named entries, plain notation, `//` comments, blank lines ignored, creatable by hand in any text editor. A missing/empty Pool, a parsed notation-invalid entry, or an unsatisfied Energy set is a configuration error and fails visibly rather than synthesizing or widening to a fallback.
