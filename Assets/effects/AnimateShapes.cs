@@ -46,12 +46,6 @@ public class AnimateShapes : EffectBase
     /// </summary>
     private const float StandaloneForegroundPositionAdvancePerSecond = 0.6f;
 
-    /// <summary>Authored inclusive lower bound of the Standalone foreground Waveform-response roll; 1 selects Strong.</summary>
-    private const int StandaloneForegroundWaveformResponseModeMinInclusive = 1;
-
-    /// <summary>Authored exclusive upper bound of the Standalone foreground Waveform-response roll; 1 is Strong and 2 is Subtle.</summary>
-    private const int StandaloneForegroundWaveformResponseModeMaxExclusive = 3;
-
     // Sync Defaults
 
     /// <summary>Authored Synced Mode counterpart to the background hue advance used in Standalone Mode.</summary>
@@ -103,41 +97,29 @@ public class AnimateShapes : EffectBase
     private const int SyncForegroundDropRibbonWindowBeats = 16;
 
     /// <summary>
-    /// Authored foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. One cycle
-    /// per beat matches the established Angles impact speed. Tune live at the wall.
+    /// Authored foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. The
+    /// wall-approved 1.15 is a slight lift from the established one-cycle Angles impact speed.
     /// </summary>
-    private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1f;
+    private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1.15f;
 
     /// <summary>
-    /// Authored Value supplied to the ribbon color's HSV brightness slot. One is the plain full
-    /// hue wheel; higher values overdrive the ribbons against the Drop background. Tune live at
-    /// the wall.
+    /// Authored Value supplied to the ribbon color's HSV brightness slot. The wall-approved value
+    /// is one, the plain full hue wheel; higher values overdrive the ribbons against the Drop background.
     /// </summary>
-    private const float SyncForegroundDropRibbonBrightness = 1.25f;
+    private const float SyncForegroundDropRibbonBrightness = 1f;
 
     /// <summary>
     /// Authored Pool entry name of the one Waveform this effect holds: peaks on counts 2 and 4,
-    /// the figure its foreground position response rides. Holding this named figure prevents the
+    /// the figure its background brightness response rides. Holding this named figure prevents the
     /// former per-activation Random draw from moving the response to a different figure.
     /// </summary>
-    private const string SyncForegroundWaveformName = "beats 2 and 4";
-
-    /// <summary>Inclusive lower bound of the complete foreground Waveform-response roll domain: 1 selects Strong.</summary>
-    private const int SyncForegroundWaveformResponseModeMinInclusive = 1;
-
-    /// <summary>Exclusive upper bound of the complete foreground Waveform-response roll domain: 1 is Strong and 2 is Subtle.</summary>
-    private const int SyncForegroundWaveformResponseModeMaxExclusive = 3;
-
-    /// <summary>Maximum cyclic palette-position shift applied by the Strong foreground Waveform response.</summary>
-    private const float SyncForegroundWaveformStrongPositionShift = 0.25f;
+    private const string SyncBackgroundWaveformName = "beats 2 and 4";
 
     /// <summary>
-    /// Maximum cyclic palette-position shift applied by the Subtle foreground Waveform response.
-    /// The 0.05 magnitude preserves the former 0.5-second sampled-time offset multiplied by its
-    /// 0.1 hue scale; keeping their effective product here removes a second tuning knob that could
-    /// not change the look independently.
+    /// Authored background brightness at a held Waveform trough. The wall-approved half-brightness
+    /// floor keeps the response visible without extinguishing the background; peaks reach full brightness.
     /// </summary>
-    private const float SyncForegroundWaveformSubtlePositionShift = 0.05f;
+    private const float SyncBackgroundWaveformBrightnessFloor = 0.5f;
 
     /// <summary>
     /// Current fixed hue step between consecutive Tile indexes in the Drop background. The unfinished
@@ -153,11 +135,10 @@ public class AnimateShapes : EffectBase
     private const float SyncBackgroundDropHueRate = 0.5f;
 
     /// <summary>
-    /// Authored Value supplied to the Drop background before final HSV-to-RGB conversion.
-    /// It intentionally remains 10 so final conversion produces the approved clipped rainbow rather
-    /// than a pre-clamped substitute.
+    /// Authored Value supplied to the Drop background's HSV-to-RGB conversion. One preserves the
+    /// smooth full-brightness hue gradient instead of clipping it into a few flat RGB colors.
     /// </summary>
-    private const float SyncBackgroundDropValue = 10f;
+    private const float SyncBackgroundDropValue = 1f;
 
     /// <summary>Probability that each Circle or Arc becomes black-and-white during an active Fill.</summary>
     private const float SyncForegroundFillBlackAndWhiteProbability = 0.125f;
@@ -189,9 +170,6 @@ public class AnimateShapes : EffectBase
         ForegroundPaletteConditioning = StandaloneForegroundPaletteConditioning,
         ForegroundTilePositionStep = StandaloneForegroundTilePositionStep,
         ForegroundPositionAdvancePerSecond = StandaloneForegroundPositionAdvancePerSecond,
-        ForegroundWaveformResponseMode = new IntRange(
-            StandaloneForegroundWaveformResponseModeMinInclusive,
-            StandaloneForegroundWaveformResponseModeMaxExclusive),
     };
 
     /// <summary>Resolves a fresh copy of AnimateShapes' file-local Sync Defaults.</summary>
@@ -208,12 +186,8 @@ public class AnimateShapes : EffectBase
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding,
         ForegroundDropRibbonBrightness = SyncForegroundDropRibbonBrightness,
-        ForegroundWaveformName = SyncForegroundWaveformName,
-        ForegroundWaveformResponseMode = new IntRange(
-            SyncForegroundWaveformResponseModeMinInclusive,
-            SyncForegroundWaveformResponseModeMaxExclusive),
-        ForegroundWaveformStrongPositionShift = SyncForegroundWaveformStrongPositionShift,
-        ForegroundWaveformSubtlePositionShift = SyncForegroundWaveformSubtlePositionShift,
+        BackgroundWaveformName = SyncBackgroundWaveformName,
+        BackgroundWaveformBrightnessFloor = SyncBackgroundWaveformBrightnessFloor,
         BackgroundDropTileHueStep = SyncBackgroundDropTileHueStep,
         BackgroundDropHueRate = SyncBackgroundDropHueRate,
         BackgroundDropValue = SyncBackgroundDropValue,
@@ -260,28 +234,19 @@ public class AnimateShapes : EffectBase
     /// <summary>The active foreground Shape List name shown in the debug readout.</summary>
     private string foregroundShapeName;
 
-    /// <summary>Which foreground Waveform strength this activation applies: 1 is Strong and 2 is Subtle.</summary>
-    private int foregroundWaveformResponseMode;
-
     /// <summary>
-    /// Pool entry name of the currently held foreground Waveform, so a live Play Mode edit of the
-    /// ForegroundWaveformName Sync Setting re-acquires while an unchanged setting leaves the held
+    /// Pool entry name of the currently held background Waveform, so a live Play Mode edit of the
+    /// BackgroundWaveformName Sync Setting re-acquires while an unchanged setting leaves the held
     /// value — and any owner's replacement of it — alone.
     /// </summary>
-    private string acquiredForegroundWaveformName;
+    private string acquiredBackgroundWaveformName;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
     public override string DebugText()
     {
-        string responseStrength = foregroundWaveformResponseMode switch
-        {
-            1 => "Strong",
-            2 => "Subtle",
-            _ => $"None ({foregroundWaveformResponseMode})",
-        };
-        return $"shape: {foregroundShapeName}\nForeground Waveform Response: {responseStrength}" +
+        return $"shape: {foregroundShapeName}\nBackground Waveform: {acquiredBackgroundWaveformName}" +
             (foregroundDropRibbonEnvelope > 0f
                 ? $"\nDROP {foregroundDropRibbonEnvelope:0.00}  {SyncSettings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding:0.00} cpb"
                 : "");
@@ -302,16 +267,10 @@ public class AnimateShapes : EffectBase
         foregroundPalette.Refresh(APalette, beatManager.IsSynced
             ? SyncSettings.ForegroundPaletteConditioning
             : standaloneSettings.ForegroundPaletteConditioning);
-        string requestedForegroundWaveformName = SyncSettings.ForegroundWaveformName;
-        waveform = waveforms.Named(requestedForegroundWaveformName);
-        acquiredForegroundWaveformName = requestedForegroundWaveformName;
+        string requestedBackgroundWaveformName = SyncSettings.BackgroundWaveformName;
+        waveform = waveforms.Named(requestedBackgroundWaveformName);
+        acquiredBackgroundWaveformName = requestedBackgroundWaveformName;
         foregroundShapes = penrose.Layout.shapes.Circles;
-        IntRange foregroundWaveformResponseModeRange = beatManager.IsSynced
-            ? SyncSettings.ForegroundWaveformResponseMode
-            : standaloneSettings.ForegroundWaveformResponseMode;
-        foregroundWaveformResponseMode = Random.Range(
-            foregroundWaveformResponseModeRange.MinInclusive,
-            foregroundWaveformResponseModeRange.MaxExclusive);
         foregroundShapeName = "circles";
         foregroundPositions = new float[foregroundShapes.GroupCount];
         for (int i = 0; i < foregroundShapes.GroupCount; i++)
@@ -333,9 +292,9 @@ public class AnimateShapes : EffectBase
     /// </summary>
     /// <remarks>
     /// The background pass establishes the complementary Tile colors; the following foreground pass
-    /// overwrites exact Circle/Arc membership. Foreground settings and the foreground Waveform response
-    /// never enter the background calculation, while background settings cannot survive the foreground
-    /// overwrite. The foreground Drop ribbons read their Stock Envelope and measured beat interval here
+    /// overwrites exact Circle/Arc membership. Background settings and the background Waveform response
+    /// cannot survive the foreground overwrite, while foreground settings never enter the background
+    /// calculation. The foreground Drop ribbons read their Stock Envelope and measured beat interval here
     /// every frame, so every ribbon Sync Setting remains live in Play Mode. The authored window is
     /// independent of the wire's Drop length, and Energy scales only the ordinary crawl, never the
     /// ribbon flow phase.
@@ -352,9 +311,9 @@ public class AnimateShapes : EffectBase
     /// </summary>
     /// <param name="isSynced">Whether the Data Surface selects Synced rather than Standalone Mode.</param>
     /// <remarks>
-    /// This method reads only background-owned visual settings. An active Drop is the raw Data Surface
-    /// fact that selects the Drop background; its Value intentionally remains 10 before final
-    /// HSV-to-RGB conversion to preserve the approved clipped rainbow.
+    /// This method reads only background-owned visual settings and the held Waveform. An active Drop
+    /// is the raw Data Surface fact that selects the Drop background; its Value remains one so the
+    /// rotating hue gradient reaches full brightness without clipping into flat RGB bands.
     /// </remarks>
     private void DrawBackground(bool isSynced)
     {
@@ -364,6 +323,15 @@ public class AnimateShapes : EffectBase
         float backgroundDropTileHueStep = SyncSettings.BackgroundDropTileHueStep;
         float backgroundDropHueRate = SyncSettings.BackgroundDropHueRate;
         float backgroundDropValue = SyncSettings.BackgroundDropValue;
+        string requestedBackgroundWaveformName = SyncSettings.BackgroundWaveformName;
+        if (requestedBackgroundWaveformName != acquiredBackgroundWaveformName)
+        {
+            waveform = waveforms.Named(requestedBackgroundWaveformName);
+            acquiredBackgroundWaveformName = requestedBackgroundWaveformName;
+        }
+        float backgroundWaveformBrightness = isSynced
+            ? waveform.Lerp(SyncSettings.BackgroundWaveformBrightnessFloor, 1f)
+            : 1f;
 
         backgroundHue += effectDelta * backgroundHueRate;
         backgroundHue = Mathf.Repeat(backgroundHue, 1f);
@@ -375,10 +343,14 @@ public class AnimateShapes : EffectBase
                 float phase = Mathf.Repeat(
                     i * backgroundDropTileHueStep + backgroundDropHueOffset,
                     1f);
-                buffer[i] = Color.HSVToRGB(
+                Color dropBackgroundColor = Color.HSVToRGB(
                     phase,
                     1f,
                     backgroundDropValue);
+                dropBackgroundColor.r *= backgroundWaveformBrightness;
+                dropBackgroundColor.g *= backgroundWaveformBrightness;
+                dropBackgroundColor.b *= backgroundWaveformBrightness;
+                buffer[i] = dropBackgroundColor;
             }
             return;
         }
@@ -387,6 +359,9 @@ public class AnimateShapes : EffectBase
             backgroundHue,
             1f,
             1f);
+        backgroundColor.r *= backgroundWaveformBrightness;
+        backgroundColor.g *= backgroundWaveformBrightness;
+        backgroundColor.b *= backgroundWaveformBrightness;
         for (int i = 0; i < buffer.Length; i++)
         {
             buffer[i] = backgroundColor;
@@ -398,8 +373,8 @@ public class AnimateShapes : EffectBase
     /// </summary>
     /// <param name="isSynced">Whether the Data Surface selects Synced rather than Standalone Mode.</param>
     /// <remarks>
-    /// This method reads only foreground-owned visual settings plus the Energy, Drop, Fill, Waveform,
-    /// and Timing facts that drive those foreground mappings. Its writes are limited to exact
+    /// This method reads only foreground-owned visual settings plus the Energy, Drop, Fill, and Timing
+    /// facts that drive those foreground mappings. Its writes are limited to exact
     /// Circle/Arc membership.
     /// </remarks>
     private void DrawForeground(bool isSynced)
@@ -424,24 +399,7 @@ public class AnimateShapes : EffectBase
         float foregroundFillBlackAndWhiteProbability =
             SyncSettings.ForegroundFillBlackAndWhiteProbability;
         float foregroundFillBrightnessLift = SyncSettings.ForegroundFillBrightnessLift;
-        float foregroundWaveformPositionShift = 0f;
         int groupCount = foregroundShapes.GroupCount;
-
-        string requestedForegroundWaveformName = SyncSettings.ForegroundWaveformName;
-        if (requestedForegroundWaveformName != acquiredForegroundWaveformName)
-        {
-            waveform = waveforms.Named(requestedForegroundWaveformName);
-            acquiredForegroundWaveformName = requestedForegroundWaveformName;
-        }
-
-        // Both strengths map the held Waveform only onto foreground palette position.
-        float rhythm = waveform.Envelope;
-        if (foregroundWaveformResponseMode == 1)
-            foregroundWaveformPositionShift =
-                SyncSettings.ForegroundWaveformStrongPositionShift * rhythm;
-        else if (foregroundWaveformResponseMode == 2)
-            foregroundWaveformPositionShift =
-                SyncSettings.ForegroundWaveformSubtlePositionShift * rhythm;
 
         if (Random.value < ForegroundGroupReseedsPerSecond * effectDelta)
         {
@@ -464,8 +422,7 @@ public class AnimateShapes : EffectBase
                 int idx = group[j];
                 float palettePosition =
                     (groupPosition +
-                    foregroundTilePositionStep * group.PackedIndex(j) +
-                    foregroundWaveformPositionShift) % 1f;
+                    foregroundTilePositionStep * group.PackedIndex(j)) % 1f;
                 Color paletteColor = foregroundPalette.ReadCyclic(
                     palettePosition,
                     doblend: true);
@@ -573,10 +530,7 @@ public sealed class AnimateShapesStandaloneSettings
     /// <summary>Foreground palette-position advance per second for each packed Circle or Arc.</summary>
     public float ForegroundPositionAdvancePerSecond;
 
-    /// <summary>Per-activation range selecting the Strong or Subtle foreground Waveform response.</summary>
-    public IntRange ForegroundWaveformResponseMode;
-
-    /// <summary>Copies every AnimateShapes Standalone Setting, including foreground response-mode Rails.</summary>
+    /// <summary>Copies every AnimateShapes Standalone Setting.</summary>
     public void CopyFrom(AnimateShapesStandaloneSettings source)
     {
         if (source == null)
@@ -588,11 +542,6 @@ public sealed class AnimateShapesStandaloneSettings
         ForegroundPaletteConditioning = source.ForegroundPaletteConditioning;
         ForegroundTilePositionStep = source.ForegroundTilePositionStep;
         ForegroundPositionAdvancePerSecond = source.ForegroundPositionAdvancePerSecond;
-        ForegroundWaveformResponseMode = new IntRange(
-            source.ForegroundWaveformResponseMode.MinInclusive,
-            source.ForegroundWaveformResponseMode.MaxExclusive,
-            source.ForegroundWaveformResponseMode.LowRail,
-            source.ForegroundWaveformResponseMode.HighRail);
     }
 }
 
@@ -643,24 +592,15 @@ public sealed class AnimateShapesSyncSettings
     public float ForegroundDropRibbonBrightness;
 
     /// <summary>
-    /// Live Pool entry name of the one Waveform this effect holds — the rhythm that shifts foreground
-    /// palette positions. A name missing from the Pool is a configuration error and fails visibly.
+    /// Live Pool entry name of the one Waveform this effect holds — the rhythm that changes background
+    /// brightness. A name missing from the Pool is a configuration error and fails visibly.
     /// </summary>
     [WaveformName]
-    public string ForegroundWaveformName;
+    public string BackgroundWaveformName;
 
-    /// <summary>Per-activation range selecting the Strong or Subtle foreground Waveform response.</summary>
-    public IntRange ForegroundWaveformResponseMode;
-
-    /// <summary>Maximum palette-position shift applied by the Strong foreground Waveform response.</summary>
-    public float ForegroundWaveformStrongPositionShift;
-
-    /// <summary>
-    /// Maximum palette-position shift applied by the Subtle foreground Waveform response. This single
-    /// live magnitude replaces the former sampled-time seconds and hue-scale controls while preserving
-    /// their product, which was the only rendered value.
-    /// </summary>
-    public float ForegroundWaveformSubtlePositionShift;
+    /// <summary>Live background brightness at a held Waveform trough; peaks always reach one.</summary>
+    [Range(0f, 1f)]
+    public float BackgroundWaveformBrightnessFloor;
 
     /// <summary>Hue step between consecutive Tile indexes in the active Drop background.</summary>
     public float BackgroundDropTileHueStep;
@@ -669,8 +609,8 @@ public sealed class AnimateShapesSyncSettings
     public float BackgroundDropHueRate;
 
     /// <summary>
-    /// Value supplied to the Drop background before final HSV-to-RGB conversion. It intentionally
-    /// remains 10 so the final conversion produces the approved clipped rainbow.
+    /// Value supplied to the Drop background before final HSV-to-RGB conversion. One keeps the
+    /// rotating hue gradient smooth and full-brightness.
     /// </summary>
     public float BackgroundDropValue;
 
@@ -701,14 +641,8 @@ public sealed class AnimateShapesSyncSettings
         ForegroundDropRibbonFlowCyclesPerBeatAtLanding =
             source.ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
         ForegroundDropRibbonBrightness = source.ForegroundDropRibbonBrightness;
-        ForegroundWaveformName = source.ForegroundWaveformName;
-        ForegroundWaveformResponseMode = new IntRange(
-            source.ForegroundWaveformResponseMode.MinInclusive,
-            source.ForegroundWaveformResponseMode.MaxExclusive,
-            source.ForegroundWaveformResponseMode.LowRail,
-            source.ForegroundWaveformResponseMode.HighRail);
-        ForegroundWaveformStrongPositionShift = source.ForegroundWaveformStrongPositionShift;
-        ForegroundWaveformSubtlePositionShift = source.ForegroundWaveformSubtlePositionShift;
+        BackgroundWaveformName = source.BackgroundWaveformName;
+        BackgroundWaveformBrightnessFloor = source.BackgroundWaveformBrightnessFloor;
         BackgroundDropTileHueStep = source.BackgroundDropTileHueStep;
         BackgroundDropHueRate = source.BackgroundDropHueRate;
         BackgroundDropValue = source.BackgroundDropValue;

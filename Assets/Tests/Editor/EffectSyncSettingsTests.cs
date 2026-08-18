@@ -980,12 +980,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             first.ForegroundPositionAdvancePerSecond,
             Is.EqualTo(second.ForegroundPositionAdvancePerSecond));
-        Assert.That(
-            first.ForegroundWaveformResponseMode,
-            Is.Not.SameAs(second.ForegroundWaveformResponseMode));
-        AssertIntRangeEqual(
-            first.ForegroundWaveformResponseMode,
-            second.ForegroundWaveformResponseMode);
     }
 
     /// <summary>
@@ -1012,7 +1006,6 @@ public sealed class EffectSyncSettingsTests
         };
         asset.Settings.ForegroundTilePositionStep = 18f;
         asset.Settings.ForegroundPositionAdvancePerSecond = 19f;
-        asset.Settings.ForegroundWaveformResponseMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
             typeof(AnimateShapes),
@@ -1029,9 +1022,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.ForegroundPositionAdvancePerSecond,
             Is.EqualTo(defaults.ForegroundPositionAdvancePerSecond));
-        AssertIntRangeEqual(
-            asset.Settings.ForegroundWaveformResponseMode,
-            defaults.ForegroundWaveformResponseMode);
     }
 
     /// <summary>Restore replaces every edited Tunnel Sync Setting with the current file-local Sync Defaults.</summary>
@@ -1552,10 +1542,8 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ForegroundDropRibbonWindowBeats = 221;
         asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
         asset.Settings.ForegroundDropRibbonBrightness = 223f;
-        asset.Settings.ForegroundWaveformName = "sentinel entry";
-        asset.Settings.ForegroundWaveformResponseMode = new IntRange(20, 21, 19, 22);
-        asset.Settings.ForegroundWaveformStrongPositionShift = 23f;
-        asset.Settings.ForegroundWaveformSubtlePositionShift = 24f;
+        asset.Settings.BackgroundWaveformName = "sentinel entry";
+        asset.Settings.BackgroundWaveformBrightnessFloor = 22f;
         asset.Settings.BackgroundDropTileHueStep = 25f;
         asset.Settings.BackgroundDropHueRate = 26f;
         asset.Settings.BackgroundDropValue = 27f;
@@ -1588,17 +1576,11 @@ public sealed class EffectSyncSettingsTests
             asset.Settings.ForegroundDropRibbonBrightness,
             Is.EqualTo(defaults.ForegroundDropRibbonBrightness));
         Assert.That(
-            asset.Settings.ForegroundWaveformName,
-            Is.EqualTo(defaults.ForegroundWaveformName));
-        AssertIntRangeEqual(
-            asset.Settings.ForegroundWaveformResponseMode,
-            defaults.ForegroundWaveformResponseMode);
+            asset.Settings.BackgroundWaveformName,
+            Is.EqualTo(defaults.BackgroundWaveformName));
         Assert.That(
-            asset.Settings.ForegroundWaveformStrongPositionShift,
-            Is.EqualTo(defaults.ForegroundWaveformStrongPositionShift));
-        Assert.That(
-            asset.Settings.ForegroundWaveformSubtlePositionShift,
-            Is.EqualTo(defaults.ForegroundWaveformSubtlePositionShift));
+            asset.Settings.BackgroundWaveformBrightnessFloor,
+            Is.EqualTo(defaults.BackgroundWaveformBrightnessFloor));
         Assert.That(
             asset.Settings.BackgroundDropTileHueStep,
             Is.EqualTo(defaults.BackgroundDropTileHueStep));

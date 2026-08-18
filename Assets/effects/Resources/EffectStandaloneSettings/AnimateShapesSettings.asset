@@ -26,8 +26,3 @@ MonoBehaviour:
       HueRedistribution: 1
     ForegroundTilePositionStep: 0.01
     ForegroundPositionAdvancePerSecond: 0.6
-    ForegroundWaveformResponseMode:
-      MinInclusive: 1
-      MaxExclusive: 3
-      LowRail: 1
-      HighRail: 3

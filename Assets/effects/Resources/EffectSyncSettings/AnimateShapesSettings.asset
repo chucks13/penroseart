@@ -29,21 +29,15 @@ MonoBehaviour:
     ForegroundEnergyCrawlSpeedMultiplier:
       Min: 0.75
       Max: 1.25
-      LowRail: 0.5
-      HighRail: 1.5
+      LowRail: 0.75
+      HighRail: 1.25
     ForegroundDropRibbonWindowBeats: 16
-    ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 1
-    ForegroundDropRibbonBrightness: 1.25
-    ForegroundWaveformName: beats 2 and 4
-    ForegroundWaveformResponseMode:
-      MinInclusive: 1
-      MaxExclusive: 3
-      LowRail: 1
-      HighRail: 3
-    ForegroundWaveformStrongPositionShift: 0.25
-    ForegroundWaveformSubtlePositionShift: 0.05
+    ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 1.15
+    ForegroundDropRibbonBrightness: 1
+    BackgroundWaveformName: beats 2 and 4
+    BackgroundWaveformBrightnessFloor: 0.5
     BackgroundDropTileHueStep: 0.001
     BackgroundDropHueRate: 0.5
-    BackgroundDropValue: 10
+    BackgroundDropValue: 1
     ForegroundFillBlackAndWhiteProbability: 0.125
     ForegroundFillBrightnessLift: 0.8

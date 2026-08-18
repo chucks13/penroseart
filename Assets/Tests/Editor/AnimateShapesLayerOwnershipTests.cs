@@ -1,7 +1,9 @@
 // Verifies AnimateShapes layer controls through its production OnStart and Draw behavior.
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
+using PenroseArt.RaveOsc;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -22,10 +24,10 @@ public sealed class AnimateShapesLayerOwnershipTests
     }
 
     /// <summary>
-    /// Scenario: a foreground Waveform response and a background hue-rate edit are rendered through
-    /// <see cref="AnimateShapes.Draw"/> with identical rolls and exact Circle/Arc membership.
-    /// Asserts each control changes its owned partition while every Tile in the opposite partition
-    /// keeps its final color.
+    /// Scenario: background Waveform brightness, a background hue-rate edit, and an active Drop are
+    /// rendered through <see cref="AnimateShapes.Draw"/> with identical rolls and exact Circle/Arc
+    /// membership. Asserts each control changes only its owned partition and that the Drop background
+    /// retains a continuous rotating hue gradient rather than clipping into a few flat colors.
     /// </summary>
     [UnityTest]
     public IEnumerator ForegroundAndBackgroundControlsStayInsideCircleArcOwnershipPartitions()
@@ -67,22 +69,24 @@ public sealed class AnimateShapesLayerOwnershipTests
             bool[] foregroundMembership = ReadForegroundMembership(layout.shapes.Circles);
             AnimateShapesSyncSettings settings = settingsAsset.Settings;
             InstallWaveformFixture(controller, settings);
-            settings.ForegroundWaveformResponseMode = new IntRange(1, 2);
             settings.ForegroundPositionAdvancePerSecond = 0f;
             settings.BackgroundHueRate = 0f;
-            settings.ForegroundWaveformStrongPositionShift = 0f;
-            Color[] noForegroundResponse = Render(controller, effectDelta: 0f);
-            settings.ForegroundWaveformStrongPositionShift = 0.25f;
-            Color[] foregroundResponse = Render(controller, effectDelta: 0f);
+            settings.BackgroundWaveformBrightnessFloor = 1f;
+            Color[] fullBackgroundBrightness = Render(controller, effectDelta: 0f);
+            settings.BackgroundWaveformBrightnessFloor = 0f;
+            Color[] waveformBackgroundBrightness = Render(controller, effectDelta: 0f);
 
             AssertOnlyOwnedPartitionChanges(
-                noForegroundResponse,
-                foregroundResponse,
+                fullBackgroundBrightness,
+                waveformBackgroundBrightness,
                 foregroundMembership,
-                changedPartitionIsForeground: true,
-                "foreground Waveform response");
+                changedPartitionIsForeground: false,
+                "background Waveform brightness");
+            AssertBackgroundBrightnessDropsWithWaveform(
+                fullBackgroundBrightness,
+                waveformBackgroundBrightness,
+                foregroundMembership);
 
-            settings.ForegroundWaveformStrongPositionShift = 0f;
             settings.BackgroundHueRate = 0f;
             Color[] stationaryBackground = Render(controller, effectDelta: 1f);
             settings.BackgroundHueRate = 0.1f;
@@ -94,6 +98,34 @@ public sealed class AnimateShapesLayerOwnershipTests
                 foregroundMembership,
                 changedPartitionIsForeground: false,
                 "background hue rate");
+
+            BeatManagerWireFixture.Feed(controller.beatManager, snapshot =>
+            {
+                snapshot.beatInBar = 2;
+                snapshot.beatAverageMs = 500;
+                snapshot.beatsCountMs = new[] { 1500, 0, 500, 1000 };
+                snapshot.dropState = new CountdownState
+                {
+                    active = 1,
+                    countBeats = 16,
+                    lengthBeats = 16,
+                    remaining = 1,
+                };
+            });
+            controller.beatManager.Update(0f);
+            Color[] dropFrame = Render(controller, effectDelta: 0f);
+            var backgroundColors = new HashSet<Color32>();
+            for (int tileIndex = 0; tileIndex < Penrose.Total; tileIndex++)
+            {
+                if (!foregroundMembership[tileIndex])
+                {
+                    backgroundColors.Add(dropFrame[tileIndex]);
+                }
+            }
+            Assert.That(
+                backgroundColors.Count,
+                Is.GreaterThan(300),
+                "the 334 background Tiles should retain a smooth Drop hue gradient");
         }
         finally
         {
@@ -140,7 +172,7 @@ public sealed class AnimateShapesLayerOwnershipTests
         {
             new WaveformPool.Entry(
                 waveformName,
-                Waveform.Parse("QQQQ", "8888", 0.3f, 0f, out _)),
+                Waveform.Parse("QQQQ", "4444", 0.3f, 0f, out _)),
         });
         // Controller startup owns this surface; the test replaces that startup result with its local Pool.
         var setter = typeof(Controller)
@@ -148,7 +180,7 @@ public sealed class AnimateShapesLayerOwnershipTests
             .GetSetMethod(nonPublic: true);
         Assert.That(setter, Is.Not.Null, "the Controller Waveforms setter used by production startup");
         setter.Invoke(controller, new object[] { fixture });
-        settings.ForegroundWaveformName = waveformName;
+        settings.BackgroundWaveformName = waveformName;
     }
 
     /// <summary>Builds exact foreground membership from every packed Circle and Arc group.</summary>
@@ -203,6 +235,33 @@ public sealed class AnimateShapesLayerOwnershipTests
         }
 
         Assert.That(ownedChanges, Is.GreaterThan(0), $"{controlName} must exercise its owned partition");
+    }
+
+    /// <summary>
+    /// Asserts the held Waveform scales background RGB brightness downward from the full-brightness
+    /// reference while leaving alpha and the foreground partition outside this check.
+    /// </summary>
+    private static void AssertBackgroundBrightnessDropsWithWaveform(
+        Color[] fullBrightness,
+        Color[] waveformBrightness,
+        bool[] foregroundMembership)
+    {
+        for (int tileIndex = 0; tileIndex < Penrose.Total; tileIndex++)
+        {
+            if (foregroundMembership[tileIndex])
+            {
+                continue;
+            }
+
+            Assert.That(
+                waveformBrightness[tileIndex].maxColorComponent,
+                Is.LessThan(fullBrightness[tileIndex].maxColorComponent),
+                $"background Tile {tileIndex} should dim below its full-brightness reference");
+            Assert.That(
+                waveformBrightness[tileIndex].a,
+                Is.EqualTo(fullBrightness[tileIndex].a).Within(0.0001f),
+                $"background Tile {tileIndex} Waveform brightness should not change alpha");
+        }
     }
 
     /// <summary>Compares two rendered colors component-by-component within the seam tolerance.</summary>
