@@ -33,7 +33,7 @@ MonoBehaviour:
       HighRail: 1.5
     ForegroundDropRibbonWindowBeats: 16
     ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 1
-    ForegroundDropRibbonBrightness: 1
+    ForegroundDropRibbonBrightness: 1.25
     WaveformName: beats 2 and 4
     DistortionMode:
       MinInclusive: 1
