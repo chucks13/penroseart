@@ -115,7 +115,6 @@ public class Penrose : MonoBehaviour
     {
         var i = 0;
         var j = 0;
-        Vector3 reflect = new Vector3(1, -1, 1);
 
         // grab the geometry
         for (int n = 0; n < Layout.Mesh.Length; n += 6)
@@ -210,9 +209,11 @@ public class Penrose : MonoBehaviour
 
             for (var j = 0; j < Layout.tiles[i].neighbors.Length; j++)
             {
-                t.neighbors[j] = new neighbor();
-                t.neighbors[j].type = Layout.tiles[i].neighbors[j].type;
-                t.neighbors[j].tileIdx = Layout.tiles[i].neighbors[j].tileIdx;
+                t.neighbors[j] = new neighbor
+                {
+                    type = Layout.tiles[i].neighbors[j].type,
+                    tileIdx = Layout.tiles[i].neighbors[j].tileIdx,
+                };
             }
             //            t.neighbors[j] = RawData.Tiles[idx++];
             tiles[i] = t;

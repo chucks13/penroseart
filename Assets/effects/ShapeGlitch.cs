@@ -105,7 +105,7 @@ public class ShapeGlitch : MixerBase
     /// Resolves a fresh copy so saved Standalone Settings can never mutate ShapeGlitch's authored
     /// Standalone Defaults.
     /// </summary>
-    public static ShapeGlitchStandaloneSettings StandaloneDefaults => new ShapeGlitchStandaloneSettings
+    public static ShapeGlitchStandaloneSettings StandaloneDefaults => new()
     {
         ModeRoll = new IntRange(StandaloneModeRollMin, StandaloneModeRollMaxExclusive),
         HighlightCount = new IntRange(StandaloneHighlightCountMin, StandaloneHighlightCountMaxExclusive),
@@ -120,7 +120,7 @@ public class ShapeGlitch : MixerBase
     };
 
     /// <summary>Resolves a fresh copy of ShapeGlitch's file-local Sync Defaults.</summary>
-    public static ShapeGlitchSyncSettings SyncDefaults => new ShapeGlitchSyncSettings
+    public static ShapeGlitchSyncSettings SyncDefaults => new()
     {
         ModeRoll = new IntRange(SyncModeRollMin, SyncModeRollMaxExclusive),
         HighlightCount = new IntRange(SyncHighlightCountMin, SyncHighlightCountMaxExclusive),
@@ -135,14 +135,20 @@ public class ShapeGlitch : MixerBase
     };
 
     /// <summary>ShapeGlitch's stutter/glitch bursts accent Fills and suit Mid/High-energy sections.</summary>
-    /// This is a filter. it intentionall isnt beat awaire. It's meant to be used with beat-aware effects
+    /// <remarks>
+    /// This intentionally beat-unaware filter is meant to wrap beat-aware Effects rather than adding
+    /// another response to their musical motion.
+    /// </remarks>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-
+    /// <summary>The intensity behavior selected for this activation's highlights.</summary>
     private enum Mode
     {
+        /// <summary>Raises intensity until the authored limit turns the highlight off.</summary>
         Blink,
+
+        /// <summary>Reduces intensity until the highlight turns off.</summary>
         Fade
     }
 
@@ -151,7 +157,10 @@ public class ShapeGlitch : MixerBase
     /// </summary>
     public class Highlight
     {
+        /// <summary>The current contribution of this highlight to its selected shape.</summary>
         public float intensity;
+
+        /// <summary>The selected group index in the activation's Shape List.</summary>
         public int index;
     }
 
@@ -161,13 +170,19 @@ public class ShapeGlitch : MixerBase
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private ShapeGlitchSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
+    /// <summary>The child Effect whose frame receives the shape highlights.</summary>
     private EffectBase effect;
 
     /// <summary>The allocation-free Penrose Shape List reader rolled for this activation.</summary>
     private LayoutData.ShapeList.Reader shape;
 
+    /// <summary>The shared highlight color advanced once per Shape List group.</summary>
     private Color color;
+
+    /// <summary>The activation's blinking or fading intensity behavior.</summary>
     private Mode mode;
+
+    /// <summary>The fixed pool of independently spawned shape highlights.</summary>
     private Highlight[] highlights;
 
     /// <summary>
@@ -257,8 +272,7 @@ public class ShapeGlitch : MixerBase
         effect.Init();
         effect.OnStart();
         // Passive composition: the child keeps the Waveform it acquired for itself.
-        var debugText = $"{effect.Name}";
-        controller.debugText.text = debugText;
+        controller.debugText.text = effect.Name;
     }
 
     /// <summary>
@@ -271,18 +285,13 @@ public class ShapeGlitch : MixerBase
     /// </summary>
     public override void Draw()
     {
-
         effect.UpdateTime();
         effect.Draw();
 
         for (int i = 0; i < buffer.Length; i++)
         {
-
-            float r = 0f, g = 0f, b = 0f;
-            r += effect.buffer[i].r;
-            g += effect.buffer[i].g;
-            b += effect.buffer[i].b;
-            buffer[i] = new Color(r, g, b, 1f);
+            Color childColor = effect.buffer[i];
+            buffer[i] = new Color(childColor.r, childColor.g, childColor.b, 1f);
         }
 
         bool isSynced = beatManager.IsSynced;
@@ -292,6 +301,7 @@ public class ShapeGlitch : MixerBase
         float blinkIntensityPerFrame = isSynced ? SyncSettings.BlinkIntensityPerFrame : standaloneSettings.BlinkIntensityPerFrame;
         float blinkIntensityLimit = isSynced ? SyncSettings.BlinkIntensityLimit : standaloneSettings.BlinkIntensityLimit;
         float hueDriftPerShape = isSynced ? SyncSettings.HueDriftPerShape : standaloneSettings.HueDriftPerShape;
+        int groupCount = shape.GroupCount;
 
         if (Random.Range(
             spawnRoll.MinInclusive,
@@ -299,39 +309,43 @@ public class ShapeGlitch : MixerBase
         {
             Highlight newlyCreated = highlights[Random.Range(0, highlights.Length)];
             newlyCreated.intensity = highlightInitialIntensity;
-            newlyCreated.index = Random.Range(0, shape.GroupCount);
+            newlyCreated.index = Random.Range(0, groupCount);
         }
-        for (int i = 0; i < shape.GroupCount; i++)
+
+        for (int i = 0; i < groupCount; i++)
         {
             for (int h = 0; h < highlights.Length; h++)
             {
-                if (highlights[h].index == i)
+                Highlight highlight = highlights[h];
+                if (highlight.index != i || highlight.intensity <= 0f)
                 {
-                    LayoutData.ShapeList.Group group = shape.GetGroup(i);
-                    for (int j = 0; j < group.TileCount; j++)
-                    {
-                        int idx = group[j];
-                        float intensity = highlights[h].intensity;
-                        if (intensity > 1f) { intensity = 1f; }
-                        buffer[idx] = color * intensity + buffer[idx] * (1f - intensity);
-                    }
-                    if (mode == Mode.Fade && highlights[h].intensity > 0f)
-                    {
-                        highlights[h].intensity -= fadeIntensityPerFrame;
-                        if (highlights[h].intensity < 0f)
-                        {
-                            highlights[h].intensity = 0f;
-                        }
-                    }
-                    if (mode == Mode.Blink && highlights[h].intensity > 0f)
-                    {
-                        highlights[h].intensity += blinkIntensityPerFrame;
-                        if (highlights[h].intensity > blinkIntensityLimit)
-                        {
-                            highlights[h].intensity = 0f;
-                        }
-                    }
+                    continue;
+                }
 
+                LayoutData.ShapeList.Group group = shape.GetGroup(i);
+                float intensity = highlight.intensity > 1f ? 1f : highlight.intensity;
+                for (int j = 0; j < group.TileCount; j++)
+                {
+                    int idx = group[j];
+                    buffer[idx] = color * intensity + buffer[idx] * (1f - intensity);
+                }
+
+                if (mode == Mode.Fade)
+                {
+                    highlight.intensity -= fadeIntensityPerFrame;
+                    if (highlight.intensity < 0f)
+                    {
+                        highlight.intensity = 0f;
+                    }
+                }
+
+                if (mode == Mode.Blink)
+                {
+                    highlight.intensity += blinkIntensityPerFrame;
+                    if (highlight.intensity > blinkIntensityLimit)
+                    {
+                        highlight.intensity = 0f;
+                    }
                 }
             }
             Color.RGBToHSV(color, out float hue, out float sat, out float bri);

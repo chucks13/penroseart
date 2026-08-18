@@ -95,28 +95,17 @@ public class Petals : ScreenEffect
     private const float SyncSparkleChance = 0.25f;
 
     /// <summary>
-    /// Authored fixed per-Tile index step used by the Drop and Fill sparkle phase. The intended alternative roll
-    /// remains unfinished: <c>Random.Range(SyncDropDensityMin, SyncDropDensityMax)</c>.
+    /// Authored fixed per-Tile index step used by the Drop and Fill sparkle phase. The unfinished alternative
+    /// would roll from 0.0004f through 0.003f; keeping the fixed value preserves the approved look and Random
+    /// consumption.
     /// </summary>
     private const float SyncSparklePhaseTileIndexStep = 0.001f;
 
-    /// <summary>Authored minimum for the unfinished per-activation Drop/Fill sparkle-density roll.</summary>
-    private const float SyncDropDensityMin = 0.0004f;
-
-    /// <summary>Authored maximum for the unfinished per-activation Drop/Fill sparkle-density roll.</summary>
-    private const float SyncDropDensityMax = 0.003f;
-
     /// <summary>
-    /// Authored fixed speed used by the Drop and Fill sparkle phase. The intended alternative roll
-    /// remains unfinished: <c>Random.Range(SyncDropSpeedMin, SyncDropSpeedMax)</c>.
+    /// Authored fixed speed used by the Drop and Fill sparkle phase. The unfinished alternative would roll
+    /// from 0.1f through 1f; keeping the fixed value preserves the approved look and Random consumption.
     /// </summary>
     private const float SyncSparklePhaseSpeed = 0.5f;
-
-    /// <summary>Authored minimum for the unfinished per-activation Drop/Fill sparkle-speed roll.</summary>
-    private const float SyncDropSpeedMin = 0.1f;
-
-    /// <summary>Authored maximum for the unfinished per-activation Drop/Fill sparkle-speed roll.</summary>
-    private const float SyncDropSpeedMax = 1f;
 
     /// <summary>Authored HDR value of tiles replaced by a Drop or Fill sparkle.</summary>
     private const float SyncSparkleValue = 10f;
@@ -178,7 +167,7 @@ public class Petals : ScreenEffect
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
     /// </summary>
-    public override string DebugText() { return $""; }
+    public override string DebugText() => string.Empty;
 
     /// <summary>
     /// Resolves Effect Settings and initializes per-activation random state before this effect starts drawing.
@@ -244,21 +233,21 @@ public class Petals : ScreenEffect
         int bitMask = Random.Range(layerMask.MinInclusive, layerMask.MaxExclusive);       // randomly select shape layers with bit masks
         background += effectDelta * backgroundHueAdvance;
         background %= 1f;
+        Color backgroundColor = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
+        bool dropActive = beatManager.Drop.Active;
         for (int i = 0; i < buffer.Length; i++)
         {
-            Color color = Color.HSVToRGB(background, 1f, 1f) * beatBrightness;
-            // drop mode stole part of tunnel for the backbround color
-            if (beatManager.Drop.Active)
+            Color color = backgroundColor;
+            if (dropActive && Random.value < sparkleChance)
             {
-                if (Random.value < sparkleChance)
-                {
-                    float phase = (i * sparklePhaseTileIndexStep + (effectTime * sparklePhaseSpeed)) % 1f;
-                    color = Color.HSVToRGB(phase, 1f, sparkleValue);
-                }
+                float phase = (i * sparklePhaseTileIndexStep + (effectTime * sparklePhaseSpeed)) % 1f;
+                color = Color.HSVToRGB(phase, 1f, sparkleValue);
             }
             buffer[i] = color;
         }
 
+        bool shiftLayerHue = ((1 << 1) & bitMask) == 0;
+        bool fillActive = beatManager.Fill.Active;
         for (int shapeIdx = 0; shapeIdx < 3; shapeIdx++)
         {
             LayoutData.ShapeList.Reader shape = shapeIdx switch
@@ -270,11 +259,13 @@ public class Petals : ScreenEffect
             };
             for (int i = 0; i < shape.GroupCount; i++)
             {
-                int thisBit = 1 << 1;
                 LayoutData.ShapeList.Group group = shape.GetGroup(i);
                 Color.RGBToHSV(colors[shapeIdx], out float hue, out float sat, out float bri);
-                if ((thisBit & bitMask) == 0)
+                if (shiftLayerHue)
+                {
                     hue += hueShift;
+                }
+
                 for (int j = 0; j < group.TileCount; j++)
                 {
                     int idx = group[j];
@@ -282,14 +273,10 @@ public class Petals : ScreenEffect
                         (hue + tileHueSpread * group.PackedIndex(j)) % 1f,
                         sat,
                         bri) * beatBrightness;
-                    if (beatManager.Fill.Active)
+                    if (fillActive && Random.value < sparkleChance)
                     {
-                        if (Random.value < sparkleChance)
-                        {
-                            float phase = (idx * sparklePhaseTileIndexStep + (effectTime * sparklePhaseSpeed)) % 1f;
-                            color = Color.HSVToRGB(phase, 1f, sparkleValue);
-
-                        }
+                        float phase = (idx * sparklePhaseTileIndexStep + (effectTime * sparklePhaseSpeed)) % 1f;
+                        color = Color.HSVToRGB(phase, 1f, sparkleValue);
                     }
                     buffer[idx] = color;
                 }

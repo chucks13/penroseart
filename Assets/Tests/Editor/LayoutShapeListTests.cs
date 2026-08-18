@@ -20,8 +20,8 @@ public class LayoutShapeListTests
     /// <summary>The temporary Unity host for the runtime geometry.</summary>
     private GameObject penroseObject;
 
-    /// <summary>Loads the shipped layout and derives its effect-facing geometry facts once per test.</summary>
-    [SetUp]
+    /// <summary>Loads the shipped layout and derives its immutable effect-facing geometry once for the fixture.</summary>
+    [OneTimeSetUp]
     public void SetUp()
     {
         string path = Path.Combine(Application.streamingAssetsPath, "penrose_layout.txt");
@@ -36,8 +36,8 @@ public class LayoutShapeListTests
         penrose.Init(layout);
     }
 
-    /// <summary>Destroys the temporary runtime geometry after each test.</summary>
-    [TearDown]
+    /// <summary>Destroys the fixture's temporary runtime geometry after all cases finish.</summary>
+    [OneTimeTearDown]
     public void TearDown()
     {
         Object.DestroyImmediate(penroseObject);

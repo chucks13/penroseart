@@ -482,7 +482,7 @@ public class Angles : EffectBase
         bool isSynced = beatManager.IsSynced;
         float cyclesPerBeat = isSynced ? ResolveSyncedSweepCyclesPerBeat() : 0f;
         float cyclesPerSecond = isSynced
-            ? ResolveSyncedSweepCyclesPerSecond()
+            ? ResolveSyncedSweepCyclesPerSecond(cyclesPerBeat)
             : standaloneSweepCyclesPerSecond;
         float shadeDepth = isSynced
             ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
@@ -548,13 +548,10 @@ public class Angles : EffectBase
             penrose.Layout.shapes.Stars);
 
         ribbonPositionByActiveFamilyCount = PrecomputeRibbonPositionsByActiveFamilyCount(
-            new[]
-            {
-                penrose.Layout.shapes.Lines0,
-                penrose.Layout.shapes.Lines3,
-                penrose.Layout.shapes.Lines2,
-                penrose.Layout.shapes.Lines1,
-            },
+            penrose.Layout.shapes.Lines0,
+            penrose.Layout.shapes.Lines3,
+            penrose.Layout.shapes.Lines2,
+            penrose.Layout.shapes.Lines1,
             total);
     }
 
@@ -564,7 +561,10 @@ public class Angles : EffectBase
     /// Settling the stable priority during <see cref="Init"/> removes the per-Tile family scan from
     /// <see cref="Draw"/> while still allowing the live Drop envelope to select a density each frame.
     /// </summary>
-    /// <param name="families">The shared Line Ribbon readers in cleanest-first lines0, lines3, lines2, lines1 order.</param>
+    /// <param name="lines0">The cleanest shared Line Ribbon family.</param>
+    /// <param name="lines3">The second shared Line Ribbon family in visual priority order.</param>
+    /// <param name="lines2">The third shared Line Ribbon family in visual priority order.</param>
+    /// <param name="lines1">The fourth shared Line Ribbon family in visual priority order.</param>
     /// <param name="total">Number of Tiles represented by every resolved density.</param>
     /// <returns>Per active-family count and Tile, the selected ribbon position or -1.</returns>
     /// <remarks>
@@ -574,34 +574,39 @@ public class Angles : EffectBase
     /// and mix remain live per frame, so no Sync Setting is baked into the cache.
     /// </remarks>
     private static float[][] PrecomputeRibbonPositionsByActiveFamilyCount(
-        LayoutData.ShapeList.Reader[] families,
+        LayoutData.ShapeList.Reader lines0,
+        LayoutData.ShapeList.Reader lines3,
+        LayoutData.ShapeList.Reader lines2,
+        LayoutData.ShapeList.Reader lines1,
         int total)
     {
-        var positionsByFamily = new float[RibbonFamilyCount][];
-        for (int familyIndex = 0; familyIndex < RibbonFamilyCount; familyIndex++)
-        {
-            var positions = new float[total];
-            for (int tileIndex = 0; tileIndex < total; tileIndex++)
-            {
-                positions[tileIndex] = families[familyIndex].GetPosition(tileIndex);
-            }
-
-            positionsByFamily[familyIndex] = positions;
-        }
-
         var positionsByActiveFamilyCount = new float[RibbonFamilyCount + 1][];
-        positionsByActiveFamilyCount[1] = positionsByFamily[0];
-        for (int activeFamilyCount = 2;
+        for (int activeFamilyCount = 1;
             activeFamilyCount <= RibbonFamilyCount;
             activeFamilyCount++)
         {
-            float[] positions = positionsByFamily[activeFamilyCount - 1];
-            float[] cleanerPositions = positionsByActiveFamilyCount[activeFamilyCount - 1];
+            LayoutData.ShapeList.Reader family = activeFamilyCount switch
+            {
+                1 => lines0,
+                2 => lines3,
+                3 => lines2,
+                _ => lines1,
+            };
+            var positions = new float[total];
             for (int tileIndex = 0; tileIndex < total; tileIndex++)
             {
-                if (cleanerPositions[tileIndex] >= 0f)
+                positions[tileIndex] = family.GetPosition(tileIndex);
+            }
+
+            if (activeFamilyCount > 1)
+            {
+                float[] cleanerPositions = positionsByActiveFamilyCount[activeFamilyCount - 1];
+                for (int tileIndex = 0; tileIndex < total; tileIndex++)
                 {
-                    positions[tileIndex] = cleanerPositions[tileIndex];
+                    if (cleanerPositions[tileIndex] >= 0f)
+                    {
+                        positions[tileIndex] = cleanerPositions[tileIndex];
+                    }
                 }
             }
 
@@ -636,25 +641,24 @@ public class Angles : EffectBase
         }
 
         int groupCount = shapeList.GroupCount;
-        var groupRadii = new float[groupCount];
+        var groupRanks = new float[groupCount];
         float minimumRadius = float.PositiveInfinity;
         float maximumRadius = float.NegativeInfinity;
 
         for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
         {
             float radius = shapeList.GetCentroid(groupIndex).magnitude;
-            groupRadii[groupIndex] = radius;
+            groupRanks[groupIndex] = radius;
             minimumRadius = Mathf.Min(minimumRadius, radius);
             maximumRadius = Mathf.Max(maximumRadius, radius);
         }
 
-        var groupRanks = new float[groupCount];
         for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
         {
             float unitRank = Mathf.InverseLerp(
                 maximumRadius,
                 minimumRadius,
-                groupRadii[groupIndex]);
+                groupRanks[groupIndex]);
             groupRanks[groupIndex] = unitRank;
         }
 
@@ -904,6 +908,7 @@ public class Angles : EffectBase
     /// Converts the smoothed hue-cycles-per-beat response to cycles per second with the Data
     /// Surface's measured live beat interval, so a faster track sweeps faster at the same tier.
     /// </summary>
+    /// <param name="cyclesPerBeat">The already resolved Synced hue-sweep rate in palette cycles per beat.</param>
     /// <returns>The current Synced hue-sweep rate in palette cycles per second.</returns>
     /// <remarks>
     /// The interval is typed nullable, but it cannot be absent here. <c>IsSynced</c> is true only
@@ -911,10 +916,10 @@ public class Angles : EffectBase
     /// and the wire reports no beat average only when no live player can contribute one. The null
     /// arm therefore exists to unwrap the <see cref="int"/>? and never renders.
     /// </remarks>
-    private float ResolveSyncedSweepCyclesPerSecond()
+    private float ResolveSyncedSweepCyclesPerSecond(float cyclesPerBeat)
     {
         return beatManager.Timing.BeatAverageMilliseconds is { } beatAverageMilliseconds
-            ? ResolveSyncedSweepCyclesPerBeat() * 1000f / beatAverageMilliseconds
+            ? cyclesPerBeat * 1000f / beatAverageMilliseconds
             : 0f;
     }
 
@@ -1063,8 +1068,9 @@ public class Angles : EffectBase
         float shadeDepth = isSynced
             ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
             : standaloneSettings.ShadeDepth.Min;
+        float sweepCyclesPerBeat = isSynced ? ResolveSyncedSweepCyclesPerBeat() : 0f;
         float sweepCyclesPerSecond = isSynced
-            ? ResolveSyncedSweepCyclesPerSecond()
+            ? ResolveSyncedSweepCyclesPerSecond(sweepCyclesPerBeat)
             : standaloneSweepCyclesPerSecond;
         huePhase = Mathf.Repeat(huePhase + (sweepCyclesPerSecond * effectDelta), 1f);
 

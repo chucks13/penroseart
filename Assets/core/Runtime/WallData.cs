@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -236,16 +235,30 @@ public class LayoutData
         /// <param name="tiles">The effect-facing Tiles after their Mesh-derived centers and y flip exist.</param>
         internal void Derive(Penrose.TileData[] tiles)
         {
-            ringsFacts = DeriveFacts(loops, tiles, RoleKind.None, PathKind.Ring);
-            starsFacts = DeriveFacts(stars, tiles, RoleKind.None, PathKind.None);
-            lines0Facts = DeriveFacts(lines0, tiles, RoleKind.None, PathKind.Ribbon);
-            lines1Facts = DeriveFacts(lines1, tiles, RoleKind.None, PathKind.Ribbon);
-            lines2Facts = DeriveFacts(lines2, tiles, RoleKind.None, PathKind.Ribbon);
-            lines3Facts = DeriveFacts(lines3, tiles, RoleKind.None, PathKind.Ribbon);
-            lotusballFacts = DeriveFacts(lotusballs, tiles, RoleKind.Lotusball, PathKind.None);
-            starballFacts = DeriveFacts(starballs, tiles, RoleKind.Starball, PathKind.None);
-            mirror2Facts = DeriveFacts(mirror2, tiles, RoleKind.None, PathKind.None);
-            mirror10Facts = DeriveFacts(mirror10, tiles, RoleKind.None, PathKind.None);
+            var stampByTile = new int[tiles.Length];
+            var tileScratch = new int[tiles.Length];
+            int nextStamp = 0;
+
+            ringsFacts = DeriveFacts(
+                loops, tiles, RoleKind.None, PathKind.Ring, stampByTile, tileScratch, ref nextStamp);
+            starsFacts = DeriveFacts(
+                stars, tiles, RoleKind.None, PathKind.None, stampByTile, tileScratch, ref nextStamp);
+            lines0Facts = DeriveFacts(
+                lines0, tiles, RoleKind.None, PathKind.Ribbon, stampByTile, tileScratch, ref nextStamp);
+            lines1Facts = DeriveFacts(
+                lines1, tiles, RoleKind.None, PathKind.Ribbon, stampByTile, tileScratch, ref nextStamp);
+            lines2Facts = DeriveFacts(
+                lines2, tiles, RoleKind.None, PathKind.Ribbon, stampByTile, tileScratch, ref nextStamp);
+            lines3Facts = DeriveFacts(
+                lines3, tiles, RoleKind.None, PathKind.Ribbon, stampByTile, tileScratch, ref nextStamp);
+            lotusballFacts = DeriveFacts(
+                lotusballs, tiles, RoleKind.Lotusball, PathKind.None, stampByTile, tileScratch, ref nextStamp);
+            starballFacts = DeriveFacts(
+                starballs, tiles, RoleKind.Starball, PathKind.None, stampByTile, tileScratch, ref nextStamp);
+            mirror2Facts = DeriveFacts(
+                mirror2, tiles, RoleKind.None, PathKind.None, stampByTile, tileScratch, ref nextStamp);
+            mirror10Facts = DeriveFacts(
+                mirror10, tiles, RoleKind.None, PathKind.None, stampByTile, tileScratch, ref nextStamp);
         }
 
         /// <summary>Builds the plain reverse-index, role, Contour, position, closure, and centroid arrays for one list.</summary>
@@ -253,12 +266,18 @@ public class LayoutData
         /// <param name="tiles">The effect-facing Tiles carrying centers and Neighbors.</param>
         /// <param name="roleKind">The named internal roles expressed by this Motif family.</param>
         /// <param name="pathKind">The packed-order path fact expressed by this Motif family.</param>
+        /// <param name="stampByTile">Reusable per-Tile stamps that deduplicate each group and Contour.</param>
+        /// <param name="tileScratch">Reusable storage for one group's deduplicated Tiles.</param>
+        /// <param name="nextStamp">The next unique stamp shared by every derived Shape List.</param>
         /// <returns>The derived facts held behind one <see cref="Reader"/>.</returns>
         private static DerivedFacts DeriveFacts(
             int[] packed,
             Penrose.TileData[] tiles,
             RoleKind roleKind,
-            PathKind pathKind)
+            PathKind pathKind,
+            int[] stampByTile,
+            int[] tileScratch,
+            ref int nextStamp)
         {
             var source = new Reader(packed, facts: null);
             int groupCount = source.GroupCount;
@@ -269,7 +288,6 @@ public class LayoutData
             var centroidByGroup = new Vector2[groupCount];
             var closedByGroup = new bool[groupCount];
             var uniqueTilesByGroup = new int[groupCount][];
-            var seenInGroup = new int[tiles.Length];
 
             for (int tileIndex = 0; tileIndex < tiles.Length; tileIndex++)
             {
@@ -281,23 +299,23 @@ public class LayoutData
             {
                 centerByGroup[groupIndex] = -1;
                 Group group = source.GetGroup(groupIndex);
-                var uniqueTiles = new List<int>(group.TileCount);
-                int groupStamp = groupIndex + 1;
+                int uniqueTileCount = 0;
+                int groupStamp = ++nextStamp;
                 for (int packedIndex = 0; packedIndex < group.TileCount; packedIndex++)
                 {
                     int tile = group[packedIndex];
-                    if (seenInGroup[tile] == groupStamp)
+                    if (stampByTile[tile] == groupStamp)
                     {
                         continue;
                     }
 
-                    seenInGroup[tile] = groupStamp;
-                    uniqueTiles.Add(tile);
+                    stampByTile[tile] = groupStamp;
+                    tileScratch[uniqueTileCount++] = tile;
                     groupByTile[tile] = groupIndex;
                     centroidByGroup[groupIndex] += tiles[tile].center;
                 }
 
-                int[] unique = uniqueTiles.ToArray();
+                int[] unique = CopyTiles(tileScratch, uniqueTileCount);
                 uniqueTilesByGroup[groupIndex] = unique;
                 centroidByGroup[groupIndex] /= unique.Length;
                 DerivePathFacts(
@@ -317,7 +335,13 @@ public class LayoutData
                     centerByGroup);
             }
 
-            int[][] contourByGroup = DeriveContours(uniqueTilesByGroup, groupByTile, tiles);
+            int[][] contourByGroup = DeriveContours(
+                uniqueTilesByGroup,
+                groupByTile,
+                tiles,
+                stampByTile,
+                tileScratch,
+                ref nextStamp);
             return new DerivedFacts(
                 groupByTile,
                 partByTile,
@@ -421,38 +445,61 @@ public class LayoutData
         /// <param name="uniqueTilesByGroup">The deduplicated member Tiles for every group.</param>
         /// <param name="groupByTile">The complete tile-to-group reverse index whose membership outranks Contours.</param>
         /// <param name="tiles">The effect-facing Tiles carrying Neighbors.</param>
+        /// <param name="stampByTile">Reusable per-Tile stamps that deduplicate each Contour.</param>
+        /// <param name="tileScratch">Reusable storage for one group's deduplicated Contour Tiles.</param>
+        /// <param name="nextStamp">The next unique stamp shared by every derived Shape List.</param>
         /// <returns>One plain Contour Tile array per group.</returns>
         private static int[][] DeriveContours(
             int[][] uniqueTilesByGroup,
             int[] groupByTile,
-            Penrose.TileData[] tiles)
+            Penrose.TileData[] tiles,
+            int[] stampByTile,
+            int[] tileScratch,
+            ref int nextStamp)
         {
             var contours = new int[uniqueTilesByGroup.Length][];
-            var claimedForGroup = new int[tiles.Length];
             for (int groupIndex = 0; groupIndex < uniqueTilesByGroup.Length; groupIndex++)
             {
-                var contour = new List<int>();
-                int groupStamp = groupIndex + 1;
+                int contourTileCount = 0;
+                int groupStamp = ++nextStamp;
                 int[] group = uniqueTilesByGroup[groupIndex];
                 for (int tileIndex = 0; tileIndex < group.Length; tileIndex++)
                 {
                     foreach (Penrose.neighbor neighbor in tiles[group[tileIndex]].neighbors)
                     {
                         int candidate = neighbor.tileIdx;
-                        if (groupByTile[candidate] >= 0 || claimedForGroup[candidate] == groupStamp)
+                        if (groupByTile[candidate] >= 0 || stampByTile[candidate] == groupStamp)
                         {
                             continue;
                         }
 
-                        claimedForGroup[candidate] = groupStamp;
-                        contour.Add(candidate);
+                        stampByTile[candidate] = groupStamp;
+                        tileScratch[contourTileCount++] = candidate;
                     }
                 }
 
-                contours[groupIndex] = contour.ToArray();
+                contours[groupIndex] = CopyTiles(tileScratch, contourTileCount);
             }
 
             return contours;
+        }
+
+        /// <summary>
+        /// Copies one completed Tile-index range out of shared scratch storage so its reader remains stable.
+        /// </summary>
+        /// <param name="source">The shared Tile-index scratch array.</param>
+        /// <param name="count">The number of populated entries to retain.</param>
+        /// <returns>A right-sized stable array, or the shared empty array when the range is empty.</returns>
+        private static int[] CopyTiles(int[] source, int count)
+        {
+            if (count == 0)
+            {
+                return Array.Empty<int>();
+            }
+
+            var copy = new int[count];
+            Array.Copy(source, copy, count);
+            return copy;
         }
 
         /// <summary>Counts how many of one Tile's Neighbors belong to the supplied Motif group.</summary>

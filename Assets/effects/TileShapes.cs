@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -86,7 +84,7 @@ public class TileShapes : EffectBase
         Repertoire.HandlesFill | Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>Resolves a fresh immutable-by-convention copy of TileShapes' Standalone Defaults.</summary>
-    public static TileShapesStandaloneSettings StandaloneDefaults => new TileShapesStandaloneSettings
+    public static TileShapesStandaloneSettings StandaloneDefaults => new()
     {
         RandomColorThreshold = StandaloneRandomColorThreshold,
         FixedHue = new FloatRange(StandaloneFixedHueMin, StandaloneFixedHueMax),
@@ -98,7 +96,7 @@ public class TileShapes : EffectBase
     };
 
     /// <summary>Resolves a fresh copy of TileShapes' file-local Sync Defaults.</summary>
-    public static TileShapesSyncSettings SyncDefaults => new TileShapesSyncSettings
+    public static TileShapesSyncSettings SyncDefaults => new()
     {
         RandomColorThreshold = SyncRandomColorThreshold,
         FixedHue = new FloatRange(SyncFixedHueMin, SyncFixedHueMax),
@@ -153,23 +151,20 @@ public class TileShapes : EffectBase
             SyncDefaults);
         waveform = waveforms.Random();
 
-        float randomColorThreshold = beatManager.IsSynced
+        bool isSynced = beatManager.IsSynced;
+        float randomColorThreshold = isSynced
             ? SyncSettings.RandomColorThreshold
             : standaloneSettings.RandomColorThreshold;
-        if (Random.value > randomColorThreshold)
+        randomColor = Random.value > randomColorThreshold;
+        if (!randomColor)
         {
-            randomColor = true;
-        }
-        else
-        {
-            randomColor = false;
-            FloatRange fixedHue = beatManager.IsSynced
+            FloatRange fixedHue = isSynced
                 ? SyncSettings.FixedHue
                 : standaloneSettings.FixedHue;
             hue = Mathf.Lerp(fixedHue.Min, fixedHue.Max, Random.value);
         }
 
-        IntRange shapeSelector = beatManager.IsSynced
+        IntRange shapeSelector = isSynced
             ? SyncSettings.ShapeSelector
             : standaloneSettings.ShapeSelector;
         switch (Random.Range(shapeSelector.MinInclusive, shapeSelector.MaxExclusive))
@@ -200,7 +195,7 @@ public class TileShapes : EffectBase
                 break;
         }
 
-        var text = (randomColor) ? "random" : hue.ToString();
+        var text = randomColor ? "random" : hue.ToString();
         controller.debugText.text = $"Color: {text}";
         buffer.Clear();
     }
@@ -217,42 +212,46 @@ public class TileShapes : EffectBase
     public override void Draw()
     {
         // Beat pulse scales randomly selected shape flashes.
-        float randomColorBrightnessAtPeak = beatManager.IsSynced
+        bool isSynced = beatManager.IsSynced;
+        float randomColorBrightnessAtPeak = isSynced
             ? SyncSettings.RandomColorBrightness.Max
             : standaloneSettings.RandomColorBrightnessAtPeak;
         float beatBrightness = waveform.Lerp(
             SyncSettings.RandomColorBrightness.Min,
             randomColorBrightnessAtPeak);
-        float fixedHueShiftAtPeak = beatManager.IsSynced
+        float fixedHueShiftAtPeak = isSynced
             ? SyncSettings.FixedHueShift.Max
             : standaloneSettings.FixedHueShiftAtPeak;
         float hueShift = waveform.Lerp(
             SyncSettings.FixedHueShift.Min,
             fixedHueShiftAtPeak);
-        int flashCountDivisor = beatManager.IsSynced
+        int flashCountDivisor = isSynced
             ? SyncSettings.FlashCountDivisor
             : standaloneSettings.FlashCountDivisor;
-        FloatRange randomHue = beatManager.IsSynced
+        FloatRange randomHue = isSynced
             ? SyncSettings.RandomHue
             : standaloneSettings.RandomHue;
         buffer.Fade();
         int count = (int)(effectDelta * buffer.Length);
-        count = count / flashCountDivisor;
+        count /= flashCountDivisor;
+        Color fixedColor = randomColor
+            ? default
+            : Color.HSVToRGB(hue + hueShift, 1f, 1f);
+        int groupCount = shape.GroupCount;
         for (int i = 0; i < count; i++)
         {
-            Color color = Color.HSVToRGB(hue+hueShift, 1f, 1f);
+            Color color = randomColor
+                ? Color.HSVToRGB(
+                    Mathf.Lerp(randomHue.Min, randomHue.Max, Random.value),
+                    1f,
+                    1f) * beatBrightness
+                : fixedColor;
 
-            if (randomColor)
-                color = Color.HSVToRGB(Mathf.Lerp(randomHue.Min, randomHue.Max, Random.value), 1f, 1f)* beatBrightness;
-
-
-            int groupIndex = Random.Range(0, shape.GroupCount);
+            int groupIndex = Random.Range(0, groupCount);
             LayoutData.ShapeList.Group group = shape.GetGroup(groupIndex);
             for (int j = 0; j < group.TileCount; j++)
             {
-                int idx = group[j];
-                if (idx >= 0)
-                    buffer[idx] = color;
+                buffer[group[j]] = color;
             }
         }
     }
@@ -301,14 +300,14 @@ public sealed class TileShapesStandaloneSettings
     }
 
     /// <summary>Creates an asset-owned copy of a floating-point range and its tuning Rails.</summary>
-    private static FloatRange CopyRange(FloatRange source) => new FloatRange(
+    private static FloatRange CopyRange(FloatRange source) => new(
         source.Min,
         source.Max,
         source.LowRail,
         source.HighRail);
 
     /// <summary>Creates an asset-owned copy of an integer range and its tuning Rails.</summary>
-    private static IntRange CopyRange(IntRange source) => new IntRange(
+    private static IntRange CopyRange(IntRange source) => new(
         source.MinInclusive,
         source.MaxExclusive,
         source.LowRail,
@@ -358,14 +357,14 @@ public sealed class TileShapesSyncSettings
     }
 
     /// <summary>Creates an asset-owned copy of a floating-point range and its tuning Rails.</summary>
-    private static FloatRange CopyRange(FloatRange source) => new FloatRange(
+    private static FloatRange CopyRange(FloatRange source) => new(
         source.Min,
         source.Max,
         source.LowRail,
         source.HighRail);
 
     /// <summary>Creates an asset-owned copy of an integer range and its tuning Rails.</summary>
-    private static IntRange CopyRange(IntRange source) => new IntRange(
+    private static IntRange CopyRange(IntRange source) => new(
         source.MinInclusive,
         source.MaxExclusive,
         source.LowRail,

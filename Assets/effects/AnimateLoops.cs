@@ -53,23 +53,18 @@ public class AnimateLoops : EffectBase
     /// <summary>Scale that maps the Time distortion's sampled-time offset into hue.</summary>
     private const float SyncTimeWarpHueScale = 0.1f;
 
-    /// <summary>Current fixed hue step between consecutive Tile indexes in the Drop background; the intended randomization remains unfinished.</summary>
+    /// <summary>
+    /// Current fixed hue step between consecutive Tile indexes in the Drop background. The unfinished
+    /// alternative would roll from 0.0004f through 0.003f; keeping the fixed value preserves the approved
+    /// look and Random consumption.
+    /// </summary>
     private const float SyncDropTileHueStep = 0.001f;
 
-    /// <summary>Authored minimum of the unfinished Drop background-density randomization range.</summary>
-    private const float SyncDropDensityRollMin = 0.0004f;
-
-    /// <summary>Authored maximum of the unfinished Drop background-density randomization range.</summary>
-    private const float SyncDropDensityRollMax = 0.003f;
-
-    /// <summary>Current fixed Drop background hue rate in cycles per second; the intended randomization remains unfinished.</summary>
+    /// <summary>
+    /// Current fixed Drop background hue rate in cycles per second. The unfinished alternative would roll
+    /// from 0.1f through 1f; keeping the fixed value preserves the approved look and Random consumption.
+    /// </summary>
     private const float SyncDropHueRate = 0.5f;
-
-    /// <summary>Authored minimum of the unfinished Drop background-speed randomization range.</summary>
-    private const float SyncDropSpeedRollMin = 0.1f;
-
-    /// <summary>Authored maximum of the unfinished Drop background-speed randomization range.</summary>
-    private const float SyncDropSpeedRollMax = 1f;
 
     /// <summary>Authored value supplied to the Drop background's HSV brightness slot.</summary>
     private const float SyncDropBrightness = 10f;
@@ -198,6 +193,7 @@ public class AnimateLoops : EffectBase
         float fillBlackAndWhiteProbability = SyncSettings.FillBlackAndWhiteProbability;
         float hueShift = 0f;
         float sampleTime = effectTime;
+        int groupCount = shape.GroupCount;
 
         // This effect owns both response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;
@@ -207,26 +203,39 @@ public class AnimateLoops : EffectBase
             sampleTime = effectTime + (SyncSettings.TimeWarpSeconds * rhythm);
 
         float beatOffset = sampleTime - effectTime;
-        colors[Random.Range(0, shape.GroupCount)] = Color.HSVToRGB(Random.value, Random.value, 1f);
+        colors[Random.Range(0, groupCount)] = Color.HSVToRGB(Random.value, Random.value, 1f);
         background += effectDelta * backgroundHueRate;
         background %= 1f;
-        for (int i = 0; i < buffer.Length; i++)
+        bool dropActive = beatManager.Drop.Active;
+        if (dropActive)
         {
-            Color color = Color.HSVToRGB((background + beatOffset * timeWarpHueScale + hueShift) % 1f, 1f, 1f);
-            // drop mode stole part of tunnel for the backbround color
-            if (beatManager.Drop.Active)
+            for (int i = 0; i < buffer.Length; i++)
             {
                 float phase = (i * dropTileHueStep + (effectTime * dropHueRate)) % 1f;
-                color = Color.HSVToRGB(phase, 1f, dropBrightness);
+                buffer[i] = Color.HSVToRGB(phase, 1f, dropBrightness);
             }
-            buffer[i] = color;
         }
-        for (int i = 0; i < shape.GroupCount; i++)
+        else
+        {
+            Color backgroundColor = Color.HSVToRGB(
+                (background + beatOffset * timeWarpHueScale + hueShift) % 1f,
+                1f,
+                1f);
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                buffer[i] = backgroundColor;
+            }
+        }
+
+        bool fillActive = beatManager.Fill.Active;
+        for (int i = 0; i < groupCount; i++)
         {
             LayoutData.ShapeList.Group group = shape.GetGroup(i);
             Color.RGBToHSV(colors[i], out float hue, out float sat, out float bri);
-            if (beatManager.Fill.Active)
+            if (fillActive)
+            {
                 sat = Random.value < fillBlackAndWhiteProbability ? 0f : 1f; // B&W on fills
+            }
 
             for (int j = 0; j < group.TileCount; j++)
             {
