@@ -33,8 +33,6 @@ MonoBehaviour:
       HighRail: 1.5
     ForegroundDropRibbonWindowBeats: 16
     ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 1
-    ForegroundDropRibbonPaletteSpread: 0.25
-    ForegroundDropRibbonBrightnessOverdrive: 4
     DistortionMode:
       MinInclusive: 1
       MaxExclusive: 3

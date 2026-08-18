@@ -1517,7 +1517,7 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including Energy-crawl and distortion-mode Rails and all four foreground Drop
+    /// replaces it—including Energy-crawl and distortion-mode Rails and both foreground Drop
     /// ribbon controls—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
@@ -1543,8 +1543,6 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.ForegroundDropRibbonWindowBeats = 221;
         asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding = 222f;
-        asset.Settings.ForegroundDropRibbonPaletteSpread = 223f;
-        asset.Settings.ForegroundDropRibbonBrightnessOverdrive = 224f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpHueResponseMagnitude = 24f;
@@ -1576,12 +1574,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.ForegroundDropRibbonFlowCyclesPerBeatAtLanding,
             Is.EqualTo(defaults.ForegroundDropRibbonFlowCyclesPerBeatAtLanding));
-        Assert.That(
-            asset.Settings.ForegroundDropRibbonPaletteSpread,
-            Is.EqualTo(defaults.ForegroundDropRibbonPaletteSpread));
-        Assert.That(
-            asset.Settings.ForegroundDropRibbonBrightnessOverdrive,
-            Is.EqualTo(defaults.ForegroundDropRibbonBrightnessOverdrive));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(
