@@ -15,8 +15,17 @@ MonoBehaviour:
   effectTypeName: Circles
   settings:
     BackgroundHueRate: 0.1
-    RingTileHueStep: 0.01
-    RingHueAdvance: 0.01
+    PaletteConditioning:
+      TargetLuminance: 0.4
+      MinimumLuminance: 0.12
+      LuminanceEqualization: 0.85
+      HueSpreadReference: 0.5
+      MaximumLuminanceScale: 4
+      DarkLuminanceThreshold: 0.03
+      DuplicateThreshold: 0.08
+      HueRedistribution: 1
+    CircleTilePositionStep: 0.01
+    CirclePositionAdvance: 0.01
     DistortionMode:
       MinInclusive: 1
       MaxExclusive: 3

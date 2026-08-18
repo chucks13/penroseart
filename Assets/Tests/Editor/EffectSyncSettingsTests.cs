@@ -1696,8 +1696,9 @@ public sealed class EffectSyncSettingsTests
 
         Assert.That(first, Is.Not.SameAs(second));
         Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
-        Assert.That(first.CircleTileHueStep, Is.EqualTo(second.CircleTileHueStep));
-        Assert.That(first.CircleHueAdvance, Is.EqualTo(second.CircleHueAdvance));
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
+        Assert.That(first.CircleTilePositionStep, Is.EqualTo(second.CircleTilePositionStep));
+        Assert.That(first.CirclePositionAdvance, Is.EqualTo(second.CirclePositionAdvance));
         Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
         AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
     }
@@ -1713,8 +1714,19 @@ public sealed class EffectSyncSettingsTests
             typeof(Circles),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.CircleTileHueStep = 18f;
-        asset.Settings.CircleHueAdvance = 19f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.11f,
+            MinimumLuminance = 0.12f,
+            LuminanceEqualization = 0.13f,
+            HueSpreadReference = 0.14f,
+            MaximumLuminanceScale = 1.15f,
+            DarkLuminanceThreshold = 0.016f,
+            DuplicateThreshold = 0.017f,
+            HueRedistribution = 0.18f,
+        };
+        asset.Settings.CircleTilePositionStep = 18f;
+        asset.Settings.CirclePositionAdvance = 19f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
@@ -1723,8 +1735,15 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = Circles.StandaloneDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        Assert.That(asset.Settings.CircleTileHueStep, Is.EqualTo(defaults.CircleTileHueStep));
-        Assert.That(asset.Settings.CircleHueAdvance, Is.EqualTo(defaults.CircleHueAdvance));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
+        Assert.That(
+            asset.Settings.CircleTilePositionStep,
+            Is.EqualTo(defaults.CircleTilePositionStep));
+        Assert.That(
+            asset.Settings.CirclePositionAdvance,
+            Is.EqualTo(defaults.CirclePositionAdvance));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
     }
 
@@ -1739,8 +1758,19 @@ public sealed class EffectSyncSettingsTests
             typeof(Circles),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.CircleTileHueStep = 18f;
-        asset.Settings.CircleHueAdvance = 19f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.21f,
+            MinimumLuminance = 0.22f,
+            LuminanceEqualization = 0.23f,
+            HueSpreadReference = 0.24f,
+            MaximumLuminanceScale = 1.25f,
+            DarkLuminanceThreshold = 0.026f,
+            DuplicateThreshold = 0.027f,
+            HueRedistribution = 0.28f,
+        };
+        asset.Settings.CircleTilePositionStep = 18f;
+        asset.Settings.CirclePositionAdvance = 19f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpSeconds = 24f;
@@ -1754,8 +1784,15 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = Circles.SyncDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        Assert.That(asset.Settings.CircleTileHueStep, Is.EqualTo(defaults.CircleTileHueStep));
-        Assert.That(asset.Settings.CircleHueAdvance, Is.EqualTo(defaults.CircleHueAdvance));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
+        Assert.That(
+            asset.Settings.CircleTilePositionStep,
+            Is.EqualTo(defaults.CircleTilePositionStep));
+        Assert.That(
+            asset.Settings.CirclePositionAdvance,
+            Is.EqualTo(defaults.CirclePositionAdvance));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));

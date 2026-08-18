@@ -15,11 +15,35 @@ public class Circles : EffectBase
     /// <summary>Authored background hue advance per second for the unchanged Standalone look.</summary>
     private const float StandaloneBackgroundHueRate = 0.1f;
 
-    /// <summary>Authored hue step between Tiles within each packed Circle or Arc for the unchanged Standalone look.</summary>
-    private const float StandaloneCircleTileHueStep = 0.01f;
+    /// <summary>
+    /// Standalone palette-family conditioning. The absolute target and floor put every palette in
+    /// the same working band; hue-spread-aware equalization, bounded lift, dark-stop repair, duplicate
+    /// collapse, and full redistribution keep the Circle and Arc crawl colorful across palette families.
+    /// Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning StandalonePaletteConditioning => new()
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
 
-    /// <summary>Authored per-frame hue advance for each Circle or Arc's stored color in the unchanged Standalone look.</summary>
-    private const float StandaloneCircleHueAdvance = 0.01f;
+    /// <summary>
+    /// Authored cyclic palette-position step between Tiles within each packed Circle or Arc,
+    /// preserving the approved Standalone crawl spacing as palette sampling replaces HSV.
+    /// </summary>
+    private const float StandaloneCircleTilePositionStep = 0.01f;
+
+    /// <summary>
+    /// Authored per-frame palette-position advance for each Circle or Arc's stored position,
+    /// preserving the approved frame-driven Standalone crawl.
+    /// </summary>
+    private const float StandaloneCirclePositionAdvance = 0.01f;
 
     /// <summary>Authored inclusive lower bound of the Standalone distortion-mode roll; 1 selects Color.</summary>
     private const int StandaloneDistortionModeMinInclusive = 1;
@@ -32,11 +56,29 @@ public class Circles : EffectBase
     /// <summary>Authored Synced Mode counterpart to the background hue advance used in Standalone Mode.</summary>
     private const float SyncBackgroundHueRate = 0.1f;
 
-    /// <summary>Authored Synced Mode counterpart to the hue step between Tiles within each packed Circle or Arc.</summary>
-    private const float SyncCircleTileHueStep = 0.01f;
+    /// <summary>
+    /// Sync palette-family conditioning, independently authored so ADR-0013 live tuning in one mode
+    /// cannot drift the other. It begins at the same working luminance band, hue-spread-aware
+    /// equalization, bounded lift, dark-stop repair, duplicate collapse, and full redistribution as
+    /// Standalone. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning SyncPaletteConditioning => new()
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
 
-    /// <summary>Authored Synced Mode counterpart to each Circle or Arc's per-frame stored-color hue advance.</summary>
-    private const float SyncCircleHueAdvance = 0.01f;
+    /// <summary>Authored Synced Mode counterpart to the cyclic palette-position step between Tiles.</summary>
+    private const float SyncCircleTilePositionStep = 0.01f;
+
+    /// <summary>Authored Synced Mode counterpart to each Circle or Arc's per-frame palette-position advance.</summary>
+    private const float SyncCirclePositionAdvance = 0.01f;
 
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
@@ -83,8 +125,9 @@ public class Circles : EffectBase
     public static CirclesStandaloneSettings StandaloneDefaults => new()
     {
         BackgroundHueRate = StandaloneBackgroundHueRate,
-        CircleTileHueStep = StandaloneCircleTileHueStep,
-        CircleHueAdvance = StandaloneCircleHueAdvance,
+        PaletteConditioning = StandalonePaletteConditioning,
+        CircleTilePositionStep = StandaloneCircleTilePositionStep,
+        CirclePositionAdvance = StandaloneCirclePositionAdvance,
         DistortionMode = new IntRange(
             StandaloneDistortionModeMinInclusive,
             StandaloneDistortionModeMaxExclusive),
@@ -94,8 +137,9 @@ public class Circles : EffectBase
     public static CirclesSyncSettings SyncDefaults => new()
     {
         BackgroundHueRate = SyncBackgroundHueRate,
-        CircleTileHueStep = SyncCircleTileHueStep,
-        CircleHueAdvance = SyncCircleHueAdvance,
+        PaletteConditioning = SyncPaletteConditioning,
+        CircleTilePositionStep = SyncCircleTilePositionStep,
+        CirclePositionAdvance = SyncCirclePositionAdvance,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -114,8 +158,14 @@ public class Circles : EffectBase
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private CirclesSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>Per-group colors advanced across the packed Circle and Arc data.</summary>
-    private Color[] colors;
+    /// <summary>
+    /// Circles' Effect-local conditioned endpoint cache. It follows shared palette revisions and live
+    /// conditioning controls while preserving the animated cross-fade without steady-frame allocation.
+    /// </summary>
+    private readonly ConditionedPaletteCache conditionedPalette = new();
+
+    /// <summary>Per-group cyclic palette positions advanced across the packed Circle and Arc data.</summary>
+    private float[] positions;
 
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
@@ -149,6 +199,9 @@ public class Circles : EffectBase
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Circles),
             SyncDefaults);
+        conditionedPalette.Refresh(APalette, beatManager.IsSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning);
         waveform = waveforms.Random();
         shape = penrose.Layout.shapes.Circles;
         IntRange distortionModeRange = beatManager.IsSynced
@@ -158,10 +211,10 @@ public class Circles : EffectBase
             distortionModeRange.MinInclusive,
             distortionModeRange.MaxExclusive);
         shapeName = "circles";
-        colors = new Color[shape.GroupCount];
+        positions = new float[shape.GroupCount];
         for (int i = 0; i < shape.GroupCount; i++)
         {
-            colors[i] = Color.HSVToRGB(Random.value, Random.value, 1f);
+            positions[i] = Random.value;
         }
         background = Random.value;
     }
@@ -180,30 +233,34 @@ public class Circles : EffectBase
         float backgroundHueRate = isSynced
             ? SyncSettings.BackgroundHueRate
             : standaloneSettings.BackgroundHueRate;
-        float ringTileHueStep = isSynced
-            ? SyncSettings.CircleTileHueStep
-            : standaloneSettings.CircleTileHueStep;
-        float ringHueAdvance = isSynced
-            ? SyncSettings.CircleHueAdvance
-            : standaloneSettings.CircleHueAdvance;
+        float circleTilePositionStep = isSynced
+            ? SyncSettings.CircleTilePositionStep
+            : standaloneSettings.CircleTilePositionStep;
+        float circlePositionAdvance = isSynced
+            ? SyncSettings.CirclePositionAdvance
+            : standaloneSettings.CirclePositionAdvance;
+        PaletteConditioning paletteConditioning = isSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning;
+        conditionedPalette.Refresh(APalette, paletteConditioning);
         float timeWarpHueScale = SyncSettings.TimeWarpHueScale;
         float dropTileHueStep = SyncSettings.DropTileHueStep;
         float dropHueRate = SyncSettings.DropHueRate;
         float dropBrightness = SyncSettings.DropBrightness;
         float fillBlackAndWhiteProbability = SyncSettings.FillBlackAndWhiteProbability;
-        float hueShift = 0f;
+        float positionShift = 0f;
         float sampleTime = effectTime;
         int groupCount = shape.GroupCount;
 
         // This effect owns both response mappings and their clockless fallbacks.
         float rhythm = waveform.Envelope;
         if (distortionMode == 1)
-            hueShift = SyncSettings.HueResponseMagnitude * rhythm;
+            positionShift = SyncSettings.HueResponseMagnitude * rhythm;
         else if (distortionMode == 2)
             sampleTime = effectTime + (SyncSettings.TimeWarpSeconds * rhythm);
 
         float beatOffset = sampleTime - effectTime;
-        colors[Random.Range(0, groupCount)] = Color.HSVToRGB(Random.value, Random.value, 1f);
+        positions[Random.Range(0, groupCount)] = Random.value;
         background += effectDelta * backgroundHueRate;
         background %= 1f;
         bool dropActive = beatManager.Drop.Active;
@@ -218,7 +275,7 @@ public class Circles : EffectBase
         else
         {
             Color backgroundColor = Color.HSVToRGB(
-                (background + beatOffset * timeWarpHueScale + hueShift) % 1f,
+                (background + beatOffset * timeWarpHueScale + positionShift) % 1f,
                 1f,
                 1f);
             for (int i = 0; i < buffer.Length; i++)
@@ -231,21 +288,30 @@ public class Circles : EffectBase
         for (int i = 0; i < groupCount; i++)
         {
             LayoutData.ShapeList.Group group = shape.GetGroup(i);
-            Color.RGBToHSV(colors[i], out float hue, out float sat, out float bri);
-            if (fillActive)
-            {
-                sat = Random.value < fillBlackAndWhiteProbability ? 0f : 1f; // B&W on fills
-            }
+            float groupPosition = positions[i];
+            bool blackAndWhite = fillActive && Random.value < fillBlackAndWhiteProbability;
 
             for (int j = 0; j < group.TileCount; j++)
             {
                 int idx = group[j];
-                buffer[idx] = Color.HSVToRGB(
-                    (hue + ringTileHueStep * group.PackedIndex(j) + beatOffset * timeWarpHueScale + hueShift) % 1f,
-                    sat,
-                    bri);
+                float palettePosition =
+                    (groupPosition +
+                    circleTilePositionStep * group.PackedIndex(j) +
+                    beatOffset * timeWarpHueScale +
+                    positionShift) % 1f;
+                Color paletteColor = conditionedPalette.ReadCyclic(
+                    palettePosition,
+                    doblend: true);
+                if (blackAndWhite)
+                {
+                    // Fill desaturates the sampled palette color without overwriting the group's
+                    // stored position, so its B&W identity keeps the crawl and ends with the Fill.
+                    Color.RGBToHSV(paletteColor, out _, out _, out float value);
+                    paletteColor = new Color(value, value, value, paletteColor.a);
+                }
+                buffer[idx] = paletteColor;
             }
-            colors[i] = Color.HSVToRGB((hue + ringHueAdvance) % 1f, sat, bri);
+            positions[i] = (groupPosition + circlePositionAdvance) % 1f;
         }
     }
 
@@ -261,11 +327,14 @@ public sealed class CirclesStandaloneSettings
     /// <summary>Background hue advance per second.</summary>
     public float BackgroundHueRate;
 
-    /// <summary>Hue step between Tiles within each packed Circle or Arc.</summary>
-    public float CircleTileHueStep;
+    /// <summary>Live effect-local palette conditioning for the Standalone foreground.</summary>
+    public PaletteConditioning PaletteConditioning;
 
-    /// <summary>Per-frame hue advance for each packed Circle or Arc's stored color.</summary>
-    public float CircleHueAdvance;
+    /// <summary>Cyclic palette-position step between Tiles within each packed Circle or Arc.</summary>
+    public float CircleTilePositionStep;
+
+    /// <summary>Per-frame palette-position advance for each packed Circle or Arc's stored position.</summary>
+    public float CirclePositionAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -279,8 +348,9 @@ public sealed class CirclesStandaloneSettings
         }
 
         BackgroundHueRate = source.BackgroundHueRate;
-        CircleTileHueStep = source.CircleTileHueStep;
-        CircleHueAdvance = source.CircleHueAdvance;
+        PaletteConditioning = source.PaletteConditioning;
+        CircleTilePositionStep = source.CircleTilePositionStep;
+        CirclePositionAdvance = source.CirclePositionAdvance;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
@@ -296,11 +366,14 @@ public sealed class CirclesSyncSettings
     /// <summary>Live Synced Mode background hue advance per second.</summary>
     public float BackgroundHueRate;
 
-    /// <summary>Live Synced Mode hue step between Tiles within each packed Circle or Arc.</summary>
-    public float CircleTileHueStep;
+    /// <summary>Live effect-local palette conditioning for the Synced foreground.</summary>
+    public PaletteConditioning PaletteConditioning;
 
-    /// <summary>Live Synced Mode per-frame hue advance for each packed Circle or Arc's stored color.</summary>
-    public float CircleHueAdvance;
+    /// <summary>Live Synced Mode cyclic palette-position step between Tiles within each packed Circle or Arc.</summary>
+    public float CircleTilePositionStep;
+
+    /// <summary>Live Synced Mode per-frame palette-position advance for each packed Circle or Arc.</summary>
+    public float CirclePositionAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -335,8 +408,9 @@ public sealed class CirclesSyncSettings
         }
 
         BackgroundHueRate = source.BackgroundHueRate;
-        CircleTileHueStep = source.CircleTileHueStep;
-        CircleHueAdvance = source.CircleHueAdvance;
+        PaletteConditioning = source.PaletteConditioning;
+        CircleTilePositionStep = source.CircleTilePositionStep;
+        CirclePositionAdvance = source.CirclePositionAdvance;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
