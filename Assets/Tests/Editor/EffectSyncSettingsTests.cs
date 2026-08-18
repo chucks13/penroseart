@@ -1782,6 +1782,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropHueRate = 27f;
         asset.Settings.DropBrightness = 28f;
         asset.Settings.FillBlackAndWhiteProbability = 0.29f;
+        asset.Settings.FillBrightnessLift = 0.31f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateShapes), TempAssetFolder);
 
@@ -1809,6 +1810,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.FillBlackAndWhiteProbability,
             Is.EqualTo(defaults.FillBlackAndWhiteProbability));
+        Assert.That(
+            asset.Settings.FillBrightnessLift,
+            Is.EqualTo(defaults.FillBrightnessLift));
     }
 
     /// <summary>

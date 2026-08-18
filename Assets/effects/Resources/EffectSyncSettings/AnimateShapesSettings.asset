@@ -43,3 +43,4 @@ MonoBehaviour:
     DropHueRate: 0.5
     DropBrightness: 10
     FillBlackAndWhiteProbability: 0.125
+    FillBrightnessLift: 0.5

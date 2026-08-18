@@ -136,6 +136,12 @@ public class AnimateShapes : EffectBase
     private const float SyncFillBlackAndWhiteProbability = 0.125f;
 
     /// <summary>
+    /// Fraction of the distance from a Fill gray's sampled Value to full brightness that the gray is
+    /// lifted, so the flash reads bright even when the conditioned palette sits in a dark stretch.
+    /// </summary>
+    private const float SyncFillBrightnessLift = 0.5f;
+
+    /// <summary>
     /// Circle or Arc group reseeds per second, shared by Standalone and Synced Mode. Sixty preserves
     /// the approved one-reseed-per-frame cadence at the 60 fps reference rate, where the per-frame
     /// reseed probability reaches one.
@@ -183,6 +189,7 @@ public class AnimateShapes : EffectBase
         DropHueRate = SyncDropHueRate,
         DropBrightness = SyncDropBrightness,
         FillBlackAndWhiteProbability = SyncFillBlackAndWhiteProbability,
+        FillBrightnessLift = SyncFillBrightnessLift,
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
@@ -283,6 +290,7 @@ public class AnimateShapes : EffectBase
         float dropHueRate = SyncSettings.DropHueRate;
         float dropBrightness = SyncSettings.DropBrightness;
         float fillBlackAndWhiteProbability = SyncSettings.FillBlackAndWhiteProbability;
+        float fillBrightnessLift = SyncSettings.FillBrightnessLift;
         float positionShift = 0f;
         float sampleTime = effectTime;
         int groupCount = shape.GroupCount;
@@ -344,7 +352,10 @@ public class AnimateShapes : EffectBase
                 {
                     // Fill desaturates the sampled palette color without overwriting the group's
                     // stored position, so its B&W identity keeps the crawl and ends with the Fill.
+                    // The gray's Value is lifted toward full brightness so the flash reads bright
+                    // even when the palette sample is dark.
                     Color.RGBToHSV(paletteColor, out _, out _, out float value);
+                    value = Mathf.Lerp(value, 1f, fillBrightnessLift);
                     paletteColor = new Color(value, value, value, paletteColor.a);
                 }
                 buffer[idx] = paletteColor;
@@ -472,6 +483,9 @@ public sealed class AnimateShapesSyncSettings
     /// <summary>Probability that each packed Circle or Arc becomes black-and-white during an active Fill.</summary>
     [Range(0f, 1f)] public float FillBlackAndWhiteProbability;
 
+    /// <summary>Fraction of the distance from a Fill gray's sampled Value to full brightness that it is lifted.</summary>
+    [Range(0f, 1f)] public float FillBrightnessLift;
+
     /// <summary>Copies every AnimateShapes Sync Setting from another value.</summary>
     public void CopyFrom(AnimateShapesSyncSettings source)
     {
@@ -501,5 +515,6 @@ public sealed class AnimateShapesSyncSettings
         DropHueRate = source.DropHueRate;
         DropBrightness = source.DropBrightness;
         FillBlackAndWhiteProbability = source.FillBlackAndWhiteProbability;
+        FillBrightnessLift = source.FillBrightnessLift;
     }
 }
