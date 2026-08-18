@@ -26,7 +26,6 @@ MonoBehaviour:
       HueRedistribution: 1
     CircleTilePositionStep: 0.01
     CirclePositionAdvancePerSecond: 0.6
-    GroupReseedsPerSecond: 60
     DistortionMode:
       MinInclusive: 1
       MaxExclusive: 3

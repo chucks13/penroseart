@@ -31,7 +31,6 @@ MonoBehaviour:
       Max: 1.25
       LowRail: 0.5
       HighRail: 1.5
-    GroupReseedsPerSecond: 60
     DistortionMode:
       MinInclusive: 1
       MaxExclusive: 3

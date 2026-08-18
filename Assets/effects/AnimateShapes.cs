@@ -45,12 +45,6 @@ public class AnimateShapes : EffectBase
     /// </summary>
     private const float StandaloneCirclePositionAdvancePerSecond = 0.6f;
 
-    /// <summary>
-    /// Authored Circle or Arc group reseeds per second. Sixty preserves the approved one-reseed-per-frame
-    /// cadence at the 60 fps reference rate.
-    /// </summary>
-    private const float StandaloneGroupReseedsPerSecond = 60f;
-
     /// <summary>Authored inclusive lower bound of the Standalone distortion-mode roll; 1 selects Color.</summary>
     private const int StandaloneDistortionModeMinInclusive = 1;
 
@@ -107,12 +101,6 @@ public class AnimateShapes : EffectBase
     /// <summary>Upper tuning Rail for exploring faster Energy-driven foreground crawl.</summary>
     private const float SyncEnergyCrawlSpeedMultiplierHighRail = 1.5f;
 
-    /// <summary>
-    /// Authored Synced Mode Circle or Arc group reseeds per second. Sixty preserves the approved
-    /// one-reseed-per-frame cadence at the 60 fps reference rate.
-    /// </summary>
-    private const float SyncGroupReseedsPerSecond = 60f;
-
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
 
@@ -147,6 +135,13 @@ public class AnimateShapes : EffectBase
     /// <summary>Probability that each Circle or Arc becomes black-and-white during an active Fill.</summary>
     private const float SyncFillBlackAndWhiteProbability = 0.125f;
 
+    /// <summary>
+    /// Circle or Arc group reseeds per second, shared by Standalone and Synced Mode. Sixty preserves
+    /// the approved one-reseed-per-frame cadence at the 60 fps reference rate, where the per-frame
+    /// reseed probability reaches one.
+    /// </summary>
+    private const float GroupReseedsPerSecond = 60f;
+
     /// <summary>AnimateShapes' crawling motion suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
@@ -161,7 +156,6 @@ public class AnimateShapes : EffectBase
         PaletteConditioning = StandalonePaletteConditioning,
         CircleTilePositionStep = StandaloneCircleTilePositionStep,
         CirclePositionAdvancePerSecond = StandaloneCirclePositionAdvancePerSecond,
-        GroupReseedsPerSecond = StandaloneGroupReseedsPerSecond,
         DistortionMode = new IntRange(
             StandaloneDistortionModeMinInclusive,
             StandaloneDistortionModeMaxExclusive),
@@ -179,7 +173,6 @@ public class AnimateShapes : EffectBase
             SyncHighEnergyCrawlSpeedMultiplier,
             SyncEnergyCrawlSpeedMultiplierLowRail,
             SyncEnergyCrawlSpeedMultiplierHighRail),
-        GroupReseedsPerSecond = SyncGroupReseedsPerSecond,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -206,9 +199,6 @@ public class AnimateShapes : EffectBase
 
     /// <summary>Per-group cyclic palette positions advanced across the packed Circle and Arc data.</summary>
     private float[] positions;
-
-    /// <summary>Fractional Circle or Arc group reseeds carried between frames.</summary>
-    private float groupReseedAccumulator;
 
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
@@ -259,7 +249,6 @@ public class AnimateShapes : EffectBase
         {
             positions[i] = Random.value;
         }
-        groupReseedAccumulator = 0f;
         background = Random.value;
     }
 
@@ -285,9 +274,6 @@ public class AnimateShapes : EffectBase
             : standaloneSettings.CirclePositionAdvancePerSecond;
         float energyCrawlSpeedMultiplier = GetEnergyCrawlSpeedMultiplier(
             beatManager.Energy.Level);
-        float groupReseedsPerSecond = isSynced
-            ? SyncSettings.GroupReseedsPerSecond
-            : standaloneSettings.GroupReseedsPerSecond;
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
@@ -309,11 +295,9 @@ public class AnimateShapes : EffectBase
             sampleTime = effectTime + (SyncSettings.TimeWarpSeconds * rhythm);
 
         float beatOffset = sampleTime - effectTime;
-        groupReseedAccumulator += groupReseedsPerSecond * effectDelta;
-        while (groupReseedAccumulator >= 1f)
+        if (Random.value < GroupReseedsPerSecond * effectDelta)
         {
             positions[Random.Range(0, groupCount)] = Random.value;
-            groupReseedAccumulator -= 1f;
         }
         background += effectDelta * backgroundHueRate;
         background %= 1f;
@@ -419,9 +403,6 @@ public sealed class AnimateShapesStandaloneSettings
     /// <summary>Palette-position advance per second for each packed Circle or Arc's stored position.</summary>
     public float CirclePositionAdvancePerSecond;
 
-    /// <summary>Circle or Arc group positions reseeded per second.</summary>
-    public float GroupReseedsPerSecond;
-
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
 
@@ -437,7 +418,6 @@ public sealed class AnimateShapesStandaloneSettings
         PaletteConditioning = source.PaletteConditioning;
         CircleTilePositionStep = source.CircleTilePositionStep;
         CirclePositionAdvancePerSecond = source.CirclePositionAdvancePerSecond;
-        GroupReseedsPerSecond = source.GroupReseedsPerSecond;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
@@ -467,9 +447,6 @@ public sealed class AnimateShapesSyncSettings
     /// Mid uses their midpoint of exactly one to preserve the approved baseline speed.
     /// </summary>
     public FloatRange EnergyCrawlSpeedMultiplier;
-
-    /// <summary>Live Synced Mode Circle or Arc group positions reseeded per second.</summary>
-    public float GroupReseedsPerSecond;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -512,7 +489,6 @@ public sealed class AnimateShapesSyncSettings
             source.EnergyCrawlSpeedMultiplier.Max,
             source.EnergyCrawlSpeedMultiplier.LowRail,
             source.EnergyCrawlSpeedMultiplier.HighRail);
-        GroupReseedsPerSecond = source.GroupReseedsPerSecond;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,

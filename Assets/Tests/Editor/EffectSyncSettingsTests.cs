@@ -1701,7 +1701,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             first.CirclePositionAdvancePerSecond,
             Is.EqualTo(second.CirclePositionAdvancePerSecond));
-        Assert.That(first.GroupReseedsPerSecond, Is.EqualTo(second.GroupReseedsPerSecond));
         Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
         AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
     }
@@ -1730,7 +1729,6 @@ public sealed class EffectSyncSettingsTests
         };
         asset.Settings.CircleTilePositionStep = 18f;
         asset.Settings.CirclePositionAdvancePerSecond = 19f;
-        asset.Settings.GroupReseedsPerSecond = 19.5f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
@@ -1748,9 +1746,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.CirclePositionAdvancePerSecond,
             Is.EqualTo(defaults.CirclePositionAdvancePerSecond));
-        Assert.That(
-            asset.Settings.GroupReseedsPerSecond,
-            Is.EqualTo(defaults.GroupReseedsPerSecond));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
     }
 
@@ -1779,7 +1774,6 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.CircleTilePositionStep = 18f;
         asset.Settings.CirclePositionAdvancePerSecond = 19f;
         asset.Settings.EnergyCrawlSpeedMultiplier = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.GroupReseedsPerSecond = 19.5f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpSeconds = 24f;
@@ -1805,9 +1799,6 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(
             asset.Settings.EnergyCrawlSpeedMultiplier,
             defaults.EnergyCrawlSpeedMultiplier);
-        Assert.That(
-            asset.Settings.GroupReseedsPerSecond,
-            Is.EqualTo(defaults.GroupReseedsPerSecond));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));
