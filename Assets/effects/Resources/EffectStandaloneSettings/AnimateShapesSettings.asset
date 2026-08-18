@@ -9,10 +9,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8d0517f7673ac447892b8809bd0076e0, type: 3}
-  m_Name: CirclesSettings
-  m_EditorClassIdentifier: Assembly-CSharp::CirclesSyncSettingsAsset
-  effectTypeName: Circles
+  m_Script: {fileID: 11500000, guid: 02beba9c8ebd9456e9c342bfe6cacdfb, type: 3}
+  m_Name: AnimateShapesSettings
+  m_EditorClassIdentifier: Assembly-CSharp::AnimateShapesStandaloneSettingsAsset
+  effectTypeName: AnimateShapes
   settings:
     BackgroundHueRate: 0.1
     PaletteConditioning:
@@ -31,10 +31,3 @@ MonoBehaviour:
       MaxExclusive: 3
       LowRail: 1
       HighRail: 3
-    HueResponseMagnitude: 0.25
-    TimeWarpSeconds: 0.5
-    TimeWarpHueScale: 0.1
-    DropTileHueStep: 0.001
-    DropHueRate: 0.5
-    DropBrightness: 10
-    FillBlackAndWhiteProbability: 0.125

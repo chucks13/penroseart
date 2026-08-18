@@ -1685,14 +1685,14 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Circles Standalone Defaults resolve as fresh, mutually independent copies without
+    /// AnimateShapes Standalone Defaults resolve as fresh, mutually independent copies without
     /// pinning authored tuning values that are judged on the wall.
     /// </summary>
     [Test]
-    public void CirclesStandaloneDefaultsResolveAsIndependentCopies()
+    public void AnimateShapesStandaloneDefaultsResolveAsIndependentCopies()
     {
-        var first = Circles.StandaloneDefaults;
-        var second = Circles.StandaloneDefaults;
+        var first = AnimateShapes.StandaloneDefaults;
+        var second = AnimateShapes.StandaloneDefaults;
 
         Assert.That(first, Is.Not.SameAs(second));
         Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
@@ -1704,14 +1704,14 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited Circles Standalone Setting and distortion-mode Rail with
+    /// Restore replaces every edited AnimateShapes Standalone Setting and distortion-mode Rail with
     /// the current file-local Standalone Defaults.
     /// </summary>
     [Test]
-    public void RestoreStandaloneDefaultsCopiesEveryCirclesValue()
+    public void RestoreStandaloneDefaultsCopiesEveryAnimateShapesValue()
     {
-        var asset = (CirclesStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
-            typeof(Circles),
+        var asset = (AnimateShapesStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
+            typeof(AnimateShapes),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
@@ -1730,10 +1730,10 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
-            typeof(Circles),
+            typeof(AnimateShapes),
             TempAssetFolder);
 
-        var defaults = Circles.StandaloneDefaults;
+        var defaults = AnimateShapes.StandaloneDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
@@ -1748,14 +1748,14 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited Circles Sync Setting and distortion-mode Rail with the
+    /// Restore replaces every edited AnimateShapes Sync Setting and distortion-mode Rail with the
     /// current file-local Sync Defaults.
     /// </summary>
     [Test]
-    public void RestoreSyncDefaultsCopiesEveryCirclesValue()
+    public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()
     {
-        var asset = (CirclesSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
-            typeof(Circles),
+        var asset = (AnimateShapesSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
+            typeof(AnimateShapes),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
@@ -1780,9 +1780,9 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropBrightness = 28f;
         asset.Settings.FillBlackAndWhiteProbability = 0.29f;
 
-        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Circles), TempAssetFolder);
+        EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(AnimateShapes), TempAssetFolder);
 
-        var defaults = Circles.SyncDefaults;
+        var defaults = AnimateShapes.SyncDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,

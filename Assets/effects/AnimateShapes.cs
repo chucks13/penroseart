@@ -6,9 +6,9 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// Animates packed Penrose Circle and Arc groups over a background color.
 /// </summary>
-[EffectSyncSettings(typeof(CirclesSyncSettingsAsset))]
-[EffectStandaloneSettings(typeof(CirclesStandaloneSettingsAsset))]
-public class Circles : EffectBase
+[EffectSyncSettings(typeof(AnimateShapesSyncSettingsAsset))]
+[EffectStandaloneSettings(typeof(AnimateShapesStandaloneSettingsAsset))]
+public class AnimateShapes : EffectBase
 {
     // Standalone Defaults
 
@@ -114,15 +114,15 @@ public class Circles : EffectBase
     /// <summary>Probability that each Circle or Arc becomes black-and-white during an active Fill.</summary>
     private const float SyncFillBlackAndWhiteProbability = 0.125f;
 
-    /// <summary>Circles' crawling motion suits Low/Mid-energy sections.</summary>
+    /// <summary>AnimateShapes' crawling motion suits Low/Mid-energy sections.</summary>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyLow | Repertoire.EnergyMid;
 
     /// <summary>
-    /// Resolves a fresh copy so saved Standalone Settings cannot mutate Circles' authored
+    /// Resolves a fresh copy so saved Standalone Settings cannot mutate AnimateShapes' authored
     /// Standalone Defaults.
     /// </summary>
-    public static CirclesStandaloneSettings StandaloneDefaults => new()
+    public static AnimateShapesStandaloneSettings StandaloneDefaults => new()
     {
         BackgroundHueRate = StandaloneBackgroundHueRate,
         PaletteConditioning = StandalonePaletteConditioning,
@@ -133,8 +133,8 @@ public class Circles : EffectBase
             StandaloneDistortionModeMaxExclusive),
     };
 
-    /// <summary>Resolves a fresh copy of Circles' file-local Sync Defaults.</summary>
-    public static CirclesSyncSettings SyncDefaults => new()
+    /// <summary>Resolves a fresh copy of AnimateShapes' file-local Sync Defaults.</summary>
+    public static AnimateShapesSyncSettings SyncDefaults => new()
     {
         BackgroundHueRate = SyncBackgroundHueRate,
         PaletteConditioning = SyncPaletteConditioning,
@@ -153,13 +153,13 @@ public class Circles : EffectBase
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
-    private CirclesStandaloneSettings standaloneSettings = StandaloneDefaults;
+    private AnimateShapesStandaloneSettings standaloneSettings = StandaloneDefaults;
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
-    private CirclesSyncSettings SyncSettings { get; set; } = SyncDefaults;
+    private AnimateShapesSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
     /// <summary>
-    /// Circles' Effect-local conditioned endpoint cache. It follows shared palette revisions and live
+    /// AnimateShapes' Effect-local conditioned endpoint cache. It follows shared palette revisions and live
     /// conditioning controls while preserving the animated cross-fade without steady-frame allocation.
     /// </summary>
     private readonly ConditionedPaletteCache conditionedPalette = new();
@@ -194,10 +194,10 @@ public class Circles : EffectBase
     public override void OnStart()
     {
         standaloneSettings = EffectStandaloneSettingsProvider.Resolve(
-            typeof(Circles),
+            typeof(AnimateShapes),
             StandaloneDefaults);
         SyncSettings = EffectSyncSettingsProvider.Resolve(
-            typeof(Circles),
+            typeof(AnimateShapes),
             SyncDefaults);
         conditionedPalette.Refresh(APalette, beatManager.IsSynced
             ? SyncSettings.PaletteConditioning
@@ -318,11 +318,11 @@ public class Circles : EffectBase
 }
 
 /// <summary>
-/// The serializable value shape shared by Circles' fully populated Standalone Defaults and
+/// The serializable value shape shared by AnimateShapes' fully populated Standalone Defaults and
 /// saved Standalone Settings; Unity may create an empty instance before serialized values apply.
 /// </summary>
 [Serializable]
-public sealed class CirclesStandaloneSettings
+public sealed class AnimateShapesStandaloneSettings
 {
     /// <summary>Background hue advance per second.</summary>
     public float BackgroundHueRate;
@@ -339,8 +339,8 @@ public sealed class CirclesStandaloneSettings
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
 
-    /// <summary>Copies every Circles Standalone Setting, including distortion-mode Rails.</summary>
-    public void CopyFrom(CirclesStandaloneSettings source)
+    /// <summary>Copies every AnimateShapes Standalone Setting, including distortion-mode Rails.</summary>
+    public void CopyFrom(AnimateShapesStandaloneSettings source)
     {
         if (source == null)
         {
@@ -359,9 +359,9 @@ public sealed class CirclesStandaloneSettings
     }
 }
 
-/// <summary>The saved-or-default musical-response settings used by Circles in Synced Mode.</summary>
+/// <summary>The saved-or-default musical-response settings used by AnimateShapes in Synced Mode.</summary>
 [Serializable]
-public sealed class CirclesSyncSettings
+public sealed class AnimateShapesSyncSettings
 {
     /// <summary>Live Synced Mode background hue advance per second.</summary>
     public float BackgroundHueRate;
@@ -399,8 +399,8 @@ public sealed class CirclesSyncSettings
     /// <summary>Probability that each packed Circle or Arc becomes black-and-white during an active Fill.</summary>
     [Range(0f, 1f)] public float FillBlackAndWhiteProbability;
 
-    /// <summary>Copies every Circles Sync Setting from another value.</summary>
-    public void CopyFrom(CirclesSyncSettings source)
+    /// <summary>Copies every AnimateShapes Sync Setting from another value.</summary>
+    public void CopyFrom(AnimateShapesSyncSettings source)
     {
         if (source == null)
         {

@@ -243,7 +243,7 @@ Every one of the 3,446 directed neighbor entries has a reciprocal entry and corr
 
 ### Packed Shape Lists
 
-Several Effects use the ten packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `Circles`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Each named accessor, such as `penrose.Layout.shapes.Circles`, returns an allocation-free `LayoutData.ShapeList.Reader` over both the packed groups and their shared load-derived geometry facts; the packed arrays are private serialization details. Every list uses the same encoding:
+Several Effects use the ten packed Shape Lists under `penrose.Layout.shapes`, especially `TileShapes`, `Petals`, `AnimateShapes`, `ShapeGlitch`, `Mirror`, `Kscope`, and `Lightning`. Each named accessor, such as `penrose.Layout.shapes.Circles`, returns an allocation-free `LayoutData.ShapeList.Reader` over both the packed groups and their shared load-derived geometry facts; the packed arrays are private serialization details. Every list uses the same encoding:
 
 ```text
 shape[0]                         = group count N
