@@ -15,8 +15,8 @@ MonoBehaviour:
   effectTypeName: AnimateLoops
   settings:
     BackgroundHueRate: 0.1
-    LoopTileHueStep: 0.01
-    LoopHueAdvance: 0.01
+    RingTileHueStep: 0.01
+    RingHueAdvance: 0.01
     DistortionModeMinInclusive: 1
     DistortionModeMaxExclusive: 3
     HueResponseMagnitude: 0.25

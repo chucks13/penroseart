@@ -51,8 +51,8 @@ The finest natural role within a Motif: a Starball has a five-Tile Star Core and
 _Avoid_: a Tile; a Shape List group; treating an Effect's coarser grouping as canonical; assuming every Motif has more than one Part.
 
 **Contour**:
-The Tiles that border a Motif without belonging to it, lit so the Motif reads as a shape with an edge. A Tile that belongs to any Motif is never that Motif's Contour, and where two Motifs compete for a bordering Tile only one may claim it.
-_Avoid_: an outline drawn in darkness — a Contour is a colour against a colour; the Motif's own Tiles.
+The Tiles that border a Motif without belonging to it, lit so the Motif reads as a shape with an edge. A Tile that belongs to any Motif in the same Shape List is never a Contour Tile there. Neighboring Motifs may share a bordering Tile in each of their Contours; which one lights a contested Tile is Effect policy rather than wall geometry.
+_Avoid_: an outline drawn in darkness — a Contour is a colour against a colour; the Motif's own Tiles; treating one Effect's claim resolution as canonical.
 
 **Star**:
 A closed cycle of five neighboring fat Tiles. It has three lives on the wall: a Motif in its own Shape List, the Core Part of every Starball, and the smallest Ring.

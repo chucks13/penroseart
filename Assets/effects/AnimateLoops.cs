@@ -83,8 +83,8 @@ public class AnimateLoops : EffectBase
     public static AnimateLoopsStandaloneSettings StandaloneDefaults => new()
     {
         BackgroundHueRate = StandaloneBackgroundHueRate,
-        LoopTileHueStep = StandaloneRingTileHueStep,
-        LoopHueAdvance = StandaloneRingHueAdvance,
+        RingTileHueStep = StandaloneRingTileHueStep,
+        RingHueAdvance = StandaloneRingHueAdvance,
         DistortionMode = new IntRange(
             StandaloneDistortionModeMinInclusive,
             StandaloneDistortionModeMaxExclusive),
@@ -94,8 +94,8 @@ public class AnimateLoops : EffectBase
     public static AnimateLoopsSyncSettings SyncDefaults => new()
     {
         BackgroundHueRate = SyncBackgroundHueRate,
-        LoopTileHueStep = SyncRingTileHueStep,
-        LoopHueAdvance = SyncRingHueAdvance,
+        RingTileHueStep = SyncRingTileHueStep,
+        RingHueAdvance = SyncRingHueAdvance,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -181,11 +181,11 @@ public class AnimateLoops : EffectBase
             ? SyncSettings.BackgroundHueRate
             : standaloneSettings.BackgroundHueRate;
         float ringTileHueStep = isSynced
-            ? SyncSettings.LoopTileHueStep
-            : standaloneSettings.LoopTileHueStep;
+            ? SyncSettings.RingTileHueStep
+            : standaloneSettings.RingTileHueStep;
         float ringHueAdvance = isSynced
-            ? SyncSettings.LoopHueAdvance
-            : standaloneSettings.LoopHueAdvance;
+            ? SyncSettings.RingHueAdvance
+            : standaloneSettings.RingHueAdvance;
         float timeWarpHueScale = SyncSettings.TimeWarpHueScale;
         float dropTileHueStep = SyncSettings.DropTileHueStep;
         float dropHueRate = SyncSettings.DropHueRate;
@@ -262,10 +262,10 @@ public sealed class AnimateLoopsStandaloneSettings
     public float BackgroundHueRate;
 
     /// <summary>Hue step between Tiles within each packed Ring or Arc.</summary>
-    public float LoopTileHueStep;
+    public float RingTileHueStep;
 
     /// <summary>Per-frame hue advance for each packed Ring or Arc's stored color.</summary>
-    public float LoopHueAdvance;
+    public float RingHueAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -279,8 +279,8 @@ public sealed class AnimateLoopsStandaloneSettings
         }
 
         BackgroundHueRate = source.BackgroundHueRate;
-        LoopTileHueStep = source.LoopTileHueStep;
-        LoopHueAdvance = source.LoopHueAdvance;
+        RingTileHueStep = source.RingTileHueStep;
+        RingHueAdvance = source.RingHueAdvance;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,
@@ -297,10 +297,10 @@ public sealed class AnimateLoopsSyncSettings
     public float BackgroundHueRate;
 
     /// <summary>Live Synced Mode hue step between Tiles within each packed Ring or Arc.</summary>
-    public float LoopTileHueStep;
+    public float RingTileHueStep;
 
     /// <summary>Live Synced Mode per-frame hue advance for each packed Ring or Arc's stored color.</summary>
-    public float LoopHueAdvance;
+    public float RingHueAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
     public IntRange DistortionMode;
@@ -335,8 +335,8 @@ public sealed class AnimateLoopsSyncSettings
         }
 
         BackgroundHueRate = source.BackgroundHueRate;
-        LoopTileHueStep = source.LoopTileHueStep;
-        LoopHueAdvance = source.LoopHueAdvance;
+        RingTileHueStep = source.RingTileHueStep;
+        RingHueAdvance = source.RingHueAdvance;
         DistortionMode = new IntRange(
             source.DistortionMode.MinInclusive,
             source.DistortionMode.MaxExclusive,

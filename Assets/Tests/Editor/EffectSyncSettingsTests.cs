@@ -1696,8 +1696,8 @@ public sealed class EffectSyncSettingsTests
 
         Assert.That(first, Is.Not.SameAs(second));
         Assert.That(first.BackgroundHueRate, Is.EqualTo(second.BackgroundHueRate));
-        Assert.That(first.LoopTileHueStep, Is.EqualTo(second.LoopTileHueStep));
-        Assert.That(first.LoopHueAdvance, Is.EqualTo(second.LoopHueAdvance));
+        Assert.That(first.RingTileHueStep, Is.EqualTo(second.RingTileHueStep));
+        Assert.That(first.RingHueAdvance, Is.EqualTo(second.RingHueAdvance));
         Assert.That(first.DistortionMode, Is.Not.SameAs(second.DistortionMode));
         AssertIntRangeEqual(first.DistortionMode, second.DistortionMode);
     }
@@ -1713,8 +1713,8 @@ public sealed class EffectSyncSettingsTests
             typeof(AnimateLoops),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.LoopTileHueStep = 18f;
-        asset.Settings.LoopHueAdvance = 19f;
+        asset.Settings.RingTileHueStep = 18f;
+        asset.Settings.RingHueAdvance = 19f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
@@ -1723,8 +1723,8 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = AnimateLoops.StandaloneDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        Assert.That(asset.Settings.LoopTileHueStep, Is.EqualTo(defaults.LoopTileHueStep));
-        Assert.That(asset.Settings.LoopHueAdvance, Is.EqualTo(defaults.LoopHueAdvance));
+        Assert.That(asset.Settings.RingTileHueStep, Is.EqualTo(defaults.RingTileHueStep));
+        Assert.That(asset.Settings.RingHueAdvance, Is.EqualTo(defaults.RingHueAdvance));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
     }
 
@@ -1739,8 +1739,8 @@ public sealed class EffectSyncSettingsTests
             typeof(AnimateLoops),
             TempAssetFolder);
         asset.Settings.BackgroundHueRate = 17f;
-        asset.Settings.LoopTileHueStep = 18f;
-        asset.Settings.LoopHueAdvance = 19f;
+        asset.Settings.RingTileHueStep = 18f;
+        asset.Settings.RingHueAdvance = 19f;
         asset.Settings.DistortionMode = new IntRange(20, 21, 19, 22);
         asset.Settings.HueResponseMagnitude = 23f;
         asset.Settings.TimeWarpSeconds = 24f;
@@ -1754,8 +1754,8 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = AnimateLoops.SyncDefaults;
         Assert.That(asset.Settings.BackgroundHueRate, Is.EqualTo(defaults.BackgroundHueRate));
-        Assert.That(asset.Settings.LoopTileHueStep, Is.EqualTo(defaults.LoopTileHueStep));
-        Assert.That(asset.Settings.LoopHueAdvance, Is.EqualTo(defaults.LoopHueAdvance));
+        Assert.That(asset.Settings.RingTileHueStep, Is.EqualTo(defaults.RingTileHueStep));
+        Assert.That(asset.Settings.RingHueAdvance, Is.EqualTo(defaults.RingHueAdvance));
         AssertIntRangeEqual(asset.Settings.DistortionMode, defaults.DistortionMode);
         Assert.That(asset.Settings.HueResponseMagnitude, Is.EqualTo(defaults.HueResponseMagnitude));
         Assert.That(asset.Settings.TimeWarpSeconds, Is.EqualTo(defaults.TimeWarpSeconds));
