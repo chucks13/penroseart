@@ -187,7 +187,7 @@ public class TileShapes : EffectBase
                 shape = penrose.Layout.shapes.Lines3;
                 break;
             case 4:
-                shape = penrose.Layout.shapes.Loops;
+                shape = penrose.Layout.shapes.Rings;
                 break;
             case 5:
                 shape = penrose.Layout.shapes.Lotusballs;
@@ -246,8 +246,8 @@ public class TileShapes : EffectBase
                 color = Color.HSVToRGB(Mathf.Lerp(randomHue.Min, randomHue.Max, Random.value), 1f, 1f)* beatBrightness;
 
 
-            int loop = Random.Range(0, shape.GroupCount);
-            LayoutData.ShapeList.Group group = shape.GetGroup(loop);
+            int groupIndex = Random.Range(0, shape.GroupCount);
+            LayoutData.ShapeList.Group group = shape.GetGroup(groupIndex);
             for (int j = 0; j < group.TileCount; j++)
             {
                 int idx = group[j];

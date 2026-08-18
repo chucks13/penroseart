@@ -3,7 +3,7 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Colors packed loop, starball, and star shape groups with layered petal-style palettes.
+/// Colors packed Ring, Arc, Starball, and Star groups with layered petal-style palettes.
 /// </summary>
 [EffectSyncSettings(typeof(PetalsSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(PetalsStandaloneSettingsAsset))]
@@ -263,7 +263,7 @@ public class Petals : ScreenEffect
         {
             LayoutData.ShapeList.Reader shape = shapeIdx switch
             {
-                0 => penrose.Layout.shapes.Loops,
+                0 => penrose.Layout.shapes.Rings,
                 1 => penrose.Layout.shapes.Starballs,
                 2 => penrose.Layout.shapes.Stars,
                 _ => default

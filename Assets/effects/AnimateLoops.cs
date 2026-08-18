@@ -4,7 +4,7 @@ using Random = UnityEngine.Random;
 
 
 /// <summary>
-/// Animates packed Penrose loop shape groups over a background color.
+/// Animates packed Penrose Ring and Arc groups over a background color.
 /// </summary>
 [EffectSyncSettings(typeof(AnimateLoopsSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(AnimateLoopsStandaloneSettingsAsset))]
@@ -15,11 +15,11 @@ public class AnimateLoops : EffectBase
     /// <summary>Authored background hue advance per second for the unchanged Standalone look.</summary>
     private const float StandaloneBackgroundHueRate = 0.1f;
 
-    /// <summary>Authored hue step between tiles within each packed loop for the unchanged Standalone look.</summary>
-    private const float StandaloneLoopTileHueStep = 0.01f;
+    /// <summary>Authored hue step between Tiles within each packed Ring or Arc for the unchanged Standalone look.</summary>
+    private const float StandaloneRingTileHueStep = 0.01f;
 
-    /// <summary>Authored per-frame hue advance for each packed loop's stored color in the unchanged Standalone look.</summary>
-    private const float StandaloneLoopHueAdvance = 0.01f;
+    /// <summary>Authored per-frame hue advance for each Ring or Arc's stored color in the unchanged Standalone look.</summary>
+    private const float StandaloneRingHueAdvance = 0.01f;
 
     /// <summary>Authored inclusive lower bound of the Standalone distortion-mode roll; 1 selects Color.</summary>
     private const int StandaloneDistortionModeMinInclusive = 1;
@@ -32,11 +32,11 @@ public class AnimateLoops : EffectBase
     /// <summary>Authored Synced Mode counterpart to the background hue advance used in Standalone Mode.</summary>
     private const float SyncBackgroundHueRate = 0.1f;
 
-    /// <summary>Authored Synced Mode counterpart to the hue step between tiles within each packed loop.</summary>
-    private const float SyncLoopTileHueStep = 0.01f;
+    /// <summary>Authored Synced Mode counterpart to the hue step between Tiles within each packed Ring or Arc.</summary>
+    private const float SyncRingTileHueStep = 0.01f;
 
-    /// <summary>Authored Synced Mode counterpart to each packed loop's per-frame stored-color hue advance.</summary>
-    private const float SyncLoopHueAdvance = 0.01f;
+    /// <summary>Authored Synced Mode counterpart to each Ring or Arc's per-frame stored-color hue advance.</summary>
+    private const float SyncRingHueAdvance = 0.01f;
 
     /// <summary>Inclusive lower bound of the complete distortion roll domain: 1 selects Color.</summary>
     private const int SyncDistortionModeMinInclusive = 1;
@@ -74,7 +74,7 @@ public class AnimateLoops : EffectBase
     /// <summary>Authored value supplied to the Drop background's HSV brightness slot.</summary>
     private const float SyncDropBrightness = 10f;
 
-    /// <summary>Probability that each packed loop becomes black-and-white during an active Fill.</summary>
+    /// <summary>Probability that each Ring or Arc becomes black-and-white during an active Fill.</summary>
     private const float SyncFillBlackAndWhiteProbability = 0.125f;
 
     /// <summary>AnimateLoops' looping motion suits Low/Mid-energy sections.</summary>
@@ -88,8 +88,8 @@ public class AnimateLoops : EffectBase
     public static AnimateLoopsStandaloneSettings StandaloneDefaults => new()
     {
         BackgroundHueRate = StandaloneBackgroundHueRate,
-        LoopTileHueStep = StandaloneLoopTileHueStep,
-        LoopHueAdvance = StandaloneLoopHueAdvance,
+        LoopTileHueStep = StandaloneRingTileHueStep,
+        LoopHueAdvance = StandaloneRingHueAdvance,
         DistortionMode = new IntRange(
             StandaloneDistortionModeMinInclusive,
             StandaloneDistortionModeMaxExclusive),
@@ -99,8 +99,8 @@ public class AnimateLoops : EffectBase
     public static AnimateLoopsSyncSettings SyncDefaults => new()
     {
         BackgroundHueRate = SyncBackgroundHueRate,
-        LoopTileHueStep = SyncLoopTileHueStep,
-        LoopHueAdvance = SyncLoopHueAdvance,
+        LoopTileHueStep = SyncRingTileHueStep,
+        LoopHueAdvance = SyncRingHueAdvance,
         DistortionMode = new IntRange(
             SyncDistortionModeMinInclusive,
             SyncDistortionModeMaxExclusive),
@@ -119,13 +119,13 @@ public class AnimateLoops : EffectBase
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private AnimateLoopsSyncSettings SyncSettings { get; set; } = SyncDefaults;
 
-    /// <summary>Per-loop colors advanced across the packed shape data.</summary>
+    /// <summary>Per-group colors advanced across the packed Ring and Arc data.</summary>
     private Color[] colors;
 
     /// <summary>Background hue advanced continuously while this effect runs.</summary>
     private float background;
 
-    /// <summary>Allocation-free access to the packed loop groups supplied by the Penrose layout.</summary>
+    /// <summary>Allocation-free access to the packed Ring and Arc groups supplied by the Penrose layout.</summary>
     private LayoutData.ShapeList.Reader shape;
 
     /// <summary>The active packed-shape name shown in the debug readout.</summary>
@@ -155,14 +155,14 @@ public class AnimateLoops : EffectBase
             typeof(AnimateLoops),
             SyncDefaults);
         waveform = waveforms.Random();
-        shape = penrose.Layout.shapes.Loops;
+        shape = penrose.Layout.shapes.Rings;
         IntRange distortionModeRange = beatManager.IsSynced
             ? SyncSettings.DistortionMode
             : standaloneSettings.DistortionMode;
         distortionMode = Random.Range(
             distortionModeRange.MinInclusive,
             distortionModeRange.MaxExclusive);
-        shapeName = "loops";
+        shapeName = "rings";
         colors = new Color[shape.GroupCount];
         for (int i = 0; i < shape.GroupCount; i++)
         {
@@ -185,10 +185,10 @@ public class AnimateLoops : EffectBase
         float backgroundHueRate = isSynced
             ? SyncSettings.BackgroundHueRate
             : standaloneSettings.BackgroundHueRate;
-        float loopTileHueStep = isSynced
+        float ringTileHueStep = isSynced
             ? SyncSettings.LoopTileHueStep
             : standaloneSettings.LoopTileHueStep;
-        float loopHueAdvance = isSynced
+        float ringHueAdvance = isSynced
             ? SyncSettings.LoopHueAdvance
             : standaloneSettings.LoopHueAdvance;
         float timeWarpHueScale = SyncSettings.TimeWarpHueScale;
@@ -232,11 +232,11 @@ public class AnimateLoops : EffectBase
             {
                 int idx = group[j];
                 buffer[idx] = Color.HSVToRGB(
-                    (hue + loopTileHueStep * group.PackedIndex(j) + beatOffset * timeWarpHueScale + hueShift) % 1f,
+                    (hue + ringTileHueStep * group.PackedIndex(j) + beatOffset * timeWarpHueScale + hueShift) % 1f,
                     sat,
                     bri);
             }
-            colors[i] = Color.HSVToRGB((hue + loopHueAdvance) % 1f, sat, bri);
+            colors[i] = Color.HSVToRGB((hue + ringHueAdvance) % 1f, sat, bri);
         }
     }
 
@@ -252,10 +252,10 @@ public sealed class AnimateLoopsStandaloneSettings
     /// <summary>Background hue advance per second.</summary>
     public float BackgroundHueRate;
 
-    /// <summary>Hue step between tiles within each packed loop.</summary>
+    /// <summary>Hue step between Tiles within each packed Ring or Arc.</summary>
     public float LoopTileHueStep;
 
-    /// <summary>Per-frame hue advance for each packed loop's stored color.</summary>
+    /// <summary>Per-frame hue advance for each packed Ring or Arc's stored color.</summary>
     public float LoopHueAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
@@ -287,10 +287,10 @@ public sealed class AnimateLoopsSyncSettings
     /// <summary>Live Synced Mode background hue advance per second.</summary>
     public float BackgroundHueRate;
 
-    /// <summary>Live Synced Mode hue step between tiles within each packed loop.</summary>
+    /// <summary>Live Synced Mode hue step between Tiles within each packed Ring or Arc.</summary>
     public float LoopTileHueStep;
 
-    /// <summary>Live Synced Mode per-frame hue advance for each packed loop's stored color.</summary>
+    /// <summary>Live Synced Mode per-frame hue advance for each packed Ring or Arc's stored color.</summary>
     public float LoopHueAdvance;
 
     /// <summary>Per-activation range selecting Color or Time distortion.</summary>
@@ -314,7 +314,7 @@ public sealed class AnimateLoopsSyncSettings
     /// <summary>Value supplied to the Drop background's HSV brightness slot.</summary>
     [Min(0f)] public float DropBrightness;
 
-    /// <summary>Probability that each packed loop becomes black-and-white during an active Fill.</summary>
+    /// <summary>Probability that each packed Ring or Arc becomes black-and-white during an active Fill.</summary>
     [Range(0f, 1f)] public float FillBlackAndWhiteProbability;
 
     /// <summary>Copies every AnimateLoops Sync Setting from another value.</summary>

@@ -240,13 +240,6 @@ public class Angles : EffectBase
     private const float BeatTriggerWindowFraction = 0.25f;
 
     /// <summary>
-    /// Number of leading packed positions that form the Star inside every ten-Tile Starball. The
-    /// current layout stores all 32 Starballs as five fat Star Tiles followed by five thin border
-    /// Tiles, and each leading subset exactly matches one Stars group and walks its closed Neighbor cycle.
-    /// </summary>
-    private const int StarballStarTileCount = 5;
-
-    /// <summary>
     /// Hue-wheel distance a contour Tile sits from the motif part it borders. Half a cycle is the most
     /// distant entry in the conditioned palette's cyclic order, so this is the largest step the palette
     /// can make and needs no tuning — it is a property of the wheel rather than a matter of taste.
@@ -425,18 +418,6 @@ public class Angles : EffectBase
     private FillTileFields[] starFillFields;
 
     /// <summary>
-    /// Per Line Ribbon family and Tile, the Tile's normalized stored position along its group, or -1
-    /// when it belongs to no ribbon in that family. Families are ordered cleanest-first as lines0,
-    /// lines3, lines2, lines1 so overlap resolution and density decay share one stable priority.
-    /// </summary>
-    /// <remarks>
-    /// This is initialization-only geometry staging. Its arrays become the resolved active-family
-    /// cache below, then this outer reference is cleared. The Drop envelope, active-family count,
-    /// flow phase, and mix remain live per-frame values, so no Sync Setting is baked into either cache.
-    /// </remarks>
-    private float[][] ribbonPositionByFamily;
-
-    /// <summary>
     /// Per active-family count and Tile, the normalized stored position from the cleanest active
     /// Line Ribbon family that contains it, or -1 when no active family contains it. Multiply-covered
     /// Tiles keep one stable source until their current family drops out, while every family still
@@ -545,7 +526,6 @@ public class Angles : EffectBase
         rawHue = new float[total];
         tileCenters = new Vector2[total];
         beatFrontRankByTile = new float[total];
-        ribbonPositionByFamily = new float[RibbonFamilyCount][];
         normalizedOrientationByTile = new float[total];
         lightAlignmentByTile = new float[total];
 
@@ -561,87 +541,54 @@ public class Angles : EffectBase
         }
 
         lotusballFillFields = PrecomputeFillFields(
-            penrose.Layout.shapes.Lotusballs,
-            AnglesSyncSettings.FillUnitKind.Lotusballs);
+            penrose.Layout.shapes.Lotusballs);
         starballFillFields = PrecomputeFillFields(
-            penrose.Layout.shapes.Starballs,
-            AnglesSyncSettings.FillUnitKind.Starballs);
+            penrose.Layout.shapes.Starballs);
         starFillFields = PrecomputeFillFields(
-            penrose.Layout.shapes.Stars,
-            AnglesSyncSettings.FillUnitKind.Stars);
+            penrose.Layout.shapes.Stars);
 
-        PrecomputeRibbonFamily(0, penrose.Layout.shapes.Lines0, total);
-        PrecomputeRibbonFamily(1, penrose.Layout.shapes.Lines3, total);
-        PrecomputeRibbonFamily(2, penrose.Layout.shapes.Lines2, total);
-        PrecomputeRibbonFamily(3, penrose.Layout.shapes.Lines1, total);
         ribbonPositionByActiveFamilyCount = PrecomputeRibbonPositionsByActiveFamilyCount(
-            ribbonPositionByFamily,
+            new[]
+            {
+                penrose.Layout.shapes.Lines0,
+                penrose.Layout.shapes.Lines3,
+                penrose.Layout.shapes.Lines2,
+                penrose.Layout.shapes.Lines1,
+            },
             total);
-        ribbonPositionByFamily = null;
     }
 
     /// <summary>
-    /// Caches one Line Ribbon family's membership and normalized ordered position without retaining
-    /// its packed Reader. Consecutive duplicate Tile positions count once, so lines2 group 10's
-    /// repeated Tile 466 neither divides by a false path length nor shifts the visible current.
-    /// </summary>
-    /// <param name="familyIndex">Cleanest-first destination family index.</param>
-    /// <param name="shapeList">The allocation-free Line Ribbon Shape List reader.</param>
-    /// <param name="total">Number of Tiles whose membership array is allocated once.</param>
-    private void PrecomputeRibbonFamily(
-        int familyIndex,
-        LayoutData.ShapeList.Reader shapeList,
-        int total)
-    {
-        var positions = new float[total];
-        for (int tileIndex = 0; tileIndex < positions.Length; tileIndex++)
-        {
-            positions[tileIndex] = -1f;
-        }
-
-        for (int groupIndex = 0; groupIndex < shapeList.GroupCount; groupIndex++)
-        {
-            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
-            int uniqueTileCount = group.TileCount;
-            for (int pathIndex = 1; pathIndex < group.TileCount; pathIndex++)
-            {
-                if (group[pathIndex] == group[pathIndex - 1])
-                {
-                    uniqueTileCount--;
-                }
-            }
-
-            int uniquePathIndex = 0;
-            for (int pathIndex = 0; pathIndex < group.TileCount; pathIndex++)
-            {
-                int tile = group[pathIndex];
-                if (pathIndex > 0 && tile == group[pathIndex - 1])
-                {
-                    continue;
-                }
-
-                positions[tile] = uniqueTileCount > 1
-                    ? uniquePathIndex / (float)(uniqueTileCount - 1)
-                    : 0f;
-                uniquePathIndex++;
-            }
-        }
-
-        ribbonPositionByFamily[familyIndex] = positions;
-    }
-
-    /// <summary>
-    /// Resolves every possible Drop density to the cleanest active family containing each Tile.
+    /// Copies the shared Line Ribbon positions and resolves every possible Drop density to the
+    /// cleanest active family containing each Tile.
     /// Settling the stable priority during <see cref="Init"/> removes the per-Tile family scan from
     /// <see cref="Draw"/> while still allowing the live Drop envelope to select a density each frame.
     /// </summary>
-    /// <param name="positionsByFamily">Cleanest-first per-family Line Ribbon positions.</param>
+    /// <param name="families">The shared Line Ribbon readers in cleanest-first lines0, lines3, lines2, lines1 order.</param>
     /// <param name="total">Number of Tiles represented by every resolved density.</param>
     /// <returns>Per active-family count and Tile, the selected ribbon position or -1.</returns>
+    /// <remarks>
+    /// The shared layer deduplicates lines2 group 10's repeated Tile 466 before exposing position,
+    /// so it neither divides by a false path length nor shifts the visible current. These copied
+    /// geometry arrays are initialization-only. The Drop envelope, active-family count, flow phase,
+    /// and mix remain live per frame, so no Sync Setting is baked into the cache.
+    /// </remarks>
     private static float[][] PrecomputeRibbonPositionsByActiveFamilyCount(
-        float[][] positionsByFamily,
+        LayoutData.ShapeList.Reader[] families,
         int total)
     {
+        var positionsByFamily = new float[RibbonFamilyCount][];
+        for (int familyIndex = 0; familyIndex < RibbonFamilyCount; familyIndex++)
+        {
+            var positions = new float[total];
+            for (int tileIndex = 0; tileIndex < total; tileIndex++)
+            {
+                positions[tileIndex] = families[familyIndex].GetPosition(tileIndex);
+            }
+
+            positionsByFamily[familyIndex] = positions;
+        }
+
         var positionsByActiveFamilyCount = new float[RibbonFamilyCount + 1][];
         positionsByActiveFamilyCount[1] = positionsByFamily[0];
         for (int activeFamilyCount = 2;
@@ -665,26 +612,22 @@ public class Angles : EffectBase
     }
 
     /// <summary>
-    /// Caches one Shape List's participating Tiles, preserving its existing full-group radius rank
-    /// while assigning every Tile to the explicit parts defined by its motif kind.
+    /// Caches one shared Shape List's membership, preserving Angles' existing full-group radius rank
+    /// while mapping the layer's finest Part roles onto this Effect's two-part hue policy.
     /// </summary>
-    /// <param name="shapeList">The allocation-free Shape List reader whose motif groups become Fill units.</param>
-    /// <param name="fillUnit">The motif kind whose measured part decomposition is applied.</param>
+    /// <param name="shapeList">The shared Shape List reader whose Motif groups become Fill units.</param>
     /// <returns>One immutable geometry entry per wall Tile, with negative values for nonmembers.</returns>
     /// <remarks>
-    /// Stars are one part. Starballs use their known five-fat-Tile prefix as the Star core and their
-    /// five-thin-Tile suffix as the surrounding ball. Lotusballs use the unique fat Tile with four
-    /// in-group Neighbors as the center and every other Tile as the connected surround, including the
-    /// one clipped nine-Tile group. Packed traversal order and clockwise traversal orientation deliberately
-    /// do not enter the cache: those made hue vary per Tile, while Fill motion belongs to whole parts.
-    /// A second pass then claims each motif's bordering Tiles as its contour, which is why membership
-    /// has to be complete first: a Tile bordering one motif is very often a member of the next.
-    /// Every array allocation and both adjacency scans happen here during <see cref="Init"/> so
-    /// <see cref="Draw"/> reads only cached scalars.
+    /// Stars remain one Angles part. A Starball Core and Lotusball Center map to part zero; each
+    /// Surround maps to part one. Packed traversal order and clockwise traversal orientation
+    /// deliberately do not enter this cache: those made hue vary per Tile, while Fill motion belongs
+    /// to whole Parts. The shared layer has already completed membership before Contours, because a
+    /// Tile bordering one Motif is frequently a member of the next. Angles then retains its outermost-
+    /// wins Contour tie-break and outer-to-inner rank direction as visual policy. Shared Neighbor walks
+    /// happen once during layout loading; this Effect allocates only its policy cache during
+    /// <see cref="Init"/>, so <see cref="Draw"/> reads cached scalars.
     /// </remarks>
-    private FillTileFields[] PrecomputeFillFields(
-        LayoutData.ShapeList.Reader shapeList,
-        AnglesSyncSettings.FillUnitKind fillUnit)
+    private FillTileFields[] PrecomputeFillFields(LayoutData.ShapeList.Reader shapeList)
     {
         var fields = new FillTileFields[tiles.Length];
         for (int i = 0; i < fields.Length; i++)
@@ -699,15 +642,7 @@ public class Angles : EffectBase
 
         for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
         {
-            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
-            Vector2 groupCenter = Vector2.zero;
-            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
-            {
-                groupCenter += tileCenters[group[tileIndex]];
-            }
-
-            groupCenter /= group.TileCount;
-            float radius = groupCenter.magnitude;
+            float radius = shapeList.GetCentroid(groupIndex).magnitude;
             groupRadii[groupIndex] = radius;
             minimumRadius = Mathf.Min(minimumRadius, radius);
             maximumRadius = Mathf.Max(maximumRadius, radius);
@@ -721,117 +656,70 @@ public class Angles : EffectBase
                 minimumRadius,
                 groupRadii[groupIndex]);
             groupRanks[groupIndex] = unitRank;
-            LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
-            int lotusballCenterTile = fillUnit == AnglesSyncSettings.FillUnitKind.Lotusballs
-                ? FindLotusballCenter(group, groupIndex)
-                : -1;
-
-            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
-            {
-                int tile = group[tileIndex];
-                int partIndex = fillUnit switch
-                {
-                    AnglesSyncSettings.FillUnitKind.Stars => 0,
-                    AnglesSyncSettings.FillUnitKind.Starballs =>
-                        tileIndex < StarballStarTileCount ? 0 : 1,
-                    _ => tile == lotusballCenterTile ? 0 : 1,
-                };
-                fields[tile] = new FillTileFields(
-                    unitRank,
-                    partIndex,
-                    -1f,
-                    contourPartIndex: -1);
-            }
         }
 
-        // Contours run only after every motif has claimed its Tiles, because a Tile that borders one
-        // motif is frequently a member of the next one and membership always wins. A Tile bordering two
-        // motifs keeps the outermost, so a shared contour lights with the leading edge of the wave —
-        // settling it here costs one cached value instead of a per-frame comparison in Draw.
+        for (int tile = 0; tile < fields.Length; tile++)
+        {
+            int groupIndex = shapeList.GetGroupIndex(tile);
+            if (groupIndex < 0)
+            {
+                continue;
+            }
+
+            fields[tile] = new FillTileFields(
+                groupRanks[groupIndex],
+                ResolveFillPartIndex(shapeList.GetPart(tile)),
+                -1f,
+                contourPartIndex: -1);
+        }
+
+        // The shared layer has already removed every Motif member from Contour claims. A Tile bordering
+        // two Motifs keeps the outermost here, so a shared Contour lights with the leading edge of the
+        // wave — settling that Angles policy costs one cached value instead of a per-frame comparison.
         for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
         {
             LayoutData.ShapeList.Group group = shapeList.GetGroup(groupIndex);
+            LayoutData.ShapeList.Group contour = shapeList.GetContour(groupIndex);
             float unitRank = groupRanks[groupIndex];
 
             int outerPartIndex = 0;
             for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
             {
-                outerPartIndex = Mathf.Max(outerPartIndex, fields[group[tileIndex]].PartIndex);
+                outerPartIndex = Mathf.Max(
+                    outerPartIndex,
+                    ResolveFillPartIndex(shapeList.GetPart(group[tileIndex])));
             }
 
-            for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
+            for (int contourIndex = 0; contourIndex < contour.TileCount; contourIndex++)
             {
-                foreach (var neighbor in tiles[group[tileIndex]].neighbors)
+                int candidate = contour[contourIndex];
+                FillTileFields existing = fields[candidate];
+                if (existing.ContourRank >= 0f && existing.ContourRank <= unitRank)
                 {
-                    int candidate = neighbor.tileIdx;
-                    FillTileFields existing = fields[candidate];
-                    if (existing.UnitRank >= 0f)
-                    {
-                        continue;
-                    }
-
-                    if (existing.ContourRank >= 0f && existing.ContourRank <= unitRank)
-                    {
-                        continue;
-                    }
-
-                    fields[candidate] = new FillTileFields(
-                        -1f,
-                        partIndex: -1,
-                        unitRank,
-                        outerPartIndex);
+                    continue;
                 }
+
+                fields[candidate] = new FillTileFields(
+                    -1f,
+                    partIndex: -1,
+                    unitRank,
+                    outerPartIndex);
             }
         }
 
         return fields;
     }
 
-    /// <summary>
-    /// Finds the center part of one Lotusball from its measured Rhomb Type and Neighbor topology.
-    /// </summary>
-    /// <param name="group">The packed Lotusball group whose unique degree-four fat Tile is requested.</param>
-    /// <param name="groupIndex">Group index reported if the measured center invariant is broken.</param>
-    /// <returns>The direct Tile index of the Lotusball's center.</returns>
-    /// <remarks>
-    /// All 49 groups have exactly one fat Tile touching four other group Tiles—two fat and two thin.
-    /// Packed position does not express that role, so adjacency and Rhomb Type are the source.
-    /// </remarks>
-    private int FindLotusballCenter(
-        LayoutData.ShapeList.Group group,
-        int groupIndex)
+    /// <summary>Maps the shared finest Part roles onto Angles' coarser two-hue grouping.</summary>
+    /// <param name="part">The shared Center, Core, Surround, or unnamed single Part.</param>
+    /// <returns>Part zero for Center, Core, and an undivided Motif; part one for Surround.</returns>
+    private static int ResolveFillPartIndex(LayoutData.ShapeList.PartRole part)
     {
-        for (int tileIndex = 0; tileIndex < group.TileCount; tileIndex++)
+        return part switch
         {
-            int tile = group[tileIndex];
-            if (tiles[tile].type != 0)
-            {
-                continue;
-            }
-
-            int groupNeighborCount = 0;
-            foreach (var neighbor in tiles[tile].neighbors)
-            {
-                for (int candidateIndex = 0; candidateIndex < group.TileCount; candidateIndex++)
-                {
-                    if (neighbor.tileIdx != group[candidateIndex])
-                    {
-                        continue;
-                    }
-
-                    groupNeighborCount++;
-                    break;
-                }
-            }
-
-            if (groupNeighborCount == 4)
-            {
-                return tile;
-            }
-        }
-
-        throw new InvalidOperationException(
-            $"Lotusball group {groupIndex} has no fat Tile with four in-group Neighbors.");
+            LayoutData.ShapeList.PartRole.Surround => 1,
+            _ => 0,
+        };
     }
 
     /// <summary>

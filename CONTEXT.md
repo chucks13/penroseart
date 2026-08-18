@@ -43,20 +43,28 @@ A named collection of Tile groups that traces repeated geometric motifs or symme
 _Avoid_: a Buffer; assuming every Shape List group is a closed path or has the same number of Tiles.
 
 **Motif**:
-One Shape List group considered as a single figure on the wall — a Star, a Starball, a Lotusball, a Line Ribbon. The word names the figure a viewer sees, whether or not anything is currently lighting it.
+One Shape List group considered as a single figure on the wall — a Star, a Starball, a Lotusball, a Ring, an Arc, or a Line Ribbon. The word names the figure a viewer sees, whether or not anything is currently lighting it.
 _Avoid_: the Shape List itself, which is the whole collection; assuming a Motif is closed, or that every Motif in one Shape List holds the same number of Tiles.
 
 **Part**:
-A subdivision of a Motif whose Tiles an Effect treats as one region — a Starball's five-Tile Star core and its five-Tile surround are two Parts. A Motif with no internal division, such as a Star, is a single Part.
-_Avoid_: a Tile; a Shape List group; assuming every Motif has more than one Part.
+The finest natural role within a Motif: a Starball has a five-Tile Star Core and a five-Tile Surround, while a Lotusball has one Center Tile and a Surround. A Motif with no internal roles, such as a Star, is one Part. Effects may combine Parts into coarser regions, but those combinations are Effect policy rather than wall geometry.
+_Avoid_: a Tile; a Shape List group; treating an Effect's coarser grouping as canonical; assuming every Motif has more than one Part.
 
 **Contour**:
 The Tiles that border a Motif without belonging to it, lit so the Motif reads as a shape with an edge. A Tile that belongs to any Motif is never that Motif's Contour, and where two Motifs compete for a bordering Tile only one may claim it.
 _Avoid_: an outline drawn in darkness — a Contour is a colour against a colour; the Motif's own Tiles.
 
 **Star**:
-A closed cycle of five neighboring fat Tiles.
+A closed cycle of five neighboring fat Tiles. It has three lives on the wall: a Motif in its own Shape List, the Core Part of every Starball, and the smallest Ring.
 _Avoid_: Starball — that is the larger compound motif around a Star.
+
+**Ring**:
+A closed circuit of neighboring fat Tiles. A Star is the smallest Ring.
+_Avoid_: Loop — that term is musical; Arc — that is the wall-clipped open form.
+
+**Arc**:
+An open chain of neighboring fat Tiles formed where the wall boundary clips a Ring.
+_Avoid_: Line Ribbon — that is a separate open-chain Motif family; Ring — that is closed.
 
 **Starball**:
 A ten-Tile compound motif in which five fat Tiles form a Star and five thin Tiles surround it.
@@ -66,9 +74,13 @@ _Avoid_: Star; Lotusball — it uses a different fat/thin adjacency pattern.
 A connected ten-Tile motif of five fat and five thin Tiles built around one fat Tile that touches four of the others. Its fat Tiles never form a Star, which is what separates it from a Starball. The shipped Shape List has one clipped nine-Tile group (group 24); the runtime handles that wall-edge exception while ten Tiles remains the canonical shape.
 _Avoid_: Starball; assuming its groups must have the Star's closed-cycle topology.
 
+**Center**:
+The one fat Tile at the heart of a Lotusball — the only member that touches four other Tiles of its group. It is the finest Part role a Lotusball expresses.
+_Avoid_: a Tile's coordinate center; a Motif's centroid — both are geometry, not a role; a Starball's Core.
+
 **Line Ribbon**:
 An ordered open chain of neighboring Tiles that runs across the wall, possibly shortened where it meets the wall edge.
-_Avoid_: Loop — that term is musical; a closed Star or other Shape List motif.
+_Avoid_: Loop — that term is musical; Arc — that is the wall-clipped form of a Ring; a closed Star or other Shape List motif.
 
 **Performer**:
 The umbrella for anything that can be put on the wall — an Effect, Transition, or Mixer — seen as something called on stage rather than as a class. The Director casts Performers; the Switcher moves them on and off. **Everything else in the system exists to serve Performers**: modules inform them, and never restrict or command them.

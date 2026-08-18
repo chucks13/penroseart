@@ -259,13 +259,15 @@ public class Penrose : MonoBehaviour
     }
 
     /// <summary>
-    /// Adopts the parsed layout, then generates mesh, tile metadata, bounds, edge-and-seam distances, and background brightness.
+    /// Adopts the parsed layout, then generates mesh, tile metadata, shared Motif facts, bounds,
+    /// edge-and-seam distances, and background brightness.
     /// </summary>
     public void Init(LayoutData layout)
     {
         Layout = layout;
         GenerateMesh();
         GenerateTiles();
+        Layout.shapes.Derive(tiles);
         GenerateBounds();
         GenerateEdgeAndSeamDistances();
         bgBrightness = bgColor.grayscale;

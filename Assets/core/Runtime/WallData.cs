@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
@@ -81,12 +82,23 @@ public class LayoutData
     /// <summary>
     /// Named decorative index lists over the 900 tiles, each packed as
     /// [group count, pointer×group count, then per group: (tile count, tileIdx×tile count)].
-    /// Consumed by shape-tracing effects (TileShapes, ShapeGlitch, Petals, Mirror, …).
+    /// Owns the wall's shared Motif facts and serves them with the packed groups through one reader.
+    /// Consumed by shape-tracing Effects such as TileShapes, ShapeGlitch, Petals, and Mirror.
     /// </summary>
+    /// <remarks>
+    /// The facts stay load-derived rather than generator-baked because membership, Parts, Contours,
+    /// positions, closure, and centroids are pure consequences of the authoritative layout. Keeping one
+    /// derivation beside the reader prevents generated facts from disagreeing with changed topology or
+    /// carrying a packing defect such as a repeated Line Ribbon Tile into every consumer. Centroids cannot
+    /// be completed directly in <see cref="LayoutData.Parse"/> because serialized <see cref="Tile"/> values
+    /// carry no centers: <see cref="Penrose.GenerateTiles"/> derives the effect-facing coordinates from
+    /// <see cref="LayoutData.Mesh"/> in its y-flipped coordinate space. Derivation therefore runs immediately
+    /// after that step, still inside layout loading and before any Effect initializes.
+    /// </remarks>
     [Serializable]
     public class ShapeList
     {
-        /// <summary>Packed loop group data populated from the layout's <c>loops</c> JSON field.</summary>
+        /// <summary>Packed Ring and Arc group data populated from the layout's <c>loops</c> JSON field.</summary>
         [SerializeField] private int[] loops;
 
         /// <summary>Packed star group data populated from the layout's <c>stars</c> JSON field.</summary>
@@ -116,47 +128,443 @@ public class LayoutData
         /// <summary>Packed variable-size mirror group data populated from the layout's <c>mirror10</c> JSON field.</summary>
         [SerializeField] private int[] mirror10;
 
-        /// <summary>Allocation-free access to the loop Shape List groups.</summary>
-        public Reader Loops => new(loops);
+        /// <summary>Facts derived from the Rings Shape List during layout loading.</summary>
+        private DerivedFacts ringsFacts;
+
+        /// <summary>Facts derived from the Stars Shape List during layout loading.</summary>
+        private DerivedFacts starsFacts;
+
+        /// <summary>Facts derived from the first Line Ribbon family during layout loading.</summary>
+        private DerivedFacts lines0Facts;
+
+        /// <summary>Facts derived from the second Line Ribbon family during layout loading.</summary>
+        private DerivedFacts lines1Facts;
+
+        /// <summary>Facts derived from the third Line Ribbon family during layout loading.</summary>
+        private DerivedFacts lines2Facts;
+
+        /// <summary>Facts derived from the fourth Line Ribbon family during layout loading.</summary>
+        private DerivedFacts lines3Facts;
+
+        /// <summary>Facts derived from the Lotusball Shape List during layout loading.</summary>
+        private DerivedFacts lotusballFacts;
+
+        /// <summary>Facts derived from the Starball Shape List during layout loading.</summary>
+        private DerivedFacts starballFacts;
+
+        /// <summary>Facts derived from the two-tile mirror Shape List during layout loading.</summary>
+        private DerivedFacts mirror2Facts;
+
+        /// <summary>Facts derived from the variable-size mirror Shape List during layout loading.</summary>
+        private DerivedFacts mirror10Facts;
+
+        /// <summary>The finest named Part role a Tile holds inside its Motif.</summary>
+        public enum PartRole
+        {
+            /// <summary>The Tile belongs to no named internal role.</summary>
+            None,
+
+            /// <summary>The single degree-four fat Tile at the heart of a Lotusball.</summary>
+            Center,
+
+            /// <summary>The five-Tile Star at the heart of a Starball.</summary>
+            Core,
+
+            /// <summary>The Tiles around a Lotusball Center or Starball Core.</summary>
+            Surround,
+        }
+
+        /// <summary>The role convention used while deriving one Shape List.</summary>
+        private enum RoleKind
+        {
+            /// <summary>The Motif has no named internal role.</summary>
+            None,
+
+            /// <summary>The Motif is a Lotusball with a Center and Surround.</summary>
+            Lotusball,
+
+            /// <summary>The Motif is a Starball with a Core and Surround.</summary>
+            Starball,
+        }
+
+        /// <summary>The ordered-path convention used while deriving one Shape List.</summary>
+        private enum PathKind
+        {
+            /// <summary>The packed order carries no promoted path fact.</summary>
+            None,
+
+            /// <summary>The packed order is an open Line Ribbon.</summary>
+            Ribbon,
+
+            /// <summary>The packed order is a closed Ring or wall-clipped Arc.</summary>
+            Ring,
+        }
+
+        /// <summary>Allocation-free access to the Ring and Arc groups stored in the serialized <c>loops</c> field.</summary>
+        public Reader Rings => new(loops, ringsFacts);
 
         /// <summary>Allocation-free access to the star Shape List groups.</summary>
-        public Reader Stars => new(stars);
+        public Reader Stars => new(stars, starsFacts);
 
         /// <summary>Allocation-free access to the first Line Ribbon Shape List groups.</summary>
-        public Reader Lines0 => new(lines0);
+        public Reader Lines0 => new(lines0, lines0Facts);
 
         /// <summary>Allocation-free access to the second Line Ribbon Shape List groups.</summary>
-        public Reader Lines1 => new(lines1);
+        public Reader Lines1 => new(lines1, lines1Facts);
 
         /// <summary>Allocation-free access to the third Line Ribbon Shape List groups.</summary>
-        public Reader Lines2 => new(lines2);
+        public Reader Lines2 => new(lines2, lines2Facts);
 
         /// <summary>Allocation-free access to the fourth Line Ribbon Shape List groups.</summary>
-        public Reader Lines3 => new(lines3);
+        public Reader Lines3 => new(lines3, lines3Facts);
 
         /// <summary>Allocation-free access to the Lotusball Shape List groups.</summary>
-        public Reader Lotusballs => new(lotusballs);
+        public Reader Lotusballs => new(lotusballs, lotusballFacts);
 
         /// <summary>Allocation-free access to the Starball Shape List groups.</summary>
-        public Reader Starballs => new(starballs);
+        public Reader Starballs => new(starballs, starballFacts);
 
         /// <summary>Allocation-free access to the two-tile mirror Shape List groups.</summary>
-        public Reader Mirror2 => new(mirror2);
+        public Reader Mirror2 => new(mirror2, mirror2Facts);
 
         /// <summary>Allocation-free access to the variable-size mirror Shape List groups.</summary>
-        public Reader Mirror10 => new(mirror10);
+        public Reader Mirror10 => new(mirror10, mirror10Facts);
 
-        /// <summary>Allocation-free access to the groups stored in one packed Shape List array.</summary>
+        /// <summary>
+        /// Derives the wall's shared Motif facts once while <see cref="Penrose.Init"/> loads the layout.
+        /// </summary>
+        /// <param name="tiles">The effect-facing Tiles after their Mesh-derived centers and y flip exist.</param>
+        internal void Derive(Penrose.TileData[] tiles)
+        {
+            ringsFacts = DeriveFacts(loops, tiles, RoleKind.None, PathKind.Ring);
+            starsFacts = DeriveFacts(stars, tiles, RoleKind.None, PathKind.None);
+            lines0Facts = DeriveFacts(lines0, tiles, RoleKind.None, PathKind.Ribbon);
+            lines1Facts = DeriveFacts(lines1, tiles, RoleKind.None, PathKind.Ribbon);
+            lines2Facts = DeriveFacts(lines2, tiles, RoleKind.None, PathKind.Ribbon);
+            lines3Facts = DeriveFacts(lines3, tiles, RoleKind.None, PathKind.Ribbon);
+            lotusballFacts = DeriveFacts(lotusballs, tiles, RoleKind.Lotusball, PathKind.None);
+            starballFacts = DeriveFacts(starballs, tiles, RoleKind.Starball, PathKind.None);
+            mirror2Facts = DeriveFacts(mirror2, tiles, RoleKind.None, PathKind.None);
+            mirror10Facts = DeriveFacts(mirror10, tiles, RoleKind.None, PathKind.None);
+        }
+
+        /// <summary>Builds the plain reverse-index, role, Contour, position, closure, and centroid arrays for one list.</summary>
+        /// <param name="packed">The serialized packed Shape List.</param>
+        /// <param name="tiles">The effect-facing Tiles carrying centers and Neighbors.</param>
+        /// <param name="roleKind">The named internal roles expressed by this Motif family.</param>
+        /// <param name="pathKind">The packed-order path fact expressed by this Motif family.</param>
+        /// <returns>The derived facts held behind one <see cref="Reader"/>.</returns>
+        private static DerivedFacts DeriveFacts(
+            int[] packed,
+            Penrose.TileData[] tiles,
+            RoleKind roleKind,
+            PathKind pathKind)
+        {
+            var source = new Reader(packed, facts: null);
+            int groupCount = source.GroupCount;
+            var groupByTile = new int[tiles.Length];
+            var partByTile = new PartRole[tiles.Length];
+            var positionByTile = new float[tiles.Length];
+            var centerByGroup = new int[groupCount];
+            var centroidByGroup = new Vector2[groupCount];
+            var closedByGroup = new bool[groupCount];
+            var uniqueTilesByGroup = new int[groupCount][];
+            var seenInGroup = new int[tiles.Length];
+
+            for (int tileIndex = 0; tileIndex < tiles.Length; tileIndex++)
+            {
+                groupByTile[tileIndex] = -1;
+                positionByTile[tileIndex] = -1f;
+            }
+
+            for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
+            {
+                centerByGroup[groupIndex] = -1;
+                Group group = source.GetGroup(groupIndex);
+                var uniqueTiles = new List<int>(group.TileCount);
+                int groupStamp = groupIndex + 1;
+                for (int packedIndex = 0; packedIndex < group.TileCount; packedIndex++)
+                {
+                    int tile = group[packedIndex];
+                    if (seenInGroup[tile] == groupStamp)
+                    {
+                        continue;
+                    }
+
+                    seenInGroup[tile] = groupStamp;
+                    uniqueTiles.Add(tile);
+                    groupByTile[tile] = groupIndex;
+                    centroidByGroup[groupIndex] += tiles[tile].center;
+                }
+
+                int[] unique = uniqueTiles.ToArray();
+                uniqueTilesByGroup[groupIndex] = unique;
+                centroidByGroup[groupIndex] /= unique.Length;
+                DerivePathFacts(
+                    unique,
+                    tiles,
+                    groupIndex,
+                    pathKind,
+                    positionByTile,
+                    closedByGroup);
+                DeriveRoleFacts(
+                    group,
+                    unique,
+                    tiles,
+                    groupIndex,
+                    roleKind,
+                    partByTile,
+                    centerByGroup);
+            }
+
+            int[][] contourByGroup = DeriveContours(uniqueTilesByGroup, groupByTile, tiles);
+            return new DerivedFacts(
+                groupByTile,
+                partByTile,
+                positionByTile,
+                centerByGroup,
+                centroidByGroup,
+                closedByGroup,
+                contourByGroup);
+        }
+
+        /// <summary>Derives the promoted packed-order position and Rings-family closure fact for one group.</summary>
+        /// <param name="group">The group's deduplicated packed-order Tiles.</param>
+        /// <param name="tiles">The effect-facing Tiles carrying Neighbors.</param>
+        /// <param name="groupIndex">The group index receiving the derived closure fact.</param>
+        /// <param name="pathKind">The path convention carried by this Shape List.</param>
+        /// <param name="positionByTile">The per-Tile position array receiving normalized traversal positions.</param>
+        /// <param name="closedByGroup">The per-group closure array receiving Ring/Arc classification.</param>
+        private static void DerivePathFacts(
+            int[] group,
+            Penrose.TileData[] tiles,
+            int groupIndex,
+            PathKind pathKind,
+            float[] positionByTile,
+            bool[] closedByGroup)
+        {
+            if (pathKind == PathKind.None)
+            {
+                return;
+            }
+
+            bool isClosedRing = pathKind == PathKind.Ring
+                && group.Length > 2
+                && AreNeighbors(tiles, group[group.Length - 1], group[0]);
+            closedByGroup[groupIndex] = isClosedRing;
+            float denominator = isClosedRing ? group.Length : group.Length - 1;
+            for (int pathIndex = 0; pathIndex < group.Length; pathIndex++)
+            {
+                positionByTile[group[pathIndex]] = denominator > 0f
+                    ? pathIndex / denominator
+                    : 0f;
+            }
+        }
+
+        /// <summary>Derives the named Part roles and Lotusball Center for one Motif group.</summary>
+        /// <param name="packedGroup">The original packed group, whose Starball prefix is meaningful.</param>
+        /// <param name="uniqueGroup">The group's deduplicated Tiles.</param>
+        /// <param name="tiles">The effect-facing Tiles carrying Rhomb Type and Neighbors.</param>
+        /// <param name="groupIndex">The group index reported when its role invariant is broken.</param>
+        /// <param name="roleKind">The role convention expressed by this Motif family.</param>
+        /// <param name="partByTile">The per-Tile role array receiving the derived roles.</param>
+        /// <param name="centerByGroup">The per-group array receiving a Lotusball Center Tile.</param>
+        private static void DeriveRoleFacts(
+            Group packedGroup,
+            int[] uniqueGroup,
+            Penrose.TileData[] tiles,
+            int groupIndex,
+            RoleKind roleKind,
+            PartRole[] partByTile,
+            int[] centerByGroup)
+        {
+            if (roleKind == RoleKind.None)
+            {
+                return;
+            }
+
+            if (roleKind == RoleKind.Starball)
+            {
+                const int coreTileCount = 5;
+                for (int tileIndex = 0; tileIndex < packedGroup.TileCount; tileIndex++)
+                {
+                    int tile = packedGroup[tileIndex];
+                    bool isCore = tileIndex < coreTileCount;
+                    partByTile[tile] = isCore ? PartRole.Core : PartRole.Surround;
+                }
+
+                return;
+            }
+
+            int centerTile = -1;
+            for (int tileIndex = 0; tileIndex < uniqueGroup.Length; tileIndex++)
+            {
+                int tile = uniqueGroup[tileIndex];
+                partByTile[tile] = PartRole.Surround;
+                if (tiles[tile].type == 0 && CountNeighborsInGroup(tiles, tile, uniqueGroup) == 4)
+                {
+                    centerTile = tile;
+                }
+            }
+
+            if (centerTile < 0)
+            {
+                throw new InvalidDataException(
+                    $"Lotusball group {groupIndex} has no fat Tile with four in-group Neighbors.");
+            }
+
+            partByTile[centerTile] = PartRole.Center;
+            centerByGroup[groupIndex] = centerTile;
+        }
+
+        /// <summary>Builds each Motif's deduplicated Contour after all Motif membership is known.</summary>
+        /// <param name="uniqueTilesByGroup">The deduplicated member Tiles for every group.</param>
+        /// <param name="groupByTile">The complete tile-to-group reverse index whose membership outranks Contours.</param>
+        /// <param name="tiles">The effect-facing Tiles carrying Neighbors.</param>
+        /// <returns>One plain Contour Tile array per group.</returns>
+        private static int[][] DeriveContours(
+            int[][] uniqueTilesByGroup,
+            int[] groupByTile,
+            Penrose.TileData[] tiles)
+        {
+            var contours = new int[uniqueTilesByGroup.Length][];
+            var claimedForGroup = new int[tiles.Length];
+            for (int groupIndex = 0; groupIndex < uniqueTilesByGroup.Length; groupIndex++)
+            {
+                var contour = new List<int>();
+                int groupStamp = groupIndex + 1;
+                int[] group = uniqueTilesByGroup[groupIndex];
+                for (int tileIndex = 0; tileIndex < group.Length; tileIndex++)
+                {
+                    foreach (Penrose.neighbor neighbor in tiles[group[tileIndex]].neighbors)
+                    {
+                        int candidate = neighbor.tileIdx;
+                        if (groupByTile[candidate] >= 0 || claimedForGroup[candidate] == groupStamp)
+                        {
+                            continue;
+                        }
+
+                        claimedForGroup[candidate] = groupStamp;
+                        contour.Add(candidate);
+                    }
+                }
+
+                contours[groupIndex] = contour.ToArray();
+            }
+
+            return contours;
+        }
+
+        /// <summary>Counts how many of one Tile's Neighbors belong to the supplied Motif group.</summary>
+        /// <param name="tiles">The effect-facing Tiles carrying Neighbors.</param>
+        /// <param name="tile">The Tile whose in-group degree is requested.</param>
+        /// <param name="group">The Motif's deduplicated member Tiles.</param>
+        /// <returns>The Tile's Neighbor count inside the Motif.</returns>
+        private static int CountNeighborsInGroup(Penrose.TileData[] tiles, int tile, int[] group)
+        {
+            int count = 0;
+            foreach (Penrose.neighbor neighbor in tiles[tile].neighbors)
+            {
+                for (int candidateIndex = 0; candidateIndex < group.Length; candidateIndex++)
+                {
+                    if (neighbor.tileIdx == group[candidateIndex])
+                    {
+                        count++;
+                        break;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>Reports whether two Tiles share one complete edge.</summary>
+        /// <param name="tiles">The effect-facing Tiles carrying Neighbors.</param>
+        /// <param name="fromTile">The Tile whose adjacency list is read.</param>
+        /// <param name="toTile">The candidate Neighbor Tile.</param>
+        /// <returns><c>true</c> when the two Tiles are Neighbors.</returns>
+        private static bool AreNeighbors(Penrose.TileData[] tiles, int fromTile, int toTile)
+        {
+            foreach (Penrose.neighbor neighbor in tiles[fromTile].neighbors)
+            {
+                if (neighbor.tileIdx == toTile)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>The plain arrays held behind one derived Shape List reader.</summary>
+        internal sealed class DerivedFacts
+        {
+            /// <summary>Creates one immutable bundle of derived Shape List arrays.</summary>
+            /// <param name="groupByTile">Per-Tile group membership, or -1.</param>
+            /// <param name="partByTile">Per-Tile finest named Part role.</param>
+            /// <param name="positionByTile">Per-Tile Ribbon or Ring position, or -1.</param>
+            /// <param name="centerByGroup">Per-group Lotusball Center Tile, or -1.</param>
+            /// <param name="centroidByGroup">Per-group centroid in effect-layout coordinates.</param>
+            /// <param name="closedByGroup">Per-group closed Ring fact.</param>
+            /// <param name="contourByGroup">Per-group Contour Tiles.</param>
+            public DerivedFacts(
+                int[] groupByTile,
+                PartRole[] partByTile,
+                float[] positionByTile,
+                int[] centerByGroup,
+                Vector2[] centroidByGroup,
+                bool[] closedByGroup,
+                int[][] contourByGroup)
+            {
+                GroupByTile = groupByTile;
+                PartByTile = partByTile;
+                PositionByTile = positionByTile;
+                CenterByGroup = centerByGroup;
+                CentroidByGroup = centroidByGroup;
+                ClosedByGroup = closedByGroup;
+                ContourByGroup = contourByGroup;
+            }
+
+            /// <summary>Per-Tile group membership, or -1.</summary>
+            public int[] GroupByTile { get; }
+
+            /// <summary>Per-Tile finest named Part role.</summary>
+            public PartRole[] PartByTile { get; }
+
+            /// <summary>Per-Tile Ribbon or Ring position, or -1.</summary>
+            public float[] PositionByTile { get; }
+
+            /// <summary>Per-group Lotusball Center Tile, or -1.</summary>
+            public int[] CenterByGroup { get; }
+
+            /// <summary>Per-group centroid in effect-layout coordinates.</summary>
+            public Vector2[] CentroidByGroup { get; }
+
+            /// <summary>Per-group closed Ring fact.</summary>
+            public bool[] ClosedByGroup { get; }
+
+            /// <summary>Per-group Contour Tiles.</summary>
+            public int[][] ContourByGroup { get; }
+        }
+
+        /// <summary>
+        /// Allocation-free access to one Shape List's groups and its shared load-derived Motif facts.
+        /// </summary>
         public readonly struct Reader
         {
             /// <summary>The packed group pointers, tile counts, and tile indexes supplied by the layout.</summary>
             private readonly int[] packed;
 
-            /// <summary>Creates a reader over one packed Shape List array without copying its contents.</summary>
+            /// <summary>The load-derived plain arrays shared by every copy of this reader.</summary>
+            private readonly DerivedFacts facts;
+
+            /// <summary>Creates a reader over one packed Shape List and its derived facts without copying either.</summary>
             /// <param name="packed">The packed group and tile data to read.</param>
-            public Reader(int[] packed)
+            /// <param name="facts">The load-derived facts, or null only while those facts are being built.</param>
+            internal Reader(int[] packed, DerivedFacts facts)
             {
                 this.packed = packed;
+                this.facts = facts;
             }
 
             /// <summary>The number of groups declared at the start of the packed array.</summary>
@@ -170,42 +578,81 @@ public class LayoutData
                 int pointer = packed[groupIndex + 1];
                 return new Group(packed, pointer + 1, packed[pointer]);
             }
+
+            /// <summary>Returns the Shape List group containing one Tile.</summary>
+            /// <param name="tileIndex">The direct wall Tile index.</param>
+            /// <returns>The zero-based group index, or -1 when the Tile belongs to no group in this list.</returns>
+            public int GetGroupIndex(int tileIndex) => facts.GroupByTile[tileIndex];
+
+            /// <summary>Returns one Tile's finest named Part role inside its Motif.</summary>
+            /// <param name="tileIndex">The direct wall Tile index.</param>
+            /// <returns>The Tile's Center, Core, Surround, or no named role.</returns>
+            public PartRole GetPart(int tileIndex) => facts.PartByTile[tileIndex];
+
+            /// <summary>Returns the Center Tile of one Lotusball group.</summary>
+            /// <param name="groupIndex">The zero-based group index.</param>
+            /// <returns>The direct Center Tile index, or -1 when this Motif has no Center role.</returns>
+            public int GetCenterTile(int groupIndex) => facts.CenterByGroup[groupIndex];
+
+            /// <summary>Returns the centroid of one group in effect-layout coordinates.</summary>
+            /// <param name="groupIndex">The zero-based group index.</param>
+            /// <returns>The arithmetic mean of the group's unique Tile centers.</returns>
+            public Vector2 GetCentroid(int groupIndex) => facts.CentroidByGroup[groupIndex];
+
+            /// <summary>Returns one Motif's Contour after all membership in this Shape List has won.</summary>
+            /// <param name="groupIndex">The zero-based group index.</param>
+            /// <returns>The deduplicated Tiles bordering this Motif without belonging to any Motif in the list.</returns>
+            public Group GetContour(int groupIndex)
+            {
+                int[] contour = facts.ContourByGroup[groupIndex];
+                return new Group(contour, 0, contour.Length);
+            }
+
+            /// <summary>Returns one Tile's normalized position along its Line Ribbon, Ring, or Arc.</summary>
+            /// <param name="tileIndex">The direct wall Tile index.</param>
+            /// <returns>The deduplicated packed-order position, or -1 when this list carries no position for the Tile.</returns>
+            public float GetPosition(int tileIndex) => facts.PositionByTile[tileIndex];
+
+            /// <summary>Reports whether one Rings-list group is a closed Ring rather than a wall-clipped Arc.</summary>
+            /// <param name="groupIndex">The zero-based group index.</param>
+            /// <returns><c>true</c> for a closed Ring; <c>false</c> for an Arc or a non-Rings motif.</returns>
+            public bool IsClosed(int groupIndex) => facts.ClosedByGroup[groupIndex];
         }
 
-        /// <summary>Allocation-free access to one decoded Shape List group's ordered tile indexes.</summary>
+        /// <summary>Allocation-free access to one Tile-index array segment.</summary>
         public readonly struct Group
         {
-            /// <summary>The packed Shape List array that owns this group.</summary>
-            private readonly int[] packed;
+            /// <summary>The Tile-index source array that owns this view.</summary>
+            private readonly int[] source;
 
-            /// <summary>The absolute packed-array position of this group's first tile index.</summary>
+            /// <summary>The absolute source-array position of this view's first Tile index.</summary>
             private readonly int start;
 
-            /// <summary>Creates a group view over a decoded payload range without copying its tile indexes.</summary>
-            /// <param name="packed">The packed Shape List array that owns the group.</param>
-            /// <param name="start">The absolute packed-array position of the first tile index.</param>
-            /// <param name="tileCount">The number of ordered tile indexes in the group.</param>
-            public Group(int[] packed, int start, int tileCount)
+            /// <summary>Creates a view over a Tile-index range without copying it.</summary>
+            /// <param name="source">The Tile-index array that owns the range.</param>
+            /// <param name="start">The absolute source-array position of the first Tile index.</param>
+            /// <param name="tileCount">The number of ordered Tile indexes in the view.</param>
+            public Group(int[] source, int start, int tileCount)
             {
-                this.packed = packed;
+                this.source = source;
                 this.start = start;
                 TileCount = tileCount;
             }
 
-            /// <summary>The number of ordered tile indexes in this group.</summary>
+            /// <summary>The number of ordered Tile indexes in this view.</summary>
             public int TileCount { get; }
 
-            /// <summary>Reads one direct tile index from this group.</summary>
-            /// <param name="tileIndex">The zero-based position inside the group.</param>
-            /// <value>The tile index stored at the requested group position.</value>
-            public int this[int tileIndex] => packed[start + tileIndex];
+            /// <summary>Reads one direct Tile index from this view.</summary>
+            /// <param name="tileIndex">The zero-based position inside the view.</param>
+            /// <value>The Tile index stored at the requested position.</value>
+            public int this[int tileIndex] => source[start + tileIndex];
 
             /// <summary>
-            /// Returns a tile's absolute position in the packed source array so legacy hue arithmetic keeps its exact phase
-            /// without making Effects reconstruct group record boundaries.
+            /// Returns a Tile's absolute position in its source array. For packed Shape List groups this lets legacy
+            /// hue arithmetic keep its exact phase without making Effects reconstruct group record boundaries.
             /// </summary>
-            /// <param name="tileIndex">The zero-based position inside the group.</param>
-            /// <returns>The absolute packed-array position occupied by that tile index.</returns>
+            /// <param name="tileIndex">The zero-based position inside the view.</param>
+            /// <returns>The absolute source-array position occupied by that Tile index.</returns>
             public int PackedIndex(int tileIndex)
             {
                 return start + tileIndex;
