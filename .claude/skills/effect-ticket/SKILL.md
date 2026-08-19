@@ -43,8 +43,7 @@ its base class, never its name — some Mixers carry no "Mixer" in their name. L
 
 - Implementation workers run Codex `gpt-5.6-sol --effort xhigh`, always. Do not lower this
   selection.
-- Standards and Spec review workers run Codex `gpt-5.6-sol --effort xhigh`, always. Run both
-  reviews as visible, read-only Codex workers.
+- Standards and Spec review workers run Codex `gpt-5.6-sol --effort xhigh`, always.
 
 ## Commit before the next change
 
@@ -58,7 +57,9 @@ Wall approval is not part of this gate. The maintainer judges the look after the
 rejected look becomes a follow-up commit, or a revert by hash.
 
 A worker that edits a dirty tree mixes two changes into one diff. Nobody can tell the two apart
-after that, and nobody can revert one of them.
+after that, and nobody can revert one of them. The goal is reversibility, not commit count:
+never build new work on uncommitted work. One piece of work is one commit — a wall tuning loop
+commits when the maintainer settles, not once per nudge.
 
 When a change reshapes a settings class, update its `.asset` files in the same change — they are
 plain text, and a stale asset loads a new field as zero and keeps a removed field as drift.
@@ -107,9 +108,9 @@ Rejoin the phase the evidence names, not the phase the last comment names.
 
 1. If this session already ran a ticket, stop and tell the maintainer.
 
-2. Complete the repo startup gates and pull Memory Vault context.
+2. Pull Memory Vault context for this repo and the campaign.
 
-3. Load `domain-modeling` and `codebase-design` with the Skill tool. Capability discussions and
+3. Load `domain-modeling` and `codebase-design` with the Skill tool. Stage discussions and
    Repertoire classifications are design judgments; work with that vocabulary loaded, not from
    memory of it.
 
@@ -142,14 +143,15 @@ The check: each of the Effect's Sync and Standalone `.asset` files is in sync wi
 settings class — every field the class declares is present in the asset, and no removed field
 lingers. Unity loads a missing field as zero, so an absent field is a silent wrong value on
 the wall. Seed missing fields with their authored defaults, delete leftovers, and report what
-changed.
+changed. An Effect missing a whole surface is a maintainer question, not a rebuild from this
+runbook.
 
 ## Phase C — Reshape
 
 Run this phase only when triage or a maintainer decision calls for structural or overall-look
-changes to the Effect's body; otherwise skip to the musicality loop. The rework comes before any
-capability work because capabilities land on the final structure — building one on a shape about
-to be recut is the same work done twice.
+changes to the Effect's body; otherwise skip to the musicality loop. The rework comes before the
+musicality stages because their work lands on the final structure — building a stage on a shape
+about to be recut is the same work done twice.
 
 1. Discuss the target shape with the maintainer: what the structure becomes and what the new
    baseline look is. The maintainer owns the intent; you own the design conversation.
@@ -158,7 +160,7 @@ to be recut is the same work done twice.
    loop's steps 2–4 prescribe.
 
 3. The maintainer judges the new baseline look on the wall. That approved look is the baseline
-   every later phase preserves, except where a later capability decision changes it again.
+   every later phase preserves, except where a later stage decision changes it again.
 
 ## Phase D — Musicality loop
 
@@ -166,13 +168,14 @@ Phase D runs as three stages in a fixed order. **Basic musicality** comes first:
 always-on response while synced. It can draw on Levels, Energy, waveform-driven motion — all of
 them, some, or none, depending on the Effect and what it is trying to achieve. Fill follows, and
 Drop lands last; each is a special sequence that runs independent of the basic musicality. The
-maintainer may add or skip a stage, and a capability discussion that reopens the Effect's shape
+maintainer may add or skip a stage, and a stage discussion that reopens the Effect's shape
 is a return to Reshape, judged the same way.
 
 Run the loop below once per stage. Offer musicality ideas inside step 1 of the stage at hand —
 a suggestion about Drop belongs in the Drop stage, not in the basic-musicality discussion.
 
-Vocabulary: **Levels**, **Energy**, **Waveform**, and **Data Surface** are `CONTEXT.md` terms.
+Vocabulary: **Levels**, **Energy**, **Waveform**, **Fill**, **Drop**, and **Data Surface** are
+`CONTEXT.md` terms.
 Use them exactly as the glossary defines them, and sharpen the glossary when a discussion refines
 one.
 
@@ -181,8 +184,10 @@ one.
 
 2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). The
    brief carries the goals and the design agreed in step 1 — the what. The how is the worker's:
-   do not prescribe the code. While the worker runs, wait for completion or do other ticket
-   work — the `codex-worker` skill owns how to wait. A followed progress stream fills the
+   do not prescribe the code. While the worker runs, wait for completion or do
+   work that leaves the tree alone — inspection, reading, preparing the next discussion; the
+   `codex-worker` skill owns how to wait. The worker owns the tree until its diff is validated
+   and committed. A followed progress stream fills the
    coordinator's context and buys nothing; read the activity log only to diagnose a run that
    failed or returned a doubtful claim.
 
@@ -195,8 +200,10 @@ one.
    coverage by the printed `total=` and the printed path, never by the skip count. Bridge green
    is the inner loop, not the full suite.
 
-5. The maintainer plays, tweaks the settings live, and judges. Send design-level rework back with
-   `codex exec resume`; fix small defects directly. A wall tuning loop may run through the
+5. The maintainer plays, tweaks the settings live, and judges. When the wall result misses
+   the agreed design, send the rework back with `codex exec resume`. When the design itself
+   fails at the wall, return to step 1 and agree the new design before a fresh brief. Fix small
+   defects directly. A wall tuning loop may run through the
    coordinator: adjusting authored defaults, adding a single settings slot, and baking the
    maintainer's saved asset values back as defaults are direct edits. Structural or sizable
    implementation still goes to a worker — the coordinator does not take over development.
@@ -263,7 +270,8 @@ and side quests included. The coordinator does not narrow this scope.
 
    If a follow-up commit can change the evidence or conclusion for one axis, re-run only that
    axis. For changes to standards compliance or code structure, re-run Standards. For changes to
-   requirements, behavior, acceptance evidence, or ticket interpretation, re-run Spec.
+   requirements, behavior, acceptance evidence, or ticket interpretation, re-run Spec. Baked
+   defaults and `.asset` value changes are tuning, never a re-run trigger.
 
    If a bounded correction cannot change either conclusion, review the final diff and keep both
    reports valid. Record why each existing report remains valid. A final `HEAD` can land only with
@@ -283,7 +291,8 @@ and side quests included. The coordinator does not narrow this scope.
 ## Worker briefs
 
 Every brief carries the `AGENTS.md` framing, the goals, the agreed design when the phase produced
-one, the acceptance criteria, the vocabulary, this reading list, and these boundaries.
+one, the acceptance criteria, the vocabulary, this reading list, and these boundaries. The
+vocabulary is the `CONTEXT.md` entries and this runbook's terms that the work touches.
 
 Reading list — the worker reads all of it before touching code:
 
@@ -318,7 +327,7 @@ Boundaries — in every brief:
 - Write XML docs on every touched symbol.
 - Never delete or compress an authored doc comment. Carry every WHY clause — tuning pointers,
   value derivations, rationale — onto whatever replaces its symbol.
-- Change the Standalone look only where the maintainer has classified that capability or finding as
+- Change the Standalone look only where the maintainer has classified that stage or finding as
   look-changing; everywhere else the look stays identical.
 
 ## Diff review checklist
@@ -338,5 +347,4 @@ Boundaries — in every brief:
   never the check.
 - Tests sit on agreed seams only, and no test pins an authored tuning value — an assertion that
   encodes one is at the wrong seam and is deleted, not preserved.
-- Every complete-domain claim is checked against the consuming code.
 - No authored WHY documentation was lost or compressed.
