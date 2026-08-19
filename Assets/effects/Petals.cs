@@ -95,15 +95,14 @@ public class Petals : ScreenEffect
     private const float SyncSparkleChance = 0.25f;
 
     /// <summary>
-    /// Authored fixed per-Tile index step used by the Drop and Fill sparkle phase. The unfinished alternative
-    /// would roll from 0.0004f through 0.003f; keeping the fixed value preserves the approved look and Random
-    /// consumption.
+    /// Authored fixed per-Tile index step used by the Drop and Fill sparkle phase. A fixed value
+    /// keeps the sparkle identical across activations and consumes no Random.
     /// </summary>
     private const float SyncSparklePhaseTileIndexStep = 0.001f;
 
     /// <summary>
-    /// Authored fixed speed used by the Drop and Fill sparkle phase. The unfinished alternative would roll
-    /// from 0.1f through 1f; keeping the fixed value preserves the approved look and Random consumption.
+    /// Authored fixed speed used by the Drop and Fill sparkle phase. A fixed value keeps the
+    /// sparkle identical across activations and consumes no Random.
     /// </summary>
     private const float SyncSparklePhaseSpeed = 0.5f;
 

@@ -757,8 +757,8 @@ public class Waterfall : ScreenEffect
             // exact width and texture while the whole picture visibly rushes toward the center
             // line, new streams entering from the edges for as long as the current runs. The
             // aperiodic harmonics are defined at every real position, so the inflow never
-            // repeats. At zero displacement the sample position is exactly x — the approved
-            // baseline arithmetic.
+            // repeats. At zero displacement the sample position is exactly x, so the no-Fill
+            // picture is untouched.
             float sampleX = x < fillCenterX ? x - fillFlowOffset : x + fillFlowOffset;
             float primaryStrength = 0.55f +
                 (0.45f * Mathf.Sin(sampleX * streamFrequency * 0.23f + mergeDrift));
@@ -897,8 +897,7 @@ public class Waterfall : ScreenEffect
     /// <remarks>
     /// Timing carries no authored knobs — runway and release both derive from the Fill's own
     /// length. The release is a local visual ramp because the Data Surface forgets a Fill the
-    /// moment it ends (maintainer-approved over adding an after-the-Fill span). Standalone Mode
-    /// rests at the exact zero baseline.
+    /// moment it ends. Standalone Mode rests at the exact zero baseline.
     /// </remarks>
     /// <param name="isSynced">Whether live Fill data is available.</param>
     private void AdvanceFillFlow(bool isSynced)
@@ -1013,7 +1012,7 @@ public class Waterfall : ScreenEffect
         float activeDropSpeedMultiplier = AdvanceDropSpeedMultiplier(bpm);
         if (activeDropSpeedMultiplier == 1f)
         {
-            // Skipping the extra multiply preserves the approved BPM × Energy arithmetic bit for
+            // Skipping the extra multiply keeps the BPM × Energy arithmetic bit for
             // bit whenever Drop data is absent or outside its authored runway.
             heldStreamSpeedMultiplier = bpmAndEnergySpeedMultiplier;
             return bpmAndEnergySpeedMultiplier;
@@ -1162,7 +1161,7 @@ public class Waterfall : ScreenEffect
     /// Advances existing surges and launches at most one profiled color-and-value swell per
     /// musical count. The count's quarter-beat window opens the opportunity and the low band, in
     /// the selected Levels reading, must confirm it. Losing Sync clears the moving response
-    /// immediately so Standalone remains the approved water-only look.
+    /// immediately so Standalone stays the water-only look.
     /// </summary>
     /// <param name="isSynced">Whether the running one-through-four count is available.</param>
     /// <param name="fallSpeed">Current downward surge speed in screen pixels per second: the

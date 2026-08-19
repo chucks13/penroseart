@@ -8,8 +8,8 @@ using UnityEngine;
 /// <summary>
 /// Renders a <see cref="WaveformNameAttribute"/> string field as a pulldown over the current
 /// Waveform Pool's entry names, so a setting selects an existing Preset instead of retyping one.
-/// A saved name missing from the Pool stays shown and marked — the defect is the maintainer's to
-/// see, and the runtime fails visibly on it — until the pulldown repoints to a real entry.
+/// A saved name missing from the Pool stays shown and marked — the drawer never repairs it
+/// silently, and the runtime fails visibly on it — until the pulldown repoints to a real entry.
 /// </summary>
 [CustomPropertyDrawer(typeof(WaveformNameAttribute))]
 public sealed class WaveformNameDrawer : PropertyDrawer

@@ -629,7 +629,7 @@ public class CrystalGrowth : EffectBase
 
             // Synced composes two independent terms: Average × Energy scales continuous pace, while the wire Beat
             // Pulse is accented only by remapped Low presence. Keeping the terms additive prevents Average or
-            // Energy from multiplying the beat accent. Standalone retains its approved self-driven surge
+            // Energy from multiplying the beat accent. Standalone retains its self-driven surge
             // arithmetic. The Grid-bound Drop response washes the fresh layer across the wall and adds
             // release-shaped sixteenth lunges.
             float pulse = isSynced
@@ -855,8 +855,8 @@ public class CrystalGrowth : EffectBase
     /// <summary>
     /// Samples the two independently selected <see cref="BeatManager.Levels"/> forms, remaps Low into
     /// Crystal Growth's bass-presence proxy, and returns remapped broad-spectrum Average activity.
-    /// Standalone retains its former Smoothed reads and saved-or-default activity range so a Sync Settings
-    /// edit cannot move the approved self-driven look. Missing wire Levels read as zero.
+    /// Standalone keeps its Smoothed reads and saved-or-default activity range so a Sync Settings
+    /// edit cannot move the self-driven look. Missing wire Levels read as zero.
     /// </summary>
     /// <param name="isSynced">Whether to read the selectable Sync forms or Standalone Smoothed Levels.</param>
     private float ReadLevels(bool isSynced)

@@ -35,8 +35,7 @@ public class Kscope : ScreenEffect
     /// <summary>
     /// Exclusive upper bound of the discrete channel-swap selector roll in <see cref="CreateChannelSwappedTexture"/>.
     /// The switch defines three channel swaps, but this authored bound reaches only the first two
-    /// (red/blue and red/green); the green/blue arm is unreachable today, recorded on #111's
-    /// findings list rather than changed here.
+    /// (red/blue and red/green); the green/blue arm is deliberately unreachable.
     /// </summary>
     private const int StandaloneChannelSwapSelectorMaxExclusive = 2;
 
@@ -87,7 +86,7 @@ public class Kscope : ScreenEffect
     private const int SyncChannelSwapSelectorMaxExclusive = 2;
 
     /// <summary>
-    /// Wall units panned per beat before musical pacing. Four preserves the wall-approved
+    /// Wall units panned per beat before musical pacing. Four preserves the authored
     /// neutral-pace drift without coupling motion to the source image.
     /// </summary>
     private const float SyncPanWallUnitsPerBeat = 4f;
@@ -142,13 +141,12 @@ public class Kscope : ScreenEffect
     /// </summary>
     private const float SyncFillContrast = 2f;
 
-    /// <summary>Window in whole beats across which the Drop approach freeze deepens. The wall tightened it to 6.</summary>
+    /// <summary>Window in whole beats across which the Drop approach freeze deepens.</summary>
     private const int SyncDropSlowdownBeats = 6;
 
     /// <summary>
     /// Pace added at the Drop landing, decaying to zero across the burst window. Additive so the
-    /// landing displaces the same wall distance in every Energy state. The wall settled on 3,
-    /// softer than the 4.5 that reproduced the prior 5x-of-Mid-pace landing magnitude.
+    /// landing displaces the same wall distance in every Energy state.
     /// </summary>
     private const float SyncDropBurstPace = 3f;
 

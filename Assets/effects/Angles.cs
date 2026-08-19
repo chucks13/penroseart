@@ -1064,7 +1064,7 @@ public class Angles : EffectBase
 
         // Directional shading is a standing part of both looks. Standalone holds its authored
         // ShadeDepth.Min exactly; Synced Energy deepens from its independently authored Min baseline
-        // toward Max, so the approved static look remains the musical response's starting point.
+        // toward Max, so the static look remains the musical response's starting point.
         float shadeDepth = isSynced
             ? smoothedEnergy.Lerp(SyncSettings.ShadeDepth.Min, SyncSettings.ShadeDepth.Max)
             : standaloneSettings.ShadeDepth.Min;
