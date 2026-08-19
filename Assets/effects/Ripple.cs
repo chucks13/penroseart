@@ -159,14 +159,15 @@ public class Ripple : ScreenEffect
     private const float SyncHueWiggleAmplitude = 0.4f;
 
     /// <summary>
-    /// Authored Beat Pulse displacement, in hue-wheel cycles, applied while a Fill is active in
-    /// Synced Mode.
+    /// Authored depth of the Beat Pulse fade from the conditioned palette to its complementary
+    /// color set while a Fill is active in Synced Mode. One reaches the full complementary set at
+    /// each pulse peak.
     /// </summary>
     /// <remarks>
     /// See Fill and Beat Pulse in <c>CONTEXT.md</c>, and the <c>/rave/onair/fill_state</c> and
     /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
-    private const float SyncFillHueSwingAmplitude = 0.5f;
+    private const float SyncFillComplementFadeDepth = 1f;
 
     /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
@@ -178,8 +179,8 @@ public class Ripple : ScreenEffect
     private const float SyncHueDriftRate = 0.05f;
 
     /// <summary>
-    /// Ripple handles Fill with a transient Beat Pulse hue inversion and suits Mid/High Energy
-    /// sections.
+    /// Ripple handles Fill with a transient Beat Pulse fade to complementary colors and suits
+    /// Mid/High Energy sections.
     /// </summary>
     /// <remarks>
     /// See Repertoire, Fill, Beat Pulse, and Energy in <c>CONTEXT.md</c>, and the
@@ -232,7 +233,7 @@ public class Ripple : ScreenEffect
         LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
         HueWiggleAmplitude = SyncHueWiggleAmplitude,
-        FillHueSwingAmplitude = SyncFillHueSwingAmplitude,
+        FillComplementFadeDepth = SyncFillComplementFadeDepth,
         HueDriftRate = SyncHueDriftRate,
     };
 
@@ -418,13 +419,19 @@ public class Ripple : ScreenEffect
         previousPulse = pulse;
         previousIsSynced = isSynced;
 
-        // Fill adds the raw Beat Pulse at palette-read time, so it never enters huePhase and
-        // vanishes without disturbing the wiggle or drift when Active ends. See Fill and Beat
-        // Pulse in CONTEXT.md and the /rave/onair/fill_state and /rave/onair/beat_pulse lanes in
+        // Fill uses the raw Beat Pulse to fade between the conditioned palette and its complementary
+        // set at one unchanged read position. The fade never enters huePhase, so it vanishes without
+        // disturbing the wiggle or drift when Active ends. See Fill and Beat Pulse in CONTEXT.md and
+        // the /rave/onair/fill_state and /rave/onair/beat_pulse lanes in
         // docs/osc-client-contract.md.
-        float fillHueDisplacement = isSynced && beatManager.Fill.Active
-            ? pulse * SyncSettings.FillHueSwingAmplitude
+        bool fillActive = isSynced && beatManager.Fill.Active;
+        float fillComplementBlend = fillActive
+            ? pulse * SyncSettings.FillComplementFadeDepth
             : 0f;
+        if (fillActive)
+        {
+            conditionedPalette.PrepareComplementaryPalette();
+        }
         float clockAdvance = clockRate * effectDelta;
         float spawnChance = isSynced
             ? syncedSpawnsPerCrossing * clockAdvance / screenCrossingRadius
@@ -467,9 +474,16 @@ public class Ripple : ScreenEffect
 
                 sum += paletteOffset;
                 sum %= 1f;
-                screenBuffer[idx] = conditionedPalette.ReadCyclic(
-                    sum + huePhase + fillHueDisplacement,
-                    doblend: true);
+                float palettePosition = sum + huePhase;
+                Color color = conditionedPalette.ReadCyclic(palettePosition, doblend: true);
+                screenBuffer[idx] = fillActive
+                    ? Color.Lerp(
+                        color,
+                        conditionedPalette.ReadComplementaryCyclic(
+                            palettePosition,
+                            doblend: true),
+                        fillComplementBlend)
+                    : color;
             }
         }
 
@@ -718,14 +732,14 @@ public sealed class RippleSyncSettings
     [Range(0f, 1f)] public float HueWiggleAmplitude;
 
     /// <summary>
-    /// Raw Beat Pulse displacement, in hue-wheel cycles, applied while a Fill is active in Synced
-    /// Mode.
+    /// Depth of the raw Beat Pulse fade from the conditioned palette color to the complementary
+    /// color at the same read position while a Fill is active in Synced Mode.
     /// </summary>
     /// <remarks>
     /// See Fill and Beat Pulse in <c>CONTEXT.md</c>, and the <c>/rave/onair/fill_state</c> and
     /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
-    [Range(0f, 1f)] public float FillHueSwingAmplitude;
+    [Range(0f, 1f)] public float FillComplementFadeDepth;
 
     /// <summary>
     /// Hue-wheel cycles advanced per second while the selected Levels form's Low is at or below the
@@ -756,7 +770,7 @@ public sealed class RippleSyncSettings
         LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
         HueWiggleAmplitude = source.HueWiggleAmplitude;
-        FillHueSwingAmplitude = source.FillHueSwingAmplitude;
+        FillComplementFadeDepth = source.FillComplementFadeDepth;
         HueDriftRate = source.HueDriftRate;
     }
 

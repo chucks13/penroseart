@@ -869,7 +869,8 @@ public class AnimPalette
 
 /// <summary>
 /// Holds one Effect's conditioned copies of the shared animated palette endpoints and samples their
-/// live cross-fade without allocating on steady frames.
+/// live cross-fade without allocating on steady frames. A consumer may also prepare complementary
+/// copies whose hues are rotated by half the hue wheel after conditioning.
 /// </summary>
 /// <remarks>
 /// The cache is deliberately per Effect because each Effect owns independently live Standalone and
@@ -877,6 +878,8 @@ public class AnimPalette
 /// landed next endpoint rotates into current without being conditioned again. Endpoint copies are
 /// re-derived only when the shared owner, its endpoint revision, or the live conditioning controls
 /// change; the shared three-second fade remains a per-frame value rather than entering the cache key.
+/// Complementary copies are lazy and invalidated with their conditioned endpoints, so they allocate
+/// only when a consumer needs the alternate set after one of those changes.
 /// </remarks>
 public sealed class ConditionedPaletteCache
 {
@@ -900,6 +903,12 @@ public sealed class ConditionedPaletteCache
 
     /// <summary>The conditioned copy of the shared next palette endpoint.</summary>
     private GPalette nextPalette;
+
+    /// <summary>The half-hue-wheel rotation of the conditioned current endpoint.</summary>
+    private GPalette currentComplementaryPalette;
+
+    /// <summary>The half-hue-wheel rotation of the conditioned next endpoint.</summary>
+    private GPalette nextComplementaryPalette;
 
     /// <summary>Whether the refreshed frame is inside the shared palette's three-second cross-fade.</summary>
     private bool isTransitioning;
@@ -961,6 +970,29 @@ public sealed class ConditionedPaletteCache
         nextSource = refreshedNextSource;
         currentPalette = refreshedCurrent;
         nextPalette = refreshedNext;
+        currentComplementaryPalette = null;
+        nextComplementaryPalette = null;
+    }
+
+    /// <summary>
+    /// Lazily builds complementary copies of the refreshed conditioned endpoints by rotating every
+    /// entry half the hue wheel while preserving its saturation, value, and alpha.
+    /// </summary>
+    /// <remarks>
+    /// Call after <see cref="Refresh"/> and before <see cref="ReadComplementaryCyclic"/>. Repeated
+    /// calls allocate nothing until Refresh invalidates the conditioned endpoints.
+    /// </remarks>
+    public void PrepareComplementaryPalette()
+    {
+        if (currentComplementaryPalette != null)
+        {
+            return;
+        }
+
+        currentComplementaryPalette = BuildComplementaryPalette(currentPalette);
+        nextComplementaryPalette = ReferenceEquals(nextPalette, currentPalette)
+            ? currentComplementaryPalette
+            : BuildComplementaryPalette(nextPalette);
     }
 
     /// <summary>
@@ -972,14 +1004,66 @@ public sealed class ConditionedPaletteCache
     /// <returns>The conditioned, cyclic, and cross-faded palette colour.</returns>
     public Color ReadCyclic(float i, bool doblend = false)
     {
-        Color color = currentPalette.ReadCyclic(i, doblend);
+        return ReadPalettePairCyclic(currentPalette, nextPalette, i, doblend);
+    }
+
+    /// <summary>
+    /// Samples the prepared complementary current endpoint cyclically and, during a shared palette
+    /// transition, samples the complementary next endpoint at the same coordinate and blends by
+    /// live progress.
+    /// </summary>
+    /// <param name="i">The cyclic palette coordinate, wrapped into the normalized domain.</param>
+    /// <param name="doblend">Whether to interpolate between adjacent entries within each endpoint.</param>
+    /// <returns>The complementary, cyclic, and cross-faded palette colour.</returns>
+    public Color ReadComplementaryCyclic(float i, bool doblend = false)
+    {
+        return ReadPalettePairCyclic(
+            currentComplementaryPalette,
+            nextComplementaryPalette,
+            i,
+            doblend);
+    }
+
+    /// <summary>Samples one cached endpoint pair through the shared live palette cross-fade.</summary>
+    /// <param name="current">The current endpoint to sample.</param>
+    /// <param name="next">The next endpoint to sample during a shared palette transition.</param>
+    /// <param name="i">The cyclic palette coordinate, wrapped into the normalized domain.</param>
+    /// <param name="doblend">Whether to interpolate between adjacent endpoint entries.</param>
+    /// <returns>The cyclic endpoint sample at the current shared transition progress.</returns>
+    private Color ReadPalettePairCyclic(GPalette current, GPalette next, float i, bool doblend)
+    {
+        Color color = current.ReadCyclic(i, doblend);
         if (!isTransitioning)
         {
             return color;
         }
 
-        Color nextColor = nextPalette.ReadCyclic(i, doblend);
+        Color nextColor = next.ReadCyclic(i, doblend);
         return Color.Lerp(color, nextColor, transitionProgress);
+    }
+
+    /// <summary>
+    /// Derives one complementary endpoint from a conditioned palette without changing entry order,
+    /// saturation, value, alpha, or cyclic sampling behavior.
+    /// </summary>
+    /// <param name="source">The conditioned endpoint whose entries are rotated.</param>
+    /// <returns>The complementary endpoint, or null when no next endpoint exists.</returns>
+    private static GPalette BuildComplementaryPalette(GPalette source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        Color[] values = new Color[source.length];
+        for (int i = 0; i < source.length; i++)
+        {
+            Color color = source.values[i];
+            Color complementary = color.Delta();
+            complementary.a = color.a;
+            values[i] = complementary;
+        }
+        return new GPalette(values, source.blend);
     }
 
     /// <summary>
