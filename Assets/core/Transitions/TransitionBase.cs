@@ -23,7 +23,7 @@ public abstract class TransitionBase
     /// </summary>
     public BeatManager beatManager => controller.beatManager;
 
-    /// <summary>The live Waveform acquisition surface owned by the bound Controller.</summary>
+    /// <summary>The shared live Waveform acquisition surface exposed by the bound Controller.</summary>
     public Waveforms waveforms => controller.waveforms;
 
     /// <summary>Catalog/display name for this transition. Currently the C# type name.</summary>

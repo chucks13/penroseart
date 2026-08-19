@@ -28,10 +28,10 @@ public abstract class EffectBase
     protected Penrose.TileData[] tiles;
     public static AnimPalette APalette;
 
-    /// <summary>The live BeatManager owned by the bound Controller.</summary>
+    /// <summary>The shared live BeatManager exposed by the bound Controller.</summary>
     public BeatManager beatManager => controller.beatManager;
 
-    /// <summary>The live Waveform acquisition surface owned by the bound Controller.</summary>
+    /// <summary>The shared live Waveform acquisition surface exposed by the bound Controller.</summary>
     public Waveforms waveforms => controller.waveforms;
 
     /// <summary>

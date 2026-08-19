@@ -250,10 +250,10 @@ public class Controller : Singleton<Controller>
     public BeatManager beatManager = new BeatManager();
 
     /// <summary>
-    /// The shared Waveform acquisition surface, created in <see cref="Awake"/> and replaceable by
-    /// the owning host before Performers run.
+    /// The shared Waveform acquisition surface, constructed in <see cref="Awake"/> from the live
+    /// BeatManager and exposed read-only to the rest of the application.
     /// </summary>
-    public Waveforms waveforms { get; set; }
+    public Waveforms waveforms { get; private set; }
 
     // ---------------------------------------------------------------------
     // UI and scene references

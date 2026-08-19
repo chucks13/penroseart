@@ -62,13 +62,13 @@ public sealed class AnimateShapesLayerOwnershipTests
 
             bool[] foregroundMembership = ReadForegroundMembership(layout.shapes.Circles);
             AnimateShapesSyncSettings settings = settingsAsset.Settings;
-            InstallWaveformFixture(controller, settings);
+            Waveform waveform = CreateWaveformFixture(controller.beatManager);
             settings.ForegroundPositionAdvancePerSecond = 0f;
             settings.BackgroundHueRate = 0f;
             settings.BackgroundWaveformBrightnessFloor = 1f;
-            Color[] fullBackgroundBrightness = Render(controller, effectDelta: 0f);
+            Color[] fullBackgroundBrightness = Render(controller, waveform, effectDelta: 0f);
             settings.BackgroundWaveformBrightnessFloor = 0f;
-            Color[] waveformBackgroundBrightness = Render(controller, effectDelta: 0f);
+            Color[] waveformBackgroundBrightness = Render(controller, waveform, effectDelta: 0f);
 
             AssertOnlyOwnedPartitionChanges(
                 fullBackgroundBrightness,
@@ -82,9 +82,9 @@ public sealed class AnimateShapesLayerOwnershipTests
                 foregroundMembership);
 
             settings.BackgroundHueRate = 0f;
-            Color[] stationaryBackground = Render(controller, effectDelta: 1f);
+            Color[] stationaryBackground = Render(controller, waveform, effectDelta: 1f);
             settings.BackgroundHueRate = 0.1f;
-            Color[] movingBackground = Render(controller, effectDelta: 1f);
+            Color[] movingBackground = Render(controller, waveform, effectDelta: 1f);
 
             AssertOnlyOwnedPartitionChanges(
                 stationaryBackground,
@@ -100,7 +100,7 @@ public sealed class AnimateShapesLayerOwnershipTests
                 beatsRemaining: 16,
                 lengthBeats: 16);
             controller.beatManager.Update(0f);
-            Color[] dropFrame = Render(controller, effectDelta: 0f);
+            Color[] dropFrame = Render(controller, waveform, effectDelta: 0f);
             var backgroundColors = new HashSet<Color32>();
             for (int tileIndex = 0; tileIndex < Penrose.Total; tileIndex++)
             {
@@ -125,16 +125,18 @@ public sealed class AnimateShapesLayerOwnershipTests
     }
 
     /// <summary>Renders one production AnimateShapes activation under a repeatable Roll and draw sequence.</summary>
-    /// <param name="controller">The live Controller that owns the production Penrose and musical surfaces.</param>
+    /// <param name="controller">The live Controller that provides the production Penrose and musical surfaces.</param>
+    /// <param name="waveform">The test-owned artistic Waveform assigned through the Effect's public seam.</param>
     /// <param name="effectDelta">Frame delta supplied to the Effect's production draw.</param>
     /// <returns>A copy of the final 900-Tile color buffer.</returns>
-    private static Color[] Render(Controller controller, float effectDelta)
+    private static Color[] Render(Controller controller, Waveform waveform, float effectDelta)
     {
         UnityEngine.Random.InitState(155);
         var effect = new AnimateShapes();
         effect.BindController(controller);
         effect.Init();
         effect.OnStart();
+        effect.waveform = waveform;
         effect.effectTime = 12f;
         effect.effectDelta = effectDelta;
         Assert.That(
@@ -147,21 +149,19 @@ public sealed class AnimateShapesLayerOwnershipTests
         return (Color[])effect.buffer.Clone();
     }
 
-    /// <summary>Installs a test-owned named Waveform so ownership does not depend on shipped Preset tuning.</summary>
-    /// <param name="controller">The Controller whose startup-owned Waveforms surface receives the fixture.</param>
-    /// <param name="settings">The live Sync Settings redirected to the fixture's persisted name.</param>
-    private static void InstallWaveformFixture(
-        Controller controller,
-        AnimateShapesSyncSettings settings)
+    /// <summary>Acquires a test-owned Waveform without replacing the application's shared Waveforms surface.</summary>
+    /// <param name="beatManager">The live musical clock the test Waveform reads.</param>
+    /// <returns>A deterministic clock-bound Waveform independent of shipped Preset tuning.</returns>
+    private static Waveform CreateWaveformFixture(BeatManager beatManager)
     {
         const string waveformName = "layer ownership pulse";
-        controller.waveforms = new Waveforms(controller.beatManager, new[]
+        var waveforms = new Waveforms(beatManager, new[]
         {
             new WaveformPool.Entry(
                 waveformName,
                 Waveform.Parse("QQQQ", "4444", 0.3f, 0f, out _)),
         });
-        settings.BackgroundWaveformName = waveformName;
+        return waveforms.Named(waveformName);
     }
 
     /// <summary>Builds exact foreground membership from every packed Circle and Arc group.</summary>
