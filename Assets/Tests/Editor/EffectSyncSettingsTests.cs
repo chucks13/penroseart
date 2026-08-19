@@ -675,8 +675,8 @@ public sealed class EffectSyncSettingsTests
         var second = Ripple.StandaloneDefaults;
 
         Assert.That(first, Is.Not.SameAs(second));
-        Assert.That(first.DropSpawnChance, Is.Not.SameAs(second.DropSpawnChance));
-        AssertFloatRangeEqual(first.DropSpawnChance, second.DropSpawnChance);
+        Assert.That(first.SpawnChance, Is.Not.SameAs(second.SpawnChance));
+        AssertFloatRangeEqual(first.SpawnChance, second.SpawnChance);
         Assert.That(first.Velocity, Is.Not.SameAs(second.Velocity));
         AssertFloatRangeEqual(first.Velocity, second.Velocity);
         Assert.That(first.VelocityDivisor, Is.EqualTo(second.VelocityDivisor));
@@ -695,7 +695,7 @@ public sealed class EffectSyncSettingsTests
         var asset = (RippleStandaloneSettingsAsset)EffectStandaloneSettingsAssetUtility.EnsureAsset(
             typeof(Ripple),
             TempAssetFolder);
-        asset.Settings.DropSpawnChance = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.SpawnChance = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.VelocityDivisor = 23f;
         asset.Settings.DistanceDivisor = 24f;
@@ -705,7 +705,7 @@ public sealed class EffectSyncSettingsTests
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Ripple), TempAssetFolder);
 
         var defaults = Ripple.StandaloneDefaults;
-        AssertFloatRangeEqual(asset.Settings.DropSpawnChance, defaults.DropSpawnChance);
+        AssertFloatRangeEqual(asset.Settings.SpawnChance, defaults.SpawnChance);
         AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
         Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
@@ -1418,7 +1418,7 @@ public sealed class EffectSyncSettingsTests
         var asset = (RippleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
             typeof(Ripple),
             TempAssetFolder);
-        asset.Settings.DropSpawnChance = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.SpawnChance = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.VelocityDivisor = 23f;
         asset.Settings.DistanceDivisor = 24f;
@@ -1430,7 +1430,7 @@ public sealed class EffectSyncSettingsTests
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
 
         var defaults = Ripple.SyncDefaults;
-        AssertFloatRangeEqual(asset.Settings.DropSpawnChance, defaults.DropSpawnChance);
+        AssertFloatRangeEqual(asset.Settings.SpawnChance, defaults.SpawnChance);
         AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
         Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));

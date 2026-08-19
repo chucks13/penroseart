@@ -11,19 +11,19 @@ public class Ripple : ScreenEffect
 {
     // Standalone Defaults
 
-    /// <summary>Authored minimum per-frame drop-spawn chance for the unchanged Standalone look.</summary>
-    private const float StandaloneDropSpawnChanceMin = 0.01f;
+    /// <summary>Authored minimum per-frame spawn chance for the unchanged Standalone look.</summary>
+    private const float StandaloneSpawnChanceMin = 0.01f;
 
-    /// <summary>Authored maximum per-frame drop-spawn chance for the unchanged Standalone look.</summary>
-    private const float StandaloneDropSpawnChanceMax = 0.02f;
+    /// <summary>Authored maximum per-frame spawn chance for the unchanged Standalone look.</summary>
+    private const float StandaloneSpawnChanceMax = 0.02f;
 
-    /// <summary>Authored minimum pre-division drop velocity for the unchanged Standalone look.</summary>
+    /// <summary>Authored minimum pre-division wavefront velocity for the unchanged Standalone look.</summary>
     private const float StandaloneVelocityMin = 0.01f;
 
-    /// <summary>Authored maximum pre-division drop velocity for the unchanged Standalone look.</summary>
+    /// <summary>Authored maximum pre-division wavefront velocity for the unchanged Standalone look.</summary>
     private const float StandaloneVelocityMax = 0.9f;
 
-    /// <summary>Authored divisor applied to each randomly rolled drop velocity.</summary>
+    /// <summary>Authored divisor applied to each randomly rolled wavefront velocity.</summary>
     private const float StandaloneVelocityDivisor = 2000f;
 
     /// <summary>Authored divisor that maps screen-space distance into ripple phase.</summary>
@@ -37,19 +37,19 @@ public class Ripple : ScreenEffect
 
     // Sync Defaults
 
-    /// <summary>Authored minimum per-frame drop-spawn chance for the current Synced look.</summary>
-    private const float SyncDropSpawnChanceMin = 0.01f;
+    /// <summary>Authored minimum per-frame spawn chance for the current Synced look.</summary>
+    private const float SyncSpawnChanceMin = 0.01f;
 
-    /// <summary>Authored maximum per-frame drop-spawn chance for the current Synced look.</summary>
-    private const float SyncDropSpawnChanceMax = 0.02f;
+    /// <summary>Authored maximum per-frame spawn chance for the current Synced look.</summary>
+    private const float SyncSpawnChanceMax = 0.02f;
 
-    /// <summary>Authored minimum pre-division drop velocity for the current Synced look.</summary>
+    /// <summary>Authored minimum pre-division wavefront velocity for the current Synced look.</summary>
     private const float SyncVelocityMin = 0.01f;
 
-    /// <summary>Authored maximum pre-division drop velocity for the current Synced look.</summary>
+    /// <summary>Authored maximum pre-division wavefront velocity for the current Synced look.</summary>
     private const float SyncVelocityMax = 0.9f;
 
-    /// <summary>Authored divisor applied to each randomly rolled drop velocity in Synced Mode.</summary>
+    /// <summary>Authored divisor applied to each randomly rolled wavefront velocity in Synced Mode.</summary>
     private const float SyncVelocityDivisor = 2000f;
 
     /// <summary>Authored divisor that maps screen-space distance into ripple phase in Synced Mode.</summary>
@@ -95,9 +95,9 @@ public class Ripple : ScreenEffect
     /// <summary>Resolves a fresh copy of Ripple's file-local Standalone Defaults.</summary>
     public static RippleStandaloneSettings StandaloneDefaults => new()
     {
-        DropSpawnChance = new FloatRange(
-            StandaloneDropSpawnChanceMin,
-            StandaloneDropSpawnChanceMax),
+        SpawnChance = new FloatRange(
+            StandaloneSpawnChanceMin,
+            StandaloneSpawnChanceMax),
         Velocity = new FloatRange(StandaloneVelocityMin, StandaloneVelocityMax),
         VelocityDivisor = StandaloneVelocityDivisor,
         DistanceDivisor = StandaloneDistanceDivisor,
@@ -108,7 +108,7 @@ public class Ripple : ScreenEffect
     /// <summary>Resolves a fresh copy of Ripple's file-local Sync Defaults.</summary>
     public static RippleSyncSettings SyncDefaults => new()
     {
-        DropSpawnChance = new FloatRange(SyncDropSpawnChanceMin, SyncDropSpawnChanceMax),
+        SpawnChance = new FloatRange(SyncSpawnChanceMin, SyncSpawnChanceMax),
         Velocity = new FloatRange(SyncVelocityMin, SyncVelocityMax),
         VelocityDivisor = SyncVelocityDivisor,
         DistanceDivisor = SyncDistanceDivisor,
@@ -127,11 +127,11 @@ public class Ripple : ScreenEffect
 
     private Color startColor;
     private Color endColor;
-    private Drop[] drops;
+    private Wavefront[] wavefronts;
     private Vector2 screen;
 
-    /// <summary>Current per-frame chance of spawning a new drop, rolled from the active mode's range.</summary>
-    private float dropSpawnChance;
+    /// <summary>Current per-frame chance of spawning a new wavefront, rolled from the active mode's range.</summary>
+    private float spawnChance;
 
     /// <summary>
     /// Persistent wrapped palette hue position, initialized from the rendered offset at activation
@@ -161,7 +161,7 @@ public class Ripple : ScreenEffect
     /// </summary>
     public override string DebugText()
     {
-        return $"Drops {drops.Length}";
+        return $"Wavefronts {wavefronts.Length}";
     }
 
     /// <summary>
@@ -170,7 +170,7 @@ public class Ripple : ScreenEffect
     public override void Init()
     {
         base.Init();
-        drops = new Drop[0];
+        wavefronts = new Wavefront[0];
     }
 
     /// <summary>
@@ -197,10 +197,10 @@ public class Ripple : ScreenEffect
             1f);
         previousPulse = pulse;
         previousIsSynced = isSynced;
-        FloatRange dropSpawnChanceRange = isSynced
-            ? SyncSettings.DropSpawnChance
-            : standaloneSettings.DropSpawnChance;
-        dropSpawnChance = Random.Range(dropSpawnChanceRange.Min, dropSpawnChanceRange.Max);
+        FloatRange spawnChanceRange = isSynced
+            ? SyncSettings.SpawnChance
+            : standaloneSettings.SpawnChance;
+        spawnChance = Random.Range(spawnChanceRange.Min, spawnChanceRange.Max);
     }
 
     /// <summary>
@@ -244,10 +244,10 @@ public class Ripple : ScreenEffect
         }
         previousPulse = pulse;
         previousIsSynced = isSynced;
-        if (Random.value < dropSpawnChance)
+        if (Random.value < spawnChance)
         {
-            Array.Resize(ref drops, drops.Length + 1);
-            drops[drops.Length - 1] = new Drop(velocityRange, velocityDivisor);
+            Array.Resize(ref wavefronts, wavefronts.Length + 1);
+            wavefronts[wavefronts.Length - 1] = new Wavefront(velocityRange, velocityDivisor);
         }
         buffer.Fade();
 
@@ -259,11 +259,11 @@ public class Ripple : ScreenEffect
                 screen.y = y;
                 var idx = x + (y * width);
                 var sum = 0f;
-                for (int i = 0; i < drops.Length; i++)
+                for (int i = 0; i < wavefronts.Length; i++)
                 {
-                    drops[i].Update(effectDelta);
-                    var d = Vector2.Distance(screen, drops[i].Position);
-                    sum += (drops[i].radius - (d / distanceDivisor)).Clamp01();
+                    wavefronts[i].Update(effectDelta);
+                    var d = Vector2.Distance(screen, wavefronts[i].Position);
+                    sum += (wavefronts[i].radius - (d / distanceDivisor)).Clamp01();
                 }
                 sum += paletteOffset;
                 sum %= 1f;
@@ -277,16 +277,16 @@ public class Ripple : ScreenEffect
     /// <summary>
     /// Expanding screen-space ripple source.
     /// </summary>
-    public class Drop
+    public class Wavefront
     {
         private Vector2 position;
         private float velocity;
         public float radius = 0f;
 
         /// <summary>
-        /// Creates a ripple drop at a random screen position using the active mode's velocity Settings.
+        /// Creates a wavefront at a random screen position using the active mode's velocity Settings.
         /// </summary>
-        public Drop(FloatRange velocityRange, float velocityDivisor)
+        public Wavefront(FloatRange velocityRange, float velocityDivisor)
         {
             velocity = Random.Range(velocityRange.Min, velocityRange.Max) / velocityDivisor;
             position = new Vector2(Random.Range(0, width), Random.Range(0, height));
@@ -312,13 +312,13 @@ public class Ripple : ScreenEffect
 [Serializable]
 public sealed class RippleStandaloneSettings
 {
-    /// <summary>Per-activation range for the per-frame chance of spawning a new drop.</summary>
-    public FloatRange DropSpawnChance;
+    /// <summary>Per-activation range for the per-frame chance of spawning a new wavefront.</summary>
+    public FloatRange SpawnChance;
 
-    /// <summary>Per-drop pre-division velocity range.</summary>
+    /// <summary>Per-wavefront pre-division velocity range.</summary>
     public FloatRange Velocity;
 
-    /// <summary>Divisor applied to each randomly rolled drop velocity.</summary>
+    /// <summary>Divisor applied to each randomly rolled wavefront velocity.</summary>
     public float VelocityDivisor;
 
     /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
@@ -342,7 +342,7 @@ public sealed class RippleStandaloneSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        DropSpawnChance = CopyRange(source.DropSpawnChance);
+        SpawnChance = CopyRange(source.SpawnChance);
         Velocity = CopyRange(source.Velocity);
         VelocityDivisor = source.VelocityDivisor;
         DistanceDivisor = source.DistanceDivisor;
@@ -364,13 +364,13 @@ public sealed class RippleStandaloneSettings
 [Serializable]
 public sealed class RippleSyncSettings
 {
-    /// <summary>Per-activation range for the per-frame chance of spawning a new drop.</summary>
-    public FloatRange DropSpawnChance;
+    /// <summary>Per-activation range for the per-frame chance of spawning a new wavefront.</summary>
+    public FloatRange SpawnChance;
 
-    /// <summary>Per-drop pre-division velocity range.</summary>
+    /// <summary>Per-wavefront pre-division velocity range.</summary>
     public FloatRange Velocity;
 
-    /// <summary>Divisor applied to each randomly rolled drop velocity.</summary>
+    /// <summary>Divisor applied to each randomly rolled wavefront velocity.</summary>
     public float VelocityDivisor;
 
     /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
@@ -402,7 +402,7 @@ public sealed class RippleSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        DropSpawnChance = CopyRange(source.DropSpawnChance);
+        SpawnChance = CopyRange(source.SpawnChance);
         Velocity = CopyRange(source.Velocity);
         VelocityDivisor = source.VelocityDivisor;
         DistanceDivisor = source.DistanceDivisor;

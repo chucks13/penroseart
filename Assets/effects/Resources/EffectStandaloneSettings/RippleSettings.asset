@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RippleStandaloneSettingsAsset
   effectTypeName: Ripple
   settings:
-    DropSpawnChance:
+    SpawnChance:
       Min: 0.01
       Max: 0.02
       LowRail: 0.01
