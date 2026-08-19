@@ -98,11 +98,11 @@ public class Ripple : ScreenEffect
     /// </remarks>
     private const float SyncLowPresenceThreshold = 0.375f;
 
-    /// <summary>Authored maximum Beat Pulse-driven hue shift in Synced Mode.</summary>
+    /// <summary>Authored amplitude of the Beat Pulse hue wiggle in Synced Mode.</summary>
     /// <remarks>
     /// See Beat Pulse in <c>CONTEXT.md:267-269</c> and <c>docs/osc-client-contract.md:355-382</c>.
     /// </remarks>
-    private const float SyncHueShiftMax = 0.2f;
+    private const float SyncHueWiggleAmplitude = 0.2f;
 
     /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
@@ -150,7 +150,7 @@ public class Ripple : ScreenEffect
         PaletteOffset = SyncPaletteOffset,
         LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
-        HueShiftMax = SyncHueShiftMax,
+        HueWiggleAmplitude = SyncHueWiggleAmplitude,
         HueDriftRate = SyncHueDriftRate,
     };
 
@@ -240,7 +240,7 @@ public class Ripple : ScreenEffect
             SyncSettings.LowPresenceThreshold;
         huePhase = Mathf.Repeat(
             isSynced
-                ? lowPresent ? pulse * SyncSettings.HueShiftMax : 0f
+                ? lowPresent ? pulse * SyncSettings.HueWiggleAmplitude : 0f
                 : standaloneSettings.HueShift,
             1f);
         previousPulse = pulse;
@@ -291,7 +291,7 @@ public class Ripple : ScreenEffect
             bool lowPresent = beatManager.Levels.Select(SyncSettings.LowLevelsForm).Low >
                 SyncSettings.LowPresenceThreshold;
             float hueAdvance = lowPresent
-                ? SyncSettings.HueShiftMax * pulseDelta
+                ? SyncSettings.HueWiggleAmplitude * pulseDelta
                 : SyncSettings.HueDriftRate * effectDelta;
             huePhase = Mathf.Repeat(huePhase + hueAdvance, 1f);
         }
@@ -556,8 +556,11 @@ public sealed class RippleSyncSettings
     /// <summary>Selected-form Low threshold above which the Beat Pulse shifts the palette in Synced Mode.</summary>
     [Range(0f, 1f)] public float LowPresenceThreshold;
 
-    /// <summary>Maximum hue shift reached at the Beat Pulse peak in Synced Mode.</summary>
-    [Range(0f, 1f)] public float HueShiftMax;
+    /// <summary>
+    /// Amplitude of the Beat Pulse hue wiggle in Synced Mode: the palette displacement, in
+    /// hue-wheel cycles, reached at each pulse peak.
+    /// </summary>
+    [Range(0f, 1f)] public float HueWiggleAmplitude;
 
     /// <summary>
     /// Hue-wheel cycles advanced per second while the selected Levels form's Low is at or below the
@@ -584,7 +587,7 @@ public sealed class RippleSyncSettings
         PaletteOffset = source.PaletteOffset;
         LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
-        HueShiftMax = source.HueShiftMax;
+        HueWiggleAmplitude = source.HueWiggleAmplitude;
         HueDriftRate = source.HueDriftRate;
     }
 

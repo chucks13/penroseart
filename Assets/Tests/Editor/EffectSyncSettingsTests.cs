@@ -1434,7 +1434,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.PaletteOffset = 0.11f;
         asset.Settings.LowLevelsForm = LevelsForm.Peak;
         asset.Settings.LowPresenceThreshold = 0.8f;
-        asset.Settings.HueShiftMax = 0.9f;
+        asset.Settings.HueWiggleAmplitude = 0.9f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
 
@@ -1452,7 +1452,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
         Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
-        Assert.That(asset.Settings.HueShiftMax, Is.EqualTo(defaults.HueShiftMax));
+        Assert.That(asset.Settings.HueWiggleAmplitude, Is.EqualTo(defaults.HueWiggleAmplitude));
     }
 
     /// <summary>Restore replaces every edited Crystal Growth Sync Setting with its file-local Sync Default.</summary>

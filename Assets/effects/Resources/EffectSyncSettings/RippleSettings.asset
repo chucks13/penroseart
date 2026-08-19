@@ -37,5 +37,5 @@ MonoBehaviour:
     PaletteOffset: 0.5
     LowLevelsForm: 0
     LowPresenceThreshold: 0.375
-    HueShiftMax: 0.2
+    HueWiggleAmplitude: 0.2
     HueDriftRate: 0.05
