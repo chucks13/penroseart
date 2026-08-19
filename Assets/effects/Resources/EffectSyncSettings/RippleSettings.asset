@@ -28,6 +28,6 @@ MonoBehaviour:
     DistanceDivisor: 20
     PaletteOffset: 0.5
     LowLevelsForm: 1
-    LowPresenceThreshold: 0.3333
+    LowPresenceThreshold: 0.375
     HueShiftMax: 0.2
     HueDriftRate: 0.05

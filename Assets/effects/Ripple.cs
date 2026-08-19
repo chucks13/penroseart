@@ -59,7 +59,7 @@ public class Ripple : ScreenEffect
     private const float SyncPaletteOffset = 0.5f;
 
     /// <summary>Authored Levels form whose Low band supplies the Synced presence gate.</summary>
-    private const LevelsForm SyncLowLevelsForm = LevelsForm.Normalized;
+    private const LevelsForm SyncLowLevelsForm = LevelsForm.Smoothed;
 
     /// <summary>
     /// Authored selected-form Low presence threshold for the Beat Pulse palette shift in Synced Mode.
@@ -68,7 +68,7 @@ public class Ripple : ScreenEffect
     /// See Levels and Beat Pulse in <c>CONTEXT.md:189-191,267-269</c> and their wire lanes in
     /// <c>docs/osc-client-contract.md:355-400</c>.
     /// </remarks>
-    private const float SyncLowPresenceThreshold = 0.35f;
+    private const float SyncLowPresenceThreshold = 0.375f;
 
     /// <summary>Authored maximum Beat Pulse-driven hue shift in Synced Mode.</summary>
     /// <remarks>
