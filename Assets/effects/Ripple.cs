@@ -3,7 +3,8 @@ using UnityEngine;
 using System;
 
 /// <summary>
-/// Renders expanding screen-space ripple rings and maps them to Penrose tiles.
+/// Renders expanding screen-space ripple rings, samples an Effect-conditioned copy of the shared
+/// animated palette, and maps the result to Penrose tiles.
 /// </summary>
 [EffectSyncSettings(typeof(RippleSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(RippleStandaloneSettingsAsset))]
@@ -39,6 +40,24 @@ public class Ripple : ScreenEffect
 
     /// <summary>Authored palette phase offset for the unchanged Standalone look.</summary>
     private const float StandalonePaletteOffset = 0.5f;
+
+    /// <summary>
+    /// Standalone palette conditioning for clean separation between Wavefronts. The Angles
+    /// calibration moves dark-heavy palettes into one useful luminance band, repairs black and
+    /// near-black entries with neighbouring hue, collapses near-duplicates, and redistributes
+    /// distinct colour movement across the cyclic table. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning StandalonePaletteConditioning => new()
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
 
     /// <summary>Authored fixed hue shift for the unchanged Standalone look.</summary>
     private const float StandaloneHueShift = 0.2f;
@@ -102,6 +121,24 @@ public class Ripple : ScreenEffect
     /// <summary>Authored palette phase offset for the current Synced look.</summary>
     private const float SyncPaletteOffset = 0.5f;
 
+    /// <summary>
+    /// Sync palette conditioning, independently authored so live tuning in one mode cannot drift
+    /// the other. It starts at the same dark-heavy-palette repair calibration as Standalone, keeping
+    /// Wavefront colour separation readable while the Beat Pulse wiggle and hue drift move through
+    /// the conditioned cyclic table. Tune on the wall.
+    /// </summary>
+    private static PaletteConditioning SyncPaletteConditioning => new()
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
+
     /// <summary>Authored Levels form whose Low band supplies the Synced presence gate.</summary>
     private const LevelsForm SyncLowLevelsForm = LevelsForm.Smoothed;
 
@@ -136,7 +173,10 @@ public class Ripple : ScreenEffect
     public override Repertoire Repertoire =>
         Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
-    /// <summary>Resolves a fresh copy of Ripple's file-local Standalone Defaults.</summary>
+    /// <summary>
+    /// Resolves a fresh copy of Ripple's file-local Standalone Defaults, including Effect-local
+    /// palette conditioning.
+    /// </summary>
     public static RippleStandaloneSettings StandaloneDefaults => new()
     {
         SpawnChance = new FloatRange(
@@ -147,10 +187,14 @@ public class Ripple : ScreenEffect
         DistanceDivisor = StandaloneDistanceDivisor,
         MaxFlatScreenFraction = StandaloneMaxFlatScreenFraction,
         PaletteOffset = StandalonePaletteOffset,
+        PaletteConditioning = StandalonePaletteConditioning,
         HueShift = StandaloneHueShift,
     };
 
-    /// <summary>Resolves a fresh copy of Ripple's file-local Sync Defaults.</summary>
+    /// <summary>
+    /// Resolves a fresh copy of Ripple's file-local Sync Defaults, including independently saved
+    /// Effect-local palette conditioning.
+    /// </summary>
     public static RippleSyncSettings SyncDefaults => new()
     {
         SpawnsPerCrossing = new FloatRange(
@@ -166,6 +210,7 @@ public class Ripple : ScreenEffect
         DistanceDivisor = SyncDistanceDivisor,
         MaxFlatScreenFraction = SyncMaxFlatScreenFraction,
         PaletteOffset = SyncPaletteOffset,
+        PaletteConditioning = SyncPaletteConditioning,
         LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
         HueWiggleAmplitude = SyncHueWiggleAmplitude,
@@ -177,6 +222,12 @@ public class Ripple : ScreenEffect
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private RippleSyncSettings SyncSettings { get; set; } = SyncDefaults;
+
+    /// <summary>
+    /// Ripple's Effect-local conditioned endpoint cache. It follows shared palette revisions and live
+    /// conditioning controls while preserving the animated cross-fade without steady-frame allocation.
+    /// </summary>
+    private readonly ConditionedPaletteCache conditionedPalette = new();
 
     private Color startColor;
     private Color endColor;
@@ -302,7 +353,8 @@ public class Ripple : ScreenEffect
     public override void OnEnd() { }
 
     /// <summary>
-    /// Renders one frame into this effect's 900-color buffer.
+    /// Renders one frame into this effect's 900-color buffer through the active mode's live palette
+    /// conditioning.
     /// </summary>
     public override void Draw()
     {
@@ -317,6 +369,10 @@ public class Ripple : ScreenEffect
         float maxFlatScreenFraction = isSynced
             ? SyncSettings.MaxFlatScreenFraction
             : standaloneSettings.MaxFlatScreenFraction;
+        PaletteConditioning paletteConditioning = isSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning;
+        conditionedPalette.Refresh(APalette, paletteConditioning);
         float screenCrossingRadius = maxScreenDistance / distanceDivisor;
         float saturationRadius = 1f + screenCrossingRadius;
         clockRate = isSynced
@@ -384,7 +440,7 @@ public class Ripple : ScreenEffect
 
                 sum += paletteOffset;
                 sum %= 1f;
-                screenBuffer[idx] = APalette.read(sum + huePhase, true);
+                screenBuffer[idx] = conditionedPalette.ReadCyclic(sum + huePhase, doblend: true);
             }
         }
 
@@ -533,13 +589,22 @@ public sealed class RippleStandaloneSettings
     public float PaletteOffset;
 
     /// <summary>
+    /// Live Effect-local palette conditioning for Standalone Mode, independently saved so tuning it
+    /// cannot drift the Synced look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
+
+    /// <summary>
     /// Hue shift the persistent palette position is seeded with when a Standalone activation
     /// begins. Standalone then holds that position rather than re-reading this value, so a Play
     /// Mode edit here reaches the wall on the next activation rather than on the next frame.
     /// </summary>
     public float HueShift;
 
-    /// <summary>Copies every Ripple Standalone Setting, including range endpoints and Rails.</summary>
+    /// <summary>
+    /// Copies every Ripple Standalone Setting, including palette conditioning, range endpoints, and
+    /// Rails.
+    /// </summary>
     public void CopyFrom(RippleStandaloneSettings source)
     {
         if (source == null)
@@ -553,6 +618,7 @@ public sealed class RippleStandaloneSettings
         DistanceDivisor = source.DistanceDivisor;
         MaxFlatScreenFraction = source.MaxFlatScreenFraction;
         PaletteOffset = source.PaletteOffset;
+        PaletteConditioning = source.PaletteConditioning;
         HueShift = source.HueShift;
     }
 
@@ -604,6 +670,12 @@ public sealed class RippleSyncSettings
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
+    /// <summary>
+    /// Live Effect-local palette conditioning for Synced Mode, independently saved so tuning it
+    /// cannot drift the Standalone look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
+
     /// <summary>Levels form whose Low band supplies the Beat Pulse presence gate.</summary>
     public LevelsForm LowLevelsForm;
 
@@ -622,7 +694,9 @@ public sealed class RippleSyncSettings
     /// </summary>
     [Min(0f)] public float HueDriftRate;
 
-    /// <summary>Copies every Ripple Sync Setting, including range endpoints and Rails.</summary>
+    /// <summary>
+    /// Copies every Ripple Sync Setting, including palette conditioning, range endpoints, and Rails.
+    /// </summary>
     public void CopyFrom(RippleSyncSettings source)
     {
         if (source == null)
@@ -639,6 +713,7 @@ public sealed class RippleSyncSettings
         DistanceDivisor = source.DistanceDivisor;
         MaxFlatScreenFraction = source.MaxFlatScreenFraction;
         PaletteOffset = source.PaletteOffset;
+        PaletteConditioning = source.PaletteConditioning;
         LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
         HueWiggleAmplitude = source.HueWiggleAmplitude;

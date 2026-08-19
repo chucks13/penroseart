@@ -665,8 +665,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Ripple Standalone Defaults resolve as fresh, independent copies without pinning authored
-    /// tuning values that are judged on the wall.
+    /// Ripple Standalone Defaults, including palette conditioning, resolve as fresh independent
+    /// copies without pinning authored tuning values that are judged on the wall.
     /// </summary>
     [Test]
     public void RippleStandaloneDefaultsResolveAsIndependentCopies()
@@ -683,12 +683,13 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.DistanceDivisor, Is.EqualTo(second.DistanceDivisor));
         Assert.That(first.MaxFlatScreenFraction, Is.EqualTo(second.MaxFlatScreenFraction));
         Assert.That(first.PaletteOffset, Is.EqualTo(second.PaletteOffset));
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
         Assert.That(first.HueShift, Is.EqualTo(second.HueShift));
     }
 
     /// <summary>
-    /// Restore replaces every edited Ripple Standalone Setting and Rail with the current file-local
-    /// Standalone Defaults.
+    /// Restore replaces every edited Ripple Standalone Setting and Rail, including palette
+    /// conditioning, with the current file-local Standalone Defaults.
     /// </summary>
     [Test]
     public void RestoreStandaloneDefaultsCopiesEveryRippleValue()
@@ -702,6 +703,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DistanceDivisor = 24f;
         asset.Settings.MaxFlatScreenFraction = 0.13f;
         asset.Settings.PaletteOffset = 0.11f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.11f,
+            MinimumLuminance = 0.12f,
+            LuminanceEqualization = 0.13f,
+            HueSpreadReference = 0.14f,
+            MaximumLuminanceScale = 2f,
+            DarkLuminanceThreshold = 0.15f,
+            DuplicateThreshold = 0.16f,
+            HueRedistribution = 0.17f,
+        };
         asset.Settings.HueShift = 0.12f;
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Ripple), TempAssetFolder);
@@ -715,6 +727,9 @@ public sealed class EffectSyncSettingsTests
             asset.Settings.MaxFlatScreenFraction,
             Is.EqualTo(defaults.MaxFlatScreenFraction));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         Assert.That(asset.Settings.HueShift, Is.EqualTo(defaults.HueShift));
     }
 
@@ -1414,8 +1429,9 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited Ripple Sync Setting and Rail, including spawn density, the
-    /// Levels form, and Low presence threshold, with the current file-local Sync Defaults.
+    /// Restore replaces every edited Ripple Sync Setting and Rail, including spawn density, palette
+    /// conditioning, the Levels form, and Low presence threshold, with the current file-local Sync
+    /// Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
@@ -1432,6 +1448,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DistanceDivisor = 24f;
         asset.Settings.MaxFlatScreenFraction = 0.13f;
         asset.Settings.PaletteOffset = 0.11f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.21f,
+            MinimumLuminance = 0.22f,
+            LuminanceEqualization = 0.23f,
+            HueSpreadReference = 0.24f,
+            MaximumLuminanceScale = 3f,
+            DarkLuminanceThreshold = 0.2f,
+            DuplicateThreshold = 0.18f,
+            HueRedistribution = 0.19f,
+        };
         asset.Settings.LowLevelsForm = LevelsForm.Peak;
         asset.Settings.LowPresenceThreshold = 0.8f;
         asset.Settings.HueWiggleAmplitude = 0.9f;
@@ -1450,6 +1477,9 @@ public sealed class EffectSyncSettingsTests
             asset.Settings.MaxFlatScreenFraction,
             Is.EqualTo(defaults.MaxFlatScreenFraction));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
         Assert.That(asset.Settings.HueWiggleAmplitude, Is.EqualTo(defaults.HueWiggleAmplitude));
