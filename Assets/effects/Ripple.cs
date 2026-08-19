@@ -59,7 +59,7 @@ public class Ripple : ScreenEffect
     private const float SyncPaletteOffset = 0.5f;
 
     /// <summary>
-    /// Authored Normalized Low presence threshold for the Beat Pulse palette shift in Synced Mode.
+    /// Authored default Normalized Low presence threshold for the Beat Pulse palette shift in Synced Mode.
     /// </summary>
     /// <remarks>
     /// See Levels and Beat Pulse in <c>CONTEXT.md:189-191,267-269</c> and their wire lanes in
@@ -101,6 +101,7 @@ public class Ripple : ScreenEffect
         VelocityDivisor = SyncVelocityDivisor,
         DistanceDivisor = SyncDistanceDivisor,
         PaletteOffset = SyncPaletteOffset,
+        LowPresenceThreshold = SyncLowPresenceThreshold,
         HueShiftMax = SyncHueShiftMax,
     };
 
@@ -180,7 +181,7 @@ public class Ripple : ScreenEffect
         // keeps its existing Waveform path. See CONTEXT.md:189-191,267-269 and the beat-pulse and
         // levels wire lanes in docs/osc-client-contract.md:355-400.
         float hueShift = isSynced
-            ? beatManager.Levels.Normalized.Low > SyncLowPresenceThreshold
+            ? beatManager.Levels.Normalized.Low > SyncSettings.LowPresenceThreshold
                 ? beatManager.Pulses.Beat * SyncSettings.HueShiftMax
                 : 0f
             : waveform.Lerp(0f, standaloneSettings.HueShift);
@@ -315,6 +316,9 @@ public sealed class RippleSyncSettings
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
+    /// <summary>Normalized Low threshold above which the Beat Pulse shifts the palette in Synced Mode.</summary>
+    [Range(0f, 1f)] public float LowPresenceThreshold;
+
     /// <summary>Maximum hue shift reached at the Beat Pulse peak in Synced Mode.</summary>
     [Range(0f, 1f)] public float HueShiftMax;
 
@@ -331,6 +335,7 @@ public sealed class RippleSyncSettings
         VelocityDivisor = source.VelocityDivisor;
         DistanceDivisor = source.DistanceDivisor;
         PaletteOffset = source.PaletteOffset;
+        LowPresenceThreshold = source.LowPresenceThreshold;
         HueShiftMax = source.HueShiftMax;
     }
 

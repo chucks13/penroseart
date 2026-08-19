@@ -27,4 +27,5 @@ MonoBehaviour:
     VelocityDivisor: 2000
     DistanceDivisor: 20
     PaletteOffset: 0.5
+    LowPresenceThreshold: 0.35
     HueShiftMax: 0.2

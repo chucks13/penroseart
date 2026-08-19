@@ -1409,8 +1409,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited Ripple Sync Setting and Rail with the current file-local Sync
-    /// Defaults.
+    /// Restore replaces every edited Ripple Sync Setting and Rail, including the Low presence
+    /// threshold, with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
@@ -1423,6 +1423,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.VelocityDivisor = 23f;
         asset.Settings.DistanceDivisor = 24f;
         asset.Settings.PaletteOffset = 0.11f;
+        asset.Settings.LowPresenceThreshold = 0.8f;
         asset.Settings.HueShiftMax = 0.9f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
@@ -1433,6 +1434,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
+        Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
         Assert.That(asset.Settings.HueShiftMax, Is.EqualTo(defaults.HueShiftMax));
     }
 
