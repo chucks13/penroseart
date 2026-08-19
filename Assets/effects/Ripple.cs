@@ -169,6 +169,22 @@ public class Ripple : ScreenEffect
     private const float SyncFillComplementDepth = 1f;
 
     /// <summary>
+    /// Authored number of beats from the Drop landing that spawn extra wavefronts in Synced Mode.
+    /// </summary>
+    /// <remarks>
+    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const int SyncDropSpawnBeats = 8;
+
+    /// <summary>Authored number of extra wavefronts spawned on each selected Drop beat.</summary>
+    /// <remarks>
+    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const int SyncDropSpawnsPerBeat = 1;
+
+    /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
     /// below its presence threshold in Synced Mode.
     /// </summary>
@@ -178,16 +194,19 @@ public class Ripple : ScreenEffect
     private const float SyncHueDriftRate = 0.05f;
 
     /// <summary>
-    /// Ripple handles Fill with a transient Beat Pulse hue rotation toward complementary colors
-    /// and suits Mid/High Energy sections.
+    /// Ripple handles Fill with a transient Beat Pulse hue rotation toward complementary colors,
+    /// handles the opening Drop beats with extra wavefront spawns, and suits Mid/High Energy
+    /// sections.
     /// </summary>
     /// <remarks>
-    /// See Repertoire, Fill, Beat Pulse, and Energy in <c>CONTEXT.md</c>, and the
-    /// <c>/rave/onair/fill_state</c> and <c>/rave/onair/beat_pulse</c> lanes in
+    /// See Repertoire, Fill, Drop, Beat Pulse, and Energy in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/fill_state</c>, <c>/rave/onair/drop_state</c>,
+    /// <c>/rave/onair/beat_pulse</c>, and <c>/rave/onair/energy_state</c> lanes in
     /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     public override Repertoire Repertoire =>
         Repertoire.HandlesFill |
+        Repertoire.HandlesDrop |
         Repertoire.EnergyMid |
         Repertoire.EnergyHigh;
 
@@ -233,6 +252,8 @@ public class Ripple : ScreenEffect
         LowPresenceThreshold = SyncLowPresenceThreshold,
         HueWiggleAmplitude = SyncHueWiggleAmplitude,
         FillComplementDepth = SyncFillComplementDepth,
+        DropSpawnBeats = SyncDropSpawnBeats,
+        DropSpawnsPerBeat = SyncDropSpawnsPerBeat,
         HueDriftRate = SyncHueDriftRate,
     };
 
@@ -288,6 +309,22 @@ public class Ripple : ScreenEffect
     private float previousPulse;
 
     /// <summary>
+    /// Previous active Drop beats-remaining value retained for Ripple's consumer-local beat Edge.
+    /// </summary>
+    /// <remarks>
+    /// See Drop, Data Surface, and Edge in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private int? previousDropBeatsRemaining;
+
+    /// <summary>Number of Drop beat Edges observed during the current active Drop.</summary>
+    /// <remarks>
+    /// See Drop and Edge in <c>CONTEXT.md</c>, and the <c>/rave/onair/drop_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private int dropSpawnBeatCount;
+
+    /// <summary>
     /// Whether the previous frame was in Synced Mode, retained so entering it cannot apply pulse
     /// movement accumulated while Standalone held the hue position.
     /// </summary>
@@ -336,6 +373,8 @@ public class Ripple : ScreenEffect
             1f);
         previousPulse = pulse;
         previousIsSynced = isSynced;
+        previousDropBeatsRemaining = null;
+        dropSpawnBeatCount = 0;
         FloatRange activeSpawnRange = isSynced
             ? SyncSettings.SpawnsPerCrossing
             : standaloneSettings.SpawnChance;
@@ -493,6 +532,35 @@ public class Ripple : ScreenEffect
         {
             SpawnWavefront(velocityRange);
         }
+
+        // Comparing the active Drop's beats-remaining Data Surface read with Ripple's retained
+        // prior value creates the consumer-local Edge for each new Drop beat. When Active begins,
+        // its first value is the landing beat, so the local count begins there and rests as soon as
+        // Active ends. Drop wavefronts are added after the unchanged paced roll and flat-spawn
+        // decision, leaving both existing paths in force. See Drop, Data Surface, and Edge in
+        // CONTEXT.md, and /rave/onair/drop_state in docs/osc-client-contract.md.
+        bool dropActive = isSynced && beatManager.Drop.Active;
+        int? dropBeatsRemaining = dropActive
+            ? beatManager.Drop.BeatsRemaining.Value
+            : null;
+        bool newDropBeat = dropBeatsRemaining != previousDropBeatsRemaining;
+        if (!dropActive)
+        {
+            dropSpawnBeatCount = 0;
+        }
+        else if (newDropBeat)
+        {
+            if (dropSpawnBeatCount < SyncSettings.DropSpawnBeats)
+            {
+                for (int i = 0; i < SyncSettings.DropSpawnsPerBeat; i++)
+                {
+                    SpawnWavefront(velocityRange);
+                }
+            }
+
+            dropSpawnBeatCount++;
+        }
+        previousDropBeatsRemaining = dropBeatsRemaining;
     }
 
     /// <summary>
@@ -731,6 +799,20 @@ public sealed class RippleSyncSettings
     /// </remarks>
     [Range(0f, 1f)] public float FillComplementDepth;
 
+    /// <summary>Number of beats from the Drop landing that spawn extra wavefronts.</summary>
+    /// <remarks>
+    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    public int DropSpawnBeats;
+
+    /// <summary>Number of extra wavefronts spawned on each selected Drop beat.</summary>
+    /// <remarks>
+    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    public int DropSpawnsPerBeat;
+
     /// <summary>
     /// Hue-wheel cycles advanced per second while the selected Levels form's Low is at or below the
     /// presence threshold in Synced Mode.
@@ -761,6 +843,8 @@ public sealed class RippleSyncSettings
         LowPresenceThreshold = source.LowPresenceThreshold;
         HueWiggleAmplitude = source.HueWiggleAmplitude;
         FillComplementDepth = source.FillComplementDepth;
+        DropSpawnBeats = source.DropSpawnBeats;
+        DropSpawnsPerBeat = source.DropSpawnsPerBeat;
         HueDriftRate = source.HueDriftRate;
     }
 

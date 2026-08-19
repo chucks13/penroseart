@@ -1430,9 +1430,13 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// Restore replaces every edited Ripple Sync Setting and Rail, including spawn density, palette
-    /// conditioning, the Levels form, Low presence threshold, and Fill complement depth, with the
-    /// current file-local Sync Defaults.
+    /// conditioning, the Levels form, Low presence threshold, Fill complement depth, both Drop
+    /// spawning quantities, and hue drift rate, with the current file-local Sync Defaults object.
     /// </summary>
+    /// <remarks>
+    /// See Drop in <c>CONTEXT.md</c> and the <c>/rave/onair/drop_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
     {
@@ -1463,6 +1467,9 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.LowPresenceThreshold = 0.8f;
         asset.Settings.HueWiggleAmplitude = 0.9f;
         asset.Settings.FillComplementDepth = 0.7f;
+        asset.Settings.DropSpawnBeats = 6;
+        asset.Settings.DropSpawnsPerBeat = 4;
+        asset.Settings.HueDriftRate = 0.6f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
 
@@ -1487,6 +1494,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.FillComplementDepth,
             Is.EqualTo(defaults.FillComplementDepth));
+        Assert.That(asset.Settings.DropSpawnBeats, Is.EqualTo(defaults.DropSpawnBeats));
+        Assert.That(asset.Settings.DropSpawnsPerBeat, Is.EqualTo(defaults.DropSpawnsPerBeat));
+        Assert.That(asset.Settings.HueDriftRate, Is.EqualTo(defaults.HueDriftRate));
     }
 
     /// <summary>Restore replaces every edited Crystal Growth Sync Setting with its file-local Sync Default.</summary>
