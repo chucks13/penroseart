@@ -36,23 +36,24 @@ public class Ripple : ScreenEffect
     /// mostly flat. Any value costs exactly one wavefront per flat episode, because the fresh
     /// wavefront counts as pending motion and clears the flat check on its next frame.
     /// </summary>
-    private const float StandaloneMaxFlatScreenFraction = 1f;
+    private const float StandaloneMaxFlatScreenFraction = 0.9f;
 
     /// <summary>Authored palette phase offset for the unchanged Standalone look.</summary>
     private const float StandalonePaletteOffset = 0.5f;
 
     /// <summary>
-    /// Standalone palette conditioning for clean separation between Wavefronts. The Angles
-    /// calibration moves dark-heavy palettes into one useful luminance band, repairs black and
-    /// near-black entries with neighbouring hue, collapses near-duplicates, and redistributes
-    /// distinct colour movement across the cyclic table. Tune on the wall.
+    /// Standalone palette conditioning for clean separation between Wavefronts. Starting from the
+    /// Angles calibration with the hue-spread reference tightened at the wall, it moves dark-heavy
+    /// palettes into one useful luminance band, repairs black and near-black entries with
+    /// neighbouring hue, collapses near-duplicates, and redistributes distinct colour movement
+    /// across the cyclic table. Tune on the wall.
     /// </summary>
     private static PaletteConditioning StandalonePaletteConditioning => new()
     {
         TargetLuminance = 0.4f,
         MinimumLuminance = 0.12f,
         LuminanceEqualization = 0.85f,
-        HueSpreadReference = 0.5f,
+        HueSpreadReference = 0.325f,
         MaximumLuminanceScale = 4f,
         DarkLuminanceThreshold = 0.03f,
         DuplicateThreshold = 0.08f,
@@ -116,7 +117,7 @@ public class Ripple : ScreenEffect
     /// flat. Any value costs exactly one wavefront per flat episode, because the fresh wavefront
     /// counts as pending motion and clears the flat check on its next frame.
     /// </summary>
-    private const float SyncMaxFlatScreenFraction = 1f;
+    private const float SyncMaxFlatScreenFraction = 0.8f;
 
     /// <summary>Authored palette phase offset for the current Synced look.</summary>
     private const float SyncPaletteOffset = 0.5f;
@@ -132,7 +133,7 @@ public class Ripple : ScreenEffect
         TargetLuminance = 0.4f,
         MinimumLuminance = 0.12f,
         LuminanceEqualization = 0.85f,
-        HueSpreadReference = 0.5f,
+        HueSpreadReference = 0.325f,
         MaximumLuminanceScale = 4f,
         DarkLuminanceThreshold = 0.03f,
         DuplicateThreshold = 0.08f,
@@ -149,13 +150,13 @@ public class Ripple : ScreenEffect
     /// See Levels and Beat Pulse in <c>CONTEXT.md:189-191,267-269</c> and their wire lanes in
     /// <c>docs/osc-client-contract.md:355-400</c>.
     /// </remarks>
-    private const float SyncLowPresenceThreshold = 0.375f;
+    private const float SyncLowPresenceThreshold = 0.4f;
 
     /// <summary>Authored amplitude of the Beat Pulse hue wiggle in Synced Mode.</summary>
     /// <remarks>
     /// See Beat Pulse in <c>CONTEXT.md:267-269</c> and <c>docs/osc-client-contract.md:355-382</c>.
     /// </remarks>
-    private const float SyncHueWiggleAmplitude = 0.2f;
+    private const float SyncHueWiggleAmplitude = 0.4f;
 
     /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or

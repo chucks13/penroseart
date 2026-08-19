@@ -39,12 +39,12 @@ MonoBehaviour:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12
       LuminanceEqualization: 0.85
-      HueSpreadReference: 0.5
+      HueSpreadReference: 0.325
       MaximumLuminanceScale: 4
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    LowLevelsForm: 0
+    LowLevelsForm: 1
     LowPresenceThreshold: 0.4
     HueWiggleAmplitude: 0.4
     HueDriftRate: 0.05
