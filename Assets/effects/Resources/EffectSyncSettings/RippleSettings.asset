@@ -14,4 +14,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RippleSyncSettingsAsset
   effectTypeName: Ripple
   settings:
+    DropSpawnChance:
+      Min: 0.01
+      Max: 0.02
+      LowRail: 0.01
+      HighRail: 0.02
+    Velocity:
+      Min: 0.01
+      Max: 0.9
+      LowRail: 0.01
+      HighRail: 0.9
+    VelocityDivisor: 2000
+    DistanceDivisor: 20
+    PaletteOffset: 0.5
     HueShiftMax: 0.2
