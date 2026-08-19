@@ -20,25 +20,25 @@ MonoBehaviour:
       MinimumLuminance: 0.12
       LuminanceEqualization: 0.85
       HueSpreadReference: 0.5
-      MaximumLuminanceScale: 4
+      MaximumLuminanceScale: 10
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    ForegroundTilePositionStep: 0.01
+    ForegroundTilePositionStep: 0.025
     ForegroundPositionAdvancePerSecond: 1
     ForegroundEnergyCrawlSpeedMultiplier:
-      Min: 0.75
-      Max: 1.25
-      LowRail: 0.75
-      HighRail: 1.25
+      Min: 0.5
+      Max: 1.5
+      LowRail: 0.5
+      HighRail: 1.5
     ForegroundDropRibbonWindowBeats: 16
-    ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 1.15
+    ForegroundDropRibbonFlowCyclesPerBeatAtLanding: 0.5
     ForegroundDropRibbonBrightness: 1
     BackgroundWaveformName: beats 2 and 4
     BackgroundWaveformBrightnessFloor: 0.5
     BackgroundWaveformPeakBrightnessTarget: 0.6
     BackgroundDropTileHueStep: 0.001
     BackgroundDropHueRate: 0.5
-    BackgroundDropValue: 1
+    BackgroundDropValue: 0.5
     ForegroundFillBlackAndWhiteProbability: 0.125
     ForegroundFillBrightnessLift: 0.8

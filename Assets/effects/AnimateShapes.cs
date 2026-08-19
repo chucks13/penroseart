@@ -18,9 +18,9 @@ public class AnimateShapes : EffectBase
 
     /// <summary>
     /// Standalone palette-family conditioning. The absolute target and floor put every palette in
-    /// the same working band; hue-spread-aware equalization, bounded lift, dark-stop repair, duplicate
-    /// collapse, and full redistribution keep the Circle and Arc crawl colorful across palette families.
-    /// Tune on the wall.
+    /// the same working band; hue-spread-aware equalization, a tenfold lift ceiling, dark-stop repair,
+    /// duplicate collapse, and full redistribution keep the Circle and Arc crawl colorful across
+    /// palette families.
     /// </summary>
     private static PaletteConditioning StandaloneForegroundPaletteConditioning => new()
     {
@@ -28,7 +28,7 @@ public class AnimateShapes : EffectBase
         MinimumLuminance = 0.12f,
         LuminanceEqualization = 0.85f,
         HueSpreadReference = 0.5f,
-        MaximumLuminanceScale = 4f,
+        MaximumLuminanceScale = 10f,
         DarkLuminanceThreshold = 0.03f,
         DuplicateThreshold = 0.08f,
         HueRedistribution = 1f,
@@ -54,8 +54,8 @@ public class AnimateShapes : EffectBase
     /// <summary>
     /// Sync palette-family conditioning, independently authored so ADR-0013 live tuning in one mode
     /// cannot drift the other. It begins at the same working luminance band, hue-spread-aware
-    /// equalization, bounded lift, dark-stop repair, duplicate collapse, and full redistribution as
-    /// Standalone. Tune on the wall.
+    /// equalization, a tenfold lift ceiling, dark-stop repair, duplicate collapse, and full
+    /// redistribution as Standalone.
     /// </summary>
     private static PaletteConditioning SyncForegroundPaletteConditioning => new()
     {
@@ -63,14 +63,17 @@ public class AnimateShapes : EffectBase
         MinimumLuminance = 0.12f,
         LuminanceEqualization = 0.85f,
         HueSpreadReference = 0.5f,
-        MaximumLuminanceScale = 4f,
+        MaximumLuminanceScale = 10f,
         DarkLuminanceThreshold = 0.03f,
         DuplicateThreshold = 0.08f,
         HueRedistribution = 1f,
     };
 
-    /// <summary>Authored Synced Mode counterpart to the cyclic palette-position step between Tiles.</summary>
-    private const float SyncForegroundTilePositionStep = 0.01f;
+    /// <summary>
+    /// Authored Synced Mode counterpart to the cyclic palette-position step between Tiles. A 0.025
+    /// step gives neighboring Tiles more color separation across each foreground Shape.
+    /// </summary>
+    private const float SyncForegroundTilePositionStep = 0.025f;
 
     /// <summary>
     /// Authored Synced Mode palette-position advance per second. Raised from the frame-rate
@@ -79,16 +82,16 @@ public class AnimateShapes : EffectBase
     private const float SyncForegroundPositionAdvancePerSecond = 1f;
 
     /// <summary>
-    /// Authored Low Energy multiplier for the foreground Circle and Arc crawl. The ruled 0.75 Low
-    /// and 1.25 High endpoints make Mid's midpoint exactly one, preserving the approved baseline speed.
+    /// Authored Low Energy multiplier for the foreground Circle and Arc crawl. The 0.5 Low and 1.5
+    /// High endpoints keep Mid's midpoint at one while widening the visible speed range.
     /// </summary>
-    private const float SyncForegroundLowEnergyCrawlSpeedMultiplier = 0.75f;
+    private const float SyncForegroundLowEnergyCrawlSpeedMultiplier = 0.5f;
 
     /// <summary>
-    /// Authored High Energy multiplier for the foreground Circle and Arc crawl. The ruled 0.75 Low
-    /// and 1.25 High endpoints make Mid's midpoint exactly one, preserving the approved baseline speed.
+    /// Authored High Energy multiplier for the foreground Circle and Arc crawl. The 0.5 Low and 1.5
+    /// High endpoints keep Mid's midpoint at one while widening the visible speed range.
     /// </summary>
-    private const float SyncForegroundHighEnergyCrawlSpeedMultiplier = 1.25f;
+    private const float SyncForegroundHighEnergyCrawlSpeedMultiplier = 1.5f;
 
     /// <summary>
     /// Authored foreground Drop ribbon window in beats. Sixteen beats gives each landing one finite
@@ -97,10 +100,10 @@ public class AnimateShapes : EffectBase
     private const int SyncForegroundDropRibbonWindowBeats = 16;
 
     /// <summary>
-    /// Authored foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. The
-    /// wall-approved 1.15 is a slight lift from the established one-cycle Angles impact speed.
+    /// Authored foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. A value of
+    /// 0.5 lets the landing ribbon travel half the hue wheel each beat.
     /// </summary>
-    private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 1.15f;
+    private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 0.5f;
 
     /// <summary>
     /// Authored Value supplied to the ribbon color's HSV brightness slot. The wall-approved value
@@ -142,10 +145,10 @@ public class AnimateShapes : EffectBase
     private const float SyncBackgroundDropHueRate = 0.5f;
 
     /// <summary>
-    /// Authored Value supplied to the Drop background's HSV-to-RGB conversion. One preserves the
-    /// smooth full-brightness hue gradient instead of clipping it into a few flat RGB colors.
+    /// Authored Value supplied to the Drop background's HSV-to-RGB conversion. Half Value keeps the
+    /// direct rainbow visible beneath the foreground without a Waveform response.
     /// </summary>
-    private const float SyncBackgroundDropValue = 1f;
+    private const float SyncBackgroundDropValue = 0.5f;
 
     /// <summary>Probability that each Circle or Arc becomes black-and-white during an active Fill.</summary>
     private const float SyncForegroundFillBlackAndWhiteProbability = 0.125f;
