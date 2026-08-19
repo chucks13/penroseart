@@ -99,10 +99,9 @@ A resumed ticket starts from state, not from the Phase A reading list. The readi
 ticket-scoped. Phase A steps 2 and 3 are session-scoped, so complete them again in every
 session.
 
-Git says what landed. The comments on the ticket say what the maintainer decided. Create a new
-worklog for the resumed session. Read a Phase A document again only when the current step needs
-it. The Musical claims rule names one such need. Rejoin the phase the evidence names, not the
-phase the last comment names.
+Git says what landed. The comments on the ticket say what the maintainer decided. Read a Phase A
+document again only when the current step needs it. The Musical claims rule names one such need.
+Rejoin the phase the evidence names, not the phase the last comment names.
 
 ## Phase A — Set up
 
@@ -126,11 +125,9 @@ phase the last comment names.
    to build. Read every comment oldest to newest, and treat the newest statement on any point as the
    live one. When the body disagrees with the comments, fix the body in the same session.
 
-5. Seed one worklog for the ticket.
+5. With the `using-git-branch` skill, create branch `feat/<effect>-musicality` from master.
 
-6. With the `using-git-branch` skill, create branch `feat/<effect>-musicality` from master.
-
-7. Triage the ticket's findings with the maintainer before any implementation. Classify each as:
+6. Triage the ticket's findings with the maintainer before any implementation. Classify each as:
    fix during musicality, fix during polish (look-preserving), or look-changing — the maintainer
    must see the wall before and after a look-changing fix. Record the classification on the
    ticket.
@@ -280,7 +277,7 @@ and side quests included. The coordinator does not narrow this scope.
    stays unfixed lands on the epic issue, not in comments on the closed ticket.
 
 6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
-   skill only for a maintainer decision or a process failure that repeated. Retire the worklog.
+   skill only for a maintainer decision or a process failure that repeated.
 
 ## Worker briefs
 
