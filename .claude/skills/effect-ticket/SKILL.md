@@ -169,16 +169,21 @@ to be recut is the same work done twice.
 
 ## Phase D — Musicality loop
 
-Run once per capability. The usual order is Levels, then Fill, then Drop, then Energy, but the
-Effect decides what it supports and the maintainer may reorder, add, or skip capabilities. When
-a capability discussion reopens the Effect's shape, that is a return to Reshape, judged the same
-way.
+Phase D runs as three stages in a fixed order. **Basic musicality** comes first: the Effect's
+always-on response while synced. It can draw on Levels, Energy, waveform-driven motion — all of
+them, some, or none, depending on the Effect and what it is trying to achieve. Fill follows, and
+Drop lands last; each is a special sequence that runs independent of the basic musicality. The
+maintainer may add or skip a stage, and a capability discussion that reopens the Effect's shape
+is a return to Reshape, judged the same way.
+
+Run the loop below once per stage. Offer musicality ideas inside step 1 of the stage at hand —
+a suggestion about Drop belongs in the Drop stage, not in the basic-musicality discussion.
 
 Vocabulary: **Levels**, **Energy**, **Waveform**, and **Data Surface** are `CONTEXT.md` terms.
 Use them exactly as the glossary defines them, and sharpen the glossary when a discussion refines
 one.
 
-1. Discuss with the maintainer what this Effect should do with the capability. The maintainer
+1. Discuss with the maintainer what this Effect should do in the stage at hand. The maintainer
    owns the intent; you own the design conversation; the worker implements.
 
 2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). The
@@ -203,7 +208,7 @@ one.
    maintainer's saved asset values back as defaults are direct edits. Structural or sizable
    implementation still goes to a worker — the coordinator does not take over development.
 
-6. When the capability lands, update the Effect's `Repertoire` flags so they advertise honestly
+6. When the stage lands, update the Effect's `Repertoire` flags so they advertise honestly
    what it now handles.
 
 ## Phase E — Polish and optimize
