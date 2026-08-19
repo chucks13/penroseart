@@ -17,11 +17,40 @@ unity_bin="${UNITY_BIN:-/Applications/Unity/Hub/Editor/$editor_version/Unity.app
 log_file="${UNITY_COMPILE_LOG:-/tmp/penrose-unity-compile.log}"
 license_timeout="${UNITY_LICENSE_TIMEOUT:-30}"
 process_timeout="${UNITY_COMPILE_TIMEOUT:-300}"
+status_file="${UNITY_COMPILE_STATUS:-${log_file%.log}.status}"
+bridge_timeout="${UNITY_EDITOR_COMPILE_TIMEOUT:-300}"
 
 if unity_editor_has_project_open "$repo_root"; then
-  printf 'ERROR: Unity Editor already owns this project; refusing to launch a second Editor.\n' >&2
-  printf 'Let the open Editor refresh/compile, then inspect: %s\n' "$repo_root/Logs/Editor.log" >&2
-  exit 1
+  rm -f "$log_file" "$status_file"
+  request_file="$(unity_write_bridge_request \
+    "$repo_root" "compile" "" "" "" "" "$status_file" "$log_file")"
+  printf 'Unity Editor already has this project open; requested in-Editor compilation via %s\n' "$request_file"
+
+  status=0
+  if ! unity_wait_for_bridge_status "$request_file" "$status_file" "$bridge_timeout"; then
+    printf 'Timed out waiting for open Unity Editor compilation after %ss.\n' "$bridge_timeout" >&2
+    printf 'If the Editor is in Play Mode or busy compiling/importing, stop that and rerun.\n' >&2
+    printf 'Set UNITY_EDITOR_COMPILE_TIMEOUT=<seconds> for a longer wait.\n' >&2
+    status=1
+  elif [ "$(unity_bridge_status_value "$status_file" result)" != "Passed" ]; then
+    status=1
+  fi
+
+  printf 'Unity compile log: %s\n' "$log_file"
+  warning_count=0
+  if [ -f "$status_file" ]; then
+    if grep -q '^compilerError=' "$status_file" 2>/dev/null; then
+      printf '\nCompile errors:\n'
+      sed -n 's/^compilerError=//p' "$status_file"
+    elif [ "$status" -ne 0 ]; then
+      message="$(unity_bridge_status_value "$status_file" message)"
+      [ -z "$message" ] || printf '\n%s\n' "$message" >&2
+    fi
+    warning_count="$(unity_bridge_status_value "$status_file" warningCount)"
+    warning_count="${warning_count:-0}"
+  fi
+  printf 'C# warning count: %s\n' "$warning_count"
+  exit "$status"
 fi
 
 unity_require_batchmode_host_access "$repo_root"

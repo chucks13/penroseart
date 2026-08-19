@@ -17,13 +17,12 @@ unity_bin="${UNITY_BIN:-/Applications/Unity/Hub/Editor/$editor_version/Unity.app
 results_file="${UNITY_TEST_RESULTS:-/tmp/penrose-unity-tests.xml}"
 log_file="${UNITY_TEST_LOG:-/tmp/penrose-unity-tests.log}"
 platform="${UNITY_TEST_PLATFORM:-EditMode}"
-filter="${UNITY_TEST_FILTER:-}"
+filter="${1:-${UNITY_TEST_FILTER:-}}"
 assembly_names="${UNITY_TEST_ASSEMBLY_NAMES:-}"
-timeout_seconds="${UNITY_EDITOR_TEST_TIMEOUT:-45}"
+timeout_seconds="${UNITY_EDITOR_TEST_TIMEOUT:-300}"
 license_timeout="${UNITY_LICENSE_TIMEOUT:-30}"
 process_timeout="${UNITY_TEST_PROCESS_TIMEOUT:-900}"
 status_file="${UNITY_TEST_STATUS:-${results_file%.xml}.status}"
-request_dir="$repo_root/Temp/PenroseUnityTestBridge/requests"
 
 print_results() {
   python3 - "$results_file" <<'PY'
@@ -47,39 +46,19 @@ PY
 }
 
 run_in_open_editor() {
-  local request_file request_id
-  request_id="$(date +%s)-$$"
-  request_file="$request_dir/$request_id.json"
-  mkdir -p "$request_dir"
-  python3 - "$request_file" "$request_id" "$platform" "$filter" "$assembly_names" "$results_file" "$status_file" "$log_file" <<'PY'
-import json
-import sys
-
-path, request_id, platform, filt, assemblies, results, status, log = sys.argv[1:]
-with open(path, 'w', encoding='utf-8') as handle:
-    json.dump({
-        'id': request_id,
-        'testMode': platform,
-        'filter': filt,
-        'assemblyNames': assemblies,
-        'resultsFile': results,
-        'statusFile': status,
-        'logFile': log,
-    }, handle)
-PY
+  local request_file
+  request_file="$(unity_write_bridge_request \
+    "$repo_root" "test" "$platform" "$filter" "$assembly_names" "$results_file" "$status_file" "$log_file")"
 
   printf 'Unity Editor already has this project open; requested in-Editor test run via %s\n' "$request_file"
-  local deadline=$((SECONDS + timeout_seconds))
-  while [ "$SECONDS" -lt "$deadline" ]; do
-    [ -f "$status_file" ] && return 0
-    sleep 1
-  done
+  if ! unity_wait_for_bridge_status "$request_file" "$status_file" "$timeout_seconds"; then
+    printf 'Timed out waiting for open Unity Editor test results after %ss.\n' "$timeout_seconds" >&2
+    printf 'If the Editor is in Play Mode or busy compiling/importing, stop that and rerun.\n' >&2
+    printf 'For long all-test runs, set UNITY_EDITOR_TEST_TIMEOUT=<seconds>.\n' >&2
+    return 1
+  fi
 
-  rm -f "$request_file"
-  printf 'Timed out waiting for open Unity Editor test results after %ss.\n' "$timeout_seconds" >&2
-  printf 'If the Editor is in Play Mode or busy compiling/importing, stop that and rerun.\n' >&2
-  printf 'For long all-test runs, set UNITY_EDITOR_TEST_TIMEOUT=<seconds>.\n' >&2
-  return 1
+  [ "$(unity_bridge_status_value "$status_file" result)" = "Passed" ]
 }
 
 run_batchmode() {
@@ -110,10 +89,6 @@ run_batchmode() {
 
 rm -f "$results_file" "$log_file" "$status_file"
 
-# The two paths do NOT run the same set. The bridge omits [UnityTest] coroutines and reports
-# skipped=0 while doing so, because the omitted tests are never selected rather than skipped.
-# The path is printed because a total= count means nothing until you know which path produced
-# it — comparing a bridge run against a batchmode run is the mistake this line exists to stop.
 status=0
 if unity_editor_has_project_open "$repo_root"; then
   test_path="open-editor-bridge"
@@ -124,10 +99,6 @@ else
 fi
 
 printf 'Unity test path: %s (platform %s)\n' "$test_path" "$platform"
-if [ "$test_path" = "open-editor-bridge" ]; then
-  printf 'NOTE: the bridge omits [UnityTest] coroutines and still reports skipped=0.\n'
-  printf '      Judge coverage by total=, not skipped=, and close the Editor for a full run.\n'
-fi
 printf 'Unity test log: %s\n' "$log_file"
 printf 'Unity test results: %s\n' "$results_file"
 
@@ -140,4 +111,9 @@ if [ ! -f "$results_file" ]; then
   exit "${status:-1}"
 fi
 
-print_results
+results_status=0
+print_results || results_status=$?
+if [ "$test_path" = "open-editor-bridge" ] && [ "$status" -ne 0 ]; then
+  exit "$status"
+fi
+exit "$results_status"

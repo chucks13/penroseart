@@ -29,6 +29,69 @@ unity_editor_has_project_open() {
   fi
 }
 
+# Publish requests by rename so the Editor never reads a partially written JSON file.
+unity_write_bridge_request() {
+  local repo_root="$1"
+  local request_type="$2"
+  local test_mode="$3"
+  local filter="$4"
+  local assembly_names="$5"
+  local results_file="$6"
+  local status_file="$7"
+  local log_file="$8"
+  local request_dir="$repo_root/Temp/PenroseUnityTestBridge/requests"
+
+  mkdir -p "$request_dir"
+  python3 - "$request_dir" "$request_type" "$test_mode" "$filter" "$assembly_names" "$results_file" "$status_file" "$log_file" <<'PY'
+import json
+import os
+import sys
+import time
+
+request_dir, request_type, test_mode, filt, assemblies, results, status, log = sys.argv[1:]
+request_id = f"{time.time_ns():020d}-{os.getpid():010d}"
+request_path = os.path.join(request_dir, f"{request_id}.json")
+temporary_path = request_path + ".tmp"
+with open(temporary_path, "w", encoding="utf-8") as handle:
+    json.dump({
+        "id": request_id,
+        "type": request_type,
+        "testMode": test_mode,
+        "filter": filt,
+        "assemblyNames": assemblies,
+        "resultsFile": results,
+        "statusFile": status,
+        "logFile": log,
+    }, handle)
+os.replace(temporary_path, request_path)
+print(request_path)
+PY
+}
+
+# A timeout removes only an unclaimed queue entry; active work lives in the bridge's state file.
+unity_wait_for_bridge_status() {
+  local request_file="$1"
+  local status_file="$2"
+  local timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    [ -f "$status_file" ] && return 0
+    sleep 1
+  done
+
+  rm -f "$request_file"
+  return 1
+}
+
+# Status values are line-based so callers do not need a second JSON parser after polling.
+unity_bridge_status_value() {
+  local status_file="$1"
+  local key="$2"
+
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$status_file"
+}
+
 unity_licensing_log_path() {
   case "$(uname -s)" in
     Darwin) printf '%s\n' "$HOME/Library/Logs/Unity/Unity.Licensing.Client.log" ;;
