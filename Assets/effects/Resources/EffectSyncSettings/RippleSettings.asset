@@ -30,3 +30,4 @@ MonoBehaviour:
     LowLevelsForm: 1
     LowPresenceThreshold: 0.3333
     HueShiftMax: 0.2
+    HueDriftRate: 0.05

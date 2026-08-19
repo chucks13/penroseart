@@ -77,6 +77,15 @@ public class Ripple : ScreenEffect
     private const float SyncHueShiftMax = 0.2f;
 
     /// <summary>
+    /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
+    /// below its presence threshold in Synced Mode.
+    /// </summary>
+    /// <remarks>
+    /// See Levels and Standalone Mode / Synced Mode in <c>CONTEXT.md:189-191,227-235</c>.
+    /// </remarks>
+    private const float SyncHueDriftRate = 0.05f;
+
+    /// <summary>
     /// Ripple's Mid/High Energy suitability character; see the Repertoire and Energy entries in
     /// <c>CONTEXT.md</c>.
     /// </summary>
@@ -107,6 +116,7 @@ public class Ripple : ScreenEffect
         LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
         HueShiftMax = SyncHueShiftMax,
+        HueDriftRate = SyncHueDriftRate,
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
@@ -122,6 +132,29 @@ public class Ripple : ScreenEffect
 
     /// <summary>Current per-frame chance of spawning a new drop, rolled from the active mode's range.</summary>
     private float dropSpawnChance;
+
+    /// <summary>
+    /// Persistent wrapped palette hue position, initialized from the rendered offset at activation
+    /// and then moved without being replaced when its driver changes.
+    /// </summary>
+    private float huePhase;
+
+    /// <summary>
+    /// Previous frame's Beat Pulse read, advanced every frame so reopening the Low gate applies only
+    /// the current frame's pulse movement.
+    /// </summary>
+    /// <remarks>
+    /// See Beat Pulse in <c>CONTEXT.md:268-270</c> and
+    /// <c>docs/osc-client-contract.md:356-382</c>.
+    /// </remarks>
+    private float previousPulse;
+
+    /// <summary>
+    /// Whether the previous frame was in Synced Mode, retained so entering it cannot apply pulse
+    /// movement accumulated while Standalone held the hue position.
+    /// </summary>
+    /// <remarks>See Standalone Mode / Synced Mode in <c>CONTEXT.md:227-235</c>.</remarks>
+    private bool previousIsSynced;
 
     /// <summary>
     /// Returns text for the Controller debug display while this effect is active.
@@ -152,7 +185,19 @@ public class Ripple : ScreenEffect
             typeof(Ripple),
             SyncDefaults);
         waveform = waveforms.Random();
-        FloatRange dropSpawnChanceRange = beatManager.IsSynced
+        bool isSynced = beatManager.IsSynced;
+        float pulse = beatManager.Pulses.Beat;
+        bool lowPresent = isSynced &&
+            beatManager.Levels.Select(SyncSettings.LowLevelsForm).Low >
+            SyncSettings.LowPresenceThreshold;
+        huePhase = Mathf.Repeat(
+            isSynced
+                ? lowPresent ? pulse * SyncSettings.HueShiftMax : 0f
+                : standaloneSettings.HueShift,
+            1f);
+        previousPulse = pulse;
+        previousIsSynced = isSynced;
+        FloatRange dropSpawnChanceRange = isSynced
             ? SyncSettings.DropSpawnChance
             : standaloneSettings.DropSpawnChance;
         dropSpawnChance = Random.Range(dropSpawnChanceRange.Min, dropSpawnChanceRange.Max);
@@ -180,16 +225,25 @@ public class Ripple : ScreenEffect
             ? SyncSettings.PaletteOffset
             : standaloneSettings.PaletteOffset;
 
-        // Synced Mode uses the selected Levels form's Low only as a strict presence gate; above it,
-        // the full Beat Pulse shifts palette hue while drop radius/progression remains independent.
-        // Standalone keeps its existing Waveform path. See CONTEXT.md:189-191,267-269 and the
-        // beat-pulse and levels wire lanes in docs/osc-client-contract.md:355-400.
-        float hueShift = isSynced
-            ? beatManager.Levels.Select(SyncSettings.LowLevelsForm).Low >
-                SyncSettings.LowPresenceThreshold
-                ? beatManager.Pulses.Beat * SyncSettings.HueShiftMax
-                : 0f
-            : waveform.Lerp(0f, standaloneSettings.HueShift);
+        // Synced Mode uses the selected Levels form's Low only as a strict presence gate. Above it,
+        // the full Beat Pulse's frame delta moves the persistent hue position; below it, the authored
+        // drift moves that same position. Standalone holds it. Advancing previousPulse in every mode
+        // and gate state keeps every crossing a velocity change instead of a position jump. See
+        // CONTEXT.md:189-191,227-235,268-270 and the beat-pulse and levels wire lanes in
+        // docs/osc-client-contract.md:356-400.
+        float pulse = beatManager.Pulses.Beat;
+        if (isSynced)
+        {
+            float pulseDelta = previousIsSynced ? pulse - previousPulse : 0f;
+            bool lowPresent = beatManager.Levels.Select(SyncSettings.LowLevelsForm).Low >
+                SyncSettings.LowPresenceThreshold;
+            float hueAdvance = lowPresent
+                ? SyncSettings.HueShiftMax * pulseDelta
+                : SyncSettings.HueDriftRate * effectDelta;
+            huePhase = Mathf.Repeat(huePhase + hueAdvance, 1f);
+        }
+        previousPulse = pulse;
+        previousIsSynced = isSynced;
         if (Random.value < dropSpawnChance)
         {
             Array.Resize(ref drops, drops.Length + 1);
@@ -213,7 +267,7 @@ public class Ripple : ScreenEffect
                 }
                 sum += paletteOffset;
                 sum %= 1f;
-                screenBuffer[idx] = APalette.read(sum + hueShift, true);
+                screenBuffer[idx] = APalette.read(sum + huePhase, true);
             }
         }
 
@@ -273,7 +327,11 @@ public sealed class RippleStandaloneSettings
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
-    /// <summary>Fixed hue shift applied to every palette read in Standalone Mode.</summary>
+    /// <summary>
+    /// Hue shift the persistent palette position is seeded with when a Standalone activation
+    /// begins. Standalone then holds that position rather than re-reading this value, so a Play
+    /// Mode edit here reaches the wall on the next activation rather than on the next frame.
+    /// </summary>
     public float HueShift;
 
     /// <summary>Copies every Ripple Standalone Setting, including range endpoints and Rails.</summary>
@@ -330,6 +388,12 @@ public sealed class RippleSyncSettings
     /// <summary>Maximum hue shift reached at the Beat Pulse peak in Synced Mode.</summary>
     [Range(0f, 1f)] public float HueShiftMax;
 
+    /// <summary>
+    /// Hue-wheel cycles advanced per second while the selected Levels form's Low is at or below the
+    /// presence threshold in Synced Mode.
+    /// </summary>
+    [Min(0f)] public float HueDriftRate;
+
     /// <summary>Copies every Ripple Sync Setting, including range endpoints and Rails.</summary>
     public void CopyFrom(RippleSyncSettings source)
     {
@@ -346,6 +410,7 @@ public sealed class RippleSyncSettings
         LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
         HueShiftMax = source.HueShiftMax;
+        HueDriftRate = source.HueDriftRate;
     }
 
     /// <summary>Copies one FloatRange so saved Settings cannot mutate authored Defaults through aliasing.</summary>
