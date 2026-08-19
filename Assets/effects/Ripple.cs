@@ -58,12 +58,27 @@ public class Ripple : ScreenEffect
     /// <summary>Authored palette phase offset for the current Synced look.</summary>
     private const float SyncPaletteOffset = 0.5f;
 
-    /// <summary>Authored maximum Waveform-driven hue shift in Synced Mode.</summary>
+    /// <summary>
+    /// Authored Normalized Low presence threshold for the Beat Pulse palette shift in Synced Mode.
+    /// </summary>
+    /// <remarks>
+    /// See Levels and Beat Pulse in <c>CONTEXT.md:189-191,267-269</c> and their wire lanes in
+    /// <c>docs/osc-client-contract.md:355-400</c>.
+    /// </remarks>
+    private const float SyncLowPresenceThreshold = 0.35f;
+
+    /// <summary>Authored maximum Beat Pulse-driven hue shift in Synced Mode.</summary>
+    /// <remarks>
+    /// See Beat Pulse in <c>CONTEXT.md:267-269</c> and <c>docs/osc-client-contract.md:355-382</c>.
+    /// </remarks>
     private const float SyncHueShiftMax = 0.2f;
 
-    /// <summary>Ripple can pulse a Fill and land a Drop, and suits Mid/High-energy sections.</summary>
+    /// <summary>
+    /// Ripple's Mid/High Energy suitability character; see the Repertoire and Energy entries in
+    /// <c>CONTEXT.md</c>.
+    /// </summary>
     public override Repertoire Repertoire =>
-        Repertoire.HandlesFill | Repertoire.HandlesDrop | Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.EnergyMid | Repertoire.EnergyHigh;
 
     /// <summary>Resolves a fresh copy of Ripple's file-local Standalone Defaults.</summary>
     public static RippleStandaloneSettings StandaloneDefaults => new()
@@ -160,12 +175,15 @@ public class Ripple : ScreenEffect
             ? SyncSettings.PaletteOffset
             : standaloneSettings.PaletteOffset;
 
-        // The Waveform shifts palette hue while drop radius/progression remains independent. Each
-        // mode reads its own saved hue shift so tuning one surface cannot move the other, and
-        // Waveform.Lerp returns its second argument when no live clock is sampled.
-        float hueShift = waveform.Lerp(
-            0f,
-            isSynced ? SyncSettings.HueShiftMax : standaloneSettings.HueShift);
+        // Synced Mode uses Normalized Low only as a strict presence gate; above it, the full Beat
+        // Pulse shifts palette hue while drop radius/progression remains independent. Standalone
+        // keeps its existing Waveform path. See CONTEXT.md:189-191,267-269 and the beat-pulse and
+        // levels wire lanes in docs/osc-client-contract.md:355-400.
+        float hueShift = isSynced
+            ? beatManager.Levels.Normalized.Low > SyncLowPresenceThreshold
+                ? beatManager.Pulses.Beat * SyncSettings.HueShiftMax
+                : 0f
+            : waveform.Lerp(0f, standaloneSettings.HueShift);
         if (Random.value < dropSpawnChance)
         {
             Array.Resize(ref drops, drops.Length + 1);
@@ -297,7 +315,7 @@ public sealed class RippleSyncSettings
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
-    /// <summary>Maximum hue shift reached at the Waveform peak in Synced Mode.</summary>
+    /// <summary>Maximum hue shift reached at the Beat Pulse peak in Synced Mode.</summary>
     [Range(0f, 1f)] public float HueShiftMax;
 
     /// <summary>Copies every Ripple Sync Setting, including range endpoints and Rails.</summary>
