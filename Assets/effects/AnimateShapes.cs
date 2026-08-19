@@ -110,16 +110,23 @@ public class AnimateShapes : EffectBase
 
     /// <summary>
     /// Authored Pool entry name of the one Waveform this effect holds: peaks on counts 2 and 4,
-    /// the figure its background brightness response rides. Holding this named figure prevents the
-    /// former per-activation Random draw from moving the response to a different figure.
+    /// the figure its regular-background brightness response rides. Holding this named figure
+    /// prevents the former per-activation Random draw from moving the response to a different figure.
     /// </summary>
     private const string SyncBackgroundWaveformName = "beats 2 and 4";
 
     /// <summary>
-    /// Authored background brightness at a held Waveform trough. The wall-approved half-brightness
-    /// floor keeps the response visible without extinguishing the background; peaks reach full brightness.
+    /// Authored regular-background brightness at a held Waveform trough. The wall-approved
+    /// half-brightness floor keeps the response visible without extinguishing the background.
     /// </summary>
     private const float SyncBackgroundWaveformBrightnessFloor = 0.5f;
+
+    /// <summary>
+    /// Authored human-weighted RGB brightness target for the regular background at a held Waveform
+    /// peak. Colors already at or above it stay put; darker colors lift their lower RGB components
+    /// toward their own greatest component only until they reach it. Tune on the wall.
+    /// </summary>
+    private const float SyncBackgroundWaveformPeakBrightnessTarget = 0.6f;
 
     /// <summary>
     /// Current fixed hue step between consecutive Tile indexes in the Drop background. The unfinished
@@ -188,6 +195,7 @@ public class AnimateShapes : EffectBase
         ForegroundDropRibbonBrightness = SyncForegroundDropRibbonBrightness,
         BackgroundWaveformName = SyncBackgroundWaveformName,
         BackgroundWaveformBrightnessFloor = SyncBackgroundWaveformBrightnessFloor,
+        BackgroundWaveformPeakBrightnessTarget = SyncBackgroundWaveformPeakBrightnessTarget,
         BackgroundDropTileHueStep = SyncBackgroundDropTileHueStep,
         BackgroundDropHueRate = SyncBackgroundDropHueRate,
         BackgroundDropValue = SyncBackgroundDropValue,
@@ -311,9 +319,10 @@ public class AnimateShapes : EffectBase
     /// </summary>
     /// <param name="isSynced">Whether the Data Surface selects Synced rather than Standalone Mode.</param>
     /// <remarks>
-    /// This method reads only background-owned visual settings and the held Waveform. An active Drop
-    /// is the raw Data Surface fact that selects the Drop background; its Value remains one so the
-    /// rotating hue gradient reaches full brightness without clipping into flat RGB bands.
+    /// This method reads only background-owned visual settings. An active Drop is the raw Data Surface
+    /// fact that selects the direct HSV rainbow and bypasses the regular background's held Waveform.
+    /// The Drop Value defaults to one so the rotating hue gradient reaches full brightness without
+    /// clipping into flat RGB bands.
     /// </remarks>
     private void DrawBackground(bool isSynced)
     {
@@ -329,10 +338,6 @@ public class AnimateShapes : EffectBase
             waveform = waveforms.Named(requestedBackgroundWaveformName);
             acquiredBackgroundWaveformName = requestedBackgroundWaveformName;
         }
-        float backgroundWaveformBrightness = isSynced
-            ? waveform.Lerp(SyncSettings.BackgroundWaveformBrightnessFloor, 1f)
-            : 1f;
-
         backgroundHue += effectDelta * backgroundHueRate;
         backgroundHue = Mathf.Repeat(backgroundHue, 1f);
         if (beatManager.Drop.Active)
@@ -350,29 +355,69 @@ public class AnimateShapes : EffectBase
                 float phase = Mathf.Repeat(
                     i * backgroundDropTileHueStep + backgroundDropHueOffset,
                     1f);
-                Color dropBackgroundColor = Color.HSVToRGB(
-                    phase,
-                    1f,
-                    backgroundDropValue);
-                dropBackgroundColor.r *= backgroundWaveformBrightness;
-                dropBackgroundColor.g *= backgroundWaveformBrightness;
-                dropBackgroundColor.b *= backgroundWaveformBrightness;
-                buffer[i] = dropBackgroundColor;
+                buffer[i] = Color.HSVToRGB(phase, 1f, backgroundDropValue);
             }
             return;
         }
 
-        Color backgroundColor = Color.HSVToRGB(
+        float backgroundWaveformEnvelope = isSynced ? waveform.Envelope : 0f;
+        Color backgroundColor = CreateRegularBackgroundColor(
             backgroundHue,
-            1f,
-            1f);
-        backgroundColor.r *= backgroundWaveformBrightness;
-        backgroundColor.g *= backgroundWaveformBrightness;
-        backgroundColor.b *= backgroundWaveformBrightness;
+            backgroundWaveformEnvelope,
+            isSynced);
         for (int i = 0; i < buffer.Length; i++)
         {
             buffer[i] = backgroundColor;
         }
+    }
+
+    /// <summary>Creates the regular background color from its hue and held Waveform response.</summary>
+    /// <param name="hue">Continuously rotating source hue.</param>
+    /// <param name="waveformEnvelope">Current acquired Waveform envelope.</param>
+    /// <param name="isSynced">Whether the Data Surface selects Synced rather than Standalone Mode.</param>
+    /// <returns>The regular background color for this frame.</returns>
+    /// <remarks>
+    /// The trough remains the source hue at its authored Value. At the crest, colors that read below
+    /// the target raise each lower RGB component by the same fraction of its gap to that color's own
+    /// greatest component. This preserves the hue and greatest component while producing a brighter,
+    /// still-chromatic color instead of making white the endpoint.
+    /// </remarks>
+    private Color CreateRegularBackgroundColor(
+        float hue,
+        float waveformEnvelope,
+        bool isSynced)
+    {
+        Color peakColor = Color.HSVToRGB(hue, 1f, 1f);
+        if (!isSynced)
+        {
+            return peakColor;
+        }
+
+        float peakBrightness = HumanWeightedRgbBrightness(peakColor);
+        float targetBrightness = SyncSettings.BackgroundWaveformPeakBrightnessTarget;
+        if (peakBrightness < targetBrightness)
+        {
+            float greatestComponent = peakColor.maxColorComponent;
+            float lift = (targetBrightness - peakBrightness) /
+                (greatestComponent - peakBrightness);
+            peakColor.r += (greatestComponent - peakColor.r) * lift;
+            peakColor.g += (greatestComponent - peakColor.g) * lift;
+            peakColor.b += (greatestComponent - peakColor.b) * lift;
+        }
+
+        Color troughColor = Color.HSVToRGB(
+            hue,
+            1f,
+            SyncSettings.BackgroundWaveformBrightnessFloor);
+        return Color.Lerp(troughColor, peakColor, waveformEnvelope);
+    }
+
+    /// <summary>Measures visible RGB brightness with human sensitivity weighted toward green.</summary>
+    /// <param name="color">RGB color to measure.</param>
+    /// <returns>The Rec. 709 weighted sum of the color's RGB channels.</returns>
+    private static float HumanWeightedRgbBrightness(Color color)
+    {
+        return (0.2126f * color.r) + (0.7152f * color.g) + (0.0722f * color.b);
     }
 
     /// <summary>
@@ -599,15 +644,23 @@ public sealed class AnimateShapesSyncSettings
     public float ForegroundDropRibbonBrightness;
 
     /// <summary>
-    /// Live Pool entry name of the one Waveform this effect holds — the rhythm that changes background
-    /// brightness. A name missing from the Pool is a configuration error and fails visibly.
+    /// Live Pool entry name of the one Waveform this effect holds — the rhythm that changes the
+    /// regular background's brightness. A name missing from the Pool is a configuration error and fails visibly.
     /// </summary>
     [WaveformName]
     public string BackgroundWaveformName;
 
-    /// <summary>Live background brightness at a held Waveform trough; peaks always reach one.</summary>
+    /// <summary>Live regular-background HSV Value at a held Waveform trough.</summary>
     [Range(0f, 1f)]
     public float BackgroundWaveformBrightnessFloor;
+
+    /// <summary>
+    /// Live human-weighted RGB brightness target for a regular-background Waveform crest. Darker
+    /// colors lift toward their own greatest component independently of
+    /// <see cref="BackgroundWaveformBrightnessFloor"/>; active-Drop backgrounds bypass it.
+    /// </summary>
+    [Range(0f, 1f)]
+    public float BackgroundWaveformPeakBrightnessTarget;
 
     /// <summary>Hue step between consecutive Tile indexes in the active Drop background.</summary>
     public float BackgroundDropTileHueStep;
@@ -652,6 +705,7 @@ public sealed class AnimateShapesSyncSettings
         ForegroundDropRibbonBrightness = source.ForegroundDropRibbonBrightness;
         BackgroundWaveformName = source.BackgroundWaveformName;
         BackgroundWaveformBrightnessFloor = source.BackgroundWaveformBrightnessFloor;
+        BackgroundWaveformPeakBrightnessTarget = source.BackgroundWaveformPeakBrightnessTarget;
         BackgroundDropTileHueStep = source.BackgroundDropTileHueStep;
         BackgroundDropHueRate = source.BackgroundDropHueRate;
         BackgroundDropValue = source.BackgroundDropValue;

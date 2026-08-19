@@ -1515,8 +1515,8 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including foreground Energy-crawl, Drop-ribbon, and Fill controls plus the
-    /// background Waveform and Drop controls—with the current file-local Sync Defaults.
+    /// replaces it—including foreground Energy-crawl, Drop-ribbon, and Fill controls plus the regular
+    /// background's Waveform and Drop controls—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()
@@ -1544,6 +1544,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ForegroundDropRibbonBrightness = 223f;
         asset.Settings.BackgroundWaveformName = "sentinel entry";
         asset.Settings.BackgroundWaveformBrightnessFloor = 22f;
+        asset.Settings.BackgroundWaveformPeakBrightnessTarget = 24f;
         asset.Settings.BackgroundDropTileHueStep = 25f;
         asset.Settings.BackgroundDropHueRate = 26f;
         asset.Settings.BackgroundDropValue = 27f;
@@ -1581,6 +1582,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(
             asset.Settings.BackgroundWaveformBrightnessFloor,
             Is.EqualTo(defaults.BackgroundWaveformBrightnessFloor));
+        Assert.That(
+            asset.Settings.BackgroundWaveformPeakBrightnessTarget,
+            Is.EqualTo(defaults.BackgroundWaveformPeakBrightnessTarget));
         Assert.That(
             asset.Settings.BackgroundDropTileHueStep,
             Is.EqualTo(defaults.BackgroundDropTileHueStep));

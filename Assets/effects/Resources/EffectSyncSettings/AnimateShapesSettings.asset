@@ -36,6 +36,7 @@ MonoBehaviour:
     ForegroundDropRibbonBrightness: 1
     BackgroundWaveformName: beats 2 and 4
     BackgroundWaveformBrightnessFloor: 0.5
+    BackgroundWaveformPeakBrightnessTarget: 0.6
     BackgroundDropTileHueStep: 0.001
     BackgroundDropHueRate: 0.5
     BackgroundDropValue: 1
