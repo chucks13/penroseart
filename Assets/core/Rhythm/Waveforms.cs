@@ -16,7 +16,7 @@ public sealed class Waveforms
     /// <summary>The runtime-bound Waveforms available for acquisition.</summary>
     private readonly Waveform[] waveforms;
 
-    /// <summary>Unique persisted identity of each Waveform, aligned by index, for named acquisition.</summary>
+    /// <summary>Display name of each Waveform, aligned by index, for named acquisition.</summary>
     private readonly string[] names;
 
     /// <summary>
@@ -32,7 +32,7 @@ public sealed class Waveforms
     {
     }
 
-    /// <summary>Creates the acquisition surface from caller-supplied Pool entries with valid, unique persisted names.</summary>
+    /// <summary>Creates the acquisition surface from caller-supplied Pool entries.</summary>
     /// <param name="clockSource">The shared musical source runtime Waveforms read.</param>
     /// <param name="poolEntries">The required, non-empty Pool.</param>
     public Waveforms(BeatManager clockSource, IReadOnlyList<WaveformPool.Entry> poolEntries)
@@ -51,25 +51,6 @@ public sealed class Waveforms
         {
             throw new InvalidOperationException(
                 $"Waveform Pool '{WaveformPool.FilePath}' contains no Waveforms.");
-        }
-
-        for (var i = 0; i < poolEntries.Count; i++)
-        {
-            var entryName = poolEntries[i].name;
-            if (!WaveformPool.IsValidName(entryName))
-            {
-                throw new InvalidOperationException(
-                    $"Waveform Pool '{WaveformPool.FilePath}' contains invalid entry name '{entryName}'. " +
-                    "Pool entry names must be non-empty and cannot contain macro delimiters.");
-            }
-        }
-
-        var duplicateName = WaveformPool.FindDuplicateName(poolEntries);
-        if (duplicateName != null)
-        {
-            throw new InvalidOperationException(
-                $"Waveform Pool '{WaveformPool.FilePath}' contains duplicate entry name '{duplicateName}'. " +
-                "Pool entry names are persisted identities and must be unique.");
         }
 
         waveforms = new Waveform[poolEntries.Count];
@@ -127,13 +108,12 @@ public sealed class Waveforms
     }
 
     /// <summary>
-    /// Draws the one Pool Preset identified by the given unique persisted name, for a performer that holds one selected
-    /// Waveform instead of drawing randomly. A name missing from the Pool — including a Pool-side
-    /// rename of a selected entry — is a configuration error and fails visibly rather than
-    /// widening to a fallback.
+    /// Draws the first Pool Preset with the given exact display name, for a performer that holds one
+    /// selected Waveform instead of drawing randomly. A name missing from the Pool is a configuration
+    /// error and fails visibly rather than widening to a fallback.
     /// </summary>
     /// <param name="name">The exact Pool entry name.</param>
-    /// <returns>The runtime-bound Waveform saved under that name.</returns>
+    /// <returns>The first runtime-bound Waveform saved under that name, in Pool order.</returns>
     public Waveform Named(string name)
     {
         for (var i = 0; i < names.Length; i++)

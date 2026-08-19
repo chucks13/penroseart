@@ -7,8 +7,7 @@ using UnityEngine;
 
 /// <summary>
 /// Renders a <see cref="WaveformNameAttribute"/> string field as a pulldown over the current
-/// Waveform Pool's unique persisted entry names, so a setting selects exactly one existing Preset
-/// instead of retyping one.
+/// Waveform Pool's entry names, so a setting selects an existing Preset instead of retyping one.
 /// A saved name missing from the Pool stays shown and marked — the defect is the maintainer's to
 /// see, and the runtime fails visibly on it — until the pulldown repoints to a real entry.
 /// </summary>
@@ -53,7 +52,7 @@ public sealed class WaveformNameDrawer : PropertyDrawer
     }
 
     /// <summary>
-    /// Reads the valid, unique persisted Pool entry names through the runtime-faithful preview, re-reading only when
+    /// Reads the valid Pool entry names through the runtime-faithful preview, re-reading only when
     /// the Pool file's write time moves. An unusable Pool yields no choices, so the current setting stays visibly missing.
     /// </summary>
     private static string[] PoolNames()

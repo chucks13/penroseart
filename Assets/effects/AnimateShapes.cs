@@ -35,14 +35,13 @@ public class AnimateShapes : EffectBase
     };
 
     /// <summary>
-    /// Authored cyclic palette-position step between Tiles within each packed Circle or Arc,
-    /// preserving the approved Standalone crawl spacing as palette sampling replaces HSV.
+    /// Authored cyclic palette-position step between Tiles within each packed Circle or Arc.
     /// </summary>
     private const float StandaloneForegroundTilePositionStep = 0.01f;
 
     /// <summary>
     /// Authored palette-position advance per second for each Circle or Arc's stored position.
-    /// The 0.6 rate preserves the approved 0.01-per-frame crawl at the 60 fps reference rate.
+    /// At 60 fps, the 0.6 rate advances the position by 0.01 each frame.
     /// </summary>
     private const float StandaloneForegroundPositionAdvancePerSecond = 0.6f;
 
@@ -76,8 +75,8 @@ public class AnimateShapes : EffectBase
     private const float SyncForegroundTilePositionStep = 0.025f;
 
     /// <summary>
-    /// Authored Synced Mode palette-position advance per second. Raised from the frame-rate
-    /// conversion's baseline 0.6 (the approved 0.01-per-frame crawl at 60 fps) to 1 at the wall.
+    /// Authored Synced Mode palette-position advance per second. A value of one advances through
+    /// one full palette cycle each second.
     /// </summary>
     private const float SyncForegroundPositionAdvancePerSecond = 1f;
 
@@ -95,7 +94,7 @@ public class AnimateShapes : EffectBase
 
     /// <summary>
     /// Authored foreground Drop ribbon window in beats. Sixteen beats gives each landing one finite
-    /// response independent of the wire's Drop length. Tune live at the wall.
+    /// response independent of the wire's Drop length.
     /// </summary>
     private const int SyncForegroundDropRibbonWindowBeats = 16;
 
@@ -106,41 +105,37 @@ public class AnimateShapes : EffectBase
     private const float SyncForegroundDropRibbonFlowCyclesPerBeatAtLanding = 0.5f;
 
     /// <summary>
-    /// Authored Value supplied to the ribbon color's HSV brightness slot. The wall-approved value
-    /// is one, the plain full hue wheel; higher values overdrive the ribbons against the Drop background.
+    /// Authored Value supplied to the ribbon color's HSV brightness slot. A value of one uses the
+    /// plain full hue wheel; higher values overdrive the ribbons against the Drop background.
     /// </summary>
     private const float SyncForegroundDropRibbonBrightness = 1f;
 
     /// <summary>
     /// Authored Pool entry name of the one Waveform this effect holds: peaks on counts 2 and 4,
-    /// the figure its regular-background brightness response rides. Holding this named figure
-    /// prevents the former per-activation Random draw from moving the response to a different figure.
+    /// the figure its regular-background brightness response rides across activations.
     /// </summary>
     private const string SyncBackgroundWaveformName = "beats 2 and 4";
 
     /// <summary>
-    /// Authored regular-background brightness at a held Waveform trough. The wall-approved
-    /// half-brightness floor keeps the response visible without extinguishing the background.
+    /// Authored regular-background brightness at a held Waveform trough. The half-brightness floor
+    /// keeps the response visible without extinguishing the background.
     /// </summary>
     private const float SyncBackgroundWaveformBrightnessFloor = 0.5f;
 
     /// <summary>
     /// Authored human-weighted RGB brightness target for the regular background at a held Waveform
     /// peak. Colors already at or above it stay put; darker colors lift their lower RGB components
-    /// toward their own greatest component only until they reach it. Tune on the wall.
+    /// toward their own greatest component only until they reach it.
     /// </summary>
     private const float SyncBackgroundWaveformPeakBrightnessTarget = 0.6f;
 
     /// <summary>
-    /// Current fixed hue step between consecutive Tile indexes in the Drop background. The unfinished
-    /// alternative would roll from 0.0004f through 0.003f; keeping the fixed value preserves the approved
-    /// look and Random consumption.
+    /// Authored fixed hue step between consecutive Tile indexes in the Drop background.
     /// </summary>
     private const float SyncBackgroundDropTileHueStep = 0.001f;
 
     /// <summary>
-    /// Current fixed Drop background hue rate in cycles per second. The unfinished alternative would roll
-    /// from 0.1f through 1f; keeping the fixed value preserves the approved look and Random consumption.
+    /// Authored fixed Drop background hue rate in cycles per second.
     /// </summary>
     private const float SyncBackgroundDropHueRate = 0.5f;
 
@@ -160,9 +155,8 @@ public class AnimateShapes : EffectBase
     private const float SyncForegroundFillBrightnessLift = 0.8f;
 
     /// <summary>
-    /// Circle or Arc group reseeds per second, shared by Standalone and Synced Mode. Sixty preserves
-    /// the approved one-reseed-per-frame cadence at the 60 fps reference rate, where the per-frame
-    /// reseed probability reaches one.
+    /// Circle or Arc group reseeds per second, shared by Standalone and Synced Mode. Sixty yields
+    /// one reseed per frame at 60 fps; longer frames apply multiple reseeds to keep the same rate.
     /// </summary>
     private const float ForegroundGroupReseedsPerSecond = 60f;
 
@@ -324,8 +318,7 @@ public class AnimateShapes : EffectBase
     /// <remarks>
     /// This method reads only background-owned visual settings. An active Drop is the raw Data Surface
     /// fact that selects the direct HSV rainbow and bypasses the regular background's held Waveform.
-    /// The Drop Value defaults to one so the rotating hue gradient reaches full brightness without
-    /// clipping into flat RGB bands.
+    /// The Drop Value defaults to 0.5 so the rotating hue gradient remains below the foreground.
     /// </remarks>
     private void DrawBackground(bool isSynced)
     {
@@ -456,7 +449,13 @@ public class AnimateShapes : EffectBase
         float foregroundFillBrightnessLift = SyncSettings.ForegroundFillBrightnessLift;
         int groupCount = foregroundShapes.GroupCount;
 
-        if (Random.value < ForegroundGroupReseedsPerSecond * effectDelta)
+        float expectedReseeds = ForegroundGroupReseedsPerSecond * effectDelta;
+        int reseedCount = Mathf.FloorToInt(expectedReseeds);
+        if (Random.value < expectedReseeds - reseedCount)
+        {
+            reseedCount++;
+        }
+        for (int i = 0; i < reseedCount; i++)
         {
             foregroundPositions[Random.Range(0, groupCount)] = Random.value;
         }
@@ -621,8 +620,8 @@ public sealed class AnimateShapesSyncSettings
     public float ForegroundPositionAdvancePerSecond;
 
     /// <summary>
-    /// Low-to-High Energy range for foreground crawl speed. The ruled endpoints are 0.75 and 1.25;
-    /// Mid uses their midpoint of exactly one to preserve the approved baseline speed.
+    /// Low-to-High Energy range for foreground crawl speed. The 0.5 and 1.5 endpoints give Mid a
+    /// midpoint of exactly one.
     /// </summary>
     public FloatRange ForegroundEnergyCrawlSpeedMultiplier;
 
@@ -633,9 +632,9 @@ public sealed class AnimateShapesSyncSettings
     public int ForegroundDropRibbonWindowBeats;
 
     /// <summary>
-    /// Live foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. One cycle per
-    /// beat is the authored impact speed; Energy does not rescale it. Each shape carries the full
-    /// rainbow once along its path; the shared palette plays no part in the ribbon color.
+    /// Live foreground Drop ribbon flow at the landing, in hue-wheel cycles per beat. At the default
+    /// 0.5, the ribbon travels half the hue wheel each beat. Energy does not rescale it. Each shape
+    /// carries the full rainbow once along its path; the shared palette plays no part in the ribbon color.
     /// </summary>
     public float ForegroundDropRibbonFlowCyclesPerBeatAtLanding;
 
@@ -672,8 +671,8 @@ public sealed class AnimateShapesSyncSettings
     public float BackgroundDropHueRate;
 
     /// <summary>
-    /// Value supplied to the Drop background before final HSV-to-RGB conversion. One keeps the
-    /// rotating hue gradient smooth and full-brightness.
+    /// Value supplied to the Drop background before final HSV-to-RGB conversion. This controls the
+    /// active-Drop background independently of the regular background's Waveform response.
     /// </summary>
     public float BackgroundDropValue;
 

@@ -109,36 +109,17 @@ public sealed class WaveformsTests
             () => new Waveforms(new BeatManager(), Array.Empty<WaveformPool.Entry>()));
     }
 
-    /// <summary>Duplicate persisted Pool names make construction fail visibly and identify the duplicate.</summary>
+    /// <summary>Named acquisition returns the first exact match when display names repeat.</summary>
     [Test]
-    public void Construction_DuplicateNames_ThrowsWithDuplicateName()
+    public void Named_DuplicateNames_ReturnsFirstMatch()
     {
-        var poolEntries = new[]
+        var waveforms = new Waveforms(new BeatManager(), new[]
         {
             Entry("same name", "QQQQ", "8888"),
             Entry("same name", "QQQQ", "8000"),
-        };
+        });
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => new Waveforms(new BeatManager(), poolEntries));
-
-        Assert.That(exception.Message, Does.Contain("duplicate").And.Contain("same name"));
-    }
-
-    /// <summary>Invalid persisted Pool names make construction fail before named acquisition can accept them.</summary>
-    [TestCase("")]
-    [TestCase("bad|name")]
-    public void Construction_InvalidName_Throws(string name)
-    {
-        var poolEntries = new[]
-        {
-            Entry(name, "QQQQ", "8888"),
-        };
-
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => new Waveforms(new BeatManager(), poolEntries));
-
-        Assert.That(exception.Message, Does.Contain("invalid").And.Contain("non-empty"));
+        AssertNotationIn(waveforms.Named("same name"), ("QQQQ", "8888", 0f));
     }
 
     /// <summary>Caller mutation after construction cannot replace the values owned by Waveforms.</summary>

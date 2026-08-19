@@ -17,8 +17,8 @@ using UnityEngine;
 /// so restored drafts cannot masquerade as saved content and stale drafts cannot overwrite external hand edits.
 /// </para>
 /// <para>
-/// List order is authoring presentation only. Runtime performers acquire Waveforms by Energy, uniformly from the
-/// whole Pool, or by unique persisted entry name. One non-empty name identifies exactly one entry.
+/// List order is authoring presentation and save order. Runtime performers acquire Waveforms by Energy,
+/// uniformly from the whole Pool, or by the first exact entry-name match.
 /// </para>
 /// </remarks>
 public sealed class WaveformPoolEditor : EditorWindow
@@ -37,7 +37,7 @@ public sealed class WaveformPoolEditor : EditorWindow
     [Serializable]
     private sealed class Draft
     {
-        /// <summary>The unique persisted Preset identity written inside <c>DEFINE_WAVEFORM(...)</c>.</summary>
+        /// <summary>The Preset display name written inside <c>DEFINE_WAVEFORM(...)</c>.</summary>
         [SerializeField] public string name;
 
         /// <summary>The raw note-width tokens.</summary>
@@ -242,7 +242,7 @@ public sealed class WaveformPoolEditor : EditorWindow
         {
             EditorGUILayout.LabelField("Presets", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Order controls presentation and save order. Runtime acquisition uses Energy or unique entry names, never row indexes. One non-empty name identifies exactly one entry; duplicates cannot be saved. Renaming an entry breaks any saved setting that selects it by name.",
+                "Order controls presentation and save order. Runtime acquisition uses Energy or the first exact entry-name match, never row indexes. A missing selected name fails visibly.",
                 MessageType.None);
 
             using (var scroll = new EditorGUILayout.ScrollViewScope(listScroll, GUI.skin.box))

@@ -61,7 +61,7 @@ internal readonly struct WaveformPoolPreview
 
         try
         {
-            // Canonical serialization owns Pool-name grammar and uniqueness for authoring; the preview
+            // Canonical serialization owns Pool-name grammar for authoring; the preview
             // follows that same seam so it cannot claim runtime usability for a document Save would reject.
             WaveformPool.Serialize(entries);
         }
