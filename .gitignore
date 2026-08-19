@@ -33,3 +33,6 @@
 # Claude Code personal/local settings
 .claude/settings.local.json
 /.claude/worktrees/
+
+# TMP rewrites the fallback font atlas whenever a new glyph renders; keep that churn local.
+/Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset
