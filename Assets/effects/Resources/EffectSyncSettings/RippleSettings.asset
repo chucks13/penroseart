@@ -48,6 +48,6 @@ MonoBehaviour:
     LowPresenceThreshold: 0.4
     HueWiggleAmplitude: 0.4
     FillComplementDepth: 1
-    DropSpawnBeats: 8
-    DropSpawnsPerBeat: 1
+    DropSpawnBeats: 32
+    DropSpawnsPerBeat: 2
     HueDriftRate: 0.05

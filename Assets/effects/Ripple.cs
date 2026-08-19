@@ -175,14 +175,14 @@ public class Ripple : ScreenEffect
     /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
-    private const int SyncDropSpawnBeats = 8;
+    private const int SyncDropSpawnBeats = 32;
 
     /// <summary>Authored number of extra wavefronts spawned on each selected Drop beat.</summary>
     /// <remarks>
     /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
-    private const int SyncDropSpawnsPerBeat = 1;
+    private const int SyncDropSpawnsPerBeat = 2;
 
     /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
