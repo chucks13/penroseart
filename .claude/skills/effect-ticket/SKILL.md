@@ -138,10 +138,11 @@ The Phase B build-out — Standalone Settings and the range audit of both surfac
 has run for every Effect and Mixer in the catalog, so no ticket builds those again. What
 remains is a check each ticket runs once, before any change builds on the settings.
 
-Compare the Effect's Sync and Standalone `.asset` values against the authored defaults in
-source. A match, or a difference the maintainer confirms as intended, passes. Any other
-difference is a maintainer question — restore the asset to the defaults, or bake the value
-back as the new authored default. Never build on a drifted asset silently.
+The check: each of the Effect's Sync and Standalone `.asset` files is in sync with its
+settings class — every field the class declares is present in the asset, and no removed field
+lingers. Unity loads a missing field as zero, so an absent field is a silent wrong value on
+the wall. Seed missing fields with their authored defaults, delete leftovers, and report what
+changed.
 
 ## Phase C — Reshape
 
