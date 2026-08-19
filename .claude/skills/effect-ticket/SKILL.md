@@ -181,9 +181,12 @@ one.
 1. Discuss with the maintainer what this Effect should do with the capability. The maintainer
    owns the intent; you own the design conversation; the worker implements.
 
-2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`); read
-   progress with `tail --label <label>`. State goals, never a design — the worker proposes the
-   design and you judge it.
+2. With the `codex-worker` skill, brief one implementation worker (`--mode implement`). The
+   brief carries the goals and the design agreed in step 1 — the what. The how is the worker's:
+   do not prescribe the code. While the worker runs, wait for completion or do other ticket
+   work — the `codex-worker` skill owns how to wait. A followed progress stream fills the
+   coordinator's context and buys nothing; read the activity log only to diagnose a run that
+   failed or returned a doubtful claim.
 
 3. Review the diff yourself against the checklist below. The worker report is a claim, not
    evidence.
@@ -281,8 +284,8 @@ and side quests included. The coordinator does not narrow this scope.
 
 ## Worker briefs
 
-Every brief carries the `AGENTS.md` framing, the goals, the acceptance criteria, the vocabulary,
-this reading list, and these boundaries.
+Every brief carries the `AGENTS.md` framing, the goals, the agreed design when the phase produced
+one, the acceptance criteria, the vocabulary, this reading list, and these boundaries.
 
 Reading list — the worker reads all of it before touching code:
 
