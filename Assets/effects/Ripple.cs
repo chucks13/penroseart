@@ -30,10 +30,10 @@ public class Ripple : ScreenEffect
     private const float StandaloneDistanceDivisor = 20f;
 
     /// <summary>
-    /// Authored greatest flat fraction of the Standalone screen before Ripple spawns. One means
-    /// only a completely flat screen spawns, which costs exactly one wavefront per flat episode.
-    /// A lower value spawns while the screen is merely mostly flat, which refills an empty screen
-    /// faster but can spawn on several consecutive frames before the new ring covers enough.
+    /// Authored greatest flat fraction of the Standalone screen before Ripple spawns. One waits
+    /// for a completely flat screen; a lower value spawns earlier, while the screen is merely
+    /// mostly flat. Any value costs exactly one wavefront per flat episode, because the fresh
+    /// wavefront counts as pending motion and clears the flat check on its next frame.
     /// </summary>
     private const float StandaloneMaxFlatScreenFraction = 1f;
 
@@ -76,10 +76,10 @@ public class Ripple : ScreenEffect
     private const float SyncDistanceDivisor = 20f;
 
     /// <summary>
-    /// Authored greatest flat fraction of the Synced screen before Ripple spawns. One means only a
-    /// completely flat screen spawns, which costs exactly one wavefront per flat episode. A lower
-    /// value spawns while the screen is merely mostly flat, which refills an empty screen faster
-    /// but can spawn on several consecutive frames before the new ring covers enough.
+    /// Authored greatest flat fraction of the Synced screen before Ripple spawns. One waits for a
+    /// completely flat screen; a lower value spawns earlier, while the screen is merely mostly
+    /// flat. Any value costs exactly one wavefront per flat episode, because the fresh wavefront
+    /// counts as pending motion and clears the flat check on its next frame.
     /// </summary>
     private const float SyncMaxFlatScreenFraction = 1f;
 
@@ -315,17 +315,17 @@ public class Ripple : ScreenEffect
                 screen.y = y;
                 var idx = x + (y * width);
                 var sum = 0f;
-                bool hasGradient = false;
+                bool wavefrontPending = false;
                 for (int i = 0; i < wavefronts.Length; i++)
                 {
                     var d = Vector2.Distance(screen, wavefronts[i].Position);
                     var contribution =
                         (wavefronts[i].RadiusAt(clock) - (d / distanceDivisor)).Clamp01();
-                    hasGradient |= contribution > 0f && contribution < 1f;
+                    wavefrontPending |= contribution < 1f;
                     sum += contribution;
                 }
 
-                if (!hasGradient)
+                if (!wavefrontPending)
                 {
                     flatPixels++;
                 }
@@ -339,10 +339,15 @@ public class Ripple : ScreenEffect
         ConvertScreenBuffer(ref screenBuffer, in buffer);
 
         // A wavefront contributes exactly 1 everywhere its ring has already passed, and the wrap
-        // above discards whole numbers, so a pixel reached only by passed rings renders the same
-        // color as every other such pixel. Once enough of the screen is in that state the wall
-        // reads as one flat color, so Ripple spawns a wavefront to put a gradient back onto it.
-        // This runs in both modes; only where Synced Mode places its spawns may change later.
+        // above discards whole numbers, so a pixel that every ring has passed renders the same
+        // color as every other such pixel. Any contribution below 1 means a ring is crossing the
+        // pixel now or has not reached it yet, and both are motion the pixel is about to show, so
+        // neither counts as flat. Counting a ring that has not arrived is also what keeps this to
+        // one spawn: the wavefront below contributes 0 everywhere on its first frame, which clears
+        // the flat count outright at any MaxFlatScreenFraction instead of leaving the check armed
+        // until the new ring grows wide enough. Once enough of the screen is flat the wall reads as
+        // one color, so Ripple spawns a wavefront to put motion back onto it. This runs in both
+        // modes; only where Synced Mode places its spawns may change later.
         if (flatPixels >= maxFlatScreenFraction * width * height)
         {
             SpawnWavefront(velocityRange);
