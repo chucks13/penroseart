@@ -32,6 +32,32 @@ internal static class BeatClockFixture
         return beatManager;
     }
 
+    /// <summary>Seeds a live beat clock whose current frame is inside an active Drop.</summary>
+    /// <param name="beatManager">The manager to seed through its live transport input.</param>
+    /// <param name="bpm">Beats per minute of the seeded clock.</param>
+    /// <param name="timeSeconds">Wall-clock position used to roll the bar.</param>
+    /// <param name="beatsRemaining">Beats remaining in the active Drop.</param>
+    /// <param name="lengthBeats">Total length of the active Drop in beats.</param>
+    /// <returns>The seeded manager for chaining.</returns>
+    public static BeatManager SeedActiveDrop(
+        BeatManager beatManager,
+        float bpm,
+        float timeSeconds,
+        int beatsRemaining,
+        int lengthBeats)
+    {
+        RaveWireSnapshot snapshot = CreateSnapshot(bpm, timeSeconds);
+        snapshot.dropState = new CountdownState
+        {
+            active = 1,
+            countBeats = beatsRemaining,
+            lengthBeats = lengthBeats,
+            remaining = 1,
+        };
+        beatManager.FeedWireSnapshot(snapshot);
+        return beatManager;
+    }
+
     /// <summary>Builds the deterministic live transport snapshot used by <see cref="SeedBeatClock"/>.</summary>
     public static RaveWireSnapshot CreateSnapshot(float bpm, float timeSeconds)
     {

@@ -249,8 +249,11 @@ public class Controller : Singleton<Controller>
     /// <summary>Global beat clock and beat-reactive helper system.</summary>
     public BeatManager beatManager = new BeatManager();
 
-    /// <summary>The shared Waveform acquisition surface that binds Pool values to the live BeatManager.</summary>
-    public Waveforms waveforms { get; private set; }
+    /// <summary>
+    /// The shared Waveform acquisition surface, created in <see cref="Awake"/> and replaceable by
+    /// the owning host before Performers run.
+    /// </summary>
+    public Waveforms waveforms { get; set; }
 
     // ---------------------------------------------------------------------
     // UI and scene references

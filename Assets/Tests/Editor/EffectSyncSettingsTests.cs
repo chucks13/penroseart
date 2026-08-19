@@ -983,8 +983,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited AnimateShapes Standalone Setting and foreground response-mode
-    /// Rail with the current file-local Standalone Defaults.
+    /// Restore replaces every edited AnimateShapes Standalone Setting with the current file-local
+    /// Standalone Defaults.
     /// </summary>
     [Test]
     public void RestoreStandaloneDefaultsCopiesEveryAnimateShapesValue()
@@ -1515,8 +1515,8 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// After every saved AnimateShapes Sync Setting receives a sentinel value, verifies that Restore
-    /// replaces it—including foreground Energy-crawl and Waveform-response Rails, foreground Drop
-    /// ribbon controls, and the held Waveform name—with the current file-local Sync Defaults.
+    /// replaces it—including foreground Energy-crawl, Drop-ribbon, and Fill controls plus the
+    /// background Waveform and Drop controls—with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryAnimateShapesValue()

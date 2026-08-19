@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
-using PenroseArt.RaveOsc;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -57,12 +56,7 @@ public sealed class AnimateShapesLayerOwnershipTests
             Controller controller = controllerObject.AddComponent<Controller>();
             controller.penrose = penrose;
             EffectBase.LoadPalette(string.Empty);
-            BeatManagerWireFixture.Feed(controller.beatManager, snapshot =>
-            {
-                snapshot.beatInBar = 2;
-                snapshot.beatAverageMs = 500;
-                snapshot.beatsCountMs = new[] { 1500, 0, 500, 1000 };
-            });
+            BeatClockFixture.SeedBeatClock(controller.beatManager, 120f, 0.5f);
             controller.beatManager.Update(0f);
             Assert.That(controller.beatManager.IsSynced, Is.True, "the production Waveform response is active");
 
@@ -99,19 +93,12 @@ public sealed class AnimateShapesLayerOwnershipTests
                 changedPartitionIsForeground: false,
                 "background hue rate");
 
-            BeatManagerWireFixture.Feed(controller.beatManager, snapshot =>
-            {
-                snapshot.beatInBar = 2;
-                snapshot.beatAverageMs = 500;
-                snapshot.beatsCountMs = new[] { 1500, 0, 500, 1000 };
-                snapshot.dropState = new CountdownState
-                {
-                    active = 1,
-                    countBeats = 16,
-                    lengthBeats = 16,
-                    remaining = 1,
-                };
-            });
+            BeatClockFixture.SeedActiveDrop(
+                controller.beatManager,
+                bpm: 120f,
+                timeSeconds: 0.5f,
+                beatsRemaining: 16,
+                lengthBeats: 16);
             controller.beatManager.Update(0f);
             Color[] dropFrame = Render(controller, effectDelta: 0f);
             var backgroundColors = new HashSet<Color32>();
@@ -168,18 +155,12 @@ public sealed class AnimateShapesLayerOwnershipTests
         AnimateShapesSyncSettings settings)
     {
         const string waveformName = "layer ownership pulse";
-        var fixture = new Waveforms(controller.beatManager, new[]
+        controller.waveforms = new Waveforms(controller.beatManager, new[]
         {
             new WaveformPool.Entry(
                 waveformName,
                 Waveform.Parse("QQQQ", "4444", 0.3f, 0f, out _)),
         });
-        // Controller startup owns this surface; the test replaces that startup result with its local Pool.
-        var setter = typeof(Controller)
-            .GetProperty(nameof(Controller.waveforms))
-            .GetSetMethod(nonPublic: true);
-        Assert.That(setter, Is.Not.Null, "the Controller Waveforms setter used by production startup");
-        setter.Invoke(controller, new object[] { fixture });
         settings.BackgroundWaveformName = waveformName;
     }
 

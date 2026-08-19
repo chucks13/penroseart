@@ -622,9 +622,11 @@ public sealed class AnimateShapesSyncSettings
     public float BackgroundDropValue;
 
     /// <summary>Probability that each foreground Circle or Arc becomes black-and-white during an active Fill.</summary>
+    [Range(0f, 1f)]
     public float ForegroundFillBlackAndWhiteProbability;
 
     /// <summary>Foreground Fill gray lift as a fraction of its distance to full brightness.</summary>
+    [Range(0f, 1f)]
     public float ForegroundFillBrightnessLift;
 
     /// <summary>Copies every AnimateShapes Sync Setting from another value.</summary>
