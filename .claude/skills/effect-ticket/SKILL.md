@@ -195,10 +195,9 @@ one.
    evidence.
 
 4. Validate yourself, never through a worker: `scripts/unity-compile.sh` to zero warnings,
-   `scripts/unity-tests.sh` to all green. With the Editor open the script uses the test bridge,
-   which omits every `[UnityTest]` coroutine and reports `skipped=0` while doing it — judge
-   coverage by the printed `total=` and the printed path, never by the skip count. Bridge green
-   is the inner loop, not the full suite.
+   `scripts/unity-tests.sh` to all green. Both Editor states run the complete suite; the script
+   prints the path and totals. While iterating, run the affected tests through the filter
+   argument; run the full unfiltered suite once when the stage's work is done.
 
 5. The maintainer plays, tweaks the settings live, and judges. When the wall result misses
    the agreed design, send the rework back with `codex exec resume`. When the design itself
@@ -245,9 +244,8 @@ and side quests included. The coordinator does not narrow this scope.
    - Keep architecture work inside the changed scope. Do not add speculative architecture.
 
 4. Review the diff and validate it as steps 3 and 4 of the musicality loop prescribe. Run the
-   full suite once with the Editor closed. Record the test route and the exact test count. Confirm
-   that the batchmode run includes the `[UnityTest]` coroutines that the bridge omits. A bridge
-   run is an inner-loop result and is not the full-suite gate.
+   full suite once, unfiltered, and record the printed path and test total. Both paths run the
+   complete suite, so the Editor may stay open.
 
 5. Ask the maintainer to judge the wall. Phase E completes only when the wall still matches the
    approved Phase D result.

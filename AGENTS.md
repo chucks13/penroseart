@@ -130,6 +130,18 @@ Start with these before adding new structures:
 - Do not hand-edit Unity-generated `.csproj`, `.sln`, or `.slnx` files. Regenerate them through Unity when needed.
 - Do not treat Unity-generated files as stable hand-authored source.
 
+## Validation Scripts
+
+- `scripts/unity-compile.sh` compiles and imports; `scripts/unity-tests.sh [filter]` runs the
+  Unity Test Framework suite. Both detect whether the Editor is open and route themselves:
+  open goes through the in-editor bridge (`Assets/Tests/Editor/PenroseUnityTestBridge.cs`),
+  closed runs batchmode. Either state gives the same coverage and output shape, so run the
+  scripts as-is and leave the Editor alone.
+- Run `scripts/unity-compile.sh` after creating asset files so Unity imports them and
+  generates their `.meta` files.
+- While iterating, run the affected tests through the filter argument. Run the full unfiltered
+  suite once, when the work is substantially done and before commit.
+
 ## Serial, Output, and Cross-Platform Rules
 
 - Current target focus is Windows, with macOS development also important. The project should stay as cross-platform as practical. UDP/E1.31 (ACN) is the active output path; serial output support stays in the codebase behind `ENABLE_SERIAL` but is not currently in use.
