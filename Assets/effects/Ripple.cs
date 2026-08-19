@@ -17,14 +17,14 @@ public class Ripple : ScreenEffect
     /// <summary>Authored maximum per-frame spawn chance for the unchanged Standalone look.</summary>
     private const float StandaloneSpawnChanceMax = 0.02f;
 
-    /// <summary>Authored minimum pre-division wavefront velocity for the unchanged Standalone look.</summary>
-    private const float StandaloneVelocityMin = 0.01f;
+    /// <summary>Authored minimum wavefront clock multiplier for the Standalone look.</summary>
+    private const float StandaloneVelocityMin = 0.75f;
 
-    /// <summary>Authored maximum pre-division wavefront velocity for the unchanged Standalone look.</summary>
-    private const float StandaloneVelocityMax = 0.9f;
+    /// <summary>Authored maximum wavefront clock multiplier for the Standalone look.</summary>
+    private const float StandaloneVelocityMax = 1.25f;
 
-    /// <summary>Authored divisor applied to each randomly rolled wavefront velocity.</summary>
-    private const float StandaloneVelocityDivisor = 2000f;
+    /// <summary>Authored Standalone clock advance in ripple-radius units per second.</summary>
+    private const float StandaloneClockRate = 0.4f;
 
     /// <summary>Authored divisor that maps screen-space distance into ripple phase.</summary>
     private const float StandaloneDistanceDivisor = 20f;
@@ -43,14 +43,26 @@ public class Ripple : ScreenEffect
     /// <summary>Authored maximum per-frame spawn chance for the current Synced look.</summary>
     private const float SyncSpawnChanceMax = 0.02f;
 
-    /// <summary>Authored minimum pre-division wavefront velocity for the current Synced look.</summary>
-    private const float SyncVelocityMin = 0.01f;
+    /// <summary>Authored minimum wavefront clock multiplier for the Synced look.</summary>
+    private const float SyncVelocityMin = 0.75f;
 
-    /// <summary>Authored maximum pre-division wavefront velocity for the current Synced look.</summary>
-    private const float SyncVelocityMax = 0.9f;
+    /// <summary>Authored maximum wavefront clock multiplier for the Synced look.</summary>
+    private const float SyncVelocityMax = 1.25f;
 
-    /// <summary>Authored divisor applied to each randomly rolled wavefront velocity in Synced Mode.</summary>
-    private const float SyncVelocityDivisor = 2000f;
+    /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at Low Energy.</summary>
+    private const float SyncLowCrossingBeats = 16f;
+
+    /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at Mid Energy.</summary>
+    private const float SyncMidCrossingBeats = 8f;
+
+    /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at High Energy.</summary>
+    private const float SyncHighCrossingBeats = 4f;
+
+    /// <summary>Authored minimum real-time screen crossing for the tempo-and-Energy pace.</summary>
+    private const float SyncCrossingTimeMinSeconds = 2f;
+
+    /// <summary>Authored maximum real-time screen crossing for the tempo-and-Energy pace.</summary>
+    private const float SyncCrossingTimeMaxSeconds = 8f;
 
     /// <summary>Authored divisor that maps screen-space distance into ripple phase in Synced Mode.</summary>
     private const float SyncDistanceDivisor = 20f;
@@ -99,7 +111,7 @@ public class Ripple : ScreenEffect
             StandaloneSpawnChanceMin,
             StandaloneSpawnChanceMax),
         Velocity = new FloatRange(StandaloneVelocityMin, StandaloneVelocityMax),
-        VelocityDivisor = StandaloneVelocityDivisor,
+        ClockRate = StandaloneClockRate,
         DistanceDivisor = StandaloneDistanceDivisor,
         PaletteOffset = StandalonePaletteOffset,
         HueShift = StandaloneHueShift,
@@ -110,7 +122,12 @@ public class Ripple : ScreenEffect
     {
         SpawnChance = new FloatRange(SyncSpawnChanceMin, SyncSpawnChanceMax),
         Velocity = new FloatRange(SyncVelocityMin, SyncVelocityMax),
-        VelocityDivisor = SyncVelocityDivisor,
+        LowCrossingBeats = SyncLowCrossingBeats,
+        MidCrossingBeats = SyncMidCrossingBeats,
+        HighCrossingBeats = SyncHighCrossingBeats,
+        CrossingTimeSeconds = new FloatRange(
+            SyncCrossingTimeMinSeconds,
+            SyncCrossingTimeMaxSeconds),
         DistanceDivisor = SyncDistanceDivisor,
         PaletteOffset = SyncPaletteOffset,
         LowLevelsForm = SyncLowLevelsForm,
@@ -129,6 +146,18 @@ public class Ripple : ScreenEffect
     private Color endColor;
     private Wavefront[] wavefronts;
     private Vector2 screen;
+
+    /// <summary>The greatest possible distance between two pixels in Ripple's fixed screen buffer.</summary>
+    private float maxScreenDistance;
+
+    /// <summary>The single motion clock shared by every active wavefront.</summary>
+    private float clock;
+
+    /// <summary>
+    /// Current clock advance per second. It remains an unconstrained value so later choreography
+    /// can freeze it at zero or make it negative without changing the clock model.
+    /// </summary>
+    private float clockRate;
 
     /// <summary>Current per-frame chance of spawning a new wavefront, rolled from the active mode's range.</summary>
     private float spawnChance;
@@ -171,6 +200,7 @@ public class Ripple : ScreenEffect
     {
         base.Init();
         wavefronts = new Wavefront[0];
+        maxScreenDistance = new Vector2(width - 1, height - 1).magnitude;
     }
 
     /// <summary>
@@ -215,15 +245,17 @@ public class Ripple : ScreenEffect
     {
         bool isSynced = beatManager.IsSynced;
         FloatRange velocityRange = isSynced ? SyncSettings.Velocity : standaloneSettings.Velocity;
-        float velocityDivisor = isSynced
-            ? SyncSettings.VelocityDivisor
-            : standaloneSettings.VelocityDivisor;
         float distanceDivisor = isSynced
             ? SyncSettings.DistanceDivisor
             : standaloneSettings.DistanceDivisor;
         float paletteOffset = isSynced
             ? SyncSettings.PaletteOffset
             : standaloneSettings.PaletteOffset;
+        float screenCrossingRadius = maxScreenDistance / distanceDivisor;
+        float saturationRadius = 1f + screenCrossingRadius;
+        clockRate = isSynced
+            ? ResolveSyncedClockRate(screenCrossingRadius)
+            : standaloneSettings.ClockRate;
 
         // Synced Mode uses the selected Levels form's Low only as a strict presence gate. Above it,
         // the full Beat Pulse's frame delta moves the persistent hue position; below it, the authored
@@ -244,11 +276,13 @@ public class Ripple : ScreenEffect
         }
         previousPulse = pulse;
         previousIsSynced = isSynced;
-        if (Random.value < spawnChance)
+        bool spawnWavefront = Random.value < spawnChance;
+        if (spawnWavefront)
         {
-            Array.Resize(ref wavefronts, wavefronts.Length + 1);
-            wavefronts[wavefronts.Length - 1] = new Wavefront(velocityRange, velocityDivisor);
+            SpawnWavefront(velocityRange);
         }
+        clock += clockRate * effectDelta;
+        RetireWavefronts(saturationRadius);
         buffer.Fade();
 
         for (int x = 0; x < width; x++)
@@ -261,9 +295,8 @@ public class Ripple : ScreenEffect
                 var sum = 0f;
                 for (int i = 0; i < wavefronts.Length; i++)
                 {
-                    wavefronts[i].Update(effectDelta);
                     var d = Vector2.Distance(screen, wavefronts[i].Position);
-                    sum += (wavefronts[i].radius - (d / distanceDivisor)).Clamp01();
+                    sum += (wavefronts[i].RadiusAt(clock) - (d / distanceDivisor)).Clamp01();
                 }
                 sum += paletteOffset;
                 sum %= 1f;
@@ -275,33 +308,101 @@ public class Ripple : ScreenEffect
     }
 
     /// <summary>
+    /// Converts the Energy-selected musical crossing pace into Ripple clock units per second.
+    /// </summary>
+    /// <param name="screenCrossingRadius">Radius a unit-velocity wavefront travels across the screen.</param>
+    /// <returns>The positive base clock rate before later choreography steers it.</returns>
+    /// <remarks>
+    /// Energy and the Data Surface are defined in <c>CONTEXT.md</c>. Tempo and Energy arrive through
+    /// <c>/rave/onair/bpm</c> and <c>/rave/onair/energy_state</c> in
+    /// <c>docs/osc-client-contract.md</c>. The real-time range applies only here, leaving
+    /// <see cref="clockRate"/> free to reach zero or become negative afterward.
+    /// </remarks>
+    private float ResolveSyncedClockRate(float screenCrossingRadius)
+    {
+        float crossingBeats = beatManager.Energy.Level switch
+        {
+            Energy.Low => SyncSettings.LowCrossingBeats,
+            Energy.Mid => SyncSettings.MidCrossingBeats,
+            Energy.High => SyncSettings.HighCrossingBeats,
+            _ => SyncSettings.MidCrossingBeats,
+        };
+        float crossingSeconds = Mathf.Clamp(
+            crossingBeats * 60f / beatManager.Timing.Bpm.Value,
+            SyncSettings.CrossingTimeSeconds.Min,
+            SyncSettings.CrossingTimeSeconds.Max);
+        return screenCrossingRadius / crossingSeconds;
+    }
+
+    /// <summary>Adds one wavefront born at the current shared clock value.</summary>
+    /// <param name="velocityRange">Active mode's authored wavefront clock-multiplier range.</param>
+    private void SpawnWavefront(FloatRange velocityRange)
+    {
+        Array.Resize(ref wavefronts, wavefronts.Length + 1);
+        wavefronts[^1] = new Wavefront(velocityRange, clock);
+    }
+
+    /// <summary>
+    /// Retires wavefronts once saturation makes their modulo-wrapped contribution invisible, or
+    /// once reverse clock motion collapses their radius back to zero.
+    /// </summary>
+    /// <param name="saturationRadius">Radius whose contribution is exactly one at every screen pixel.</param>
+    private void RetireWavefronts(float saturationRadius)
+    {
+        int retainedCount = 0;
+        for (int i = 0; i < wavefronts.Length; i++)
+        {
+            Wavefront wavefront = wavefronts[i];
+            float radius = wavefront.RadiusAt(clock);
+            bool saturated = radius >= saturationRadius;
+            bool collapsedWhileReversing = clockRate < 0f && radius <= 0f;
+            if (saturated || collapsedWhileReversing)
+            {
+                continue;
+            }
+
+            wavefronts[retainedCount++] = wavefront;
+        }
+
+        if (retainedCount != wavefronts.Length)
+        {
+            Array.Resize(ref wavefronts, retainedCount);
+        }
+    }
+
+    /// <summary>
     /// Expanding screen-space ripple source.
     /// </summary>
     public class Wavefront
     {
-        private Vector2 position;
-        private float velocity;
-        public float radius = 0f;
+        /// <summary>The fixed screen-space origin of this wavefront.</summary>
+        private readonly Vector2 position;
+
+        /// <summary>The wavefront's fixed multiplier over shared-clock movement.</summary>
+        private readonly float velocity;
+
+        /// <summary>The shared clock value captured when this wavefront spawned.</summary>
+        private readonly float birthClock;
 
         /// <summary>
         /// Creates a wavefront at a random screen position using the active mode's velocity Settings.
         /// </summary>
-        public Wavefront(FloatRange velocityRange, float velocityDivisor)
+        /// <param name="velocityRange">Active mode's authored clock-multiplier range.</param>
+        /// <param name="birthClock">Shared clock value at this wavefront's birth.</param>
+        public Wavefront(FloatRange velocityRange, float birthClock)
         {
-            velocity = Random.Range(velocityRange.Min, velocityRange.Max) / velocityDivisor;
+            velocity = Random.Range(velocityRange.Min, velocityRange.Max);
             position = new Vector2(Random.Range(0, width), Random.Range(0, height));
+            this.birthClock = birthClock;
         }
 
+        /// <summary>This wavefront's fixed screen-space origin.</summary>
         public Vector2 Position => position;
-        public float Radius => radius;
 
-        /// <summary>
-        /// Expands the ripple radius and respawns when it grows past the screen.
-        /// </summary>
-        public void Update(float deltaTime)
-        {
-            radius += deltaTime * velocity;
-        }
+        /// <summary>Calculates radius from shared-clock distance since this wavefront's birth.</summary>
+        /// <param name="currentClock">Ripple's current shared clock value.</param>
+        /// <returns>The signed radius at <paramref name="currentClock"/>.</returns>
+        public float RadiusAt(float currentClock) => velocity * (currentClock - birthClock);
     }
 }
 
@@ -315,11 +416,11 @@ public sealed class RippleStandaloneSettings
     /// <summary>Per-activation range for the per-frame chance of spawning a new wavefront.</summary>
     public FloatRange SpawnChance;
 
-    /// <summary>Per-wavefront pre-division velocity range.</summary>
+    /// <summary>Per-wavefront multiplier range over shared-clock movement.</summary>
     public FloatRange Velocity;
 
-    /// <summary>Divisor applied to each randomly rolled wavefront velocity.</summary>
-    public float VelocityDivisor;
+    /// <summary>Standalone shared-clock advance in ripple-radius units per second.</summary>
+    public float ClockRate;
 
     /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
     public float DistanceDivisor;
@@ -344,7 +445,7 @@ public sealed class RippleStandaloneSettings
 
         SpawnChance = CopyRange(source.SpawnChance);
         Velocity = CopyRange(source.Velocity);
-        VelocityDivisor = source.VelocityDivisor;
+        ClockRate = source.ClockRate;
         DistanceDivisor = source.DistanceDivisor;
         PaletteOffset = source.PaletteOffset;
         HueShift = source.HueShift;
@@ -367,11 +468,23 @@ public sealed class RippleSyncSettings
     /// <summary>Per-activation range for the per-frame chance of spawning a new wavefront.</summary>
     public FloatRange SpawnChance;
 
-    /// <summary>Per-wavefront pre-division velocity range.</summary>
+    /// <summary>Per-wavefront multiplier range over shared-clock movement.</summary>
     public FloatRange Velocity;
 
-    /// <summary>Divisor applied to each randomly rolled wavefront velocity.</summary>
-    public float VelocityDivisor;
+    /// <summary>Beats for a unit-velocity wavefront to cross the screen at Low Energy.</summary>
+    public float LowCrossingBeats;
+
+    /// <summary>Beats for a unit-velocity wavefront to cross the screen at Mid Energy.</summary>
+    public float MidCrossingBeats;
+
+    /// <summary>Beats for a unit-velocity wavefront to cross the screen at High Energy.</summary>
+    public float HighCrossingBeats;
+
+    /// <summary>
+    /// Minimum and maximum real seconds for the tempo-and-Energy crossing calculation. This range
+    /// does not constrain the final clock rate.
+    /// </summary>
+    public FloatRange CrossingTimeSeconds;
 
     /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
     public float DistanceDivisor;
@@ -404,7 +517,10 @@ public sealed class RippleSyncSettings
 
         SpawnChance = CopyRange(source.SpawnChance);
         Velocity = CopyRange(source.Velocity);
-        VelocityDivisor = source.VelocityDivisor;
+        LowCrossingBeats = source.LowCrossingBeats;
+        MidCrossingBeats = source.MidCrossingBeats;
+        HighCrossingBeats = source.HighCrossingBeats;
+        CrossingTimeSeconds = CopyRange(source.CrossingTimeSeconds);
         DistanceDivisor = source.DistanceDivisor;
         PaletteOffset = source.PaletteOffset;
         LowLevelsForm = source.LowLevelsForm;

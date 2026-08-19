@@ -20,11 +20,11 @@ MonoBehaviour:
       LowRail: 0.01
       HighRail: 0.02
     Velocity:
-      Min: 0.01
-      Max: 0.9
-      LowRail: 0.01
-      HighRail: 0.9
-    VelocityDivisor: 2000
+      Min: 0.75
+      Max: 1.25
+      LowRail: 0.75
+      HighRail: 1.25
+    ClockRate: 0.4
     DistanceDivisor: 20
     PaletteOffset: 0.5
     HueShift: 0.2

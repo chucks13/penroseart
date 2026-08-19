@@ -679,7 +679,7 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(first.SpawnChance, second.SpawnChance);
         Assert.That(first.Velocity, Is.Not.SameAs(second.Velocity));
         AssertFloatRangeEqual(first.Velocity, second.Velocity);
-        Assert.That(first.VelocityDivisor, Is.EqualTo(second.VelocityDivisor));
+        Assert.That(first.ClockRate, Is.EqualTo(second.ClockRate));
         Assert.That(first.DistanceDivisor, Is.EqualTo(second.DistanceDivisor));
         Assert.That(first.PaletteOffset, Is.EqualTo(second.PaletteOffset));
         Assert.That(first.HueShift, Is.EqualTo(second.HueShift));
@@ -697,7 +697,7 @@ public sealed class EffectSyncSettingsTests
             TempAssetFolder);
         asset.Settings.SpawnChance = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.VelocityDivisor = 23f;
+        asset.Settings.ClockRate = 23f;
         asset.Settings.DistanceDivisor = 24f;
         asset.Settings.PaletteOffset = 0.11f;
         asset.Settings.HueShift = 0.12f;
@@ -707,7 +707,7 @@ public sealed class EffectSyncSettingsTests
         var defaults = Ripple.StandaloneDefaults;
         AssertFloatRangeEqual(asset.Settings.SpawnChance, defaults.SpawnChance);
         AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
-        Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
+        Assert.That(asset.Settings.ClockRate, Is.EqualTo(defaults.ClockRate));
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
         Assert.That(asset.Settings.HueShift, Is.EqualTo(defaults.HueShift));
@@ -1420,7 +1420,10 @@ public sealed class EffectSyncSettingsTests
             TempAssetFolder);
         asset.Settings.SpawnChance = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.VelocityDivisor = 23f;
+        asset.Settings.LowCrossingBeats = 23f;
+        asset.Settings.MidCrossingBeats = 25f;
+        asset.Settings.HighCrossingBeats = 26f;
+        asset.Settings.CrossingTimeSeconds = new FloatRange(27f, 28f, 26f, 29f);
         asset.Settings.DistanceDivisor = 24f;
         asset.Settings.PaletteOffset = 0.11f;
         asset.Settings.LowLevelsForm = LevelsForm.Peak;
@@ -1432,7 +1435,10 @@ public sealed class EffectSyncSettingsTests
         var defaults = Ripple.SyncDefaults;
         AssertFloatRangeEqual(asset.Settings.SpawnChance, defaults.SpawnChance);
         AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
-        Assert.That(asset.Settings.VelocityDivisor, Is.EqualTo(defaults.VelocityDivisor));
+        Assert.That(asset.Settings.LowCrossingBeats, Is.EqualTo(defaults.LowCrossingBeats));
+        Assert.That(asset.Settings.MidCrossingBeats, Is.EqualTo(defaults.MidCrossingBeats));
+        Assert.That(asset.Settings.HighCrossingBeats, Is.EqualTo(defaults.HighCrossingBeats));
+        AssertFloatRangeEqual(asset.Settings.CrossingTimeSeconds, defaults.CrossingTimeSeconds);
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
         Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
