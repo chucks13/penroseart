@@ -1414,8 +1414,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited Ripple Sync Setting and Rail, including the Levels form and
-    /// Low presence threshold, with the current file-local Sync Defaults.
+    /// Restore replaces every edited Ripple Sync Setting and Rail, including spawn density, the
+    /// Levels form, and Low presence threshold, with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
@@ -1423,7 +1423,7 @@ public sealed class EffectSyncSettingsTests
         var asset = (RippleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
             typeof(Ripple),
             TempAssetFolder);
-        asset.Settings.SpawnChance = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.SpawnsPerCrossing = new FloatRange(17f, 18f, 16f, 19f);
         asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.LowCrossingBeats = 23f;
         asset.Settings.MidCrossingBeats = 25f;
@@ -1439,7 +1439,7 @@ public sealed class EffectSyncSettingsTests
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
 
         var defaults = Ripple.SyncDefaults;
-        AssertFloatRangeEqual(asset.Settings.SpawnChance, defaults.SpawnChance);
+        AssertFloatRangeEqual(asset.Settings.SpawnsPerCrossing, defaults.SpawnsPerCrossing);
         AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
         Assert.That(asset.Settings.LowCrossingBeats, Is.EqualTo(defaults.LowCrossingBeats));
         Assert.That(asset.Settings.MidCrossingBeats, Is.EqualTo(defaults.MidCrossingBeats));

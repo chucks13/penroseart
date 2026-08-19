@@ -45,11 +45,27 @@ public class Ripple : ScreenEffect
 
     // Sync Defaults
 
-    /// <summary>Authored minimum per-frame spawn chance for the current Synced look.</summary>
-    private const float SyncSpawnChanceMin = 0.01f;
+    /// <summary>
+    /// Authored minimum mean wavefront spawns per unit-velocity screen crossing in Synced Mode.
+    /// At Mid Energy and 125 BPM, the eight-beat crossing lasts 3.84 seconds, so 2.3 targets about
+    /// 0.6 spawns per second at the wall's ordinary tempo.
+    /// </summary>
+    /// <remarks>
+    /// See Energy and Data Surface in <c>CONTEXT.md</c>, and the <c>/rave/onair/bpm</c> and
+    /// <c>/rave/onair/energy_state</c> lanes in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const float SyncSpawnsPerCrossingMin = 2.3f;
 
-    /// <summary>Authored maximum per-frame spawn chance for the current Synced look.</summary>
-    private const float SyncSpawnChanceMax = 0.02f;
+    /// <summary>
+    /// Authored maximum mean wavefront spawns per unit-velocity screen crossing in Synced Mode.
+    /// At Mid Energy and 125 BPM, the eight-beat crossing lasts 3.84 seconds, so 4.6 targets about
+    /// 1.2 spawns per second at the wall's ordinary tempo.
+    /// </summary>
+    /// <remarks>
+    /// See Energy and Data Surface in <c>CONTEXT.md</c>, and the <c>/rave/onair/bpm</c> and
+    /// <c>/rave/onair/energy_state</c> lanes in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const float SyncSpawnsPerCrossingMax = 4.6f;
 
     /// <summary>Authored minimum wavefront clock multiplier for the Synced look.</summary>
     private const float SyncVelocityMin = 0.75f;
@@ -137,7 +153,9 @@ public class Ripple : ScreenEffect
     /// <summary>Resolves a fresh copy of Ripple's file-local Sync Defaults.</summary>
     public static RippleSyncSettings SyncDefaults => new()
     {
-        SpawnChance = new FloatRange(SyncSpawnChanceMin, SyncSpawnChanceMax),
+        SpawnsPerCrossing = new FloatRange(
+            SyncSpawnsPerCrossingMin,
+            SyncSpawnsPerCrossingMax),
         Velocity = new FloatRange(SyncVelocityMin, SyncVelocityMax),
         LowCrossingBeats = SyncLowCrossingBeats,
         MidCrossingBeats = SyncMidCrossingBeats,
@@ -177,8 +195,11 @@ public class Ripple : ScreenEffect
     /// </summary>
     private float clockRate;
 
-    /// <summary>Current per-frame chance of spawning a new wavefront, rolled from the active mode's range.</summary>
-    private float spawnChance;
+    /// <summary>Standalone per-frame wavefront spawn chance chosen by the activation Roll.</summary>
+    private float standaloneSpawnChance;
+
+    /// <summary>Synced mean wavefront spawns per screen crossing chosen by the activation Roll.</summary>
+    private float syncedSpawnsPerCrossing;
 
     /// <summary>
     /// Persistent wrapped palette hue position, initialized from the rendered offset at activation
@@ -245,10 +266,34 @@ public class Ripple : ScreenEffect
             1f);
         previousPulse = pulse;
         previousIsSynced = isSynced;
-        FloatRange spawnChanceRange = isSynced
-            ? SyncSettings.SpawnChance
+        FloatRange activeSpawnRange = isSynced
+            ? SyncSettings.SpawnsPerCrossing
             : standaloneSettings.SpawnChance;
-        spawnChance = Random.Range(spawnChanceRange.Min, spawnChanceRange.Max);
+        float activeSpawnValue = Random.Range(activeSpawnRange.Min, activeSpawnRange.Max);
+        float spawnRangePosition = Mathf.InverseLerp(
+            activeSpawnRange.Min,
+            activeSpawnRange.Max,
+            activeSpawnValue);
+
+        // One activation Roll drives both mode-owned quantities at the same range position. The
+        // active mode keeps the direct Random result, while the other value is ready if IsSynced
+        // changes mid-activation without consuming a second random number.
+        if (isSynced)
+        {
+            syncedSpawnsPerCrossing = activeSpawnValue;
+            standaloneSpawnChance = Mathf.Lerp(
+                standaloneSettings.SpawnChance.Min,
+                standaloneSettings.SpawnChance.Max,
+                spawnRangePosition);
+        }
+        else
+        {
+            standaloneSpawnChance = activeSpawnValue;
+            syncedSpawnsPerCrossing = Mathf.Lerp(
+                SyncSettings.SpawnsPerCrossing.Min,
+                SyncSettings.SpawnsPerCrossing.Max,
+                spawnRangePosition);
+        }
     }
 
     /// <summary>
@@ -297,12 +342,19 @@ public class Ripple : ScreenEffect
         }
         previousPulse = pulse;
         previousIsSynced = isSynced;
+        float clockAdvance = clockRate * effectDelta;
+        float spawnChance = isSynced
+            ? syncedSpawnsPerCrossing * clockAdvance / screenCrossingRadius
+            : standaloneSpawnChance;
+
+        // Both the Synced spawn chance and wavefront lifetime now advance in shared-clock units,
+        // so changing the clock pace changes their real-time speed without changing ring density.
         bool spawnWavefront = Random.value < spawnChance;
         if (spawnWavefront)
         {
             SpawnWavefront(velocityRange);
         }
-        clock += clockRate * effectDelta;
+        clock += clockAdvance;
         RetireWavefronts(saturationRadius);
         buffer.Fade();
 
@@ -347,7 +399,7 @@ public class Ripple : ScreenEffect
         // the flat count outright at any MaxFlatScreenFraction instead of leaving the check armed
         // until the new ring grows wide enough. Once enough of the screen is flat the wall reads as
         // one color, so Ripple spawns a wavefront to put motion back onto it. This runs in both
-        // modes; only where Synced Mode places its spawns may change later.
+        // modes and stays independent of the paced random spawn roll above.
         if (flatPixels >= maxFlatScreenFraction * width * height)
         {
             SpawnWavefront(velocityRange);
@@ -518,8 +570,10 @@ public sealed class RippleStandaloneSettings
 [Serializable]
 public sealed class RippleSyncSettings
 {
-    /// <summary>Per-activation range for the per-frame chance of spawning a new wavefront.</summary>
-    public FloatRange SpawnChance;
+    /// <summary>
+    /// Per-activation range for mean wavefront spawns during one unit-velocity screen crossing.
+    /// </summary>
+    public FloatRange SpawnsPerCrossing;
 
     /// <summary>Per-wavefront multiplier range over shared-clock movement.</summary>
     public FloatRange Velocity;
@@ -576,7 +630,7 @@ public sealed class RippleSyncSettings
             throw new ArgumentNullException(nameof(source));
         }
 
-        SpawnChance = CopyRange(source.SpawnChance);
+        SpawnsPerCrossing = CopyRange(source.SpawnsPerCrossing);
         Velocity = CopyRange(source.Velocity);
         LowCrossingBeats = source.LowCrossingBeats;
         MidCrossingBeats = source.MidCrossingBeats;

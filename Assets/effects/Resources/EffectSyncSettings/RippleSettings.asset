@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RippleSyncSettingsAsset
   effectTypeName: Ripple
   settings:
-    SpawnChance:
-      Min: 0.01
-      Max: 0.02
-      LowRail: 0.01
-      HighRail: 0.02
+    SpawnsPerCrossing:
+      Min: 2.3
+      Max: 4.6
+      LowRail: 2.3
+      HighRail: 4.6
     Velocity:
       Min: 0.75
       Max: 1.25
