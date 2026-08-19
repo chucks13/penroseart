@@ -132,24 +132,16 @@ Rejoin the phase the evidence names, not the phase the last comment names.
    must see the wall before and after a look-changing fix. Record the classification on the
    ticket.
 
-## Phase B — Standalone Settings into the editor
+## Phase B — Settings check
 
-Per ADR-0013, Phase B adds Standalone Settings and audits both setting surfaces.
+The Phase B build-out — Standalone Settings and the range audit of both surfaces (ADR-0013) —
+has run for every Effect and Mixer in the catalog, so no ticket builds those again. What
+remains is a check each ticket runs once, before any change builds on the settings.
 
-1. Inspect every setting and its production consumers on both setting surfaces.
-2. Group two numeric values when one consumer uses them as endpoints for interpolation, selection,
-   or randomization.
-3. Use `FloatRange` or `IntRange` for each group, regardless of Min/Max, Low/High, From/To, or
-   Start/End names.
-4. Keep numeric values separate only when their production consumers use them independently.
-5. Remove the replaced scalar fields in the same pass.
-6. Update each changed `.asset` in the same pass, seeding the reshaped fields from the source
-   defaults.
-
-One worker applies the audit changes and adds the Standalone Settings asset type and Effects-tab wiring.
-Make the asset serialized, editable during Play Mode, persistent after the run, and restorable. The
-maintainer verifies live edits, persistence, and Restore. Keep Standalone Defaults in source as the
-authored record.
+Compare the Effect's Sync and Standalone `.asset` values against the authored defaults in
+source. A match, or a difference the maintainer confirms as intended, passes. Any other
+difference is a maintainer question — restore the asset to the defaults, or bake the value
+back as the new authored default. Never build on a drifted asset silently.
 
 ## Phase C — Reshape
 
@@ -317,6 +309,8 @@ Boundaries — in every brief:
   weights — anything the maintainer could want to tweak at the wall — land on the settings
   surface its mode owns, Sync or Standalone, with the authored value as the default. Values the
   structure fixes, like tile counts and math constants, stay in code.
+- When one consumer uses two numeric settings as endpoints for interpolation, selection, or
+  randomization, they are one `FloatRange` or `IntRange`, never two scalars.
 - Do not commit.
 - After the final edit, run `git diff --check` exactly once. Report the result, then stop without
   another edit or check.
