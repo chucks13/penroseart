@@ -681,6 +681,7 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(first.Velocity, second.Velocity);
         Assert.That(first.ClockRate, Is.EqualTo(second.ClockRate));
         Assert.That(first.DistanceDivisor, Is.EqualTo(second.DistanceDivisor));
+        Assert.That(first.MaxFlatScreenFraction, Is.EqualTo(second.MaxFlatScreenFraction));
         Assert.That(first.PaletteOffset, Is.EqualTo(second.PaletteOffset));
         Assert.That(first.HueShift, Is.EqualTo(second.HueShift));
     }
@@ -699,6 +700,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.Velocity = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.ClockRate = 23f;
         asset.Settings.DistanceDivisor = 24f;
+        asset.Settings.MaxFlatScreenFraction = 0.13f;
         asset.Settings.PaletteOffset = 0.11f;
         asset.Settings.HueShift = 0.12f;
 
@@ -709,6 +711,9 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.Velocity, defaults.Velocity);
         Assert.That(asset.Settings.ClockRate, Is.EqualTo(defaults.ClockRate));
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
+        Assert.That(
+            asset.Settings.MaxFlatScreenFraction,
+            Is.EqualTo(defaults.MaxFlatScreenFraction));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
         Assert.That(asset.Settings.HueShift, Is.EqualTo(defaults.HueShift));
     }
@@ -1425,6 +1430,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.HighCrossingBeats = 26f;
         asset.Settings.CrossingTimeSeconds = new FloatRange(27f, 28f, 26f, 29f);
         asset.Settings.DistanceDivisor = 24f;
+        asset.Settings.MaxFlatScreenFraction = 0.13f;
         asset.Settings.PaletteOffset = 0.11f;
         asset.Settings.LowLevelsForm = LevelsForm.Peak;
         asset.Settings.LowPresenceThreshold = 0.8f;
@@ -1440,6 +1446,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.HighCrossingBeats, Is.EqualTo(defaults.HighCrossingBeats));
         AssertFloatRangeEqual(asset.Settings.CrossingTimeSeconds, defaults.CrossingTimeSeconds);
         Assert.That(asset.Settings.DistanceDivisor, Is.EqualTo(defaults.DistanceDivisor));
+        Assert.That(
+            asset.Settings.MaxFlatScreenFraction,
+            Is.EqualTo(defaults.MaxFlatScreenFraction));
         Assert.That(asset.Settings.PaletteOffset, Is.EqualTo(defaults.PaletteOffset));
         Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));

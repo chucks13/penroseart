@@ -26,5 +26,6 @@ MonoBehaviour:
       HighRail: 1.25
     ClockRate: 0.4
     DistanceDivisor: 20
+    MaxFlatScreenFraction: 1
     PaletteOffset: 0.5
     HueShift: 0.2

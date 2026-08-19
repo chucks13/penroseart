@@ -29,6 +29,14 @@ public class Ripple : ScreenEffect
     /// <summary>Authored divisor that maps screen-space distance into ripple phase.</summary>
     private const float StandaloneDistanceDivisor = 20f;
 
+    /// <summary>
+    /// Authored greatest flat fraction of the Standalone screen before Ripple spawns. One means
+    /// only a completely flat screen spawns, which costs exactly one wavefront per flat episode.
+    /// A lower value spawns while the screen is merely mostly flat, which refills an empty screen
+    /// faster but can spawn on several consecutive frames before the new ring covers enough.
+    /// </summary>
+    private const float StandaloneMaxFlatScreenFraction = 1f;
+
     /// <summary>Authored palette phase offset for the unchanged Standalone look.</summary>
     private const float StandalonePaletteOffset = 0.5f;
 
@@ -66,6 +74,14 @@ public class Ripple : ScreenEffect
 
     /// <summary>Authored divisor that maps screen-space distance into ripple phase in Synced Mode.</summary>
     private const float SyncDistanceDivisor = 20f;
+
+    /// <summary>
+    /// Authored greatest flat fraction of the Synced screen before Ripple spawns. One means only a
+    /// completely flat screen spawns, which costs exactly one wavefront per flat episode. A lower
+    /// value spawns while the screen is merely mostly flat, which refills an empty screen faster
+    /// but can spawn on several consecutive frames before the new ring covers enough.
+    /// </summary>
+    private const float SyncMaxFlatScreenFraction = 1f;
 
     /// <summary>Authored palette phase offset for the current Synced look.</summary>
     private const float SyncPaletteOffset = 0.5f;
@@ -113,6 +129,7 @@ public class Ripple : ScreenEffect
         Velocity = new FloatRange(StandaloneVelocityMin, StandaloneVelocityMax),
         ClockRate = StandaloneClockRate,
         DistanceDivisor = StandaloneDistanceDivisor,
+        MaxFlatScreenFraction = StandaloneMaxFlatScreenFraction,
         PaletteOffset = StandalonePaletteOffset,
         HueShift = StandaloneHueShift,
     };
@@ -129,6 +146,7 @@ public class Ripple : ScreenEffect
             SyncCrossingTimeMinSeconds,
             SyncCrossingTimeMaxSeconds),
         DistanceDivisor = SyncDistanceDivisor,
+        MaxFlatScreenFraction = SyncMaxFlatScreenFraction,
         PaletteOffset = SyncPaletteOffset,
         LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
@@ -251,6 +269,9 @@ public class Ripple : ScreenEffect
         float paletteOffset = isSynced
             ? SyncSettings.PaletteOffset
             : standaloneSettings.PaletteOffset;
+        float maxFlatScreenFraction = isSynced
+            ? SyncSettings.MaxFlatScreenFraction
+            : standaloneSettings.MaxFlatScreenFraction;
         float screenCrossingRadius = maxScreenDistance / distanceDivisor;
         float saturationRadius = 1f + screenCrossingRadius;
         clockRate = isSynced
@@ -285,6 +306,7 @@ public class Ripple : ScreenEffect
         RetireWavefronts(saturationRadius);
         buffer.Fade();
 
+        int flatPixels = 0;
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -293,11 +315,21 @@ public class Ripple : ScreenEffect
                 screen.y = y;
                 var idx = x + (y * width);
                 var sum = 0f;
+                bool hasGradient = false;
                 for (int i = 0; i < wavefronts.Length; i++)
                 {
                     var d = Vector2.Distance(screen, wavefronts[i].Position);
-                    sum += (wavefronts[i].RadiusAt(clock) - (d / distanceDivisor)).Clamp01();
+                    var contribution =
+                        (wavefronts[i].RadiusAt(clock) - (d / distanceDivisor)).Clamp01();
+                    hasGradient |= contribution > 0f && contribution < 1f;
+                    sum += contribution;
                 }
+
+                if (!hasGradient)
+                {
+                    flatPixels++;
+                }
+
                 sum += paletteOffset;
                 sum %= 1f;
                 screenBuffer[idx] = APalette.read(sum + huePhase, true);
@@ -305,6 +337,16 @@ public class Ripple : ScreenEffect
         }
 
         ConvertScreenBuffer(ref screenBuffer, in buffer);
+
+        // A wavefront contributes exactly 1 everywhere its ring has already passed, and the wrap
+        // above discards whole numbers, so a pixel reached only by passed rings renders the same
+        // color as every other such pixel. Once enough of the screen is in that state the wall
+        // reads as one flat color, so Ripple spawns a wavefront to put a gradient back onto it.
+        // This runs in both modes; only where Synced Mode places its spawns may change later.
+        if (flatPixels >= maxFlatScreenFraction * width * height)
+        {
+            SpawnWavefront(velocityRange);
+        }
     }
 
     /// <summary>
@@ -425,6 +467,11 @@ public sealed class RippleStandaloneSettings
     /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
     public float DistanceDivisor;
 
+    /// <summary>
+    /// Greatest fraction of the screen that may render flat before Ripple spawns a wavefront.
+    /// </summary>
+    [Range(0f, 1f)] public float MaxFlatScreenFraction;
+
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
@@ -447,6 +494,7 @@ public sealed class RippleStandaloneSettings
         Velocity = CopyRange(source.Velocity);
         ClockRate = source.ClockRate;
         DistanceDivisor = source.DistanceDivisor;
+        MaxFlatScreenFraction = source.MaxFlatScreenFraction;
         PaletteOffset = source.PaletteOffset;
         HueShift = source.HueShift;
     }
@@ -489,6 +537,11 @@ public sealed class RippleSyncSettings
     /// <summary>Divisor that maps screen-space distance into ripple phase.</summary>
     public float DistanceDivisor;
 
+    /// <summary>
+    /// Greatest fraction of the screen that may render flat before Ripple spawns a wavefront.
+    /// </summary>
+    [Range(0f, 1f)] public float MaxFlatScreenFraction;
+
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
@@ -522,6 +575,7 @@ public sealed class RippleSyncSettings
         HighCrossingBeats = source.HighCrossingBeats;
         CrossingTimeSeconds = CopyRange(source.CrossingTimeSeconds);
         DistanceDivisor = source.DistanceDivisor;
+        MaxFlatScreenFraction = source.MaxFlatScreenFraction;
         PaletteOffset = source.PaletteOffset;
         LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
