@@ -13,7 +13,7 @@ public class AnimateShapes : EffectBase
 {
     // Standalone Defaults
 
-    /// <summary>Authored background hue advance per second for the unchanged Standalone look.</summary>
+    /// <summary>Authored Standalone background hue advance per second.</summary>
     private const float StandaloneBackgroundHueRate = 0.1f;
 
     /// <summary>
@@ -51,8 +51,8 @@ public class AnimateShapes : EffectBase
     private const float SyncBackgroundHueRate = 0.1f;
 
     /// <summary>
-    /// Sync palette-family conditioning, independently authored so ADR-0013 live tuning in one mode
-    /// cannot drift the other. It begins at the same working luminance band, hue-spread-aware
+    /// Sync palette-family conditioning, independently authored so live tuning in one mode cannot
+    /// mutate the other. It begins at the same working luminance band, hue-spread-aware
     /// equalization, a tenfold lift ceiling, dark-stop repair, duplicate collapse, and full
     /// redistribution as Standalone.
     /// </summary>

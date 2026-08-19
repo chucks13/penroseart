@@ -962,8 +962,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// AnimateShapes Standalone Defaults resolve as fresh, mutually independent copies without
-    /// pinning authored tuning values that are judged on the wall.
+    /// Verifies AnimateShapes Standalone Defaults resolve as fresh, mutually independent copies
+    /// while leaving their numeric contents unconstrained.
     /// </summary>
     [Test]
     public void AnimateShapesStandaloneDefaultsResolveAsIndependentCopies()

@@ -14,7 +14,7 @@ using UnityEngine;
 [CustomPropertyDrawer(typeof(WaveformNameAttribute))]
 public sealed class WaveformNameDrawer : PropertyDrawer
 {
-    /// <summary>Unique persisted Pool entry names in document order, cached against the Pool file write time.</summary>
+    /// <summary>Pool entry display names in document order, cached against the Pool file write time.</summary>
     private static string[] cachedNames;
 
     /// <summary>Pool file write time the cached names were read at.</summary>
