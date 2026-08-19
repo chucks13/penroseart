@@ -1430,8 +1430,8 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// Restore replaces every edited Ripple Sync Setting and Rail, including spawn density, palette
-    /// conditioning, the Levels form, and Low presence threshold, with the current file-local Sync
-    /// Defaults.
+    /// conditioning, the Levels form, Low presence threshold, and Fill hue swing, with the current
+    /// file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryRippleValue()
@@ -1462,6 +1462,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.LowLevelsForm = LevelsForm.Peak;
         asset.Settings.LowPresenceThreshold = 0.8f;
         asset.Settings.HueWiggleAmplitude = 0.9f;
+        asset.Settings.FillHueSwingAmplitude = 0.7f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
 
@@ -1483,6 +1484,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
         Assert.That(asset.Settings.LowPresenceThreshold, Is.EqualTo(defaults.LowPresenceThreshold));
         Assert.That(asset.Settings.HueWiggleAmplitude, Is.EqualTo(defaults.HueWiggleAmplitude));
+        Assert.That(
+            asset.Settings.FillHueSwingAmplitude,
+            Is.EqualTo(defaults.FillHueSwingAmplitude));
     }
 
     /// <summary>Restore replaces every edited Crystal Growth Sync Setting with its file-local Sync Default.</summary>

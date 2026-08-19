@@ -159,6 +159,16 @@ public class Ripple : ScreenEffect
     private const float SyncHueWiggleAmplitude = 0.4f;
 
     /// <summary>
+    /// Authored Beat Pulse displacement, in hue-wheel cycles, applied while a Fill is active in
+    /// Synced Mode.
+    /// </summary>
+    /// <remarks>
+    /// See Fill and Beat Pulse in <c>CONTEXT.md</c>, and the <c>/rave/onair/fill_state</c> and
+    /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const float SyncFillHueSwingAmplitude = 0.5f;
+
+    /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
     /// below its presence threshold in Synced Mode.
     /// </summary>
@@ -168,11 +178,18 @@ public class Ripple : ScreenEffect
     private const float SyncHueDriftRate = 0.05f;
 
     /// <summary>
-    /// Ripple's Mid/High Energy suitability character; see the Repertoire and Energy entries in
-    /// <c>CONTEXT.md</c>.
+    /// Ripple handles Fill with a transient Beat Pulse hue inversion and suits Mid/High Energy
+    /// sections.
     /// </summary>
+    /// <remarks>
+    /// See Repertoire, Fill, Beat Pulse, and Energy in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/fill_state</c> and <c>/rave/onair/beat_pulse</c> lanes in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     public override Repertoire Repertoire =>
-        Repertoire.EnergyMid | Repertoire.EnergyHigh;
+        Repertoire.HandlesFill |
+        Repertoire.EnergyMid |
+        Repertoire.EnergyHigh;
 
     /// <summary>
     /// Resolves a fresh copy of Ripple's file-local Standalone Defaults, including Effect-local
@@ -215,6 +232,7 @@ public class Ripple : ScreenEffect
         LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
         HueWiggleAmplitude = SyncHueWiggleAmplitude,
+        FillHueSwingAmplitude = SyncFillHueSwingAmplitude,
         HueDriftRate = SyncHueDriftRate,
     };
 
@@ -399,6 +417,14 @@ public class Ripple : ScreenEffect
         }
         previousPulse = pulse;
         previousIsSynced = isSynced;
+
+        // Fill adds the raw Beat Pulse at palette-read time, so it never enters huePhase and
+        // vanishes without disturbing the wiggle or drift when Active ends. See Fill and Beat
+        // Pulse in CONTEXT.md and the /rave/onair/fill_state and /rave/onair/beat_pulse lanes in
+        // docs/osc-client-contract.md.
+        float fillHueDisplacement = isSynced && beatManager.Fill.Active
+            ? pulse * SyncSettings.FillHueSwingAmplitude
+            : 0f;
         float clockAdvance = clockRate * effectDelta;
         float spawnChance = isSynced
             ? syncedSpawnsPerCrossing * clockAdvance / screenCrossingRadius
@@ -441,7 +467,9 @@ public class Ripple : ScreenEffect
 
                 sum += paletteOffset;
                 sum %= 1f;
-                screenBuffer[idx] = conditionedPalette.ReadCyclic(sum + huePhase, doblend: true);
+                screenBuffer[idx] = conditionedPalette.ReadCyclic(
+                    sum + huePhase + fillHueDisplacement,
+                    doblend: true);
             }
         }
 
@@ -690,6 +718,16 @@ public sealed class RippleSyncSettings
     [Range(0f, 1f)] public float HueWiggleAmplitude;
 
     /// <summary>
+    /// Raw Beat Pulse displacement, in hue-wheel cycles, applied while a Fill is active in Synced
+    /// Mode.
+    /// </summary>
+    /// <remarks>
+    /// See Fill and Beat Pulse in <c>CONTEXT.md</c>, and the <c>/rave/onair/fill_state</c> and
+    /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    [Range(0f, 1f)] public float FillHueSwingAmplitude;
+
+    /// <summary>
     /// Hue-wheel cycles advanced per second while the selected Levels form's Low is at or below the
     /// presence threshold in Synced Mode.
     /// </summary>
@@ -718,6 +756,7 @@ public sealed class RippleSyncSettings
         LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
         HueWiggleAmplitude = source.HueWiggleAmplitude;
+        FillHueSwingAmplitude = source.FillHueSwingAmplitude;
         HueDriftRate = source.HueDriftRate;
     }
 
