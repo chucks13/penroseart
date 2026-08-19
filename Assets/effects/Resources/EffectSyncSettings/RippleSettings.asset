@@ -33,7 +33,7 @@ MonoBehaviour:
       LowRail: 2
       HighRail: 8
     DistanceDivisor: 20
-    MaxFlatScreenFraction: 1
+    MaxFlatScreenFraction: 0.9
     PaletteOffset: 0.5
     LowLevelsForm: 0
     LowPresenceThreshold: 0.375
