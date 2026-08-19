@@ -313,6 +313,10 @@ Boundaries — in every brief:
   scripts work with the Editor open or closed, so you may run them in either state.
 - Never create or edit `.meta` files — Unity owns them. `.asset` files are text: when a change
   reshapes a settings class, update its `.asset` in the same pass so the two never drift.
+- A value chosen by taste is a setting, never a literal in the code. Thresholds, rates, ranges,
+  weights — anything the maintainer could want to tweak at the wall — land on the settings
+  surface its mode owns, Sync or Standalone, with the authored value as the default. Values the
+  structure fixes, like tile counts and math constants, stay in code.
 - Do not commit.
 - After the final edit, run `git diff --check` exactly once. Report the result, then stop without
   another edit or check.
@@ -329,6 +333,8 @@ Boundaries — in every brief:
 - Every musical read traces to the Data Surface; no OSC access, no locally computed musical
   fact.
 - Settings resolution consumes no Random.
+- Every taste-chosen value the diff introduces lives on a settings surface with an authored
+  default; no literal in the code encodes one.
 - No Sync or Standalone Setting is baked into a cache that `Init` builds once — such a cache
   makes the setting half-live under a Play Mode edit.
 - The worker added no guard that did not exist before, and no defensive layer the framing
