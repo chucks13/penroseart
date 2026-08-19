@@ -47,5 +47,5 @@ MonoBehaviour:
     LowLevelsForm: 1
     LowPresenceThreshold: 0.4
     HueWiggleAmplitude: 0.4
-    FillComplementFadeDepth: 1
+    FillComplementDepth: 1
     HueDriftRate: 0.05
