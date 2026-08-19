@@ -23,7 +23,7 @@ fact the Data Surface does not carry, stop and ask the maintainer; never compute
 The roles do not change. You are the coordinator and you own every judgment in this file. Codex
 workers implement. The maintainer judges the wall and owns the artistic intent (ADR-0007). The
 maintainer is present throughout this campaign, editor open — discussion replaces formal gates,
-but two rules keep their force: a scope question stops the work until the maintainer rules, and
+but two rules keep their force: a scope question stops the work until the maintainer decides, and
 nothing lands without wall approval.
 
 ## Framing
@@ -78,7 +78,7 @@ arrive. The sender lives in RaveSystem, so no code in this repo says what the wi
 4. Cite the entries and the lanes where you state the claim.
 5. If an _Avoid_ item names the scenario in the claim, discard the claim as that named error.
 6. If code appears to contradict either document, report the mismatch as the finding and stop
-   for a maintainer ruling.
+   for a maintainer decision.
 
 ## Documentation order
 
@@ -91,7 +91,7 @@ with the code that they explain.
 
 Git and the ticket are the records that survive a session. Post a status comment at every phase
 boundary, and post one before the session ends with the ticket open. The comment states what
-landed by hash, what the maintainer ruled, and what comes next. Record a finding on the ticket
+landed by hash, what the maintainer decided, and what comes next. Record a finding on the ticket
 when you find it. Debt on this ticket belongs to this ticket, not to a later session that has
 never heard of it.
 
@@ -99,7 +99,7 @@ A resumed ticket starts from state, not from the Phase A reading list. The readi
 ticket-scoped. Phase A steps 2 and 3 are session-scoped, so complete them again in every
 session.
 
-Git says what landed. The comments on the ticket say what the maintainer ruled. Create a new
+Git says what landed. The comments on the ticket say what the maintainer decided. Create a new
 worklog for the resumed session. Read a Phase A document again only when the current step needs
 it. The Musical claims rule names one such need. Rejoin the phase the evidence names, not the
 phase the last comment names.
@@ -120,7 +120,7 @@ phase the last comment names.
    them stand.
 
    The comments are not optional and the body is not a summary of them. A ticket's design is settled
-   incrementally at the wall, so a ruling in the body is routinely withdrawn by a later comment, and
+   incrementally at the wall, so a decision in the body is routinely withdrawn by a later comment, and
    a "still open" line is routinely stale the moment the next session lands that work. Reading the
    body alone, or only the newest comments, produces confident wrong statements about what is left
    to build. Read every comment oldest to newest, and treat the newest statement on any point as the
@@ -156,7 +156,7 @@ authored record.
 
 ## Phase C — Reshape
 
-Run this phase only when triage or a maintainer ruling calls for structural or overall-look
+Run this phase only when triage or a maintainer decision calls for structural or overall-look
 changes to the Effect's body; otherwise skip to the musicality loop. The rework comes before any
 capability work because capabilities land on the final structure — building one on a shape about
 to be recut is the same work done twice.
@@ -168,7 +168,7 @@ to be recut is the same work done twice.
    loop's steps 2–4 prescribe.
 
 3. The maintainer judges the new baseline look on the wall. That approved look is the baseline
-   every later phase preserves, except where a later capability ruling changes it again.
+   every later phase preserves, except where a later capability decision changes it again.
 
 ## Phase D — Musicality loop
 
@@ -197,7 +197,7 @@ one.
    coverage by the printed `total=` and the printed path, never by the skip count. Bridge green
    is the inner loop, not the full suite.
 
-5. The maintainer plays, tweaks the settings live, and rules. Send design-level rework back with
+5. The maintainer plays, tweaks the settings live, and judges. Send design-level rework back with
    `codex exec resume`; fix small defects directly. A wall tuning loop may run through the
    coordinator: adjusting authored defaults, adding a single settings slot, and baking the
    maintainer's saved asset values back as defaults are direct edits. Structural or sizable
@@ -280,7 +280,7 @@ and side quests included. The coordinator does not narrow this scope.
    stays unfixed lands on the epic issue, not in comments on the closed ticket.
 
 6. Promote a durable finding to Memory Vault as a pointer to its primary source. Update this
-   skill only for a maintainer ruling or a process failure that repeated. Retire the worklog.
+   skill only for a maintainer decision or a process failure that repeated. Retire the worklog.
 
 ## Worker briefs
 
@@ -314,7 +314,7 @@ Boundaries — in every brief:
 - Write XML docs on every touched symbol.
 - Never delete or compress an authored doc comment. Carry every WHY clause — tuning pointers,
   value derivations, rationale — onto whatever replaces its symbol.
-- Change the Standalone look only where the maintainer has ruled that capability or finding
+- Change the Standalone look only where the maintainer has classified that capability or finding as
   look-changing; everywhere else the look stays identical.
 
 ## Diff review checklist
