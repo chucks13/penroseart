@@ -129,8 +129,7 @@ public class Angles : EffectBase
     private const float SyncBeatLowThreshold = 0.35f;
 
     /// <summary>Levels form the Low gate reads. Normalized is the default because the gate's job is to report what is happening on the beat: it tracks the hit instantly, where Smoothed averages across the beat boundary and blurs the moment, and Peak holds on after a kick fades. Flip it live on the wall.</summary>
-    private const AnglesSyncSettings.BeatLevelReading SyncBeatLowLevelReading =
-        AnglesSyncSettings.BeatLevelReading.Normalized;
+    private const LevelsForm SyncBeatLowLevelReading = LevelsForm.Normalized;
 
     /// <summary>Hue phase added by each engaged beat. The 0.1 default advances one of the tiling's ten orientation classes, permuting their colour assignment without changing the wall's colour set.</summary>
     private const float SyncBeatPhaseStep = 0.1f;
@@ -949,12 +948,8 @@ public class Angles : EffectBase
     /// tracks the kick instantly, follows it smoothly, or holds on after it fades.
     /// </summary>
     /// <returns>The current Low-band strength from the selected Levels form.</returns>
-    private float ReadBeatGateLowLevel() => SyncSettings.BeatLowLevelReading switch
-    {
-        AnglesSyncSettings.BeatLevelReading.Smoothed => beatManager.Levels.Smoothed.Low,
-        AnglesSyncSettings.BeatLevelReading.Peak => beatManager.Levels.Peak.Low,
-        _ => beatManager.Levels.Normalized.Low,
-    };
+    private float ReadBeatGateLowLevel() =>
+        beatManager.Levels.Select(SyncSettings.BeatLowLevelReading).Low;
 
     /// <summary>
     /// Updates the consumer-local On Beat edge and latches the old and new beat-driven phase offsets
@@ -1330,27 +1325,14 @@ public sealed class AnglesSyncSettings
         Stars,
     }
 
-    /// <summary>
-    /// Which form of the Levels reading the beat phase front's Low gate consults; renders as an
-    /// Inspector dropdown so the reading can be flipped live on the wall.
-    /// </summary>
-    public enum BeatLevelReading
-    {
-        /// <summary>The instantaneous wire value — high only while the kick is actually sounding.</summary>
-        Normalized,
-
-        /// <summary>The attack/release follower — steadier, but lags the kick.</summary>
-        Smoothed,
-
-        /// <summary>Instant rise with a tempo-based linear fall — holds on after the kick fades.</summary>
-        Peak,
-    }
-
     /// <summary>Low-band strength that must be exceeded before beat-driven phase movement runs.</summary>
     [Range(0f, 1f)] public float BeatLowThreshold;
 
-    /// <summary>Levels reading the beat phase front's Low gate reads its value from.</summary>
-    public BeatLevelReading BeatLowLevelReading;
+    /// <summary>
+    /// Levels form the beat phase front's Low gate reads, serialized as a live Inspector dropdown
+    /// so the reading can be flipped on the wall.
+    /// </summary>
+    public LevelsForm BeatLowLevelReading;
 
     /// <summary>Forward hue-phase step latched on each engaged beat; 0.1 advances one orientation class.</summary>
     [Range(0f, 1f)] public float BeatPhaseStep;

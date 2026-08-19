@@ -8,7 +8,7 @@ using PenroseArt.RaveOsc;
 /// <summary>Tests the always-present normalized, smoothed, and peak level groups.</summary>
 public sealed class BeatManagerLevelsTests
 {
-    /// <summary>Every level form serves the same complete band-reading interface.</summary>
+    /// <summary>Every selectable Levels form serves its existing complete band-reading interface.</summary>
     [Test]
     public void EveryLevelFormExposesTheSameBandAndDerivedReadings()
     {
@@ -21,6 +21,26 @@ public sealed class BeatManagerLevelsTests
         Assert.That(beatManager.Levels.Normalized.Average, Is.EqualTo(0.5f).Within(0.001f));
         Assert.That(beatManager.Levels.Normalized.Centroid, Is.GreaterThan(0.5f));
         Assert.That(beatManager.Levels.Normalized.Dominance, Is.GreaterThan(0f));
+    }
+
+    /// <summary>The shared selector returns each existing Normalized, Smoothed, and Peak value.</summary>
+    [Test]
+    public void SelectReturnsTheRequestedExistingLevelForm()
+    {
+        var beatManager = ManagerWithLevels(1f, 0.5f, 0.25f, 0f);
+        BeatManagerWireFixture.Feed(beatManager, snapshot =>
+            snapshot.levels = new Levels { low = 0f, mid = 0f, high = 0f });
+        beatManager.Update(0.1f);
+
+        Assert.That(
+            beatManager.Levels.Select(LevelsForm.Normalized),
+            Is.EqualTo(beatManager.Levels.Normalized));
+        Assert.That(
+            beatManager.Levels.Select(LevelsForm.Smoothed),
+            Is.EqualTo(beatManager.Levels.Smoothed));
+        Assert.That(
+            beatManager.Levels.Select(LevelsForm.Peak),
+            Is.EqualTo(beatManager.Levels.Peak));
     }
 
     /// <summary>Unavailable wire levels clear Normalized immediately without snapping shaped values.</summary>

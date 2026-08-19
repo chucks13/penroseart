@@ -58,8 +58,11 @@ public class Ripple : ScreenEffect
     /// <summary>Authored palette phase offset for the current Synced look.</summary>
     private const float SyncPaletteOffset = 0.5f;
 
+    /// <summary>Authored Levels form whose Low band supplies the Synced presence gate.</summary>
+    private const LevelsForm SyncLowLevelsForm = LevelsForm.Normalized;
+
     /// <summary>
-    /// Authored default Normalized Low presence threshold for the Beat Pulse palette shift in Synced Mode.
+    /// Authored selected-form Low presence threshold for the Beat Pulse palette shift in Synced Mode.
     /// </summary>
     /// <remarks>
     /// See Levels and Beat Pulse in <c>CONTEXT.md:189-191,267-269</c> and their wire lanes in
@@ -101,6 +104,7 @@ public class Ripple : ScreenEffect
         VelocityDivisor = SyncVelocityDivisor,
         DistanceDivisor = SyncDistanceDivisor,
         PaletteOffset = SyncPaletteOffset,
+        LowLevelsForm = SyncLowLevelsForm,
         LowPresenceThreshold = SyncLowPresenceThreshold,
         HueShiftMax = SyncHueShiftMax,
     };
@@ -176,12 +180,13 @@ public class Ripple : ScreenEffect
             ? SyncSettings.PaletteOffset
             : standaloneSettings.PaletteOffset;
 
-        // Synced Mode uses Normalized Low only as a strict presence gate; above it, the full Beat
-        // Pulse shifts palette hue while drop radius/progression remains independent. Standalone
-        // keeps its existing Waveform path. See CONTEXT.md:189-191,267-269 and the beat-pulse and
-        // levels wire lanes in docs/osc-client-contract.md:355-400.
+        // Synced Mode uses the selected Levels form's Low only as a strict presence gate; above it,
+        // the full Beat Pulse shifts palette hue while drop radius/progression remains independent.
+        // Standalone keeps its existing Waveform path. See CONTEXT.md:189-191,267-269 and the
+        // beat-pulse and levels wire lanes in docs/osc-client-contract.md:355-400.
         float hueShift = isSynced
-            ? beatManager.Levels.Normalized.Low > SyncSettings.LowPresenceThreshold
+            ? beatManager.Levels.Select(SyncSettings.LowLevelsForm).Low >
+                SyncSettings.LowPresenceThreshold
                 ? beatManager.Pulses.Beat * SyncSettings.HueShiftMax
                 : 0f
             : waveform.Lerp(0f, standaloneSettings.HueShift);
@@ -316,7 +321,10 @@ public sealed class RippleSyncSettings
     /// <summary>Palette phase offset applied before wrapping the ripple sum.</summary>
     public float PaletteOffset;
 
-    /// <summary>Normalized Low threshold above which the Beat Pulse shifts the palette in Synced Mode.</summary>
+    /// <summary>Levels form whose Low band supplies the Beat Pulse presence gate.</summary>
+    public LevelsForm LowLevelsForm;
+
+    /// <summary>Selected-form Low threshold above which the Beat Pulse shifts the palette in Synced Mode.</summary>
     [Range(0f, 1f)] public float LowPresenceThreshold;
 
     /// <summary>Maximum hue shift reached at the Beat Pulse peak in Synced Mode.</summary>
@@ -335,6 +343,7 @@ public sealed class RippleSyncSettings
         VelocityDivisor = source.VelocityDivisor;
         DistanceDivisor = source.DistanceDivisor;
         PaletteOffset = source.PaletteOffset;
+        LowLevelsForm = source.LowLevelsForm;
         LowPresenceThreshold = source.LowPresenceThreshold;
         HueShiftMax = source.HueShiftMax;
     }

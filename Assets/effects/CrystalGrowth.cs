@@ -150,12 +150,10 @@ public class CrystalGrowth : EffectBase
     // Sync Defaults
 
     /// <summary>The selected-form Low consumer reads Normalized Levels by default.</summary>
-    private const CrystalGrowthSyncSettings.LevelsForm SyncLowLevelsForm =
-        CrystalGrowthSyncSettings.LevelsForm.Normalized;
+    private const LevelsForm SyncLowLevelsForm = LevelsForm.Normalized;
 
     /// <summary>The selected-form Average consumer reads Normalized Levels by default.</summary>
-    private const CrystalGrowthSyncSettings.LevelsForm SyncActivityLevelsForm =
-        CrystalGrowthSyncSettings.LevelsForm.Normalized;
+    private const LevelsForm SyncActivityLevelsForm = LevelsForm.Normalized;
 
     /// <summary>Selected-form Low value above which Crystal Growth's bass-presence proxy qualifies an open On Beat window (three eighths).</summary>
     private const float SyncLowPresenceThreshold = 0.375f;
@@ -862,10 +860,10 @@ public class CrystalGrowth : EffectBase
     private float ReadLevels(bool isSynced)
     {
         LevelBands lowBands = isSynced
-            ? ReadLevelsForm(SyncSettings.LowLevelsForm)
+            ? beatManager.Levels.Select(SyncSettings.LowLevelsForm)
             : beatManager.Levels.Smoothed;
         LevelBands activityBands = isSynced && SyncSettings.ActivityLevelsForm != SyncSettings.LowLevelsForm
-            ? ReadLevelsForm(SyncSettings.ActivityLevelsForm)
+            ? beatManager.Levels.Select(SyncSettings.ActivityLevelsForm)
             : lowBands;
         lowLevel = lowBands.Low;
         averageLevel = activityBands.Average;
@@ -877,19 +875,6 @@ public class CrystalGrowth : EffectBase
             : standaloneSettings.ActivityLevel;
         return averageLevel.Remap(activityRange.Min, activityRange.Max, 0f, 1f, clamp: true);
     }
-
-    /// <summary>
-    /// Reads one selected Levels form directly from BeatManager's read-only Data Surface.
-    /// </summary>
-    /// <param name="form">The Normalized, Smoothed, or Peak form chosen by this consumer.</param>
-    /// <returns>The selected immutable low/mid/high band set.</returns>
-    private LevelBands ReadLevelsForm(CrystalGrowthSyncSettings.LevelsForm form) => form switch
-    {
-        CrystalGrowthSyncSettings.LevelsForm.Normalized => beatManager.Levels.Normalized,
-        CrystalGrowthSyncSettings.LevelsForm.Smoothed => beatManager.Levels.Smoothed,
-        CrystalGrowthSyncSettings.LevelsForm.Peak => beatManager.Levels.Peak,
-        _ => throw new ArgumentOutOfRangeException(nameof(form)),
-    };
 
     /// <summary>
     /// Maps the current phrase/run-scale Energy to the authored Low/High pace endpoints, with Mid at
@@ -1311,19 +1296,6 @@ public sealed class CrystalGrowthStandaloneSettings
 [Serializable]
 public sealed class CrystalGrowthSyncSettings
 {
-    /// <summary>The three BeatManager Levels forms independently selectable by Crystal Growth consumers.</summary>
-    public enum LevelsForm
-    {
-        /// <summary>The instantaneous wire-authored live-set aggregate.</summary>
-        Normalized,
-
-        /// <summary>The attack/release follower.</summary>
-        Smoothed,
-
-        /// <summary>Instant rise with a tempo-based linear fall.</summary>
-        Peak,
-    }
-
     /// <summary>Levels form used by the Low bass-presence consumer.</summary>
     public LevelsForm LowLevelsForm;
 

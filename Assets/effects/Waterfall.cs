@@ -196,8 +196,7 @@ public class Waterfall : ScreenEffect
     /// through the attack/release follower and Peak lingers after the hit, so both stay
     /// selectable for wall judgment rather than being the default.
     /// </summary>
-    private const WaterfallSyncSettings.SurgeLevelReading SyncStreamSurgeLowLevelReading =
-        WaterfallSyncSettings.SurgeLevelReading.Normalized;
+    private const LevelsForm SyncStreamSurgeLowLevelReading = LevelsForm.Normalized;
 
     /// <summary>
     /// Authored fraction of the screen width, at each edge, where no surge stream center may sit.
@@ -1214,12 +1213,9 @@ public class Waterfall : ScreenEffect
         // vanish with the kick during breakdowns. Checking every open-window frame instead of only
         // the window's rising edge lets a kick that registers a frame or two late still fire its
         // count's surge.
-        float lowBandLevel = SyncSettings.StreamSurgeLowLevelReading switch
-        {
-            WaterfallSyncSettings.SurgeLevelReading.Smoothed => beatManager.Levels.Smoothed.Low,
-            WaterfallSyncSettings.SurgeLevelReading.Peak => beatManager.Levels.Peak.Low,
-            _ => beatManager.Levels.Normalized.Low,
-        };
+        float lowBandLevel = beatManager.Levels
+            .Select(SyncSettings.StreamSurgeLowLevelReading)
+            .Low;
         if (!surgeLaunchedThisWindow &&
             lowBandLevel >= SyncSettings.StreamSurgeLowLevelThreshold)
         {
@@ -1772,29 +1768,16 @@ public sealed class WaterfallSyncSettings
     [Min(0.0001f)] public float StreamSurgeSpeedMultiplier;
 
     /// <summary>
-    /// Which form of the Levels reading the low-band surge gate consults; renders as an Inspector
-    /// dropdown so the reading can be flipped live on the wall.
-    /// </summary>
-    public enum SurgeLevelReading
-    {
-        /// <summary>The instantaneous wire value — high only while the hit is actually sounding.</summary>
-        Normalized,
-
-        /// <summary>The attack/release follower — steadier, but lags the hit.</summary>
-        Smoothed,
-
-        /// <summary>Instant rise with a tempo-based linear fall — holds on after the hit fades.</summary>
-        Peak,
-    }
-
-    /// <summary>
     /// Minimum low-band level, in the reading StreamSurgeLowLevelReading selects, that admits a
     /// beat surge; counts without bass presence launch nothing.
     /// </summary>
     [Range(0f, 1f)] public float StreamSurgeLowLevelThreshold;
 
-    /// <summary>Levels reading the low-band surge gate reads its value from.</summary>
-    public SurgeLevelReading StreamSurgeLowLevelReading;
+    /// <summary>
+    /// Levels form the low-band surge gate reads, serialized as a live Inspector dropdown so the
+    /// reading can be flipped on the wall.
+    /// </summary>
+    public LevelsForm StreamSurgeLowLevelReading;
 
     /// <summary>
     /// Fraction of the screen width at each edge where no surge stream may sit; keeps strikes

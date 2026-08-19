@@ -14,6 +14,19 @@ public enum Band
     High,
 }
 
+/// <summary>The selectable Normalized, Smoothed, and Peak forms of Levels.</summary>
+public enum LevelsForm
+{
+    /// <summary>The instantaneous wire-authored live-set aggregate.</summary>
+    Normalized = 0,
+
+    /// <summary>The attack/release follower.</summary>
+    Smoothed = 1,
+
+    /// <summary>Instant rise with a tempo-based linear fall.</summary>
+    Peak = 2,
+}
+
 /// <summary>One immutable low/mid/high level set and its direct derived readings.</summary>
 public readonly struct LevelBands
 {
@@ -89,6 +102,20 @@ public readonly struct LevelsValues
     public LevelBands Smoothed { get; }
     /// <summary>Instant rise with a tempo-based linear fall.</summary>
     public LevelBands Peak { get; }
+
+    /// <summary>Selects one of the existing immutable Levels forms.</summary>
+    /// <param name="form">The Levels form to read.</param>
+    /// <returns>The selected low/mid/high band set.</returns>
+    /// <exception cref="System.ArgumentOutOfRangeException">
+    /// The supplied value is not a Levels form.
+    /// </exception>
+    public LevelBands Select(LevelsForm form) => form switch
+    {
+        LevelsForm.Normalized => Normalized,
+        LevelsForm.Smoothed => Smoothed,
+        LevelsForm.Peak => Peak,
+        _ => throw new System.ArgumentOutOfRangeException(nameof(form)),
+    };
 }
 
 public partial class BeatManager
