@@ -261,14 +261,21 @@ and side quests included. The coordinator does not narrow this scope.
    - The Spec worker reads the complete diff, the ticket body, and every ticket comment from
      oldest to newest.
 
-3. Present the two reports separately. Resolve hard violations in logical follow-up commits. If
-   any commit changes the reviewed candidate, run both reviews again. Only the final reviewed
-   `HEAD` can land.
+3. Present the two reports separately. Resolve hard violations in logical follow-up commits.
 
-4. Record the reviewed `HEAD`. Merge to master by ref update — `git fetch . <branch>:master` —
+   If a follow-up commit can change the evidence or conclusion for one axis, re-run only that
+   axis. For changes to standards compliance or code structure, re-run Standards. For changes to
+   requirements, behavior, acceptance evidence, or ticket interpretation, re-run Spec.
+
+   If a bounded correction cannot change either conclusion, review the final diff and keep both
+   reports valid. Record why each existing report remains valid. A final `HEAD` can land only with
+   valid reports for both axes.
+
+4. Record the final `HEAD` and the valid reports. Merge to master by ref update —
+   `git fetch . <branch>:master` —
    so no file churn hits the open Editor. Switch to master, delete the branch, and push.
 
-5. Confirm that `master` points to the reviewed commit, the push succeeded, and the worktree is
+5. Confirm that `master` points to the final commit, the push succeeded, and the worktree is
    clean. Close the ticket only after all three checks pass. A finding that surfaced here but
    stays unfixed lands on the epic issue, not in comments on the closed ticket.
 
