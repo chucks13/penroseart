@@ -103,9 +103,6 @@ public static class PenroseUnityTestBridge
                 case RequestPhase.WaitingForSettle:
                     FinishRefresh(currentRequest);
                     return;
-                case RequestPhase.TestRunning:
-                case RequestPhase.Completing:
-                    return;
                 default:
                     throw new InvalidOperationException($"Unknown bridge phase: {currentRequest.phase}");
             }
