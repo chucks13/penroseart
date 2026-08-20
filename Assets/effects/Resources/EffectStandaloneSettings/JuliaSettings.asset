@@ -19,7 +19,7 @@ MonoBehaviour:
       Max: 0.3
       LowRail: 0.1
       HighRail: 0.3
-    Depth: 1
+    Depth: 0.75
     ConstantMorphRadius: 0.0024
     ConstantMorphRate: 0.01
     WindowWidth:
@@ -27,8 +27,8 @@ MonoBehaviour:
       Max: 5
       LowRail: 0.002
       HighRail: 5
-    EdgeLockFraming: 0
-    FogDensity: 2
+    EdgeLockFraming: 0.2
+    FogDensity: 4
     FogBrightnessFloor: 0.22
     FogBrightensTowardSet: 0
     ReliefLightAzimuth: 315

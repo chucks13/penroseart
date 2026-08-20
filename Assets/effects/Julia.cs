@@ -22,7 +22,7 @@ public class Julia : EffectBase
     private const float StandaloneBreathingZoomSpeedMax = 0.3f;
 
     /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
-    private const float StandaloneDepth = 1f;
+    private const float StandaloneDepth = 0.75f;
 
     /// <summary>
     /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
@@ -46,10 +46,10 @@ public class Julia : EffectBase
     /// Window-width fraction that frames the solved boundary point toward the preset's authored
     /// view center. Zero keeps the boundary point at the camera center.
     /// </summary>
-    private const float StandaloneEdgeLockFraming = 0f;
+    private const float StandaloneEdgeLockFraming = 0.2f;
 
     /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
-    private const float StandaloneFogDensity = 2f;
+    private const float StandaloneFogDensity = 4f;
 
     /// <summary>Brightness floor beneath the depth-fog factor.</summary>
     private const float StandaloneFogBrightnessFloor = 0.22f;
@@ -126,7 +126,7 @@ public class Julia : EffectBase
     private const float SyncBreathingZoomSpeedMax = 0.3f;
 
     /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
-    private const float SyncDepth = 1f;
+    private const float SyncDepth = 0.75f;
 
     /// <summary>
     /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
@@ -150,10 +150,10 @@ public class Julia : EffectBase
     /// Window-width fraction that frames the solved boundary point toward the preset's authored
     /// view center. Zero keeps the boundary point at the camera center.
     /// </summary>
-    private const float SyncEdgeLockFraming = 0f;
+    private const float SyncEdgeLockFraming = 0.2f;
 
     /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
-    private const float SyncFogDensity = 2f;
+    private const float SyncFogDensity = 4f;
 
     /// <summary>Brightness floor beneath the depth-fog factor.</summary>
     private const float SyncFogBrightnessFloor = 0.22f;
@@ -184,8 +184,11 @@ public class Julia : EffectBase
         HueRedistribution = 1f,
     };
 
-    /// <summary>Chance that a Roll colors from the shared palette instead of the HSV rainbow.</summary>
-    private const float SyncPaletteChance = 0.5f;
+    /// <summary>
+    /// Chance that a Roll colors from the shared palette instead of the HSV rainbow. Authored at
+    /// zero: the rainbow is the approved Synced look, and palette selection is Standalone's domain.
+    /// </summary>
+    private const float SyncPaletteChance = 0f;
 
     /// <summary>Baseline hue cycling speed in wheel revolutions per second; the colors never stop marching.</summary>
     private const float SyncHueBaseRate = 0.05f;

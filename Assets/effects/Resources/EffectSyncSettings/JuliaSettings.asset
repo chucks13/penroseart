@@ -19,7 +19,7 @@ MonoBehaviour:
       Max: 0.3
       LowRail: 0.1
       HighRail: 0.3
-    Depth: 1
+    Depth: 0.75
     ConstantMorphRadius: 0.0024
     ConstantMorphRate: 0.01
     WindowWidth:
@@ -27,7 +27,7 @@ MonoBehaviour:
       Max: 5
       LowRail: 0.002
       HighRail: 5
-    EdgeLockFraming: 0
+    EdgeLockFraming: 0.2
     FogDensity: 4
     FogBrightnessFloor: 0.22
     FogBrightensTowardSet: 0
@@ -37,12 +37,12 @@ MonoBehaviour:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12
       LuminanceEqualization: 0.85
-      HueSpreadReference: 0.5
+      HueSpreadReference: 0.8
       MaximumLuminanceScale: 10
       DarkLuminanceThreshold: 0.03
-      DuplicateThreshold: 0.08
+      DuplicateThreshold: 0.125
       HueRedistribution: 1
-    PaletteChance: 0
+    PaletteChance: 0.8
     HueBaseRate: 0.05
     FillDiveDepth: 2
     FillAttackRate: 22
