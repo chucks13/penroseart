@@ -28,7 +28,7 @@ MonoBehaviour:
       LowRail: 0.002
       HighRail: 5
     EdgeLockFraming: 0
-    FogDensity: 2
+    FogDensity: 4
     FogBrightnessFloor: 0.22
     ReliefLightAzimuth: 315
     ReliefShadingDepth: 0.72
@@ -41,7 +41,7 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.08
       HueRedistribution: 1
-    PaletteChance: 0.5
+    PaletteChance: 0
     HueBaseRate: 0.05
     FillDiveDepth: 2
     FillAttackRate: 22
@@ -54,9 +54,9 @@ MonoBehaviour:
     WaveformName: beats 2 and 4
     HueCycleDrive:
       Min: 0
-      Max: 1
+      Max: 2
       LowRail: 0
-      HighRail: 1
+      HighRail: 2
     HueBeatRate: 2
     JuliaConstants:
     - {x: 0.285, y: 0.01}

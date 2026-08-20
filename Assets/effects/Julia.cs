@@ -227,7 +227,7 @@ public class Julia : EffectBase
     private const float SyncHueCycleDriveMin = 0f;
 
     /// <summary>Hue-cycle drive at the held Waveform's peak.</summary>
-    private const float SyncHueCycleDriveMax = 1f;
+    private const float SyncHueCycleDriveMax = 2f;
 
     /// <summary>
     /// Extra hue cycling speed, in wheel revolutions per second, added at the beat envelope's
