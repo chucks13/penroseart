@@ -30,6 +30,7 @@ MonoBehaviour:
     EdgeLockFraming: 0
     FogDensity: 4
     FogBrightnessFloor: 0.22
+    FogBrightensTowardSet: 0
     ReliefLightAzimuth: 315
     ReliefShadingDepth: 0.72
     PaletteConditioning:

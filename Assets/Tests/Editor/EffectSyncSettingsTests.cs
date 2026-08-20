@@ -584,6 +584,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.EdgeLockFraming, Is.EqualTo(second.EdgeLockFraming));
         Assert.That(first.FogDensity, Is.EqualTo(second.FogDensity));
         Assert.That(first.FogBrightnessFloor, Is.EqualTo(second.FogBrightnessFloor));
+        Assert.That(first.FogBrightensTowardSet, Is.EqualTo(second.FogBrightensTowardSet));
         Assert.That(first.ReliefLightAzimuth, Is.EqualTo(second.ReliefLightAzimuth));
         Assert.That(first.ReliefShadingDepth, Is.EqualTo(second.ReliefShadingDepth));
         AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
@@ -615,6 +616,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.EdgeLockFraming = 22f;
         asset.Settings.FogDensity = 23f;
         asset.Settings.FogBrightnessFloor = 0.09f;
+        asset.Settings.FogBrightensTowardSet = true;
         asset.Settings.ReliefLightAzimuth = 24f;
         asset.Settings.ReliefShadingDepth = 0.1f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
@@ -646,6 +648,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
         Assert.That(asset.Settings.FogDensity, Is.EqualTo(defaults.FogDensity));
         Assert.That(asset.Settings.FogBrightnessFloor, Is.EqualTo(defaults.FogBrightnessFloor));
+        Assert.That(asset.Settings.FogBrightensTowardSet, Is.EqualTo(defaults.FogBrightensTowardSet));
         Assert.That(asset.Settings.ReliefLightAzimuth, Is.EqualTo(defaults.ReliefLightAzimuth));
         Assert.That(asset.Settings.ReliefShadingDepth, Is.EqualTo(defaults.ReliefShadingDepth));
         AssertPaletteConditioningEqual(
@@ -1407,6 +1410,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.EdgeLockFraming = 22f;
         asset.Settings.FogDensity = 23f;
         asset.Settings.FogBrightnessFloor = 0.09f;
+        asset.Settings.FogBrightensTowardSet = true;
         asset.Settings.ReliefLightAzimuth = 24f;
         asset.Settings.ReliefShadingDepth = 0.1f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
@@ -1447,6 +1451,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
         Assert.That(asset.Settings.FogDensity, Is.EqualTo(defaults.FogDensity));
         Assert.That(asset.Settings.FogBrightnessFloor, Is.EqualTo(defaults.FogBrightnessFloor));
+        Assert.That(asset.Settings.FogBrightensTowardSet, Is.EqualTo(defaults.FogBrightensTowardSet));
         Assert.That(asset.Settings.ReliefLightAzimuth, Is.EqualTo(defaults.ReliefLightAzimuth));
         Assert.That(asset.Settings.ReliefShadingDepth, Is.EqualTo(defaults.ReliefShadingDepth));
         AssertPaletteConditioningEqual(

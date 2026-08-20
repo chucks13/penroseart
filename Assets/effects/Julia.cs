@@ -48,11 +48,14 @@ public class Julia : EffectBase
     /// </summary>
     private const float StandaloneEdgeLockFraming = 0f;
 
-    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
     private const float StandaloneFogDensity = 2f;
 
-    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    /// <summary>Brightness floor beneath the depth-fog factor.</summary>
     private const float StandaloneFogBrightnessFloor = 0.22f;
+
+    /// <summary>Fog polarity: false darkens toward the set beneath a bright exterior; true brightens toward the set out of a dark exterior.</summary>
+    private const bool StandaloneFogBrightensTowardSet = false;
 
     /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
     private const float StandaloneReliefLightAzimuth = 315f;
@@ -149,11 +152,14 @@ public class Julia : EffectBase
     /// </summary>
     private const float SyncEdgeLockFraming = 0f;
 
-    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
     private const float SyncFogDensity = 2f;
 
-    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    /// <summary>Brightness floor beneath the depth-fog factor.</summary>
     private const float SyncFogBrightnessFloor = 0.22f;
+
+    /// <summary>Fog polarity: false darkens toward the set beneath a bright exterior; true brightens toward the set out of a dark exterior.</summary>
+    private const bool SyncFogBrightensTowardSet = false;
 
     /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
     private const float SyncReliefLightAzimuth = 315f;
@@ -331,6 +337,7 @@ public class Julia : EffectBase
         EdgeLockFraming = StandaloneEdgeLockFraming,
         FogDensity = StandaloneFogDensity,
         FogBrightnessFloor = StandaloneFogBrightnessFloor,
+        FogBrightensTowardSet = StandaloneFogBrightensTowardSet,
         ReliefLightAzimuth = StandaloneReliefLightAzimuth,
         ReliefShadingDepth = StandaloneReliefShadingDepth,
         PaletteConditioning = StandalonePaletteConditioning,
@@ -353,6 +360,7 @@ public class Julia : EffectBase
         EdgeLockFraming = SyncEdgeLockFraming,
         FogDensity = SyncFogDensity,
         FogBrightnessFloor = SyncFogBrightnessFloor,
+        FogBrightensTowardSet = SyncFogBrightensTowardSet,
         ReliefLightAzimuth = SyncReliefLightAzimuth,
         ReliefShadingDepth = SyncReliefShadingDepth,
         PaletteConditioning = SyncPaletteConditioning,
@@ -768,18 +776,20 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Maps smooth escape depth through the baked inverted squared-exponential fog, then remaps
-    /// that factor from the live brightness floor to full brightness.
+    /// Maps smooth escape depth through the squared-exponential depth fog in the live polarity,
+    /// then remaps that factor from the live brightness floor to full brightness.
     /// </summary>
     private static float DepthFogBrightness(
         float smoothEscape,
         float fogDensity,
-        float brightnessFloor)
+        float brightnessFloor,
+        bool brightensTowardSet)
     {
         var proximity = Mathf.Sqrt(smoothEscape / Iterations);
         var exponent = fogDensity * (1f - proximity);
-        var invertedFog = 1f - Mathf.Exp(-(exponent * exponent));
-        return brightnessFloor + ((1f - brightnessFloor) * invertedFog);
+        var towardSetFog = Mathf.Exp(-(exponent * exponent));
+        var fog = brightensTowardSet ? towardSetFog : 1f - towardSetFog;
+        return brightnessFloor + ((1f - brightnessFloor) * fog);
     }
 
     /// <summary>
@@ -809,7 +819,7 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Renders the current session journey after solving its boundary lock. Depth, morph, lock
-    /// framing, inverted fog, and relief resolve live from the active mode's Settings without a
+    /// framing, fog, and relief resolve live from the active mode's Settings without a
     /// second fractal pass or any per-frame heap allocation.
     /// </summary>
     public override void Draw()
@@ -888,6 +898,9 @@ public class Julia : EffectBase
         var fogBrightnessFloor = isSynced
             ? SyncSettings.FogBrightnessFloor
             : standaloneSettings.FogBrightnessFloor;
+        var fogBrightensTowardSet = isSynced
+            ? SyncSettings.FogBrightensTowardSet
+            : standaloneSettings.FogBrightensTowardSet;
         var reliefLightAzimuth = isSynced
             ? SyncSettings.ReliefLightAzimuth
             : standaloneSettings.ReliefLightAzimuth;
@@ -950,7 +963,8 @@ public class Julia : EffectBase
                 var brightness = DepthFogBrightness(
                     smoothEscape,
                     fogDensity,
-                    fogBrightnessFloor) * reliefBrightness;
+                    fogBrightnessFloor,
+                    fogBrightensTowardSet) * reliefBrightness;
                 pix += new Color(
                     color.r * brightness,
                     color.g * brightness,
@@ -1036,11 +1050,14 @@ public sealed class JuliaStandaloneSettings
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
     public float EdgeLockFraming;
 
-    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
     [Range(0.1f, 8f)] public float FogDensity;
 
-    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    /// <summary>Brightness floor beneath the depth-fog factor.</summary>
     [Range(0f, 1f)] public float FogBrightnessFloor;
+
+    /// <summary>Fog polarity: false darkens toward the set beneath a bright exterior; true brightens toward the set out of a dark exterior.</summary>
+    public bool FogBrightensTowardSet;
 
     /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
     [Range(0f, 360f)] public float ReliefLightAzimuth;
@@ -1085,6 +1102,7 @@ public sealed class JuliaStandaloneSettings
         EdgeLockFraming = source.EdgeLockFraming;
         FogDensity = source.FogDensity;
         FogBrightnessFloor = source.FogBrightnessFloor;
+        FogBrightensTowardSet = source.FogBrightensTowardSet;
         ReliefLightAzimuth = source.ReliefLightAzimuth;
         ReliefShadingDepth = source.ReliefShadingDepth;
         PaletteConditioning = source.PaletteConditioning;
@@ -1125,11 +1143,14 @@ public sealed class JuliaSyncSettings
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
     public float EdgeLockFraming;
 
-    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
     [Range(0.1f, 8f)] public float FogDensity;
 
-    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    /// <summary>Brightness floor beneath the depth-fog factor.</summary>
     [Range(0f, 1f)] public float FogBrightnessFloor;
+
+    /// <summary>Fog polarity: false darkens toward the set beneath a bright exterior; true brightens toward the set out of a dark exterior.</summary>
+    public bool FogBrightensTowardSet;
 
     /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
     [Range(0f, 360f)] public float ReliefLightAzimuth;
@@ -1205,6 +1226,7 @@ public sealed class JuliaSyncSettings
         EdgeLockFraming = source.EdgeLockFraming;
         FogDensity = source.FogDensity;
         FogBrightnessFloor = source.FogBrightnessFloor;
+        FogBrightensTowardSet = source.FogBrightensTowardSet;
         ReliefLightAzimuth = source.ReliefLightAzimuth;
         ReliefShadingDepth = source.ReliefShadingDepth;
         PaletteConditioning = source.PaletteConditioning;
