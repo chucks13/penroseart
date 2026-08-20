@@ -210,7 +210,7 @@ public class Julia : EffectBase
     /// peak. The held Waveform's envelope (0..1, peaking on its hits) scales this, so the cycle
     /// surges on those hits and settles back to the base rate between them.
     /// </summary>
-    private const float SyncHueBeatRate = 0.25f;
+    private const float SyncHueBeatRate = 2f;
 
     /// <summary>
     /// Julia constants (c = x + yi) known to produce interesting sets. This Synced copy keeps its

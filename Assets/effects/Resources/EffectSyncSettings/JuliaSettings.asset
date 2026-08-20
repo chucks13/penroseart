@@ -53,7 +53,7 @@ MonoBehaviour:
       Max: 1
       LowRail: 0
       HighRail: 1
-    HueBeatRate: 0.25
+    HueBeatRate: 2
     JuliaConstants:
     - {x: 0.285, y: 0.01}
     - {x: -0.70176, y: -0.3842}
