@@ -14,12 +14,39 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::JuliaSyncSettingsAsset
   effectTypeName: Julia
   settings:
+    BreathingZoomSpeed:
+      Min: 0.1
+      Max: 0.3
+      LowRail: 0.1
+      HighRail: 0.3
+    WindowWidth:
+      Min: 0.002
+      Max: 5
+      LowRail: 0.002
+      HighRail: 5
+    PaletteChance: 0.5
+    HueBaseRate: 0.05
     FillDiveDepth: 2
     DropDecayBeats: 8
     DropSpinRate: 1
     DropBlowout: 1.5
     DropHueKick: 0.5
     NegativeDropSpinChance: 0.5
-    BeatEnvelopeAtTrough: 0
-    BeatEnvelopeAtPeak: 1
+    HueCycleDrive:
+      Min: 0
+      Max: 1
+      LowRail: 0
+      HighRail: 1
     HueBeatRate: 0.25
+    JuliaConstants:
+    - {x: 0.285, y: 0.01}
+    - {x: -0.70176, y: -0.3842}
+    - {x: -0.835, y: -0.2321}
+    - {x: -0.8, y: 0.156}
+    - {x: -0.7269, y: 0.1889}
+    PresetViewCenters:
+    - {x: 0.2, y: 0.04}
+    - {x: -0.125, y: -0.04}
+    - {x: -0.0375, y: 0}
+    - {x: 0.175, y: 0.05}
+    - {x: 0.0875, y: 0.225}
