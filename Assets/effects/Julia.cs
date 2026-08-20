@@ -14,11 +14,17 @@ public class Julia : EffectBase
 {
     // Standalone Defaults
 
-    /// <summary>Minimum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
+    /// <summary>Minimum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
     private const float StandaloneBreathingZoomSpeedMin = 0.1f;
 
-    /// <summary>Maximum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
+    /// <summary>Maximum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
     private const float StandaloneBreathingZoomSpeedMax = 0.3f;
+
+    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
+    private const float StandaloneConstantMorphRadius = 0.012f;
+
+    /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
+    private const float StandaloneConstantMorphRate = 0.01f;
 
     /// <summary>Width of the complex-plane window, in complex units, at full zoom-out.</summary>
     private const float StandaloneWindowWidthMax = 5f;
@@ -28,6 +34,15 @@ public class Julia : EffectBase
     /// stops the breathing zoom from collapsing to a single flat point at sin = 1.
     /// </summary>
     private const float StandaloneWindowWidthMin = 0.002f;
+
+    /// <summary>Lower smooth escape count admitted by the boundary-detail tracker.</summary>
+    private const float StandaloneBoundaryEscapeBandMin = 6f;
+
+    /// <summary>Upper smooth escape count admitted by the boundary-detail tracker.</summary>
+    private const float StandaloneBoundaryEscapeBandMax = 72f;
+
+    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
+    private const float StandaloneEdgeTrackingRate = 0.18f;
 
     /// <summary>Chance that an activation colors from the shared palette instead of the HSV rainbow.</summary>
     private const float StandalonePaletteChance = 0.5f;
@@ -68,11 +83,17 @@ public class Julia : EffectBase
 
     // Sync Defaults
 
-    /// <summary>Minimum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
+    /// <summary>Minimum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
     private const float SyncBreathingZoomSpeedMin = 0.1f;
 
-    /// <summary>Maximum breathing-zoom speed re-rolled on activation and each new Grid.</summary>
+    /// <summary>Maximum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
     private const float SyncBreathingZoomSpeedMax = 0.3f;
+
+    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
+    private const float SyncConstantMorphRadius = 0.012f;
+
+    /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
+    private const float SyncConstantMorphRate = 0.01f;
 
     /// <summary>Width of the complex-plane window, in complex units, at full zoom-out.</summary>
     private const float SyncWindowWidthMax = 5f;
@@ -82,6 +103,15 @@ public class Julia : EffectBase
     /// stops the breathing zoom from collapsing to a single flat point at sin = 1.
     /// </summary>
     private const float SyncWindowWidthMin = 0.002f;
+
+    /// <summary>Lower smooth escape count admitted by the boundary-detail tracker.</summary>
+    private const float SyncBoundaryEscapeBandMin = 6f;
+
+    /// <summary>Upper smooth escape count admitted by the boundary-detail tracker.</summary>
+    private const float SyncBoundaryEscapeBandMax = 72f;
+
+    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
+    private const float SyncEdgeTrackingRate = 0.18f;
 
     /// <summary>Chance that a Roll colors from the shared palette instead of the HSV rainbow.</summary>
     private const float SyncPaletteChance = 0.5f;
@@ -188,7 +218,13 @@ public class Julia : EffectBase
         BreathingZoomSpeed = new FloatRange(
             StandaloneBreathingZoomSpeedMin,
             StandaloneBreathingZoomSpeedMax),
+        ConstantMorphRadius = StandaloneConstantMorphRadius,
+        ConstantMorphRate = StandaloneConstantMorphRate,
         WindowWidth = new FloatRange(StandaloneWindowWidthMin, StandaloneWindowWidthMax),
+        BoundaryEscapeBand = new FloatRange(
+            StandaloneBoundaryEscapeBandMin,
+            StandaloneBoundaryEscapeBandMax),
+        EdgeTrackingRate = StandaloneEdgeTrackingRate,
         PaletteChance = StandalonePaletteChance,
         HueBaseRate = StandaloneHueBaseRate,
         HueBeatRate = StandaloneHueBeatRate,
@@ -201,7 +237,13 @@ public class Julia : EffectBase
     public static JuliaSyncSettings SyncDefaults => new()
     {
         BreathingZoomSpeed = new FloatRange(SyncBreathingZoomSpeedMin, SyncBreathingZoomSpeedMax),
+        ConstantMorphRadius = SyncConstantMorphRadius,
+        ConstantMorphRate = SyncConstantMorphRate,
         WindowWidth = new FloatRange(SyncWindowWidthMin, SyncWindowWidthMax),
+        BoundaryEscapeBand = new FloatRange(
+            SyncBoundaryEscapeBandMin,
+            SyncBoundaryEscapeBandMax),
+        EdgeTrackingRate = SyncEdgeTrackingRate,
         PaletteChance = SyncPaletteChance,
         HueBaseRate = SyncHueBaseRate,
         FillDiveDepth = SyncFillDiveDepth,
@@ -242,22 +284,48 @@ public class Julia : EffectBase
         return offsets;
     }
 
-    private float angle;
+    /// <summary>The current breathing-zoom sine position in radians.</summary>
+    private float zoomBreathPhase;
 
-    /// <summary>Current breathing-zoom speed rolled for this activation or Grid.</summary>
-    private float speed;
+    /// <summary>Breathing-zoom speed rolled once for this Play Mode session.</summary>
+    private float breathingZoomSpeed;
 
-    private Vector2 c;
+    /// <summary>The authored Julia constant at the center of the selected preset's morph orbit.</summary>
+    private Vector2 presetConstant;
+
+    /// <summary>The Julia constant at its current position on the session journey's morph orbit.</summary>
+    private Vector2 morphedConstant;
+
+    /// <summary>The current normalized position around the Julia constant's circular morph orbit.</summary>
+    private float constantMorphPhase;
+
+    /// <summary>Whether the one-time Play Mode session journey Roll has run.</summary>
+    private bool sessionJourneyStarted;
+
+    /// <summary>The session journey's current complex-plane view center.</summary>
     private Vector2 viewCenter;
 
-    /// <summary>The curated Julia preset selected for this activation.</summary>
+    /// <summary>The latest complex-plane centroid of visible boundary detail.</summary>
+    /// <remarks>
+    /// Seeded to the activation's view center, so the tracking drift rests at exactly zero
+    /// until a frame observes boundary detail.
+    /// </remarks>
+    private Vector2 edgeTarget;
+
+    /// <summary>The curated Julia preset selected for this Play Mode session.</summary>
     /// <remarks>
     /// Its <c>0..JuliaConstants.Length</c> roll covers the complete preset catalog, not an
     /// authored subrange, so the bounds remain part of the selection mechanism.
     /// </remarks>
     private int presetIndex;
+
+    /// <summary>The hue-wheel offset, reset on each activation.</summary>
     private float hueScroll;
+
+    /// <summary>The current Fill Build envelope used by the zoom dive.</summary>
     private float fillEnv;
+
+    /// <summary>The current Drop Decay envelope used by the spin and zoom blowout.</summary>
     private float dropEnv;
 
     /// <summary>The signed unit direction used by the current Drop spin.</summary>
@@ -266,8 +334,13 @@ public class Julia : EffectBase
     /// magnitude range; <see cref="JuliaSyncSettings.NegativeDropSpinChance"/> carries the tunable bias.
     /// </remarks>
     private float dropSpinDir = 1f;
+
+    /// <summary>The session journey's accumulated rotation in radians.</summary>
     private float rotation;
+
+    /// <summary>Whether the current color Roll uses the shared palette instead of the HSV rainbow.</summary>
     private bool usePalette;
+
     /// <summary>Whether Drop was active on the preceding frame, retained for local onset detection.</summary>
     private bool previousDropActive;
 
@@ -276,14 +349,15 @@ public class Julia : EffectBase
     /// </summary>
     public override string DebugText()
     {
-        return $"{presetIndex}, {speed}, ({viewCenter.x}, {viewCenter.y})\n" +
+        return $"{presetIndex}, {breathingZoomSpeed}, ({viewCenter.x}, {viewCenter.y})\n" +
             (usePalette ? "PALETTE" : "RAINBOW") + $" HUE {hueScroll:0.00}" +
             (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
             (dropEnv > 0.01f ? $"\nDROP {dropEnv:0.00}" : "");
     }
 
     /// <summary>
-    /// Called when effect is selected by controller to be drawn every frame
+    /// Resolves the current Settings, starts the session journey once, and performs the shared
+    /// activation re-roll while preserving zoom breath, view center, morphed constant, and rotation.
     /// </summary>
     public override void OnStart()
     {
@@ -294,6 +368,27 @@ public class Julia : EffectBase
             typeof(Julia),
             SyncDefaults);
 
+        if (!sessionJourneyStarted)
+        {
+            RollSessionJourney();
+        }
+
+        Reroll();
+        hueScroll = 0f;
+        fillEnv = 0f;
+        dropEnv = 0f;
+        edgeTarget = viewCenter;
+        previousDropActive = beatManager.Drop.Active;
+        buffer.Clear();
+    }
+
+    /// <summary>
+    /// Rolls the preset, breathing-zoom speed, and morph starting phase once for the Play Mode
+    /// session. Julia deliberately resumes this session journey when it returns to the wall,
+    /// rather than discarding its carried motion state at later Rolls.
+    /// </summary>
+    private void RollSessionJourney()
+    {
         var isSynced = beatManager.IsSynced;
         var juliaConstants = isSynced
             ? SyncSettings.JuliaConstants
@@ -301,33 +396,30 @@ public class Julia : EffectBase
         var presetViewCenters = isSynced
             ? SyncSettings.PresetViewCenters
             : standaloneSettings.PresetViewCenters;
+        var breathingZoomSpeedRange = isSynced
+            ? SyncSettings.BreathingZoomSpeed
+            : standaloneSettings.BreathingZoomSpeed;
+
         presetIndex = Random.Range(0, juliaConstants.Length);
-        c = juliaConstants[presetIndex];
+        presetConstant = juliaConstants[presetIndex];
         viewCenter = presetViewCenters[presetIndex];
-        Reroll();
-        hueScroll = 0f;
-        fillEnv = 0f;
-        dropEnv = 0f;
-        rotation = 0f;
-        previousDropActive = beatManager.Drop.Active;
-        buffer.Clear();
+        breathingZoomSpeed = Random.Range(
+            breathingZoomSpeedRange.Min,
+            breathingZoomSpeedRange.Max);
+        constantMorphPhase = Random.value;
+        sessionJourneyStarted = true;
     }
 
     /// <summary>
-    /// Re-rolls the per-activation look: Julia constant preset, zoom speed, color mode
-    /// (fresh palette or rainbow), and held Waveform. Called once at activation and
-    /// again on each new Grid, so the fractal takes a fresh form in step with the music.
+    /// Performs the shared activation/Grid re-roll: color mode, an optional fresh palette, and
+    /// held Waveform. It never changes the session journey.
     /// </summary>
     private void Reroll()
     {
         var isSynced = beatManager.IsSynced;
-        var breathingZoomSpeed = isSynced
-            ? SyncSettings.BreathingZoomSpeed
-            : standaloneSettings.BreathingZoomSpeed;
         var paletteChance = isSynced
             ? SyncSettings.PaletteChance
             : standaloneSettings.PaletteChance;
-        speed = Random.Range(breathingZoomSpeed.Min, breathingZoomSpeed.Max);
         usePalette = Random.value < paletteChance;
         if (usePalette) APalette.Change();
 
@@ -342,7 +434,7 @@ public class Julia : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// On each new Grid the fractal takes a fresh form and held Waveform.
+    /// On each new Grid Julia re-rolls only its color mode and held Waveform.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -377,11 +469,46 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Called every frame by controller when the effect is selected
+    /// Advances the session journey's Julia constant deterministically around the preset's
+    /// circular orbit, reading the active mode's live Settings on every frame.
+    /// </summary>
+    private void UpdateConstantMorph(bool isSynced)
+    {
+        var morphRadius = isSynced
+            ? SyncSettings.ConstantMorphRadius
+            : standaloneSettings.ConstantMorphRadius;
+        var morphRate = isSynced
+            ? SyncSettings.ConstantMorphRate
+            : standaloneSettings.ConstantMorphRate;
+
+        constantMorphPhase = Mathf.Repeat(
+            constantMorphPhase + (morphRate * effectDelta),
+            1f);
+        var orbitAngle = constantMorphPhase * 2f * Mathf.PI;
+        morphedConstant = presetConstant + new Vector2(
+            Mathf.Cos(orbitAngle) * morphRadius,
+            Mathf.Sin(orbitAngle) * morphRadius);
+    }
+
+    /// <summary>
+    /// Scores one existing smooth escape result for boundary detail. A triangular weight peaks
+    /// halfway through the live boundary band and reaches zero at either endpoint.
+    /// </summary>
+    private static float BoundaryWeight(float smoothEscape, FloatRange boundaryBand)
+    {
+        var midpoint = (boundaryBand.Min + boundaryBand.Max) * 0.5f;
+        var halfWidth = (boundaryBand.Max - boundaryBand.Min) * 0.5f;
+        return Mathf.Max(0f, 1f - (Mathf.Abs(smoothEscape - midpoint) / halfWidth));
+    }
+
+    /// <summary>
+    /// Renders the current session journey and accumulates its visible boundary target from the
+    /// smooth escape results already produced for color, without another fractal pass.
     /// </summary>
     public override void Draw()
     {
         var isSynced = beatManager.IsSynced;
+        UpdateConstantMorph(isSynced);
 
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
         // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
@@ -409,18 +536,27 @@ public class Julia : EffectBase
         var windowWidth = isSynced
             ? SyncSettings.WindowWidth
             : standaloneSettings.WindowWidth;
-        var sa = Mathf.Sin(angle).Remap(1f, -1f, 0f, 1f);
+        var sa = Mathf.Sin(zoomBreathPhase).Remap(1f, -1f, 0f, 1f);
         var window = Mathf.Clamp(
             windowWidth.Max * sa * Mathf.Exp(
                 (SyncSettings.DropBlowout * dropEnv) - (SyncSettings.FillDiveDepth * fillEnv)),
             windowWidth.Min,
             windowWidth.Max);
         var scale = window / penrose.Bounds.size.x;
-        angle += speed * effectDelta;
+        zoomBreathPhase += breathingZoomSpeed * effectDelta;
 
         // Drop spin: rotate wall space into the complex plane.
         var rotCos = Mathf.Cos(rotation);
         var rotSin = Mathf.Sin(rotation);
+        var boundaryEscapeBand = isSynced
+            ? SyncSettings.BoundaryEscapeBand
+            : standaloneSettings.BoundaryEscapeBand;
+        var edgeTrackingRate = isSynced
+            ? SyncSettings.EdgeTrackingRate
+            : standaloneSettings.EdgeTrackingRate;
+        var boundaryWeightTotal = 0f;
+        var boundaryWeightedX = 0f;
+        var boundaryWeightedY = 0f;
 
         for (var i = 0; i < buffer.Length; i++)
         {
@@ -431,11 +567,29 @@ public class Julia : EffectBase
                 var world = center + aaOffsets[s];
                 var rx = (world.x * rotCos) - (world.y * rotSin);
                 var ry = (world.x * rotSin) + (world.y * rotCos);
-                pix += EscapeColor(SampleEscape(viewCenter.x + (rx * scale), viewCenter.y + (ry * scale)));
+                var sampleX = viewCenter.x + (rx * scale);
+                var sampleY = viewCenter.y + (ry * scale);
+                var smoothEscape = SampleEscape(sampleX, sampleY);
+                pix += EscapeColor(smoothEscape);
+
+                var boundaryWeight = BoundaryWeight(smoothEscape, boundaryEscapeBand);
+                boundaryWeightTotal += boundaryWeight;
+                boundaryWeightedX += sampleX * boundaryWeight;
+                boundaryWeightedY += sampleY * boundaryWeight;
             }
 
             buffer[i] = pix / aaOffsets.Length;
         }
+
+        if (boundaryWeightTotal > 0f)
+        {
+            edgeTarget = new Vector2(
+                boundaryWeightedX / boundaryWeightTotal,
+                boundaryWeightedY / boundaryWeightTotal);
+        }
+
+        var edgeTrackingBlend = 1f - Mathf.Exp(-edgeTrackingRate * effectDelta);
+        viewCenter += edgeTrackingBlend * (edgeTarget - viewCenter);
     }
 
     /// <summary>
@@ -455,8 +609,8 @@ public class Julia : EffectBase
 
             var twoAb = 2f * a * b;
 
-            a = aa - bb + c.x;
-            b = twoAb + c.y;
+            a = aa - bb + morphedConstant.x;
+            b = twoAb + morphedConstant.y;
             aa = a * a;
             bb = b * b;
 
@@ -492,11 +646,23 @@ public class Julia : EffectBase
 [Serializable]
 public sealed class JuliaStandaloneSettings
 {
-    /// <summary>Per-activation and per-Grid breathing-zoom speed range.</summary>
+    /// <summary>Breathing-zoom speed range rolled on the first activation of a Play Mode session.</summary>
     public FloatRange BreathingZoomSpeed;
+
+    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
+    public float ConstantMorphRadius;
+
+    /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
+    public float ConstantMorphRate;
 
     /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
     public FloatRange WindowWidth;
+
+    /// <summary>Smooth escape-count band treated as visible Julia boundary detail.</summary>
+    public FloatRange BoundaryEscapeBand;
+
+    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
+    public float EdgeTrackingRate;
 
     /// <summary>Chance that a color-mode roll selects the shared palette instead of the HSV rainbow.</summary>
     [Range(0f, 1f)] public float PaletteChance;
@@ -525,7 +691,11 @@ public sealed class JuliaStandaloneSettings
         }
 
         BreathingZoomSpeed = CopyRange(source.BreathingZoomSpeed);
+        ConstantMorphRadius = source.ConstantMorphRadius;
+        ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
+        BoundaryEscapeBand = CopyRange(source.BoundaryEscapeBand);
+        EdgeTrackingRate = source.EdgeTrackingRate;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         HueBeatRate = source.HueBeatRate;
@@ -545,11 +715,23 @@ public sealed class JuliaStandaloneSettings
 [Serializable]
 public sealed class JuliaSyncSettings
 {
-    /// <summary>Per-activation and per-Grid breathing-zoom speed range.</summary>
+    /// <summary>Breathing-zoom speed range rolled on the first activation of a Play Mode session.</summary>
     public FloatRange BreathingZoomSpeed;
+
+    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
+    public float ConstantMorphRadius;
+
+    /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
+    public float ConstantMorphRate;
 
     /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
     public FloatRange WindowWidth;
+
+    /// <summary>Smooth escape-count band treated as visible Julia boundary detail.</summary>
+    public FloatRange BoundaryEscapeBand;
+
+    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
+    public float EdgeTrackingRate;
 
     /// <summary>Chance that a color-mode Roll selects the shared palette instead of the HSV rainbow.</summary>
     [Range(0f, 1f)] public float PaletteChance;
@@ -596,7 +778,11 @@ public sealed class JuliaSyncSettings
         }
 
         BreathingZoomSpeed = CopyRange(source.BreathingZoomSpeed);
+        ConstantMorphRadius = source.ConstantMorphRadius;
+        ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
+        BoundaryEscapeBand = CopyRange(source.BoundaryEscapeBand);
+        EdgeTrackingRate = source.EdgeTrackingRate;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         FillDiveDepth = source.FillDiveDepth;

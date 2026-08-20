@@ -19,11 +19,19 @@ MonoBehaviour:
       Max: 0.3
       LowRail: 0.1
       HighRail: 0.3
+    ConstantMorphRadius: 0.012
+    ConstantMorphRate: 0.01
     WindowWidth:
       Min: 0.002
       Max: 5
       LowRail: 0.002
       HighRail: 5
+    BoundaryEscapeBand:
+      Min: 6
+      Max: 72
+      LowRail: 6
+      HighRail: 72
+    EdgeTrackingRate: 0.18
     PaletteChance: 0.5
     HueBaseRate: 0.05
     HueBeatRate: 0.25
