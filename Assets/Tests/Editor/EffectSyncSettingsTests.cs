@@ -1430,8 +1430,9 @@ public sealed class EffectSyncSettingsTests
 
     /// <summary>
     /// Restore replaces every edited Ripple Sync Setting and Rail, including spawn density, palette
-    /// conditioning, the Levels form, Low presence threshold, Fill complement depth, both Drop
-    /// spawning quantities, and hue drift rate, with the current file-local Sync Defaults object.
+    /// conditioning, the Levels form, Low presence threshold, Fill complement depth, the Drop
+    /// spawning and seeding quantities, and hue drift rate, with the current file-local Sync
+    /// Defaults object.
     /// </summary>
     /// <remarks>
     /// See Drop in <c>CONTEXT.md</c> and the <c>/rave/onair/drop_state</c> lane in
@@ -1469,6 +1470,8 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.FillComplementDepth = 0.7f;
         asset.Settings.DropSpawnBeats = 6;
         asset.Settings.DropSpawnsPerBeat = 4;
+        asset.Settings.DropSeedBeatsBefore = 5;
+        asset.Settings.DropSeedSpawns = 9;
         asset.Settings.HueDriftRate = 0.6f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(Ripple), TempAssetFolder);
@@ -1496,6 +1499,8 @@ public sealed class EffectSyncSettingsTests
             Is.EqualTo(defaults.FillComplementDepth));
         Assert.That(asset.Settings.DropSpawnBeats, Is.EqualTo(defaults.DropSpawnBeats));
         Assert.That(asset.Settings.DropSpawnsPerBeat, Is.EqualTo(defaults.DropSpawnsPerBeat));
+        Assert.That(asset.Settings.DropSeedBeatsBefore, Is.EqualTo(defaults.DropSeedBeatsBefore));
+        Assert.That(asset.Settings.DropSeedSpawns, Is.EqualTo(defaults.DropSeedSpawns));
         Assert.That(asset.Settings.HueDriftRate, Is.EqualTo(defaults.HueDriftRate));
     }
 

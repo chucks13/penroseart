@@ -50,4 +50,6 @@ MonoBehaviour:
     FillComplementDepth: 1
     DropSpawnBeats: 32
     DropSpawnsPerBeat: 2
+    DropSeedBeatsBefore: 2
+    DropSeedSpawns: 4
     HueDriftRate: 0.05

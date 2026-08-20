@@ -185,6 +185,24 @@ public class Ripple : ScreenEffect
     private const int SyncDropSpawnsPerBeat = 2;
 
     /// <summary>
+    /// Authored whole beats before the upcoming Drop at which Ripple seeds spawn points once in
+    /// Synced Mode.
+    /// </summary>
+    /// <remarks>
+    /// See Drop, Edge, and Beat Counting in <c>CONTEXT.md</c>, and the inactive
+    /// <c>count_beats</c> meaning of the <c>/rave/onair/drop_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const int SyncDropSeedBeatsBefore = 2;
+
+    /// <summary>Authored number of wavefronts seeded once before the upcoming Drop.</summary>
+    /// <remarks>
+    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private const int SyncDropSeedSpawns = 4;
+
+    /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or
     /// below its presence threshold in Synced Mode.
     /// </summary>
@@ -195,8 +213,8 @@ public class Ripple : ScreenEffect
 
     /// <summary>
     /// Ripple handles Fill with a transient Beat Pulse hue rotation toward complementary colors,
-    /// handles the opening Drop beats with extra wavefront spawns, and suits Mid/High Energy
-    /// sections.
+    /// handles the Drop by seeding spawn points once just before it lands and spawning extra
+    /// wavefronts on its opening beats, and suits Mid/High Energy sections.
     /// </summary>
     /// <remarks>
     /// See Repertoire, Fill, Drop, Beat Pulse, and Energy in <c>CONTEXT.md</c>, and the
@@ -254,6 +272,8 @@ public class Ripple : ScreenEffect
         FillComplementDepth = SyncFillComplementDepth,
         DropSpawnBeats = SyncDropSpawnBeats,
         DropSpawnsPerBeat = SyncDropSpawnsPerBeat,
+        DropSeedBeatsBefore = SyncDropSeedBeatsBefore,
+        DropSeedSpawns = SyncDropSeedSpawns,
         HueDriftRate = SyncHueDriftRate,
     };
 
@@ -331,6 +351,16 @@ public class Ripple : ScreenEffect
     private int dropSpawnBeatCount;
 
     /// <summary>
+    /// Previous upcoming-Drop beats-until value retained for the consumer-local seed Edge. Null
+    /// while a Drop is active, unannounced, or Standalone Mode rests the group.
+    /// </summary>
+    /// <remarks>
+    /// See Drop, Data Surface, and Edge in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    private int? previousDropBeatsUntil;
+
+    /// <summary>
     /// Whether the previous frame was in Synced Mode, retained so entering it cannot apply pulse
     /// movement accumulated while Standalone held the hue position.
     /// </summary>
@@ -381,6 +411,7 @@ public class Ripple : ScreenEffect
         previousPulse = pulse;
         previousIsSynced = isSynced;
         previousDropBeatsRemaining = null;
+        previousDropBeatsUntil = null;
         dropSpawnBeatCount = 0;
         FloatRange activeSpawnRange = isSynced
             ? SyncSettings.SpawnsPerCrossing
@@ -570,6 +601,24 @@ public class Ripple : ScreenEffect
             dropSpawnBeatCount++;
         }
         previousDropBeatsRemaining = dropBeatsRemaining;
+
+        // Seeding once, DropSeedBeatsBefore beats ahead of the landing, puts DropSeedSpawns fresh
+        // rings on the wall so the Drop arrives onto visible motion. BeatsUntil is null while a
+        // Drop is active or unannounced, so the transition Edge into the authored lead value fires
+        // exactly once per approach. See Drop, Data Surface, and Edge in CONTEXT.md, and the
+        // inactive count_beats meaning of /rave/onair/drop_state in docs/osc-client-contract.md.
+        int? dropBeatsUntil = isSynced ? beatManager.Drop.BeatsUntil : null;
+        bool seedEdge = dropBeatsUntil.HasValue &&
+            dropBeatsUntil != previousDropBeatsUntil &&
+            dropBeatsUntil.Value == SyncSettings.DropSeedBeatsBefore;
+        if (seedEdge)
+        {
+            for (int i = 0; i < SyncSettings.DropSeedSpawns; i++)
+            {
+                SpawnWavefront(velocityRange);
+            }
+        }
+        previousDropBeatsUntil = dropBeatsUntil;
     }
 
     /// <summary>
@@ -828,6 +877,21 @@ public sealed class RippleSyncSettings
     /// </remarks>
     public int DropSpawnsPerBeat;
 
+    /// <summary>Whole beats before the upcoming Drop at which spawn points are seeded once.</summary>
+    /// <remarks>
+    /// See Drop, Edge, and Beat Counting in <c>CONTEXT.md</c>, and the inactive
+    /// <c>count_beats</c> meaning of the <c>/rave/onair/drop_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    public int DropSeedBeatsBefore;
+
+    /// <summary>Number of wavefronts seeded once before the upcoming Drop.</summary>
+    /// <remarks>
+    /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
+    /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
+    public int DropSeedSpawns;
+
     /// <summary>
     /// Hue-wheel cycles advanced per second while the selected Levels form's Low is at or below the
     /// presence threshold in Synced Mode.
@@ -860,6 +924,8 @@ public sealed class RippleSyncSettings
         FillComplementDepth = source.FillComplementDepth;
         DropSpawnBeats = source.DropSpawnBeats;
         DropSpawnsPerBeat = source.DropSpawnsPerBeat;
+        DropSeedBeatsBefore = source.DropSeedBeatsBefore;
+        DropSeedSpawns = source.DropSeedSpawns;
         HueDriftRate = source.HueDriftRate;
     }
 
