@@ -15,6 +15,10 @@ public enum Band
 }
 
 /// <summary>The selectable Normalized, Smoothed, and Peak forms of Levels.</summary>
+/// <remarks>
+/// See Levels in <c>CONTEXT.md</c> and the <c>/rave/onair/levels</c> lane in
+/// <c>docs/osc-client-contract.md</c>.
+/// </remarks>
 public enum LevelsForm
 {
     /// <summary>The instantaneous wire-authored live-set aggregate.</summary>

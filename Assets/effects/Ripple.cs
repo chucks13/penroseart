@@ -42,8 +42,7 @@ public class Ripple : ScreenEffect
     private const float StandalonePaletteOffset = 0.5f;
 
     /// <summary>
-    /// Standalone palette conditioning for clean separation between Wavefronts. Starting from the
-    /// Angles calibration with the hue-spread reference tightened at the wall, it moves dark-heavy
+    /// Standalone palette conditioning for clean separation between Wavefronts. It moves dark-heavy
     /// palettes into one useful luminance band, repairs black and near-black entries with
     /// neighbouring hue, collapses near-duplicates, and redistributes distinct colour movement
     /// across the cyclic table. Tune on the wall.
@@ -94,12 +93,24 @@ public class Ripple : ScreenEffect
     private const float SyncVelocityMax = 1.25f;
 
     /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at Low Energy.</summary>
+    /// <remarks>
+    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     private const float SyncLowCrossingBeats = 16f;
 
     /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at Mid Energy.</summary>
+    /// <remarks>
+    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     private const float SyncMidCrossingBeats = 8f;
 
     /// <summary>Authored beats for a unit-velocity wavefront to cross the screen at High Energy.</summary>
+    /// <remarks>
+    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     private const float SyncHighCrossingBeats = 4f;
 
     /// <summary>Authored minimum real-time screen crossing for the tempo-and-Energy pace.</summary>
@@ -124,9 +135,9 @@ public class Ripple : ScreenEffect
 
     /// <summary>
     /// Sync palette conditioning, independently authored so live tuning in one mode cannot drift
-    /// the other. It starts at the same dark-heavy-palette repair calibration as Standalone, keeping
-    /// Wavefront colour separation readable while the Beat Pulse wiggle and hue drift move through
-    /// the conditioned cyclic table. Tune on the wall.
+    /// the other. It is authored to the same dark-heavy-palette repair calibration as Standalone,
+    /// keeping Wavefront colour separation readable while the wire-beat-pulse hue wiggle and hue
+    /// drift move through the conditioned cyclic table. Tune on the wall.
     /// </summary>
     private static PaletteConditioning SyncPaletteConditioning => new()
     {
@@ -144,26 +155,30 @@ public class Ripple : ScreenEffect
     private const LevelsForm SyncLowLevelsForm = LevelsForm.Smoothed;
 
     /// <summary>
-    /// Authored selected-form Low presence threshold for the Beat Pulse palette shift in Synced Mode.
+    /// Authored selected-form Low presence threshold for the wire-beat-pulse palette shift in
+    /// Synced Mode.
     /// </summary>
     /// <remarks>
-    /// See Levels and Beat Pulse in <c>CONTEXT.md:189-191,267-269</c> and their wire lanes in
-    /// <c>docs/osc-client-contract.md:355-400</c>.
+    /// See Levels and the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c>, and
+    /// the <c>/rave/onair/levels</c> and <c>/rave/onair/beat_pulse</c> lanes in
+    /// <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncLowPresenceThreshold = 0.4f;
 
-    /// <summary>Authored amplitude of the Beat Pulse hue wiggle in Synced Mode.</summary>
+    /// <summary>Authored amplitude of the wire-beat-pulse hue wiggle in Synced Mode.</summary>
     /// <remarks>
-    /// See Beat Pulse in <c>CONTEXT.md:267-269</c> and <c>docs/osc-client-contract.md:355-382</c>.
+    /// See the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c> and the
+    /// <c>/rave/onair/beat_pulse</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncHueWiggleAmplitude = 0.4f;
 
     /// <summary>
-    /// Authored depth of the Beat Pulse hue rotation while a Fill is active in Synced Mode: the
-    /// fraction of the half-wheel journey to the complementary color reached at each pulse peak.
+    /// Authored depth of the wire-beat-pulse hue rotation while a Fill is active in Synced Mode:
+    /// the fraction of the half-wheel journey to the complementary color reached at each pulse peak.
     /// </summary>
     /// <remarks>
-    /// See Fill and Beat Pulse in <c>CONTEXT.md</c>, and the <c>/rave/onair/fill_state</c> and
+    /// See Fill and the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c>, and
+    /// the <c>/rave/onair/fill_state</c> and
     /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private const float SyncFillComplementDepth = 1f;
@@ -212,12 +227,13 @@ public class Ripple : ScreenEffect
     private const float SyncHueDriftRate = 0.05f;
 
     /// <summary>
-    /// Ripple handles Fill with a transient Beat Pulse hue rotation toward complementary colors,
+    /// Ripple handles Fill with a transient wire-beat-pulse hue rotation toward complementary colors,
     /// handles the Drop by seeding spawn points once just before it lands and spawning extra
     /// wavefronts on its opening beats, and suits Mid/High Energy sections.
     /// </summary>
     /// <remarks>
-    /// See Repertoire, Fill, Drop, Beat Pulse, and Energy in <c>CONTEXT.md</c>, and the
+    /// See Repertoire, Fill, Drop, the pulse family (Duration Pulse / Duration Gate), and Energy
+    /// in <c>CONTEXT.md</c>, and the
     /// <c>/rave/onair/fill_state</c>, <c>/rave/onair/drop_state</c>,
     /// <c>/rave/onair/beat_pulse</c>, and <c>/rave/onair/energy_state</c> lanes in
     /// <c>docs/osc-client-contract.md</c>.
@@ -325,12 +341,12 @@ public class Ripple : ScreenEffect
     private float huePhase;
 
     /// <summary>
-    /// Previous frame's Beat Pulse read, advanced every frame so reopening the Low gate applies only
-    /// the current frame's pulse movement.
+    /// Previous frame's wire beat pulse read, advanced every frame so reopening the Low gate
+    /// applies only the current frame's pulse movement.
     /// </summary>
     /// <remarks>
-    /// See Beat Pulse in <c>CONTEXT.md:268-270</c> and
-    /// <c>docs/osc-client-contract.md:356-382</c>.
+    /// See the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c> and the
+    /// <c>/rave/onair/beat_pulse</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     private float previousPulse;
 
@@ -476,11 +492,12 @@ public class Ripple : ScreenEffect
             : standaloneSettings.ClockRate;
 
         // Synced Mode uses the selected Levels form's Low only as a strict presence gate. Above it,
-        // the full Beat Pulse's frame delta moves the persistent hue position; below it, the authored
-        // drift moves that same position. Standalone holds it. Advancing previousPulse in every mode
-        // and gate state keeps every crossing a velocity change instead of a position jump. See
-        // CONTEXT.md:189-191,227-235,268-270 and the beat-pulse and levels wire lanes in
-        // docs/osc-client-contract.md:356-400.
+        // the wire beat pulse's frame delta moves the persistent hue position; below it, the
+        // authored drift moves that same position. Standalone holds it. Advancing previousPulse in
+        // every mode and gate state keeps every crossing a velocity change instead of a position
+        // jump. See Levels, Standalone Mode / Synced Mode, and the pulse family (Duration Pulse /
+        // Duration Gate) in CONTEXT.md, and the /rave/onair/levels and /rave/onair/beat_pulse
+        // lanes in docs/osc-client-contract.md.
         float pulse = beatManager.Pulses.Beat;
         if (isSynced)
         {
@@ -495,13 +512,14 @@ public class Ripple : ScreenEffect
         previousPulse = pulse;
         previousIsSynced = isSynced;
 
-        // Fill rotates each rendered hue around the wheel by the raw Beat Pulse — pulse x depth x
+        // Fill rotates each rendered hue around the wheel by the wire beat pulse — pulse x depth x
         // half the wheel — so every color travels the rim to its complement and back at its own
         // saturation and brightness, never crossing the gray middle a straight crossfade passes
         // through. The rotation never enters huePhase, so it vanishes without disturbing the wiggle
-        // or drift when Active ends. See Fill and Beat Pulse in CONTEXT.md and the
-        // /rave/onair/fill_state and /rave/onair/beat_pulse lanes in docs/osc-client-contract.md.
-        bool fillActive = isSynced && beatManager.Fill.Active;
+        // or drift when Active ends. See Fill, Standalone Mode / Synced Mode, and the pulse family
+        // (Duration Pulse / Duration Gate) in CONTEXT.md, and the /rave/onair/fill_state and
+        // /rave/onair/beat_pulse lanes in docs/osc-client-contract.md.
+        bool fillActive = beatManager.Fill.Active;
         float fillHueRotation = fillActive
             ? pulse * SyncSettings.FillComplementDepth * 0.5f
             : 0f;
@@ -535,9 +553,9 @@ public class Ripple : ScreenEffect
                 for (int i = 0; i < activeWavefrontCount; i++)
                 {
                     Wavefront wavefront = wavefronts[i];
-                    var d = Vector2.Distance(screenPosition, wavefront.Position);
+                    var distance = Vector2.Distance(screenPosition, wavefront.Position);
                     var contribution =
-                        (wavefront.CurrentRadius - (d / distanceDivisor)).Clamp01();
+                        (wavefront.CurrentRadius - (distance / distanceDivisor)).Clamp01();
                     wavefrontPending |= contribution < 1f;
                     sum += contribution;
                 }
@@ -579,7 +597,7 @@ public class Ripple : ScreenEffect
         // Active ends. Drop wavefronts are added after the unchanged paced roll and flat-spawn
         // decision, leaving both existing paths in force. See Drop, Data Surface, and Edge in
         // CONTEXT.md, and /rave/onair/drop_state in docs/osc-client-contract.md.
-        bool dropActive = isSynced && beatManager.Drop.Active;
+        bool dropActive = beatManager.Drop.Active;
         int? dropBeatsRemaining = dropActive
             ? beatManager.Drop.BeatsRemaining.Value
             : null;
@@ -607,7 +625,7 @@ public class Ripple : ScreenEffect
         // Drop is active or unannounced, so the transition Edge into the authored lead value fires
         // exactly once per approach. See Drop, Data Surface, and Edge in CONTEXT.md, and the
         // inactive count_beats meaning of /rave/onair/drop_state in docs/osc-client-contract.md.
-        int? dropBeatsUntil = isSynced ? beatManager.Drop.BeatsUntil : null;
+        int? dropBeatsUntil = beatManager.Drop.BeatsUntil;
         bool seedEdge = dropBeatsUntil.HasValue &&
             dropBeatsUntil != previousDropBeatsUntil &&
             dropBeatsUntil.Value == SyncSettings.DropSeedBeatsBefore;
@@ -810,12 +828,24 @@ public sealed class RippleSyncSettings
     public FloatRange Velocity;
 
     /// <summary>Beats for a unit-velocity wavefront to cross the screen at Low Energy.</summary>
+    /// <remarks>
+    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     public float LowCrossingBeats;
 
     /// <summary>Beats for a unit-velocity wavefront to cross the screen at Mid Energy.</summary>
+    /// <remarks>
+    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     public float MidCrossingBeats;
 
     /// <summary>Beats for a unit-velocity wavefront to cross the screen at High Energy.</summary>
+    /// <remarks>
+    /// See Energy in <c>CONTEXT.md</c> and the <c>/rave/onair/energy_state</c> lane in
+    /// <c>docs/osc-client-contract.md</c>.
+    /// </remarks>
     public float HighCrossingBeats;
 
     /// <summary>
@@ -841,24 +871,28 @@ public sealed class RippleSyncSettings
     /// </summary>
     public PaletteConditioning PaletteConditioning;
 
-    /// <summary>Levels form whose Low band supplies the Beat Pulse presence gate.</summary>
+    /// <summary>Levels form whose Low band supplies the wire-beat-pulse presence gate.</summary>
     public LevelsForm LowLevelsForm;
 
-    /// <summary>Selected-form Low threshold above which the Beat Pulse shifts the palette in Synced Mode.</summary>
+    /// <summary>
+    /// Selected-form Low threshold above which the wire beat pulse shifts the palette in Synced
+    /// Mode.
+    /// </summary>
     [Range(0f, 1f)] public float LowPresenceThreshold;
 
     /// <summary>
-    /// Amplitude of the Beat Pulse hue wiggle in Synced Mode: the palette displacement, in
+    /// Amplitude of the wire-beat-pulse hue wiggle in Synced Mode: the palette displacement, in
     /// hue-wheel cycles, reached at each pulse peak.
     /// </summary>
     [Range(0f, 1f)] public float HueWiggleAmplitude;
 
     /// <summary>
-    /// Depth of the raw Beat Pulse hue rotation while a Fill is active in Synced Mode: the
+    /// Depth of the wire-beat-pulse hue rotation while a Fill is active in Synced Mode: the
     /// fraction of the half-wheel journey to the complementary color reached at each pulse peak.
     /// </summary>
     /// <remarks>
-    /// See Fill and Beat Pulse in <c>CONTEXT.md</c>, and the <c>/rave/onair/fill_state</c> and
+    /// See Fill and the pulse family (Duration Pulse / Duration Gate) in <c>CONTEXT.md</c>, and
+    /// the <c>/rave/onair/fill_state</c> and
     /// <c>/rave/onair/beat_pulse</c> lanes in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
     [Range(0f, 1f)] public float FillComplementDepth;
