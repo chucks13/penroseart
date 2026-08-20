@@ -269,10 +269,16 @@ public class Ripple : ScreenEffect
     /// </summary>
     private readonly ConditionedPaletteCache conditionedPalette = new();
 
-    private Color startColor;
-    private Color endColor;
+    /// <summary>
+    /// Initial storage reserved for active wavefront values before capacity grows geometrically.
+    /// </summary>
+    private const int InitialWavefrontCapacity = 4;
+
+    /// <summary>Reusable storage for active wavefront values.</summary>
     private Wavefront[] wavefronts;
-    private Vector2 screen;
+
+    /// <summary>Number of active values at the start of <see cref="wavefronts"/>.</summary>
+    private int wavefrontCount;
 
     /// <summary>The greatest possible distance between two pixels in Ripple's fixed screen buffer.</summary>
     private float maxScreenDistance;
@@ -336,7 +342,7 @@ public class Ripple : ScreenEffect
     /// </summary>
     public override string DebugText()
     {
-        return $"Wavefronts {wavefronts.Length}";
+        return $"Wavefronts {wavefrontCount}";
     }
 
     /// <summary>
@@ -345,7 +351,8 @@ public class Ripple : ScreenEffect
     public override void Init()
     {
         base.Init();
-        wavefronts = new Wavefront[0];
+        wavefronts = new Wavefront[InitialWavefrontCapacity];
+        wavefrontCount = 0;
         maxScreenDistance = new Vector2(width - 1, height - 1).magnitude;
     }
 
@@ -360,7 +367,7 @@ public class Ripple : ScreenEffect
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Ripple),
             SyncDefaults);
-        waveform = waveforms.Random();
+        waveform = waveforms.None;
         bool isSynced = beatManager.IsSynced;
         float pulse = beatManager.Pulses.Beat;
         bool lowPresent = isSynced &&
@@ -484,20 +491,22 @@ public class Ripple : ScreenEffect
         buffer.Fade();
 
         int flatPixels = 0;
-        for (int x = 0; x < width; x++)
+        int activeWavefrontCount = wavefrontCount;
+        for (int y = 0; y < height; y++)
         {
-            for (int y = 0; y < height; y++)
+            int rowStart = y * width;
+            for (int x = 0; x < width; x++)
             {
-                screen.x = x;
-                screen.y = y;
-                var idx = x + (y * width);
+                var screenPosition = new Vector2(x, y);
+                var idx = rowStart + x;
                 var sum = 0f;
                 bool wavefrontPending = false;
-                for (int i = 0; i < wavefronts.Length; i++)
+                for (int i = 0; i < activeWavefrontCount; i++)
                 {
-                    var d = Vector2.Distance(screen, wavefronts[i].Position);
+                    Wavefront wavefront = wavefronts[i];
+                    var d = Vector2.Distance(screenPosition, wavefront.Position);
                     var contribution =
-                        (wavefronts[i].RadiusAt(clock) - (d / distanceDivisor)).Clamp01();
+                        (wavefront.CurrentRadius - (d / distanceDivisor)).Clamp01();
                     wavefrontPending |= contribution < 1f;
                     sum += contribution;
                 }
@@ -594,8 +603,12 @@ public class Ripple : ScreenEffect
     /// <param name="velocityRange">Active mode's authored wavefront clock-multiplier range.</param>
     private void SpawnWavefront(FloatRange velocityRange)
     {
-        Array.Resize(ref wavefronts, wavefronts.Length + 1);
-        wavefronts[^1] = new Wavefront(velocityRange, clock);
+        if (wavefrontCount == wavefronts.Length)
+        {
+            Array.Resize(ref wavefronts, wavefronts.Length * 2);
+        }
+
+        wavefronts[wavefrontCount++] = new Wavefront(velocityRange, clock);
     }
 
     /// <summary>
@@ -606,12 +619,12 @@ public class Ripple : ScreenEffect
     private void RetireWavefronts(float saturationRadius)
     {
         int retainedCount = 0;
-        for (int i = 0; i < wavefronts.Length; i++)
+        for (int i = 0; i < wavefrontCount; i++)
         {
             Wavefront wavefront = wavefronts[i];
-            float radius = wavefront.RadiusAt(clock);
-            bool saturated = radius >= saturationRadius;
-            bool collapsedWhileReversing = clockRate < 0f && radius <= 0f;
+            wavefront.CurrentRadius = wavefront.RadiusAt(clock);
+            bool saturated = wavefront.CurrentRadius >= saturationRadius;
+            bool collapsedWhileReversing = clockRate < 0f && wavefront.CurrentRadius <= 0f;
             if (saturated || collapsedWhileReversing)
             {
                 continue;
@@ -620,10 +633,7 @@ public class Ripple : ScreenEffect
             wavefronts[retainedCount++] = wavefront;
         }
 
-        if (retainedCount != wavefronts.Length)
-        {
-            Array.Resize(ref wavefronts, retainedCount);
-        }
+        wavefrontCount = retainedCount;
     }
 
     /// <summary>
@@ -639,6 +649,11 @@ public class Ripple : ScreenEffect
 
         /// <summary>The shared clock value captured when this wavefront spawned.</summary>
         private readonly float birthClock;
+
+        /// <summary>
+        /// Signed radius calculated once for the current frame before screen pixels read it.
+        /// </summary>
+        internal float CurrentRadius { get; set; }
 
         /// <summary>
         /// Creates a wavefront at a random screen position using the active mode's velocity Settings.
