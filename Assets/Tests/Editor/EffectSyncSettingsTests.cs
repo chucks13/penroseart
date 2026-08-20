@@ -576,13 +576,12 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first, Is.Not.SameAs(second));
         Assert.That(first.BreathingZoomSpeed, Is.Not.SameAs(second.BreathingZoomSpeed));
         AssertFloatRangeEqual(first.BreathingZoomSpeed, second.BreathingZoomSpeed);
+        Assert.That(first.Depth, Is.EqualTo(second.Depth));
         Assert.That(first.ConstantMorphRadius, Is.EqualTo(second.ConstantMorphRadius));
         Assert.That(first.ConstantMorphRate, Is.EqualTo(second.ConstantMorphRate));
         Assert.That(first.WindowWidth, Is.Not.SameAs(second.WindowWidth));
         AssertFloatRangeEqual(first.WindowWidth, second.WindowWidth);
-        Assert.That(first.BoundaryEscapeBand, Is.Not.SameAs(second.BoundaryEscapeBand));
-        AssertFloatRangeEqual(first.BoundaryEscapeBand, second.BoundaryEscapeBand);
-        Assert.That(first.EdgeTrackingRate, Is.EqualTo(second.EdgeTrackingRate));
+        Assert.That(first.EdgeLockFraming, Is.EqualTo(second.EdgeLockFraming));
         Assert.That(first.PaletteChance, Is.EqualTo(second.PaletteChance));
         Assert.That(first.HueBaseRate, Is.EqualTo(second.HueBaseRate));
         Assert.That(first.HueBeatRate, Is.EqualTo(second.HueBeatRate));
@@ -604,11 +603,11 @@ public sealed class EffectSyncSettingsTests
             typeof(Julia),
             TempAssetFolder);
         asset.Settings.BreathingZoomSpeed = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.Depth = 19f;
         asset.Settings.ConstantMorphRadius = 19f;
         asset.Settings.ConstantMorphRate = 20f;
         asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.BoundaryEscapeBand = new FloatRange(22f, 23f, 21f, 24f);
-        asset.Settings.EdgeTrackingRate = 25f;
+        asset.Settings.EdgeLockFraming = 22f;
         asset.Settings.PaletteChance = 0.11f;
         asset.Settings.HueBaseRate = 23f;
         asset.Settings.HueBeatRate = 24f;
@@ -620,11 +619,11 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = Julia.StandaloneDefaults;
         AssertFloatRangeEqual(asset.Settings.BreathingZoomSpeed, defaults.BreathingZoomSpeed);
+        Assert.That(asset.Settings.Depth, Is.EqualTo(defaults.Depth));
         Assert.That(asset.Settings.ConstantMorphRadius, Is.EqualTo(defaults.ConstantMorphRadius));
         Assert.That(asset.Settings.ConstantMorphRate, Is.EqualTo(defaults.ConstantMorphRate));
         AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
-        AssertFloatRangeEqual(asset.Settings.BoundaryEscapeBand, defaults.BoundaryEscapeBand);
-        Assert.That(asset.Settings.EdgeTrackingRate, Is.EqualTo(defaults.EdgeTrackingRate));
+        Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
         Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
         Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
         Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
@@ -1374,14 +1373,16 @@ public sealed class EffectSyncSettingsTests
             typeof(Julia),
             TempAssetFolder);
         asset.Settings.BreathingZoomSpeed = new FloatRange(17f, 18f, 16f, 19f);
+        asset.Settings.Depth = 19f;
         asset.Settings.ConstantMorphRadius = 19f;
         asset.Settings.ConstantMorphRate = 20f;
         asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
-        asset.Settings.BoundaryEscapeBand = new FloatRange(22f, 23f, 21f, 24f);
-        asset.Settings.EdgeTrackingRate = 25f;
+        asset.Settings.EdgeLockFraming = 22f;
         asset.Settings.PaletteChance = 0.11f;
         asset.Settings.HueBaseRate = 23f;
         asset.Settings.FillDiveDepth = 24f;
+        asset.Settings.FillAttackRate = 25f;
+        asset.Settings.FillReleaseBeats = 26f;
         asset.Settings.DropDecayBeats = 25;
         asset.Settings.DropSpinRate = 26f;
         asset.Settings.DropBlowout = 27f;
@@ -1396,14 +1397,16 @@ public sealed class EffectSyncSettingsTests
 
         var defaults = Julia.SyncDefaults;
         AssertFloatRangeEqual(asset.Settings.BreathingZoomSpeed, defaults.BreathingZoomSpeed);
+        Assert.That(asset.Settings.Depth, Is.EqualTo(defaults.Depth));
         Assert.That(asset.Settings.ConstantMorphRadius, Is.EqualTo(defaults.ConstantMorphRadius));
         Assert.That(asset.Settings.ConstantMorphRate, Is.EqualTo(defaults.ConstantMorphRate));
         AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
-        AssertFloatRangeEqual(asset.Settings.BoundaryEscapeBand, defaults.BoundaryEscapeBand);
-        Assert.That(asset.Settings.EdgeTrackingRate, Is.EqualTo(defaults.EdgeTrackingRate));
+        Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
         Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
         Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
         Assert.That(asset.Settings.FillDiveDepth, Is.EqualTo(defaults.FillDiveDepth));
+        Assert.That(asset.Settings.FillAttackRate, Is.EqualTo(defaults.FillAttackRate));
+        Assert.That(asset.Settings.FillReleaseBeats, Is.EqualTo(defaults.FillReleaseBeats));
         Assert.That(asset.Settings.DropDecayBeats, Is.EqualTo(defaults.DropDecayBeats));
         Assert.That(asset.Settings.DropSpinRate, Is.EqualTo(defaults.DropSpinRate));
         Assert.That(asset.Settings.DropBlowout, Is.EqualTo(defaults.DropBlowout));

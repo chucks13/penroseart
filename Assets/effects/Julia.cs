@@ -4,9 +4,10 @@ using Random = UnityEngine.Random;
 
 /// <summary>
 /// Renders a Julia fractal by iterating the escape-time function directly at each Penrose
-/// tile center. The view is a plain linear transform from wall space to the complex plane
-/// (center + uniform scale), so recentering, zooming, and rotating are vector math on the
-/// sample coordinates rather than raster operations.
+/// tile center. The camera is solved onto an inverse image of a repelling fixed point every
+/// frame, so its session journey rides the Julia boundary at every depth. The view remains a
+/// plain linear transform from wall space to the complex plane (center + uniform scale), so
+/// recentering, zooming, and rotating are vector math rather than raster operations.
 /// </summary>
 [EffectSyncSettings(typeof(JuliaSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(JuliaStandaloneSettingsAsset))]
@@ -20,8 +21,14 @@ public class Julia : EffectBase
     /// <summary>Maximum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
     private const float StandaloneBreathingZoomSpeedMax = 0.3f;
 
-    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
-    private const float StandaloneConstantMorphRadius = 0.012f;
+    /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
+    private const float StandaloneDepth = 1f;
+
+    /// <summary>
+    /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
+    /// width. The 0.0024 default preserves the former 0.012 radius at the five-unit full view.
+    /// </summary>
+    private const float StandaloneConstantMorphRadius = 0.0024f;
 
     /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
     private const float StandaloneConstantMorphRate = 0.01f;
@@ -35,14 +42,11 @@ public class Julia : EffectBase
     /// </summary>
     private const float StandaloneWindowWidthMin = 0.002f;
 
-    /// <summary>Lower smooth escape count admitted by the boundary-detail tracker.</summary>
-    private const float StandaloneBoundaryEscapeBandMin = 6f;
-
-    /// <summary>Upper smooth escape count admitted by the boundary-detail tracker.</summary>
-    private const float StandaloneBoundaryEscapeBandMax = 72f;
-
-    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
-    private const float StandaloneEdgeTrackingRate = 0.18f;
+    /// <summary>
+    /// Window-width fraction that frames the solved boundary point toward the preset's authored
+    /// view center. Zero keeps the boundary point at the camera center.
+    /// </summary>
+    private const float StandaloneEdgeLockFraming = 0f;
 
     /// <summary>Chance that an activation colors from the shared palette instead of the HSV rainbow.</summary>
     private const float StandalonePaletteChance = 0.5f;
@@ -89,8 +93,14 @@ public class Julia : EffectBase
     /// <summary>Maximum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
     private const float SyncBreathingZoomSpeedMax = 0.3f;
 
-    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
-    private const float SyncConstantMorphRadius = 0.012f;
+    /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
+    private const float SyncDepth = 1f;
+
+    /// <summary>
+    /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
+    /// width. The 0.0024 default preserves the former 0.012 radius at the five-unit full view.
+    /// </summary>
+    private const float SyncConstantMorphRadius = 0.0024f;
 
     /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
     private const float SyncConstantMorphRate = 0.01f;
@@ -104,14 +114,11 @@ public class Julia : EffectBase
     /// </summary>
     private const float SyncWindowWidthMin = 0.002f;
 
-    /// <summary>Lower smooth escape count admitted by the boundary-detail tracker.</summary>
-    private const float SyncBoundaryEscapeBandMin = 6f;
-
-    /// <summary>Upper smooth escape count admitted by the boundary-detail tracker.</summary>
-    private const float SyncBoundaryEscapeBandMax = 72f;
-
-    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
-    private const float SyncEdgeTrackingRate = 0.18f;
+    /// <summary>
+    /// Window-width fraction that frames the solved boundary point toward the preset's authored
+    /// view center. Zero keeps the boundary point at the camera center.
+    /// </summary>
+    private const float SyncEdgeLockFraming = 0f;
 
     /// <summary>Chance that a Roll colors from the shared palette instead of the HSV rainbow.</summary>
     private const float SyncPaletteChance = 0.5f;
@@ -124,6 +131,15 @@ public class Julia : EffectBase
     /// breathing zoom alone. Exponential so the dive speed feels constant at any depth.
     /// </summary>
     private const float SyncFillDiveDepth = 2f;
+
+    /// <summary>
+    /// Fill envelope attack rate in inverse seconds. The original 22/s response lets even a
+    /// one-beat Fill reach its live Build quickly without a one-frame snap.
+    /// </summary>
+    private const float SyncFillAttackRate = 22f;
+
+    /// <summary>Beats taken to release a full Fill dive back to rest after the Fill ends.</summary>
+    private const float SyncFillReleaseBeats = 2f;
 
     /// <summary>Beats the Drop slam takes to decay back to rest.</summary>
     private const int SyncDropDecayBeats = 8;
@@ -186,6 +202,19 @@ public class Julia : EffectBase
     private const float Ln2 = 0.6931472f;
 
     /// <summary>
+    /// Squared fixed-point magnitude where |2z| = 1. A fixed point above this threshold is
+    /// repelling and therefore lies on the Julia boundary.
+    /// </summary>
+    private const float RepellingFixedPointMagnitudeSquared = 0.25f;
+
+    /// <summary>
+    /// Inverse-orbit depth used to choose the boundary point nearest the preset's authored view
+    /// center. Twelve levels bound the one-time search at 4096 exact candidates and each later
+    /// frame at twelve inverse roots.
+    /// </summary>
+    private const int EdgeLockPreimageDepth = 12;
+
+    /// <summary>
     /// Anti-aliasing samples per tile; two interleaved rings of AaSamples/2. The angular sweep
     /// covers the complete 0..2π direction domain, so it is an algorithm invariant rather than
     /// an authored range.
@@ -218,13 +247,11 @@ public class Julia : EffectBase
         BreathingZoomSpeed = new FloatRange(
             StandaloneBreathingZoomSpeedMin,
             StandaloneBreathingZoomSpeedMax),
+        Depth = StandaloneDepth,
         ConstantMorphRadius = StandaloneConstantMorphRadius,
         ConstantMorphRate = StandaloneConstantMorphRate,
         WindowWidth = new FloatRange(StandaloneWindowWidthMin, StandaloneWindowWidthMax),
-        BoundaryEscapeBand = new FloatRange(
-            StandaloneBoundaryEscapeBandMin,
-            StandaloneBoundaryEscapeBandMax),
-        EdgeTrackingRate = StandaloneEdgeTrackingRate,
+        EdgeLockFraming = StandaloneEdgeLockFraming,
         PaletteChance = StandalonePaletteChance,
         HueBaseRate = StandaloneHueBaseRate,
         HueBeatRate = StandaloneHueBeatRate,
@@ -237,16 +264,16 @@ public class Julia : EffectBase
     public static JuliaSyncSettings SyncDefaults => new()
     {
         BreathingZoomSpeed = new FloatRange(SyncBreathingZoomSpeedMin, SyncBreathingZoomSpeedMax),
+        Depth = SyncDepth,
         ConstantMorphRadius = SyncConstantMorphRadius,
         ConstantMorphRate = SyncConstantMorphRate,
         WindowWidth = new FloatRange(SyncWindowWidthMin, SyncWindowWidthMax),
-        BoundaryEscapeBand = new FloatRange(
-            SyncBoundaryEscapeBandMin,
-            SyncBoundaryEscapeBandMax),
-        EdgeTrackingRate = SyncEdgeTrackingRate,
+        EdgeLockFraming = SyncEdgeLockFraming,
         PaletteChance = SyncPaletteChance,
         HueBaseRate = SyncHueBaseRate,
         FillDiveDepth = SyncFillDiveDepth,
+        FillAttackRate = SyncFillAttackRate,
+        FillReleaseBeats = SyncFillReleaseBeats,
         DropDecayBeats = SyncDropDecayBeats,
         DropSpinRate = SyncDropSpinRate,
         DropBlowout = SyncDropBlowout,
@@ -266,6 +293,12 @@ public class Julia : EffectBase
 
     /// <summary>Anti-aliasing sample offsets around each tile center, in wall units.</summary>
     private static readonly Vector2[] aaOffsets = BuildAaOffsets();
+
+    /// <summary>
+    /// Reusable inverse-orbit chain from a repelling fixed point to the camera's boundary point;
+    /// allocated once so the per-frame edge solve creates no garbage.
+    /// </summary>
+    private readonly Vector2[] edgeLockChain = new Vector2[EdgeLockPreimageDepth + 1];
 
     /// <summary>
     /// Builds the AA sample pattern: AaSamples points spread evenly by angle, alternating
@@ -293,7 +326,7 @@ public class Julia : EffectBase
     /// <summary>The authored Julia constant at the center of the selected preset's morph orbit.</summary>
     private Vector2 presetConstant;
 
-    /// <summary>The Julia constant at its current position on the session journey's morph orbit.</summary>
+    /// <summary>The Julia constant at its current zoom-relative position on the session journey's morph orbit.</summary>
     private Vector2 morphedConstant;
 
     /// <summary>The current normalized position around the Julia constant's circular morph orbit.</summary>
@@ -302,15 +335,17 @@ public class Julia : EffectBase
     /// <summary>Whether the one-time Play Mode session journey Roll has run.</summary>
     private bool sessionJourneyStarted;
 
-    /// <summary>The session journey's current complex-plane view center.</summary>
-    private Vector2 viewCenter;
+    /// <summary>The selected preset's authored view center, retained as the edge-lock framing direction.</summary>
+    private Vector2 presetViewCenter;
 
-    /// <summary>The latest complex-plane centroid of visible boundary detail.</summary>
-    /// <remarks>
-    /// Seeded to the activation's view center, so the tracking drift rests at exactly zero
-    /// until a frame observes boundary detail.
-    /// </remarks>
-    private Vector2 edgeTarget;
+    /// <summary>The inverse image that edge-locks the camera to the morphed Julia boundary.</summary>
+    private Vector2 edgeLockPoint;
+
+    /// <summary>Whether the session journey has selected its inverse-orbit address from the authored preset center.</summary>
+    private bool edgeLockInitialized;
+
+    /// <summary>The session journey's current zoom-relative, edge-locked complex-plane view center.</summary>
+    private Vector2 viewCenter;
 
     /// <summary>The curated Julia preset selected for this Play Mode session.</summary>
     /// <remarks>
@@ -322,7 +357,7 @@ public class Julia : EffectBase
     /// <summary>The hue-wheel offset, reset on each activation.</summary>
     private float hueScroll;
 
-    /// <summary>The current Fill Build envelope used by the zoom dive.</summary>
+    /// <summary>The consumer-local Fill envelope whose fast attack and authored release drive the zoom dive.</summary>
     private float fillEnv;
 
     /// <summary>The current Drop Decay envelope used by the spin and zoom blowout.</summary>
@@ -377,7 +412,6 @@ public class Julia : EffectBase
         hueScroll = 0f;
         fillEnv = 0f;
         dropEnv = 0f;
-        edgeTarget = viewCenter;
         previousDropActive = beatManager.Drop.Active;
         buffer.Clear();
     }
@@ -402,7 +436,10 @@ public class Julia : EffectBase
 
         presetIndex = Random.Range(0, juliaConstants.Length);
         presetConstant = juliaConstants[presetIndex];
-        viewCenter = presetViewCenters[presetIndex];
+        presetViewCenter = presetViewCenters[presetIndex];
+        edgeLockPoint = presetViewCenter;
+        viewCenter = presetViewCenter;
+        edgeLockInitialized = false;
         breathingZoomSpeed = Random.Range(
             breathingZoomSpeedRange.Min,
             breathingZoomSpeedRange.Max);
@@ -470,9 +507,10 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Advances the session journey's Julia constant deterministically around the preset's
-    /// circular orbit, reading the active mode's live Settings on every frame.
+    /// circular orbit. Its radius scales with the current window, so morph travel keeps the
+    /// same visual pace at every depth while reading the active mode's live Settings each frame.
     /// </summary>
-    private void UpdateConstantMorph(bool isSynced)
+    private void UpdateConstantMorph(bool isSynced, float window)
     {
         var morphRadius = isSynced
             ? SyncSettings.ConstantMorphRadius
@@ -485,30 +523,148 @@ public class Julia : EffectBase
             constantMorphPhase + (morphRate * effectDelta),
             1f);
         var orbitAngle = constantMorphPhase * 2f * Mathf.PI;
+        var orbitRadius = morphRadius * window;
         morphedConstant = presetConstant + new Vector2(
-            Mathf.Cos(orbitAngle) * morphRadius,
-            Mathf.Sin(orbitAngle) * morphRadius);
+            Mathf.Cos(orbitAngle) * orbitRadius,
+            Mathf.Sin(orbitAngle) * orbitRadius);
     }
 
     /// <summary>
-    /// Scores one existing smooth escape result for boundary detail. A triangular weight peaks
-    /// halfway through the live boundary band and reaches zero at either endpoint.
+    /// Tracks the live Fill Build with the original fast exponential attack, then releases the
+    /// consumer-local dive linearly over the authored number of beats when Build falls away.
     /// </summary>
-    private static float BoundaryWeight(float smoothEscape, FloatRange boundaryBand)
+    private void UpdateFillEnvelope()
     {
-        var midpoint = (boundaryBand.Min + boundaryBand.Max) * 0.5f;
-        var halfWidth = (boundaryBand.Max - boundaryBand.Min) * 0.5f;
-        return Mathf.Max(0f, 1f - (Mathf.Abs(smoothEscape - midpoint) / halfWidth));
+        var fillTarget = beatManager.Fill.In.Build();
+        if (fillTarget > fillEnv)
+        {
+            var attackBlend = 1f - Mathf.Exp(-SyncSettings.FillAttackRate * effectDelta);
+            fillEnv += (fillTarget - fillEnv) * attackBlend;
+            return;
+        }
+
+        var releaseSeconds = SyncSettings.FillReleaseBeats *
+            beatManager.Timing.BeatAverageMilliseconds.Value /
+            1000f;
+        fillEnv = Mathf.MoveTowards(fillEnv, fillTarget, effectDelta / releaseSeconds);
     }
 
     /// <summary>
-    /// Renders the current session journey and accumulates its visible boundary target from the
-    /// smooth escape results already produced for color, without another fractal pass.
+    /// Re-solves the inverse orbit of a repelling fixed point of z² + c on every frame.
+    /// Repelling periodic points and all their inverse images belong to the Julia boundary, so
+    /// framing the final point makes a featureless dive structurally impossible. Each root is
+    /// chosen nearest its prior chain point, keeping the analytic branch continuous as c morphs.
+    /// </summary>
+    private void UpdateEdgeLock(float window, float edgeLockFraming)
+    {
+        var discriminantRoot = ComplexSquareRoot(new Vector2(
+            1f - (4f * morphedConstant.x),
+            -4f * morphedConstant.y));
+        var first = (Vector2.right + discriminantRoot) * 0.5f;
+        var second = (Vector2.right - discriminantRoot) * 0.5f;
+
+        if (!edgeLockInitialized)
+        {
+            var strongerFixedPoint = first.sqrMagnitude >= second.sqrMagnitude ? first : second;
+            InitializeEdgeLock(strongerFixedPoint);
+        }
+        else
+        {
+            var firstRepels = first.sqrMagnitude > RepellingFixedPointMagnitudeSquared;
+            var secondRepels = second.sqrMagnitude > RepellingFixedPointMagnitudeSquared;
+            if (firstRepels != secondRepels)
+            {
+                edgeLockChain[0] = firstRepels ? first : second;
+            }
+            else
+            {
+                edgeLockChain[0] = (first - edgeLockChain[0]).sqrMagnitude <=
+                    (second - edgeLockChain[0]).sqrMagnitude
+                    ? first
+                    : second;
+            }
+
+            for (var depth = 1; depth <= EdgeLockPreimageDepth; depth++)
+            {
+                var positiveRoot = ComplexSquareRoot(edgeLockChain[depth - 1] - morphedConstant);
+                edgeLockChain[depth] =
+                    (positiveRoot - edgeLockChain[depth]).sqrMagnitude <=
+                    (-positiveRoot - edgeLockChain[depth]).sqrMagnitude
+                    ? positiveRoot
+                    : -positiveRoot;
+            }
+
+            edgeLockPoint = edgeLockChain[EdgeLockPreimageDepth];
+        }
+
+        var framingDirection = (presetViewCenter - edgeLockPoint).normalized;
+        viewCenter = edgeLockPoint + edgeLockFraming * window * framingDirection;
+    }
+
+    /// <summary>
+    /// Searches the complete fixed-depth inverse orbit once, chooses the exact boundary point
+    /// nearest the preset's authored view center, and records its branch address in the reusable
+    /// chain. Later activations resume that same chain as part of the session journey.
+    /// </summary>
+    private void InitializeEdgeLock(Vector2 fixedPoint)
+    {
+        var bestAddress = 0;
+        var bestDistanceSquared = float.PositiveInfinity;
+        var addressCount = 1 << EdgeLockPreimageDepth;
+        for (var address = 0; address < addressCount; address++)
+        {
+            var candidate = fixedPoint;
+            for (var depth = 0; depth < EdgeLockPreimageDepth; depth++)
+            {
+                candidate = ComplexSquareRoot(candidate - morphedConstant);
+                if ((address & (1 << depth)) != 0)
+                {
+                    candidate = -candidate;
+                }
+            }
+
+            var distanceSquared = (candidate - presetViewCenter).sqrMagnitude;
+            if (distanceSquared < bestDistanceSquared)
+            {
+                bestAddress = address;
+                bestDistanceSquared = distanceSquared;
+            }
+        }
+
+        edgeLockChain[0] = fixedPoint;
+        for (var depth = 1; depth <= EdgeLockPreimageDepth; depth++)
+        {
+            var point = ComplexSquareRoot(edgeLockChain[depth - 1] - morphedConstant);
+            edgeLockChain[depth] = (bestAddress & (1 << (depth - 1))) == 0
+                ? point
+                : -point;
+        }
+
+        edgeLockPoint = edgeLockChain[EdgeLockPreimageDepth];
+        edgeLockInitialized = true;
+    }
+
+    /// <summary>
+    /// Returns the principal square root of one complex value stored as (real, imaginary).
+    /// The edge lock considers both its positive and negative roots, so principal-branch sign
+    /// changes cannot jump the camera between fixed points.
+    /// </summary>
+    private static Vector2 ComplexSquareRoot(Vector2 value)
+    {
+        var magnitude = value.magnitude;
+        return new Vector2(
+            Mathf.Sqrt((magnitude + value.x) * 0.5f),
+            Mathf.Sign(value.y) * Mathf.Sqrt((magnitude - value.x) * 0.5f));
+    }
+
+    /// <summary>
+    /// Renders the current session journey after solving its boundary lock. Depth, morph, and
+    /// lock framing resolve live from the active mode's Settings without a second wall pass or
+    /// any per-frame heap allocation.
     /// </summary>
     public override void Draw()
     {
         var isSynced = beatManager.IsSynced;
-        UpdateConstantMorph(isSynced);
 
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
         // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
@@ -527,8 +683,14 @@ public class Julia : EffectBase
             hueScroll + ((hueBaseRate + (hueCycleDrive * hueBeatRate)) * effectDelta),
             1f);
 
-        // Fill Build becomes extra zoom depth below.
-        fillEnv = beatManager.Fill.In.Build();
+        if (isSynced)
+        {
+            UpdateFillEnvelope();
+        }
+        else
+        {
+            fillEnv = 0f;
+        }
         UpdateDropSlam();
 
         // Breathing zoom (window width oscillates between the range endpoints), deepened
@@ -536,27 +698,28 @@ public class Julia : EffectBase
         var windowWidth = isSynced
             ? SyncSettings.WindowWidth
             : standaloneSettings.WindowWidth;
+        var depth = isSynced
+            ? SyncSettings.Depth
+            : standaloneSettings.Depth;
         var sa = Mathf.Sin(zoomBreathPhase).Remap(1f, -1f, 0f, 1f);
+        var breathWindow = windowWidth.Max * (1f + ((sa - 1f) * depth));
         var window = Mathf.Clamp(
-            windowWidth.Max * sa * Mathf.Exp(
+            breathWindow * Mathf.Exp(
                 (SyncSettings.DropBlowout * dropEnv) - (SyncSettings.FillDiveDepth * fillEnv)),
             windowWidth.Min,
             windowWidth.Max);
         var scale = window / penrose.Bounds.size.x;
         zoomBreathPhase += breathingZoomSpeed * effectDelta;
 
+        UpdateConstantMorph(isSynced, window);
+        var edgeLockFraming = isSynced
+            ? SyncSettings.EdgeLockFraming
+            : standaloneSettings.EdgeLockFraming;
+        UpdateEdgeLock(window, edgeLockFraming);
+
         // Drop spin: rotate wall space into the complex plane.
         var rotCos = Mathf.Cos(rotation);
         var rotSin = Mathf.Sin(rotation);
-        var boundaryEscapeBand = isSynced
-            ? SyncSettings.BoundaryEscapeBand
-            : standaloneSettings.BoundaryEscapeBand;
-        var edgeTrackingRate = isSynced
-            ? SyncSettings.EdgeTrackingRate
-            : standaloneSettings.EdgeTrackingRate;
-        var boundaryWeightTotal = 0f;
-        var boundaryWeightedX = 0f;
-        var boundaryWeightedY = 0f;
 
         for (var i = 0; i < buffer.Length; i++)
         {
@@ -571,25 +734,10 @@ public class Julia : EffectBase
                 var sampleY = viewCenter.y + (ry * scale);
                 var smoothEscape = SampleEscape(sampleX, sampleY);
                 pix += EscapeColor(smoothEscape);
-
-                var boundaryWeight = BoundaryWeight(smoothEscape, boundaryEscapeBand);
-                boundaryWeightTotal += boundaryWeight;
-                boundaryWeightedX += sampleX * boundaryWeight;
-                boundaryWeightedY += sampleY * boundaryWeight;
             }
 
             buffer[i] = pix / aaOffsets.Length;
         }
-
-        if (boundaryWeightTotal > 0f)
-        {
-            edgeTarget = new Vector2(
-                boundaryWeightedX / boundaryWeightTotal,
-                boundaryWeightedY / boundaryWeightTotal);
-        }
-
-        var edgeTrackingBlend = 1f - Mathf.Exp(-edgeTrackingRate * effectDelta);
-        viewCenter += edgeTrackingBlend * (edgeTarget - viewCenter);
     }
 
     /// <summary>
@@ -649,7 +797,10 @@ public sealed class JuliaStandaloneSettings
     /// <summary>Breathing-zoom speed range rolled on the first activation of a Play Mode session.</summary>
     public FloatRange BreathingZoomSpeed;
 
-    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
+    /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
+    public float Depth;
+
+    /// <summary>Radius of the Julia constant's circular morph orbit, as a fraction of current window width.</summary>
     public float ConstantMorphRadius;
 
     /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
@@ -658,11 +809,8 @@ public sealed class JuliaStandaloneSettings
     /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
     public FloatRange WindowWidth;
 
-    /// <summary>Smooth escape-count band treated as visible Julia boundary detail.</summary>
-    public FloatRange BoundaryEscapeBand;
-
-    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
-    public float EdgeTrackingRate;
+    /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
+    public float EdgeLockFraming;
 
     /// <summary>Chance that a color-mode roll selects the shared palette instead of the HSV rainbow.</summary>
     [Range(0f, 1f)] public float PaletteChance;
@@ -691,11 +839,11 @@ public sealed class JuliaStandaloneSettings
         }
 
         BreathingZoomSpeed = CopyRange(source.BreathingZoomSpeed);
+        Depth = source.Depth;
         ConstantMorphRadius = source.ConstantMorphRadius;
         ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
-        BoundaryEscapeBand = CopyRange(source.BoundaryEscapeBand);
-        EdgeTrackingRate = source.EdgeTrackingRate;
+        EdgeLockFraming = source.EdgeLockFraming;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         HueBeatRate = source.HueBeatRate;
@@ -718,7 +866,10 @@ public sealed class JuliaSyncSettings
     /// <summary>Breathing-zoom speed range rolled on the first activation of a Play Mode session.</summary>
     public FloatRange BreathingZoomSpeed;
 
-    /// <summary>Radius of the Julia constant's circular morph orbit in the complex plane.</summary>
+    /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
+    public float Depth;
+
+    /// <summary>Radius of the Julia constant's circular morph orbit, as a fraction of current window width.</summary>
     public float ConstantMorphRadius;
 
     /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
@@ -727,11 +878,8 @@ public sealed class JuliaSyncSettings
     /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
     public FloatRange WindowWidth;
 
-    /// <summary>Smooth escape-count band treated as visible Julia boundary detail.</summary>
-    public FloatRange BoundaryEscapeBand;
-
-    /// <summary>Exponential response rate toward visible boundary detail, in inverse seconds.</summary>
-    public float EdgeTrackingRate;
+    /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
+    public float EdgeLockFraming;
 
     /// <summary>Chance that a color-mode Roll selects the shared palette instead of the HSV rainbow.</summary>
     [Range(0f, 1f)] public float PaletteChance;
@@ -741,6 +889,12 @@ public sealed class JuliaSyncSettings
 
     /// <summary>Exponential zoom depth added at full Fill.</summary>
     [Min(0f)] public float FillDiveDepth;
+
+    /// <summary>Fast exponential response rate toward the live Fill Build, in inverse seconds.</summary>
+    public float FillAttackRate;
+
+    /// <summary>Beats taken to release a full consumer-local Fill envelope back to rest.</summary>
+    public float FillReleaseBeats;
 
     /// <summary>Length of the Drop slam decay in beats.</summary>
     [Min(1)] public int DropDecayBeats;
@@ -778,14 +932,16 @@ public sealed class JuliaSyncSettings
         }
 
         BreathingZoomSpeed = CopyRange(source.BreathingZoomSpeed);
+        Depth = source.Depth;
         ConstantMorphRadius = source.ConstantMorphRadius;
         ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
-        BoundaryEscapeBand = CopyRange(source.BoundaryEscapeBand);
-        EdgeTrackingRate = source.EdgeTrackingRate;
+        EdgeLockFraming = source.EdgeLockFraming;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         FillDiveDepth = source.FillDiveDepth;
+        FillAttackRate = source.FillAttackRate;
+        FillReleaseBeats = source.FillReleaseBeats;
         DropDecayBeats = source.DropDecayBeats;
         DropSpinRate = source.DropSpinRate;
         DropBlowout = source.DropBlowout;

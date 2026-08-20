@@ -19,22 +19,20 @@ MonoBehaviour:
       Max: 0.3
       LowRail: 0.1
       HighRail: 0.3
-    ConstantMorphRadius: 0.012
+    Depth: 1
+    ConstantMorphRadius: 0.0024
     ConstantMorphRate: 0.01
     WindowWidth:
       Min: 0.002
       Max: 5
       LowRail: 0.002
       HighRail: 5
-    BoundaryEscapeBand:
-      Min: 6
-      Max: 72
-      LowRail: 6
-      HighRail: 72
-    EdgeTrackingRate: 0.18
+    EdgeLockFraming: 0
     PaletteChance: 0.5
     HueBaseRate: 0.05
     FillDiveDepth: 2
+    FillAttackRate: 22
+    FillReleaseBeats: 2
     DropDecayBeats: 8
     DropSpinRate: 1
     DropBlowout: 1.5
