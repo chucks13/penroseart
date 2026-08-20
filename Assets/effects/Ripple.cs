@@ -200,7 +200,7 @@ public class Ripple : ScreenEffect
     /// See Drop and Beat Counting in <c>CONTEXT.md</c>, and the
     /// <c>/rave/onair/drop_state</c> lane in <c>docs/osc-client-contract.md</c>.
     /// </remarks>
-    private const int SyncDropSeedSpawns = 4;
+    private const int SyncDropSeedSpawns = 6;
 
     /// <summary>
     /// Authored hue-wheel cycles per second advanced while the selected Levels form's Low is at or

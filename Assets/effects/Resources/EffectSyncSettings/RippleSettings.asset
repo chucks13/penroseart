@@ -51,5 +51,5 @@ MonoBehaviour:
     DropSpawnBeats: 32
     DropSpawnsPerBeat: 2
     DropSeedBeatsBefore: 2
-    DropSeedSpawns: 4
+    DropSeedSpawns: 6
     HueDriftRate: 0.05
