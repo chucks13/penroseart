@@ -48,6 +48,23 @@ public class Julia : EffectBase
     /// </summary>
     private const float StandaloneEdgeLockFraming = 0f;
 
+    /// <summary>
+    /// Standalone palette conditioning. The absolute target and floor lift dark contour bands;
+    /// hue-spread-aware equalization, a tenfold lift ceiling, dark-stop repair, duplicate collapse,
+    /// and full redistribution keep neighboring escape contours distinct across palette families.
+    /// </summary>
+    private static PaletteConditioning StandalonePaletteConditioning => new()
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 10f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
+
     /// <summary>Chance that an activation colors from the shared palette instead of the HSV rainbow.</summary>
     private const float StandalonePaletteChance = 0.5f;
 
@@ -120,6 +137,23 @@ public class Julia : EffectBase
     /// </summary>
     private const float SyncEdgeLockFraming = 0f;
 
+    /// <summary>
+    /// Sync palette conditioning, independently authored so live tuning in one mode cannot mutate
+    /// the other. It begins with the same luminance band, dark-stop repair, duplicate collapse,
+    /// and full redistribution as Standalone.
+    /// </summary>
+    private static PaletteConditioning SyncPaletteConditioning => new()
+    {
+        TargetLuminance = 0.4f,
+        MinimumLuminance = 0.12f,
+        LuminanceEqualization = 0.85f,
+        HueSpreadReference = 0.5f,
+        MaximumLuminanceScale = 10f,
+        DarkLuminanceThreshold = 0.03f,
+        DuplicateThreshold = 0.08f,
+        HueRedistribution = 1f,
+    };
+
     /// <summary>Chance that a Roll colors from the shared palette instead of the HSV rainbow.</summary>
     private const float SyncPaletteChance = 0.5f;
 
@@ -158,6 +192,12 @@ public class Julia : EffectBase
 
     /// <summary>Chance that a Drop hit chooses the negative direction for its spin.</summary>
     private const float SyncNegativeDropSpinChance = 0.5f;
+
+    /// <summary>
+    /// Authored Pool entry name of the one Waveform Julia holds: peaks on counts 2 and 4 and drives
+    /// the existing hue-cycle response across activations and Grids.
+    /// </summary>
+    private const string SyncWaveformName = "beats 2 and 4";
 
     /// <summary>Hue-cycle drive at the held Waveform's trough.</summary>
     private const float SyncHueCycleDriveMin = 0f;
@@ -252,6 +292,7 @@ public class Julia : EffectBase
         ConstantMorphRate = StandaloneConstantMorphRate,
         WindowWidth = new FloatRange(StandaloneWindowWidthMin, StandaloneWindowWidthMax),
         EdgeLockFraming = StandaloneEdgeLockFraming,
+        PaletteConditioning = StandalonePaletteConditioning,
         PaletteChance = StandalonePaletteChance,
         HueBaseRate = StandaloneHueBaseRate,
         HueBeatRate = StandaloneHueBeatRate,
@@ -269,6 +310,7 @@ public class Julia : EffectBase
         ConstantMorphRate = SyncConstantMorphRate,
         WindowWidth = new FloatRange(SyncWindowWidthMin, SyncWindowWidthMax),
         EdgeLockFraming = SyncEdgeLockFraming,
+        PaletteConditioning = SyncPaletteConditioning,
         PaletteChance = SyncPaletteChance,
         HueBaseRate = SyncHueBaseRate,
         FillDiveDepth = SyncFillDiveDepth,
@@ -279,6 +321,7 @@ public class Julia : EffectBase
         DropBlowout = SyncDropBlowout,
         DropHueKick = SyncDropHueKick,
         NegativeDropSpinChance = SyncNegativeDropSpinChance,
+        WaveformName = SyncWaveformName,
         HueCycleDrive = new FloatRange(SyncHueCycleDriveMin, SyncHueCycleDriveMax),
         HueBeatRate = SyncHueBeatRate,
         JuliaConstants = (Vector2[])SyncJuliaConstants.Clone(),
@@ -290,6 +333,12 @@ public class Julia : EffectBase
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private JuliaSyncSettings SyncSettings { get; set; } = SyncDefaults;
+
+    /// <summary>
+    /// Julia's Effect-local conditioned endpoint cache. It follows shared palette revisions and
+    /// the active mode's live conditioning controls without steady-frame allocation.
+    /// </summary>
+    private readonly ConditionedPaletteCache conditionedPalette = new();
 
     /// <summary>Anti-aliasing sample offsets around each tile center, in wall units.</summary>
     private static readonly Vector2[] aaOffsets = BuildAaOffsets();
@@ -376,6 +425,12 @@ public class Julia : EffectBase
     /// <summary>Whether the current color Roll uses the shared palette instead of the HSV rainbow.</summary>
     private bool usePalette;
 
+    /// <summary>
+    /// Pool entry name of the currently held Waveform, so a live Play Mode edit re-acquires while
+    /// an unchanged setting leaves the held value, including any owner's replacement, alone.
+    /// </summary>
+    private string acquiredWaveformName;
+
     /// <summary>Whether Drop was active on the preceding frame, retained for local onset detection.</summary>
     private bool previousDropActive;
 
@@ -386,13 +441,15 @@ public class Julia : EffectBase
     {
         return $"{presetIndex}, {breathingZoomSpeed}, ({viewCenter.x}, {viewCenter.y})\n" +
             (usePalette ? "PALETTE" : "RAINBOW") + $" HUE {hueScroll:0.00}" +
+            $"\nWAVEFORM {acquiredWaveformName}" +
             (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
             (dropEnv > 0.01f ? $"\nDROP {dropEnv:0.00}" : "");
     }
 
     /// <summary>
-    /// Resolves the current Settings, starts the session journey once, and performs the shared
-    /// activation re-roll while preserving zoom breath, view center, morphed constant, and rotation.
+    /// Resolves the current Settings, acquires the selected Waveform, starts the session journey
+    /// once, refreshes the conditioned palette, and performs the color re-roll while preserving
+    /// zoom breath, view center, morphed constant, and rotation.
     /// </summary>
     public override void OnStart()
     {
@@ -402,6 +459,9 @@ public class Julia : EffectBase
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Julia),
             SyncDefaults);
+        var requestedWaveformName = SyncSettings.WaveformName;
+        waveform = waveforms.Named(requestedWaveformName);
+        acquiredWaveformName = requestedWaveformName;
 
         if (!sessionJourneyStarted)
         {
@@ -409,6 +469,9 @@ public class Julia : EffectBase
         }
 
         Reroll();
+        conditionedPalette.Refresh(APalette, beatManager.IsSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning);
         hueScroll = 0f;
         fillEnv = 0f;
         dropEnv = 0f;
@@ -448,8 +511,8 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Performs the shared activation/Grid re-roll: color mode, an optional fresh palette, and
-    /// held Waveform. It never changes the session journey.
+    /// Performs the shared activation/Grid color re-roll: color mode and an optional fresh palette.
+    /// It never changes the session journey or held Waveform.
     /// </summary>
     private void Reroll()
     {
@@ -459,10 +522,6 @@ public class Julia : EffectBase
             : standaloneSettings.PaletteChance;
         usePalette = Random.value < paletteChance;
         if (usePalette) APalette.Change();
-
-        // Unfiltered acquisition spans the complete curated Waveform Pool, so Julia has no
-        // authored Waveform-selection subrange to expose as Effect Settings.
-        waveform = waveforms.Random();
     }
 
     /// <summary>
@@ -471,7 +530,7 @@ public class Julia : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// On each new Grid Julia re-rolls only its color mode and held Waveform.
+    /// On each new Grid Julia re-rolls only its color mode and optional fresh palette.
     /// </summary>
     protected override void OnNewGrid()
     {
@@ -665,6 +724,17 @@ public class Julia : EffectBase
     public override void Draw()
     {
         var isSynced = beatManager.IsSynced;
+        var requestedWaveformName = SyncSettings.WaveformName;
+        if (requestedWaveformName != acquiredWaveformName)
+        {
+            waveform = waveforms.Named(requestedWaveformName);
+            acquiredWaveformName = requestedWaveformName;
+        }
+
+        var paletteConditioning = isSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning;
+        conditionedPalette.Refresh(APalette, paletteConditioning);
 
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
         // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
@@ -776,14 +846,16 @@ public class Julia : EffectBase
     /// <summary>
     /// Maps a smooth escape count to its color: a ramp by escape speed shifted by the
     /// beat-driven hue scroll, black for points inside the set. The activation's color
-    /// mode picks the ramp — the shared palette or the HSV rainbow.
+    /// mode picks the ramp — the conditioned shared palette or the HSV rainbow.
     /// </summary>
     private Color EscapeColor(float smoothN)
     {
         if (smoothN >= Iterations) return Color.black;
 
         var t = Mathf.Repeat(Mathf.Sqrt(smoothN / Iterations) + hueScroll, 1f);
-        return usePalette ? APalette.read(t, true) : Color.HSVToRGB(t, 1f, 1f);
+        return usePalette
+            ? conditionedPalette.ReadCyclic(t, doblend: true)
+            : Color.HSVToRGB(t, 1f, 1f);
     }
 }
 
@@ -811,6 +883,9 @@ public sealed class JuliaStandaloneSettings
 
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
     public float EdgeLockFraming;
+
+    /// <summary>Live effect-local palette conditioning for Standalone palette contours.</summary>
+    public PaletteConditioning PaletteConditioning;
 
     /// <summary>Chance that a color-mode roll selects the shared palette instead of the HSV rainbow.</summary>
     [Range(0f, 1f)] public float PaletteChance;
@@ -844,6 +919,7 @@ public sealed class JuliaStandaloneSettings
         ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
         EdgeLockFraming = source.EdgeLockFraming;
+        PaletteConditioning = source.PaletteConditioning;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         HueBeatRate = source.HueBeatRate;
@@ -881,6 +957,9 @@ public sealed class JuliaSyncSettings
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
     public float EdgeLockFraming;
 
+    /// <summary>Live effect-local palette conditioning for Synced palette contours.</summary>
+    public PaletteConditioning PaletteConditioning;
+
     /// <summary>Chance that a color-mode Roll selects the shared palette instead of the HSV rainbow.</summary>
     [Range(0f, 1f)] public float PaletteChance;
 
@@ -911,6 +990,13 @@ public sealed class JuliaSyncSettings
     /// <summary>Chance that a Drop hit chooses the negative direction for its spin.</summary>
     [Range(0f, 1f)] public float NegativeDropSpinChance;
 
+    /// <summary>
+    /// Live Pool entry name of the one Waveform Julia holds for its hue-cycle response. A name
+    /// missing from the Pool is a configuration error and fails visibly.
+    /// </summary>
+    [WaveformName]
+    public string WaveformName;
+
     /// <summary>Hue-cycle drive range interpolated by the held Waveform.</summary>
     public FloatRange HueCycleDrive;
 
@@ -937,6 +1023,7 @@ public sealed class JuliaSyncSettings
         ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
         EdgeLockFraming = source.EdgeLockFraming;
+        PaletteConditioning = source.PaletteConditioning;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         FillDiveDepth = source.FillDiveDepth;
@@ -947,6 +1034,7 @@ public sealed class JuliaSyncSettings
         DropBlowout = source.DropBlowout;
         DropHueKick = source.DropHueKick;
         NegativeDropSpinChance = source.NegativeDropSpinChance;
+        WaveformName = source.WaveformName;
         HueCycleDrive = CopyRange(source.HueCycleDrive);
         HueBeatRate = source.HueBeatRate;
         JuliaConstants = (Vector2[])source.JuliaConstants.Clone();

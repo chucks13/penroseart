@@ -564,8 +564,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Julia Standalone Defaults resolve as independent values, including their range and preset
-    /// objects, without pinning the authored tuning values in the test.
+    /// Julia Standalone Defaults resolve as independent values, including palette conditioning,
+    /// range, and preset objects, without pinning the authored tuning values in the test.
     /// </summary>
     [Test]
     public void JuliaStandaloneDefaultsResolveAsIndependentCopies()
@@ -582,6 +582,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.WindowWidth, Is.Not.SameAs(second.WindowWidth));
         AssertFloatRangeEqual(first.WindowWidth, second.WindowWidth);
         Assert.That(first.EdgeLockFraming, Is.EqualTo(second.EdgeLockFraming));
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
         Assert.That(first.PaletteChance, Is.EqualTo(second.PaletteChance));
         Assert.That(first.HueBaseRate, Is.EqualTo(second.HueBaseRate));
         Assert.That(first.HueBeatRate, Is.EqualTo(second.HueBeatRate));
@@ -608,6 +609,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ConstantMorphRate = 20f;
         asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.EdgeLockFraming = 22f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.31f,
+            MinimumLuminance = 0.32f,
+            LuminanceEqualization = 0.33f,
+            HueSpreadReference = 0.34f,
+            MaximumLuminanceScale = 1.35f,
+            DarkLuminanceThreshold = 0.036f,
+            DuplicateThreshold = 0.037f,
+            HueRedistribution = 0.38f,
+        };
         asset.Settings.PaletteChance = 0.11f;
         asset.Settings.HueBaseRate = 23f;
         asset.Settings.HueBeatRate = 24f;
@@ -624,6 +636,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ConstantMorphRate, Is.EqualTo(defaults.ConstantMorphRate));
         AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
         Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
         Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
         Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
@@ -1363,8 +1378,8 @@ public sealed class EffectSyncSettingsTests
     }
 
     /// <summary>
-    /// Restore replaces every edited Julia Sync Setting, range Rail, and preset-table value with
-    /// the current file-local Sync Defaults.
+    /// Restore replaces every edited Julia Sync Setting, including palette conditioning, the held
+    /// Waveform name, range Rails, and preset-table values, with the current file-local Sync Defaults.
     /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryJuliaValue()
@@ -1378,6 +1393,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ConstantMorphRate = 20f;
         asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.EdgeLockFraming = 22f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.41f,
+            MinimumLuminance = 0.42f,
+            LuminanceEqualization = 0.43f,
+            HueSpreadReference = 0.44f,
+            MaximumLuminanceScale = 1.45f,
+            DarkLuminanceThreshold = 0.046f,
+            DuplicateThreshold = 0.047f,
+            HueRedistribution = 0.48f,
+        };
         asset.Settings.PaletteChance = 0.11f;
         asset.Settings.HueBaseRate = 23f;
         asset.Settings.FillDiveDepth = 24f;
@@ -1388,6 +1414,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.DropBlowout = 27f;
         asset.Settings.DropHueKick = 0.12f;
         asset.Settings.NegativeDropSpinChance = 0.13f;
+        asset.Settings.WaveformName = "sentinel entry";
         asset.Settings.HueCycleDrive = new FloatRange(0.14f, 0.15f, 0.13f, 0.16f);
         asset.Settings.HueBeatRate = 28f;
         asset.Settings.JuliaConstants = new[] { new Vector2(29f, 30f) };
@@ -1402,6 +1429,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ConstantMorphRate, Is.EqualTo(defaults.ConstantMorphRate));
         AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
         Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
         Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
         Assert.That(asset.Settings.FillDiveDepth, Is.EqualTo(defaults.FillDiveDepth));
@@ -1412,6 +1442,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.DropBlowout, Is.EqualTo(defaults.DropBlowout));
         Assert.That(asset.Settings.DropHueKick, Is.EqualTo(defaults.DropHueKick));
         Assert.That(asset.Settings.NegativeDropSpinChance, Is.EqualTo(defaults.NegativeDropSpinChance));
+        Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));
         AssertFloatRangeEqual(asset.Settings.HueCycleDrive, defaults.HueCycleDrive);
         Assert.That(asset.Settings.HueBeatRate, Is.EqualTo(defaults.HueBeatRate));
         Assert.That(asset.Settings.JuliaConstants, Is.Not.SameAs(defaults.JuliaConstants));

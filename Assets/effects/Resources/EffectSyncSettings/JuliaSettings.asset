@@ -28,6 +28,15 @@ MonoBehaviour:
       LowRail: 0.002
       HighRail: 5
     EdgeLockFraming: 0
+    PaletteConditioning:
+      TargetLuminance: 0.4
+      MinimumLuminance: 0.12
+      LuminanceEqualization: 0.85
+      HueSpreadReference: 0.5
+      MaximumLuminanceScale: 10
+      DarkLuminanceThreshold: 0.03
+      DuplicateThreshold: 0.08
+      HueRedistribution: 1
     PaletteChance: 0.5
     HueBaseRate: 0.05
     FillDiveDepth: 2
@@ -38,6 +47,7 @@ MonoBehaviour:
     DropBlowout: 1.5
     DropHueKick: 0.5
     NegativeDropSpinChance: 0.5
+    WaveformName: beats 2 and 4
     HueCycleDrive:
       Min: 0
       Max: 1
