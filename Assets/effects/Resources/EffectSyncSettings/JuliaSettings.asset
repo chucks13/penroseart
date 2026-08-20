@@ -28,6 +28,10 @@ MonoBehaviour:
       LowRail: 0.002
       HighRail: 5
     EdgeLockFraming: 0
+    FogDensity: 2
+    FogBrightnessFloor: 0.22
+    ReliefLightAzimuth: 315
+    ReliefShadingDepth: 0.72
     PaletteConditioning:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12

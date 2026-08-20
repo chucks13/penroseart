@@ -582,6 +582,10 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.WindowWidth, Is.Not.SameAs(second.WindowWidth));
         AssertFloatRangeEqual(first.WindowWidth, second.WindowWidth);
         Assert.That(first.EdgeLockFraming, Is.EqualTo(second.EdgeLockFraming));
+        Assert.That(first.FogDensity, Is.EqualTo(second.FogDensity));
+        Assert.That(first.FogBrightnessFloor, Is.EqualTo(second.FogBrightnessFloor));
+        Assert.That(first.ReliefLightAzimuth, Is.EqualTo(second.ReliefLightAzimuth));
+        Assert.That(first.ReliefShadingDepth, Is.EqualTo(second.ReliefShadingDepth));
         AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
         Assert.That(first.PaletteChance, Is.EqualTo(second.PaletteChance));
         Assert.That(first.HueBaseRate, Is.EqualTo(second.HueBaseRate));
@@ -609,6 +613,10 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ConstantMorphRate = 20f;
         asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.EdgeLockFraming = 22f;
+        asset.Settings.FogDensity = 23f;
+        asset.Settings.FogBrightnessFloor = 0.09f;
+        asset.Settings.ReliefLightAzimuth = 24f;
+        asset.Settings.ReliefShadingDepth = 0.1f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
         {
             TargetLuminance = 0.31f,
@@ -636,6 +644,10 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ConstantMorphRate, Is.EqualTo(defaults.ConstantMorphRate));
         AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
         Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
+        Assert.That(asset.Settings.FogDensity, Is.EqualTo(defaults.FogDensity));
+        Assert.That(asset.Settings.FogBrightnessFloor, Is.EqualTo(defaults.FogBrightnessFloor));
+        Assert.That(asset.Settings.ReliefLightAzimuth, Is.EqualTo(defaults.ReliefLightAzimuth));
+        Assert.That(asset.Settings.ReliefShadingDepth, Is.EqualTo(defaults.ReliefShadingDepth));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);
@@ -1393,6 +1405,10 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.ConstantMorphRate = 20f;
         asset.Settings.WindowWidth = new FloatRange(20f, 21f, 19f, 22f);
         asset.Settings.EdgeLockFraming = 22f;
+        asset.Settings.FogDensity = 23f;
+        asset.Settings.FogBrightnessFloor = 0.09f;
+        asset.Settings.ReliefLightAzimuth = 24f;
+        asset.Settings.ReliefShadingDepth = 0.1f;
         asset.Settings.PaletteConditioning = new PaletteConditioning
         {
             TargetLuminance = 0.41f,
@@ -1429,6 +1445,10 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.ConstantMorphRate, Is.EqualTo(defaults.ConstantMorphRate));
         AssertFloatRangeEqual(asset.Settings.WindowWidth, defaults.WindowWidth);
         Assert.That(asset.Settings.EdgeLockFraming, Is.EqualTo(defaults.EdgeLockFraming));
+        Assert.That(asset.Settings.FogDensity, Is.EqualTo(defaults.FogDensity));
+        Assert.That(asset.Settings.FogBrightnessFloor, Is.EqualTo(defaults.FogBrightnessFloor));
+        Assert.That(asset.Settings.ReliefLightAzimuth, Is.EqualTo(defaults.ReliefLightAzimuth));
+        Assert.That(asset.Settings.ReliefShadingDepth, Is.EqualTo(defaults.ReliefShadingDepth));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);

@@ -48,6 +48,18 @@ public class Julia : EffectBase
     /// </summary>
     private const float StandaloneEdgeLockFraming = 0f;
 
+    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    private const float StandaloneFogDensity = 2f;
+
+    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    private const float StandaloneFogBrightnessFloor = 0.22f;
+
+    /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
+    private const float StandaloneReliefLightAzimuth = 315f;
+
+    /// <summary>Depth of relief shading below full brightness.</summary>
+    private const float StandaloneReliefShadingDepth = 0.72f;
+
     /// <summary>
     /// Standalone palette conditioning. The absolute target and floor lift dark contour bands;
     /// hue-spread-aware equalization, a tenfold lift ceiling, dark-stop repair, duplicate collapse,
@@ -136,6 +148,18 @@ public class Julia : EffectBase
     /// view center. Zero keeps the boundary point at the camera center.
     /// </summary>
     private const float SyncEdgeLockFraming = 0f;
+
+    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    private const float SyncFogDensity = 2f;
+
+    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    private const float SyncFogBrightnessFloor = 0.22f;
+
+    /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
+    private const float SyncReliefLightAzimuth = 315f;
+
+    /// <summary>Depth of relief shading below full brightness.</summary>
+    private const float SyncReliefShadingDepth = 0.72f;
 
     /// <summary>
     /// Sync palette conditioning, independently authored so live tuning in one mode cannot mutate
@@ -270,6 +294,19 @@ public class Julia : EffectBase
     /// </summary>
     private const float AaInnerRingScale = 0.55f;
 
+    /// <summary>Scale that turns the fitted smooth-count gradient into the relief surface's tilt.</summary>
+    private const float ReliefSlope = 0.28f;
+
+    /// <summary>Fixed elevation of the relief light above the wall plane, in degrees.</summary>
+    private const float ReliefLightElevationDegrees = 55f;
+
+    /// <summary>
+    /// Sum of squared x or y offsets in the symmetric two-ring AA footprint, used by the
+    /// least-squares gradient fit.
+    /// </summary>
+    private const float AaGradientDenominator =
+        2f * AaRadius * AaRadius * (1f + (AaInnerRingScale * AaInnerRingScale));
+
     /// <summary>
     /// Julia's fractal drift suits Low/Mid-energy sections, dives on Fills, and answers
     /// Drops with a spin/blowout slam.
@@ -292,6 +329,10 @@ public class Julia : EffectBase
         ConstantMorphRate = StandaloneConstantMorphRate,
         WindowWidth = new FloatRange(StandaloneWindowWidthMin, StandaloneWindowWidthMax),
         EdgeLockFraming = StandaloneEdgeLockFraming,
+        FogDensity = StandaloneFogDensity,
+        FogBrightnessFloor = StandaloneFogBrightnessFloor,
+        ReliefLightAzimuth = StandaloneReliefLightAzimuth,
+        ReliefShadingDepth = StandaloneReliefShadingDepth,
         PaletteConditioning = StandalonePaletteConditioning,
         PaletteChance = StandalonePaletteChance,
         HueBaseRate = StandaloneHueBaseRate,
@@ -310,6 +351,10 @@ public class Julia : EffectBase
         ConstantMorphRate = SyncConstantMorphRate,
         WindowWidth = new FloatRange(SyncWindowWidthMin, SyncWindowWidthMax),
         EdgeLockFraming = SyncEdgeLockFraming,
+        FogDensity = SyncFogDensity,
+        FogBrightnessFloor = SyncFogBrightnessFloor,
+        ReliefLightAzimuth = SyncReliefLightAzimuth,
+        ReliefShadingDepth = SyncReliefShadingDepth,
         PaletteConditioning = SyncPaletteConditioning,
         PaletteChance = SyncPaletteChance,
         HueBaseRate = SyncHueBaseRate,
@@ -342,6 +387,12 @@ public class Julia : EffectBase
 
     /// <summary>Anti-aliasing sample offsets around each tile center, in wall units.</summary>
     private static readonly Vector2[] aaOffsets = BuildAaOffsets();
+
+    /// <summary>
+    /// Reusable smooth escape counts for one Tile's AA footprint, retained so relief can fit a
+    /// gradient without evaluating the fractal twice or allocating per frame.
+    /// </summary>
+    private readonly float[] smoothEscapeSamples = new float[AaSamples];
 
     /// <summary>
     /// Reusable inverse-orbit chain from a repelling fixed point to the camera's boundary point;
@@ -717,9 +768,49 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Renders the current session journey after solving its boundary lock. Depth, morph, and
-    /// lock framing resolve live from the active mode's Settings without a second wall pass or
-    /// any per-frame heap allocation.
+    /// Maps smooth escape depth through the baked inverted squared-exponential fog, then remaps
+    /// that factor from the live brightness floor to full brightness.
+    /// </summary>
+    private static float DepthFogBrightness(
+        float smoothEscape,
+        float fogDensity,
+        float brightnessFloor)
+    {
+        var proximity = Mathf.Sqrt(smoothEscape / Iterations);
+        var exponent = fogDensity * (1f - proximity);
+        var invertedFog = 1f - Mathf.Exp(-(exponent * exponent));
+        return brightnessFloor + ((1f - brightnessFloor) * invertedFog);
+    }
+
+    /// <summary>
+    /// Lights the fitted escape-potential gradient as a relief normal and dims its unlit side
+    /// toward the live shading-depth floor.
+    /// </summary>
+    private static float ReliefBrightness(
+        float gradientX,
+        float gradientY,
+        float lightX,
+        float lightY,
+        float lightZ,
+        float shadingDepth)
+    {
+        var normalX = -gradientX * ReliefSlope;
+        var normalY = -gradientY * ReliefSlope;
+        var inverseNormalLength = 1f / Mathf.Sqrt(
+            (normalX * normalX) + (normalY * normalY) + 1f);
+        normalX *= inverseNormalLength;
+        normalY *= inverseNormalLength;
+        var normalZ = inverseNormalLength;
+        var lambert = Mathf.Max(
+            0f,
+            normalX * lightX + normalY * lightY + normalZ * lightZ);
+        return 1f - shadingDepth + shadingDepth * lambert;
+    }
+
+    /// <summary>
+    /// Renders the current session journey after solving its boundary lock. Depth, morph, lock
+    /// framing, inverted fog, and relief resolve live from the active mode's Settings without a
+    /// second fractal pass or any per-frame heap allocation.
     /// </summary>
     public override void Draw()
     {
@@ -791,10 +882,29 @@ public class Julia : EffectBase
         var rotCos = Mathf.Cos(rotation);
         var rotSin = Mathf.Sin(rotation);
 
+        var fogDensity = isSynced
+            ? SyncSettings.FogDensity
+            : standaloneSettings.FogDensity;
+        var fogBrightnessFloor = isSynced
+            ? SyncSettings.FogBrightnessFloor
+            : standaloneSettings.FogBrightnessFloor;
+        var reliefLightAzimuth = isSynced
+            ? SyncSettings.ReliefLightAzimuth
+            : standaloneSettings.ReliefLightAzimuth;
+        var reliefShadingDepth = isSynced
+            ? SyncSettings.ReliefShadingDepth
+            : standaloneSettings.ReliefShadingDepth;
+        var lightAzimuthRadians = reliefLightAzimuth * Mathf.Deg2Rad;
+        var lightElevationRadians = ReliefLightElevationDegrees * Mathf.Deg2Rad;
+        var lightHorizontal = Mathf.Cos(lightElevationRadians);
+        var lightX = Mathf.Cos(lightAzimuthRadians) * lightHorizontal;
+        var lightY = Mathf.Sin(lightAzimuthRadians) * lightHorizontal;
+        var lightZ = Mathf.Sin(lightElevationRadians);
+
         for (var i = 0; i < buffer.Length; i++)
         {
             var center = tiles[i].center;
-            var pix = Color.black;
+            var smoothMean = 0f;
             for (var s = 0; s < aaOffsets.Length; s++)
             {
                 var world = center + aaOffsets[s];
@@ -803,7 +913,49 @@ public class Julia : EffectBase
                 var sampleX = viewCenter.x + (rx * scale);
                 var sampleY = viewCenter.y + (ry * scale);
                 var smoothEscape = SampleEscape(sampleX, sampleY);
-                pix += EscapeColor(smoothEscape);
+                smoothEscapeSamples[s] = smoothEscape;
+                smoothMean += smoothEscape;
+            }
+            smoothMean /= aaOffsets.Length;
+
+            var gradientX = 0f;
+            var gradientY = 0f;
+            for (var s = 0; s < aaOffsets.Length; s++)
+            {
+                var centeredEscape = smoothEscapeSamples[s] - smoothMean;
+                gradientX += aaOffsets[s].x * centeredEscape;
+                gradientY += aaOffsets[s].y * centeredEscape;
+            }
+            gradientX /= AaGradientDenominator;
+            gradientY /= AaGradientDenominator;
+            var reliefBrightness = ReliefBrightness(
+                gradientX,
+                gradientY,
+                lightX,
+                lightY,
+                lightZ,
+                reliefShadingDepth);
+
+            var pix = Color.black;
+            for (var s = 0; s < aaOffsets.Length; s++)
+            {
+                var smoothEscape = smoothEscapeSamples[s];
+                if (smoothEscape >= Iterations)
+                {
+                    pix += Color.black;
+                    continue;
+                }
+
+                var color = EscapeColor(smoothEscape);
+                var brightness = DepthFogBrightness(
+                    smoothEscape,
+                    fogDensity,
+                    fogBrightnessFloor) * reliefBrightness;
+                pix += new Color(
+                    color.r * brightness,
+                    color.g * brightness,
+                    color.b * brightness,
+                    color.a);
             }
 
             buffer[i] = pix / aaOffsets.Length;
@@ -884,6 +1036,18 @@ public sealed class JuliaStandaloneSettings
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
     public float EdgeLockFraming;
 
+    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    [Range(0.1f, 8f)] public float FogDensity;
+
+    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    [Range(0f, 1f)] public float FogBrightnessFloor;
+
+    /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
+    [Range(0f, 360f)] public float ReliefLightAzimuth;
+
+    /// <summary>Depth of relief shading below full brightness.</summary>
+    [Range(0f, 1f)] public float ReliefShadingDepth;
+
     /// <summary>Live effect-local palette conditioning for Standalone palette contours.</summary>
     public PaletteConditioning PaletteConditioning;
 
@@ -919,6 +1083,10 @@ public sealed class JuliaStandaloneSettings
         ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
         EdgeLockFraming = source.EdgeLockFraming;
+        FogDensity = source.FogDensity;
+        FogBrightnessFloor = source.FogBrightnessFloor;
+        ReliefLightAzimuth = source.ReliefLightAzimuth;
+        ReliefShadingDepth = source.ReliefShadingDepth;
         PaletteConditioning = source.PaletteConditioning;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
@@ -956,6 +1124,18 @@ public sealed class JuliaSyncSettings
 
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
     public float EdgeLockFraming;
+
+    /// <summary>Density of the inverted squared-exponential fog keyed to smooth escape depth.</summary>
+    [Range(0.1f, 8f)] public float FogDensity;
+
+    /// <summary>Brightness floor beneath the inverted depth-fog factor.</summary>
+    [Range(0f, 1f)] public float FogBrightnessFloor;
+
+    /// <summary>Wall-space azimuth of the fixed relief light, in degrees.</summary>
+    [Range(0f, 360f)] public float ReliefLightAzimuth;
+
+    /// <summary>Depth of relief shading below full brightness.</summary>
+    [Range(0f, 1f)] public float ReliefShadingDepth;
 
     /// <summary>Live effect-local palette conditioning for Synced palette contours.</summary>
     public PaletteConditioning PaletteConditioning;
@@ -1023,6 +1203,10 @@ public sealed class JuliaSyncSettings
         ConstantMorphRate = source.ConstantMorphRate;
         WindowWidth = CopyRange(source.WindowWidth);
         EdgeLockFraming = source.EdgeLockFraming;
+        FogDensity = source.FogDensity;
+        FogBrightnessFloor = source.FogBrightnessFloor;
+        ReliefLightAzimuth = source.ReliefLightAzimuth;
+        ReliefShadingDepth = source.ReliefShadingDepth;
         PaletteConditioning = source.PaletteConditioning;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
