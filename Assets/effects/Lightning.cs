@@ -31,19 +31,21 @@ public class Lightning : EffectBase
 
     /// <summary>
     /// Lifts dark Standalone palette entries into a visible working range without changing the hue
-    /// walk. Zero equalization preserves authored brightness relationships, zero duplicate collapse
-    /// keeps every entry, and zero redistribution keeps every palette position.
+    /// walk. Wall-tuned: the third-luminance floor keeps bolt tiles reading against the dark field,
+    /// and the mild duplicate collapse and redistribution shift conditioned entries off the authored
+    /// positions the brightest-entry scan samples, an accepted approximation. Zero equalization
+    /// preserves authored brightness relationships.
     /// </summary>
     private static PaletteConditioning StandalonePaletteConditioning => new()
     {
         TargetLuminance = 0.5f,
-        MinimumLuminance = 0.15f,
+        MinimumLuminance = 0.33333f,
         LuminanceEqualization = 0f,
         HueSpreadReference = 1f,
         MaximumLuminanceScale = 4f,
-        DarkLuminanceThreshold = 0.1f,
-        DuplicateThreshold = 0f,
-        HueRedistribution = 0f,
+        DarkLuminanceThreshold = 0.2f,
+        DuplicateThreshold = 0.1f,
+        HueRedistribution = 0.1f,
     };
 
     // Sync Defaults
@@ -105,19 +107,21 @@ public class Lightning : EffectBase
 
     /// <summary>
     /// Lifts dark Synced palette entries into a visible working range without changing the hue walk.
-    /// Zero equalization preserves authored brightness relationships, zero duplicate collapse keeps
-    /// every entry, and zero redistribution keeps every palette position.
+    /// Wall-tuned: the third-luminance floor keeps bolt tiles reading against the dark field, and
+    /// the mild duplicate collapse and redistribution shift conditioned entries off the authored
+    /// positions the brightest-entry scan samples, an accepted approximation. Zero equalization
+    /// preserves authored brightness relationships.
     /// </summary>
     private static PaletteConditioning SyncPaletteConditioning => new()
     {
         TargetLuminance = 0.5f,
-        MinimumLuminance = 0.15f,
+        MinimumLuminance = 0.33333f,
         LuminanceEqualization = 0f,
         HueSpreadReference = 1f,
         MaximumLuminanceScale = 4f,
-        DarkLuminanceThreshold = 0.1f,
-        DuplicateThreshold = 0f,
-        HueRedistribution = 0f,
+        DarkLuminanceThreshold = 0.2f,
+        DuplicateThreshold = 0.1f,
+        HueRedistribution = 0.1f,
     };
 
     // Runtime mechanism constants

@@ -24,10 +24,10 @@ MonoBehaviour:
       HighRail: 1
     PaletteConditioning:
       TargetLuminance: 0.5
-      MinimumLuminance: 0.15
+      MinimumLuminance: 0.33333
       LuminanceEqualization: 0
       HueSpreadReference: 1
       MaximumLuminanceScale: 4
-      DarkLuminanceThreshold: 0.1
-      DuplicateThreshold: 0
-      HueRedistribution: 0
+      DarkLuminanceThreshold: 0.2
+      DuplicateThreshold: 0.1
+      HueRedistribution: 0.1
