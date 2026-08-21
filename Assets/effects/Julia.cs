@@ -26,7 +26,7 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
-    /// width. The 0.0024 default preserves the former 0.012 radius at the five-unit full view.
+    /// width. The 0.0024 default works out to a 0.012 absolute radius at the five-unit full view.
     /// </summary>
     private const float StandaloneConstantMorphRadius = 0.0024f;
 
@@ -130,7 +130,7 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
-    /// width. The 0.0024 default preserves the former 0.012 radius at the five-unit full view.
+    /// width. The 0.0024 default works out to a 0.012 absolute radius at the five-unit full view.
     /// </summary>
     private const float SyncConstantMorphRadius = 0.0024f;
 
@@ -170,7 +170,7 @@ public class Julia : EffectBase
     /// <summary>
     /// Sync palette conditioning, independently authored so live tuning in one mode cannot mutate
     /// the other. It shares Standalone's luminance band, dark-stop repair, and full redistribution,
-    /// but was ruled at the wall onto a wider hue-spread reference — so mid-spread palettes keep
+    /// but uses a wider hue-spread reference — so mid-spread palettes keep
     /// their own light/dark motion instead of being flattened — and a higher duplicate threshold
     /// that collapses near-identical stops.
     /// </summary>
@@ -187,9 +187,8 @@ public class Julia : EffectBase
     };
 
     /// <summary>
-    /// Chance that a Roll colors from the shared palette instead of the HSV rainbow. Ruled at the
-    /// wall to 0.25 from the authored zero: the rainbow leads the Synced look, with palette Rolls
-    /// mixed in.
+    /// Chance that a Roll colors from the shared palette instead of the HSV rainbow. Kept low: the
+    /// rainbow leads the Synced look, with palette Rolls mixed in.
     /// </summary>
     private const float SyncPaletteChance = 0.25f;
 
@@ -200,9 +199,8 @@ public class Julia : EffectBase
     private const int SyncFillApproachBeats = 8;
 
     /// <summary>
-    /// Fill envelope attack rate in inverse seconds. Wall-tuned down in two rounds from the
-    /// original 22/s for a softer ramp into the deeper dive; still fast enough for a short Fill
-    /// to register without a one-frame snap.
+    /// Fill envelope attack rate in inverse seconds. Slow enough for a soft ramp into the deeper
+    /// dive; still fast enough for a short Fill to register without a one-frame snap.
     /// </summary>
     private const float SyncFillAttackRate = 5f;
 
@@ -666,7 +664,7 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Tracks the Fill's full-length In Build with the original fast exponential attack, then
+    /// Tracks the Fill's full-length In Build with a fast exponential attack, then
     /// releases the consumer-local dive linearly over the authored number of beats when Build
     /// falls away.
     /// </summary>
