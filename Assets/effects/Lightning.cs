@@ -71,9 +71,6 @@ public class Lightning : EffectBase
     /// <summary>Pool Preset name of the Waveform held for brightness and hue response.</summary>
     private const string SyncWaveformName = "beats 2 and 4";
 
-    /// <summary>Pulse duration whose rising edge re-walks the bolt outside a Fill.</summary>
-    private const Duration SyncRewalkDuration = Duration.Quarter;
-
     /// <summary>Low-band level above which an On the Beat gate opens the flash.</summary>
     private const float SyncOnBeatLowThreshold = 0.5f;
 
@@ -185,7 +182,6 @@ public class Lightning : EffectBase
             SyncWaveformBrightnessMax),
         WaveformName = SyncWaveformName,
         WaveformHueOffset = SyncWaveformHueOffset,
-        RewalkDuration = SyncRewalkDuration,
         OnBeatLowThreshold = SyncOnBeatLowThreshold,
         LowLevelsForm = SyncLowLevelsForm,
         FlashHueOffset = SyncFlashHueOffset,
@@ -260,9 +256,6 @@ public class Lightning : EffectBase
     /// <summary>Previous frame's rewalk-gate state; the rising edge triggers the Fill re-walk.</summary>
     private bool previousRewalkOn;
 
-    /// <summary>Previous frame's ordinary rewalk-gate state; its rising edge triggers the Synced re-walk.</summary>
-    private bool previousSyncedRewalkOn;
-
     /// <summary>Pool Preset name used for the current held Waveform acquisition.</summary>
     private string acquiredWaveformName;
 
@@ -308,7 +301,6 @@ public class Lightning : EffectBase
         heldRays = null;
         heldActive = false;
         previousRewalkOn = false;
-        previousSyncedRewalkOn = false;
         previousFlashGate = false;
         burningRayIndex = -1;
         flashEnvelope = 0f;
@@ -398,16 +390,16 @@ public class Lightning : EffectBase
     }
 
     /// <summary>
-    /// Updates the held bolt path. Standalone keeps the original per-frame stochastic redraw; Synced Mode re-walks
-    /// on the consumer-local rising edge of the ordinary rewalk pulse. A Fill keeps precedence with its own held
-    /// rewalk cadence, so the branch hard-snaps to new positions in step with that pulse instead of flowing continuously.
-    /// An active burning ray is preserved while the other rays re-walk so its path lasts for the whole flash.
+    /// Updates the held bolt path. Outside a Fill the bolt re-walks every frame in both modes, preserving the original
+    /// dancing look; inside a Fill it freezes and only re-walks on the rising edge of the configured rewalk gate
+    /// (sixteenth notes by default), so the whole branch hard-snaps to new positions in step with that pulse instead of
+    /// flowing continuously. If the beat gate is unavailable, it holds. An active burning ray is preserved through
+    /// every re-walk so its path lasts for the whole flash.
     /// </summary>
     private void UpdateHeldBolt()
     {
         heldActive = beatManager.Fill.Active;
         bool fillRewalkOn = beatManager.Pulses.On(SyncSettings.FillRewalkDuration);
-        bool syncedRewalkOn = beatManager.Pulses.On(SyncSettings.RewalkDuration);
         int preservedRayIndex = flashEnvelope > 0f ? burningRayIndex : -1;
         if (heldActive)
         {
@@ -416,17 +408,11 @@ public class Lightning : EffectBase
                 GenerateBolt(preservedRayIndex);
             }
         }
-        else if (!beatManager.IsSynced)
-        {
-            GenerateBolt();
-        }
-        else if ((syncedRewalkOn && !previousSyncedRewalkOn) || heldRays == null)
+        else
         {
             GenerateBolt(preservedRayIndex);
         }
-
         previousRewalkOn = fillRewalkOn;
-        previousSyncedRewalkOn = syncedRewalkOn;
     }
 
     /// <summary>
@@ -625,9 +611,9 @@ public class Lightning : EffectBase
     /// <summary>
     /// Walks the stochastic branch path outward from each center-star tile and caches the visited tile indices in
     /// <see cref="heldRays"/>. Splitting the walk (here) from the coloring (<see cref="RenderBolt"/>) is what lets a
-    /// Fill hold one bolt and re-walk it only on the rewalk; Standalone calls it every frame, preserving the original
-    /// stochastic redraw. During a flash, <paramref name="preservedRayIndex"/> keeps the burning path while the other
-    /// rays re-walk.
+    /// Fill hold one bolt and re-walk it only on the rewalk; outside a Fill it is simply called every frame, preserving
+    /// the original per-frame stochastic redraw. During a flash, <paramref name="preservedRayIndex"/> keeps the burning
+    /// path while the other rays re-walk.
     /// </summary>
     /// <param name="preservedRayIndex">Ray index to retain, or -1 when every ray should be re-walked.</param>
     private void GenerateBolt(int preservedRayIndex = -1)
@@ -841,9 +827,6 @@ public sealed class LightningSyncSettings
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float WaveformHueOffset;
 
-    /// <summary>Pulse duration whose rising edge re-walks the held bolt outside a Fill.</summary>
-    public Duration RewalkDuration;
-
     /// <summary>Low-band level above which an On the Beat gate opens the flash.</summary>
     [Range(0f, 1f)] public float OnBeatLowThreshold;
 
@@ -908,7 +891,6 @@ public sealed class LightningSyncSettings
         WaveformName = source.WaveformName;
         PaletteConditioning = source.PaletteConditioning;
         WaveformHueOffset = source.WaveformHueOffset;
-        RewalkDuration = source.RewalkDuration;
         OnBeatLowThreshold = source.OnBeatLowThreshold;
         LowLevelsForm = source.LowLevelsForm;
         FlashHueOffset = source.FlashHueOffset;

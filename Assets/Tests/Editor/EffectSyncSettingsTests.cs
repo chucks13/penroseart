@@ -2376,7 +2376,6 @@ public sealed class EffectSyncSettingsTests
             HueRedistribution = 0.19f,
         };
         asset.Settings.WaveformHueOffset = 23f;
-        asset.Settings.RewalkDuration = Duration.Whole;
         asset.Settings.OnBeatLowThreshold = 0.33f;
         asset.Settings.LowLevelsForm = LevelsForm.Peak;
         asset.Settings.FlashHueOffset = 0.25f;
@@ -2405,7 +2404,6 @@ public sealed class EffectSyncSettingsTests
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);
         Assert.That(asset.Settings.WaveformHueOffset, Is.EqualTo(defaults.WaveformHueOffset));
-        Assert.That(asset.Settings.RewalkDuration, Is.EqualTo(defaults.RewalkDuration));
         Assert.That(asset.Settings.OnBeatLowThreshold, Is.EqualTo(defaults.OnBeatLowThreshold));
         Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
         Assert.That(asset.Settings.FlashHueOffset, Is.EqualTo(defaults.FlashHueOffset));

@@ -33,7 +33,6 @@ MonoBehaviour:
       DuplicateThreshold: 0.1
       HueRedistribution: 0.1
     WaveformHueOffset: 0.5
-    RewalkDuration: 2
     OnBeatLowThreshold: 0.5
     LowLevelsForm: 0
     FlashHueOffset: 0.5
