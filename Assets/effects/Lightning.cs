@@ -75,7 +75,7 @@ public class Lightning : EffectBase
     private const float SyncOnBeatLowThreshold = 0.4f;
 
     /// <summary>Levels form sampled for the bass-gated On the Beat flash.</summary>
-    private const LevelsForm SyncLowLevelsForm = LevelsForm.Smoothed;
+    private const LevelsForm SyncLowLevelsForm = LevelsForm.Normalized;
 
     /// <summary>Hue-wheel offset applied to the burning ray.</summary>
     private const float SyncFlashHueOffset = 0.5f;

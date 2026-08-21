@@ -34,7 +34,7 @@ MonoBehaviour:
       HueRedistribution: 0.1
     WaveformHueOffset: 0.5
     OnBeatLowThreshold: 0.4
-    LowLevelsForm: 1
+    LowLevelsForm: 0
     FlashHueOffset: 0.5
     FlashDecayBeats: 0.5
     DropBars: 8
