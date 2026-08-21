@@ -854,8 +854,10 @@ public class Julia : EffectBase
     /// Renders the current session journey after solving its boundary lock. Depth, morph, lock
     /// framing, fog, and relief resolve live from the active mode's Settings without a
     /// second fractal pass or any per-frame heap allocation.
-    /// A full Fill always plunges to the window-width floor: log-space interpolation makes that
-    /// wall ruling structural instead of relying on tuned overshoot into a clamp.
+    /// The Fill dive interpolates in log space toward the window-width floor — the floor is the
+    /// dive's structural endpoint, not a tuned overshoot into a clamp — and the attack envelope
+    /// shapes the chase, so the deepest frame lands as close to the floor as the tuned attack
+    /// rate reaches by the Fill's final beat.
     /// </summary>
     public override void Draw()
     {
