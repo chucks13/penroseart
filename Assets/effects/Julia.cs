@@ -1116,19 +1116,19 @@ public sealed class JuliaStandaloneSettings
     public FloatRange BreathingZoomSpeed;
 
     /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
-    public float Depth;
+    [Range(0f, 1f)] public float Depth;
 
     /// <summary>Radius of the Julia constant's circular morph orbit, as a fraction of current window width.</summary>
-    public float ConstantMorphRadius;
+    [Min(0f)] public float ConstantMorphRadius;
 
     /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
-    public float ConstantMorphRate;
+    [Min(0f)] public float ConstantMorphRate;
 
     /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
     public FloatRange WindowWidth;
 
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
-    public float EdgeLockFraming;
+    [Range(0f, 1f)] public float EdgeLockFraming;
 
     /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
     [Range(0.1f, 8f)] public float FogDensity;
@@ -1209,19 +1209,19 @@ public sealed class JuliaSyncSettings
     public FloatRange BreathingZoomSpeed;
 
     /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
-    public float Depth;
+    [Range(0f, 1f)] public float Depth;
 
     /// <summary>Radius of the Julia constant's circular morph orbit, as a fraction of current window width.</summary>
-    public float ConstantMorphRadius;
+    [Min(0f)] public float ConstantMorphRadius;
 
     /// <summary>Speed of the Julia constant's circular morph orbit in revolutions per second.</summary>
-    public float ConstantMorphRate;
+    [Min(0f)] public float ConstantMorphRate;
 
     /// <summary>Complex-plane window-width range from the precision floor to full zoom-out.</summary>
     public FloatRange WindowWidth;
 
     /// <summary>Window-width fraction framing the solved boundary point toward its authored preset center.</summary>
-    public float EdgeLockFraming;
+    [Range(0f, 1f)] public float EdgeLockFraming;
 
     /// <summary>Density of the squared-exponential depth fog keyed to smooth escape depth.</summary>
     [Range(0.1f, 8f)] public float FogDensity;
@@ -1248,13 +1248,13 @@ public sealed class JuliaSyncSettings
     [Min(0f)] public float HueBaseRate;
 
     /// <summary>Whole-beat window over which an announced upcoming Fill pulls back to the full-set view.</summary>
-    public int FillApproachBeats;
+    [Min(1)] public int FillApproachBeats;
 
     /// <summary>Fast exponential response rate toward the live Fill Build, in inverse seconds.</summary>
-    public float FillAttackRate;
+    [Min(0f)] public float FillAttackRate;
 
     /// <summary>Beats taken to release a full consumer-local Fill envelope back to rest.</summary>
-    public float FillReleaseBeats;
+    [Min(0f)] public float FillReleaseBeats;
 
     /// <summary>Fraction of the half-wheel complement rotation reached at each wire beat pulse peak during a Fill.</summary>
     [Range(0f, 1f)] public float FillComplementDepth;
