@@ -195,12 +195,18 @@ public class Julia : EffectBase
     /// <summary>Baseline hue cycling speed in wheel revolutions per second; the colors never stop marching.</summary>
     private const float SyncHueBaseRate = 0.05f;
 
+    /// <summary>Whole-beat window over which an announced upcoming Fill pulls back to the full-set view.</summary>
+    private const int SyncFillApproachBeats = 8;
+
     /// <summary>
     /// Fill dive depth: at full Fill the zoom is e^FillDiveDepth deeper than the breathing zoom
     /// alone. Exponential so the dive speed feels constant at any depth. Ruled at the wall up to
     /// 10 from the original 2: a full Fill now always plunges to the window-width floor.
     /// </summary>
     private const float SyncFillDiveDepth = 10f;
+
+    /// <summary>Whole beats over which the Fill plunge reaches full depth before holding.</summary>
+    private const int SyncFillDiveBeats = 4;
 
     /// <summary>
     /// Fill envelope attack rate in inverse seconds. Halved at the wall from the original 22/s
@@ -211,6 +217,9 @@ public class Julia : EffectBase
 
     /// <summary>Beats taken to release a full Fill dive back to rest after the Fill ends.</summary>
     private const float SyncFillReleaseBeats = 1f;
+
+    /// <summary>Fraction of the half-wheel complement rotation reached at each wire beat pulse peak during a Fill.</summary>
+    private const float SyncFillComplementDepth = 1f;
 
     /// <summary>Beats the Drop slam takes to decay back to rest.</summary>
     private const int SyncDropDecayBeats = 16;
@@ -373,9 +382,12 @@ public class Julia : EffectBase
         PaletteConditioning = SyncPaletteConditioning,
         PaletteChance = SyncPaletteChance,
         HueBaseRate = SyncHueBaseRate,
+        FillApproachBeats = SyncFillApproachBeats,
         FillDiveDepth = SyncFillDiveDepth,
+        FillDiveBeats = SyncFillDiveBeats,
         FillAttackRate = SyncFillAttackRate,
         FillReleaseBeats = SyncFillReleaseBeats,
+        FillComplementDepth = SyncFillComplementDepth,
         DropDecayBeats = SyncDropDecayBeats,
         DropSpinRate = SyncDropSpinRate,
         DropBlowout = SyncDropBlowout,
@@ -472,8 +484,14 @@ public class Julia : EffectBase
     /// <summary>The hue-wheel offset, reset on each activation.</summary>
     private float hueScroll;
 
-    /// <summary>The consumer-local Fill envelope whose fast attack and authored release drive the zoom dive.</summary>
+    /// <summary>The consumer-local Fill plunge envelope whose fast attack and authored release drive the zoom dive.</summary>
     private float fillEnv;
+
+    /// <summary>
+    /// Logarithmic window offset that carries the announced Fill inhale continuously into the
+    /// plunge while the breathing oscillator keeps advancing underneath.
+    /// </summary>
+    private float fillApproachLogOffset;
 
     /// <summary>The current Drop Decay envelope used by the spin and zoom blowout.</summary>
     private float dropEnv;
@@ -540,6 +558,7 @@ public class Julia : EffectBase
             : standaloneSettings.PaletteConditioning);
         hueScroll = 0f;
         fillEnv = 0f;
+        fillApproachLogOffset = 0f;
         dropEnv = 0f;
         previousDropActive = beatManager.Drop.Active;
         buffer.Clear();
@@ -660,7 +679,7 @@ public class Julia : EffectBase
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        var fillTarget = beatManager.Fill.In.Build();
+        var fillTarget = beatManager.Fill.In.Build(SyncSettings.FillDiveBeats);
         if (fillTarget > fillEnv)
         {
             var attackBlend = 1f - Mathf.Exp(-SyncSettings.FillAttackRate * effectDelta);
@@ -672,6 +691,20 @@ public class Julia : EffectBase
             beatManager.Timing.BeatAverageMilliseconds.Value /
             1000f;
         fillEnv = Mathf.MoveTowards(fillEnv, fillTarget, effectDelta / releaseSeconds);
+    }
+
+    /// <summary>
+    /// Tracks the announced Fill Before span in logarithmic window space so the inhale shares the
+    /// plunge's exponential camera motion. The existing attack smoothing lets selection changes
+    /// and an arriving active Fill redirect the current view without a position jump.
+    /// </summary>
+    private void UpdateFillApproach(float restingBreathWindow, float fullViewWindow)
+    {
+        var approachTarget = Mathf.Log(fullViewWindow / restingBreathWindow) *
+            beatManager.Fill.Before.Build(SyncSettings.FillApproachBeats);
+        var approachBlend = 1f - Mathf.Exp(-SyncSettings.FillAttackRate * effectDelta);
+        fillApproachLogOffset +=
+            (approachTarget - fillApproachLogOffset) * approachBlend;
     }
 
     /// <summary>
@@ -881,9 +914,28 @@ public class Julia : EffectBase
             : standaloneSettings.Depth;
         var sa = Mathf.Sin(zoomBreathPhase).Remap(1f, -1f, 0f, 1f);
         var breathWindow = windowWidth.Max * (1f + ((sa - 1f) * depth));
-        var window = Mathf.Clamp(
+        var restingBreathWindow = Mathf.Clamp(
+            breathWindow,
+            windowWidth.Min,
+            windowWidth.Max);
+        if (isSynced)
+        {
+            UpdateFillApproach(restingBreathWindow, windowWidth.Max);
+        }
+        else
+        {
+            fillApproachLogOffset = 0f;
+        }
+
+        var fillDropWindow = Mathf.Clamp(
             breathWindow * Mathf.Exp(
                 (SyncSettings.DropBlowout * dropEnv) - (SyncSettings.FillDiveDepth * fillEnv)),
+            windowWidth.Min,
+            windowWidth.Max);
+        // The Fill inhale multiplies the existing camera in log space, carrying its last actual
+        // position into the plunge while the breathing oscillator continues underneath.
+        var window = Mathf.Clamp(
+            fillDropWindow * Mathf.Exp(fillApproachLogOffset),
             windowWidth.Min,
             windowWidth.Max);
         var scale = window / penrose.Bounds.size.x;
@@ -920,6 +972,10 @@ public class Julia : EffectBase
         var lightX = Mathf.Cos(lightAzimuthRadians) * lightHorizontal;
         var lightY = Mathf.Sin(lightAzimuthRadians) * lightHorizontal;
         var lightZ = Mathf.Sin(lightElevationRadians);
+        var fillActive = beatManager.Fill.Active;
+        var fillHueRotation = fillActive
+            ? beatManager.Pulses.Beat * SyncSettings.FillComplementDepth * 0.5f
+            : 0f;
 
         for (var i = 0; i < buffer.Length; i++)
         {
@@ -979,7 +1035,14 @@ public class Julia : EffectBase
                     color.a);
             }
 
-            buffer[i] = pix / aaOffsets.Length;
+            var tileColor = pix / aaOffsets.Length;
+            if (fillActive)
+            {
+                var alpha = tileColor.a;
+                tileColor = tileColor.Delta(fillHueRotation);
+                tileColor.a = alpha;
+            }
+            buffer[i] = tileColor;
         }
     }
 
@@ -1174,14 +1237,23 @@ public sealed class JuliaSyncSettings
     /// <summary>Baseline hue cycling speed in wheel revolutions per second.</summary>
     [Min(0f)] public float HueBaseRate;
 
+    /// <summary>Whole-beat window over which an announced upcoming Fill pulls back to the full-set view.</summary>
+    public int FillApproachBeats;
+
     /// <summary>Exponential zoom depth added at full Fill.</summary>
     [Min(0f)] public float FillDiveDepth;
+
+    /// <summary>Whole beats over which the active Fill plunge reaches full depth before holding.</summary>
+    public int FillDiveBeats;
 
     /// <summary>Fast exponential response rate toward the live Fill Build, in inverse seconds.</summary>
     public float FillAttackRate;
 
     /// <summary>Beats taken to release a full consumer-local Fill envelope back to rest.</summary>
     public float FillReleaseBeats;
+
+    /// <summary>Fraction of the half-wheel complement rotation reached at each wire beat pulse peak during a Fill.</summary>
+    [Range(0f, 1f)] public float FillComplementDepth;
 
     /// <summary>Length of the Drop slam decay in beats.</summary>
     [Min(1)] public int DropDecayBeats;
@@ -1239,9 +1311,12 @@ public sealed class JuliaSyncSettings
         PaletteConditioning = source.PaletteConditioning;
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
+        FillApproachBeats = source.FillApproachBeats;
         FillDiveDepth = source.FillDiveDepth;
+        FillDiveBeats = source.FillDiveBeats;
         FillAttackRate = source.FillAttackRate;
         FillReleaseBeats = source.FillReleaseBeats;
+        FillComplementDepth = source.FillComplementDepth;
         DropDecayBeats = source.DropDecayBeats;
         DropSpinRate = source.DropSpinRate;
         DropBlowout = source.DropBlowout;

@@ -44,9 +44,12 @@ MonoBehaviour:
       HueRedistribution: 1
     PaletteChance: 0.25
     HueBaseRate: 0.05
+    FillApproachBeats: 8
     FillDiveDepth: 10
+    FillDiveBeats: 4
     FillAttackRate: 11
     FillReleaseBeats: 1
+    FillComplementDepth: 1
     DropDecayBeats: 16
     DropSpinRate: 1.5
     DropBlowout: 1.5
