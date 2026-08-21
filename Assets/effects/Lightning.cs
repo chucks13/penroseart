@@ -345,20 +345,18 @@ public class Lightning : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// On each new Grid the center-star cache follows any refreshed layout before the bolts take a fresh form.
-    /// Drop intensity is read independently from the hub's direct Drop decay, so this hook owns only Lightning's
-    /// Grid-aligned geometry refresh and visual reroll.
+    /// On each new Grid the bolts take a fresh form. Drop intensity is read independently from the hub's
+    /// direct Drop decay, so this hook owns only Lightning's Grid-aligned visual reroll.
     /// </summary>
     protected override void OnNewGrid()
     {
-        RefreshCenterStar();
         Reroll();
     }
 
     /// <summary>
-    /// Caches the Star Motif whose centroid has the smallest squared distance from the layout origin. Refreshing
-    /// this allocation-free group view at activation and each new Grid follows layout changes without treating
-    /// packed payload order as geometry.
+    /// Caches the Star Motif whose centroid has the smallest squared distance from the layout origin. The layout
+    /// is assigned once at startup, so one refresh at activation suffices; selecting by centroid keeps packed
+    /// payload order out of the geometry.
     /// </summary>
     private void RefreshCenterStar()
     {
@@ -709,17 +707,17 @@ public class Lightning : EffectBase
         starthue += deltastart;
         for (int rayOrder = 0; rayOrder < heldRays.Length; rayOrder++)
         {
-            int r = rayOrder;
+            int rayIndex = rayOrder;
             if (flashActive)
             {
                 if (rayOrder == heldRays.Length - 1)
-                    r = burningRayIndex;
+                    rayIndex = burningRayIndex;
                 else if (rayOrder >= burningRayIndex)
-                    r++;
+                    rayIndex++;
             }
-            List<int> ray = heldRays[r];
-            bool rayBurning = r == burningRayIndex && flashActive;
-            float tilehue = flashActive ? firstRayHue + (deltaray * r) : rayhue;
+            List<int> ray = heldRays[rayIndex];
+            bool rayBurning = rayIndex == burningRayIndex && flashActive;
+            float tilehue = flashActive ? firstRayHue + (deltaray * rayIndex) : rayhue;
             rayhue += deltaray;
             for (int k = 0; k < ray.Count; k++)
             {
