@@ -22,6 +22,7 @@ MonoBehaviour:
       Max: 1
       LowRail: 0.75
       HighRail: 1
+    WaveformName: beats 2 and 4
     PaletteConditioning:
       TargetLuminance: 0.5
       MinimumLuminance: 0.33333
@@ -32,6 +33,11 @@ MonoBehaviour:
       DuplicateThreshold: 0.1
       HueRedistribution: 0.1
     WaveformHueOffset: 0.5
+    RewalkDuration: 2
+    OnBeatLowThreshold: 0.5
+    LowLevelsForm: 0
+    FlashHueOffset: 0.5
+    FlashDecayBeats: 0.5
     DropBars: 8
     DropValueLift: 1
     DropFlickerDepth: 0.5

@@ -2363,6 +2363,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.RayHueDelta = 18f;
         asset.Settings.TileHueDelta = 19f;
         asset.Settings.WaveformBrightness = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.WaveformName = "test waveform";
         asset.Settings.PaletteConditioning = new PaletteConditioning
         {
             TargetLuminance = 0.21f,
@@ -2375,6 +2376,11 @@ public sealed class EffectSyncSettingsTests
             HueRedistribution = 0.19f,
         };
         asset.Settings.WaveformHueOffset = 23f;
+        asset.Settings.RewalkDuration = Duration.Whole;
+        asset.Settings.OnBeatLowThreshold = 0.33f;
+        asset.Settings.LowLevelsForm = LevelsForm.Peak;
+        asset.Settings.FlashHueOffset = 0.25f;
+        asset.Settings.FlashDecayBeats = 0.75f;
         asset.Settings.DropBars = 24;
         asset.Settings.DropValueLift = 25f;
         asset.Settings.DropFlickerDepth = 26f;
@@ -2394,10 +2400,16 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.RayHueDelta, Is.EqualTo(defaults.RayHueDelta));
         Assert.That(asset.Settings.TileHueDelta, Is.EqualTo(defaults.TileHueDelta));
         AssertFloatRangeEqual(asset.Settings.WaveformBrightness, defaults.WaveformBrightness);
+        Assert.That(asset.Settings.WaveformName, Is.EqualTo(defaults.WaveformName));
         AssertPaletteConditioningEqual(
             asset.Settings.PaletteConditioning,
             defaults.PaletteConditioning);
         Assert.That(asset.Settings.WaveformHueOffset, Is.EqualTo(defaults.WaveformHueOffset));
+        Assert.That(asset.Settings.RewalkDuration, Is.EqualTo(defaults.RewalkDuration));
+        Assert.That(asset.Settings.OnBeatLowThreshold, Is.EqualTo(defaults.OnBeatLowThreshold));
+        Assert.That(asset.Settings.LowLevelsForm, Is.EqualTo(defaults.LowLevelsForm));
+        Assert.That(asset.Settings.FlashHueOffset, Is.EqualTo(defaults.FlashHueOffset));
+        Assert.That(asset.Settings.FlashDecayBeats, Is.EqualTo(defaults.FlashDecayBeats));
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
         Assert.That(asset.Settings.DropValueLift, Is.EqualTo(defaults.DropValueLift));
         Assert.That(asset.Settings.DropFlickerDepth, Is.EqualTo(defaults.DropFlickerDepth));

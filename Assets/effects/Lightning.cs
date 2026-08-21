@@ -68,6 +68,24 @@ public class Lightning : EffectBase
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     private const float SyncWaveformHueOffset = 0.5f;
 
+    /// <summary>Pool Preset name of the Waveform held for brightness and hue response.</summary>
+    private const string SyncWaveformName = "beats 2 and 4";
+
+    /// <summary>Pulse duration whose rising edge re-walks the bolt outside a Fill.</summary>
+    private const Duration SyncRewalkDuration = Duration.Quarter;
+
+    /// <summary>Low-band level above which an On the Beat gate opens the flash.</summary>
+    private const float SyncOnBeatLowThreshold = 0.5f;
+
+    /// <summary>Levels form sampled for the bass-gated On the Beat flash.</summary>
+    private const LevelsForm SyncLowLevelsForm = LevelsForm.Normalized;
+
+    /// <summary>Hue-wheel offset applied to the burning ray.</summary>
+    private const float SyncFlashHueOffset = 0.5f;
+
+    /// <summary>Beats taken for the burning ray to decay after its gate closes.</summary>
+    private const float SyncFlashDecayBeats = 0.5f;
+
     /// <summary>Drop decay length in bars: the slam falls linearly from full to nothing over this many bars.</summary>
     private const int SyncDropBars = 2;
 
@@ -165,7 +183,13 @@ public class Lightning : EffectBase
         WaveformBrightness = new FloatRange(
             SyncWaveformBrightnessMin,
             SyncWaveformBrightnessMax),
+        WaveformName = SyncWaveformName,
         WaveformHueOffset = SyncWaveformHueOffset,
+        RewalkDuration = SyncRewalkDuration,
+        OnBeatLowThreshold = SyncOnBeatLowThreshold,
+        LowLevelsForm = SyncLowLevelsForm,
+        FlashHueOffset = SyncFlashHueOffset,
+        FlashDecayBeats = SyncFlashDecayBeats,
         DropBars = SyncDropBars,
         DropValueLift = SyncDropValueLift,
         DropFlickerDepth = SyncDropFlickerDepth,
@@ -236,6 +260,21 @@ public class Lightning : EffectBase
     /// <summary>Previous frame's rewalk-gate state; the rising edge triggers the Fill re-walk.</summary>
     private bool previousRewalkOn;
 
+    /// <summary>Previous frame's ordinary rewalk-gate state; its rising edge triggers the Synced re-walk.</summary>
+    private bool previousSyncedRewalkOn;
+
+    /// <summary>Pool Preset name used for the current held Waveform acquisition.</summary>
+    private string acquiredWaveformName;
+
+    /// <summary>Previous frame's bass-gated On the Beat state; its rising edge chooses the burning ray.</summary>
+    private bool previousFlashGate;
+
+    /// <summary>Index of the ray whose path and flash response remain held for the flash lifetime.</summary>
+    private int burningRayIndex;
+
+    /// <summary>Burning-ray intensity, held at one while gated and released over the authored beat count.</summary>
+    private float flashEnvelope;
+
     /// <summary>Drop slam amount (1 at the downbeat, then falling linearly to 0 over <see cref="LightningSyncSettings.DropBars"/>); drives the value lift, flicker, field inversion, and trail hold.</summary>
     private float dropEnv;
 
@@ -260,16 +299,19 @@ public class Lightning : EffectBase
         SyncSettings = EffectSyncSettingsProvider.Resolve(
             typeof(Lightning),
             SyncDefaults);
-
-        // Unfiltered acquisition spans the complete curated Waveform Pool, so Lightning has no
-        // authored Waveform-selection subrange to expose as Effect Settings.
-        waveform = waveforms.Random();
+        var requestedWaveformName = SyncSettings.WaveformName;
+        waveform = waveforms.Named(requestedWaveformName);
+        acquiredWaveformName = requestedWaveformName;
         buffer.Clear();
         Reroll();
 
         heldRays = null;
         heldActive = false;
         previousRewalkOn = false;
+        previousSyncedRewalkOn = false;
+        previousFlashGate = false;
+        burningRayIndex = -1;
+        flashEnvelope = 0f;
 
         dropEnv = 0f;
     }
@@ -356,26 +398,86 @@ public class Lightning : EffectBase
     }
 
     /// <summary>
-    /// Updates the Fill hold/rewalk path. Outside a Fill the bolt re-walks every frame; inside a Fill it freezes
-    /// and only re-walks on the rising edge of the configured rewalk gate (sixteenth notes by default), so the whole
-    /// branch hard-snaps to new positions in step with that pulse instead of flowing continuously. If the beat gate is unavailable, it holds.
+    /// Updates the held bolt path. Standalone keeps the original per-frame stochastic redraw; Synced Mode re-walks
+    /// on the consumer-local rising edge of the ordinary rewalk pulse. A Fill keeps precedence with its own held
+    /// rewalk cadence, so the branch hard-snaps to new positions in step with that pulse instead of flowing continuously.
+    /// An active burning ray is preserved while the other rays re-walk so its path lasts for the whole flash.
     /// </summary>
     private void UpdateHeldBolt()
     {
         heldActive = beatManager.Fill.Active;
-        var rewalkOn = beatManager.Pulses.On(SyncSettings.FillRewalkDuration);
+        bool fillRewalkOn = beatManager.Pulses.On(SyncSettings.FillRewalkDuration);
+        bool syncedRewalkOn = beatManager.Pulses.On(SyncSettings.RewalkDuration);
+        int preservedRayIndex = flashEnvelope > 0f ? burningRayIndex : -1;
         if (heldActive)
         {
-            if ((rewalkOn && !previousRewalkOn) || heldRays == null)
+            if ((fillRewalkOn && !previousRewalkOn) || heldRays == null)
             {
-                GenerateBolt();
+                GenerateBolt(preservedRayIndex);
             }
         }
-        else
+        else if (!beatManager.IsSynced)
         {
             GenerateBolt();
         }
-        previousRewalkOn = rewalkOn;
+        else if ((syncedRewalkOn && !previousSyncedRewalkOn) || heldRays == null)
+        {
+            GenerateBolt(preservedRayIndex);
+        }
+
+        previousRewalkOn = fillRewalkOn;
+        previousSyncedRewalkOn = syncedRewalkOn;
+    }
+
+    /// <summary>
+    /// Holds one freshly rolled ray at full flash while any On the Beat lane and the selected low-band form open
+    /// the gate, then releases it over the authored beat count. Standalone clears the local state because every
+    /// musical group rests there; only the gate-opening ray choice consumes Random, as effect art.
+    /// </summary>
+    private void UpdateFlash()
+    {
+        if (!beatManager.IsSynced)
+        {
+            previousFlashGate = false;
+            burningRayIndex = -1;
+            flashEnvelope = 0f;
+            return;
+        }
+
+        bool flashGate =
+            (beatManager.Beats.OnBeat(1) ||
+             beatManager.Beats.OnBeat(2) ||
+             beatManager.Beats.OnBeat(3) ||
+             beatManager.Beats.OnBeat(4)) &&
+            beatManager.Levels.Select(SyncSettings.LowLevelsForm).Low >
+            SyncSettings.OnBeatLowThreshold;
+        if (flashGate)
+        {
+            if (!previousFlashGate)
+            {
+                int rayCount = penrose.Layout.shapes.Stars.GetGroup(0).TileCount;
+                burningRayIndex = Random.Range(0, rayCount);
+            }
+            flashEnvelope = 1f;
+        }
+        else if (SyncSettings.FlashDecayBeats == 0f)
+        {
+            burningRayIndex = -1;
+            flashEnvelope = 0f;
+        }
+        else if (flashEnvelope > 0f)
+        {
+            float decaySeconds = SyncSettings.FlashDecayBeats *
+                beatManager.Timing.BeatAverageMilliseconds.Value /
+                1000f;
+            flashEnvelope = Mathf.MoveTowards(flashEnvelope, 0f, effectDelta / decaySeconds);
+            if (flashEnvelope == 0f)
+            {
+                burningRayIndex = -1;
+            }
+        }
+
+        previousFlashGate = flashGate;
     }
 
     /// <summary>
@@ -401,6 +503,13 @@ public class Lightning : EffectBase
     {
         // This Effect owns its brightness, hue, and clockless fallback mappings.
         bool isSynced = beatManager.IsSynced;
+        var requestedWaveformName = SyncSettings.WaveformName;
+        if (requestedWaveformName != acquiredWaveformName)
+        {
+            waveform = waveforms.Named(requestedWaveformName);
+            acquiredWaveformName = requestedWaveformName;
+        }
+
         PaletteConditioning paletteConditioning = isSynced
             ? SyncSettings.PaletteConditioning
             : standaloneSettings.PaletteConditioning;
@@ -419,6 +528,7 @@ public class Lightning : EffectBase
         buffer.Fade(dropEnv.Lerp(fadeValue, SyncSettings.DropTrailFade));
         FloodDropField(flicker);
 
+        UpdateFlash();
         UpdateHeldBolt();
         float strobe = FillStrobe();
 
@@ -515,21 +625,29 @@ public class Lightning : EffectBase
     /// <summary>
     /// Walks the stochastic branch path outward from each center-star tile and caches the visited tile indices in
     /// <see cref="heldRays"/>. Splitting the walk (here) from the coloring (<see cref="RenderBolt"/>) is what lets a
-    /// Fill hold one bolt and re-walk it only on the rewalk; outside a Fill it is simply called every frame, preserving
-    /// the original per-frame stochastic redraw.
+    /// Fill hold one bolt and re-walk it only on the rewalk; Standalone calls it every frame, preserving the original
+    /// stochastic redraw. During a flash, <paramref name="preservedRayIndex"/> keeps the burning path while the other
+    /// rays re-walk.
     /// </summary>
-    private void GenerateBolt()
+    /// <param name="preservedRayIndex">Ray index to retain, or -1 when every ray should be re-walked.</param>
+    private void GenerateBolt(int preservedRayIndex = -1)
     {
         // this selects the center star tiles
         LayoutData.ShapeList.Reader stars = penrose.Layout.shapes.Stars;
         LayoutData.ShapeList.Group centerStar = stars.GetGroup(0);
         int rayCount = centerStar.TileCount;
         if (heldRays == null || heldRays.Length != rayCount)
+        {
             heldRays = new List<int>[rayCount];
+            preservedRayIndex = -1;
+        }
 
         int[] possible = { 0, 0, 0, 0 };        // holds possible step positions
         for (int j = 0; j < centerStar.TileCount; j++)
         {
+            if (j == preservedRayIndex)
+                continue;
+
             List<int> ray = heldRays[j] ??= new List<int>();
             ray.Clear();
             int currentIdx = centerStar[j];
@@ -562,7 +680,9 @@ public class Lightning : EffectBase
     /// progression, then applies the beat pulse, Drop flicker/value-lift/inversion, and the Fill strobe. Outside a
     /// Fill <paramref name="strobe"/> is 1 and the Drop terms collapse at dropEnv 0, so the output is the ordinary
     /// bright-bolts-on-black look. Each ray root substitutes the brightest color from the active source before all
-    /// downstream brightness, flicker, strobe, Drop, and trail behavior runs unchanged.
+    /// downstream brightness, flicker, strobe, Drop, and trail behavior runs unchanged. The burning ray blends toward
+    /// a fully saturated, full-value hue-shifted color without the inverse Waveform dim, then decays back to the ordinary
+    /// bolt. It renders last so an overlapping ordinary walk cannot hide any of its flash tiles.
     /// </summary>
     private void RenderBolt(float waveformBrightness, float waveformHueOffset, float flicker, float strobe)
     {
@@ -571,18 +691,30 @@ public class Lightning : EffectBase
 
         // for each of the center-star rays
         Color centerColor = mode != 0 ? brightestPaletteColor : BrightestRainbowColor;
-        float rayhue = starthue;
+        bool flashActive = burningRayIndex >= 0 && flashEnvelope > 0f;
+        float firstRayHue = starthue;
+        float rayhue = firstRayHue;
         starthue += deltastart;
-        for (int r = 0; r < heldRays.Length; r++)
+        for (int rayOrder = 0; rayOrder < heldRays.Length; rayOrder++)
         {
+            int r = rayOrder;
+            if (flashActive)
+            {
+                if (rayOrder == heldRays.Length - 1)
+                    r = burningRayIndex;
+                else if (rayOrder >= burningRayIndex)
+                    r++;
+            }
             List<int> ray = heldRays[r];
-            float tilehue = rayhue;
+            bool rayBurning = r == burningRayIndex && flashActive;
+            float tilehue = flashActive ? firstRayHue + (deltaray * r) : rayhue;
             rayhue += deltaray;
             for (int k = 0; k < ray.Count; k++)
             {
                 int currentIdx = ray[k];
                 // color the current tile under the rolled palette/mode
                 Color strokeColor = k == 0 ? centerColor : RolledColor(tilehue);
+                Color flashStrokeColor = strokeColor;
 
                 if (beatMode < 2)
                     strokeColor *= waveformBrightness;
@@ -600,6 +732,17 @@ public class Lightning : EffectBase
                     strokeColor = Color.HSVToRGB(dh, ds, (SyncSettings.DropValueLift * dropEnv).Lerp(dv, 1f));
                 }
                 Color boltColor = strokeColor * waveformBrightness * flicker * strobe;
+                if (rayBurning)
+                {
+                    float flashWaveformHueOffset = beatMode > 0 ? waveformHueOffset : 0f;
+                    Color.RGBToHSV(flashStrokeColor, out float fh, out _, out _);
+                    flashStrokeColor = Color.HSVToRGB(
+                        (fh + flashWaveformHueOffset + SyncSettings.FlashHueOffset) % 1f,
+                        1f,
+                        1f);
+                    Color flashBoltColor = flashStrokeColor * flicker * strobe;
+                    boltColor = Color.Lerp(boltColor, flashBoltColor, flashEnvelope);
+                }
                 // Invert the bolt toward black so it reads as a dark cut through the flooded field at the Drop's peak,
                 // returning to a bright bolt as the Drop decays. At dropEnv 0 this is just the bright bolt.
                 buffer[currentIdx] = Color.Lerp(boltColor, Color.black, dropEnv);
@@ -683,6 +826,13 @@ public sealed class LightningSyncSettings
     public FloatRange WaveformBrightness;
 
     /// <summary>
+    /// Live Pool entry name of the one Waveform Lightning holds for its inverse brightness and hue response. A name
+    /// missing from the Pool is a configuration error and fails visibly.
+    /// </summary>
+    [WaveformName]
+    public string WaveformName;
+
+    /// <summary>
     /// Live effect-local palette conditioning for Synced Mode, independently saved so tuning it
     /// cannot drift the Standalone look.
     /// </summary>
@@ -690,6 +840,21 @@ public sealed class LightningSyncSettings
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float WaveformHueOffset;
+
+    /// <summary>Pulse duration whose rising edge re-walks the held bolt outside a Fill.</summary>
+    public Duration RewalkDuration;
+
+    /// <summary>Low-band level above which an On the Beat gate opens the flash.</summary>
+    [Range(0f, 1f)] public float OnBeatLowThreshold;
+
+    /// <summary>Levels form sampled for the bass-gated On the Beat flash.</summary>
+    public LevelsForm LowLevelsForm;
+
+    /// <summary>Hue-wheel offset applied to the burning ray.</summary>
+    [Range(0f, 1f)] public float FlashHueOffset;
+
+    /// <summary>Beats taken for the burning ray to decay after its gate closes; zero makes the gate a square cut.</summary>
+    [Min(0f)] public float FlashDecayBeats;
 
     /// <summary>Drop decay length in bars.</summary>
     [Min(1)] public int DropBars;
@@ -740,8 +905,14 @@ public sealed class LightningSyncSettings
             source.WaveformBrightness.Max,
             source.WaveformBrightness.LowRail,
             source.WaveformBrightness.HighRail);
+        WaveformName = source.WaveformName;
         PaletteConditioning = source.PaletteConditioning;
         WaveformHueOffset = source.WaveformHueOffset;
+        RewalkDuration = source.RewalkDuration;
+        OnBeatLowThreshold = source.OnBeatLowThreshold;
+        LowLevelsForm = source.LowLevelsForm;
+        FlashHueOffset = source.FlashHueOffset;
+        FlashDecayBeats = source.FlashDecayBeats;
         DropBars = source.DropBars;
         DropValueLift = source.DropValueLift;
         DropFlickerDepth = source.DropFlickerDepth;
