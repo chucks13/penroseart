@@ -200,17 +200,17 @@ public class Julia : EffectBase
     private const int SyncFillApproachBeats = 8;
 
     /// <summary>
-    /// Fill envelope attack rate in inverse seconds. Halved at the wall from the original 22/s
-    /// for a softer ramp into the deeper dive; still fast enough for a one-beat Fill to register
-    /// without a one-frame snap.
+    /// Fill envelope attack rate in inverse seconds. Wall-tuned down in two rounds from the
+    /// original 22/s for a softer ramp into the deeper dive; still fast enough for a short Fill
+    /// to register without a one-frame snap.
     /// </summary>
-    private const float SyncFillAttackRate = 11f;
+    private const float SyncFillAttackRate = 5f;
 
     /// <summary>Beats taken to release a full Fill dive back to rest after the Fill ends.</summary>
-    private const float SyncFillReleaseBeats = 1f;
+    private const float SyncFillReleaseBeats = 2f;
 
     /// <summary>Fraction of the half-wheel complement rotation reached at each wire beat pulse peak during a Fill.</summary>
-    private const float SyncFillComplementDepth = 1f;
+    private const float SyncFillComplementDepth = 0.75f;
 
     /// <summary>Beats the Drop slam takes to decay back to rest.</summary>
     private const int SyncDropDecayBeats = 16;
