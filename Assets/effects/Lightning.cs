@@ -7,7 +7,7 @@ using Random = UnityEngine.Random;
 /// <summary>
 /// Builds stochastic branching paths outward from center-star tiles.
 /// </summary>
-[System.Serializable]
+[Serializable]
 [EffectSyncSettings(typeof(LightningSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(LightningStandaloneSettingsAsset))]
 public class Lightning : EffectBase
@@ -251,6 +251,9 @@ public class Lightning : EffectBase
     /// <summary>During a Fill the walked bolt freezes here and is only re-walked on the rewalk pulse; one cached tile path per center-star ray.</summary>
     private List<int>[] heldRays;
 
+    /// <summary>The Star Motif nearest the layout origin, cached for bolt roots and flash-ray selection.</summary>
+    private LayoutData.ShapeList.Group centerStar;
+
     /// <summary>True while the Fill hold/rewalk/strobe mode is driving the bolt (surfaced on the readout).</summary>
     private bool heldActive;
     /// <summary>Previous frame's rewalk-gate state; the rising edge triggers the Fill re-walk.</summary>
@@ -282,7 +285,7 @@ public class Lightning : EffectBase
     }
 
     /// <summary>
-    /// Initializes per-activation random state before this effect starts drawing.
+    /// Initializes live settings, center-star geometry, and per-activation random state before this effect starts drawing.
     /// </summary>
     public override void OnStart()
     {
@@ -295,6 +298,7 @@ public class Lightning : EffectBase
         var requestedWaveformName = SyncSettings.WaveformName;
         waveform = waveforms.Named(requestedWaveformName);
         acquiredWaveformName = requestedWaveformName;
+        RefreshCenterStar();
         buffer.Clear();
         Reroll();
 
@@ -341,12 +345,37 @@ public class Lightning : EffectBase
     public override void OnEnd() { }
 
     /// <summary>
-    /// On each new Grid the bolts take a fresh form. Drop intensity is read independently from the hub's
-    /// direct Drop decay, so this hook owns only Lightning's Grid-aligned visual reroll.
+    /// On each new Grid the center-star cache follows any refreshed layout before the bolts take a fresh form.
+    /// Drop intensity is read independently from the hub's direct Drop decay, so this hook owns only Lightning's
+    /// Grid-aligned geometry refresh and visual reroll.
     /// </summary>
     protected override void OnNewGrid()
     {
+        RefreshCenterStar();
         Reroll();
+    }
+
+    /// <summary>
+    /// Caches the Star Motif whose centroid has the smallest squared distance from the layout origin. Refreshing
+    /// this allocation-free group view at activation and each new Grid follows layout changes without treating
+    /// packed payload order as geometry.
+    /// </summary>
+    private void RefreshCenterStar()
+    {
+        LayoutData.ShapeList.Reader stars = penrose.Layout.shapes.Stars;
+        int centerGroupIndex = 0;
+        float centerRadiusSquared = stars.GetCentroid(0).sqrMagnitude;
+        for (int groupIndex = 1; groupIndex < stars.GroupCount; groupIndex++)
+        {
+            float radiusSquared = stars.GetCentroid(groupIndex).sqrMagnitude;
+            if (radiusSquared < centerRadiusSquared)
+            {
+                centerGroupIndex = groupIndex;
+                centerRadiusSquared = radiusSquared;
+            }
+        }
+
+        centerStar = stars.GetGroup(centerGroupIndex);
     }
 
     /// <summary>
@@ -441,7 +470,7 @@ public class Lightning : EffectBase
         {
             if (!previousFlashGate)
             {
-                int rayCount = penrose.Layout.shapes.Stars.GetGroup(0).TileCount;
+                int rayCount = centerStar.TileCount;
                 burningRayIndex = Random.Range(0, rayCount);
             }
             flashEnvelope = 1f;
@@ -618,9 +647,6 @@ public class Lightning : EffectBase
     /// <param name="preservedRayIndex">Ray index to retain, or -1 when every ray should be re-walked.</param>
     private void GenerateBolt(int preservedRayIndex = -1)
     {
-        // this selects the center star tiles
-        LayoutData.ShapeList.Reader stars = penrose.Layout.shapes.Stars;
-        LayoutData.ShapeList.Group centerStar = stars.GetGroup(0);
         int rayCount = centerStar.TileCount;
         if (heldRays == null || heldRays.Length != rayCount)
         {
@@ -628,7 +654,7 @@ public class Lightning : EffectBase
             preservedRayIndex = -1;
         }
 
-        int[] possible = { 0, 0, 0, 0 };        // holds possible step positions
+        Span<int> possible = stackalloc int[4]; // holds possible step positions
         for (int j = 0; j < centerStar.TileCount; j++)
         {
             if (j == preservedRayIndex)
@@ -796,7 +822,7 @@ public sealed class LightningStandaloneSettings
 }
 
 /// <summary>The saved musical-response settings used by Lightning in Synced Mode.</summary>
-[System.Serializable]
+[Serializable]
 public sealed class LightningSyncSettings
 {
     /// <summary>Drift magnitude applied to the starting hue when its coin flip enables that animation.</summary>
@@ -877,7 +903,7 @@ public sealed class LightningSyncSettings
     {
         if (source == null)
         {
-            throw new System.ArgumentNullException(nameof(source));
+            throw new ArgumentNullException(nameof(source));
         }
 
         StartHueDelta = source.StartHueDelta;
