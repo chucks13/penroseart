@@ -964,6 +964,33 @@ public sealed class ConditionedPaletteCache
     }
 
     /// <summary>
+    /// Samples the conditioned current endpoint with the legacy non-cyclic palette mapping and,
+    /// during a shared palette transition, samples the conditioned next endpoint at the same
+    /// coordinate and blends by live progress.
+    /// </summary>
+    /// <param name="i">
+    /// The legacy palette coordinate. One addresses the final entry exactly for entry selection;
+    /// every smaller value follows <see cref="GPalette.read"/>.
+    /// </param>
+    /// <param name="doblend">Whether to interpolate between adjacent entries within each endpoint.</param>
+    /// <returns>The conditioned, non-cyclic, and cross-faded palette color.</returns>
+    public Color Read(float i, bool doblend = false)
+    {
+        Color color = i == 1f
+            ? currentPalette.values[currentPalette.length - 1]
+            : currentPalette.read(i, doblend);
+        if (!isTransitioning)
+        {
+            return color;
+        }
+
+        Color nextColor = i == 1f
+            ? nextPalette.values[nextPalette.length - 1]
+            : nextPalette.read(i, doblend);
+        return Color.Lerp(color, nextColor, transitionProgress);
+    }
+
+    /// <summary>
     /// Samples the conditioned current endpoint cyclically and, during a shared palette transition,
     /// samples the conditioned next endpoint at the same coordinate and blends by live progress.
     /// </summary>

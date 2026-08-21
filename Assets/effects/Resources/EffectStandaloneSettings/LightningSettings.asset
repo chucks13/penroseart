@@ -22,3 +22,12 @@ MonoBehaviour:
       Max: 1
       LowRail: 0.75
       HighRail: 1
+    PaletteConditioning:
+      TargetLuminance: 0.5
+      MinimumLuminance: 0.15
+      LuminanceEqualization: 0
+      HueSpreadReference: 1
+      MaximumLuminanceScale: 4
+      DarkLuminanceThreshold: 0.1
+      DuplicateThreshold: 0
+      HueRedistribution: 0

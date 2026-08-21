@@ -2294,7 +2294,10 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.WaveformBrightnessPeak, Is.EqualTo(defaults.WaveformBrightnessPeak));
     }
 
-    /// <summary>Lightning Standalone Defaults resolve as fresh copies without pinning authored values.</summary>
+    /// <summary>
+    /// Lightning Standalone Defaults resolve as fresh copies without pinning authored values.
+    /// The comparison covers every palette-conditioning control on both copies.
+    /// </summary>
     [Test]
     public void LightningStandaloneDefaultsResolveAsIndependentCopies()
     {
@@ -2307,9 +2310,13 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.TileHueDelta, Is.EqualTo(second.TileHueDelta));
         Assert.That(first.WaveformBrightness, Is.Not.SameAs(second.WaveformBrightness));
         AssertFloatRangeEqual(first.WaveformBrightness, second.WaveformBrightness);
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
     }
 
-    /// <summary>Restore copies every Lightning Standalone Setting from the current file-local defaults.</summary>
+    /// <summary>
+    /// Restore copies every Lightning Standalone Setting from the current file-local defaults.
+    /// The scenario mutates and then verifies every palette-conditioning control.
+    /// </summary>
     [Test]
     public void RestoreStandaloneDefaultsCopiesEveryLightningValue()
     {
@@ -2319,6 +2326,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.RayHueDelta = 18f;
         asset.Settings.TileHueDelta = 19f;
         asset.Settings.WaveformBrightness = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.11f,
+            MinimumLuminance = 0.12f,
+            LuminanceEqualization = 0.13f,
+            HueSpreadReference = 0.14f,
+            MaximumLuminanceScale = 2f,
+            DarkLuminanceThreshold = 0.15f,
+            DuplicateThreshold = 0.16f,
+            HueRedistribution = 0.17f,
+        };
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Lightning), TempAssetFolder);
 
@@ -2327,9 +2345,15 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.RayHueDelta, Is.EqualTo(defaults.RayHueDelta));
         Assert.That(asset.Settings.TileHueDelta, Is.EqualTo(defaults.TileHueDelta));
         AssertFloatRangeEqual(asset.Settings.WaveformBrightness, defaults.WaveformBrightness);
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
     }
 
-    /// <summary>Restore copies every Lightning Sync Setting and brightness Rail from the file-local defaults.</summary>
+    /// <summary>
+    /// Restore copies every Lightning Sync Setting and brightness Rail from the file-local defaults.
+    /// The scenario mutates and then verifies every palette-conditioning control.
+    /// </summary>
     [Test]
     public void RestoreSyncDefaultsCopiesEveryLightningValue()
     {
@@ -2339,6 +2363,17 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.RayHueDelta = 18f;
         asset.Settings.TileHueDelta = 19f;
         asset.Settings.WaveformBrightness = new FloatRange(20f, 21f, 19f, 22f);
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.21f,
+            MinimumLuminance = 0.22f,
+            LuminanceEqualization = 0.23f,
+            HueSpreadReference = 0.24f,
+            MaximumLuminanceScale = 3f,
+            DarkLuminanceThreshold = 0.2f,
+            DuplicateThreshold = 0.18f,
+            HueRedistribution = 0.19f,
+        };
         asset.Settings.WaveformHueOffset = 23f;
         asset.Settings.DropBars = 24;
         asset.Settings.DropValueLift = 25f;
@@ -2359,6 +2394,9 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.RayHueDelta, Is.EqualTo(defaults.RayHueDelta));
         Assert.That(asset.Settings.TileHueDelta, Is.EqualTo(defaults.TileHueDelta));
         AssertFloatRangeEqual(asset.Settings.WaveformBrightness, defaults.WaveformBrightness);
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         Assert.That(asset.Settings.WaveformHueOffset, Is.EqualTo(defaults.WaveformHueOffset));
         Assert.That(asset.Settings.DropBars, Is.EqualTo(defaults.DropBars));
         Assert.That(asset.Settings.DropValueLift, Is.EqualTo(defaults.DropValueLift));

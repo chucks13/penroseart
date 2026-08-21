@@ -29,6 +29,23 @@ public class Lightning : EffectBase
     /// <summary>Bolt brightness at the held Waveform's trough; the range maximum.</summary>
     private const float StandaloneWaveformBrightnessMax = 1f;
 
+    /// <summary>
+    /// Lifts dark Standalone palette entries into a visible working range without changing the hue
+    /// walk. Zero equalization preserves authored brightness relationships, zero duplicate collapse
+    /// keeps every entry, and zero redistribution keeps every palette position.
+    /// </summary>
+    private static PaletteConditioning StandalonePaletteConditioning => new()
+    {
+        TargetLuminance = 0.5f,
+        MinimumLuminance = 0.15f,
+        LuminanceEqualization = 0f,
+        HueSpreadReference = 1f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.1f,
+        DuplicateThreshold = 0f,
+        HueRedistribution = 0f,
+    };
+
     // Sync Defaults
 
     /// <summary>Bolt brightness at the held Waveform's peak; the range minimum, preserving the authored inverse pulse.</summary>
@@ -86,10 +103,33 @@ public class Lightning : EffectBase
     /// <summary>Fraction of each strobe pulse the Fill strobe gate stays lit (duty cycle, 0..1): smaller = shorter, sharper flashes. Tune on the readout.</summary>
     private const float SyncFillStrobeDuty = 0.5f;
 
+    /// <summary>
+    /// Lifts dark Synced palette entries into a visible working range without changing the hue walk.
+    /// Zero equalization preserves authored brightness relationships, zero duplicate collapse keeps
+    /// every entry, and zero redistribution keeps every palette position.
+    /// </summary>
+    private static PaletteConditioning SyncPaletteConditioning => new()
+    {
+        TargetLuminance = 0.5f,
+        MinimumLuminance = 0.15f,
+        LuminanceEqualization = 0f,
+        HueSpreadReference = 1f,
+        MaximumLuminanceScale = 4f,
+        DarkLuminanceThreshold = 0.1f,
+        DuplicateThreshold = 0f,
+        HueRedistribution = 0f,
+    };
+
     // Runtime mechanism constants
 
     /// <summary>Beats per bar used to express the authored Drop decay length in beats.</summary>
     private const int BeatsPerBar = 4;
+
+    /// <summary>
+    /// Pure yellow, the full-saturation and full-value rainbow hue with the greatest relative
+    /// luminance. White is outside the rainbow branch's source domain.
+    /// </summary>
+    private static readonly Color BrightestRainbowColor = new(1f, 1f, 0f, 1f);
 
     /// <summary>Lightning is a sharp beat-scaled burst. On a Fill it HOLDS a frozen bolt that hard-snaps to entirely
     /// new positions on every rewalk pulse (sixteenth notes by default) while strobing on the strobe pulses
@@ -109,6 +149,7 @@ public class Lightning : EffectBase
         WaveformBrightness = new FloatRange(
             StandaloneWaveformBrightnessMin,
             StandaloneWaveformBrightnessMax),
+        PaletteConditioning = StandalonePaletteConditioning,
     };
 
     /// <summary>Resolves a fresh copy of Lightning's file-local Sync Defaults.</summary>
@@ -132,6 +173,7 @@ public class Lightning : EffectBase
         FillStrobeDuration = SyncFillStrobeDuration,
         FillStrobeFloor = SyncFillStrobeFloor,
         FillStrobeDuty = SyncFillStrobeDuty,
+        PaletteConditioning = SyncPaletteConditioning,
     };
 
     /// <summary>The effective saved-or-default Standalone Settings read by the current activation.</summary>
@@ -139,6 +181,27 @@ public class Lightning : EffectBase
 
     /// <summary>The effective saved-or-default Sync Settings read by the current activation.</summary>
     private LightningSyncSettings SyncSettings { get; set; } = SyncDefaults;
+
+    /// <summary>
+    /// Lightning's Effect-local conditioned palette cache. It follows the shared palette crossfade,
+    /// palette revisions, and the active mode's live conditioning controls.
+    /// </summary>
+    private readonly ConditionedPaletteCache conditionedPalette = new();
+
+    /// <summary>The shared animated palette represented by <see cref="brightestPaletteColor"/>.</summary>
+    private AnimPalette brightestPaletteOwner;
+
+    /// <summary>The shared palette revision represented by <see cref="brightestPaletteColor"/>.</summary>
+    private int brightestPaletteRevision = -1;
+
+    /// <summary>The live conditioning controls represented by <see cref="brightestPaletteColor"/>.</summary>
+    private PaletteConditioning brightestPaletteConditioning;
+
+    /// <summary>The shared crossfade position represented by <see cref="brightestPaletteColor"/>.</summary>
+    private float brightestPaletteTransitionProgress = -1f;
+
+    /// <summary>The brightest color in the conditioned palette output for the current frame.</summary>
+    private Color brightestPaletteColor;
 
     /// <summary>Current trail-fade amount rolled across the complete 0..1 fade domain; the full-domain roll is mechanism rather than an authored subrange.</summary>
     private float fadeValue;
@@ -333,8 +396,14 @@ public class Lightning : EffectBase
     public override void Draw()
     {
         // This Effect owns its brightness, hue, and clockless fallback mappings.
+        bool isSynced = beatManager.IsSynced;
+        PaletteConditioning paletteConditioning = isSynced
+            ? SyncSettings.PaletteConditioning
+            : standaloneSettings.PaletteConditioning;
+        RefreshConditionedPalette(paletteConditioning);
+
         float rhythm = waveform.Envelope;
-        FloatRange brightnessRange = beatManager.IsSynced
+        FloatRange brightnessRange = isSynced
             ? SyncSettings.WaveformBrightness
             : standaloneSettings.WaveformBrightness;
         float waveformBrightness = waveform.Lerp(brightnessRange.Max, brightnessRange.Min);
@@ -350,6 +419,93 @@ public class Lightning : EffectBase
         float strobe = FillStrobe();
 
         RenderBolt(waveformBrightness, waveformHueOffset, flicker, strobe);
+    }
+
+    /// <summary>
+    /// Refreshes the conditioned palette for the active settings surface and recomputes its brightest
+    /// output only when the owner, revision, controls, or live crossfade position changes.
+    /// </summary>
+    /// <param name="conditioning">The mode-selected live palette conditioning controls.</param>
+    private void RefreshConditionedPalette(PaletteConditioning conditioning)
+    {
+        conditionedPalette.Refresh(APalette, conditioning);
+
+        int revision = APalette.Revision;
+        float transitionProgress = APalette.TransitionProgress;
+        if (ReferenceEquals(APalette, brightestPaletteOwner) &&
+            revision == brightestPaletteRevision &&
+            brightestPaletteConditioning.Matches(conditioning) &&
+            transitionProgress == brightestPaletteTransitionProgress)
+        {
+            return;
+        }
+
+        brightestPaletteColor = FindBrightestConditionedPaletteColor();
+        brightestPaletteOwner = APalette;
+        brightestPaletteRevision = revision;
+        brightestPaletteConditioning = conditioning;
+        brightestPaletteTransitionProgress = transitionProgress;
+    }
+
+    /// <summary>
+    /// Finds the conditioned palette output with greatest relative luminance without consuming
+    /// Random. During a crossfade, scanning both endpoint entry coordinates covers every linear
+    /// segment endpoint, where a relative-luminance maximum must occur.
+    /// </summary>
+    /// <returns>The brightest conditioned palette color at the current crossfade position.</returns>
+    private Color FindBrightestConditionedPaletteColor()
+    {
+        GPalette current = APalette.CurrentPalette;
+        Color brightest = conditionedPalette.Read(0f, doblend: true);
+        float brightestLuminance = brightest.RelativeLuminance();
+
+        for (int i = 1; i < current.length; i++)
+        {
+            float coordinate = LegacyPaletteEntryCoordinate(i, current.length);
+            Color candidate = conditionedPalette.Read(coordinate, doblend: true);
+            float luminance = candidate.RelativeLuminance();
+            if (luminance > brightestLuminance)
+            {
+                brightest = candidate;
+                brightestLuminance = luminance;
+            }
+        }
+
+        if (APalette.IsTransitioning)
+        {
+            GPalette next = APalette.NextPalette;
+            for (int i = 0; i < next.length; i++)
+            {
+                float coordinate = LegacyPaletteEntryCoordinate(i, next.length);
+                Color candidate = conditionedPalette.Read(coordinate, doblend: true);
+                float luminance = candidate.RelativeLuminance();
+                if (luminance > brightestLuminance)
+                {
+                    brightest = candidate;
+                    brightestLuminance = luminance;
+                }
+            }
+        }
+
+        return brightest;
+    }
+
+    /// <summary>
+    /// Returns the legacy non-cyclic coordinate for one palette entry. A one-entry palette lives at
+    /// zero, while a longer palette distributes its entries evenly across the closed zero-to-one
+    /// domain.
+    /// </summary>
+    /// <param name="index">The zero-based palette entry index.</param>
+    /// <param name="length">The palette entry count.</param>
+    /// <returns>The normalized coordinate that samples the requested entry.</returns>
+    private static float LegacyPaletteEntryCoordinate(int index, int length)
+    {
+        if (length == 1)
+        {
+            return 0f;
+        }
+
+        return (float)index / (length - 1);
     }
 
     /// <summary>
@@ -401,7 +557,8 @@ public class Lightning : EffectBase
     /// Colors the cached <see cref="heldRays"/> path into the buffer using the effect's per-ray/per-tile hue
     /// progression, then applies the beat pulse, Drop flicker/value-lift/inversion, and the Fill strobe. Outside a
     /// Fill <paramref name="strobe"/> is 1 and the Drop terms collapse at dropEnv 0, so the output is the ordinary
-    /// bright-bolts-on-black look.
+    /// bright-bolts-on-black look. Each ray root substitutes the brightest color from the active source before all
+    /// downstream brightness, flicker, strobe, Drop, and trail behavior runs unchanged.
     /// </summary>
     private void RenderBolt(float waveformBrightness, float waveformHueOffset, float flicker, float strobe)
     {
@@ -409,6 +566,7 @@ public class Lightning : EffectBase
             return;
 
         // for each of the center-star rays
+        Color centerColor = mode != 0 ? brightestPaletteColor : BrightestRainbowColor;
         float rayhue = starthue;
         starthue += deltastart;
         for (int r = 0; r < heldRays.Length; r++)
@@ -420,7 +578,7 @@ public class Lightning : EffectBase
             {
                 int currentIdx = ray[k];
                 // color the current tile under the rolled palette/mode
-                Color strokeColor = RolledColor(tilehue);
+                Color strokeColor = k == 0 ? centerColor : RolledColor(tilehue);
 
                 if (beatMode < 2)
                     strokeColor *= waveformBrightness;
@@ -448,14 +606,17 @@ public class Lightning : EffectBase
 
     /// <summary>
     /// Maps a (possibly negative) hue to a color under the current <see cref="mode"/>: the shared animated palette
-    /// when mode is non-zero, otherwise a fully-saturated HSV color. The +10000 bias keeps the modulo positive so
-    /// hues driven negative by the rolled deltas still wrap cleanly into [0,1).
+    /// conditioned by the active settings surface when mode is non-zero, otherwise an unconditioned,
+    /// fully-saturated HSV color. The +10000 bias keeps the modulo positive so hues driven negative by the rolled
+    /// deltas still wrap cleanly into [0,1).
     /// Full saturation and value define the HSV rainbow branch, so both complete-domain endpoints remain structural inline literals.
     /// </summary>
     private Color RolledColor(float hue)
     {
         float wrapped = (hue + 10000f) % 1f;
-        return mode != 0 ? APalette.read(wrapped, true) : Color.HSVToRGB(wrapped, 1f, 1f);
+        return mode != 0
+            ? conditionedPalette.Read(wrapped, doblend: true)
+            : Color.HSVToRGB(wrapped, 1f, 1f);
     }
 }
 
@@ -475,6 +636,12 @@ public sealed class LightningStandaloneSettings
     /// <summary>Bolt-brightness range whose maximum is the held Waveform's trough and whose minimum is the peak and no-placement fallback, preserving the authored inverse pulse.</summary>
     public FloatRange WaveformBrightness;
 
+    /// <summary>
+    /// Live effect-local palette conditioning for Standalone Mode, independently saved so tuning it
+    /// cannot drift the Synced look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
+
     /// <summary>Copies every Lightning Standalone Setting from another value.</summary>
     public void CopyFrom(LightningStandaloneSettings source)
     {
@@ -491,6 +658,7 @@ public sealed class LightningStandaloneSettings
             source.WaveformBrightness.Max,
             source.WaveformBrightness.LowRail,
             source.WaveformBrightness.HighRail);
+        PaletteConditioning = source.PaletteConditioning;
     }
 }
 
@@ -509,6 +677,12 @@ public sealed class LightningSyncSettings
 
     /// <summary>Bolt-brightness range whose maximum is the held Waveform's trough and whose minimum is the peak and no-placement fallback, preserving the authored inverse pulse.</summary>
     public FloatRange WaveformBrightness;
+
+    /// <summary>
+    /// Live effect-local palette conditioning for Synced Mode, independently saved so tuning it
+    /// cannot drift the Standalone look.
+    /// </summary>
+    public PaletteConditioning PaletteConditioning;
 
     /// <summary>Maximum hue-wheel offset contributed by the held Waveform.</summary>
     [Range(0f, 1f)] public float WaveformHueOffset;
@@ -562,6 +736,7 @@ public sealed class LightningSyncSettings
             source.WaveformBrightness.Max,
             source.WaveformBrightness.LowRail,
             source.WaveformBrightness.HighRail);
+        PaletteConditioning = source.PaletteConditioning;
         WaveformHueOffset = source.WaveformHueOffset;
         DropBars = source.DropBars;
         DropValueLift = source.DropValueLift;
