@@ -31,10 +31,10 @@ public class Lightning : EffectBase
 
     /// <summary>
     /// Lifts dark Standalone palette entries into a visible working range without changing the hue
-    /// walk. Wall-tuned: the third-luminance floor keeps bolt tiles reading against the dark field,
-    /// and the mild duplicate collapse and redistribution shift conditioned entries off the authored
-    /// positions the brightest-entry scan samples, an accepted approximation. Zero equalization
-    /// preserves authored brightness relationships.
+    /// walk. The third-luminance floor keeps bolt tiles reading against the dark field. The mild
+    /// duplicate collapse and redistribution shift conditioned entries off the authored positions
+    /// the brightest-entry scan samples, so that selection is approximate by construction. Zero
+    /// equalization preserves authored brightness relationships.
     /// </summary>
     private static PaletteConditioning StandalonePaletteConditioning => new()
     {
@@ -122,10 +122,10 @@ public class Lightning : EffectBase
 
     /// <summary>
     /// Lifts dark Synced palette entries into a visible working range without changing the hue walk.
-    /// Wall-tuned: the third-luminance floor keeps bolt tiles reading against the dark field, and
-    /// the mild duplicate collapse and redistribution shift conditioned entries off the authored
-    /// positions the brightest-entry scan samples, an accepted approximation. Zero equalization
-    /// preserves authored brightness relationships.
+    /// The third-luminance floor keeps bolt tiles reading against the dark field, and the mild
+    /// duplicate collapse and redistribution shift conditioned entries off the authored positions
+    /// the brightest-entry scan samples, so that selection is approximate by construction. Zero
+    /// equalization preserves authored brightness relationships.
     /// </summary>
     private static PaletteConditioning SyncPaletteConditioning => new()
     {
@@ -419,8 +419,8 @@ public class Lightning : EffectBase
     }
 
     /// <summary>
-    /// Updates the held bolt path. Outside a Fill the bolt re-walks every frame in both modes, preserving the original
-    /// dancing look; inside a Fill it freezes and only re-walks on the rising edge of the configured rewalk gate
+    /// Updates the held bolt path. Outside a Fill the bolt re-walks every frame in both modes, so the walk trails
+    /// layered by the buffer fade read as a dancing mass of bolts; inside a Fill it freezes and only re-walks on the rising edge of the configured rewalk gate
     /// (sixteenth notes by default), so the whole branch hard-snaps to new positions in step with that pulse instead of
     /// flowing continuously. If the beat gate is unavailable, it holds. An active burning ray is preserved through
     /// every re-walk so its path lasts for the whole flash.
@@ -640,8 +640,8 @@ public class Lightning : EffectBase
     /// <summary>
     /// Walks the stochastic branch path outward from each center-star tile and caches the visited tile indices in
     /// <see cref="heldRays"/>. Splitting the walk (here) from the coloring (<see cref="RenderBolt"/>) is what lets a
-    /// Fill hold one bolt and re-walk it only on the rewalk; outside a Fill it is simply called every frame, preserving
-    /// the original per-frame stochastic redraw. During a flash, <paramref name="preservedRayIndex"/> keeps the burning
+    /// Fill hold one bolt and re-walk it only on the rewalk; outside a Fill it is simply called every frame, so each
+    /// frame draws a fresh stochastic walk. During a flash, <paramref name="preservedRayIndex"/> keeps the burning
     /// path while the other rays re-walk.
     /// </summary>
     /// <param name="preservedRayIndex">Ray index to retain, or -1 when every ray should be re-walked.</param>
@@ -691,8 +691,8 @@ public class Lightning : EffectBase
     /// Colors the cached <see cref="heldRays"/> path into the buffer using the effect's per-ray/per-tile hue
     /// progression, then applies the beat pulse, Drop flicker/value-lift/inversion, and the Fill strobe. Outside a
     /// Fill <paramref name="strobe"/> is 1 and the Drop terms collapse at dropEnv 0, so the output is the ordinary
-    /// bright-bolts-on-black look. Each ray root substitutes the brightest color from the active source before all
-    /// downstream brightness, flicker, strobe, Drop, and trail behavior runs unchanged. The burning ray blends toward
+    /// bright-bolts-on-black look. Each ray root substitutes the brightest color from the active source, and all
+    /// downstream brightness, flicker, strobe, Drop, and trail behavior then runs on that color. The burning ray blends toward
     /// a fully saturated, full-value hue-shifted color without the inverse Waveform dim, then decays back to the ordinary
     /// bolt. It renders last so an overlapping ordinary walk cannot hide any of its flash tiles.
     /// </summary>
