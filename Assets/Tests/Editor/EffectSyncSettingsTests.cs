@@ -384,14 +384,19 @@ public sealed class EffectSyncSettingsTests
         var second = ColorSparkle.StandaloneDefaults;
 
         Assert.That(first, Is.Not.SameAs(second));
-        Assert.That(first.RandomColorThreshold, Is.EqualTo(second.RandomColorThreshold));
-        Assert.That(first.ActivationHue, Is.Not.SameAs(second.ActivationHue));
-        AssertFloatRangeEqual(first.ActivationHue, second.ActivationHue);
+        Assert.That(first.ConfettiChance, Is.EqualTo(second.ConfettiChance));
         Assert.That(first.PerSparkleHue, Is.Not.SameAs(second.PerSparkleHue));
         AssertFloatRangeEqual(first.PerSparkleHue, second.PerSparkleHue);
-        Assert.That(first.WaveformHueOffset, Is.Not.SameAs(second.WaveformHueOffset));
-        AssertFloatRangeEqual(first.WaveformHueOffset, second.WaveformHueOffset);
-        Assert.That(first.HueWrapPeriod, Is.EqualTo(second.HueWrapPeriod));
+        Assert.That(first.CoordinateRange, Is.Not.SameAs(second.CoordinateRange));
+        AssertFloatRangeEqual(first.CoordinateRange, second.CoordinateRange);
+        Assert.That(first.GlintChance, Is.EqualTo(second.GlintChance));
+        Assert.That(first.DarkGlintThreshold, Is.EqualTo(second.DarkGlintThreshold));
+        Assert.That(first.BloomFraction, Is.EqualTo(second.BloomFraction));
+        Assert.That(first.DarkBloomLuminance, Is.EqualTo(second.DarkBloomLuminance));
+        Assert.That(first.FloorLevel, Is.EqualTo(second.FloorLevel));
+        Assert.That(first.SparklesPerSecond, Is.EqualTo(second.SparklesPerSecond));
+        Assert.That(first.FadePerFrame, Is.EqualTo(second.FadePerFrame));
+        AssertPaletteConditioningEqual(first.PaletteConditioning, second.PaletteConditioning);
     }
 
     /// <summary>
@@ -405,22 +410,46 @@ public sealed class EffectSyncSettingsTests
             EffectStandaloneSettingsAssetUtility.EnsureAsset(
                 typeof(ColorSparkle),
                 TempAssetFolder);
-        asset.Settings.RandomColorThreshold = 0.17f;
-        asset.Settings.ActivationHue = new FloatRange(0.18f, 0.19f, 0.17f, 0.2f);
-        asset.Settings.PerSparkleHue = new FloatRange(0.21f, 0.22f, 0.2f, 0.23f);
-        asset.Settings.WaveformHueOffset = new FloatRange(0.24f, 0.25f, 0.23f, 0.26f);
-        asset.Settings.HueWrapPeriod = 0.27f;
+        asset.Settings.ConfettiChance = 0.17f;
+        asset.Settings.PerSparkleHue = new FloatRange(0.18f, 0.19f, 0.17f, 0.2f);
+        asset.Settings.CoordinateRange = new FloatRange(0.21f, 0.22f, 0.2f, 0.23f);
+        asset.Settings.GlintChance = 0.024f;
+        asset.Settings.DarkGlintThreshold = 0.25f;
+        asset.Settings.BloomFraction = 0.26f;
+        asset.Settings.DarkBloomLuminance = 0.27f;
+        asset.Settings.FloorLevel = 0.28f;
+        asset.Settings.SparklesPerSecond = 1234f;
+        asset.Settings.FadePerFrame = 0.91f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.31f,
+            MinimumLuminance = 0.32f,
+            LuminanceEqualization = 0.33f,
+            HueSpreadReference = 0.34f,
+            MaximumLuminanceScale = 1.35f,
+            DarkLuminanceThreshold = 0.036f,
+            DuplicateThreshold = 0.037f,
+            HueRedistribution = 0.38f,
+        };
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(
             typeof(ColorSparkle),
             TempAssetFolder);
 
         var defaults = ColorSparkle.StandaloneDefaults;
-        Assert.That(asset.Settings.RandomColorThreshold, Is.EqualTo(defaults.RandomColorThreshold));
-        AssertFloatRangeEqual(asset.Settings.ActivationHue, defaults.ActivationHue);
+        Assert.That(asset.Settings.ConfettiChance, Is.EqualTo(defaults.ConfettiChance));
         AssertFloatRangeEqual(asset.Settings.PerSparkleHue, defaults.PerSparkleHue);
-        AssertFloatRangeEqual(asset.Settings.WaveformHueOffset, defaults.WaveformHueOffset);
-        Assert.That(asset.Settings.HueWrapPeriod, Is.EqualTo(defaults.HueWrapPeriod));
+        AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
+        Assert.That(asset.Settings.GlintChance, Is.EqualTo(defaults.GlintChance));
+        Assert.That(asset.Settings.DarkGlintThreshold, Is.EqualTo(defaults.DarkGlintThreshold));
+        Assert.That(asset.Settings.BloomFraction, Is.EqualTo(defaults.BloomFraction));
+        Assert.That(asset.Settings.DarkBloomLuminance, Is.EqualTo(defaults.DarkBloomLuminance));
+        Assert.That(asset.Settings.FloorLevel, Is.EqualTo(defaults.FloorLevel));
+        Assert.That(asset.Settings.SparklesPerSecond, Is.EqualTo(defaults.SparklesPerSecond));
+        Assert.That(asset.Settings.FadePerFrame, Is.EqualTo(defaults.FadePerFrame));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
     }
 
     /// <summary>
@@ -1280,20 +1309,48 @@ public sealed class EffectSyncSettingsTests
         var asset = (ColorSparkleSyncSettingsAsset)EffectSyncSettingsAssetUtility.EnsureAsset(
             typeof(ColorSparkle),
             TempAssetFolder);
-        asset.Settings.ActivationHue = new FloatRange(0.31f, 0.32f, 0.3f, 0.33f);
-        asset.Settings.DropHue = new FloatRange(0.34f, 0.35f, 0.33f, 0.36f);
-        asset.Settings.WaveformHueOffset = new FloatRange(0.37f, 0.38f, 0.36f, 0.39f);
-        asset.Settings.HueWrapPeriod = 0.4f;
+        asset.Settings.ConfettiChance = 0.41f;
+        asset.Settings.PerSparkleHue = new FloatRange(0.42f, 0.43f, 0.41f, 0.44f);
+        asset.Settings.CoordinateRange = new FloatRange(0.45f, 0.46f, 0.44f, 0.47f);
+        asset.Settings.GlintChance = 0.048f;
+        asset.Settings.DarkGlintThreshold = 0.49f;
+        asset.Settings.BloomFraction = 0.51f;
+        asset.Settings.DarkBloomLuminance = 0.52f;
+        asset.Settings.FloorLevel = 0.53f;
+        asset.Settings.SparklesPerSecond = 2345f;
+        asset.Settings.FadePerFrame = 0.92f;
+        asset.Settings.PaletteConditioning = new PaletteConditioning
+        {
+            TargetLuminance = 0.54f,
+            MinimumLuminance = 0.55f,
+            LuminanceEqualization = 0.56f,
+            HueSpreadReference = 0.57f,
+            MaximumLuminanceScale = 1.58f,
+            DarkLuminanceThreshold = 0.059f,
+            DuplicateThreshold = 0.06f,
+            HueRedistribution = 0.61f,
+        };
+        asset.Settings.DropHue = new FloatRange(0.62f, 0.63f, 0.61f, 0.64f);
         asset.Settings.DropSparkleDivisor = 7;
-        asset.Settings.FillWhiteChance = 0.41f;
+        asset.Settings.FillWhiteChance = 0.65f;
 
         EffectSyncSettingsAssetUtility.RestoreSyncDefaults(typeof(ColorSparkle), TempAssetFolder);
 
         var defaults = ColorSparkle.SyncDefaults;
-        AssertFloatRangeEqual(asset.Settings.ActivationHue, defaults.ActivationHue);
+        Assert.That(asset.Settings.ConfettiChance, Is.EqualTo(defaults.ConfettiChance));
+        AssertFloatRangeEqual(asset.Settings.PerSparkleHue, defaults.PerSparkleHue);
+        AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
+        Assert.That(asset.Settings.GlintChance, Is.EqualTo(defaults.GlintChance));
+        Assert.That(asset.Settings.DarkGlintThreshold, Is.EqualTo(defaults.DarkGlintThreshold));
+        Assert.That(asset.Settings.BloomFraction, Is.EqualTo(defaults.BloomFraction));
+        Assert.That(asset.Settings.DarkBloomLuminance, Is.EqualTo(defaults.DarkBloomLuminance));
+        Assert.That(asset.Settings.FloorLevel, Is.EqualTo(defaults.FloorLevel));
+        Assert.That(asset.Settings.SparklesPerSecond, Is.EqualTo(defaults.SparklesPerSecond));
+        Assert.That(asset.Settings.FadePerFrame, Is.EqualTo(defaults.FadePerFrame));
+        AssertPaletteConditioningEqual(
+            asset.Settings.PaletteConditioning,
+            defaults.PaletteConditioning);
         AssertFloatRangeEqual(asset.Settings.DropHue, defaults.DropHue);
-        AssertFloatRangeEqual(asset.Settings.WaveformHueOffset, defaults.WaveformHueOffset);
-        Assert.That(asset.Settings.HueWrapPeriod, Is.EqualTo(defaults.HueWrapPeriod));
         Assert.That(asset.Settings.DropSparkleDivisor, Is.EqualTo(defaults.DropSparkleDivisor));
         Assert.That(asset.Settings.FillWhiteChance, Is.EqualTo(defaults.FillWhiteChance));
     }

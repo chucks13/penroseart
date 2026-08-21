@@ -14,20 +14,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ColorSparkleStandaloneSettingsAsset
   effectTypeName: ColorSparkle
   settings:
-    RandomColorThreshold: 0.5
-    ActivationHue:
-      Min: 0
-      Max: 1
-      LowRail: 0
-      HighRail: 1
+    ConfettiChance: 0.25
     PerSparkleHue:
       Min: 0
       Max: 1
       LowRail: 0
       HighRail: 1
-    WaveformHueOffset:
-      Min: 0.5
+    CoordinateRange:
+      Min: 0
       Max: 1
-      LowRail: 0.5
+      LowRail: 0
       HighRail: 1
-    HueWrapPeriod: 0.15
+    GlintChance: 0.003
+    DarkGlintThreshold: 0.2
+    BloomFraction: 0.7
+    DarkBloomLuminance: 0.6
+    FloorLevel: 0
+    SparklesPerSecond: 900
+    FadePerFrame: 0.98
+    PaletteConditioning:
+      TargetLuminance: 0.4
+      MinimumLuminance: 0.12
+      LuminanceEqualization: 0.85
+      HueSpreadReference: 0.5
+      MaximumLuminanceScale: 4
+      DarkLuminanceThreshold: 0.03
+      DuplicateThreshold: 0.08
+      HueRedistribution: 1
