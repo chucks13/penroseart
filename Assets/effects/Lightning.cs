@@ -72,10 +72,10 @@ public class Lightning : EffectBase
     private const string SyncWaveformName = "beats 2 and 4";
 
     /// <summary>Low-band level above which an On the Beat gate opens the flash.</summary>
-    private const float SyncOnBeatLowThreshold = 0.5f;
+    private const float SyncOnBeatLowThreshold = 0.4f;
 
     /// <summary>Levels form sampled for the bass-gated On the Beat flash.</summary>
-    private const LevelsForm SyncLowLevelsForm = LevelsForm.Normalized;
+    private const LevelsForm SyncLowLevelsForm = LevelsForm.Smoothed;
 
     /// <summary>Hue-wheel offset applied to the burning ray.</summary>
     private const float SyncFlashHueOffset = 0.5f;
