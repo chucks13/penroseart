@@ -14,17 +14,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LightningSyncSettingsAsset
   effectTypeName: Lightning
   settings:
-    BeatBrightnessAtTrough: 1
-    BeatBrightnessAtPeak: 0.75
-    BeatHueOffset: 0.5
+    StartHueDelta: 0.02
+    RayHueDelta: 0.2
+    TileHueDelta: 0.02
+    WaveformBrightness:
+      Min: 0.75
+      Max: 1
+      LowRail: 0.75
+      HighRail: 1
+    WaveformHueOffset: 0.5
     DropBars: 2
     DropValueLift: 1
     DropFlickerDepth: 0.5
     DropFlickerHz: 22
     DropFieldFlood: 1
-    DropFieldBright: 0.25
-    DropFadeHold: 0.97
-    FillJerkDuration: 4
+    DropFieldWhiteFlash: 0.25
+    DropTrailFade: 0.97
+    FillRewalkDuration: 4
     FillStrobeDuration: 4
     FillStrobeFloor: 0.15
     FillStrobeDuty: 0.5
