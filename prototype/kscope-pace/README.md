@@ -29,11 +29,15 @@ prototype does not alter or reinterpret it.
 3. Mirror2 or Mirror10 group replication from each group's first Tile; and
 4. the real rhomb geometry from `penrose_layout.txt`.
 
-The Fill port is exact to `Assets/effects/Kscope.cs:624–637`. A mirror group's
-color starts at `buffer[group[0]]`; while `beatManager.Fill.Active`, it is converted
-RGB→HSV, `v = (h + s + v) % 1`, fully desaturated with `s = 0`, converted back to
-RGB, and copied to the group. The runtime WHY travels with the port: the modulo sum
-is there to “assure there is brightness variation.”
+The Fill port models the treatment Kscope ran when this prototype was measured: a
+mirror group's color started at `buffer[group[0]]`; while `beatManager.Fill.Active`,
+it was converted RGB→HSV, `v = (h + s + v) % 1`, fully desaturated with `s = 0`,
+converted back to RGB, and copied to the group — the modulo sum was there to
+“assure there is brightness variation.” The runtime has since replaced that
+treatment: Kscope now drains color across the whole buffer while holding Rec.709
+relative luminance, with the live `FillContrast` knob pivoting the gray on mid-gray
+(`Assets/effects/Kscope.cs`, the Fill pass in `Draw`). The Fill scorecards here
+measure the superseded treatment, not the current one.
 
 Mono images model `Assets/effects/Kscope.cs:600–608`: source red supplies the
 palette coordinate and final brightness; the live palette supplies hue and

@@ -1,12 +1,15 @@
 # PROTOTYPE — throwaway. Do not ship anything in this folder.
 
-Desk simulation of the proposed AnimateLoops palette lookup. It reads the current
+Desk simulation of the palette lookup proposed for AnimateLoops — since renamed
+`AnimateShapes`, whose foreground now uses the cyclic palette sampling this
+prototype proposed (`Assets/effects/AnimateShapes.cs`). File cites below reference
+`AnimateLoops.cs` as it stood at measurement time. It reads the current
 wall geometry, Ring/Arc groups, and scene palettes when it builds. The generated
 HTML is one self-contained file that opens from `file://` without a server.
 
 ## The question
 
-AnimateLoops currently makes color crawl along each Ring and Arc by adding a fixed
+AnimateLoops then made color crawl along each Ring and Arc by adding a fixed
 per-Tile hue step to a per-frame hue advance. This prototype asks whether that
 signature crawl survives when cyclic palette sampling replaces the hue wheel for
 the foreground, the background, or both. It also lets the maintainer compare every
