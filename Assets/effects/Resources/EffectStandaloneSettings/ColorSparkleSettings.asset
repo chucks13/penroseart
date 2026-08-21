@@ -26,12 +26,10 @@ MonoBehaviour:
       LowRail: 0
       HighRail: 1
     GlintChance: 0.003
-    DarkGlintThreshold: 0.2
-    BloomFraction: 0.7
-    DarkBloomLuminance: 0.6
+    GlintLuminance: 0.8
     FloorLevel: 0
     SparklesPerSecond: 900
-    FadePerFrame: 0.98
+    FadePerFrame: 0.975
     PaletteConditioning:
       TargetLuminance: 0.4
       MinimumLuminance: 0.12

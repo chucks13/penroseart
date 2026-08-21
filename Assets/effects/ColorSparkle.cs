@@ -3,7 +3,7 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Maintains a fading palette sparkle field with rare Neighbor glints over the previous Buffer.
+/// Maintains a fading palette sparkle field with rare contrasting glints over the previous Buffer.
 /// </summary>
 [EffectSyncSettings(typeof(ColorSparkleSyncSettingsAsset))]
 [EffectStandaloneSettings(typeof(ColorSparkleStandaloneSettingsAsset))]
@@ -26,17 +26,11 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored maximum cyclic palette coordinate for Standalone palette variants.</summary>
     private const float StandaloneCoordinateMax = 1f;
 
-    /// <summary>Authored chance that a Standalone sparkle blooms across its Neighbor Tiles.</summary>
+    /// <summary>Authored chance that a Standalone sparkle is born as a contrasting glint.</summary>
     private const float StandaloneGlintChance = 0.003f;
 
-    /// <summary>Authored relative-luminance threshold separating bright and dark Standalone glints.</summary>
-    private const float StandaloneDarkGlintThreshold = 0.2f;
-
-    /// <summary>Authored fraction of a bright Standalone glint's center luminance used by its Neighbor bloom.</summary>
-    private const float StandaloneBloomFraction = 0.7f;
-
-    /// <summary>Authored relative luminance reached by a dark Standalone glint's Neighbor bloom.</summary>
-    private const float StandaloneDarkBloomLuminance = 0.6f;
+    /// <summary>Authored relative luminance every Standalone glint flashes at.</summary>
+    private const float StandaloneGlintLuminance = 0.8f;
 
     /// <summary>Authored scale applied to the darkest conditioned palette entry for the Standalone field floor.</summary>
     private const float StandaloneFloorLevel = 0f;
@@ -45,10 +39,11 @@ public class ColorSparkle : EffectBase
     private const float StandaloneSparklesPerSecond = 900f;
 
     /// <summary>
-    /// Authored fraction of each Tile's distance from the field floor retained per Buffer frame.
-    /// The maximum preserves the original lifetime; tuning can only shorten it.
+    /// Authored fraction of each Tile's distance from the field floor retained per Buffer frame,
+    /// tuned at the wall. The 0.98 Rail ceiling preserves the original lifetime; tuning can only
+    /// shorten it.
     /// </summary>
-    private const float StandaloneFadePerFrame = 0.98f;
+    private const float StandaloneFadePerFrame = 0.975f;
 
     /// <summary>
     /// Standalone palette conditioning keeps palette families readable while retaining their
@@ -83,17 +78,11 @@ public class ColorSparkle : EffectBase
     /// <summary>Authored maximum cyclic palette coordinate for Synced palette variants.</summary>
     private const float SyncCoordinateMax = 1f;
 
-    /// <summary>Authored chance that a Synced sparkle blooms across its Neighbor Tiles.</summary>
+    /// <summary>Authored chance that a Synced sparkle is born as a contrasting glint.</summary>
     private const float SyncGlintChance = 0.003f;
 
-    /// <summary>Authored relative-luminance threshold separating bright and dark Synced glints.</summary>
-    private const float SyncDarkGlintThreshold = 0.2f;
-
-    /// <summary>Authored fraction of a bright Synced glint's center luminance used by its Neighbor bloom.</summary>
-    private const float SyncBloomFraction = 0.7f;
-
-    /// <summary>Authored relative luminance reached by a dark Synced glint's Neighbor bloom.</summary>
-    private const float SyncDarkBloomLuminance = 0.6f;
+    /// <summary>Authored relative luminance every Synced glint flashes at.</summary>
+    private const float SyncGlintLuminance = 0.8f;
 
     /// <summary>Authored scale applied to the darkest conditioned palette entry for the Synced field floor.</summary>
     private const float SyncFloorLevel = 0f;
@@ -102,10 +91,11 @@ public class ColorSparkle : EffectBase
     private const float SyncSparklesPerSecond = 900f;
 
     /// <summary>
-    /// Authored fraction of each Tile's distance from the field floor retained per Buffer frame.
-    /// The maximum preserves the original lifetime; tuning can only shorten it.
+    /// Authored fraction of each Tile's distance from the field floor retained per Buffer frame,
+    /// tuned at the wall. The 0.98 Rail ceiling preserves the original lifetime; tuning can only
+    /// shorten it.
     /// </summary>
-    private const float SyncFadePerFrame = 0.98f;
+    private const float SyncFadePerFrame = 0.975f;
 
     /// <summary>
     /// Sync palette conditioning is independently live so tuning cannot drift the Standalone look.
@@ -167,9 +157,7 @@ public class ColorSparkle : EffectBase
             StandaloneCoordinateMin,
             StandaloneCoordinateMax),
         GlintChance = StandaloneGlintChance,
-        DarkGlintThreshold = StandaloneDarkGlintThreshold,
-        BloomFraction = StandaloneBloomFraction,
-        DarkBloomLuminance = StandaloneDarkBloomLuminance,
+        GlintLuminance = StandaloneGlintLuminance,
         FloorLevel = StandaloneFloorLevel,
         SparklesPerSecond = StandaloneSparklesPerSecond,
         FadePerFrame = StandaloneFadePerFrame,
@@ -187,9 +175,7 @@ public class ColorSparkle : EffectBase
             SyncCoordinateMin,
             SyncCoordinateMax),
         GlintChance = SyncGlintChance,
-        DarkGlintThreshold = SyncDarkGlintThreshold,
-        BloomFraction = SyncBloomFraction,
-        DarkBloomLuminance = SyncDarkBloomLuminance,
+        GlintLuminance = SyncGlintLuminance,
         FloorLevel = SyncFloorLevel,
         SparklesPerSecond = SyncSparklesPerSecond,
         FadePerFrame = SyncFadePerFrame,
@@ -317,15 +303,9 @@ public class ColorSparkle : EffectBase
         float glintChance = isSynced
             ? SyncSettings.GlintChance
             : standaloneSettings.GlintChance;
-        float darkGlintThreshold = isSynced
-            ? SyncSettings.DarkGlintThreshold
-            : standaloneSettings.DarkGlintThreshold;
-        float bloomFraction = isSynced
-            ? SyncSettings.BloomFraction
-            : standaloneSettings.BloomFraction;
-        float darkBloomLuminance = isSynced
-            ? SyncSettings.DarkBloomLuminance
-            : standaloneSettings.DarkBloomLuminance;
+        float glintLuminance = isSynced
+            ? SyncSettings.GlintLuminance
+            : standaloneSettings.GlintLuminance;
         float floorLevel = isSynced
             ? SyncSettings.FloorLevel
             : standaloneSettings.FloorLevel;
@@ -371,9 +351,8 @@ public class ColorSparkle : EffectBase
             SpawnSparkle(
                 sparkleColor,
                 glintChance,
-                darkGlintThreshold,
-                bloomFraction,
-                darkBloomLuminance);
+                glintLuminance,
+                coordinateRange);
         }
     }
 
@@ -456,57 +435,42 @@ public class ColorSparkle : EffectBase
         (float)index / length;
 
     /// <summary>
-    /// Writes one uniformly placed sparkle. The glint chance is rolled before luminance selects its
-    /// bright or dark form; ordinary dark sparkles remain one unlifted Tile.
+    /// Writes one uniformly placed sparkle. A rare glint instead flashes its single Tile with the
+    /// conditioned palette at its own rolled coordinate, set to the glint luminance — a glint
+    /// contrasts the field by hue and brightness, never by size.
     /// </summary>
     /// <param name="color">The sparkle's birth color.</param>
-    /// <param name="glintChance">Chance that this sparkle blooms to its Neighbor Tiles.</param>
-    /// <param name="darkGlintThreshold">Relative luminance below which the dark glint form is used.</param>
-    /// <param name="bloomFraction">Center-luminance fraction used by a bright glint's Neighbor bloom.</param>
-    /// <param name="darkBloomLuminance">Target relative luminance for a dark glint's Neighbor bloom.</param>
+    /// <param name="glintChance">Chance that this sparkle is born as a glint.</param>
+    /// <param name="glintLuminance">Relative luminance every glint flashes at.</param>
+    /// <param name="coordinateRange">Cyclic palette coordinate endpoints for the glint's own roll.</param>
     private void SpawnSparkle(
         Color color,
         float glintChance,
-        float darkGlintThreshold,
-        float bloomFraction,
-        float darkBloomLuminance)
+        float glintLuminance,
+        FloatRange coordinateRange)
     {
         int tileIndex = Random.Range(0, buffer.Length);
-        if (Random.value >= glintChance)
+        if (Random.value < glintChance)
         {
-            buffer[tileIndex] = color;
-            return;
+            color = SetLuminance(
+                conditionedPalette.ReadCyclic(
+                    Random.Range(coordinateRange.Min, coordinateRange.Max),
+                    doblend: true),
+                glintLuminance);
         }
 
-        Color bloom;
-        if (color.RelativeLuminance() >= darkGlintThreshold)
-        {
-            bloom = new Color(
-                color.r * bloomFraction,
-                color.g * bloomFraction,
-                color.b * bloomFraction,
-                color.a);
-        }
-        else
-        {
-            bloom = LiftToLuminance(color, darkBloomLuminance);
-        }
-
-        for (int i = 0; i < tiles[tileIndex].neighbors.Length; i++)
-        {
-            buffer[tiles[tileIndex].neighbors[i].tileIdx] = bloom;
-        }
         buffer[tileIndex] = color;
     }
 
     /// <summary>
-    /// Lifts a dark color to a target relative luminance at the same hue. Full value is tried first
-    /// at the authored saturation; saturation falls only when that vivid color cannot reach the target.
+    /// Sets a color to a target relative luminance at the same hue. Full value is tried first
+    /// at the authored saturation; saturation falls only when that vivid color cannot reach the
+    /// target, so the flash stays as colorful as the target allows.
     /// </summary>
-    /// <param name="color">The dark sparkle color whose hue and alpha are preserved.</param>
-    /// <param name="targetLuminance">Relative luminance requested for the Neighbor bloom.</param>
-    /// <returns>The same-hue bloom color at the requested luminance.</returns>
-    private static Color LiftToLuminance(Color color, float targetLuminance)
+    /// <param name="color">The color whose hue and alpha are preserved.</param>
+    /// <param name="targetLuminance">Relative luminance requested for the result.</param>
+    /// <returns>The same-hue color at the requested luminance.</returns>
+    private static Color SetLuminance(Color color, float targetLuminance)
     {
         Color.RGBToHSV(color, out float hue, out float saturation, out _);
         Color vivid = Color.HSVToRGB(hue, saturation, 1f);
@@ -546,17 +510,11 @@ public sealed class ColorSparkleStandaloneSettings
     /// <summary>Cyclic palette coordinate range used by palette-single and palette-scatter variants.</summary>
     public FloatRange CoordinateRange;
 
-    /// <summary>Chance that a spawned sparkle blooms to its Neighbor Tiles.</summary>
+    /// <summary>Chance that a spawned sparkle is born as a contrasting glint.</summary>
     [Range(0f, 0.05f)] public float GlintChance;
 
-    /// <summary>Relative-luminance threshold separating bright and dark glint forms.</summary>
-    [Range(0f, 1f)] public float DarkGlintThreshold;
-
-    /// <summary>Fraction of the center luminance used by a bright glint's Neighbor bloom.</summary>
-    [Range(0f, 1f)] public float BloomFraction;
-
-    /// <summary>Relative luminance reached by a dark glint's Neighbor bloom.</summary>
-    [Range(0f, 1f)] public float DarkBloomLuminance;
+    /// <summary>Relative luminance every glint flashes at.</summary>
+    [Range(0f, 1f)] public float GlintLuminance;
 
     /// <summary>Scale applied to the darkest conditioned palette entry for the field floor.</summary>
     [Range(0f, 1f)] public float FloorLevel;
@@ -600,9 +558,7 @@ public sealed class ColorSparkleStandaloneSettings
             source.CoordinateRange.LowRail,
             source.CoordinateRange.HighRail);
         GlintChance = source.GlintChance;
-        DarkGlintThreshold = source.DarkGlintThreshold;
-        BloomFraction = source.BloomFraction;
-        DarkBloomLuminance = source.DarkBloomLuminance;
+        GlintLuminance = source.GlintLuminance;
         FloorLevel = source.FloorLevel;
         SparklesPerSecond = source.SparklesPerSecond;
         FadePerFrame = source.FadePerFrame;
@@ -623,17 +579,11 @@ public sealed class ColorSparkleSyncSettings
     /// <summary>Cyclic palette coordinate range used by palette-single and palette-scatter variants.</summary>
     public FloatRange CoordinateRange;
 
-    /// <summary>Chance that a spawned sparkle blooms to its Neighbor Tiles.</summary>
+    /// <summary>Chance that a spawned sparkle is born as a contrasting glint.</summary>
     [Range(0f, 0.05f)] public float GlintChance;
 
-    /// <summary>Relative-luminance threshold separating bright and dark glint forms.</summary>
-    [Range(0f, 1f)] public float DarkGlintThreshold;
-
-    /// <summary>Fraction of the center luminance used by a bright glint's Neighbor bloom.</summary>
-    [Range(0f, 1f)] public float BloomFraction;
-
-    /// <summary>Relative luminance reached by a dark glint's Neighbor bloom.</summary>
-    [Range(0f, 1f)] public float DarkBloomLuminance;
+    /// <summary>Relative luminance every glint flashes at.</summary>
+    [Range(0f, 1f)] public float GlintLuminance;
 
     /// <summary>Scale applied to the darkest conditioned palette entry for the field floor.</summary>
     [Range(0f, 1f)] public float FloorLevel;
@@ -686,9 +636,7 @@ public sealed class ColorSparkleSyncSettings
             source.CoordinateRange.LowRail,
             source.CoordinateRange.HighRail);
         GlintChance = source.GlintChance;
-        DarkGlintThreshold = source.DarkGlintThreshold;
-        BloomFraction = source.BloomFraction;
-        DarkBloomLuminance = source.DarkBloomLuminance;
+        GlintLuminance = source.GlintLuminance;
         FloorLevel = source.FloorLevel;
         SparklesPerSecond = source.SparklesPerSecond;
         FadePerFrame = source.FadePerFrame;

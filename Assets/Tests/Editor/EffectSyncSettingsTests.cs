@@ -390,9 +390,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.CoordinateRange, Is.Not.SameAs(second.CoordinateRange));
         AssertFloatRangeEqual(first.CoordinateRange, second.CoordinateRange);
         Assert.That(first.GlintChance, Is.EqualTo(second.GlintChance));
-        Assert.That(first.DarkGlintThreshold, Is.EqualTo(second.DarkGlintThreshold));
-        Assert.That(first.BloomFraction, Is.EqualTo(second.BloomFraction));
-        Assert.That(first.DarkBloomLuminance, Is.EqualTo(second.DarkBloomLuminance));
+        Assert.That(first.GlintLuminance, Is.EqualTo(second.GlintLuminance));
         Assert.That(first.FloorLevel, Is.EqualTo(second.FloorLevel));
         Assert.That(first.SparklesPerSecond, Is.EqualTo(second.SparklesPerSecond));
         Assert.That(first.FadePerFrame, Is.EqualTo(second.FadePerFrame));
@@ -414,9 +412,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.PerSparkleHue = new FloatRange(0.18f, 0.19f, 0.17f, 0.2f);
         asset.Settings.CoordinateRange = new FloatRange(0.21f, 0.22f, 0.2f, 0.23f);
         asset.Settings.GlintChance = 0.024f;
-        asset.Settings.DarkGlintThreshold = 0.25f;
-        asset.Settings.BloomFraction = 0.26f;
-        asset.Settings.DarkBloomLuminance = 0.27f;
+        asset.Settings.GlintLuminance = 0.25f;
         asset.Settings.FloorLevel = 0.28f;
         asset.Settings.SparklesPerSecond = 1234f;
         asset.Settings.FadePerFrame = 0.91f;
@@ -441,9 +437,7 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.PerSparkleHue, defaults.PerSparkleHue);
         AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
         Assert.That(asset.Settings.GlintChance, Is.EqualTo(defaults.GlintChance));
-        Assert.That(asset.Settings.DarkGlintThreshold, Is.EqualTo(defaults.DarkGlintThreshold));
-        Assert.That(asset.Settings.BloomFraction, Is.EqualTo(defaults.BloomFraction));
-        Assert.That(asset.Settings.DarkBloomLuminance, Is.EqualTo(defaults.DarkBloomLuminance));
+        Assert.That(asset.Settings.GlintLuminance, Is.EqualTo(defaults.GlintLuminance));
         Assert.That(asset.Settings.FloorLevel, Is.EqualTo(defaults.FloorLevel));
         Assert.That(asset.Settings.SparklesPerSecond, Is.EqualTo(defaults.SparklesPerSecond));
         Assert.That(asset.Settings.FadePerFrame, Is.EqualTo(defaults.FadePerFrame));
@@ -1313,9 +1307,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.PerSparkleHue = new FloatRange(0.42f, 0.43f, 0.41f, 0.44f);
         asset.Settings.CoordinateRange = new FloatRange(0.45f, 0.46f, 0.44f, 0.47f);
         asset.Settings.GlintChance = 0.048f;
-        asset.Settings.DarkGlintThreshold = 0.49f;
-        asset.Settings.BloomFraction = 0.51f;
-        asset.Settings.DarkBloomLuminance = 0.52f;
+        asset.Settings.GlintLuminance = 0.49f;
         asset.Settings.FloorLevel = 0.53f;
         asset.Settings.SparklesPerSecond = 2345f;
         asset.Settings.FadePerFrame = 0.92f;
@@ -1341,9 +1333,7 @@ public sealed class EffectSyncSettingsTests
         AssertFloatRangeEqual(asset.Settings.PerSparkleHue, defaults.PerSparkleHue);
         AssertFloatRangeEqual(asset.Settings.CoordinateRange, defaults.CoordinateRange);
         Assert.That(asset.Settings.GlintChance, Is.EqualTo(defaults.GlintChance));
-        Assert.That(asset.Settings.DarkGlintThreshold, Is.EqualTo(defaults.DarkGlintThreshold));
-        Assert.That(asset.Settings.BloomFraction, Is.EqualTo(defaults.BloomFraction));
-        Assert.That(asset.Settings.DarkBloomLuminance, Is.EqualTo(defaults.DarkBloomLuminance));
+        Assert.That(asset.Settings.GlintLuminance, Is.EqualTo(defaults.GlintLuminance));
         Assert.That(asset.Settings.FloorLevel, Is.EqualTo(defaults.FloorLevel));
         Assert.That(asset.Settings.SparklesPerSecond, Is.EqualTo(defaults.SparklesPerSecond));
         Assert.That(asset.Settings.FadePerFrame, Is.EqualTo(defaults.FadePerFrame));
