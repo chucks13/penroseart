@@ -199,16 +199,6 @@ public class Julia : EffectBase
     private const int SyncFillApproachBeats = 8;
 
     /// <summary>
-    /// Fill dive depth: at full Fill the zoom is e^FillDiveDepth deeper than the breathing zoom
-    /// alone. Exponential so the dive speed feels constant at any depth. Ruled at the wall up to
-    /// 10 from the original 2: a full Fill now always plunges to the window-width floor.
-    /// </summary>
-    private const float SyncFillDiveDepth = 10f;
-
-    /// <summary>Whole beats over which the Fill plunge reaches full depth before holding.</summary>
-    private const int SyncFillDiveBeats = 4;
-
-    /// <summary>
     /// Fill envelope attack rate in inverse seconds. Halved at the wall from the original 22/s
     /// for a softer ramp into the deeper dive; still fast enough for a one-beat Fill to register
     /// without a one-frame snap.
@@ -383,8 +373,6 @@ public class Julia : EffectBase
         PaletteChance = SyncPaletteChance,
         HueBaseRate = SyncHueBaseRate,
         FillApproachBeats = SyncFillApproachBeats,
-        FillDiveDepth = SyncFillDiveDepth,
-        FillDiveBeats = SyncFillDiveBeats,
         FillAttackRate = SyncFillAttackRate,
         FillReleaseBeats = SyncFillReleaseBeats,
         FillComplementDepth = SyncFillComplementDepth,
@@ -674,12 +662,13 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Tracks the live Fill Build with the original fast exponential attack, then releases the
-    /// consumer-local dive linearly over the authored number of beats when Build falls away.
+    /// Tracks the Fill's full-length In Build with the original fast exponential attack, then
+    /// releases the consumer-local dive linearly over the authored number of beats when Build
+    /// falls away.
     /// </summary>
     private void UpdateFillEnvelope()
     {
-        var fillTarget = beatManager.Fill.In.Build(SyncSettings.FillDiveBeats);
+        var fillTarget = beatManager.Fill.In.Build();
         if (fillTarget > fillEnv)
         {
             var attackBlend = 1f - Mathf.Exp(-SyncSettings.FillAttackRate * effectDelta);
@@ -861,6 +850,8 @@ public class Julia : EffectBase
     /// Renders the current session journey after solving its boundary lock. Depth, morph, lock
     /// framing, fog, and relief resolve live from the active mode's Settings without a
     /// second fractal pass or any per-frame heap allocation.
+    /// A full Fill always plunges to the window-width floor: log-space interpolation makes that
+    /// wall ruling structural instead of relying on tuned overshoot into a clamp.
     /// </summary>
     public override void Draw()
     {
@@ -927,17 +918,20 @@ public class Julia : EffectBase
             fillApproachLogOffset = 0f;
         }
 
-        var fillDropWindow = Mathf.Clamp(
-            breathWindow * Mathf.Exp(
-                (SyncSettings.DropBlowout * dropEnv) - (SyncSettings.FillDiveDepth * fillEnv)),
+        var dropWindow = Mathf.Clamp(
+            breathWindow * Mathf.Exp(SyncSettings.DropBlowout * dropEnv),
             windowWidth.Min,
             windowWidth.Max);
         // The Fill inhale multiplies the existing camera in log space, carrying its last actual
         // position into the plunge while the breathing oscillator continues underneath.
-        var window = Mathf.Clamp(
-            fillDropWindow * Mathf.Exp(fillApproachLogOffset),
+        var undivedWindow = Mathf.Clamp(
+            dropWindow * Mathf.Exp(fillApproachLogOffset),
             windowWidth.Min,
             windowWidth.Max);
+        var window = Mathf.Exp(Mathf.Lerp(
+            Mathf.Log(undivedWindow),
+            Mathf.Log(windowWidth.Min),
+            fillEnv));
         var scale = window / penrose.Bounds.size.x;
         zoomBreathPhase += breathingZoomSpeed * effectDelta;
 
@@ -1240,12 +1234,6 @@ public sealed class JuliaSyncSettings
     /// <summary>Whole-beat window over which an announced upcoming Fill pulls back to the full-set view.</summary>
     public int FillApproachBeats;
 
-    /// <summary>Exponential zoom depth added at full Fill.</summary>
-    [Min(0f)] public float FillDiveDepth;
-
-    /// <summary>Whole beats over which the active Fill plunge reaches full depth before holding.</summary>
-    public int FillDiveBeats;
-
     /// <summary>Fast exponential response rate toward the live Fill Build, in inverse seconds.</summary>
     public float FillAttackRate;
 
@@ -1312,8 +1300,6 @@ public sealed class JuliaSyncSettings
         PaletteChance = source.PaletteChance;
         HueBaseRate = source.HueBaseRate;
         FillApproachBeats = source.FillApproachBeats;
-        FillDiveDepth = source.FillDiveDepth;
-        FillDiveBeats = source.FillDiveBeats;
         FillAttackRate = source.FillAttackRate;
         FillReleaseBeats = source.FillReleaseBeats;
         FillComplementDepth = source.FillComplementDepth;

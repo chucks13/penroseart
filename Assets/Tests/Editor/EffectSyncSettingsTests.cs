@@ -1427,8 +1427,6 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.PaletteChance = 0.11f;
         asset.Settings.HueBaseRate = 23f;
         asset.Settings.FillApproachBeats = 24;
-        asset.Settings.FillDiveDepth = 24f;
-        asset.Settings.FillDiveBeats = 25;
         asset.Settings.FillAttackRate = 25f;
         asset.Settings.FillReleaseBeats = 26f;
         asset.Settings.FillComplementDepth = 0.14f;
@@ -1463,8 +1461,6 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.PaletteChance, Is.EqualTo(defaults.PaletteChance));
         Assert.That(asset.Settings.HueBaseRate, Is.EqualTo(defaults.HueBaseRate));
         Assert.That(asset.Settings.FillApproachBeats, Is.EqualTo(defaults.FillApproachBeats));
-        Assert.That(asset.Settings.FillDiveDepth, Is.EqualTo(defaults.FillDiveDepth));
-        Assert.That(asset.Settings.FillDiveBeats, Is.EqualTo(defaults.FillDiveBeats));
         Assert.That(asset.Settings.FillAttackRate, Is.EqualTo(defaults.FillAttackRate));
         Assert.That(asset.Settings.FillReleaseBeats, Is.EqualTo(defaults.FillReleaseBeats));
         Assert.That(asset.Settings.FillComplementDepth, Is.EqualTo(defaults.FillComplementDepth));
