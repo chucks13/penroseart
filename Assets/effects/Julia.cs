@@ -512,7 +512,7 @@ public class Julia : EffectBase
     /// </summary>
     public override string DebugText()
     {
-        return $"{presetIndex}, {breathingZoomSpeed}, ({viewCenter.x}, {viewCenter.y})\n" +
+        return $"{presetIndex}, {breathingZoomSpeed:0.00}, ({viewCenter.x:0.0000}, {viewCenter.y:0.0000})\n" +
             (usePalette ? "PALETTE" : "RAINBOW") + $" HUE {hueScroll:0.00}" +
             $"\nWAVEFORM {acquiredWaveformName}" +
             (fillEnv > 0.01f ? $"\nFILL {fillEnv:0.00}" : "") +
@@ -521,8 +521,8 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Resolves the current Settings, acquires the selected Waveform, starts the session journey
-    /// once, refreshes the conditioned palette, and performs the color re-roll while preserving
-    /// zoom breath, view center, morphed constant, and rotation.
+    /// once, refreshes the conditioned palette when the color Roll uses it, and performs the
+    /// color re-roll while preserving zoom breath, view center, morphed constant, and rotation.
     /// </summary>
     public override void OnStart()
     {
@@ -542,9 +542,12 @@ public class Julia : EffectBase
         }
 
         Reroll();
-        conditionedPalette.Refresh(APalette, beatManager.IsSynced
-            ? SyncSettings.PaletteConditioning
-            : standaloneSettings.PaletteConditioning);
+        if (usePalette)
+        {
+            conditionedPalette.Refresh(APalette, beatManager.IsSynced
+                ? SyncSettings.PaletteConditioning
+                : standaloneSettings.PaletteConditioning);
+        }
         hueScroll = 0f;
         fillEnv = 0f;
         fillApproachLogOffset = 0f;
@@ -864,18 +867,21 @@ public class Julia : EffectBase
             acquiredWaveformName = requestedWaveformName;
         }
 
-        var paletteConditioning = isSynced
-            ? SyncSettings.PaletteConditioning
-            : standaloneSettings.PaletteConditioning;
-        conditionedPalette.Refresh(APalette, paletteConditioning);
+        if (usePalette)
+        {
+            var paletteConditioning = isSynced
+                ? SyncSettings.PaletteConditioning
+                : standaloneSettings.PaletteConditioning;
+            conditionedPalette.Refresh(APalette, paletteConditioning);
+        }
 
         // Beat drives color cycling, not brightness: the hue wheel always turns at the base
         // rate, and the held Waveform's envelope (0..1, peaking on its hits) adds speed on top.
-        var hueCycleDrive = waveform.Lerp(
-            SyncSettings.HueCycleDrive.Min,
-            isSynced
-                ? SyncSettings.HueCycleDrive.Max
-                : standaloneSettings.HueCycleDrive);
+        var hueCycleDrive = isSynced
+            ? waveform.Lerp(
+                SyncSettings.HueCycleDrive.Min,
+                SyncSettings.HueCycleDrive.Max)
+            : standaloneSettings.HueCycleDrive;
         var hueBaseRate = isSynced
             ? SyncSettings.HueBaseRate
             : standaloneSettings.HueBaseRate;
@@ -889,12 +895,14 @@ public class Julia : EffectBase
         if (isSynced)
         {
             UpdateFillEnvelope();
+            UpdateDropSlam();
         }
         else
         {
             fillEnv = 0f;
+            dropEnv = 0f;
+            previousDropActive = false;
         }
-        UpdateDropSlam();
 
         // Breathing zoom (window width oscillates between the range endpoints), deepened
         // exponentially by the Fill dive and blasted back out by the Drop slam.
@@ -972,30 +980,36 @@ public class Julia : EffectBase
             ? beatManager.Pulses.Beat * SyncSettings.FillComplementDepth * 0.5f
             : 0f;
 
-        for (var i = 0; i < buffer.Length; i++)
+        var output = buffer;
+        var tileData = tiles;
+        var offsets = aaOffsets;
+        var escapeSamples = smoothEscapeSamples;
+        var sampleCount = offsets.Length;
+        for (var i = 0; i < output.Length; i++)
         {
-            var center = tiles[i].center;
+            var center = tileData[i].center;
             var smoothMean = 0f;
-            for (var s = 0; s < aaOffsets.Length; s++)
+            for (var s = 0; s < sampleCount; s++)
             {
-                var world = center + aaOffsets[s];
+                var world = center + offsets[s];
                 var rx = (world.x * rotCos) - (world.y * rotSin);
                 var ry = (world.x * rotSin) + (world.y * rotCos);
                 var sampleX = viewCenter.x + (rx * scale);
                 var sampleY = viewCenter.y + (ry * scale);
                 var smoothEscape = SampleEscape(sampleX, sampleY);
-                smoothEscapeSamples[s] = smoothEscape;
+                escapeSamples[s] = smoothEscape;
                 smoothMean += smoothEscape;
             }
-            smoothMean /= aaOffsets.Length;
+            smoothMean /= sampleCount;
 
             var gradientX = 0f;
             var gradientY = 0f;
-            for (var s = 0; s < aaOffsets.Length; s++)
+            for (var s = 0; s < sampleCount; s++)
             {
-                var centeredEscape = smoothEscapeSamples[s] - smoothMean;
-                gradientX += aaOffsets[s].x * centeredEscape;
-                gradientY += aaOffsets[s].y * centeredEscape;
+                var centeredEscape = escapeSamples[s] - smoothMean;
+                var offset = offsets[s];
+                gradientX += offset.x * centeredEscape;
+                gradientY += offset.y * centeredEscape;
             }
             gradientX /= AaGradientDenominator;
             gradientY /= AaGradientDenominator;
@@ -1008,9 +1022,9 @@ public class Julia : EffectBase
                 reliefShadingDepth);
 
             var pix = Color.black;
-            for (var s = 0; s < aaOffsets.Length; s++)
+            for (var s = 0; s < sampleCount; s++)
             {
-                var smoothEscape = smoothEscapeSamples[s];
+                var smoothEscape = escapeSamples[s];
                 if (smoothEscape >= Iterations)
                 {
                     pix += Color.black;
@@ -1030,14 +1044,14 @@ public class Julia : EffectBase
                     color.a);
             }
 
-            var tileColor = pix / aaOffsets.Length;
+            var tileColor = pix / sampleCount;
             if (fillActive)
             {
                 var alpha = tileColor.a;
                 tileColor = tileColor.Delta(fillHueRotation);
                 tileColor.a = alpha;
             }
-            buffer[i] = tileColor;
+            output[i] = tileColor;
         }
     }
 
@@ -1052,14 +1066,16 @@ public class Julia : EffectBase
         var n = 0;
         var aa = a * a;
         var bb = b * b;
+        var constantX = morphedConstant.x;
+        var constantY = morphedConstant.y;
         while (n < Iterations)
         {
             if (aa + bb > 4f) break;
 
             var twoAb = 2f * a * b;
 
-            a = aa - bb + morphedConstant.x;
-            b = twoAb + morphedConstant.y;
+            a = aa - bb + constantX;
+            b = twoAb + constantY;
             aa = a * a;
             bb = b * b;
 
@@ -1075,14 +1091,13 @@ public class Julia : EffectBase
     }
 
     /// <summary>
-    /// Maps a smooth escape count to its color: a ramp by escape speed shifted by the
-    /// beat-driven hue scroll, black for points inside the set. The activation's color
-    /// mode picks the ramp — the conditioned shared palette or the HSV rainbow.
+    /// Maps an exterior sample's smooth escape count to a ramp by escape speed shifted by the
+    /// beat-driven hue scroll. <see cref="Draw"/> owns the interior skip, so this method only
+    /// receives escaped samples. The activation's color mode picks the ramp — the conditioned
+    /// shared palette or the HSV rainbow.
     /// </summary>
     private Color EscapeColor(float smoothN)
     {
-        if (smoothN >= Iterations) return Color.black;
-
         var t = Mathf.Repeat(Mathf.Sqrt(smoothN / Iterations) + hueScroll, 1f);
         return usePalette
             ? conditionedPalette.ReadCyclic(t, doblend: true)
