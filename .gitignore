@@ -27,12 +27,10 @@
 # Agent scratch: purely local, never tracked.
 /.scratch/
 
-# Prototypes are scratch: purely local, never tracked.
-/prototype/
-
 # Claude Code personal/local settings
 .claude/settings.local.json
 /.claude/worktrees/
 
 # TMP rewrites the fallback font atlas whenever a new glyph renders; keep that churn local.
 /Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset
+__pycache__/
