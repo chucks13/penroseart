@@ -123,10 +123,10 @@ public class Julia : EffectBase
     private const float SyncBreathingZoomSpeedMin = 0.1f;
 
     /// <summary>Maximum breathing-zoom speed rolled on the first activation of a Play Mode session.</summary>
-    private const float SyncBreathingZoomSpeedMax = 0.3f;
+    private const float SyncBreathingZoomSpeedMax = 1f;
 
     /// <summary>Proportion of the full breathing dive reached at the breath's deepest point.</summary>
-    private const float SyncDepth = 0.75f;
+    private const float SyncDepth = 1f;
 
     /// <summary>
     /// Radius of the Julia constant's circular morph orbit, as a fraction of current window
@@ -138,7 +138,7 @@ public class Julia : EffectBase
     private const float SyncConstantMorphRate = 0.01f;
 
     /// <summary>Width of the complex-plane window, in complex units, at full zoom-out.</summary>
-    private const float SyncWindowWidthMax = 5f;
+    private const float SyncWindowWidthMax = 2f;
 
     /// <summary>
     /// Floor for the complex-plane window width. Keeps the dive above float precision and
@@ -169,18 +169,20 @@ public class Julia : EffectBase
 
     /// <summary>
     /// Sync palette conditioning, independently authored so live tuning in one mode cannot mutate
-    /// the other. It begins with the same luminance band, dark-stop repair, duplicate collapse,
-    /// and full redistribution as Standalone.
+    /// the other. It shares Standalone's luminance band, dark-stop repair, and full redistribution,
+    /// but was ruled at the wall onto a wider hue-spread reference — so mid-spread palettes keep
+    /// their own light/dark motion instead of being flattened — and a higher duplicate threshold
+    /// that collapses near-identical stops.
     /// </summary>
     private static PaletteConditioning SyncPaletteConditioning => new()
     {
         TargetLuminance = 0.4f,
         MinimumLuminance = 0.12f,
         LuminanceEqualization = 0.85f,
-        HueSpreadReference = 0.5f,
+        HueSpreadReference = 0.8f,
         MaximumLuminanceScale = 10f,
         DarkLuminanceThreshold = 0.03f,
-        DuplicateThreshold = 0.08f,
+        DuplicateThreshold = 0.125f,
         HueRedistribution = 1f,
     };
 
@@ -194,25 +196,27 @@ public class Julia : EffectBase
     private const float SyncHueBaseRate = 0.05f;
 
     /// <summary>
-    /// Fill dive depth: at full Fill the zoom is e^FillDiveDepth (~7×) deeper than the
-    /// breathing zoom alone. Exponential so the dive speed feels constant at any depth.
+    /// Fill dive depth: at full Fill the zoom is e^FillDiveDepth deeper than the breathing zoom
+    /// alone. Exponential so the dive speed feels constant at any depth. Ruled at the wall up to
+    /// 10 from the original 2: a full Fill now always plunges to the window-width floor.
     /// </summary>
-    private const float SyncFillDiveDepth = 2f;
+    private const float SyncFillDiveDepth = 10f;
 
     /// <summary>
-    /// Fill envelope attack rate in inverse seconds. The original 22/s response lets even a
-    /// one-beat Fill reach its live Build quickly without a one-frame snap.
+    /// Fill envelope attack rate in inverse seconds. Halved at the wall from the original 22/s
+    /// for a softer ramp into the deeper dive; still fast enough for a one-beat Fill to register
+    /// without a one-frame snap.
     /// </summary>
-    private const float SyncFillAttackRate = 22f;
+    private const float SyncFillAttackRate = 11f;
 
     /// <summary>Beats taken to release a full Fill dive back to rest after the Fill ends.</summary>
-    private const float SyncFillReleaseBeats = 2f;
+    private const float SyncFillReleaseBeats = 1f;
 
     /// <summary>Beats the Drop slam takes to decay back to rest.</summary>
-    private const int SyncDropDecayBeats = 8;
+    private const int SyncDropDecayBeats = 16;
 
     /// <summary>Spin speed in revolutions per second at the Drop slam's peak.</summary>
-    private const float SyncDropSpinRate = 1f;
+    private const float SyncDropSpinRate = 1.5f;
 
     /// <summary>
     /// Drop zoom blowout: at the slam's peak the window widens by e^DropBlowout, blasting

@@ -16,17 +16,17 @@ MonoBehaviour:
   settings:
     BreathingZoomSpeed:
       Min: 0.1
-      Max: 0.3
+      Max: 1
       LowRail: 0.1
-      HighRail: 0.3
-    Depth: 0.75
+      HighRail: 1
+    Depth: 1
     ConstantMorphRadius: 0.0024
     ConstantMorphRate: 0.01
     WindowWidth:
       Min: 0.002
-      Max: 5
+      Max: 2
       LowRail: 0.002
-      HighRail: 5
+      HighRail: 2
     EdgeLockFraming: 0.2
     FogDensity: 4
     FogBrightnessFloor: 0.22
@@ -42,13 +42,13 @@ MonoBehaviour:
       DarkLuminanceThreshold: 0.03
       DuplicateThreshold: 0.125
       HueRedistribution: 1
-    PaletteChance: 0.8
+    PaletteChance: 0.25
     HueBaseRate: 0.05
-    FillDiveDepth: 2
-    FillAttackRate: 22
-    FillReleaseBeats: 2
-    DropDecayBeats: 8
-    DropSpinRate: 1
+    FillDiveDepth: 10
+    FillAttackRate: 11
+    FillReleaseBeats: 1
+    DropDecayBeats: 16
+    DropSpinRate: 1.5
     DropBlowout: 1.5
     DropHueKick: 0.5
     NegativeDropSpinChance: 0.5
