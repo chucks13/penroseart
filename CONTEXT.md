@@ -458,8 +458,8 @@ What an Effect reads in Synced Mode: a saved copy that can be tweaked while the 
 _Avoid_: treating a live tweak as finished authoring before it has been written back into the file; changing an Effect's intended values by editing the saved copy rather than the Sync Defaults.
 
 **Roll**:
-The moment at activation when an Effect determines every value it randomizes and discards every piece of carried motion state. A re-roll is the same determination run again on reactivation; after any Roll, nothing from the previous activation shows on the wall.
-_Avoid_: partial rolls that redraw random values but keep stale orientation or progress; confusing the Roll with camera roll, the aviation-sense rotation some Effects animate.
+The moment at activation when an Effect determines every value it randomizes and discards carried motion state. A re-roll is the same determination run again on reactivation; after any Roll, nothing stale from the previous activation shows on the wall. An Effect may instead declare a **session journey** — named motion state that deliberately resumes across activations within one run, documented in-code as that Effect's exception to the discard rule.
+_Avoid_: partial rolls that redraw random values but keep stale orientation or progress; calling an undeclared leftover a session journey; confusing the Roll with camera roll, the aviation-sense rotation some Effects animate.
 
 **Rail**:
 The lowest or highest value a range's tuning slider spans — per-range calibration for live tweaking, carried by the range itself and saved with the settings. Authored defaults seed Rails from the range's endpoints; a Rail stretched during tuning lives only in the saved asset.

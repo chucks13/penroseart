@@ -89,7 +89,7 @@ This map summarizes the project-authored runtime and editor code. It is meant as
 | `AnimateShapes` | Animated packed Circle and Arc coloring over a background. |
 | `ColorSparkle` | Fading sparkle field over persistent buffer trails. |
 | `Flock` | Boid simulation projected to tile positions. |
-| `Julia` | Julia fractal evaluated directly at each Penrose tile center. |
+| `Julia` | Julia fractal sampled around each Penrose tile center, shaded with depth fog and relief lighting, camera edge-locked to the set boundary. |
 | `MazeFlyer` | First-person flight through a randomized voxel maze, ray-traced directly into the tile buffer; includes Standalone and Sync Settings assets. |
 | `Nibbler` | Random neighbor walkers that paint fading trails. |
 | `Noise` | Palette-based Perlin tile shader with beat distortion modes. |
