@@ -11,8 +11,8 @@ public class ColorSparkle : EffectBase
 {
     // Standalone Defaults
 
-    /// <summary>Authored chance that an activation uses full-wheel HSV confetti in Standalone Mode.</summary>
-    private const float StandaloneConfettiChance = 0.25f;
+    /// <summary>Authored chance that an activation uses full-wheel HSV confetti in Standalone Mode, tuned at the wall.</summary>
+    private const float StandaloneConfettiChance = 0.125f;
 
     /// <summary>Authored minimum hue for each HSV confetti sparkle in Standalone Mode.</summary>
     private const float StandalonePerSparkleHueMin = 0f;
@@ -63,8 +63,8 @@ public class ColorSparkle : EffectBase
 
     // Sync Defaults
 
-    /// <summary>Authored chance that an activation uses full-wheel HSV confetti in Synced Mode.</summary>
-    private const float SyncConfettiChance = 0.25f;
+    /// <summary>Authored chance that an activation uses full-wheel HSV confetti in Synced Mode, tuned at the wall.</summary>
+    private const float SyncConfettiChance = 0.125f;
 
     /// <summary>Authored minimum hue for each HSV confetti sparkle in Synced Mode.</summary>
     private const float SyncPerSparkleHueMin = 0f;

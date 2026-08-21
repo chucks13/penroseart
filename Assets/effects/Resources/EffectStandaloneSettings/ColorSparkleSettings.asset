@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ColorSparkleStandaloneSettingsAsset
   effectTypeName: ColorSparkle
   settings:
-    ConfettiChance: 0.25
+    ConfettiChance: 0.125
     PerSparkleHue:
       Min: 0
       Max: 1
