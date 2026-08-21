@@ -84,7 +84,7 @@ public class Lightning : EffectBase
     private const float SyncFlashDecayBeats = 0.5f;
 
     /// <summary>Drop decay length in bars: the slam falls linearly from full to nothing over this many bars.</summary>
-    private const int SyncDropBars = 2;
+    private const int SyncDropBars = 8;
 
     /// <summary>How far the bolts swell toward full brightness (HSV value) at the Drop's peak (0 = unchanged, 1 = full):
     /// a pure intensity lift that keeps the rolled hue and saturation and caps at 1, so it never washes toward white. Tune on the readout.</summary>
