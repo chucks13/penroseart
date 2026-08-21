@@ -23,8 +23,11 @@ public class Lightning : EffectBase
     /// <summary>Per-tile hue drift magnitude applied when the coin flip enables that animation in the Standalone look.</summary>
     private const float StandaloneTileHueDelta = 0.02f;
 
-    /// <summary>Fixed bolt-brightness multiplier returned when no live clock can place the held Waveform.</summary>
-    private const float StandaloneBoltBrightness = 0.75f;
+    /// <summary>Bolt brightness at the held Waveform's peak; the range minimum and the no-placement fallback, preserving the authored inverse pulse.</summary>
+    private const float StandaloneWaveformBrightnessMin = 0.75f;
+
+    /// <summary>Bolt brightness at the held Waveform's trough; the range maximum.</summary>
+    private const float StandaloneWaveformBrightnessMax = 1f;
 
     // Sync Defaults
 
@@ -103,7 +106,9 @@ public class Lightning : EffectBase
         StartHueDelta = StandaloneStartHueDelta,
         RayHueDelta = StandaloneRayHueDelta,
         TileHueDelta = StandaloneTileHueDelta,
-        BoltBrightness = StandaloneBoltBrightness,
+        WaveformBrightness = new FloatRange(
+            StandaloneWaveformBrightnessMin,
+            StandaloneWaveformBrightnessMax),
     };
 
     /// <summary>Resolves a fresh copy of Lightning's file-local Sync Defaults.</summary>
@@ -329,11 +334,10 @@ public class Lightning : EffectBase
     {
         // This Effect owns its brightness, hue, and clockless fallback mappings.
         float rhythm = waveform.Envelope;
-        float waveformBrightness = waveform.Lerp(
-            SyncSettings.WaveformBrightness.Max,
-            beatManager.IsSynced
-                ? SyncSettings.WaveformBrightness.Min
-                : standaloneSettings.BoltBrightness);
+        FloatRange brightnessRange = beatManager.IsSynced
+            ? SyncSettings.WaveformBrightness
+            : standaloneSettings.WaveformBrightness;
+        float waveformBrightness = waveform.Lerp(brightnessRange.Max, brightnessRange.Min);
         float waveformHueOffset = SyncSettings.WaveformHueOffset * rhythm;
 
         dropEnv = beatManager.Drop.In.Decay(SyncSettings.DropBars * BeatsPerBar);
@@ -468,8 +472,8 @@ public sealed class LightningStandaloneSettings
     /// <summary>Drift magnitude applied per tile when its coin flip enables that animation.</summary>
     public float TileHueDelta;
 
-    /// <summary>Fixed bolt-brightness multiplier used without live musical placement.</summary>
-    public float BoltBrightness;
+    /// <summary>Bolt-brightness range whose maximum is the held Waveform's trough and whose minimum is the peak and no-placement fallback, preserving the authored inverse pulse.</summary>
+    public FloatRange WaveformBrightness;
 
     /// <summary>Copies every Lightning Standalone Setting from another value.</summary>
     public void CopyFrom(LightningStandaloneSettings source)
@@ -482,7 +486,11 @@ public sealed class LightningStandaloneSettings
         StartHueDelta = source.StartHueDelta;
         RayHueDelta = source.RayHueDelta;
         TileHueDelta = source.TileHueDelta;
-        BoltBrightness = source.BoltBrightness;
+        WaveformBrightness = new FloatRange(
+            source.WaveformBrightness.Min,
+            source.WaveformBrightness.Max,
+            source.WaveformBrightness.LowRail,
+            source.WaveformBrightness.HighRail);
     }
 }
 

@@ -2305,7 +2305,8 @@ public sealed class EffectSyncSettingsTests
         Assert.That(first.StartHueDelta, Is.EqualTo(second.StartHueDelta));
         Assert.That(first.RayHueDelta, Is.EqualTo(second.RayHueDelta));
         Assert.That(first.TileHueDelta, Is.EqualTo(second.TileHueDelta));
-        Assert.That(first.BoltBrightness, Is.EqualTo(second.BoltBrightness));
+        Assert.That(first.WaveformBrightness, Is.Not.SameAs(second.WaveformBrightness));
+        AssertFloatRangeEqual(first.WaveformBrightness, second.WaveformBrightness);
     }
 
     /// <summary>Restore copies every Lightning Standalone Setting from the current file-local defaults.</summary>
@@ -2317,7 +2318,7 @@ public sealed class EffectSyncSettingsTests
         asset.Settings.StartHueDelta = 17f;
         asset.Settings.RayHueDelta = 18f;
         asset.Settings.TileHueDelta = 19f;
-        asset.Settings.BoltBrightness = 20f;
+        asset.Settings.WaveformBrightness = new FloatRange(20f, 21f, 19f, 22f);
 
         EffectStandaloneSettingsAssetUtility.RestoreStandaloneDefaults(typeof(Lightning), TempAssetFolder);
 
@@ -2325,7 +2326,7 @@ public sealed class EffectSyncSettingsTests
         Assert.That(asset.Settings.StartHueDelta, Is.EqualTo(defaults.StartHueDelta));
         Assert.That(asset.Settings.RayHueDelta, Is.EqualTo(defaults.RayHueDelta));
         Assert.That(asset.Settings.TileHueDelta, Is.EqualTo(defaults.TileHueDelta));
-        Assert.That(asset.Settings.BoltBrightness, Is.EqualTo(defaults.BoltBrightness));
+        AssertFloatRangeEqual(asset.Settings.WaveformBrightness, defaults.WaveformBrightness);
     }
 
     /// <summary>Restore copies every Lightning Sync Setting and brightness Rail from the file-local defaults.</summary>

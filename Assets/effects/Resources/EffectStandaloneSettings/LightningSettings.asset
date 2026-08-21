@@ -17,4 +17,8 @@ MonoBehaviour:
     StartHueDelta: 0.02
     RayHueDelta: 0.2
     TileHueDelta: 0.02
-    BoltBrightness: 0.75
+    WaveformBrightness:
+      Min: 0.75
+      Max: 1
+      LowRail: 0.75
+      HighRail: 1
