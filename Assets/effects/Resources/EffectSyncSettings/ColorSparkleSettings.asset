@@ -14,12 +14,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ColorSparkleSyncSettingsAsset
   effectTypeName: ColorSparkle
   settings:
-    HueMin: 0
-    HueMax: 1
-    DropHueMin: 0
-    DropHueMax: 1
-    WaveformHueOffsetAtTrough: 0.5
-    WaveformHueOffsetAtPeak: 1
-    HueSpan: 0.15
+    ActivationHue:
+      Min: 0
+      Max: 1
+      LowRail: 0
+      HighRail: 1
+    DropHue:
+      Min: 0
+      Max: 1
+      LowRail: 0
+      HighRail: 1
+    WaveformHueOffset:
+      Min: 0.5
+      Max: 1
+      LowRail: 0.5
+      HighRail: 1
+    HueWrapPeriod: 0.15
     DropSparkleDivisor: 2
     FillWhiteChance: 0.5
