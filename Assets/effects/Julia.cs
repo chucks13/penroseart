@@ -187,10 +187,11 @@ public class Julia : EffectBase
     };
 
     /// <summary>
-    /// Chance that a Roll colors from the shared palette instead of the HSV rainbow. Authored at
-    /// zero: the rainbow is the approved Synced look, and palette selection is Standalone's domain.
+    /// Chance that a Roll colors from the shared palette instead of the HSV rainbow. Ruled at the
+    /// wall to 0.25 from the authored zero: the rainbow leads the Synced look, with palette Rolls
+    /// mixed in.
     /// </summary>
-    private const float SyncPaletteChance = 0f;
+    private const float SyncPaletteChance = 0.25f;
 
     /// <summary>Baseline hue cycling speed in wheel revolutions per second; the colors never stop marching.</summary>
     private const float SyncHueBaseRate = 0.05f;
