@@ -1,27 +1,29 @@
 # OSC Client Contract
 
-> **Scope** — The client-visible meaning of RaveSystem's OSC state feed (OSC schema 4): every broadcast address, argument shape, unit, and unavailable sentinel a receiving client must handle, across the on-air surface (`/rave/onair/…`) and the keyed per-player surface (`/rave/player/{N}/…`).
-> **Code anchors** — `RaveSystem.OscContract/` (`RaveOscAddresses`, `RaveOscFields`); `Devices/Models/Player{Clock,Transport,Structure,StructureState}.cs`; `Services/Osc/` (`OscBroadcasterService`, `OscServiceBundleWriter`); `RaveSystem.Player/Playback/PlayerDecksState.cs` (reference client)
-> **Glossary** — On air, On-air focus, Loaded track, Timing grid, The One, Grid state, Irregular phrase
+This document defines the OSC state feed published by RaveSystem: every broadcast address, its argument shape, its units, and its unavailable sentinels. It describes what appears on the wire and how a receiving client should use it. It is the reference for anyone writing a client — a lighting desk, a visual system, a show controller, or any other consumer of the stream.
 
-This document defines the client-visible meaning of the OSC state feed. Clients must match messages by OSC address and must not depend on message or bundle order. The OSC schema version follows the recording format version: any change to OSC addresses, argument shapes, types, or emitted values requires a new recording format version.
+This document defines **OSC schema 4**.
+
+Clients must match messages by OSC address and must not depend on message or bundle order. Any change to an address, an argument shape, an argument type, or an emitted value requires a new schema version.
 
 ## Transport and delivery
 
-RaveSystem sends OSC 1.0 over UDP to the configured network broadcast address. The default broadcast port is `7000`.
+The stream is OSC 1.0 over UDP, sent to a configured network broadcast address. The default broadcast port is `7000`.
 
-The schema is not negotiated or announced on the wire. Client and server releases must agree on the version out of band; this document defines schema 4.
+The schema version is not negotiated or announced on the wire. Client and sender must agree on the version out of band.
 
-UDP delivery is not guaranteed. Clients must tolerate dropped, duplicated, delayed, and out-of-order datagrams. Every broadcast state message represents current state rather than a once-only event, so clients should replace the previously stored value for that address. Values that count down or move with playback may also move backward after seeking, scratching, or looping. One address is the exception to store-by-address: `/rave/player/{N}/structure` is chunked and assembled by generation, not replaced datagram-for-datagram — see [Per-player structure](#per-player-values).
+UDP delivery is not guaranteed. Clients must tolerate dropped, duplicated, delayed, and out-of-order datagrams. Every broadcast message carries current state rather than a once-only event, so a client should replace the previously stored value for that address. Values that count down or move with playback can also move backward after seeking, scratching, or looping. One address is the exception to store-by-address: `/rave/player/{N}/structure` is chunked and assembled by generation rather than replaced datagram-for-datagram — see [Per-player structure](#raveplayernstructure).
 
-RaveSystem publishes two address surfaces on the same broadcast, both derived from one capture per tick:
+The feed publishes two address surfaces on the same broadcast:
 
 - The **on-air surface** (`/rave/onair/…`) — the single canonical answer to what the audience hears now, resolving one on-air focus across the live set.
-- The **per-player surface** (`/rave/player/{N}/…`) — one keyed address group per physical player, where `N` is the player's ProLink device number in the range `1..6`. Every physical player is reported independently, live or not; the VirtualCdj never appears. The per-player surface is broadcast-only and is not returned by any snapshot query.
+- The **per-player surface** (`/rave/player/{N}/…`) — one keyed address group per physical player, where `N` is the player's device number on the network, in the range `1..6`. Every physical player is reported independently, live or not. Only physical players appear. The per-player surface is broadcast-only and is not returned by any snapshot query.
+
+Both surfaces are sampled at the same instant on each tick, so values read across them describe one coherent moment.
 
 Messages are divided into delivery lanes:
 
-| Surface | Lane | Default delivery | Addresses |
+| Surface | Lane | Delivery | Addresses |
 | --- | --- | --- | --- |
 | On-air | Continuous | Every broadcast tick, normally `60 Hz`. | `/bpm`, `/beat`, `/bar`, `/next_bar_ms`, `/beat_in_bar`, `/beats_count_ms`, `/on_beats`, `/beat_avg_ms`, `/beat_pulse`, `/levels` |
 | On-air | Discrete | On change, repeated three times; also a complete heartbeat normally twice per second. | `/players_live`, `/track`, `/track_id`, `/total_beats`, `/phrase_state`, `/next_phrase_state`, `/drop_state`, `/fill_state`, `/energy_state`, `/next_energy_state`, `/loop_state`, `/timing_grid` |
@@ -29,13 +31,15 @@ Messages are divided into delivery lanes:
 | Per-player | Discrete | On change, repeated three times; also a complete heartbeat normally twice per second. | `/rave/player/{N}/transport`, `/rave/player/{N}/loop_state`, `/rave/player/{N}/timing_grid` |
 | Per-player | Structure | Bare datagrams: a three-send burst on each new generation, one send per changed beat while the deck plays, and a ~2/s heartbeat while it is silent. | `/rave/player/{N}/structure` |
 
-`60 Hz` is nominal: the broadcaster's timer has whole-millisecond resolution, so continuous ticks actually arrive every 16 ms (62.5 Hz). Treat the tick rate as ≈60 Hz — a client rendering at 60 fps will occasionally receive two updates within one frame.
+`60 Hz` is nominal. Continuous ticks arrive every 16 ms, which is 62.5 Hz, so treat the rate as ≈60 Hz: a client rendering at 60 fps will occasionally receive two updates within one frame.
 
-On-air abbreviated addresses in this table use the `/rave/onair` prefix. Messages captured together share one OSC bundle timetag. `/rave/player/{N}/structure` is the exception: it is a bare OSC message, never a bundle member, and carries no timetag. A client joining mid-session can wait for the next heartbeat or request an immediate on-air snapshot.
+On-air addresses in the table above are abbreviated; each carries the `/rave/onair` prefix. Messages sampled together share one OSC bundle timetag. `/rave/player/{N}/structure` is the exception: it is a bare OSC message, never a bundle member, and carries no timetag.
+
+A client joining mid-session can wait for the next heartbeat or request an immediate on-air snapshot.
 
 ### Snapshot request
 
-When query/reply is enabled, RaveSystem listens on UDP port `7001`. Send this argument-free message to request the current continuous and discrete on-air bundles:
+When query/reply is enabled, the sender listens on UDP port `7001`. Send this argument-free message to request the current continuous and discrete on-air bundles:
 
 ```text
 /rave/snapshot/onair
@@ -83,11 +87,15 @@ Unless a field says otherwise:
 
 ### Physical-player scope
 
-The per-player surface addresses each physical player by its ProLink device number `N` in `1..6`: `/rave/player/{N}/clock`, `/transport`, `/loop_state`, `/timing_grid`, `/structure`, and `/structure_state`. These report the specific player `N` unconditionally, independent of the live set and the on-air focus. A player that leaves the network simply stops appearing in the per-player bundles — there is no departure message; whether to retain or expire a silent deck's last-known state is client policy. Where a player-scoped message shares a shape with an on-air message (`loop_state`, `timing_grid`), the argument meanings and sentinels are identical — only the scope differs. For the current on-air focus player, its `/rave/player/{N}/…` values equal the corresponding `/rave/onair/…` values in the same capture.
+The per-player surface addresses each physical player by its network device number `N` in `1..6`: `/rave/player/{N}/clock`, `/transport`, `/loop_state`, `/timing_grid`, `/structure`, and `/structure_state`. These report the specific player `N` unconditionally, independent of the live set and the on-air focus.
+
+A player that leaves the network simply stops appearing in the per-player bundles. There is no departure message; whether to retain or expire a silent deck's last-known state is client policy.
+
+Where a player-scoped message shares a shape with an on-air message (`loop_state`, `timing_grid`), the argument meanings and sentinels are identical — only the scope differs. For the current on-air focus player, its `/rave/player/{N}/…` values equal the corresponding `/rave/onair/…` values from the same tick.
 
 ### Structure generation and phrase ordinal
 
-The per-player `/structure` message carries a per-player `structure_generation` — a monotonic change detector — and its live cursor `/structure_state` carries the generation it belongs to. Two rules govern them and are stated in full under [Per-player structure](#per-player-values):
+The per-player `/structure` message carries a per-player `structure_generation` — a monotonic change detector — and its live cursor `/structure_state` carries the generation it belongs to. Two rules govern them and are stated in full under [Per-player structure](#raveplayernstructure):
 
 - **Generation is the change detector; `track_id` is only a recognition hint.** A client decides "did the structure change" from the generation, never from `track_id`.
 - **Phrase identity is ordinal occurrence.** A phrase is identified by its position in the reconstructed phrase list, never by its `type` or name; identical adjacent types are legal and distinct.
@@ -180,7 +188,7 @@ Examples:
 /rave/onair/bpm -1.0
 ```
 
-This is the tempo at which the track is currently playing, not necessarily the track's analyzed/base BPM.
+This is the tempo at which the track is currently playing, not necessarily the track's analyzed or base BPM.
 
 ### `/rave/onair/beat`
 
@@ -233,7 +241,7 @@ bar = ((N - 1) / 4) + 1
 
 Integer division is used. Beats `1..4` are bar 1, beats `5..8` are bar 2, and so on. Like `/rave/onair/beat`, this is a track position rather than a monotonic event counter: seeking, scratching, or looping can move it forward or backward.
 
-RaveSystem can briefly publish `/beat` and `/bar` from different instants. Clients that require a coherent coordinate should calculate `bar` from an available `/beat` using the formula above.
+`/beat` and `/bar` can briefly arrive from different instants. Clients that require a coherent coordinate should calculate `bar` from an available `/beat` using the formula above.
 
 ### `/rave/onair/next_bar_ms`
 
@@ -250,7 +258,7 @@ Arguments: next_bar_ms
 
 The value counts down toward zero. At the instant a new bar begins, "next" means the following bar boundary rather than the boundary that has just been reached; at a constant 120 BPM, the value at beat 1 is therefore approximately `2000` milliseconds.
 
-After a seek, scratch, reverse movement, or loop jump, RaveSystem can briefly continue counting toward the previous boundary.
+After a seek, scratch, reverse movement, or loop jump, the value can briefly continue counting toward the previous boundary.
 
 ### `/rave/onair/beat_in_bar`
 
@@ -273,7 +281,7 @@ beat_in_bar = ((N - 1) % 4) + 1
 
 Music has no beat zero: this value cycles `1, 2, 3, 4, 1, ...`. It is a position rather than a trigger. Seeking, scratching, or looping can move it in either direction or repeat a value.
 
-RaveSystem can briefly publish `/beat` and `/beat_in_bar` from different instants. Clients that require a coherent coordinate should calculate `beat_in_bar` from an available `/beat` using the formula above.
+`/beat` and `/beat_in_bar` can briefly arrive from different instants. Clients that require a coherent coordinate should calculate `beat_in_bar` from an available `/beat` using the formula above.
 
 ### `/rave/onair/beats_count_ms`
 
@@ -301,7 +309,7 @@ At the start of beat 1 at a constant 120 BPM, an example value is:
 
 If no trustworthy timing is available, all four arguments are `-1`.
 
-After a seek, scratch, reverse movement, or loop jump, RaveSystem can briefly identify the previous four-count.
+After a seek, scratch, reverse movement, or loop jump, the four-count can briefly reflect the previous position.
 
 ### `/rave/onair/on_beats`
 
@@ -330,11 +338,11 @@ Examples:
 /rave/onair/on_beats -1 -1 -1 -1
 ```
 
-After a seek, scratch, reverse movement, or loop jump, RaveSystem can briefly identify the previous beat label.
+Use this address when you want a short labeled trigger rather than a continuous position. After a seek, scratch, reverse movement, or loop jump, the gate can briefly reflect the previous beat label.
 
 ### `/rave/onair/beat_avg_ms`
 
-Reports the rounded arithmetic mean of the current beat intervals contributed by live players.
+Reports the mean of the current beat intervals contributed by live players.
 
 ```text
 Type tag: ,i
@@ -351,7 +359,7 @@ This is a live-set value, not an on-air-focus value. Each live player with trust
 /rave/onair/beat_avg_ms 750
 ```
 
-Despite the field description calling this a moving average, it does not average samples over a historical time window.
+This is an instantaneous mean across players at the current tick. It is not a moving average: no samples are averaged over a historical time window.
 
 ### `/rave/onair/beat_pulse`
 
@@ -423,7 +431,7 @@ Example:
 /rave/onair/phrase_state "Up" 6 16 0
 ```
 
-Valid phrases can have lengths that are not divisible by 16. Clients must not use the `irregular` argument to reject, repair, or reinterpret phrase boundaries.
+Valid phrases can have lengths that are not divisible by 16. `irregular` is advisory only — clients must not use it to reject, repair, or reinterpret phrase boundaries.
 
 When no current phrase is available, the complete unavailable shape is:
 
@@ -444,7 +452,7 @@ The canonical `name` values for `/rave/onair/phrase_state` and `/rave/onair/next
 | `Down` | Lower-energy section, break, or transition toward the outro. |
 | `Outro` | Closing section shaped for mixing out of the track. |
 
-These six names are the canonical vocabulary. RaveSystem can also emit a legacy non-empty phrase label when canonical phrase state is not yet available. Clients must accept an unrecognized non-empty label as an opaque phrase name rather than failing or mapping it by string pattern. Numbered or unfamiliar labels must not be treated as additions to the canonical vocabulary. An empty string is the unavailable sentinel and is not a phrase name.
+These six names are the canonical vocabulary. A non-empty label outside this set can also appear. Clients must accept an unrecognized non-empty label as an opaque phrase name rather than failing or mapping it by string pattern. Numbered or unfamiliar labels must not be treated as additions to the canonical vocabulary. An empty string is the unavailable sentinel and is not a phrase name.
 
 ### `/rave/onair/next_phrase_state`
 
@@ -499,7 +507,7 @@ Examples:
 
 In the first example, the next 16-beat drop begins in 6 beats and is the final remaining drop. In the second, that drop is active and has 16 beats remaining.
 
-`remaining` can become `0` while `active` is still `1` after playback passes the active drop's marker. Clients must use `active`—not `remaining > 0`—to determine whether a drop is currently running.
+`remaining` can become `0` while `active` is still `1`, once playback passes the active drop's marker. Clients must use `active` — not `remaining > 0` — to determine whether a drop is currently running.
 
 ### `/rave/onair/fill_state`
 
@@ -525,7 +533,7 @@ Examples:
 /rave/onair/fill_state -1 -1 -1 -1
 ```
 
-RaveSystem selects the event as follows:
+When more than one live player has a fill, the reported one is chosen by these rules, in order:
 
 1. Any active fill outranks every upcoming fill.
 2. Among events with the same `active` value, the smaller `count_beats` wins.
@@ -533,7 +541,7 @@ RaveSystem selects the event as follows:
 
 The four arguments always describe that one selected player's event; values from multiple players are never averaged or added together. If no live player reports an active or upcoming fill, the complete unavailable shape is emitted.
 
-When live players differ in tempo or phase, RaveSystem may not select the fill that occurs first in real time. Clients must interpret this value as RaveSystem's selected fill rather than an absolute chronological ordering of every live player's fills.
+When live players differ in tempo or phase, the selected fill is not necessarily the one that occurs first in real time. Treat this value as the selected fill, not as an absolute chronological ordering of every live player's fills.
 
 ### `/rave/onair/energy_state`
 
@@ -627,7 +635,7 @@ Examples:
 
 `active` and `set` answer different questions. A paused player can retain its loop region, producing `active=0, set=1`. The measured `length_*` values describe the actual loop region. The nominal size fraction describes the requested loop size and can differ from the measured region. A `0/0` fraction means no nominal size was reported; it must not be interpreted as a fractional zero-beat loop.
 
-The loop state has two client-visible limitations:
+Two limitations affect how a client should read this message:
 
 1. `active` can read `0` during some audibly cycling sub-beat or track-end-clamped loops. In that state, `set` and the size fields remain independently meaningful.
 2. With non-zero pitch adjustment, `length_beats` can drift from the loop's musical length and `length_ms` can differ from the audible cycle duration.
@@ -672,8 +680,8 @@ Thus grid beats `1..4` are bar 1, `5..8` are bar 2, `9..12` are bar 3, and `13..
 | State | Meaning |
 | --- | --- |
 | `locked` | The current phrase anchors the One and the grid position is trusted. Phrases of every length can lock. |
-| `coasting` | No current phrase anchor is available, but RaveSystem can still provide an estimated grid position. |
-| `disputed` | Available timing information conflicts. The numeric grid remains RaveSystem's best usable placement but should be treated with caution. |
+| `coasting` | No current phrase anchor is available. The reported position is an estimate. |
+| `disputed` | Available timing information conflicts. The numeric grid remains the best usable placement but should be treated with caution. |
 
 Seeking, scratching, looping, and phrase changes can move or reset the grid. Clients must treat it as a position, not a monotonic counter.
 
@@ -691,7 +699,7 @@ When no focus-player grid exists at all, the complete unavailable shape is:
 
 ## Per-player values
 
-These addresses report each physical player `N` (device number `1..6`) independently of the on-air focus. A player's messages appear only while that player is tracked. For the on-air focus player, its per-player values match the corresponding `/rave/onair` values in the same capture.
+These addresses report each physical player `N` (device number `1..6`) independently of the on-air focus. A player's messages appear only while that player is tracked. For the on-air focus player, its per-player values match the corresponding `/rave/onair` values from the same tick.
 
 ### `/rave/player/{N}/clock`
 
@@ -717,11 +725,11 @@ Examples:
 /rave/player/2/clock -1.0 -1 -1 -1 0.0
 ```
 
-`beat`, `bar`, `beat_in_bar`, and `beat_pulse` follow the same meaning and formulas as the on-air `/rave/onair/beat`, `/bar`, `/beat_in_bar`, and `/beat_pulse` fields. Like `beat_pulse` on-air, `0.0` is both the mid-beat trough and the at-rest/unavailable value, so it alone cannot distinguish a missing clock from that musical position.
+`beat`, `bar`, `beat_in_bar`, and `beat_pulse` follow the same meaning and formulas as the on-air `/rave/onair/beat`, `/bar`, `/beat_in_bar`, and `/beat_pulse` fields. As on-air, `0.0` is both the mid-beat trough and the at-rest or unavailable value for `beat_pulse`, so it alone cannot distinguish a missing clock from that musical position.
 
 ### `/rave/player/{N}/transport`
 
-Reports the five capture-proven transport predicates of physical player `N`, each a tri-state.
+Reports the five transport predicates of physical player `N`, each a tri-state.
 
 ```text
 Type tag: ,iiiii
@@ -755,7 +763,7 @@ Type tag: ,iifiii
 Arguments: active, set, length_beats, length_ms, size_numerator, size_denominator
 ```
 
-See the on-air `loop_state` section for the full semantics of `active`, `set`, the measured `length_beats`/`length_ms`, and the nominal `size_numerator`/`size_denominator` fraction (including the `0/0` "no nominal size" case). The complete unavailable shape is:
+See the on-air `loop_state` section for the full semantics of `active`, `set`, the measured `length_beats`/`length_ms`, and the nominal `size_numerator`/`size_denominator` fraction, including the `0/0` "no nominal size" case. The complete unavailable shape is:
 
 ```text
 /rave/player/2/loop_state -1 -1 -1.0 -1 -1 -1
@@ -794,9 +802,9 @@ Header:
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `track_id` | string | Opaque decimal string of the loaded track's full uint32 rekordbox id; a recognition/cache hint only. Empty (`""`) when no track is loaded. |
+| `track_id` | string | Opaque decimal string of the loaded track's full uint32 rekordbox id; a recognition or cache hint only. Empty (`""`) when no track is loaded. |
 | `structure_generation` | int32 | Per-player monotonic change detector. Authoritative for whether the structure changed. Never `0` on the wire (`0` is the never-loaded sentinel). |
-| `source` | string | Structure source: exactly `analyzed`, `synthesized`, `fused`, or `unavailable`. |
+| `source` | string | Origin of the phrase list: exactly `analyzed`, `synthesized`, `fused`, or `unavailable`. See the vocabulary below. |
 | `total_beats` | int32 | Total musical beats in the loaded track per the beat grid. `-1` when unavailable. |
 | `phrase_count` | int32 | Full-track phrase count across **all** chunks of this generation; `0` when there are no phrases. |
 | `chunk_index` | int32 | Zero-based index of this datagram within the generation's chunk sequence; `0` when unchunked. |
@@ -810,8 +818,8 @@ Repeating phrase tuple:
 | `end_beat` | int32 | Inclusive phrase end beat. |
 | `type` | string | Lowercase phrase kind (vocabulary below); `unknown` when the kind is not in the published set. |
 | `variant` | int32 | Rekordbox phrase variant; `0` when variantless. |
-| `fill_start_beat` | int32 | One-based fill start beat within the phrase, or `0` when the phrase has no fill. A fill is a tail: it runs from `fill_start_beat` to `end_beat`. For the `synthesized` and `fused` sources the audio-detected fill is canonical. A `fused` phrase with no audio-detected fill adopts a rekordbox fill only when that fill ends at `end_beat`. An `analyzed` structure carries only rekordbox fills. |
-| `drop_landing_beat` | int32 | Pinned drop landing beat; `0` when none. For the `synthesized` and `fused` sources it always equals `start_beat`. Only an `analyzed` structure can carry a landing a few beats away from `start_beat`. There the landing stays a sidecar of the rekordbox boundary. |
+| `fill_start_beat` | int32 | One-based fill start beat within the phrase, or `0` when the phrase has no fill. A fill is always a tail: it runs from `fill_start_beat` to `end_beat`. |
+| `drop_landing_beat` | int32 | Pinned drop landing beat; `0` when none, and `0` on every `drop` piece after the first when a drop arrives as a run of `drop` tuples (see "Phrase identity is ordinal occurrence"). With the `synthesized` and `fused` sources it always equals `start_beat`. Only an `analyzed` structure can report a landing a few beats after `start_beat`. |
 
 Example — a two-phrase unchunked structure for track id `328123`, generation `7`:
 
@@ -819,11 +827,24 @@ Example — a two-phrase unchunked structure for track id `328123`, generation `
 /rave/player/2/structure "328123" 7 "fused" 512 2 0 1  1 128 "intro" 0 0 0  129 256 "drop" 1 249 129
 ```
 
-The cleared/unavailable shape after an eject is a header-only message under a fresh generation:
+The cleared or unavailable shape after an eject is a header-only message under a fresh generation:
 
 ```text
 /rave/player/2/structure "" 9 "unavailable" -1 0 0 1
 ```
+
+#### Structure source vocabulary
+
+`source` tells a client where the phrase list came from, which is the best available indication of how the phrase boundaries were determined:
+
+| Source | Meaning |
+| --- | --- |
+| `analyzed` | Phrases come from the track's stored rekordbox phrase analysis. |
+| `synthesized` | Phrases were derived from the audio itself, without stored phrase analysis. |
+| `fused` | Phrases combine stored analysis with audio-derived detail. |
+| `unavailable` | No structure is known for this player. The message is header-only with `phrase_count 0`. |
+
+One difference matters when reading the phrase list: an `analyzed` list can end before `total_beats`, because rekordbox stops phrase analysis before the end of the track. `fused` and `synthesized` lists end exactly at `total_beats`.
 
 #### Phrase type vocabulary
 
@@ -847,13 +868,12 @@ This is a **different set and a different case** from the capitalized `/rave/ona
 
 `structure_generation` and `track_id` answer different questions and must not be swapped:
 
-- **`track_id`** is an opaque decimal **string**, not an OSC integer, specifically so it preserves the full uint32 rekordbox id (which overflows a signed OSC int32). Use it only to recognize a track or key a cache. It is **not** a change signal: loading the same track again can reappear under an identical `track_id` but a new generation.
-- **`structure_generation`** is authoritative for change. It advances on track load, on eject/clear, and on any applied-structure or analysis change — including a content-identical re-application and, notably, a **synthesized→fused refinement** (the same track's structure improving from waveform-synthesized to PSSI-fused advances the generation even though the track never changed).
+- **`track_id`** is an opaque decimal **string**, not an OSC integer, specifically so it preserves the full uint32 rekordbox id, which overflows a signed OSC int32. Use it only to recognize a track or key a cache. It is **not** a change signal: loading the same track again can reappear under an identical `track_id` but a new generation.
+- **`structure_generation`** is authoritative for change. It advances on track load, on eject or clear, and on any change to the published structure — including a content-identical republish, and including a later refinement of the same track's structure. A new generation therefore does not imply the track changed.
 - An **eject** publishes the cleared shape — empty `track_id`, `source` `unavailable`, `total_beats` `-1`, `phrase_count` `0` — under a **fresh** generation, so a client sees the clear as an ordinary generation edge.
 - `structure_generation` `0` is the never-loaded sentinel and is **never emitted**; a player's first real structure has a positive generation.
-- **`total_beats`** counts the beats in the track per the beat grid. An `analyzed` phrase list can end before `total_beats` because rekordbox stops phrase analysis before the end of the track. `fused` and `synthesized` phrase lists end exactly at `total_beats`.
 
-A client replaces its entire held structure and chunk buffer whenever it sees a new generation — "new" means *different from the held generation*, compared for inequality, never for ordering (do not require the number to increase) — and clears its held structure and cursor when it receives a zero-phrase `chunk_index 0 / chunk_count 1` message.
+A client replaces its entire held structure and chunk buffer whenever it sees a new generation — "new" means *different from the held generation*, compared for inequality, never for ordering (do not require the number to increase) — and clears its held structure and cursor when it receives a zero-phrase `chunk_index 0` / `chunk_count 1` message.
 
 #### Phrase identity is ordinal occurrence
 
@@ -862,18 +882,19 @@ A client replaces its entire held structure and chunk buffer whenever it sees a 
 - Preserve the complete tuple order exactly as received, and concatenate chunks in ascending `chunk_index`.
 - A phrase's one-based ordinal is its position in the fully reconstructed sequence **+ 1** (the first tuple is ordinal `1`). This is the ordinal `/structure_state` reports as `current_phrase`.
 - Repeated types and **immediately adjacent identical types are legal** and remain separate phrases — two consecutive `chorus` tuples are two phrases, not one. Nothing is deduplicated by type.
+- The one exception in meaning, not in parsing: **a run of consecutive `drop` tuples is one drop.** A `fused` structure keeps every rekordbox boundary under the 32-beat drop, so the drop arrives split into pieces at those boundaries, each its own phrase with its own `fill_start_beat`. `drop_landing_beat` is non-zero on the first piece only, and `/rave/onair/drop_state` counts the run once with `length_beats` spanning the whole run. A drop begins at a `drop` tuple that follows a non-`drop` tuple, or at any `drop` tuple whose `drop_landing_beat` is non-zero (two drops back to back stay two drops). A client that fires on "a drop began" fires there, not on every `drop` tuple.
 - **Never** store phrases in a dictionary keyed by `type` or name. Keying by type collapses legal repeats and destroys the ordinal contract. Use an ordered list indexed by position.
 
 #### Chunk assembly
 
-A structure that fits in one datagram is sent as a single message with `chunk_index 0`, `chunk_count 1`. A larger structure is split into a contiguous sequence of chunk datagrams for one generation. There is exactly one envelope shape; there is no older header variant. To assemble:
+A structure that fits in one datagram is sent as a single message with `chunk_index 0`, `chunk_count 1`. A larger structure is split into a contiguous sequence of chunk datagrams for one generation. There is exactly one envelope shape. To assemble:
 
 - `phrase_count` is the **full-track** count on **every** chunk; it does not shrink per chunk.
 - Each chunk carries one contiguous phrase slice; concatenate slices in ascending `chunk_index`.
 - The tuple count in one datagram is `(argument_count − 7) / 6`.
 - Assembly is complete when the concatenated tuple count equals `phrase_count`.
 - Every chunk of a generation shares one `chunk_count`; require `0 ≤ chunk_index < chunk_count` and `chunk_count ≥ 1`.
-- At most `32` phrase tuples ride one datagram (`MaxStructurePhrasesPerDatagram`); a 33rd would cross the ~1200-byte structure sizing target. Every datagram must also clear the `1400`-byte transport guard.
+- At most `32` phrase tuples ride one datagram, which keeps every structure datagram inside a normal network MTU.
 
 ### `/rave/player/{N}/structure_state`
 
@@ -902,9 +923,9 @@ Examples:
 
 ## System values
 
-> **Deprecated transport metadata:** The `/rave/system/*` values are not part of the musical state contract and are planned for removal in a future schema version. New clients should not depend on them.
+> **Deprecated:** The `/rave/system/*` values are not part of the musical state contract and are planned for removal in a future schema version. New clients should not depend on them.
 
-RaveSystem places these four messages in one system bundle at broadcaster startup and repeats that bundle with the discrete heartbeat, normally twice per second.
+These four messages arrive together in one bundle when the sender starts, and that bundle repeats with the discrete heartbeat, normally twice per second.
 
 ### `/rave/system/session_id`
 
@@ -946,7 +967,7 @@ Example:
 
 ### `/rave/system/frame_rate`
 
-Reports the configured display frame rate.
+Reports an advisory frame rate configured on the sender.
 
 ```text
 Type tag: ,i
@@ -955,7 +976,7 @@ Arguments: frame_rate
 
 | Argument | Type | Meaning |
 | --- | --- | --- |
-| `frame_rate` | int32 | Configured display frame rate. The default is `60`. This is not a measurement of received packet cadence and is distinct from the broadcaster tick-rate setting. |
+| `frame_rate` | int32 | Advisory frame rate configured on the sender. The default is `60`. It is not a measurement of delivery cadence, and it does not describe the broadcast tick rate. |
 
 ### `/rave/system/event`
 
